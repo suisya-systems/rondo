@@ -93,7 +93,7 @@ test("straight after approve, the page says approved and not published, and neve
   expect(english).toContain("You approved the work. It is not published yet");
   expect(english).not.toContain("taken in");
   expect(head(english)).toContain("Not published yet");
-  expect(head(english)).toContain("rondo does not merge");
+  expect(head(english)).toContain("Merging is yours");
   // Neither merged nor not merged: rondo does not watch a merge (Codex).
   expect(head(english)).not.toMatch(/Not merged|Merged/);
 
@@ -103,7 +103,7 @@ test("straight after approve, the page says approved and not published, and neve
   expect(head(japanese)).toContain("承認済み");
   expect(head(japanese)).toContain("まだ公開していません");
   // The merge is said as the person's, and never as done.
-  expect(head(japanese)).toContain("取り込み（マージ）はあなたが行います");
+  expect(head(japanese)).toContain("マージはあなたが行います");
   expect(head(japanese)).not.toContain("まだです");
 });
 
@@ -290,4 +290,71 @@ test("a basis is named by what it is, and never by the id it is stored under (D-
     expect(word.said).toBe(said);
     expect(JSON.stringify(word)).not.toMatch(/draft-|lap-|scope-1/);
   }
+});
+
+// --- the merge press (rondo#380, D-0091) ------------------------------------
+
+const merging = async (world: ReturnType<typeof fresh>, lang: "en" | "ja" = "ja") =>
+  await operatorPage(
+    { ...portsOver(world, "ada", null, lang), mergeable: true },
+    "t",
+    view,
+    chromeFor(lang),
+  );
+
+test("green on the head with nothing waiting, the next step is a merge press for that head", async () => {
+  // Lap 11: green at 22:26:48, merged on GitHub at 22:29:50 -- 「rondoからマージボタン押せたらいいなぁ」.
+  const world = await approved();
+  await published(world);
+  await checked(world, { kind: "green", counted: 7, skipped: 1 });
+  const page = await merging(world);
+  expect(page).toContain('action="/merge?lang=ja"');
+  expect(page).toContain('name="head" value="abc1234"');
+  expect(page).toContain('name="iteration" value="i-r"');
+  expect(page).toContain("プルリクエストをマージする");
+  expect(page).toContain('data-busy="マージしています…"');
+  // With no merge port there is no press, and red or running is no press either.
+  expect(await ja(world)).not.toContain("/merge?");
+  const red = await approved();
+  await published(red);
+  await checked(red, { kind: "red", failed: ["build"] });
+  expect(await merging(red)).not.toContain("/merge?");
+  const running = await approved();
+  await published(running);
+  expect(await merging(running)).not.toContain("/merge?");
+});
+
+test("a question still waiting on the person keeps the merge press off the page", async () => {
+  const world = await approved();
+  await published(world);
+  await checked(world, { kind: "green", counted: 2, skipped: 0 });
+  const asked = await world.record.recordThreadMessage({
+    messageId: "ask-1",
+    body: "Which one did you mean?",
+    authorKind: "drafter",
+    authorId: "the drafter",
+    inReplyTo: "req-r",
+    atMs: 8_000,
+    bases: [{ form: "message", messageId: "req-r" }],
+    asks: true,
+  });
+  expect(asked).toMatchObject({ kind: "recorded" });
+  expect(await merging(world)).not.toContain("/merge?");
+});
+
+test("once merged, the strip says where it went and how, and the press is gone", async () => {
+  const world = await approved();
+  await published(world);
+  await checked(world, { kind: "green", counted: 2, skipped: 0 });
+  await reportToRequest(
+    threadOf(world),
+    "i-r",
+    { kind: "merged", pullRequestUrl: PR, into: "main", method: "squash", mergeCommit: "def5678" },
+    9_000,
+  );
+  const japanese = await merging(world);
+  expect(head(japanese)).toContain("main にマージしました（1 つのコミットにまとめて）");
+  expect(head(japanese)).not.toContain("マージはあなたが行います");
+  expect(japanese).not.toContain("/merge?");
+  expect(head(await merging(world, "en"))).toContain("Merged into main (squashed into one commit)");
 });

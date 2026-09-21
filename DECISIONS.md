@@ -127,6 +127,8 @@ C-NN`, so the spaces can never be read as one.
 | D-0087 | The Windows cells leave the pull-request path for the nightly schedule and `workflow_dispatch`: the matrix becomes an expression over the trigger, the double-green rule is untouched, and every guarantee only Windows carries is now carried a night later | accepted |
 | D-0088 | The Windows cell's temporary files move to the runner's local disk: `continuo D-1109` is ported because rondo measured continuo-shaped and not cadenza-shaped, and the cell halves without a test, a timeout or a durability claim changing | accepted |
 | D-0089 | A lap's definition of done is rondo's to add, not the drafter's to remember: every lap's prompt carries a fixed definition of done after its request and names the rule files its plan names, which the worker reads in its own workspace | accepted |
+| D-0090 | A request that names an issue in a repository rondo does not work in is not started: the page says so before a scope is drafted, and the person adds that repository from the page with one press, while rondo infers everything else | accepted |
+| D-0091 | A person merges from the page: a merge press per act, drawn only where rondo's own reading is green on the head and nothing waits on the person, through the operator's own `gh`; `D-0025` rule 6's "never merges" gives way for that press alone, and `D-0064` rule 3.4's transition is not taken | accepted |
 | D-0092 | Which answer a gate was given is recorded beside the gate answer, when rondo carries it: `approve` and `revise` stop being told apart by whether a next try exists, and a lap with no record is not called approved | accepted (point 3 pending the owner) |
 
 ---
@@ -971,6 +973,10 @@ That is the price of the property, and it is taken deliberately.
 > section 6 moves `D-0025` rule 6 for that, not this entry. **rondo still holds no credential of its
 > own.** Merging stays on `D-0064` rule 3.4's list of irreversible acts, approved by a person per
 > act, until that rule's transition condition holds. Nothing below is edited.
+
+> **Annotation (2026-09-22, from D-0091).** Added after this entry was accepted, and additive. A
+> person's merge press on the page runs `gh pr merge` through the operator's own `gh`, as the
+> operator. **rondo still holds no credential of its own.** Nothing below is edited.
 
 ### Decision
 
@@ -3299,6 +3305,12 @@ surface that replaces all of that, and it is deliberately the smallest one that 
    rondo publishing on its own**: the authority stays with the person, and the command is the
    keyboard rather than the authority. Merging is absent in both senses. `run close` is driven only
    from here, and only after the other two legs succeeded, because it is a claim that they did.
+   > **Annotation (2026-09-22, from D-0091).** Added after this entry was accepted, and **not
+   > additive**, by the answer of rondo's human gate on rondo#380. **"Never merges" no longer holds
+   > for the page's merge press**: a person merges a lap's pull request by pressing it, once per
+   > merge, where rondo's own reading is green on the head and nothing in the request's thread waits
+   > on them, through the operator's own `gh`. The command line still never merges. Nothing below is
+   > edited.
 
    **A closed iteration is not an approved one, and `publish` checks which it has.** `withdrawn`,
    `expired` and `unanswerable` each close a gate and therefore close the iteration, and none of
@@ -12608,6 +12620,15 @@ but does not put them to the person:
    dispute and irreversible changes still come back. A merge whose CI rondo did not observe green, or
    a pull request with a P2-P4 item open, stays a person's act. **Every other act on the list stays
    on it**; the condition moves merge alone.
+   > **Annotation (2026-09-22, from D-0091).** Added after this entry was accepted, and additive, by
+   > the answer of rondo's human gate on rondo#380. **A person's per-act approval of a merge can be
+   > the page's merge press** (`D-0091` rule 1). **The transition above is not taken yet.** The owner
+   > has answered two of its questions: `skipped` and `neutral` count as green and `pending` does not,
+   > and green is read on the head of the pull request being merged, not on the commit a squash
+   > lands. Left open is whether rondo#367's reading is "rondo observes CI", or the condition is met by
+   > continuo's `ci_observation` evidence once the judgement moves there, which is under way; until
+   > then rondo's own reading is not on an auditable record (`D-0091` section 2). Nothing above is
+   > edited.
 
 5. **Every act taken inside a scope names the scope.** An admission, a redo, an agent-type choice, a
    gate answer, a push: each records the scope it was taken under, so "which scope authorised this"
@@ -20905,3 +20926,183 @@ At rondo `87e62f0` on **2026-09-22**, by reading. Line numbers drift; re-measure
 - **An approved lap with no record written after this entry**, other than a failed write the
   terminal reported. Some path answers a gate without going through `walkGate`.
 - **The owner choosing point 3 (a)**: then rule 3 is changed, and this entry gains an annotation.
+
+---
+
+## D-0091 — A person merges from the page: a merge press per act, drawn only where rondo's own reading is green on the head and nothing waits on the person, through the operator's own `gh`; `D-0025` rule 6's "never merges" gives way for that press alone, and `D-0064` rule 3.4's transition is not taken
+
+**Status:** accepted (2026-09-22, rondo's human gate, on rondo#380). The issue's four open decisions
+were put to the gate through the window with a recommendation each, and a fifth question the
+building change raised; the answers are recorded in "What was put to the human gate, and its
+answer". `D-0025` rule 6, `D-0064` rule 3.4 and `D-0010` gain annotations this entry adds
+(listed at the end). Supersedes nothing. Refs `D-0010`, `D-0025`, `D-0064`, `D-0073`, `D-0076`,
+rondo#310, rondo#367, rondo#375, rondo#376, rondo#380.
+
+**Why an entry is needed.** In lap 11 rondo opened #372, read its checks and reported green; the
+owner then went to GitHub to merge it (`docs/operations/lap-11-dogfood.md`, N-54: green at 22:26:48,
+merged on GitHub at 22:29:50) and said *"rondoからマージボタン押せたらいいなぁ"*. Merging was the one
+act between a request and a merged change that still happened off the page. `D-0064` rule 3.4
+already allows a merge a person approves at the time, for that act; what blocked a button was
+`D-0025` rule 6's "never merges", which `D-0064`'s supersession table keeps "until rule 3.4's merge
+transition condition holds" and says "the entry that builds CI observation then supersedes it".
+rondo#367 built a CI reading and wrote no entry, so nothing had moved "never merges", and whether
+that reading meets the transition was undecided.
+
+### What was measured, and how
+
+On **2026-09-22**, at rondo `87e62f0`, by reading. Line numbers drift; re-measure the claim.
+
+- **rondo reads a pull request's checks on the head `publish` pushed.** `readChecks` and
+  `joinChecks` (`src/access/forge.ts`) run on the host's one-minute rescan
+  (`src/access/checks-host.ts`) against the lap's own `tipCommit`, and write one green, red or none
+  message into the request's thread (`reportToRequest`, `src/access/conductor.ts`). `skipped` and
+  `neutral` do not fail a reading and are counted apart (rondo#376).
+- **A squash merge lands a different commit.** #372's head was `cd10f7d`; the squash landed
+  `27b778a`, on which no check had run.
+- **The forge has no "default merge method" setting.** A repository has a set of allowed methods
+  (`squashMergeAllowed`, `mergeCommitAllowed`, `rebaseMergeAllowed` in `gh repo view --json`), and
+  `gh pr merge` needs one named when it is not asked interactively. rondo's own repository allows
+  squash alone.
+- **`gh pr merge --match-head-commit SHA`** makes the forge refuse a merge whose head is no longer
+  `SHA`. **On a base branch with a merge queue, `gh pr merge` adds the pull request to the queue,
+  or enables auto-merge where required checks have not passed**, even without `--auto`; the
+  GraphQL field `isMergeQueueEnabled` says which branches do (`gh pr view --json` does not offer
+  it).
+- **The lane is already released by landing.** `D-0073` rule 7's reading compares tree entries at
+  the fetched default branch with the tip's, which holds under squash (`readLanding`).
+
+### 1. The press
+
+1. **A person merges a lap's pull request by pressing a button on the page, once per merge.** The
+   press is `D-0064` rule 3.4's approval, given at the time, for that act: there is no standing
+   approval, no scope that includes merge, and nothing merges without the press.
+2. **The button is drawn only where all of these hold**, and the press reads the rows again and
+   refuses where any has stopped holding (`mergeBlock`, `src/access/page-logic/result.ts`, is the
+   one test both ask):
+   1. the lap was published: its request's thread holds rondo's publish report with the pull
+      request's address;
+   2. **rondo's own latest checks reading is green**, and names the commit it read;
+   3. **nothing in the request's thread waits on the person** -- an open question (P2, P3) or a gate
+      (P4) -- which is `D-0064`'s "no P2 to P4 item open";
+   4. rondo has not already merged it, and the lap's line still holds in the lane ledger (a released
+      line's work is already on the default branch);
+   5. the host holds an approver the allowlist accepts, as every other press does.
+3. **The press is about the head that was read green.** It carries the commit the button was drawn
+   for; the host refuses unless that is the commit rondo read green and the commit the lap pushed,
+   asks the forge whether the pull request is still open on that head **and into the branch it was
+   published against** (a pull request retargeted on the forge is refused), and merges with
+   `--match-head-commit`, so a push after the green reading cannot ride in on it. No
+   `--delete-branch`, no `--auto`, no `--admin`: the branch stays, and a branch protection rule is
+   not overridden. **A base branch that merges through a merge queue is refused before anything is
+   asked of it**, because there `gh pr merge` queues the pull request or turns on auto-merge rather
+   than merging it at the press; such a repository is merged on the forge.
+4. **The pull request is named by the address the forge printed when it opened it**, never by a
+   number read against whichever repository the host is told about today.
+5. **Through the operator's own `gh`, as the operator** (`D-0010`): rondo holds no credential of its
+   own, and the forge's rules about who may merge are the forge's.
+6. **What the page says.** Pressed, the button says it was received (rondo#375's `aria-disabled`
+   and busy label, unchanged). Merged, the thread gets rondo's report -- where it went, how, and the
+   commit the merge made -- and the result strip (rondo#376) says *merged into `main`* and how, in
+   the person's language. Refused, a page says why in the person's language, with the forge's own
+   line where the forge refused, and leads back to the thread, where the button still is for
+   another press. A merge the forge accepted and rondo did not then see made -- a merge queue, or a
+   forge that did not answer -- is said as that and never reported as merged.
+
+### 2. The transition is not taken
+
+`D-0064` rule 3.4's transition -- merge leaving the irreversible list, so a scope may include it and
+rondo merges without a press -- **is not taken now, and is left for a later decision.** Two of the
+questions between rondo#367's reading and the condition have been answered by the owner, and one is
+still open.
+
+1. **Answered: what green means.** A check that ended `skipped` or `neutral` counts as green; one still
+   running (`pending`) does not. This is the reading rondo#367 already takes.
+2. **Answered: which commit.** Green is read on **the head of the pull request being merged**; green
+   on the commit a squash merge then lands on the default branch is not required.
+3. **Open: which reading counts.** Whether rondo#367's reading -- rondo's own, through the operator's
+   forge CLI -- is "rondo observes CI", or whether the condition is met by the evidence continuo's
+   `ci_observation` records once the judgement moves there (survey G4).
+
+**Why it is not taken now.** The judgement and its evidence are moving to continuo's
+`ci_observation`, and that work is under way. Until it lands, rondo's own reading is not on a record
+anybody can audit afterwards: it is a line in a thread, not an observation with its inputs kept. A
+merge rondo makes without a press has to rest on such a record, so the transition waits for it.
+
+rule 1's press does not need it, because a person approves each merge at the time: the reading is
+what the button is drawn on, and the person is the one who decides.
+
+### 3. How a merge is made
+
+1. **The repository's settings decide.** Where it allows one method, that method is used; rondo's
+   own repository allows squash alone.
+2. **Where it allows several, the first of squash, a merge commit and rebase is used**, and the
+   thread's report and the result strip say which. The person does not choose per press.
+3. A forge that does not say which methods it allows is a refusal, never a guess.
+
+### 4. What a merge does to the rest of rondo
+
+1. **The lane is released as it is today**: `D-0073` rule 7's landing reading of the default
+   branch, unchanged. The merge press does not release it itself.
+2. **The issue is closed by the forge's closing keyword**, and rondo#376's rule for writing one
+   (only where the person's request names exactly one issue in the same repository, and the request
+   was not split) is unchanged. rondo closes nothing itself.
+3. **A merge made on the forge itself is not one rondo sees.** The strip says a merge is the
+   person's until rondo's own press has made one; it never says *not merged*.
+
+### What was put to the human gate, and its answer
+
+All five were answered through the window on 2026-09-22.
+
+1. **A person's merge press on the page, now** (the issue's open decision 1). Put with a
+   recommendation: a press per act, by a person, shown only where rondo's own reading is green on
+   the head and no P2 to P4 item is open, without using the transition. **Answered: the
+   recommendation.**
+2. **Whether rondo#367 meets rule 3.4's transition** (open decision 2). Put with a recommendation:
+   not yet, with the gaps recorded here. **Answered: the recommendation** (section 2). Two of the
+   gaps -- what green means, and which commit -- were answered by the owner the same day, at the gate
+   of the task that moves the CI judgement to continuo; section 2 records those answers and the one
+   question left open.
+3. **Merge method** (open decision 3). **Answered: the repository's setting** (rule 3.1).
+4. **What a merge does to the rest of rondo** (open decision 4). **Answered: the lane as `D-0073`
+   rule 7 already releases it, and the issue by the closing keyword under rondo#376's rule**
+   (section 4).
+5. **Which method, where a repository allows several.** Raised by the building change, since the
+   forge has no single setting to follow. Put with a recommendation (the first of squash, merge
+   commit and rebase, said on the page) against a chooser beside the button, and against sending
+   the person to the forge for such a repository. **Answered: the recommendation** (rule 3.2).
+
+### What this gives up
+
+- **`D-0025` rule 6's "never merges", for this press.** The command line still never merges, and no
+  path other than a person's press on the page reaches the merge.
+- **A merge is not undone from the page.** It is the one irreversible act the page can take; the
+  press's sentence says so before it is pressed.
+- **A person cannot pick the method per press** where a repository allows several (rule 3.2).
+
+### What this does not do
+
+- **It does not take `D-0064` rule 3.4's transition** or let a scope include merge (section 2).
+- **It does not watch the forge for a merge made elsewhere**, or read the pull request's state on
+  the rescan.
+- **It does not delete the branch, queue an auto-merge, or override a protection rule**, and it does
+  not merge through a merge queue.
+- **It does not change the command line**: there is no `rondo merge`.
+
+### Annotations this entry adds
+
+| Entry | What the annotation says | Additive? |
+|---|---|---|
+| `D-0025` rule 6 | "Never merges" no longer holds for the page's merge press, which a person presses per act (this entry, rule 1); the command line still never merges | **not additive** |
+| `D-0064` rule 3.4 | The per-act approval of a merge can be the page's press; the transition is not taken, with what green means and which commit answered and which reading counts left open (this entry's section 2) | additive |
+| `D-0010` | The merge press runs through the operator's own `gh`; rondo still holds no credential of its own | additive |
+
+### What would falsify it
+
+- **A merge press that merged a commit rondo had not read green**: rule 1.3's head checks are not
+  holding.
+- **A merge button drawn while a question or a gate in the thread waited on the person**: rule
+  1.2.3 is not holding.
+- **A person who went to the forge to merge a green pull request anyway**, for a reason the page
+  could have met: rule 1 is drawn in the wrong place or on the wrong condition.
+- **A repository whose own setting the fixed order of rule 3.2 overrode** in a way its owner did not
+  accept: rule 3.2 moves to a chooser.

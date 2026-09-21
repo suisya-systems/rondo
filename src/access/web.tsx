@@ -161,7 +161,7 @@ import {
   saysMore,
 } from "./page-logic/laps.js";
 import { repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
-import { resultOf } from "./page-logic/result.js";
+import { mergeBlock, resultOf } from "./page-logic/result.js";
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
 import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
@@ -1857,6 +1857,24 @@ async function threadActs(
   // The newest try that can be published, and only that one: two next steps
   // read as a choice with no answer.
   const nextPublish = waitedOn ? null : (publishable.at(-1) ?? null);
+  // **The merge, where the strip's lap can be merged now** (rondo#380,
+  // `D-0091` rule 1): published, rondo's own latest reading green on the head,
+  // nothing in the thread waiting on the person, and its line still holding.
+  // The press asks the same `mergeBlock` again over fresh rows.
+  const resultRecord = resultLap(laps.map((lap) => lap.record));
+  const result = resultRecord === null ? null : resultOf(threads.byId, resultRecord.id);
+  const nextMerge =
+    ports.mergeable !== true || nextPublish !== null || resultRecord === null || result === null
+      ? null
+      : mergeBlock(
+            result,
+            waitedOn,
+            (await ports.store.laneLedger()).some(
+              (line) => line.releasedBy === null && line.lapIds.includes(resultRecord.id),
+            ),
+          ) === null
+        ? { record: resultRecord, head: result.checksCommit ?? "" }
+        : null;
   const drafted =
     waitedOn || laps.length > 0 || unheld !== null
       ? null
@@ -1904,35 +1922,71 @@ async function threadActs(
       </a>
     </section>
   );
+  // The merge press (D-0091 rule 1): a press and not a link, since the
+  // approval is this button, per act, with no screen between it and the act.
+  const mergeCard = (lap: { readonly record: { readonly id: string }; readonly head: string }) => (
+    <section class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3">
+      <h2 class="text-meta leading-5 font-semibold text-wait-ink">{wording.nextStepHeading}</h2>
+      <p class="mt-1 text-body leading-6">{wording.nextStepMerge}</p>
+      <form
+        id={`merge-${lap.record.id}`}
+        method="post"
+        action={`/merge?lang=${encodeURIComponent(wording.lang)}`}
+        class="mt-3 flex flex-col gap-2"
+      >
+        <input type="hidden" name="token" value={token} />
+        <input type="hidden" name="iteration" value={lap.record.id} />
+        <input type="hidden" name="request" value={requestMessageId} />
+        <input type="hidden" name="head" value={lap.head} />
+        <button
+          type="submit"
+          data-busy={wording.mergeBusy}
+          class={`${PRIMARY} h-10 justify-center self-start px-6 text-sm`}
+        >
+          {wording.mergeAction}
+        </button>
+        <p
+          data-busy-note=""
+          hidden
+          role="status"
+          class="note text-meta leading-5 text-muted-foreground"
+        >
+          {wording.mergeBusyNote}
+        </p>
+      </form>
+    </section>
+  );
   const next =
     unheld !== null
       ? unheldCard(unheld)
-      : nextPublish !== null
-        ? card(
-            `publish-${nextPublish.record.id}`,
-            viewHref({ kind: "publish", iterationId: nextPublish.record.id }, wording.lang),
-            wording.nextStepPublish,
-            tryName(nextPublish),
-          )
-        : standing === null
-          ? null
-          : standing.kind === "decided" || standing.kind === "own"
-            ? card(
-                `scope-${requestMessageId}`,
-                // A drafted approval's screen is reached without its decision,
-                // which is how that screen also offers a newer draft beside it
-                // (Codex); the person's own approval is named, since that
-                // screen finds only rondo's drafts by itself.
-                scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
-                wording.nextStepStart,
-                wording.nextStepStartAction,
-              )
-            : card(
-                `scope-${requestMessageId}`,
-                scopeHref(null),
-                standing.kind === "drafted" ? wording.nextStepDrafted : wording.nextStepScope,
-                wording.scopeAction,
-              );
+      : nextMerge !== null
+        ? mergeCard(nextMerge)
+        : nextPublish !== null
+          ? card(
+              `publish-${nextPublish.record.id}`,
+              viewHref({ kind: "publish", iterationId: nextPublish.record.id }, wording.lang),
+              wording.nextStepPublish,
+              tryName(nextPublish),
+            )
+          : standing === null
+            ? null
+            : standing.kind === "decided" || standing.kind === "own"
+              ? card(
+                  `scope-${requestMessageId}`,
+                  // A drafted approval's screen is reached without its decision,
+                  // which is how that screen also offers a newer draft beside it
+                  // (Codex); the person's own approval is named, since that
+                  // screen finds only rondo's drafts by itself.
+                  scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
+                  wording.nextStepStart,
+                  wording.nextStepStartAction,
+                )
+              : card(
+                  `scope-${requestMessageId}`,
+                  scopeHref(null),
+                  standing.kind === "drafted" ? wording.nextStepDrafted : wording.nextStepScope,
+                  wording.scopeAction,
+                );
   const others = publishable.filter((lap) => lap !== nextPublish);
   // A repository added from the page whose build rondo could not tell: said
   // where the work is, since it bounds what the worker can check (D-0090).

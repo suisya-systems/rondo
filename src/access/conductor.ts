@@ -85,6 +85,7 @@ import {
   inspectLapWork,
   type LandingReading,
   type LandingRequest,
+  type MergeMethod,
   readChangedPaths,
   readLanding,
 } from "./forge.js";
@@ -856,6 +857,17 @@ export type LapEvent =
   /** `pullRequestUrl`: what the forge printed for the opened pull request, or null. */
   | { readonly kind: "published"; readonly pullRequestUrl: string | null }
   /**
+   * A person pressed merge on the page and the forge merged it (rondo#380,
+   * `D-0091`): where it went, how, and the commit the merge made.
+   */
+  | {
+      readonly kind: "merged";
+      readonly pullRequestUrl: string;
+      readonly into: string;
+      readonly method: MergeMethod;
+      readonly mergeCommit: string | null;
+    }
+  /**
    * What the forge said about the published commit's checks (rondo#310).
    *
    * **Only the three answers that end the reading.** A `pending` or an
@@ -960,6 +972,14 @@ export async function reportToRequest(
       `Lap '${iterationId}' was published: its branch was pushed, pull request ` +
       `${event.pullRequestUrl ?? "(no URL printed)"} was opened, ` +
       `and run '${row.runId ?? "(none recorded)"}' was closed completed.`;
+  } else if (event.kind === "merged") {
+    // One per lap: a pull request is merged once, and the store's
+    // `alreadyRecorded` makes a second write of the same line nothing.
+    messageId = `report-merged-${iterationId}`;
+    body =
+      `Lap '${iterationId}' was merged on a person's press on the page: pull request ` +
+      `${event.pullRequestUrl} went into '${event.into}' by ${event.method}` +
+      (event.mergeCommit === null ? "." : ` as commit '${event.mergeCommit}'.`);
   } else {
     // **One message per answer, and the answer is in the id**, so a reading
     // taken again over the same commit writes nothing (the store's
@@ -990,9 +1010,10 @@ export async function reportToRequest(
  * What the thread says a published lap's checks came to (rondo#310).
  *
  * **Every line says what rondo did *not* do.** Reading the checks is a `GET`
- * and the only act rondo takes over a pull request it opened; merging is on
- * `D-0064` rule 3.4's irreversible list and a comment on the forge is no act a
- * scope can include (`SCOPE_OUTWARD_ACTS`). A red line that did not say so
+ * and the only act rondo takes on its own over a pull request it opened;
+ * merging is on `D-0064` rule 3.4's irreversible list, a person's press per act
+ * (`D-0091`), and a comment on the forge is no act a scope can include
+ * (`SCOPE_OUTWARD_ACTS`). A red line that did not say so
  * would leave a reader waiting for a fix nothing is going to make.
  *
  * **The names are bounded and counted**, by `LIST_LIMIT` as every other list
@@ -1006,8 +1027,8 @@ function checksBody(
 ): string {
   const on = `on commit '${commit}'`;
   const nothingElse =
-    "rondo read this and did nothing else with the pull request: it does not merge, comment on or " +
-    "retry one.";
+    "rondo read this and did nothing else with the pull request: it does not comment on or retry " +
+    "one, and it does not merge one unless a person presses merge.";
   if (reading.kind === "green") {
     // **A skipped check is not said to have passed** (rondo#376): the forge's
     // `skipped` and `neutral` do not fail the reading, and the sentence says

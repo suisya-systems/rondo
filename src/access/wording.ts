@@ -1131,6 +1131,32 @@ export interface Chrome extends PageWords {
   readonly publishRefusedPullRequestFailed: (detail: string) => string;
   readonly publishRefusedRunNotClosed: string;
   readonly publishRefusedNotStarted: string;
+  /**
+   * **The merge press** (rondo#380, `D-0091`): the person's next step once the
+   * checks are green on the head and nothing waits on them, what the button
+   * says and says while it is on its way, and why a press merged nothing.
+   */
+  readonly nextStepMerge: string;
+  readonly mergeAction: string;
+  readonly mergeBusy: string;
+  readonly mergeBusyNote: string;
+  readonly mergeBack: string;
+  readonly mergeRefusedNoApprover: string;
+  readonly mergeRefusedPress: string;
+  readonly mergeRefusedForm: string;
+  readonly mergeRefusedGone: string;
+  readonly mergeRefusedNotPublished: string;
+  readonly mergeRefusedNotGreen: string;
+  readonly mergeRefusedAsked: string;
+  readonly mergeRefusedMerged: string;
+  readonly mergeRefusedLanded: string;
+  readonly mergeRefusedMoved: string;
+  readonly mergeRefusedClosed: string;
+  readonly mergeRefusedMethod: string;
+  readonly mergeRefusedForge: string;
+  readonly mergeRefusedFailed: (detail: string) => string;
+  readonly mergeRefusedQueue: string;
+  readonly mergeRefusedUnconfirmed: string;
 }
 
 /**

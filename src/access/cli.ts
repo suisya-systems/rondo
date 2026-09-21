@@ -141,6 +141,7 @@ import {
   requestOf,
   unreadIssues,
 } from "./issue-read.js";
+import { mergePress } from "./merge.js";
 import {
   type DrafterPorts,
   draftedPlanRun,
@@ -184,6 +185,7 @@ import {
   AddRepositoryPort,
   AnswerPort,
   type ClaimRefusal,
+  MergePort,
   newDraftId,
   type Published,
   type PublishInput,
@@ -426,7 +428,8 @@ environment:
                       it needs continuo to allow a second concurrent lap first
   GH_HOST             the forge host the repository is on. Default: github.com
 
-rondo never merges a pull request, and nothing here runs unless you typed it.
+The command line never merges a pull request, and nothing here runs unless you
+typed it. The page merges one only when a person presses its merge button.
 `;
 
 /**
@@ -1669,6 +1672,14 @@ export async function main(
         // rondo#288), null on `revise`'s condition: a release is recorded as
         // the person's judgement, so it needs an actor the allowlist accepts.
         releasable: sender !== null && !("refusal" in sender),
+        // **The merge press** (rondo#380, `D-0091`): a person's press per act,
+        // on `release`'s condition -- an approver the allowlist accepts -- and
+        // through the operator's own forge CLI, as publish is (`D-0010`).
+        mergeable: sender !== null && !("refusal" in sender),
+        merge:
+          sender === null || "refusal" in sender
+            ? null
+            : new MergePort(mergePress({ store, record, now: Date.now })),
         release:
           sender === null || "refusal" in sender
             ? null
