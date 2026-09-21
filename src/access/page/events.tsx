@@ -131,9 +131,11 @@ export function LastLookedLine({ said }: { readonly said: string }) {
  * A folded run of event lines: one line, with the lines kept inside it.
  *
  * **`<details>` and nothing else.** The lines are in the page, shut, and
- * opening one is the browser's own act -- no script, no state of the page's,
- * and no address of its own, so a fold a person opens survives nothing and
- * needs to survive nothing. The alternative was an address per fold, which
+ * opening one is the browser's own act -- no state of the page's and no
+ * address of its own. It stays open until the person shuts it: the five-second
+ * redraw merges into the nodes already here and leaves a fold's `open` alone
+ * (`page/composer.js`), so a redraw does not shut it; a navigation draws the
+ * page again and does. The alternative was an address per fold, which
  * would put a reading position into the URL that the language switch and every
  * redraw would then have to carry (`D-0056` rule 11).
  *

@@ -16,7 +16,7 @@
 //    to a waiting question (#206), whose form has one button per answer and no
 //    submit that means both.
 // 2. **Keep the folds a person opened** -- across the in-place redraw, which
-//    replaces them shut every five seconds, and across a navigation, so a fold
+//    would otherwise merge them shut every five seconds, and across a navigation, so a fold
 //    opened before a press is open on the page the press lands on. The ids are
 //    kept in `sessionStorage`; any fold with one of them that arrives shut is
 //    opened again. With script off `page/app.css` draws every fold open.
@@ -105,9 +105,13 @@ const restore = (afterSwap) => {
     // box and reloading the way rondo's own draft comes back. `null` is the
     // absence either way -- nothing typed, or a send that cleared it -- and
     // then the server's own value stands.
-    if (kept === null || opening.value === kept || (kept === "" && !afterSwap)) {
+    if (kept === null || (kept === "" && !afterSwap)) {
       continue;
     }
+    // Read before the value is compared and not after it: since the redraw
+    // morphs, a box a person is writing in keeps their words, so "the value
+    // already matches" no longer means nothing new was drawn under it -- the
+    // morph moved the server's words into `defaultValue` alone.
     const drawn = opening.defaultValue;
     if (drawn !== "" && drawn !== kept && drawn !== (store.get(drewKey(opening)) ?? "")) {
       for (const note of document.querySelectorAll("[data-draft-arrived]")) {
@@ -121,7 +125,9 @@ const restore = (afterSwap) => {
         }
       }
     }
-    opening.value = kept;
+    if (opening.value !== kept) {
+      opening.value = kept;
+    }
   }
 };
 restore(false);
@@ -257,8 +263,31 @@ document.addEventListener(
 reopen();
 // Both duties run on every swap: the folds a person opened, and the words they
 // typed. A swap that replaced either would be the redraw taking something back
-// that nobody sent.
-new MutationObserver(() => {
+// that nobody sent. The observer hears a node that arrived; `htmx:afterSwap`
+// hears a redraw that was merged into nodes already here, which adds none.
+const redrawn = () => {
   reopen();
   restore(true);
-}).observe(document.body, { childList: true, subtree: true });
+};
+new MutationObserver(redrawn).observe(document.body, { childList: true, subtree: true });
+document.addEventListener("htmx:afterSwap", redrawn);
+
+// **And the merge itself is told what is the person's** (D-0054 rule 2, as
+// D-0059's annotation of 2026-09-21 restores it). The redraw is idiomorph's
+// morph, which keeps the nodes a person is standing on -- a face's scroll, the
+// caret -- but would still copy the server's attributes and values onto them.
+// Two of those are the two duties above: a fold's `open`, which the server
+// never draws and a person's click gave, and the words in a draft box. So the
+// morph leaves exactly those alone, and everything else the server sent
+// arrives. It makes no request; it is configuration of the swap htmx already
+// does.
+if (typeof Idiomorph !== "undefined") {
+  Idiomorph.defaults.ignoreActiveValue = true;
+  Idiomorph.defaults.callbacks.beforeAttributeUpdated = (name, element) =>
+    !(
+      (name === "open" && element instanceof HTMLDetailsElement) ||
+      (name === "value" &&
+        element instanceof HTMLTextAreaElement &&
+        element.dataset.draft !== undefined)
+    );
+}

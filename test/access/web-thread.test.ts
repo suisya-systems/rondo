@@ -438,7 +438,12 @@ test("the composer script keeps a draft and the open folds, and makes no request
   // the boxes are inside the thread now, so the five-second redraw replaces
   // them -- a claim being typed would vanish, and a revise box a person had
   // rewritten would come back holding rondo's draft again.
-  expect(code).toMatch(/new MutationObserver\(\(\) => \{\s*reopen\(\);\s*restore\(true\);/);
+  // Heard two ways since the redraw morphs (D-0059's annotation of
+  // 2026-09-21): a node that arrived, and a redraw merged into nodes already
+  // here, which adds none for an observer to hear.
+  expect(code).toMatch(/const redrawn = \(\) => \{\s*reopen\(\);\s*restore\(true\);/);
+  expect(code).toContain("new MutationObserver(redrawn)");
+  expect(code).toContain('document.addEventListener("htmx:afterSwap", redrawn)');
   // **And a box a person emptied stays empty across the redraw** (Codex): the
   // revise box arrives holding rondo's draft, so treating *emptied* as *no
   // draft* would put those words back five seconds after they were deleted.
@@ -473,11 +478,13 @@ test("the composer script keeps a draft and the open folds, and makes no request
   ]) {
     expect(code).not.toContain(forbidden);
   }
-  // The two htmx events it hears are a send's start, where it notes the words
-  // sent, and its end, where it clears only those from the draft.
+  // The htmx events it hears are a send's start, where it notes the words
+  // sent, its end, where it clears only those from the draft, and a redraw's
+  // end, where both duties run again.
   expect([...code.matchAll(/htmx:[A-Za-z]+/g)].map((found) => found[0])).toEqual([
     "htmx:beforeRequest",
     "htmx:afterRequest",
+    "htmx:afterSwap",
   ]);
   // A refusal with no `#send-refused` (csrf, Host, a defect) still says "not sent", as text.
   expect(code).toContain("note.textContent = note.dataset.refused");

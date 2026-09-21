@@ -44,6 +44,9 @@ const manifestPath = join(root, "page.manifest.json");
  */
 const COPIES = {
   "htmx.min.js": require.resolve("htmx.org/dist/htmx.min.js"),
+  // Vendored rather than installed (D-0059's annotation of 2026-09-21): it is
+  // not a dependency, it is one pinned file `vendor/pin.mjs` checks.
+  "idiomorph-ext.min.js": join(root, "vendor/idiomorph-ext.min.js"),
   "keys.js": join(root, "page/keys.js"),
   "composer.js": join(root, "page/composer.js"),
   "chime.js": join(root, "page/chime.js"),

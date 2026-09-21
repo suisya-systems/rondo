@@ -519,8 +519,11 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     // document, and both served by this process (D-0059 R1, R2): root-relative
     // paths and no scheme anywhere, because a CDN tag is the one distribution
     // D-0054 rule 5 refused and R1 did not reopen.
+    // htmx's morph extension right after it, which registers with it
+    // (D-0059's annotation of 2026-09-21).
     expect(scriptTagsIn(html)).toEqual([
       '<script src="/htmx.min.js" defer="">',
+      '<script src="/idiomorph-ext.min.js" defer="">',
       '<script src="/keys.js" defer="">',
       '<script src="/composer.js" defer="">',
       '<script src="/chime.js" defer="">',
@@ -535,16 +538,21 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     expect(html).toContain(
       '<div id="ledger" data-waits="[&quot;gate:i-0001:awaiting_human&quot;]" ' +
         `data-chime="${EN.reachYourTurn}" ` +
-        `hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML" ` +
+        `hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-ext="morph" ` +
+        'hx-swap="morph:outerHTML" ' +
         'hx-select-oob="#waiting-count">',
     );
     // The boxes are inside the faces now, so each says it survives the swap
     // -- and nothing else on the page asks htmx for anything.
     const asked = [...html.matchAll(/hx-[a-z-]+=/g)].map((found) => found[0]);
-    expect(asked.slice(0, 5)).toEqual([
+    // **Merged, never rebuilt** (D-0054 rule 2): a plain `outerHTML` swap
+    // builds every node in the faces again, which shuts a fold, resets a
+    // face's scroll and drops a caret every five seconds (lap 11).
+    expect(asked.slice(0, 6)).toEqual([
       "hx-get=",
       "hx-trigger=",
       "hx-select=",
+      "hx-ext=",
       "hx-swap=",
       "hx-select-oob=",
     ]);
@@ -553,7 +561,7 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     // lands in its own thread, a different view, so it is a native submit.
     expect(
       asked
-        .slice(5)
+        .slice(6)
         .every((one) =>
           [
             "hx-post=",

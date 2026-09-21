@@ -2979,7 +2979,7 @@ export async function operatorPage(
           // `<noscript>` throws the document away every five seconds, which is
           // still better than a screen that goes stale without saying so. With
           // scripting on, htmx polls this same address (below, on `#ledger`)
-          // and swaps the ledger in place, so the reader's scroll and focus
+          // and morphs the ledger in place, so the reader's scroll and focus
           // survive. The `answer` view reaches none of this: it has no refresh
           // in either mode, so there is nothing for it to degrade to.
           keepsCurrent ? (
@@ -3033,11 +3033,17 @@ export async function operatorPage(
         <title>rondo</title>
         <link rel="stylesheet" href="/app.css" />
         {
-          // `defer` on both, in this order: htmx is defined before the key
-          // script runs, and neither runs before the document exists. Neither
+          // `defer` on all of them, in this order: htmx is defined before its
+          // morph extension registers with it, and both before the key and
+          // composer scripts run; none runs before the document exists. None
           // draws anything a person must read -- the whole document is already
           // here, rendered by the server (D-0054 rule 7).
-          keepsCurrent ? <script src="/htmx.min.js" defer /> : null
+          keepsCurrent ? (
+            <>
+              <script src="/htmx.min.js" defer />
+              <script src="/idiomorph-ext.min.js" defer />
+            </>
+          ) : null
         }
         <script src="/keys.js" defer />
         <script src="/composer.js" defer />
@@ -3252,6 +3258,14 @@ export async function operatorPage(
            * navigating browser gets -- so there is no second rendering of
            * anything to keep true.
            *
+           * **Merged in place, never replaced** (D-0054 rule 2, as D-0059's
+           * annotation of 2026-09-21 restores it). The swap is idiomorph's
+           * `morph:outerHTML`: the nodes a person is standing on stay the same
+           * nodes, so a face's scroll offset, an opened fold, a caret and the
+           * words in a box survive a redraw that changed something beside
+           * them. A plain `outerHTML` swap built every node again, and lap 11
+           * measured what that costs a reader every five seconds.
+           *
            * It wrapped the status groups while the page was a ledger of laps;
            * since D-0083 what goes stale is the thread and the list beside it,
            * so the wrapper moved out here. The name stayed: `hx-get` and
@@ -3281,7 +3295,8 @@ export async function operatorPage(
                   "hx-get": here,
                   "hx-trigger": "every 5s",
                   "hx-select": "#ledger",
-                  "hx-swap": "outerHTML",
+                  "hx-ext": "morph",
+                  "hx-swap": "morph:outerHTML",
                   "hx-select-oob": "#waiting-count",
                 }
               : {})}
