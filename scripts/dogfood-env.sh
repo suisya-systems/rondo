@@ -1087,33 +1087,16 @@ flag makes it one."
 fi
 
 
-cat <<READY
-
-Ready. The environment is at $env_root
-The lap is pointed at $target, branch $target_base_branch, as project '$project_name'.
-That is written into all four places the plan has to say it, from the one value
-you named, so there is nothing in the plan file to hand-edit.
-
-** To start rondo, type one word. **
-
-  rondo
-
-That is all of it: no directory to be in, no file to source, no port and no
-repository (D-0080). It hands the host to the service this script installed,
-waits until the page answers and opens it, and comes back -- so the window may
-be closed. Everything below this line is the other way in: the terminal, for
-whoever installs and repairs rondo.
-
-** On the page, nothing is pasted. ** The plan above is recorded in the store
-the page reads, so the scope screen offers it as the plan to run on and the
-drafter drafts from it. The file stays on disk as a record of this run; rondo
-does not read it again. Running this script again records the plan again, and
-the newest one is offered first.
-
-** A second repository is this script again, same --root, another
---target-repo. ** Its plan is recorded beside this one and offered as another
-choice on the same page; this run's plan and catalog file are named for
-'$project_name' and are left alone (D-0081).
+# **The terminal's way in is a file, not the last screen** (rondo#375, lap
+# 11's N-52): printed here, the start / answer / publish lines were the last
+# thing setup said, and a person about to walk the page read them as the next
+# steps. They are for whoever installs and repairs rondo, so they are kept
+# whole beside the environment and named once; the screen ends on the word
+# that opens the page.
+terminal_notes=$env_root/terminal.txt
+cat >"$terminal_notes" <<TERMINAL
+The terminal: the other way in, for whoever installs and repairs rondo.
+Nothing here is needed to use the page; the page is opened by typing 'rondo'.
 
   cd $q_repo_root
   . $q_env_file
@@ -1150,4 +1133,33 @@ first). With more than one open, 'answer' needs --iteration-id ID to say which.
 
 If something is stuck, 'node bin/rondo.mjs abandon --iteration-id ID --reason "..."'
 is the way out; see section 7 of docs/operations/rondo-cli.md.
+TERMINAL
+
+cat <<READY
+
+Ready. The environment is at $env_root
+The lap is pointed at $target, branch $target_base_branch, as project '$project_name'.
+That is written into all four places the plan has to say it, from the one value
+you named, so there is nothing in the plan file to hand-edit.
+
+** On the page, nothing is pasted. ** The plan above is recorded in the store
+the page reads, so the scope screen offers it as the plan to run on and the
+drafter drafts from it. The file stays on disk as a record of this run; rondo
+does not read it again. Running this script again records the plan again, and
+the newest one is offered first.
+
+** A second repository is this script again, same --root, another
+--target-repo. ** Its plan is recorded beside this one and offered as another
+choice on the same page; this run's plan and catalog file are named for
+'$project_name' and are left alone (D-0081).
+
+The terminal commands, for whoever installs and repairs rondo, are in
+$terminal_notes. Nothing in it is needed to use the page.
+
+** Next: open the page. ** It takes one word: no directory to be in, no file
+to source, no port and no repository (D-0080). It hands the host to the service
+this script installed, waits until the page answers and opens it, and comes
+back -- so the window may be closed. Type:
+
+  rondo
 READY

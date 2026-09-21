@@ -109,6 +109,7 @@ import {
   WAIT_SIDE,
 } from "../store/records.js";
 import { basisLine, gather } from "./advisory.js";
+import { draftedStanding } from "./drafted-view.js";
 import type { LapWorkInspection } from "./forge.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
 import { type IssueComment, parseForgeRead } from "./issue-read.js";
@@ -1319,6 +1320,7 @@ function approveView(
             type="submit"
             data-row=""
             aria-describedby={`approve-plain-${record.id}`}
+            data-busy={wording.approveBusy}
             // **The press changes shape with what it is answering over**
             // (D-0083 rule 10): ink where the readings raised nothing, and
             // amber-outlined where one of them did, which is the same
@@ -1498,10 +1500,19 @@ function reviseForm(
           type="submit"
           data-row=""
           aria-describedby="revise-plain"
+          data-busy={wording.reviseBusy}
           class={`${recommended ? PRIMARY : SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
         >
           {wording.reviseAction}
         </button>
+        <p
+          data-busy-note=""
+          hidden
+          role="status"
+          class="note text-meta leading-5 text-muted-foreground"
+        >
+          {wording.lapBusyNote}
+        </p>
         <span id="revise-plain" class="note sr-only">
           {wording.revisePlain}
         </span>
@@ -1725,24 +1736,14 @@ function noDraft(message: ThreadMessageDraft): boolean {
 /**
  * **A drafter run that drafted nothing, said as what happened** (rondo#238):
  * the row's words are rondo's own about its tools, so they are kept, folded,
- * and what is shown first is what the person can do -- set the scope
- * themselves, one press away.
+ * and what is shown first is what happened. What the person can do -- set the
+ * scope themselves -- is the thread's next step, drawn once at its top
+ * (rondo#375) rather than a second time here.
  */
-function noDraftView(wording: Chrome, message: ThreadMessageDraft, root: string, forms: boolean) {
+function noDraftView(wording: Chrome, message: ThreadMessageDraft) {
   return (
     <div class="space-y-2">
       <p class="text-body leading-6">{wording.drafterNoDraft}</p>
-      {forms ? (
-        <a
-          href={viewHref(
-            { kind: "scope", messageId: root, rounds: null, decisionId: null, plan: null },
-            wording.lang,
-          )}
-          class={`${SECONDARY} h-7 px-3 text-meta`}
-        >
-          {wording.scopeAction}
-        </a>
-      ) : null}
       <details class="group">
         <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
           {chevron()}
@@ -1759,6 +1760,24 @@ function noDraftView(wording: Chrome, message: ThreadMessageDraft, root: string,
   );
 }
 
+/** The newest approval in force over a scope the person wrote, if any. */
+async function ownApproval(
+  ports: WebPorts,
+  requestMessageId: string,
+): Promise<{ readonly kind: "own"; readonly scopeDecisionId: string } | null> {
+  for (const scope of (await ports.record.scopesFor(requestMessageId)).toReversed()) {
+    const decided = await ports.record.scopeDecisionOf(scope.scopeId);
+    if (
+      decided.kind === "read" &&
+      decided.decision.outcome === "approved" &&
+      !(await ports.record.scopeSupersededByApproved(scope.scopeId))
+    ) {
+      return { kind: "own", scopeDecisionId: decided.decision.scopeDecisionId };
+    }
+  }
+  return null;
+}
+
 /**
  * **Where this request can be taken next** (D-0083 rule 6's chain, as
  * addresses): setting its scope, and publishing a lap that is ready.
@@ -1770,7 +1789,7 @@ function noDraftView(wording: Chrome, message: ThreadMessageDraft, root: string,
  * entrance needs a write port, and the publish entrance the same three things
  * the publish screen needs before it draws a button at all.
  */
-function threadActs(
+async function threadActs(
   wording: Chrome,
   ports: WebPorts,
   token: string | null,
@@ -1795,46 +1814,121 @@ function threadActs(
           (lap) =>
             approvedForPublication(lap.record) && publishedReport(threads, lap.record.id) === null,
         );
-  return (
-    <p class="thread-acts">
+  // **Which of these is the person's next step** (rondo#375, D-0082 rule 1:
+  // weight follows who is blocked). On lap 11 the only way forward was the
+  // quietest thing on the screen and read as *nothing is happening*: nobody
+  // but the person can set a scope or open the pull request. Never while
+  // something else in the thread waits on them -- a question, or a gate, whose
+  // own box is then what they answer.
+  const waitedOn =
+    [...threads.waiting].some((id) => threads.rootOf(id) === requestMessageId) ||
+    laps.some((lap) => lap.question === "waiting");
+  // The newest try that can be published, and only that one: two next steps
+  // read as a choice with no answer.
+  const nextPublish = waitedOn ? null : (publishable.at(-1) ?? null);
+  const drafted =
+    waitedOn || laps.length > 0 ? null : await draftedStanding(ports, requestMessageId);
+  // **A scope the person set and approved themselves stands too** (Codex):
+  // `draftedStanding` follows rondo's drafts only, and saying *nothing has
+  // been set* over an approval already given would send them to approve again.
+  const standing =
+    drafted?.kind !== "none" ? drafted : ((await ownApproval(ports, requestMessageId)) ?? drafted);
+  const scopeHref = (decisionId: string | null) =>
+    viewHref(
+      { kind: "scope", messageId: requestMessageId, rounds: null, decisionId, plan: null },
+      wording.lang,
+    );
+  const tryName = (lap: LapUnderRequest) =>
+    // Which try, where there is more than one to tell apart: three buttons
+    // reading *publish* are three a person cannot choose between (D-0076 rule
+    // 3.3, as the event lines do it).
+    laps.length > 1
+      ? wording.evOfTry(laps.indexOf(lap) + 1, wording.publishAction)
+      : wording.publishAction;
+  /*
+   * **The next step, once, at the top of the thread** (rondo#375, the owner's
+   * review: *"is making it black enough to stand out?"*). A filled button at
+   * the foot of a long thread was below the fold when the thread opened, the
+   * same size as everything around it, and a second copy of the same link sat
+   * in a message above it. So it is drawn once, above the messages, under a
+   * heading that says it is the person's turn and one line that says what is
+   * waiting and what pressing does -- in the amber that is spent only on *a
+   * person must act* (D-0082 rule 2), because here that is exactly the fact.
+   * Not on the right face: that face holds no press (D-0083 rule 5) and drops
+   * below the thread at 1280.
+   */
+  const card = (id: string, href: string, said: string, label: string) => (
+    <section class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3">
+      <h2 class="text-meta leading-5 font-semibold text-wait-ink">{wording.nextStepHeading}</h2>
+      <p class="mt-1 text-body leading-6">{said}</p>
       <a
-        id={`scope-${requestMessageId}`}
-        href={viewHref(
-          {
-            kind: "scope",
-            messageId: requestMessageId,
-            rounds: null,
-            decisionId: null,
-            plan: null,
-          },
-          wording.lang,
-        )}
+        id={id}
+        href={href}
         data-open=""
-        // **A way to another screen, and not a press** (D-0082 rule 1): what
-        // these lead to is a screen with its own press on it, and drawn filled
-        // they outweighed the box further down that a person is actually being
-        // waited on by.
-        class={`${SECONDARY} h-7 px-3 text-meta`}
+        class={`${PRIMARY} mt-3 h-10 justify-center px-6 text-sm`}
       >
-        {wording.scopeAction}
+        {label}
       </a>
-      {publishable.map((lap) => (
-        <a
-          id={`publish-${lap.record.id}`}
-          href={viewHref({ kind: "publish", iterationId: lap.record.id }, wording.lang)}
-          data-open=""
-          class={`${SECONDARY} h-7 px-3 text-meta`}
-        >
-          {/* Which try, where there is more than one to tell apart: three
-              buttons reading *publish* are three a person cannot choose
-              between (D-0076 rule 3.3, as the event lines do it). */}
-          {laps.length > 1
-            ? wording.evOfTry(laps.indexOf(lap) + 1, wording.publishAction)
-            : wording.publishAction}
-        </a>
-      ))}
-    </p>
+    </section>
   );
+  const next =
+    nextPublish !== null
+      ? card(
+          `publish-${nextPublish.record.id}`,
+          viewHref({ kind: "publish", iterationId: nextPublish.record.id }, wording.lang),
+          wording.nextStepPublish,
+          tryName(nextPublish),
+        )
+      : standing === null
+        ? null
+        : standing.kind === "decided" || standing.kind === "own"
+          ? card(
+              `scope-${requestMessageId}`,
+              // A drafted approval's screen is reached without its decision,
+              // which is how that screen also offers a newer draft beside it
+              // (Codex); the person's own approval is named, since that
+              // screen finds only rondo's drafts by itself.
+              scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
+              wording.nextStepStart,
+              wording.nextStepStartAction,
+            )
+          : card(
+              `scope-${requestMessageId}`,
+              scopeHref(null),
+              standing.kind === "drafted" ? wording.nextStepDrafted : wording.nextStepScope,
+              wording.scopeAction,
+            );
+  const others = publishable.filter((lap) => lap !== nextPublish);
+  return {
+    next,
+    acts: (
+      <p class="thread-acts">
+        {/* Outlined: another scope for a request that already has work is a
+            way to another screen, and drawn filled it outweighed the box a
+            person is actually being waited on by. */}
+        {standing !== null ? null : (
+          <a
+            id={`scope-${requestMessageId}`}
+            href={scopeHref(null)}
+            data-open=""
+            class={`${SECONDARY} h-7 px-3 text-meta`}
+          >
+            {wording.scopeAction}
+          </a>
+        )}
+        {others.map((lap) => (
+          <a
+            id={`publish-${lap.record.id}`}
+            href={viewHref({ kind: "publish", iterationId: lap.record.id }, wording.lang)}
+            data-open=""
+            class={`${SECONDARY} h-7 px-3 text-meta`}
+          >
+            {tryName(lap)}
+          </a>
+        ))}
+      </p>
+    ),
+  };
 }
 
 /** A pull request body split around the request fold it carries. */
@@ -2511,7 +2605,7 @@ export async function operatorPage(
               message.messageId,
               await (message.authorKind === "forge"
                 ? forgeView(wording, message)
-                : noDraftView(wording, message, selectedRoot ?? "", forms)
+                : noDraftView(wording, message)
               ).toString(),
             ] as const,
         ),
@@ -2705,17 +2799,12 @@ export async function operatorPage(
       ? null
       : ((await approveView(wording, gatedLap, token, gateFraming, newIterationId)?.toString()) ??
         null);
-  const actsMarkup =
+  const acts =
     selectedRoot === null
       ? null
-      : ((await threadActs(
-          wording,
-          ports,
-          token,
-          selectedRoot,
-          selectedLaps,
-          threads,
-        )?.toString()) ?? null);
+      : await threadActs(wording, ports, token, selectedRoot, selectedLaps, threads);
+  const actsMarkup = acts === null ? null : ((await acts.acts.toString()) ?? null);
+  const nextMarkup = acts?.next == null ? null : ((await acts.next.toString()) ?? null);
   const centreContent = noSuchThread
     ? { rendered: await note(wording.noSuchThread).toString() }
     : selectedRoot === null
@@ -2774,6 +2863,7 @@ export async function operatorPage(
                 ? wording.lastLookedNever
                 : wording.lastLookedHere(wording.age(ago(lastLookedMs, nowMs))),
             acts: actsMarkup === null ? null : Raw({ html: actsMarkup }),
+            next: nextMarkup === null ? null : Raw({ html: nextMarkup }),
             answering: answeringBox === null ? null : Raw({ html: answeringBox }),
             adding: addBox === null || addBox === undefined ? null : Raw({ html: addBox }),
           }),

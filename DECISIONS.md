@@ -13341,6 +13341,39 @@ and R3/R4 after `D-0064`); the gate's answers are recorded in "What was put to t
 answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`, `D-0042`, `D-0007`,
 `D-0055`, `D-0056`, `D-0002`, `D-0006`, `D-0061`, `D-0064`.
 
+> **Annotation (2026-09-22, from rondo#375), and not additive.** Added after this entry was
+> accepted, by the answer of rondo's human gate (relayed by the secretary on 2026-09-22). **R3's
+> client script gains a fourth duty.** R3 counted three between two rondo-owned scripts: row focus
+> (`page/keys.js`), and keeping an unsent draft and keeping the folds a person opened
+> (`page/composer.js`). It now counts four: **showing that a press was received**, also in
+> `page/composer.js`.
+> - **What the duty is.** The moment a form makes a native `POST`, its buttons are marked
+>   `aria-disabled`, the pressed one's label is replaced by the words the server drew for it
+>   (`data-busy`, *starting the work*, *opening the pull request*), a note the server drew hidden
+>   beside it is shown (`data-busy-note`, what the press waits on and for how long), and a second
+>   submit of the same form is cancelled. The redraw's morph is told to leave a pressed form alone,
+>   because merging it would draw the button back as it was before the press.
+> - **Why: lap 11 (N-48) and the owner's own words.** A press is a native form post, and a start
+>   waits for a whole lap -- minutes, sometimes tens of them -- while the tab looks exactly as it
+>   did before the press. The owner asked that *"Start this work"* become disabled or show that it
+>   is loading once pressed, and said the same of *Publish*. HTML and CSS cannot say it: no selector
+>   matches a form whose submit is in flight, and the five-second morph would undo any mark the
+>   press left.
+> - **Marked, and not made `disabled`.** A form's data is assembled after its `submit` listeners
+>   run, and a disabled submitter is left out of it. For the waiting question's two buttons that
+>   would send a press naming no `outcome`, which the route refuses (`D-0072` rule 4). So the
+>   buttons are marked for the eye and for a screen reader, and the second submit is what is
+>   actually stopped.
+> - **What it does not change.** The duty makes no request and builds no `POST`: the only write
+>   the page can make is still a form's own submit, minted on the server (section 5a), so R3's
+>   vocabulary -- one polling `GET` of the page's own address and the send's `hx-post` -- is
+>   unchanged, and so is R4 at the door. With script off nothing is marked, and the page the press
+>   lands on is what answers it, as before.
+> - **What it costs.** The one-sentence audit of client script grows by one duty in a file it
+>   already reads, and a press whose navigation fails (the network, not a refusal) leaves its
+>   buttons marked until the page is loaded again.
+> - Nothing else in this entry is changed, and nothing below is edited.
+
 > **Annotation (2026-09-21, from D-0087).** Added after this entry was accepted, and additive.
 > **The residual *"cross-platform build reproducibility"*, whose decider this entry names as
 > *"the implementing change's CI"*, is now decided a night later.** `npm run page:check` still

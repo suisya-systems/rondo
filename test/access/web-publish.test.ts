@@ -99,7 +99,7 @@ test("the publish screen shows the dry-run and one press, and nothing has left t
   expect(screen).toContain('<form id="publish-form" method="post" action="/publish?lang=en"');
   expect(screen).toContain('<input type="hidden" name="iteration" value="i-0001"/>');
   expect(screen).toContain(`<input type="hidden" name="shown" value="${DRY_RUN.shown}"/>`);
-  expect(screen).toContain(">Publish</button>");
+  expect(screen).toContain(">Open a pull request</button>");
   // No override where there is nothing to override.
   expect(screen).not.toContain('id="publish-despite"');
   // **The screen does not redraw itself**: it is what a person is reading in
@@ -130,7 +130,7 @@ test("the publish screen offers the override as its own press, under the refusal
   // the ordinary publish button is not drawn beside it.
   expect(screen).toContain('<form id="publish-despite-form" method="post"');
   expect(screen).toContain('<input type="hidden" name="despite_review" value="yes"/>');
-  expect(screen).toContain(">Publish anyway</button>");
+  expect(screen).toContain(">Open the pull request anyway</button>");
   expect(screen).not.toContain('id="publish-form"');
 });
 

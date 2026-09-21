@@ -190,6 +190,16 @@ html:not(.js) details > summary svg {
 }
 
 /*
+ * A pressed form's buttons (rondo#375): `page/composer.js` marks them `aria-disabled` the moment
+ * the form posts, and this is what makes that visible -- faded, a waiting cursor, and no second
+ * click. Unlayered for the reason above, so it wins over the button's own hover utilities.
+ */
+button[aria-disabled="true"] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/*
  * A message's `Reply` is drawn where a person points at the message (the S1 design pass on #220):
  * on hover or keyboard focus, and only where a pointer can hover and the key script has run. On
  * touch, and with script off, it is always drawn. Hidden by opacity rather than `display`, so it

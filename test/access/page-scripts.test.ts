@@ -79,6 +79,37 @@ test("a tab that arrived on a view with no ledger starts from the first one it s
 });
 
 class HTMLDetailsElement {}
+class HTMLButtonElement {
+  dataset: Record<string, string> = {};
+  textContent = "";
+  readonly attributes = new Map<string, string>();
+  setAttribute(name: string, value: string) {
+    this.attributes.set(name, value);
+  }
+}
+/** A form with its buttons and the note beside them: all the press duty touches. */
+class HTMLFormElement {
+  dataset: Record<string, string> = {};
+  readonly attributes = new Map<string, string>();
+  readonly note = { hidden: true };
+  constructor(
+    readonly method: string,
+    readonly buttons: readonly HTMLButtonElement[],
+  ) {}
+  setAttribute(name: string, value: string) {
+    this.attributes.set(name, value);
+  }
+  querySelector() {
+    return null;
+  }
+  querySelectorAll(selector: string) {
+    return selector === "button"
+      ? this.buttons
+      : selector === "[data-busy-note]"
+        ? [this.note]
+        : [];
+  }
+}
 class HTMLTextAreaElement {
   dataset: Record<string, string> = {};
   value = "";
@@ -87,7 +118,7 @@ class HTMLTextAreaElement {
 
 /** A page running `page/composer.js` over one draft box and its note. */
 function composerPage() {
-  const heard = new Map<string, Listener[]>();
+  const heard = new Map<string, ((event?: unknown) => void)[]>();
   const stored = new Map<string, string>([
     ["rondo:draft:reply:m-0001", "my own words"],
     ["rondo:drew:reply:m-0001", "rondo's first draft"],
@@ -111,6 +142,9 @@ function composerPage() {
     Idiomorph,
     HTMLDetailsElement,
     HTMLTextAreaElement,
+    HTMLFormElement,
+    HTMLButtonElement,
+    addEventListener: () => {},
     CSS: { escape: (text: string) => text },
     location: { hash: "" },
     sessionStorage: {
@@ -133,12 +167,25 @@ function composerPage() {
             : selector === "[data-draft-state]"
               ? [holds]
               : [],
-      addEventListener: (type: string, listener: Listener) => {
+      addEventListener: (type: string, listener: (event?: unknown) => void) => {
         heard.set(type, [...(heard.get(type) ?? []), listener]);
       },
     },
   });
   return {
+    /** Submit `form` as a press of `submitter`; answers whether it was cancelled. */
+    submit(form: HTMLFormElement, submitter: HTMLButtonElement | null, cancelled = false) {
+      const event = {
+        target: form,
+        submitter,
+        defaultPrevented: cancelled,
+        preventDefault() {
+          event.defaultPrevented = true;
+        },
+      };
+      for (const listener of heard.get("submit") ?? []) listener(event);
+      return event.defaultPrevented;
+    },
     box,
     arrived,
     holds,
@@ -204,4 +251,43 @@ test("a box the morph reuses for a different draft takes the server's words, not
   expect(beforeAttributeUpdated("value", box)).not.toBe(false);
   // And after that, it is the person's again.
   expect(beforeAttributeUpdated("value", box)).toBe(false);
+});
+
+test("a press answers at once: its buttons are marked disabled, it says what it is doing, and a second is cancelled", () => {
+  const page = composerPage();
+  const other = new HTMLButtonElement();
+  const pressed = new HTMLButtonElement();
+  pressed.dataset = { busy: "Starting the work..." };
+  pressed.textContent = "Start the work";
+  const form = new HTMLFormElement("post", [other, pressed]);
+  expect(page.submit(form, pressed)).toBe(false);
+  // **Marked, not made `disabled`** (rondo#375): the form's data is read after
+  // this, and a disabled submitter would be left out of it -- an answer's
+  // `outcome` with it.
+  for (const button of [other, pressed]) {
+    expect(button.attributes.get("aria-disabled")).toBe("true");
+  }
+  expect(form.attributes.get("aria-busy")).toBe("true");
+  expect(pressed.textContent).toBe("Starting the work...");
+  expect(form.note.hidden).toBe(false);
+  // A second press of the same form goes nowhere.
+  expect(page.submit(form, pressed)).toBe(true);
+  // And the redraw leaves the pressed form as it is, or the button would come
+  // back as it was drawn while the press is still on its way.
+  const morphed = page.Idiomorph.defaults.callbacks.beforeNodeMorphed;
+  expect(morphed?.(form, form)).toBe(false);
+  expect(morphed?.(new HTMLFormElement("post", []), form)).not.toBe(false);
+});
+
+test("a send htmx took, and a form that only reads, are not presses", () => {
+  const page = composerPage();
+  const button = new HTMLButtonElement();
+  button.dataset = { busy: "Sending..." };
+  const sent = new HTMLFormElement("post", [button]);
+  page.submit(sent, button, true);
+  expect(button.attributes.size).toBe(0);
+  const read = new HTMLFormElement("get", [button]);
+  expect(page.submit(read, button)).toBe(false);
+  expect(button.attributes.size).toBe(0);
+  expect(read.note.hidden).toBe(true);
 });

@@ -1037,6 +1037,33 @@ export interface Chrome extends PageWords {
   readonly publishDespiteAction: string;
   readonly publishDespiteNote: string;
   readonly publishDespitePlain: string;
+  /**
+   * **What a pressed button says while its press is on the way** (rondo#375).
+   * A press is a native form post, and the page it lands on can be seconds
+   * (a scope, an approval) or a whole lap (a start, a change asked for) away;
+   * with nothing changing in between, the owner could not tell a press from no
+   * press. `page/composer.js` puts the label on the button it disables, and
+   * unhides the note beside it where the wait is long enough to need saying.
+   */
+  readonly scopeBusy: string;
+  /**
+   * **The person's next step, at the top of the thread** (rondo#375): a
+   * heading that says it is theirs, one line saying what is waiting and what
+   * the press does, and the label of the one way forward.
+   */
+  readonly nextStepHeading: string;
+  readonly nextStepScope: string;
+  readonly nextStepDrafted: string;
+  readonly nextStepStart: string;
+  readonly nextStepStartAction: string;
+  readonly nextStepPublish: string;
+  readonly approveBusy: string;
+  readonly startBusy: string;
+  readonly reviseBusy: string;
+  readonly publishBusy: string;
+  /** What a start or a change asked for is waiting on, and for how long. */
+  readonly lapBusyNote: string;
+  readonly publishBusyNote: string;
   /** Why a publish press published nothing, one sentence each. */
   readonly publishRefusedNoApprover: string;
   readonly publishRefusedPress: string;
