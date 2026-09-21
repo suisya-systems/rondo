@@ -322,6 +322,7 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     lapDurationMs: null,
     reason: null,
     failureKind: null,
+    gateAnswer: null,
     createdAtMs: NOW_MS,
     updatedAtMs: NOW_MS,
   };

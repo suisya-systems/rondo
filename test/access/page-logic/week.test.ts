@@ -219,8 +219,16 @@ test("the pull request is its own step, between the approval and the merge (rond
   // Approve, publish and merge are three acts, and lap 11's owner could not
   // tell which had happened. An approved lap's publish is the person's; it is
   // done only once rondo's report of it is in the thread.
-  const approved = lap({ status: "closed", gateOutcome: "answered_and_forwarded" });
+  const approved = lap({
+    status: "closed",
+    gateOutcome: "answered_and_forwarded",
+    gateAnswer: "approve",
+  });
   expect(publish(approved)).toBe("yours");
+  // rondo#385 / D-0092: a change asked for, or no record of which answer it
+  // was, is not the person's to publish.
+  expect(publish({ ...approved, gateAnswer: "revise" })).toBe("ahead");
+  expect(publish({ ...approved, gateAnswer: null })).toBe("ahead");
   expect(publish(approved, true)).toBe("done");
   // A gate that closed without a yes has nothing to publish.
   expect(publish(lap({ status: "closed", gateOutcome: "withdrawn" }))).toBe("ahead");

@@ -896,6 +896,11 @@ export const JA: Chrome = Object.freeze({
   publishNotApproved: (outcome) =>
     `ゲートが ${outcome} で終わっていて、人が回答したわけではないため、` +
     "公開してよいという承認がありません。",
+  publishAnswerNotApproval: (answer) =>
+    answer === "revise"
+      ? "この周回のゲートには、承認ではなく変更の依頼で答えています。公開してよいという承認がありません。"
+      : "この周回のゲートには、rondo がどちらの答えかを記録するようになる前に答えています。" +
+        "承認か変更依頼かが分からないため、推測で公開はしません。",
   publishNoRun: "run の記録がないため、閉じる run がありません。",
   publishPlanField: (field) =>
     `公開は周回の plan から組み立てますが、その plan に ${field} がありません。このままでは` +

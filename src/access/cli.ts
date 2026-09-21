@@ -55,6 +55,7 @@ import {
   type AgentTypeRecordDraft,
   APPROVED_OUTCOME,
   approvedForPublication,
+  type GateAnswer,
   type IterationRecord,
   isModelReadingDrafter,
   isTerminal,
@@ -695,6 +696,32 @@ export interface WalkRequest {
   readonly holder: string;
   readonly actorId: string;
   readonly body: string;
+  /**
+   * Record which answer this is (D-0092), called once continuo has accepted
+   * the body and before anything else is walked.
+   *
+   * A function rather than the store because the walk knows *when* and only
+   * its caller knows *which* -- the verb the person used, never the text: the
+   * approve press and `rondo answer` record `approve`, the revise press and
+   * `rondo revise` record `revise`.
+   */
+  readonly recordAnswer: () => Promise<void>;
+}
+
+/**
+ * What {@link WalkRequest.recordAnswer} is for one iteration's gate: the store's
+ * write with every value but the answer already the row's.
+ */
+function answerRecorder(
+  store: Pick<IterationStore, "recordGateAnswer">,
+  iterationId: string,
+  gateId: string,
+  answer: GateAnswer,
+  actorId: string,
+): () => Promise<void> {
+  return async () => {
+    await store.recordGateAnswer(iterationId, gateId, answer, actorId, Date.now());
+  };
 }
 
 /**
@@ -793,6 +820,21 @@ export async function walkGate(
     `  gate answer    forwarded relay ${answered.payload.messageId} ` +
       `(advanced: ${String(answered.payload.advanced)})`,
   );
+  // **Recorded here, when continuo holds the body, and not before the walk**
+  // (D-0092). Before it, a gate somebody else closed or a walk refused on the
+  // way would leave a record of an answer that never reached the gate; here,
+  // continuo has accepted this body and refuses any other for this gate, so
+  // the record and continuo cannot disagree. A write that fails does not stop
+  // the walk: the answer is already spent, and a lap with no record is one the
+  // page says it cannot tell -- never one it calls approved.
+  try {
+    await request.recordAnswer();
+  } catch (error) {
+    say(
+      `  rondo could not record which answer this was, so the page will say it has no record ` +
+        `of it: ${hostFailure(error).text}`,
+    );
+  }
 
   const deliveredAgain = await deliverOnce(continuo, request, gate.runId, verbs);
   if (deliveredAgain !== null) {
@@ -3692,6 +3734,7 @@ async function commandAnswer(
     holder: planField(record, "lease_claimant_id"),
     actorId: actor.actorId,
     body: parsed.body,
+    recordAnswer: answerRecorder(store, record.id, gate.gateId, "approve", actor.actorId),
   });
   if (walked.kind === "failed") {
     return walked.status;
@@ -4115,6 +4158,7 @@ export async function answerFromPage(
       holder: planField(record, "lease_claimant_id"),
       actorId: actor.actorId,
       body,
+      recordAnswer: answerRecorder(store, record.id, record.gateId, "approve", actor.actorId),
     },
     record.id,
     claim,
@@ -4987,6 +5031,7 @@ async function revisePage(
       holder: planField(record, "lease_claimant_id"),
       actorId: actor.actorId,
       body: input.body,
+      recordAnswer: answerRecorder(store, record.id, gateId, "revise", actor.actorId),
     });
     // **A walk that failed part way is not a gate that was not touched.** The
     // walk is present, deliver, ack (`walkGate`); an answer that reached
@@ -5698,6 +5743,7 @@ async function commandRevise(
       holder: planField(record, "lease_claimant_id"),
       actorId: actor.actorId,
       body,
+      recordAnswer: answerRecorder(store, record.id, gate.gateId, "revise", actor.actorId),
     });
     if (walked.kind === "failed") {
       return walked.status;
@@ -5997,6 +6043,23 @@ export async function publishPlanFor(
   // a false statement about somebody else, written by rondo. Only the outcome
   // that continuo reaches by carrying an answer through to its forward may
   // publish.
+  // **An answered gate is not an approved one either** (rondo#385, D-0092):
+  // *ask for a change* closes it with the same outcome, so what the person
+  // pressed is read from the record rondo made of it -- and a lap with no such
+  // record is one rondo cannot call approved.
+  if (record.gateOutcome === APPROVED_OUTCOME && !approvedForPublication(record)) {
+    return {
+      kind: "refused",
+      block: { why: "answerNotApproval", answer: record.gateAnswer },
+      reason:
+        record.gateAnswer === "revise"
+          ? `iteration '${record.id}' was answered with a change to make, not an approval, so ` +
+            "there is no approval to publish under."
+          : `iteration '${record.id}' was answered before rondo recorded which answer a gate ` +
+            "was given, so rondo cannot tell an approval from a change request and will not " +
+            "publish on a guess.",
+    };
+  }
   if (!approvedForPublication(record)) {
     return {
       kind: "refused",
@@ -6353,6 +6416,7 @@ function publishBlockRefusal(block: PublishBlock): PublishRefusal {
     case "notClosed":
       return "publishRefusedNotClosed";
     case "notApproved":
+    case "answerNotApproval":
       return "publishRefusedNotApproved";
     case "noRun":
       return "publishRefusedNoRun";

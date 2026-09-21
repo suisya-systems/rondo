@@ -82,7 +82,7 @@ import {
   runPlan,
 } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
-import type { JsonRecord } from "../../src/store/records.js";
+import { approvedForPublication, type JsonRecord } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { EVIDENCE, PLAN } from "./page-world.js";
 
@@ -495,6 +495,9 @@ test.skipIf(!available)(
       throw new Error("the answered lap would not read");
     }
     expect(read.record.status).toBe("closed");
+    // **Which answer it was** (rondo#385, D-0092): recorded by the walk, and
+    // named by the press rather than by the words carried.
+    expect(read.record.gateAnswer).toBe("approve");
   },
   PRESS_TIMEOUT_MS,
 );
@@ -528,6 +531,14 @@ test.skipIf(!available)(
     expect(successor.record.supersedesIterationId).toBe(iterationId);
     expect(successor.record.status).toBe("awaiting_human");
     expect(successor.record.gateId).not.toBe(gateId);
+    // **And the first lap says it was asked to change, not approved**
+    // (rondo#385, D-0092): the record, and so no pull request is offered for it.
+    const first = await world.store.read(iterationId);
+    if (first.kind !== "read") {
+      throw new Error("the revised lap would not read");
+    }
+    expect(first.record.gateAnswer).toBe("revise");
+    expect(approvedForPublication(first.record)).toBe(false);
   },
   PRESS_TIMEOUT_MS,
 );

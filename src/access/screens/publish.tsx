@@ -331,6 +331,8 @@ function publishBlockLines(wording: Chrome, block: PublishBlock): readonly strin
       return [wording.publishNotClosed(block.status)];
     case "notApproved":
       return [wording.publishNotApproved(block.outcome ?? "")];
+    case "answerNotApproval":
+      return [wording.publishAnswerNotApproval(block.answer)];
     case "noRun":
       return [wording.publishNoRun];
     case "planField":

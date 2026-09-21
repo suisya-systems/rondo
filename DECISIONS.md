@@ -127,6 +127,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0087 | The Windows cells leave the pull-request path for the nightly schedule and `workflow_dispatch`: the matrix becomes an expression over the trigger, the double-green rule is untouched, and every guarantee only Windows carries is now carried a night later | accepted |
 | D-0088 | The Windows cell's temporary files move to the runner's local disk: `continuo D-1109` is ported because rondo measured continuo-shaped and not cadenza-shaped, and the cell halves without a test, a timeout or a durability claim changing | accepted |
 | D-0089 | A lap's definition of done is rondo's to add, not the drafter's to remember: every lap's prompt carries a fixed definition of done after its request and names the rule files its plan names, which the worker reads in its own workspace | accepted |
+| D-0092 | Which answer a gate was given is recorded beside the gate answer, when rondo carries it: `approve` and `revise` stop being told apart by whether a next try exists, and a lap with no record is not called approved | accepted (point 3 pending the owner) |
 
 ---
 
@@ -3305,6 +3306,12 @@ surface that replaces all of that, and it is deliberately the smallest one that 
    its forward. Publishing on any of the other three would push the work and open a pull request
    whose body states that a human approved it — rondo making a false statement about somebody else,
    which is `D-0009`'s concern seen from the other end.
+
+   > **Annotation (2026-09-22, from D-0092).** Added after this entry was accepted, and additive.
+   > `answered_and_forwarded` is still required, and no longer enough: `revise` closes the gate with
+   > the same outcome, so `publish` also requires the answer rondo recorded when it carried it to be
+   > `approve` (`D-0092` rule 2.1). A lap with no such record is not published. Nothing above is
+   > edited.
 
    **A publish that fails partway leaves the operator a command, not a puzzle.** rondo persists
    nothing about how far it got — that would be a durable record of somebody else's state — so a
@@ -7951,6 +7958,11 @@ At `91e6fc3` on 2026-09-12, by reading the tree.
 
 2. **The four endings that do not fire, each for its own reason.**
    - **`closed` with `answered_and_forwarded`.** A person said yes; what follows is `publish`.
+
+     > **Annotation (2026-09-22, from D-0092).** Added after this entry was accepted, and **not
+     > additive** in what it says about the outcome: `answered_and_forwarded` says a person
+     > answered, and `revise` reaches it too. Whether they said yes is the recorded `gateAnswer`
+     > (`D-0092` rule 1). The trigger this rule decides is unchanged. Nothing above is edited.
    - **`closed` without it** (`withdrawn`, `expired`, `unanswerable`). This is the first widening
      and it is deliberately not taken here: a withdrawal is a person's own act and an expiry is a
      clock, and neither of them says the plan was wrong. Whoever takes it needs no new predicate --
@@ -20772,3 +20784,124 @@ All seven were answered through the window on 2026-09-22.
   holding.
 - **An added repository's plan differing from setup's in anything but the repository's own facts**:
   rule 2.5 is not holding, and the host is composing a fence.
+
+## D-0092 — Which answer a gate was given is recorded beside the gate answer, when rondo carries it: `approve` and `revise` stop being told apart by whether a next try exists, and a lap with no record is not called approved
+
+**Status:** accepted (2026-09-22, rondo's human gate, on rondo#385) for points 1 and 2; point 3 is the
+window's recommendation, built as recommended and **not yet confirmed by the owner** (see "What was
+put to the human gate, and its answer"). Supersedes nothing. `D-0025`'s rule that only
+`answered_and_forwarded` may publish, and `D-0043` rule 2's reading of that outcome as *a person
+said yes*, gain annotations (listed at the end). Refs `D-0009`, `D-0010`, `D-0025`, `D-0027`,
+`D-0030`, `D-0042`, `D-0043`, `D-0070`, rondo#233, rondo#376, rondo#385.
+
+**Why an entry is needed.** A person pressed *ask for a change*; the next try's start was refused
+(budget or scope, `D-0070` section 2.4's after-the-gate refusal). The closed lap then read *「承認
+しました。まだ公開していません」*, and the pull-request button could appear under it: rondo said a
+person approved work they had turned down, and offered to publish it, which cannot be taken back.
+The cause is that `approve` and `revise` both close the gate `answered_and_forwarded`, so the row
+cannot tell them apart. The page guessed from whether a next try had been built on the lap
+(`revisedIn`, rondo#376), and `approvedForPublication` did not ask at all. A closed lap now holds one
+more fact, so it is decided here.
+
+### What was measured, and how
+
+At rondo `87e62f0` on **2026-09-22**, by reading. Line numbers drift; re-measure the claim.
+
+- **Both answers close the gate the same way.** `walkGate` (`src/access/cli.ts`) carries any body
+  to `answered_and_forwarded`; the approve press (`answerFromPage`), `rondo answer`, the revise press
+  (`revisePage`) and `rondo revise` all go through it. Nothing rondo stored said which verb was used.
+- **The page guessed.** `endedLine` (`src/access/page-logic/thread-events.ts`) said *approved*
+  unless a later lap's `base_branch` was this lap's `topic_branch`; `resultLap` drew the result band
+  on the same guess. `rowStateOf` (`page-logic/list.ts`) and `stepsOf` (`page-logic/week.ts`) did
+  not guess at all: any `answered_and_forwarded` was *approved* and the publish step *yours*.
+- **The publish predicate did not ask.** `approvedForPublication` (`src/store/records.ts`) was
+  `closed` plus `answered_and_forwarded`, so a revised lap passed it. The page's publish entrance
+  (`threadActs`) and `rondo publish` both read it.
+- **continuo holds one body per gate.** Re-issuing `gate answer` with the identical body is
+  idempotent; a different body is refused `AnswerAlreadyRecorded` (`src/continuo/protocol.ts`).
+
+### Decision
+
+1. **The answer is recorded beside the gate answer, not on the lap's row** (point 1). A new
+   append-only table `gate_answer` holds `(iteration_id, gate_id, answer, actor_id,
+   answered_at_ms)`, one row per gate, with `answer` in `approve | revise`. It is read onto
+   `IterationRecord.gateAnswer` by the store's select, and `IterationFields` omits it, so no
+   transition can write it. It survives the lap closing and the next start being refused, because
+   nothing after the walk touches it.
+   1. **Named by the verb, never by the text.** The approve press and `rondo answer` record
+      `approve`; the revise press and `rondo revise` record `revise`. `rondo answer --body` carries
+      whatever was typed, so the text says nothing.
+   2. **Written inside `walkGate`, right after continuo accepts the body, and before the deliver.**
+      Not before the walk (`D-0042` rule 3's order for claims): a gate somebody else closed, or a
+      walk refused on the way, would leave a record of an answer that never reached the gate. At
+      this point continuo holds this body and refuses any other, so the record and continuo cannot
+      disagree. A re-issue after an interrupted walk is `INSERT OR IGNORE`.
+   3. **A write that fails does not stop the walk.** The answer is already spent; stopping would
+      make `revise` refuse a lap the person paid a gate for. The terminal says the record was not
+      written, and the lap then reads as *no record* (rule 3), never as approved.
+   4. `gate_answer` joins `CHANGE_SOURCES` by that list's own membership rule.
+
+2. **Every reader asks the record** (point 2 is this entry).
+   1. **`approvedForPublication` requires `gateAnswer === "approve"`.** The page's pull-request
+      entrance, the result band, the list's *approved* row and the week's *publish: yours* step all
+      read it, and so does `rondo publish`. One predicate, as rondo#233 S5 asked.
+   2. **The thread line reads the record.** `approve` says approved (published or not). `revise`
+      says a change was asked for, and says whether the next try started: *「変更を頼みました。次の回は
+      始まっていません。」* when none was built on it, which is rondo#385's case.
+   3. **`rondo publish` and the publish screen say why.** A new `PublishBlock` arm,
+      `answerNotApproval{answer}`, says either that the gate was answered with a change or that rondo
+      holds no record of which answer it was. It maps to the existing `publishRefusedNotApproved`,
+      because the next move is the same.
+
+3. **A lap answered before this entry has no record, and rondo says so rather than guess** (point 3,
+   the window's recommendation). Where a next try was built on it, the old reading cannot be wrong
+   (only `revise` builds one), so it still says *a change was asked for*. Otherwise the line says
+   *「確認には答えていますが、承認か変更依頼か、記録がありません。そのため、プルリクエストは出しません。」*,
+   and no pull request is offered, on the page or by `rondo publish`. Publishing cannot be taken back,
+   and rondo will not recommend it on a guess.
+
+### What was put to the human gate, and its answer
+
+1. **Where the answer is recorded.** (a) Beside the gate answer, as its own record, written when
+   rondo sends the answer, surviving the lap closing and a refused next start (recommended); (b) a
+   column on the lap's row. **Answer (2026-09-22): (a).**
+2. **Whether it is a decision record.** (a) Yes, because a closed lap holds one more fact
+   (recommended); (b) no. **Answer (2026-09-22): (a).**
+3. **Laps answered before the record.** (a) Keep the old guess; (b) where the guess could be wrong
+   (no next try), say there is no record and offer no pull request (the window's recommendation).
+   **Built as (b). Not yet confirmed by the owner**; it is presented with this change before it
+   merges.
+
+### What this gives up
+
+- **A lap approved before this entry and not yet published can no longer be published** by the
+  page or by `rondo publish`. That is point 3 (b)'s cost. Asking the same request again runs a new
+  lap whose approval is recorded.
+- **A record that fails to write costs that lap its pull-request button** (rule 1.3). It is the
+  safe direction, and the terminal says it happened.
+
+### What this does not do
+
+- **It does not change continuo, the gate's options or the walk's verbs.** continuo still records
+  the body; rondo records which verb carried it.
+- **It does not change the week's *approval* step.** That step says the gate was answered, as
+  before; only the publish step reads the record.
+- **It does not back-fill.** Nothing on an old row says which verb was used, so there is nothing
+  to back-fill from.
+
+### Annotations this entry adds
+
+- **`D-0025`**, at *"A closed iteration is not an approved one, and `publish` checks which it has"*:
+  additive. `answered_and_forwarded` is still required, and a recorded `approve` is now required
+  too.
+- **`D-0043` rule 2**, at *"`closed` with `answered_and_forwarded`. A person said yes"*: not
+  additive in what it says about the outcome. The outcome says a person answered; whether they said
+  yes is `gateAnswer`.
+
+### What would falsify it
+
+- **A closed lap whose `gateAnswer` differs from the verb the person used.** The record is taken in
+  one place, so the place is wrong, not the rule.
+- **An approved lap with no record written after this entry**, other than a failed write the
+  terminal reported. Some path answers a gate without going through `walkGate`.
+- **The owner choosing point 3 (a)**: then rule 3 is changed, and this entry gains an annotation.

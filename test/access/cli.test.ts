@@ -81,6 +81,7 @@ const walkRequest = {
   holder: "rondo-operator",
   actorId: "happy_ryo",
   body: "approve",
+  recordAnswer: async () => {},
 };
 
 /** An answered result, wrapped the way `decode` wraps one. */
@@ -554,6 +555,69 @@ test("a claim on a gate already closed is refused out loud, and no claim row is 
   expect(calls).toEqual(["show:g1"]);
 });
 
+test("which answer it was is recorded once continuo holds the body, and before it is delivered", async () => {
+  // rondo#385 / D-0092. Recorded at the one point where the record and
+  // continuo cannot disagree: continuo has accepted this body and refuses any
+  // other for the gate. Before `answer`, a refusal on the way would leave a
+  // record of an answer that never reached the gate.
+  const { verbs, calls } = fakeVerbs("received");
+  const outcome = await walkGate(
+    continuo,
+    {
+      ...walkRequest,
+      recordAnswer: async () => {
+        calls.push("record");
+      },
+    },
+    verbs,
+  );
+
+  expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
+  expect(calls.slice(calls.indexOf("answer:approve"))).toEqual([
+    "answer:approve",
+    "record",
+    "deliver:rondo-operator:r1",
+    "ack:m-forwarded-relay",
+  ]);
+});
+
+test("nothing is recorded for a gate the walk sends nothing to, or stops before answering", async () => {
+  const closed = fakeVerbs("forwarded", "answered_and_forwarded");
+  const stuck = fakeVerbs("withdrawn_pending");
+  for (const { verbs, calls } of [closed, stuck]) {
+    await walkGate(
+      continuo,
+      {
+        ...walkRequest,
+        recordAnswer: async () => {
+          calls.push("record");
+        },
+      },
+      verbs,
+    );
+    expect(calls).not.toContain("record");
+  }
+});
+
+test("a record that will not write does not stop an answer continuo already holds", async () => {
+  // The answer is spent either way; a lap with no record is one the page says
+  // it cannot tell, never one it calls approved.
+  const { verbs, calls } = fakeVerbs("presented");
+  const outcome = await walkGate(
+    continuo,
+    {
+      ...walkRequest,
+      recordAnswer: async () => {
+        throw new Error("attempt to write a readonly database");
+      },
+    },
+    verbs,
+  );
+
+  expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
+  expect(calls.at(-1)).toBe("ack:m-forwarded-relay");
+});
+
 test("a gate scoped to no run is delivered on the global resource", () => {
   return (async () => {
     // continuo's own word for the case (`gate deliver --run-id`'s help): rows
@@ -891,13 +955,25 @@ test("an actor id continuo would refuse is refused before any effect", () => {
   }
 });
 
-/** An iteration row with only the two fields the publication check reads. */
-function rowWith(status: string, gateOutcome: string | null) {
-  return { status, gateOutcome } as unknown as Parameters<typeof approvedForPublication>[0];
+/** An iteration row with only the three fields the publication check reads. */
+function rowWith(
+  status: string,
+  gateOutcome: string | null,
+  gateAnswer: "approve" | "revise" | null = "approve",
+) {
+  return { status, gateOutcome, gateAnswer } as unknown as Parameters<
+    typeof approvedForPublication
+  >[0];
 }
 
 test("only a gate a person answered is publishable", () => {
   expect(approvedForPublication(rowWith("closed", "answered_and_forwarded"))).toBe(true);
+
+  // rondo#385 / D-0092: *ask for a change* closes the gate with the same
+  // outcome, and a lap rondo holds no record for is not called approved on a
+  // guess -- publishing cannot be taken back.
+  expect(approvedForPublication(rowWith("closed", "answered_and_forwarded", "revise"))).toBe(false);
+  expect(approvedForPublication(rowWith("closed", "answered_and_forwarded", null))).toBe(false);
 
   // Each of these closes a gate and therefore closes the iteration, and none of
   // them is a person saying yes. Publishing on one would open a pull request
@@ -1295,6 +1371,7 @@ function published(parts: Partial<IterationRecord> = {}): IterationRecord {
     lapDurationMs: null,
     reason: null,
     failureKind: null,
+    gateAnswer: "approve",
     createdAtMs: 0,
     updatedAtMs: 0,
     ...parts,

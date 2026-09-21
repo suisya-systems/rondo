@@ -59,6 +59,19 @@ export async function openGate(world: ReturnType<typeof fresh>, id: string): Pro
   }
 }
 
+/**
+ * Record which answer a person gave at the gate {@link openGate} opened, as the
+ * gate walk records it (D-0092): the fixture's stand-in for pressing approve or
+ * *ask for a change*.
+ */
+export async function recordAnswer(
+  world: ReturnType<typeof fresh>,
+  id: string,
+  answer: "approve" | "revise" = "approve",
+): Promise<void> {
+  await world.store.recordGateAnswer(id, `gate-${id}`, answer, "ada", 4_000);
+}
+
 /** One request, opened by a person, for a lap to belong to. */
 export async function openRequest(
   world: ReturnType<typeof fresh>,

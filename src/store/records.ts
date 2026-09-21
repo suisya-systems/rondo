@@ -467,9 +467,35 @@ export interface IterationRecord {
    * is only asked about a failure.
    */
   readonly failureKind: FailureKind | null;
+  /**
+   * Which of the gate's two answers a person gave, as rondo recorded it when it
+   * carried that answer (rondo#385, DECISIONS.md D-0092).
+   *
+   * **Not a column of this row, and no transition can write it.** It lives in
+   * `gate_answer`, beside the gate answer it names, and is read onto the record
+   * so every reader asks the one question in one place. `approve` and `revise`
+   * both close the gate `answered_and_forwarded`, so {@link gateOutcome} cannot
+   * say which one it was -- and guessing it from whether a next try exists
+   * turned a change the person asked for into an approval the moment that next
+   * try was refused.
+   *
+   * **Null is "rondo holds no record"**: every lap answered before D-0092, and
+   * a lap whose answer rondo could not record. It is never read as either
+   * answer (see {@link approvedForPublication}).
+   */
+  readonly gateAnswer: GateAnswer | null;
   readonly createdAtMs: number;
   readonly updatedAtMs: number;
 }
+
+/**
+ * The two answers a person can give at a gate, in `gate_options`' own words.
+ *
+ * Named by the verb the person used -- the page's approve button or `rondo
+ * answer`, and the page's *ask for a change* or `rondo revise` -- and never by
+ * the text carried: `rondo answer --body` carries whatever was typed.
+ */
+export type GateAnswer = "approve" | "revise";
 
 /**
  * The one gate outcome that means a person answered.
@@ -497,9 +523,19 @@ export const APPROVED_OUTCOME = "answered_and_forwarded";
  * for, which means the renderer asks this question too -- and a second spelling
  * of it beside the first is the two surfaces disagreeing about who approved
  * what.
+ *
+ * **And the answer has to be recorded as `approve`** (rondo#385, D-0092).
+ * `revise` closes the gate with the same outcome, so the outcome alone says a
+ * person answered and not what they said. A lap with no record -- every lap
+ * answered before D-0092 -- is not approved here: publishing cannot be taken
+ * back, and rondo will not offer it on a guess.
  */
 export function approvedForPublication(record: IterationRecord): boolean {
-  return record.status === "closed" && record.gateOutcome === APPROVED_OUTCOME;
+  return (
+    record.status === "closed" &&
+    record.gateOutcome === APPROVED_OUTCOME &&
+    record.gateAnswer === "approve"
+  );
 }
 
 /**
@@ -542,6 +578,9 @@ export function planField(record: IterationRecord, key: string): string {
  * to say about it -- and a lineage a transition could write is a lineage that
  * can be composed after the fact, which is the difference between a record and
  * an assertion.
+ *
+ * **`gateAnswer` is omitted because it is not this row's** (D-0092): it is
+ * read from `gate_answer`, which only the gate walk writes.
  */
 export type IterationFields = Partial<
   Omit<
@@ -555,6 +594,7 @@ export type IterationFields = Partial<
     | "workspace"
     | "supersedesIterationId"
     | "requestMessageId"
+    | "gateAnswer"
   >
 >;
 

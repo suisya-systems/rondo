@@ -1038,6 +1038,8 @@ export interface Chrome extends PageWords {
   /** Why this lap cannot be published, one sentence each ({@link PublishBlock}). */
   readonly publishNotClosed: (status: string) => string;
   readonly publishNotApproved: (outcome: string) => string;
+  /** Answered, but not with a recorded approval: a change asked for, or no record (D-0092). */
+  readonly publishAnswerNotApproval: (answer: "approve" | "revise" | null) => string;
   readonly publishNoRun: string;
   readonly publishPlanField: (field: string) => string;
   /** Nowhere to open a pull request: neither the lap nor the host names one. */

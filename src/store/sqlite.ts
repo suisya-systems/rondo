@@ -71,6 +71,7 @@ import {
   FINDING_SEVERITIES,
   type FindingBasis,
   type FindingSeverity,
+  type GateAnswer,
   type GradedFinding,
   type HumanDecisionDraft,
   type IterationFields,
@@ -490,6 +491,21 @@ export interface IterationStore {
     iterationId: string,
     actorId: string,
     claim: string,
+    nowMs: number,
+  ): Promise<void>;
+  /**
+   * Record which answer a person gave at a gate (D-0092).
+   *
+   * Called by the gate walk once continuo has accepted the answer's body, and
+   * by nothing else. A second call for the same gate is a no-op: the walk
+   * re-issues an identical answer after an interruption, and continuo refuses
+   * a different one.
+   */
+  recordGateAnswer(
+    iterationId: string,
+    gateId: string,
+    answer: GateAnswer,
+    actorId: string,
     nowMs: number,
   ): Promise<void>;
   /** Every verification claim made on one iteration, oldest first. */
@@ -1005,6 +1021,28 @@ CREATE TABLE IF NOT EXISTS operator_verification_claim (
 
 CREATE INDEX IF NOT EXISTS operator_verification_claim_by_iteration
   ON operator_verification_claim(iteration_id, claimed_at_ms);
+
+-- rondo#385 / D-0092. Which of the gate's two answers a person gave.
+--
+-- **Beside the gate answer and not on the iteration row.** approve and revise
+-- both close a gate answered_and_forwarded, so the row's gate_outcome cannot
+-- tell them apart, and a column there would be one more field a transition
+-- could write. This is written by the gate walk alone, at the moment continuo
+-- has accepted the answer's body, so it holds exactly the answer continuo
+-- holds: a walk refused before that point writes nothing, and continuo refuses
+-- a second, different body for the same gate (AnswerAlreadyRecorded).
+--
+-- One row per gate, so re-issuing the same answer after an interrupted walk is
+-- INSERT OR IGNORE and not a second fact. Append-only, like the tables above.
+CREATE TABLE IF NOT EXISTS gate_answer (
+  iteration_id          TEXT    NOT NULL,
+  gate_id               TEXT    NOT NULL,
+  answer                TEXT    NOT NULL,
+  actor_id              TEXT    NOT NULL,
+  answered_at_ms        INTEGER NOT NULL,
+  PRIMARY KEY (iteration_id, gate_id),
+  CHECK (answer IN ('approve', 'revise'))
+);
 
 -- D-0032. The advisory record: what was proposed, what was composed from it,
 -- what a person answered, what that answer was spent on, where the operator's
@@ -1768,6 +1806,9 @@ const SELECT_COLUMNS = [
   "lap_duration_ms",
   "reason",
   "failure_kind",
+  // D-0092: read from beside the gate answer, never from a column of the row.
+  "(SELECT answer FROM gate_answer WHERE gate_answer.iteration_id = iteration.id " +
+    "AND gate_answer.gate_id = iteration.gate_id) AS gate_answer",
   "created_at_ms",
   "updated_at_ms",
 ].join(", ");
@@ -2475,6 +2516,21 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
         .run(iterationId, nowMs, actorId, claim);
     },
 
+    async recordGateAnswer(
+      iterationId: string,
+      gateId: string,
+      answer: GateAnswer,
+      actorId: string,
+      nowMs: number,
+    ): Promise<void> {
+      connection
+        .prepare(
+          "INSERT OR IGNORE INTO gate_answer (iteration_id, gate_id, answer, actor_id, " +
+            "answered_at_ms) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(iterationId, gateId, answer, actorId, nowMs);
+    },
+
     async verificationClaimsFor(
       iterationId: string,
     ): Promise<readonly OperatorVerificationClaim[]> {
@@ -3079,6 +3135,7 @@ const CHANGE_SOURCES = Object.freeze([
     id: "iteration_id",
     at: "claimed_at_ms",
   },
+  { kind: "gate_answer", table: "gate_answer", id: "iteration_id", at: "answered_at_ms" },
   { kind: "proposal", table: "proposal", id: "proposal_id", at: "created_at_ms" },
   { kind: "composition", table: "composition", id: "composition_id", at: "composed_at_ms" },
   { kind: "human_decision", table: "human_decision", id: "decision_id", at: "decided_at_ms" },
@@ -6268,6 +6325,7 @@ function toRecord(row: SqlRow): IterationRecord {
     lapDurationMs: optionalNumber(row, "lap_duration_ms"),
     reason: optionalText(row, "reason"),
     failureKind: optionalFailureKind(row),
+    gateAnswer: optionalGateAnswer(row),
     createdAtMs: requireInteger(row, "created_at_ms"),
     updatedAtMs: requireInteger(row, "updated_at_ms"),
   };
@@ -6644,6 +6702,12 @@ function optionalText(row: SqlRow, column: string, subject = "iteration"): strin
 function optionalFailureKind(row: SqlRow): FailureKind | null {
   const value = optionalText(row, "failure_kind");
   return value === "refusal" || value === "defect" ? value : null;
+}
+
+/** D-0092's answer, or null where rondo holds none; the table's CHECK already narrows it. */
+function optionalGateAnswer(row: SqlRow): GateAnswer | null {
+  const value = optionalText(row, "gate_answer");
+  return value === "approve" || value === "revise" ? value : null;
 }
 
 /**
