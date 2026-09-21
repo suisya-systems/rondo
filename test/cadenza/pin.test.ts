@@ -191,9 +191,16 @@ describe("the two digests describe the bytes that are committed", () => {
     // **The whole of the helper's list.** The helper fails with ENOENT on an
     // artifact it cannot find -- which is the right direction to fail in and
     // the wrong fixture for this case, where what is under test is a digest
-    // that disagrees. (D-0054 added idiomorph to the list; D-0059 R2 took it
-    // out again, and the page's served bytes are `page.manifest.json`'s.)
-    for (const file of [manifest.tarball, manifest.digestFile, "vendor/pin.mjs"]) {
+    // that disagrees. (D-0054 added idiomorph to the list, D-0059 R2 took it
+    // out again, and D-0059's annotation of 2026-09-21 brought it back as
+    // htmx's morph extension.)
+    for (const file of [
+      manifest.tarball,
+      manifest.digestFile,
+      "vendor/idiomorph-ext.min.js",
+      "vendor/idiomorph-ext.min.js.sha256",
+      "vendor/pin.mjs",
+    ]) {
       copyFileSync(join(ROOT, ...file.split("/")), join(scratch, ...file.split("/")));
     }
     const wrong = "0".repeat(64);

@@ -13348,6 +13348,45 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 > falsifier, and the residual observed -- is caught by the nightly rather than before a merge
 > (`D-0087`). The residual is neither closed nor widened here; only its clock changed.
 
+> **Annotation (2026-09-21, from lap 11), and not additive.** Added after this entry was accepted,
+> by the answer of rondo's human gate (relayed by the secretary on 2026-09-21). **R2 is amended**:
+> it reads *htmx 2.0.10 and its idiomorph extension replace `page/poll.js`*, where it read *htmx
+> 2.0.10 replaces idiomorph and `page/poll.js`*. The extension is `idiomorph-ext.min.js` from the
+> registry's `idiomorph-0.8.0.tgz` -- the tarball `D-0054` verified end to end, whose `dist.integrity`
+> it matched again on 2026-09-21 -- and it arrives as `D-0054` rule 5 prescribed: vendored, its
+> sha256 beside it, checked by `vendor/pin.mjs`, and served from this process with its digest in
+> `page.manifest.json`. It is not an npm dependency and nothing installs it.
+> - **Why: `D-0054` rule 2 was not being met.** That rule stands (this entry's annotation of `D-0054`
+>   says so) and asks for the view's own address to be *merged in place*; R2 kept the poll and lost
+>   the merge, because htmx 2 swaps by rebuilding. On lap 11 (2026-09-21) the operator measured the
+>   cost: every five seconds a face's scroll went back to the top, a fold shut, and a box lost its
+>   caret, while they were reading. The amendment restores what rule 2 already required, and adds no
+>   requirement of its own.
+> - **What it does not change.** idiomorph makes no request: it merges the document htmx already
+>   fetched into the nodes already on the screen. So R2's substitute -- `selfRequestsOnly`,
+>   `allowEval: false`, `allowScriptTags: false`, `historyEnabled: false`, `script-src 'self'`, and
+>   R4 at the door -- is untouched, and so is R3's vocabulary: one polling `GET` of the page's own
+>   address and the send's `hx-post`. The swap is named `morph:outerHTML`, which the extension reads
+>   without evaluating anything; the form of the attribute that would make it evaluate text is not
+>   used.
+> - **R3's duties are not widened.** The morph is told two things, and both are duties the composer
+>   script already had: a fold's `open` is left to the person (*keeping the folds a person opened*),
+>   and the words in a `textarea[data-draft]` are left to the person (*keeping an unsent draft*).
+>   That configuration lives in `page/composer.js`, beside the two duties it serves; nothing else
+>   rondo wrote learned a new job. The composer script also listens for the end of a redraw, because
+>   a merge adds no node for its observer to hear.
+> - **`D-0084`'s falsifier *"a production dependency added for rendering that is not `react` or
+>   `react-dom`"* is judged not to have fired.** No dependency was added -- `package.json` is
+>   unchanged, and the file is a pinned static asset as htmx's served bytes are -- and what it does
+>   is not rendering: the server still renders every byte, and the extension decides only how the
+>   bytes the server just sent are put into the page. The judgment is recorded here rather than
+>   left implicit, so that whoever disagrees has one sentence to argue with.
+> - **What it costs.** The audit of client script grows by one pinned file of 11,037 bytes beside
+>   htmx's 51,238, and the page has two third-party files instead of one. The faces are not
+>   hydrated by React today; if a face ever is (`D-0084` rule 1), a merge and React would both own
+>   the same nodes, and that face should take over its own updating rather than be morphed.
+> - Nothing else in this entry is changed, and nothing below is edited.
+
 > **Annotation (2026-09-14, from rondo#220).** Added after this entry was accepted, and additive, by the
 > answer of rondo's human gate (relayed by the secretary on 2026-09-14) that every write the page adds
 > beyond section 5a's table is a press, recorded as a row added to that table.
