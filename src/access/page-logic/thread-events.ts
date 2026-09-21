@@ -18,16 +18,24 @@
  * The `decided` kind exists in `page/events.tsx` and is drawn the moment
  * there is something true to draw with it.
  */
-import { APPROVED_OUTCOME, type IterationRecord, planField } from "../../store/records.js";
+import {
+  APPROVED_OUTCOME,
+  approvedForPublication,
+  type IterationRecord,
+  planField,
+} from "../../store/records.js";
 import type { ThreadEvent } from "../page/events.js";
 import type { Chrome } from "../wording.js";
 import type { LapResult } from "./result.js";
 
 /**
  * What happened to a lap after its gate, which its own row does not hold
- * (rondo#376): whether the next try was built on it -- the one way to tell
- * *asked for a change* from *approved*, since both close the gate the same --
- * and what its publish and checks reports say.
+ * (rondo#376): whether the next try was built on it, and what its publish and
+ * checks reports say.
+ *
+ * **Which answer the gate was given is not read from here** (rondo#385,
+ * D-0092): it is `record.gateAnswer`. `revised` used to stand in for it, and a
+ * change whose next try was refused read as an approval.
  */
 export interface AfterGate {
   readonly revised: boolean;
@@ -54,15 +62,12 @@ export function revisedIn(record: IterationRecord, laps: readonly IterationRecor
 }
 
 /**
- * The lap a request's result is said by (rondo#376): the newest one that was
- * approved and not asked to change, or null where none was. Oldest first in,
+ * The lap a request's result is said by (rondo#376): the newest one whose gate
+ * was recorded as approved (D-0092), or null where none was. Oldest first in,
  * as the thread holds them.
  */
 export function resultLap(laps: readonly IterationRecord[]): IterationRecord | null {
-  return (
-    laps.findLast((lap) => lap.status === "closed" && approvedAt(lap) && !revisedIn(lap, laps)) ??
-    null
-  );
+  return laps.findLast(approvedForPublication) ?? null;
 }
 
 /** One reading of a lap, narrowed to what a line is made from. */
@@ -112,9 +117,20 @@ function endedLine(
     if (!approvedAt(record)) {
       return { said: wording.evClosedUnapproved };
     }
-    return {
-      said: after.revised ? wording.evAskedChange : wording.evApproved(after.result !== null),
-    };
+    // **What the person pressed, from the record rondo made when it carried
+    // the answer** (rondo#385, D-0092), and not from whether a next try exists:
+    // a change whose next try was refused has none, and read as an approval.
+    // A lap answered before the record existed falls back to the old reading
+    // only where it cannot be wrong -- a next try built on it is a change --
+    // and otherwise says rondo does not know.
+    const answer = record.gateAnswer ?? (after.revised ? "revise" : null);
+    if (answer === "approve") {
+      return { said: wording.evApproved(after.result !== null) };
+    }
+    if (answer === "revise") {
+      return { said: after.revised ? wording.evAskedChange : wording.evAskedChangeNoNextTry };
+    }
+    return { said: wording.evAnswerUnrecorded };
   }
   if (record.status !== "failed" || record.reason === null) {
     return { said: wording.evStopped };

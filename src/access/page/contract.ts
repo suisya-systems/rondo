@@ -16,7 +16,7 @@
 
 import type { LapLogReading } from "../../continuo/transcript.js";
 import type { HostPolicy } from "../../refrain/policy.js";
-import type { IterationRecord, ThreadMessageDraft } from "../../store/records.js";
+import type { GateAnswer, IterationRecord, ThreadMessageDraft } from "../../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
 import type { LapWorkInspection } from "../forge.js";
 import type { InboxReadPorts } from "../inbox.js";
@@ -241,6 +241,12 @@ export type PublishReading = (record: IterationRecord) => Promise<PublishShown>;
 export type PublishBlock =
   | { readonly why: "notClosed"; readonly status: string }
   | { readonly why: "notApproved"; readonly outcome: string | null }
+  /**
+   * The gate was answered, but not with an approval rondo recorded (D-0092):
+   * `revise` where the person asked for a change, null where the lap predates
+   * the record and rondo cannot tell which answer it was.
+   */
+  | { readonly why: "answerNotApproval"; readonly answer: GateAnswer | null }
   | { readonly why: "noRun" }
   | { readonly why: "planField"; readonly field: string }
   /**

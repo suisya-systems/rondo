@@ -880,6 +880,13 @@ explanation you pressed on and then answers the gate.`,
   publishNotApproved: (outcome) =>
     `This lap's gate ended as ${outcome}, which is not a person having answered it, so there is ` +
     "no approval to publish under.",
+  publishAnswerNotApproval: (answer) =>
+    answer === "revise"
+      ? "This lap's gate was answered with a change to make, not an approval, so there is no " +
+        "approval to publish under."
+      : "This lap's gate was answered before rondo kept a record of which answer was given, so " +
+        "rondo cannot tell whether it was an approval or a change request, and it will not " +
+        "publish on a guess.",
   publishNoRun: "This lap records no run, so there is no run to close.",
   publishPlanField: (field) =>
     `This lap's plan records no ${field}, and publishing is built from it. It cannot be ` +

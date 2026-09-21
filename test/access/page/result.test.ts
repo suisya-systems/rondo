@@ -16,16 +16,27 @@ import { lapEvents } from "../../../src/access/page-logic/thread-events.js";
 import { threadsOf } from "../../../src/access/page-logic/threads.js";
 import { chromeFor, EN } from "../../../src/access/wording.js";
 import type { IterationRecord } from "../../../src/store/records.js";
-import { fresh, openGate, openRequest, operatorPage, portsOver, reserve } from "../page-world.js";
+import {
+  fresh,
+  openGate,
+  openRequest,
+  operatorPage,
+  portsOver,
+  recordAnswer,
+  reserve,
+} from "../page-world.js";
 
 const PR = "https://github.com/suisya-systems/rondo/pull/372";
 
-/** One request whose one lap was approved at its gate, and nothing after. */
-async function approved() {
+/** One request whose one lap was answered at its gate, and nothing after. */
+async function approved(answer: "approve" | "revise" | null = "approve") {
   const world = fresh();
   await openRequest(world, "req-r", "#291 の文言を分けて", 1_000);
   await reserve(world, "i-r", "#291 の文言を分けて", null, "req-r");
   await openGate(world, "i-r");
+  if (answer !== null) {
+    await recordAnswer(world, "i-r", answer);
+  }
   const closed = await world.store.transition(
     "i-r",
     "awaiting_human",
@@ -161,6 +172,34 @@ test("red names what failed, and a later green is what the state says", async ()
   expect(head(green)).toContain("2 件すべて通過");
 });
 
+test("a change asked for whose next try never started is not said to be approved (rondo#385)", async () => {
+  // The owner pressed *ask for a change*, the next try was refused, and the
+  // closed lap read 「承認しました。まだ公開していません」 with a pull-request
+  // button under it: rondo saying a person approved work they had turned down.
+  const world = await approved("revise");
+  const japanese = await ja(world);
+  expect(japanese).toContain("変更を頼みました。次の回は始まっていません。");
+  expect(japanese).not.toContain("承認しました");
+  expect(head(japanese)).not.toContain("承認済み");
+  const requests = await operatorPage(
+    portsOver(world, "ada", null, "ja"),
+    "t",
+    { kind: "requests" },
+    chromeFor("ja"),
+  );
+  expect(requests).not.toContain("承認済み");
+});
+
+test("a lap answered before the record existed says rondo does not know, and claims no approval", async () => {
+  const world = await approved(null);
+  const japanese = await ja(world);
+  expect(japanese).toContain("承認か変更依頼か、記録がありません");
+  expect(japanese).not.toContain("承認しました");
+  expect(head(japanese)).not.toContain("承認済み");
+  const english = await en(world);
+  expect(english).toContain(EN.evAnswerUnrecorded);
+});
+
 test("the result is read off the recorded sentences, and an old green claims no split", () => {
   const said = (entries: [string, string, number][]) =>
     new Map(entries.map(([id, body, atMs]) => [id, { body, atMs }]));
@@ -193,6 +232,7 @@ function lap(parts: Partial<IterationRecord>): IterationRecord {
     updatedAtMs: 2,
     reason: null,
     failureKind: null,
+    gateAnswer: "approve",
     plan: { topic_branch: "rondo/i-1", base_branch: "main" },
     ...parts,
   } as IterationRecord;
@@ -212,9 +252,24 @@ test("an answered gate says what was answered: approved, a change asked for, or 
   expect(ended(lap({}), false)?.said).toBe(
     "You approved the work. It is not published yet: no pull request has been opened.",
   );
-  // **Ask for a change closes the gate the same way**; what tells it apart is
-  // the next try built on this one (lap 11's try 1 was drawn as taken in).
-  expect(ended(lap({}), true)?.said).toBe("You asked for a change. The next try works on it.");
+  // **Ask for a change closes the gate the same way**, so what tells it apart
+  // is the answer rondo recorded when it carried it (rondo#385, D-0092).
+  expect(ended(lap({ gateAnswer: "revise" }), true)?.said).toBe(
+    "You asked for a change. The next try works on it.",
+  );
+  // rondo#385 itself: the next try was refused, so none was built on this one
+  // -- and the line still says a change was asked for, never an approval.
+  expect(ended(lap({ gateAnswer: "revise" }), false)?.said).toBe(
+    "You asked for a change. The next try has not started.",
+  );
+  // The record wins over the next try: an approval is an approval.
+  expect(ended(lap({ gateAnswer: "approve" }), true)?.said).toContain("You approved the work.");
+  // A lap answered before the record existed: a next try built on it can only
+  // have been a change, and without one rondo says it does not know.
+  expect(ended(lap({ gateAnswer: null }), true)?.said).toBe(
+    "You asked for a change. The next try works on it.",
+  );
+  expect(ended(lap({ gateAnswer: null }), false)?.said).toBe(EN.evAnswerUnrecorded);
   expect(ended(lap({ gateOutcome: "withdrawn" }), false)?.said).toBe(
     "The confirmation closed without an approval.",
   );

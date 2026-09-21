@@ -78,6 +78,7 @@ const recordWith = (status: IterationStatus, attempts = 1): IterationRecord => (
   lapDurationMs: null,
   reason: null,
   failureKind: null,
+  gateAnswer: null,
   createdAtMs: 0,
   updatedAtMs: 0,
 });

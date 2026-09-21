@@ -16,7 +16,14 @@ import { expect, test } from "vitest";
 
 import { PRIMARY, SECONDARY } from "../../src/access/page/vocabulary.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
-import { fresh, gateWithChecks, openRequest, operatorPage, portsOver } from "./page-world.js";
+import {
+  fresh,
+  gateWithChecks,
+  openRequest,
+  operatorPage,
+  portsOver,
+  recordAnswer,
+} from "./page-world.js";
 
 const DRY_RUN = {
   kind: "ready" as const,
@@ -90,6 +97,7 @@ test("a thread with a gate waiting leaves the gate as the press, and the scope o
 test("an approved lap's next step is drawn filled and named for what it does: a pull request", async () => {
   const world = fresh();
   await gateWithChecks(world);
+  await recordAnswer(world, "i-0001");
   await world.store.transition(
     "i-0001",
     "awaiting_human",
@@ -110,6 +118,33 @@ test("an approved lap's next step is drawn filled and named for what it does: a 
   expect(classOf(html, "scope-req-1")).toBe(`${SECONDARY} h-7 px-3 text-meta`);
   // And in Japanese, from what it does rather than from the English line.
   expect(chromeFor("ja").publishAction).toBe("プルリクエストを作る");
+});
+
+test("a lap answered with a change, or with no record of which answer, offers no pull request (rondo#385)", async () => {
+  // Publishing cannot be taken back, so the way onto it is drawn only over an
+  // approval rondo recorded (D-0092) -- never over a change the person asked
+  // for whose next try was refused, and never on a guess.
+  for (const answer of ["revise", null] as const) {
+    const world = fresh();
+    await gateWithChecks(world);
+    if (answer !== null) {
+      await recordAnswer(world, "i-0001", answer);
+    }
+    await world.store.transition(
+      "i-0001",
+      "awaiting_human",
+      "closed",
+      { gateOutcome: "answered_and_forwarded" },
+      5_000,
+    );
+    const html = await operatorPage(
+      portsOver(world, "ada", [], null, null, async () => DRY_RUN),
+      "t",
+      threadOf("req-1"),
+    );
+    expect(html).not.toContain("publish-i-0001");
+    expect(html).not.toContain(EN.nextStepPublish);
+  }
 });
 
 test("every press says what it is doing once pressed, and a long one what it waits on", async () => {

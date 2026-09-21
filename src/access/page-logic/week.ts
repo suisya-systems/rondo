@@ -34,9 +34,8 @@
  * screen that shows it is the scope screen's (`D-0074` section 4.2), not this
  * face's.
  */
-import type { IterationRecord } from "../../store/records.js";
+import { approvedForPublication, type IterationRecord } from "../../store/records.js";
 import type { StepState } from "./governance.js";
-import { approvedAt } from "./thread-events.js";
 
 /**
  * **Why an answer walked at a gate from the page is not in *you answered*.**
@@ -267,7 +266,8 @@ export function stepsOf(
     ),
     {
       name: "publish",
-      state: published ? "done" : approvedAt(record) && closed ? "yours" : "ahead",
+      // The person's only on a recorded approval (D-0092).
+      state: published ? "done" : approvedForPublication(record) ? "yours" : "ahead",
     },
     { name: "landing", state: "yours" },
   ];

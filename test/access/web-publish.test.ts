@@ -30,6 +30,7 @@ import {
   PLAN,
   planFor,
   portsOver,
+  recordAnswer,
   reserve,
   WINDOWS_HEAVY_TIMEOUT_MS,
 } from "./page-world.js";
@@ -37,6 +38,8 @@ import {
 /** One approved, ended lap: the only state with a publish screen (rondo#233 S5). */
 async function approvedLap(world: ReturnType<typeof fresh>): Promise<void> {
   await gateWithChecks(world);
+  // What the approve press records beside the gate answer (D-0092).
+  await recordAnswer(world, "i-0001");
   const closed = await world.store.transition(
     "i-0001",
     "awaiting_human",
@@ -555,6 +558,10 @@ async function publishableWorld(
     ["performing", "awaiting_human", { gateId: `gate-${iterationId}` }, taken],
     ["awaiting_human", "closed", { gateOutcome: "answered_and_forwarded" }, undefined],
   ] as const) {
+    if (to === "closed") {
+      // What the approve press records beside the gate answer (D-0092).
+      await store.recordGateAnswer(iterationId, `gate-${iterationId}`, "approve", "ada", 2_000);
+    }
     const moved = await store.transition(iterationId, from, to, fields, 2_000, carried);
     expect(moved.kind, to).toBe("transitioned");
   }

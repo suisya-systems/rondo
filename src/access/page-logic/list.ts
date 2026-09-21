@@ -18,15 +18,14 @@
  * answers *which row does the line sit above*, once, and no row carries a
  * *new* of its own.
  */
-import type { IterationRecord } from "../../store/records.js";
+import { approvedForPublication, type IterationRecord } from "../../store/records.js";
 import { byDay, type DayCut } from "./days.js";
 import type { LapResult } from "./result.js";
-import { approvedAt } from "./thread-events.js";
 
 /**
  * What a request's row says about its state, as a name the wording set says.
  *
- * `approved` is a gate answered yes (rondo#376), apart from `finished`: what a
+ * `approved` is a gate recorded as answered yes (rondo#376, D-0092), apart from `finished`: what a
  * row says next is whether it was published and what its checks came to, and
  * a row that read *finished* there said nothing about either.
  */
@@ -94,7 +93,13 @@ export function rowStateOf(
   if (!isTerminal(record)) {
     return "running";
   }
-  return record.status !== "closed" ? "stopped" : approvedAt(record) ? "approved" : "finished";
+  // `approved` only on a recorded approval (D-0092): a change asked for, or an
+  // answer rondo holds no record of, is not one.
+  return record.status !== "closed"
+    ? "stopped"
+    : approvedForPublication(record)
+      ? "approved"
+      : "finished";
 }
 
 /**

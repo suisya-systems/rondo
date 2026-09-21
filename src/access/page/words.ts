@@ -79,9 +79,18 @@ export interface PageWords extends DayWords {
    * `evAskedChange` is the same gate answered by asking for a change -- the
    * row alone cannot tell the two apart, the next try built on this one can.
    * `evClosedUnapproved` is a gate that ended any other way.
+   *
+   * **Which answer it was is rondo's record, not the next try** (rondo#385,
+   * D-0092). `evAskedChangeNoNextTry` is a change asked for whose next try did
+   * not start -- refused on budget or scope, say -- which used to read as an
+   * approval. `evAnswerUnrecorded` is a lap answered before rondo kept that
+   * record and with no next try to show it was a change: rondo does not know,
+   * so it says so and offers no pull request.
    */
   readonly evApproved: (published: boolean) => string;
   readonly evAskedChange: string;
+  readonly evAskedChangeNoNextTry: string;
+  readonly evAnswerUnrecorded: string;
   readonly evClosedUnapproved: string;
   /** The line a publish is said as; the pull request is the link after it. */
   readonly evPublished: string;
@@ -284,6 +293,10 @@ export const PAGE_EN: PageWords = Object.freeze({
       ? "You approved the work."
       : "You approved the work. It is not published yet: no pull request has been opened.",
   evAskedChange: "You asked for a change. The next try works on it.",
+  evAskedChangeNoNextTry: "You asked for a change. The next try has not started.",
+  evAnswerUnrecorded:
+    "The confirmation was answered, but there is no record of whether it was an approval or " +
+    "a change request, so no pull request is offered for it.",
   evClosedUnapproved: "The confirmation closed without an approval.",
   evPublished: "Published, and a pull request was opened:",
   evChecks: (pullRequest, word, detail) =>
@@ -419,6 +432,9 @@ export const PAGE_JA: PageWords = Object.freeze({
       ? "承認しました。"
       : "承認しました。まだ公開していません（プルリクエストはまだありません）。",
   evAskedChange: "変更を頼みました。次の回でやり直します。",
+  evAskedChangeNoNextTry: "変更を頼みました。次の回は始まっていません。",
+  evAnswerUnrecorded:
+    "確認には答えていますが、承認か変更依頼か、記録がありません。そのため、プルリクエストは出しません。",
   evClosedUnapproved: "承認されないまま、確認が閉じました。",
   evPublished: "公開しました。プルリクエストを開きました:",
   evChecks: (pullRequest, word, detail) =>
