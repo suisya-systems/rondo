@@ -1,0 +1,60 @@
+/**
+ * rondo#377: every lap's prompt carries the same definition of done, whatever
+ * the request says -- commit, run the repository's own install and
+ * verification, and say so when it cannot run -- so lap 11's one-line request
+ * would not have ended on an empty branch (`docs/operations/lap-11-dogfood.md`
+ * N-47).
+ */
+import { expect, test } from "vitest";
+
+import { withNamedIssues } from "../../src/access/cli.js";
+import { DONE_OPENING, definitionOfDone } from "../../src/access/done.js";
+import { readRunPlan } from "../../src/refrain/plan.js";
+import { planDocument, world } from "./fixtures/drafter.js";
+
+/** Lap 11's drafted prompt, in its shape: the change, and not a word about committing. */
+const DRAFTED =
+  "#291 の文言カタログを言語ごとに 1 ファイルへ分けてください。ビルドとテストが従来どおり通ることを確認してください。";
+
+const CRITERION = {
+  severities: { blocker: "b", major: "m", minor: "n", nit: "t" },
+  rule_files: ["AGENTS.md"],
+};
+
+async function lapPrompt(document: Record<string, unknown>): Promise<string> {
+  const w = await world();
+  await w.say(
+    "r1",
+    "https://github.com/suisya-systems/rondo/issues/291 をやってほしい",
+    null,
+    1_000,
+  );
+  const planned = readRunPlan({ ...planDocument(), ...document, prompt: DRAFTED });
+  if (planned.kind !== "planned") throw new Error(planned.reason);
+  const quoted = await withNamedIssues(w.record, "r1", planned.plan);
+  if ("refusal" in quoted) throw new Error(quoted.refusal);
+  return quoted.prompt;
+}
+
+test("a drafted prompt that never says commit still reaches the lap asking for a commit and the repository's verification", async () => {
+  expect(DRAFTED).not.toMatch(/commit/i);
+  const prompt = await lapPrompt({});
+  // The drafter's words first and unchanged; rondo's section after them.
+  expect(prompt.startsWith(`${DRAFTED}${DONE_OPENING}`)).toBe(true);
+  expect(prompt).toContain("Commit your work on this lap's branch.");
+  expect(prompt).toContain("run the repository's own install and verification");
+  expect(prompt).toContain("Never say it passed when it did not run.");
+});
+
+test("the plan's rule files are named to the worker, the files the model reviewer is handed", async () => {
+  const prompt = await lapPrompt({ review_criterion: CRITERION });
+  expect(prompt).toContain(
+    "The repository's own rules are in AGENTS.md in your workspace: read it first and follow its order of work.",
+  );
+});
+
+test("the section is ASCII, so it reaches continuo's command line on a cp932 console (D-0004)", () => {
+  for (const files of [[], ["AGENTS.md"], ["AGENTS.md", "CONTRIBUTING.md"]]) {
+    expect(definitionOfDone(files)).toMatch(/^[\x20-\x7e\n]*$/);
+  }
+});

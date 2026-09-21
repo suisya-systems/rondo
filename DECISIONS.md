@@ -126,6 +126,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0086 | Event lines fold twice and by no number: every try but the newest is one line, what the person has already read is one line over the top, and a decision rondo made without asking is never inside either | accepted |
 | D-0087 | The Windows cells leave the pull-request path for the nightly schedule and `workflow_dispatch`: the matrix becomes an expression over the trigger, the double-green rule is untouched, and every guarantee only Windows carries is now carried a night later | accepted |
 | D-0088 | The Windows cell's temporary files move to the runner's local disk: `continuo D-1109` is ported because rondo measured continuo-shaped and not cadenza-shaped, and the cell halves without a test, a timeout or a durability claim changing | accepted |
+| D-0089 | A lap's definition of done is rondo's to add, not the drafter's to remember: every lap's prompt carries a fixed definition of done after its request and names the rule files its plan names, which the worker reads in its own workspace | accepted |
 
 ---
 
@@ -9791,6 +9792,16 @@ either a literal in `src/access/` or a value read off continuo's gate.
    text plus a known constant rather than something rondo partly wrote. And it is ASCII, so `D-0004`
    is untouched on every path that could print an argv, even though the sentence is not printed to a
    console today.
+   > **Annotation (2026-09-22, from D-0089).** Added after this entry was accepted, and **not
+   > additive**, by the answer of rondo's human gate on rondo#377. **The language sentence is no longer
+   > the only thing rondo composes into a request.** Every lap's prompt now also carries a fixed
+   > definition of done after its request (`D-0089` rule 1): commit, run the repository's own install
+   > and verification, and say so when it cannot run. It is built the way this rule builds the
+   > language sentence: a known ASCII constant, plus the names of the rule files the plan names, about
+   > how the work is finished and never about what the work is. So `--prompt` is still the request
+   > plus known constants and carried text, not something rondo partly wrote. `D-0078`'s quoted issues
+   > and `src/refrain/revision.ts`'s revision section had already added framing of rondo's own before
+   > this annotation. Nothing above is edited.
 
 8. **What the ledger records is the ask, and never the language of the bytes.** rondo does not read
    the `rationale` to find out what language it is in, now or later: that is `D-0050` rule 6's refusal
@@ -20398,3 +20409,132 @@ no log explains. Headroom against that cap is the durable half.
 - **Red Windows nightlies not falling.** This entry claims nothing about flakiness -- continuo left
   the same claim unmeasured deliberately -- so a flat failure rate does not falsify it. It is
   recorded here so that a later reader counting nightlies knows the count was never the argument.
+
+## D-0089 — A lap's definition of done is rondo's to add, not the drafter's to remember: every lap's prompt carries a fixed definition of done after its request and names the rule files its plan names, which the worker reads in its own workspace
+
+**Status:** accepted (2026-09-22, rondo's human gate, on rondo#377). Two points were put to the gate;
+the answers are recorded in "What was put to the human gate, and its answer". Refs `D-0009`,
+`D-0053`, `D-0060`, `D-0063`, `D-0065`, `D-0075`, `D-0077`, `D-0078`, rondo#373, rondo#377.
+
+**This entry builds as well as decides.** The change that carries it is rondo#377's.
+
+**Why an entry is needed at all.** In lap 11 (`docs/operations/lap-11-dogfood.md`, N-45 and N-47) the
+owner wrote one line, *「https://github.com/suisya-systems/rondo/issues/291 をやってほしい」*, which is
+the request the completion definition expects (`D-0075`'s K1). The drafter's prompt described the
+change and asked the worker to confirm the build and tests still passed. It did not ask it to
+**commit**, and it did not name the repository's order of work. Try 1 edited three files, committed
+nothing, and failed its verification. Both readings caught it (`D-0060`'s uncommitted paths and the
+model reading), and try 2 delivered, but it cost a lap, about 8 minutes, and a dispute the person
+should not have had to settle. The owner also refused the alternative of writing a longer request
+(*「なんで英語なん？しかもこんなに長文で指示する？」*). So the fix cannot be a longer request, and a
+definition of done has to reach every lap, however short the request.
+
+### What was measured, and how
+
+At rondo `47ea4bd` on **2026-09-22**, by reading. Line numbers drift; re-measure the claim, not the
+number.
+
+- **Where "done" lived before this entry: nowhere a lap was sure to receive it.** A plan's `prompt`
+  from setup is a placeholder (`scripts/dogfood-env.sh`, "Replace this with the request"). A held
+  plan's start runs the request's own words, and a drafted split runs the drafter's prompt
+  (`D-0063` rule 4.2). `review_criterion.rule_files` was `[]` in setup's default criterion
+  (`scripts/dogfood-review-criterion.json`), so the model reviewer was given no rule file either.
+- **Every lap's prompt passes through one function.** `withNamedIssues` (`src/access/cli.ts`) is
+  where `D-0078` section 3.4's quote is added, on the command line's `start` and on the page's two
+  starts (scoped and drafted split). A `revise` successor carries its predecessor's prompt
+  (`src/refrain/revision.ts`), so whatever that function adds reaches a revision too.
+- **The worker can read its own workspace, and cannot read the forge.** Its workspace is cut from the
+  plan's repository at the plan's base branch, so a rule file named relative to the repository root
+  is there, at the commit the work starts from. This is the difference from an issue (`D-0078`
+  section 1.2).
+- **The prompt reaches continuo as one argument** (`--prompt=` in `src/continuo/invoker.ts`). Linux
+  caps one argument at 131 072 bytes (`MAX_ARG_STRLEN`), and Windows caps a whole command line near
+  32 767 characters (`src/access/issue-read.ts`'s note on `REQUEST_ISSUES_BOUND_BYTES`). rondo's own
+  `AGENTS.md` is 21 054 bytes.
+
+### The decision
+
+1. **Every lap's prompt carries the same definition of done, whatever the request says.** It is a
+   fixed ASCII section rondo adds after the drafted or written request and before `D-0078`'s quoted
+   issues, in `withNamedIssues`. It asks three things: commit the work on the lap's branch; before
+   reporting, run the repository's own install and verification, as the repository defines them;
+   if the verification cannot run or does not pass, say so, and never say it passed when it did
+   not run. Its words are `definitionOfDone` in `src/access/done.ts`, which is the one place they
+   are recorded.
+2. **The repository's own words come from the rule files the plan names, and they are named, not
+   quoted.** The plan names them in `review_criterion.rule_files`, the field that already hands them
+   to the model reviewer (`D-0065`), so the worker and the reviewer are pointed at the same files by
+   one field. The section's last line tells the worker to read those files in its workspace first
+   and follow their order of work. A plan that names none gets a line pointing the worker at the
+   repository's own documents (AGENTS.md, CONTRIBUTING.md or README.md) instead.
+3. **Setup names the target's `AGENTS.md`.** When the criterion setup writes has an empty
+   `rule_files` and the target repository's base branch holds an `AGENTS.md`, setup writes
+   `["AGENTS.md"]` (`scripts/dogfood-env.sh`). A criterion that names its own files is left as it is.
+4. **The drafter writes what to change, and the plan supplies done** (the gate's point 2). The
+   drafter's prompt is not asked to say "commit" or restate the repository's steps, and nothing
+   checks whether it does. A drafter that says them anyway is not wrong, only longer.
+5. **The person sees it where they approve** (`D-0076` rule 1.3.3, as `D-0078` section 4.4 does for
+   issues). The scope screen shows the three asks beside the request, in the person's language,
+   because they are the same on every lap. The rule files are a plan's, so they are shown beside
+   each plan a start runs on, with the exact words the worker is sent in a fold: the plan the form
+   or the approved start names, and for a drafted split, each plan's template as its snapshot froze
+   it, which is what the start runs.
+6. **A lap is recognised as its plan's with these sections after it.** The drafted-start "already
+   started" check (`src/access/drafted-start.ts`) treats a lap's prompt that is its plan's prompt
+   plus the definition of done, or, for a lap admitted before this entry, plus the issues alone, as
+   that plan's.
+
+### What was put to the human gate, and its answer
+
+1. **Where the definition of done is recorded** (rondo#377's first open decision).
+   - **(a) A field on the plan** that setup composes (`D-0075`). *Loses:* the repository's own words;
+     a per-plan paragraph somebody has to write for each repository.
+   - **(b) A rule file the plan names, such as AGENTS.md** (recommended), with the smallest fixed
+     sentence rondo must add wherever (b) cannot promise it (commit; do not claim a verification that
+     did not run). *Loses:* nothing (a) keeps; a repository with no rule file gets only the fixed
+     sentence.
+   - **(c) A fixed rondo-owned paragraph alone.** *Loses:* the repository's own steps; rondo would
+     have to guess how every repository installs and verifies.
+
+   And, under (b), **how the rule file reaches the worker**:
+   - **(b1) Quoted into the prompt byte for byte**, as `D-0078` quotes an issue. *Loses:* bounds.
+     A 21 KB AGENTS.md, a drafted prompt and a quoted issue can exceed Windows' command line, so a lap
+     would be refused at its start, and a file that cannot be read or is too long needs its own
+     failure on the page.
+   - **(b2) Named, for the worker to read in its own workspace** (recommended). *Loses:* the rule
+     file's words are not in the prompt. The worker reads them from the same commit its work starts
+     from, so they are the repository's words unchanged.
+2. **Whether the drafter must also say it.** (a) No: the drafter writes *what*, the plan supplies
+   *done* (recommended). (b) Yes, as well. *Loses:* the drafter's memory becomes a second place the
+   definition lives, which is the failure lap 11 showed.
+
+**The gate's answer (2026-09-22, on rondo#377):** point 1 **(b) with the fixed sentence**, and under it
+**(b2)**; point 2 **(a)**.
+
+### Annotations this entry adds
+
+- **`D-0053` rule 7** gains an annotation, not additive: the language sentence is no longer the only
+  thing rondo composes into a request. The annotation is in the text of `D-0053`.
+
+### What this entry does not do
+
+- **It does not check that a lap committed or verified.** `D-0060` still reads uncommitted work
+  and the model reading still judges the result. This entry changes what the worker is asked, not
+  what is checked.
+- **It does not quote a rule file**, and does not read one outside the lap. The model reviewer's
+  reading of the rule files (`D-0065`) is unchanged.
+- **It does not change the lap's fence**, continuo's worker role, or the plan's `allowed_bash`. A
+  repository whose verification needs a command the plan does not declare is still refused that
+  command, and the definition of done then asks the worker to say that verification could not run.
+- **It does not re-prompt laps already admitted.** Their prompts stay as they were recorded.
+
+### What would falsify it
+
+- **A lap that ends with uncommitted work, or claims a verification that did not run**, when its
+  prompt carried this section. The next move is to measure whether the worker read the section and
+  what it answered, before strengthening the words.
+- **A repository whose rule files are not at its root, or not in the workspace** (a generated or
+  ignored file). A named file the worker cannot open would point it at nothing, and (b1)'s quote
+  would then be worth its bounds.
+- **A drafter that keeps restating the definition** in its own words. That would mean the split in
+  rule 4 is not holding, and the drafter's instructions need to say that rondo supplies it.

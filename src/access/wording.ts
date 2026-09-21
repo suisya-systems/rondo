@@ -162,6 +162,17 @@ export interface Chrome extends PageWords {
   readonly scopeIssueGiven: string;
   readonly scopeIssueNotGiven: string;
   readonly scopeIssuePending: string;
+  /**
+   * The definition of done every lap is given after its request (rondo#377),
+   * beside the request on the scope screen: its three asks in the person's
+   * words, the repository's own rule files it points the worker at, and a fold
+   * holding the words the worker is sent, which are rondo's constant.
+   */
+  readonly scopeDoneHeading: string;
+  readonly scopeDoneAsks: readonly string[];
+  readonly scopeDoneRules: (files: readonly string[]) => string;
+  readonly scopeDoneNoRules: string;
+  readonly scopeDoneExact: string;
   /** The summary's row for an ask: the request it was asked in. */
   readonly inReplyTo: (who: string, words: string) => string;
   readonly basesLabel: string;

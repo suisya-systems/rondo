@@ -22,6 +22,7 @@ import type { HostPolicy } from "../refrain/policy.js";
 import { repositoryKey, sharedPaths, WHOLE_REPOSITORY } from "../store/lanes.js";
 import { canonicalJson } from "../store/plan.js";
 import type { AdvisoryRecord, IterationStore, LedgerLine } from "../store/sqlite.js";
+import { DONE_OPENING } from "./done.js";
 import { ISSUES_QUOTE_OPENING } from "./issue-read.js";
 import { type DraftedPlanRun, draftedPlanRun } from "./model-draft/host.js";
 import { gatherScopeSnapshot, type ScopeReadPorts, scopeVerdict } from "./scope.js";
@@ -181,9 +182,13 @@ async function startedFrom(
     if (ran.kind !== "planned") {
       continue;
     }
-    // A lap's prompt is its plan's with the issues it was given after it
-    // (D-0078 section 3.4); that section is the lap's, not the plan's.
-    const prompt = ran.plan.prompt.startsWith(run.plan.prompt + ISSUES_QUOTE_OPENING)
+    // A lap's prompt is its plan's with the definition of done (rondo#377)
+    // and the issues it was given after it (D-0078 section 3.4); those
+    // sections are the lap's, not the plan's. A lap admitted before rondo#377
+    // has the issues alone.
+    const prompt = [DONE_OPENING, ISSUES_QUOTE_OPENING].some((opening) =>
+      ran.plan.prompt.startsWith(run.plan.prompt + opening),
+    )
       ? run.plan.prompt
       : ran.plan.prompt;
     if (planIdentity({ ...ran.plan, prompt }) === identity) {

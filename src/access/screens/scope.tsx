@@ -6,6 +6,7 @@ import {
   type ScopeBudgets,
 } from "../../advisory/budget.js";
 import { FINDING_SEVERITIES, SCOPE_OUTWARD_ACTS, type StoredScope } from "../../store/records.js";
+import { definitionOfDone, planRuleFiles } from "../done.js";
 import { draftedStartReadiness } from "../drafted-start.js";
 import {
   type DraftedPlanShown,
@@ -329,6 +330,7 @@ export async function scopeView(
         {request.body}
       </p>
       {scopeIssues(wording, threads, view.messageId)}
+      {scopeDone(wording)}
     </header>
   );
   // **The third state** (D-0074 rule 4.2): raising the approval a waiting lap
@@ -426,6 +428,54 @@ function scopeIssues(wording: Chrome, threads: Threads, requestMessageId: string
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * The definition of done every lap of this request is given after its prompt
+ * (D-0089, rondo#377), beside the request: the person approves work whose end
+ * is this, so it is on the screen where they approve, as the issues are. Its
+ * three asks are the same on every lap; the rule files it points the worker
+ * at are a plan's, so {@link planDone} says them where each plan is shown.
+ */
+function scopeDone(wording: Chrome) {
+  return (
+    <section class="scope-done ml-9 space-y-1 text-body leading-5">
+      <h3 class="text-meta font-medium text-muted-foreground">{wording.scopeDoneHeading}</h3>
+      <ul class="space-y-1">
+        {wording.scopeDoneAsks.map((ask) => (
+          <li>{ask}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * One plan's part of the definition of done: the rule files it points the
+ * worker at, and in a fold the exact words a lap run on it is sent. Drawn
+ * beside the plan a start runs on -- for a drafted split, from the template
+ * its snapshot froze, which is what `draftedPlanRun` starts.
+ */
+function planDone(wording: Chrome, ruleFiles: readonly string[]) {
+  return (
+    <div class="plan-done space-y-1" data-rule-files={ruleFiles.join(" ")}>
+      <p class="text-meta leading-5 wrap-anywhere text-muted-foreground">
+        {ruleFiles.length === 0 ? wording.scopeDoneNoRules : wording.scopeDoneRules(ruleFiles)}
+      </p>
+      <details class="group">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+          {chevron()}
+          {wording.scopeDoneExact}
+        </summary>
+        <p
+          class="mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+          lang="en"
+        >
+          {definitionOfDone(ruleFiles).trimStart()}
+        </p>
+      </details>
+    </div>
   );
 }
 
@@ -621,6 +671,7 @@ async function scopeForm(
             {wording.scopeWorkspace(workspace.repository, workspace.workspace_root)}
           </p>
         ))}
+        {planDone(wording, planRuleFiles(chosen.document))}
         <p class="text-meta leading-5 font-medium text-muted-foreground">
           {wording.scopeAgentTypeBounds}
         </p>
@@ -1256,6 +1307,7 @@ async function draftedPlansList(
         >
           {plan.split.prompt}
         </p>
+        {plan.ruleFiles === null ? null : planDone(wording, plan.ruleFiles)}
         {startOf === undefined ? null : await startOf(plan)}
       </li>,
     );
@@ -1578,6 +1630,7 @@ async function scopeApproved(
           <p class="text-body leading-5 wrap-anywhere text-muted-foreground">
             {`${wording.scopePlanAsk}: ${planLine(wording, runsOn)}`}
           </p>
+          {planDone(wording, planRuleFiles(runsOn.document))}
           {/* Minted at render, as the scope id is, and for its reason: rondo
               names the lap (D-0023) and a double press is one lap. */}
           <input type="hidden" name="iteration" value={newIterationId()} />
