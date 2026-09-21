@@ -307,6 +307,19 @@ the string a required-checks ruleset would name, is
 are discovered, run its steps by hand before pushing** — a green suite over an
 empty walk looks exactly like a green suite.
 
+**Before you add code, read `D-0064` section 5's role table (D-0093).** The
+layers say what a module may reach; they do not say whether the work is
+rondo's. Authority and settings -- what a worker is allowed to run -- is
+cadenza's. Running a worker and recording what it did -- its lap, its
+transcript and spend, its sandbox, CI and merge watch -- is continuo's. The
+surfaces a person talks to, running the organisation (the secretary, the
+dispatcher, the reviewer) and its record are rondo's. So the sweep asks every
+module for its role in `ROLES_BY_MODULE`: a module with none fails, and a row
+the table gives to cadenza or continuo fails with the owner named. The answer
+to that failure is to build it in the other repository, not to pick a nearer
+role. `RELOCATING` lists what is still here while it moves; it only shrinks,
+and a new entry needs a decision that names its module.
+
 ## 6. Anything rondo prints is ASCII (D-0004)
 
 CI includes a Windows cell, where the console may be cp932. A character that
