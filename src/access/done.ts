@@ -1,5 +1,5 @@
 /**
- * A lap's definition of done (rondo#377): the section rondo puts after every
+ * A lap's definition of done (D-0089, rondo#377): the section rondo puts after every
  * lap's request, whatever the request says, so a one-line request still asks
  * for committed work and the repository's own verification.
  *
