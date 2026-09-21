@@ -40,7 +40,8 @@ const STEPS: readonly WorkStep[] = [
 const governance = (over: Partial<Governance> = {}): Governance => ({
   repository: "o/r",
   askedAtMs: 1_000,
-  allowance: { spentUsd: 5, approvedUsd: 50 },
+  allowance: { spentUsd: 5, heldUsd: 0, heldTries: 0, heldInProgress: false, approvedUsd: 50 },
+  byTry: [{ costUsd: 5, running: false }],
   tries: { at: 1, of: 4 },
   chain: [
     { step: "answer", state: "waiting" },
@@ -82,6 +83,36 @@ test("what was agreed is on the face in full: the allowance, what is left, the t
   for (const said of [EN.stepWork, EN.stepChecks, EN.stepReading, EN.stepApproval, EN.stepLanding])
     expect(html).toContain(said);
   expect(html).toContain("side-step side-step-waiting");
+});
+
+test("what is held for the try in progress is said beside the spend, and is not left", () => {
+  // rondo#378: lap 11's owner read a reserve as money spent. The reserve is
+  // its own figure now, and what is left takes it out, as the store's check does.
+  const html = side({
+    allowance: {
+      spentUsd: 0.79,
+      heldUsd: 2.5,
+      heldTries: 1,
+      heldInProgress: true,
+      approvedUsd: 25,
+    },
+  });
+  expect(html).toContain("$0.79 of $25.00, with $2.50 held for the try in progress");
+  expect(html).toContain("$21.71");
+});
+
+test("a request of several tries shows its total, with each try as the detail", () => {
+  const html = side({
+    byTry: [
+      { costUsd: 0.7916, running: false },
+      { costUsd: 0.8532, running: false },
+      { costUsd: null, running: true },
+    ],
+  });
+  expect(html).toContain(EN.govByTryLabel);
+  expect(html).toContain("$1.64 (try 1 $0.79, try 2 $0.85, try 3 in progress)");
+  // With one try there is nothing to add up.
+  expect(side()).not.toContain(EN.govByTryLabel);
 });
 
 test("with no approval read, neither the spend nor the reach is drawn", () => {

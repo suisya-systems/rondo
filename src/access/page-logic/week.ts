@@ -61,9 +61,20 @@ export const GATE_ANSWERS_NOT_DATED =
 /** Seven days, as rule 4's window. */
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** One approval in force, narrowed to the two figures rule 6 pairs. */
+/**
+ * One approval in force, narrowed to the figures rule 6 pairs: what was spent,
+ * what is held for tries whose cost is not read yet (rondo#378), and what was
+ * approved.
+ */
 export interface Allowance {
+  /** What the laps' rows say they cost -- read, never reserved. */
   readonly spentUsd: number;
+  /** The reserve the unread laps hold; the store's check counts it as spent. */
+  readonly heldUsd: number;
+  /** How many laps hold it. */
+  readonly heldTries: number;
+  /** Whether every one of them is a try still going (`page-logic/governance.ts`). */
+  readonly heldInProgress: boolean;
   readonly approvedUsd: number;
 }
 
@@ -107,6 +118,9 @@ export function weekFigures(reads: WeekReads, nowMs: number): WeekFigures {
   const inWeek = (atMs: number) => atMs >= fromMs && atMs <= nowMs;
   const spentUsd = reads.allowances.reduce((sum, one) => sum + one.spentUsd, 0);
   const approvedUsd = reads.allowances.reduce((sum, one) => sum + one.approvedUsd, 0);
+  const heldUsd = reads.allowances.reduce((sum, one) => sum + one.heldUsd, 0);
+  const heldTries = reads.allowances.reduce((sum, one) => sum + one.heldTries, 0);
+  const heldInProgress = reads.allowances.every((one) => one.heldTries === 0 || one.heldInProgress);
   return {
     asked: reads.askedAtMs.filter(inWeek).length,
     finished: reads.finishedAtMs.filter(inWeek).length,
@@ -117,7 +131,15 @@ export function weekFigures(reads: WeekReads, nowMs: number): WeekFigures {
         ? null
         : // Never below zero: a spend past its approval is the budget's own
           // refusal to report, and *left* is what remains and not a debt.
-          { spentUsd, approvedUsd, leftUsd: Math.max(0, approvedUsd - spentUsd) },
+          // What is held is not left: the store's check counts it as spent.
+          {
+            spentUsd,
+            heldUsd,
+            heldTries,
+            heldInProgress,
+            approvedUsd,
+            leftUsd: Math.max(0, approvedUsd - spentUsd - heldUsd),
+          },
   };
 }
 

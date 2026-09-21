@@ -23,8 +23,9 @@
  * box here. The title of a running request is a link into its thread, which is
  * where anything is answered.
  */
-import type { WeekFigures, WorkStep } from "../page-logic/week.js";
+import type { Allowance, WeekFigures, WorkStep } from "../page-logic/week.js";
 import type { Chrome } from "../wording.js";
+import { spendSaid } from "./governance.js";
 import { SideSteps } from "./steps.js";
 
 /** A figure in dollars, in the shape `govSpent` writes one (`D-0082`'s scale). */
@@ -39,7 +40,7 @@ export interface SideWork {
   readonly repository: string | null;
   /** How long it has been going, already said: only the caller has read the clock. */
   readonly goingSaid: string;
-  readonly allowance: { readonly spentUsd: number; readonly approvedUsd: number } | null;
+  readonly allowance: Allowance | null;
   readonly tries: { readonly at: number; readonly of: number } | null;
   readonly steps: readonly WorkStep[];
 }
@@ -92,12 +93,7 @@ export function EmptySide({ wording, figures, running, hrefOf }: EmptySideProps)
           <>
             <div>
               <dt>{wording.weekSpentFigure}</dt>
-              <dd>
-                {wording.govSpent(
-                  figures.allowance.spentUsd.toFixed(2),
-                  figures.allowance.approvedUsd.toFixed(2),
-                )}
-              </dd>
+              <dd>{spendSaid(wording, figures.allowance)}</dd>
             </div>
             <div>
               <dt>{wording.weekLeft}</dt>
@@ -125,10 +121,7 @@ export function EmptySide({ wording, figures, running, hrefOf }: EmptySideProps)
               <span>
                 {work.allowance === null
                   ? wording.weekNoAllowance
-                  : wording.govSpent(
-                      work.allowance.spentUsd.toFixed(2),
-                      work.allowance.approvedUsd.toFixed(2),
-                    )}
+                  : spendSaid(wording, work.allowance)}
               </span>
               {work.tries === null ? null : (
                 <span>{wording.govTries(work.tries.at, work.tries.of)}</span>

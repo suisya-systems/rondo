@@ -18,7 +18,25 @@
  * both.
  */
 import type { ChainLink, Governance } from "../page-logic/governance.js";
+import type { Allowance } from "../page-logic/week.js";
 import type { Chrome } from "../wording.js";
+
+/**
+ * Spent against approved, and what is held beside it (rondo#378), in the one
+ * shape every face says it: the line, the right face and the week's face.
+ * Nothing is held once every try's cost is read, and then the pair stands alone.
+ */
+export function spendSaid(wording: Chrome, allowance: Allowance): string {
+  const pair = wording.govSpent(allowance.spentUsd.toFixed(2), allowance.approvedUsd.toFixed(2));
+  return allowance.heldTries === 0
+    ? pair
+    : wording.govHeld(
+        pair,
+        allowance.heldUsd.toFixed(2),
+        allowance.heldTries,
+        allowance.heldInProgress,
+      );
+}
 
 function chainSaid(wording: Chrome, link: ChainLink): string {
   switch (link.step) {
@@ -51,9 +69,7 @@ export function GovernanceLine({
        * sentence stands for the pair rather than a spend nobody agreed to.
        */}
       <span className="gov-spend">
-        {allowance === null
-          ? wording.weekNoAllowance
-          : wording.govSpent(allowance.spentUsd.toFixed(2), allowance.approvedUsd.toFixed(2))}
+        {allowance === null ? wording.weekNoAllowance : spendSaid(wording, allowance)}
       </span>
       {tries === null ? null : <span>{wording.govTries(tries.at, tries.of)}</span>}
       <span className="gov-chain">

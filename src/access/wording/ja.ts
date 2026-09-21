@@ -539,6 +539,10 @@ export const JA: Chrome = Object.freeze({
   scopeBasisColdStart: (measurement) =>
     `${JA_MEASURE[measurement] ?? measurement}: このストアでは一度も測っていないので、rondo の` +
     `初期値を使いました`,
+  scopeColdStartNote: (whole) =>
+    whole
+      ? "ここではまだ周回が記録されていないため、この値は rondo の既定値で、測った値ではありません。"
+      : "一部は rondo の既定値です。挙げたエージェント種別のうち、ここでまだ周回が記録されていないものがあります。",
   scopeBasisPlans: (plans) => `プラン数: ${String(plans)}`,
   scopeBasisRounds: (rounds, byDefault) =>
     byDefault

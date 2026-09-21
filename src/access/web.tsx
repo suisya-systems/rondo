@@ -167,7 +167,7 @@ import { selectRequest, walkPosition } from "./page-logic/selection.js";
 import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
 import { waitsOnYou } from "./page-logic/waits.js";
-import { finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
+import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal } from "./scope.js";
@@ -2587,6 +2587,9 @@ export async function operatorPage(
            * line may carry the count and the right face may name the rules.
            */
           await ports.record.withheldFor(selectedRoot),
+          // Every try of the request, so its cost is read across all of them
+          // and each try's stays as the detail (rondo#378).
+          selectedLaps.map((lap) => lap.record),
         );
   /*
    * **The two messages whose body is not prose**, rendered here because this
@@ -2904,7 +2907,7 @@ export async function operatorPage(
    * here would make a raise read as a total across the chain, which is the
    * misreading rule 2 exists to prevent.
    */
-  const weekApprovals = new Map<string, { spentUsd: number; approvedUsd: number }>();
+  const weekApprovals = new Map<string, Allowance>();
   if (centreIsEmpty) {
     const touched = [...allLapsByRequest.values()]
       .flat()

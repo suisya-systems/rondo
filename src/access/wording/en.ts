@@ -518,6 +518,10 @@ explanation you pressed on and then answers the gate.`,
   scopeBasisColdStart: (measurement) =>
     `${EN_MEASURE[measurement] ?? measurement}: nothing in this store has measured it, so rondo ` +
     `used its own starting figure`,
+  scopeColdStartNote: (whole) =>
+    whole
+      ? "No lap has been recorded here yet, so this is rondo's default, not a measurement."
+      : "Part of this is rondo's default: one of the listed agent types has no lap recorded here yet.",
   scopeBasisPlans: (plans) => `plans: ${String(plans)}`,
   scopeBasisRounds: (rounds, byDefault) =>
     byDefault
