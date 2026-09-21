@@ -5,8 +5,10 @@
 // D-0035), which prescribes it verbatim for one tarball. It became a list with
 // D-0054, which vendored idiomorph's minified file beside the tarball; D-0059
 // R2 replaced that file with htmx out of `node_modules`, whose served bytes
-// `page.manifest.json` pins instead, so the list holds one artifact again and
-// stays a list. Only the comments, the line wrapping and the loop are rondo's. It is a Node script rather than
+// `page.manifest.json` pins instead, and D-0059's annotation of 2026-09-21
+// brought idiomorph back as htmx's morph extension: `idiomorph-ext.min.js` out
+// of the registry's `idiomorph-0.8.0.tgz`, the tarball D-0054 verified, so the
+// list holds two artifacts again. Only the comments, the line wrapping and the loop are rondo's. It is a Node script rather than
 // `sha256sum` because `sha256sum` is GNU coreutils -- absent on stock macOS and
 // on Windows, and rondo's CI matrix includes a Windows cell (DECISIONS.md
 // D-0018 rule 4).
@@ -42,6 +44,10 @@ const ARTIFACTS = [
   {
     artifact: "vendor/suisya-systems-cadenza-0.0.0.tgz",
     digest: "vendor/cadenza.tgz.sha256",
+  },
+  {
+    artifact: "vendor/idiomorph-ext.min.js",
+    digest: "vendor/idiomorph-ext.min.js.sha256",
   },
 ];
 

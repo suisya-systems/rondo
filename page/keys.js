@@ -70,8 +70,8 @@ document.addEventListener("keydown", (event) => {
 });
 
 // **And a selection the person is making is not swapped out from under them.**
-// The redraw replaces every node in the ledger, which clears a text selection
-// even when nothing changed; so while one exists the redraw's request is
+// The redraw merges into the ledger's nodes, and a text node it rewrites loses
+// the part of a selection inside it; so while one exists the redraw's request is
 // cancelled before it is sent, and the next one five seconds later is asked
 // again. Cancelling is the only thing done with that request -- none is built.
 // Only the redraw's: a send from the composer is a person's, and goes.
@@ -82,13 +82,13 @@ document.addEventListener("htmx:beforeRequest", (event) => {
 });
 
 // **And a redraw that brings back what is already on screen swaps nothing.**
-// The swap replaces every node in the ledger, which resets what the browser
-// keeps per element -- a scroll offset, a caret, a hover -- even when not one
-// byte changed. So the ledger the server last sent is kept as text, and a
-// response whose ledger is the same text is not swapped in. Compared against
-// what the server sent and never against the live document, whose folds this
-// script opens. A redraw that did change something still swaps, and resets
-// those offsets: a known limit, not one this script hides.
+// The swap merges the ledger into the nodes already here (idiomorph's morph),
+// which keeps what the browser holds per element -- a scroll offset, a caret,
+// a hover -- when something did change; when nothing did, not starting the
+// merge at all is still cheaper than a merge that finds nothing. So the ledger
+// the server last sent is kept as text, and a response whose ledger is the
+// same text is not swapped in. Compared against what the server sent and never
+// against the live document, whose folds a person opens.
 // The header's waiting count arrives out of band with the same response, so it
 // is part of what "the same" means: a count that changed alone still swaps
 // (#220 S1, Codex).

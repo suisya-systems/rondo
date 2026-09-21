@@ -1,8 +1,8 @@
 // What an open tab does when the person's turn comes (rondo#311, plan 2).
 //
 // The page already reads itself every five seconds. This is the whole of the
-// addition: notice when the number of requests waiting on the person goes *up*
-// between two of those readings, and ring once.
+// addition: notice when a wait this tab has never seen appears in one of those
+// readings, and ring once.
 //
 // **It decides nothing about waiting.** The waits come off `#ledger`'s
 // `data-waits`, which the server writes from the same pass the list's *your
@@ -19,16 +19,21 @@
 // what is compared is the set: each wait carries a key that is new exactly
 // when the wait is, which is the same test the host's own tick makes.
 //
-// **And a wait that is still standing is not rung again.** A key already seen
-// is a turn the person has been told about, or has decided to leave; ringing
-// on every poll while it stands is a program nobody leaves open.
+// **And a wait this tab has already seen is not rung again** -- while it
+// stands, and when it comes back. A key already seen is a turn the person has
+// been told about, or has decided to leave; ringing on every poll while it
+// stands is a program nobody leaves open. So the keys are added up for as long
+// as the tab lives and never forgotten: a reading that drops a wait for one
+// poll (the threads briefly unreadable, a status that goes and returns) and
+// the next that has it again is the same turn, not a new one, and a tab that
+// remembered only its last reading rang for it again (lap 11).
 //
 // **`127.0.0.1` is a secure context**, so `Notification` is available here
 // without TLS. It is still absent in some browsers and refused in others, and
 // every path below treats that as the ordinary case: with no notifications the
 // page is exactly the page it was.
 //
-// **Nothing here is remembered across a reload.** The count starts again from
+// **Nothing here is remembered across a reload.** The keys start again from
 // whatever the document arrived holding, so a reload does not ring for what
 // was already on the screen when it was pressed -- and a tab reopened in the
 // morning rings for nothing, because the person is looking at it.
@@ -61,10 +66,10 @@ const waitingNow = () => {
 /** The sentence the server composed, or null where this view carries none. */
 const sentence = () => document.querySelector("#ledger")?.getAttribute("data-chime") ?? null;
 
-// What the last reading of this tab held. A view with no `#ledger` -- the
-// answer view, which has no refresh either -- leaves this null, and the first
-// view that has one is a starting point rather than a set of new keys.
-let waiting = waitingNow();
+// Every key this tab has seen. A view with no `#ledger` -- the answer view,
+// which has no refresh either -- leaves this null, and the first view that has
+// one is a starting point rather than a set of new keys.
+let seen = waitingNow();
 
 // **The button, and only while the browser has no answer to keep.** A browser
 // grants this from a person's own press, so there is no asking without one;
@@ -113,8 +118,14 @@ document.addEventListener("htmx:afterSwap", () => {
   // **Only a key we have not seen, and only against a reading we have.** The
   // first swap after a view that carried none establishes a starting point
   // instead of ringing off every wait already on the screen.
-  if (waiting !== null && [...now].some((key) => !waiting.has(key))) {
+  if (seen === null) {
+    seen = now;
+    return;
+  }
+  if ([...now].some((key) => !seen.has(key))) {
     ring();
   }
-  waiting = now;
+  for (const key of now) {
+    seen.add(key);
+  }
 });
