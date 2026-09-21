@@ -20994,8 +20994,8 @@ On **2026-09-22**, at rondo `87e62f0`, by reading. Line numbers drift; re-measur
    commit the merge made -- and the result strip (rondo#376) says *merged into `main`* and how, in
    the person's language. Refused, a page says why in the person's language, with the forge's own
    line where the forge refused, and leads back to the thread, where the button still is for
-   another press. A merge the forge accepted and has not made (a merge queue) is said as that and
-   not as merged.
+   another press. A merge the forge accepted and rondo did not then see made -- a merge queue, or a
+   forge that did not answer -- is said as that and never reported as merged.
 
 ### 2. The transition is not taken
 

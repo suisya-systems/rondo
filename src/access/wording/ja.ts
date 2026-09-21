@@ -1089,9 +1089,10 @@ export const JA: Chrome = Object.freeze({
     "もう一度押してください。",
   mergeRefusedFailed: (detail) =>
     `マージしていません。GitHub がマージを断りました。返ってきた理由: ${detail}`,
-  mergeRefusedQueued:
-    "GitHub はマージを受け付けましたが、まだマージされていません（リポジトリがマージキューを" +
-    "使っているのかもしれません）。もう一度押す前に、GitHub でプルリクエストを確かめてください。",
+  mergeRefusedUnconfirmed:
+    "GitHub はマージを受け付けましたが、マージされたことを rondo は確かめられませんでした" +
+    "（リポジトリがマージキューを使っているか、GitHub から返事がありませんでした）。" +
+    "もう一度押す前に、GitHub でプルリクエストを確かめてください。",
   publishRefusedNotStarted:
     "何も公開していません。ここで見た内容は失われていません。" +
     "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",

@@ -1075,7 +1075,8 @@ explanation you pressed on and then answers the gate.`,
     "moment.",
   mergeRefusedFailed: (detail) =>
     `Nothing was merged: the forge refused the merge. It said: ${detail}`,
-  mergeRefusedQueued:
-    "The forge accepted the merge and has not made it yet -- the repository may merge through " +
-    "a queue. Look at the pull request on the forge before pressing again.",
+  mergeRefusedUnconfirmed:
+    "The forge accepted the merge, and rondo could not see it made -- the repository may merge " +
+    "through a queue, or the forge did not answer. Look at the pull request on the forge before " +
+    "pressing again.",
 } satisfies Chrome);

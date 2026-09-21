@@ -1125,7 +1125,7 @@ export type MergeRefusal =
   | "mergeRefusedMethod"
   | "mergeRefusedForge"
   | "mergeRefusedFailed"
-  | "mergeRefusedQueued";
+  | "mergeRefusedUnconfirmed";
 
 /** What one merge press came to; `detail` is the forge's own line. */
 export interface Merged {

@@ -156,11 +156,16 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
   }
   // **What the forge says now, and not what the command printed**: a merge
   // queue accepts a merge it has not made, and only the state tells them apart.
-  // A forge that will not answer after a merge that exited cleanly is still a
-  // merge, said with the base read before it and no commit.
+  // A report of a merge is for good, so one the forge will not confirm is not
+  // written (Codex round 1): the queue may still reject it.
   const after: PullRequestState = await forge.readPullRequest({ url });
-  if (after.kind === "read" && after.state !== "MERGED") {
-    return refused("mergeRefusedQueued", `the forge accepted the merge and says ${after.state}`);
+  if (after.kind !== "read" || after.state !== "MERGED") {
+    return refused(
+      "mergeRefusedUnconfirmed",
+      after.kind === "read"
+        ? `the forge accepted the merge and says ${after.state}`
+        : `the forge accepted the merge and did not answer after it: ${after.reason}`,
+    );
   }
   const line = await reportToRequest(
     ports,
@@ -170,7 +175,7 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
       pullRequestUrl: url,
       into: before.baseBranch,
       method: method.method,
-      mergeCommit: after.kind === "read" ? after.mergeCommit : null,
+      mergeCommit: after.mergeCommit,
     },
     ports.now(),
   );

@@ -226,10 +226,17 @@ test("the forge's refusal is carried as it said it, and nothing is reported merg
   expect(world.messages.some((message) => message.messageId === "report-merged-lap-1")).toBe(false);
 });
 
-test("a merge the forge accepted and has not made is said as that, and not as merged", async () => {
-  const world = await over({ after: { ...open, state: "OPEN" } });
-  expect(await world.press(input)).toMatchObject({ ok: false, why: "mergeRefusedQueued" });
-  expect(world.messages.some((message) => message.messageId === "report-merged-lap-1")).toBe(false);
+test("a merge the forge accepted and did not confirm is said as that, and never reported merged", async () => {
+  for (const after of [
+    { ...open, state: "OPEN" },
+    { kind: "undetermined", reason: "timed out" },
+  ] as const) {
+    const world = await over({ after });
+    expect(await world.press(input)).toMatchObject({ ok: false, why: "mergeRefusedUnconfirmed" });
+    expect(world.messages.some((message) => message.messageId === "report-merged-lap-1")).toBe(
+      false,
+    );
+  }
 });
 
 test("the method is the repository's: the one it allows, else squash, merge, rebase in that order", () => {
