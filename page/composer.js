@@ -280,9 +280,11 @@ document.addEventListener("htmx:afterSwap", redrawn);
 // never draws and a person's click gave, and the words in a draft box. So the
 // morph leaves exactly those alone, and everything else the server sent
 // arrives. It makes no request; it is configuration of the swap htmx already
-// does.
+// does. Not idiomorph's own `ignoreActiveValue` (Codex): that skips the focused
+// box's contents whole, so a draft that landed while the person was typing
+// never reached its `defaultValue` and the note above could not say so. Only
+// the value is left alone, focused or not.
 if (typeof Idiomorph !== "undefined") {
-  Idiomorph.defaults.ignoreActiveValue = true;
   Idiomorph.defaults.callbacks.beforeAttributeUpdated = (name, element) =>
     !(
       (name === "open" && element instanceof HTMLDetailsElement) ||

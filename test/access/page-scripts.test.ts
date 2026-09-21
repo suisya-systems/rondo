@@ -158,7 +158,10 @@ test("the morph is told to leave a fold's open and a draft's words to the person
   const draft = new HTMLTextAreaElement();
   draft.dataset = { draft: "claim:i-0001:gate-i-0001" };
   expect(leaves("value", draft)).toBe(false);
-  expect(Idiomorph.defaults.ignoreActiveValue).toBe(true);
+  // By this callback alone, and not by idiomorph's `ignoreActiveValue`, which
+  // would also keep a new draft out of the focused box's `defaultValue`, where
+  // the note that says a draft arrived reads it (Codex).
+  expect(Idiomorph.defaults.ignoreActiveValue).toBeUndefined();
   // Everything else the server sent arrives: a fold's other attributes, a box
   // that is not a draft, and an `open` on anything that is not a fold.
   expect(leaves("class", new HTMLDetailsElement())).not.toBe(false);
