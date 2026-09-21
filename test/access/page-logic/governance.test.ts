@@ -51,13 +51,70 @@ test("with no approval to read, neither figure is drawn", () => {
   expect(bare.askedAtMs).toBe(1_000);
 });
 
-test("the spend counts the reserve every unread lap still holds", () => {
+test("what is held for an unread lap is its own figure, not part of the spend", () => {
   // `D-0046`: a null cost is *not read*, not zero, and `D-0066` rule 3.4.2
-  // makes it hold the reserve until it is. The figure on the line is the one
-  // the store measures the budget against, or the page would say there was
-  // room the press is about to refuse.
+  // makes it hold the reserve until it is. The store's check still adds the
+  // two; the page says them apart (rondo#378), because a reserve drawn as
+  // spent read as a fact to lap 11's owner and then changed under them.
   const { allowance } = governanceOf(lap({}), null, 1, approval({}, { unreadLaps: 2 }), false, []);
-  expect(allowance).toEqual({ spentUsd: 5 + 2 * 2, approvedUsd: 20 });
+  expect(allowance).toEqual({
+    spentUsd: 5,
+    heldUsd: 2 * 2,
+    heldTries: 2,
+    heldInProgress: false,
+    approvedUsd: 20,
+  });
+});
+
+test("the request's tries are listed with their costs, and a running one holds the reserve", () => {
+  const laps = [
+    lap({ status: "closed", lapCostUsd: 0.79 }),
+    lap({ status: "failed", lapCostUsd: null }),
+    lap({ status: "performing", lapCostUsd: null }),
+  ];
+  const all = governanceOf(
+    laps[2] as IterationRecord,
+    null,
+    1,
+    approval({}, { readCostUsd: 0.79, unreadLaps: 2 }),
+    false,
+    [],
+    laps,
+  );
+  expect(all.byTry).toEqual([
+    { costUsd: 0.79, running: false },
+    { costUsd: null, running: false },
+    { costUsd: null, running: true },
+  ]);
+  // One of the two holding laps ended unread, so *in progress* would be false
+  // of it: the plainer sentence is said.
+  expect(all.allowance?.heldInProgress).toBe(false);
+
+  const going = governanceOf(
+    laps[2] as IterationRecord,
+    null,
+    1,
+    approval({}, { readCostUsd: 0.79, unreadLaps: 1 }),
+    false,
+    [],
+    [laps[0] as IterationRecord, laps[2] as IterationRecord],
+  );
+  expect(going.allowance?.heldInProgress).toBe(true);
+
+  // A lap at its gate with no cost read has none coming: `lap perform` has
+  // returned. It is not *in progress*, and its reserve is not held for one.
+  const suspended = lap({ status: "awaiting_human", lapCostUsd: null });
+  const gated = governanceOf(
+    suspended,
+    null,
+    1,
+    approval({}, { readCostUsd: 0, unreadLaps: 1 }),
+    false,
+    [],
+    [suspended],
+  );
+  expect(gated.byTry).toEqual([{ costUsd: null, running: false }]);
+  expect(gated.allowance?.heldInProgress).toBe(false);
 });
 
 test("the chain reads the lap's status, and its last step is never rondo's", () => {

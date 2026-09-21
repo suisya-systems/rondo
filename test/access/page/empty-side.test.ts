@@ -35,7 +35,14 @@ const week = {
   finished: 4,
   answered: 3,
   decidedWithoutAsking: 31,
-  allowance: { spentUsd: 18.63, approvedUsd: 50, leftUsd: 31.37 },
+  allowance: {
+    spentUsd: 18.63,
+    heldUsd: 0,
+    heldTries: 0,
+    heldInProgress: false,
+    approvedUsd: 50,
+    leftUsd: 31.37,
+  },
 };
 
 test("the week's six figures are all on the face", () => {
@@ -64,14 +71,20 @@ test("a running request carries its allowance and the five steps to its end", ()
       title: "the invoice needs the tax broken out",
       repository: "shop/app",
       goingSaid: "18m",
-      allowance: { spentUsd: 0.62, approvedUsd: 5 },
+      allowance: {
+        spentUsd: 0.62,
+        heldUsd: 2.5,
+        heldTries: 1,
+        heldInProgress: false,
+        approvedUsd: 5,
+      },
       tries: { at: 1, of: 3 },
       steps: stepsOf(lap({}), [{ drafter: "rondo/checks", verdict: "clear" }]),
     },
   ]);
   expect(html).toContain("the invoice needs the tax broken out");
   expect(html).toContain("shop/app");
-  expect(html).toContain("$0.62 of $5.00");
+  expect(html).toContain("$0.62 of $5.00, with $2.50 held for a try whose cost is not known yet");
   expect(html).toContain(EN.govTries(1, 3));
   for (const step of [EN.stepWork, EN.stepChecks, EN.stepReading, EN.stepApproval, EN.stepLanding])
     expect(html).toContain(step);

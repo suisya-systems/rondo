@@ -28,7 +28,27 @@
  * carries the whole of it and the line draws the part that fits on a line.
  */
 import type { IterationRecord, ScopePayload, ScopeSpent } from "../../store/records.js";
-import { SCOPE_OUTWARD_ACTS } from "../../store/records.js";
+import { type IterationStatus, SCOPE_OUTWARD_ACTS } from "../../store/records.js";
+import type { Allowance } from "./week.js";
+
+/** One try's cost, as the right face lists it. */
+export interface TryCost {
+  readonly costUsd: number | null;
+  readonly running: boolean;
+}
+
+/**
+ * The statuses whose cost is still to come: a lap's cost is read when `lap
+ * perform` returns, so a lap past it -- at a gate, stalled, withdrawing -- with
+ * no cost has none coming, and is not *in progress* however open it is.
+ */
+const COST_TO_COME: readonly IterationStatus[] = [
+  "planned",
+  "classified",
+  "admitting",
+  "admitted",
+  "performing",
+];
 
 /** One step of rule 6's chain, and where the work stands in it. */
 export type ChainStep = "answer" | "proposal" | "merge";
@@ -52,10 +72,16 @@ export interface Governance {
   /** When the person asked, as milliseconds; the caller says it in its own words. */
   readonly askedAtMs: number;
   /**
-   * What has been spent and what was approved, in dollars -- or null where no
-   * approval can be read, which is the one state that hides both.
+   * What has been spent, what is held, and what was approved, in dollars -- or
+   * null where no approval can be read, which is the one state that hides all.
    */
-  readonly allowance: { readonly spentUsd: number; readonly approvedUsd: number } | null;
+  readonly allowance: Allowance | null;
+  /**
+   * **What each try of the request cost, oldest first** (rondo#378): the
+   * detail under the request's total. A cost of null is not read yet --
+   * `running` says whether that is because the try is still going.
+   */
+  readonly byTry: readonly TryCost[];
   /** Which try of how many the approval allows, or null with no approval to read it from. */
   readonly tries: { readonly at: number; readonly of: number } | null;
   /** What remains, as rule 6's chain. */
@@ -90,24 +116,32 @@ export interface Governance {
 }
 
 /**
- * What one approval has spent and what it allows, as the pair rule 6 never
- * separates.
+ * What one approval has spent, what it holds, and what it allows, as the
+ * figures rule 6 never separates.
  *
- * **The spend is the figure the store measures a budget against**: what was
- * read, plus the reserve every lap whose cost is not read yet still holds
- * (`D-0046`, `D-0066` rule 3.4.2). It is here rather than inside
- * {@link governanceOf} because the right face sums the same pair over a week
- * (`page-logic/week.ts`), and two places computing a spend differently would
- * be two answers to what has been spent.
+ * **Spent and held are two figures, and the store's check adds them**
+ * (rondo#378). The store measures a budget against what was read plus the
+ * reserve every lap whose cost is not read yet still holds (`D-0046`, `D-0066`
+ * rule 3.4.2), and that sum stays the check. But a reserve is a guess made
+ * before the lap ran: drawn as *spent*, it read as a fact -- in lap 11, $0.79
+ * spent plus $2.50 held for the running try was drawn as $3.29 spent, and the
+ * owner remembered "about three dollars" for a request that cost $1.65 -- and
+ * then changed under them. So the page says what was spent and, beside it,
+ * what is held.
+ *
+ * It is here rather than inside {@link governanceOf} because the right face
+ * sums the same figures over a week (`page-logic/week.ts`), and two places
+ * computing a spend differently would be two answers to what has been spent.
  */
 export function allowanceOf(approval: {
   readonly payload: ScopePayload;
   readonly spent: ScopeSpent;
-}): { readonly spentUsd: number; readonly approvedUsd: number } {
+}): Allowance {
   return {
-    spentUsd:
-      approval.spent.readCostUsd +
-      approval.spent.unreadLaps * approval.payload.budgets.cost_reserve_usd,
+    spentUsd: approval.spent.readCostUsd,
+    heldUsd: approval.spent.unreadLaps * approval.payload.budgets.cost_reserve_usd,
+    heldTries: approval.spent.unreadLaps,
+    heldInProgress: false,
     approvedUsd: approval.payload.budgets.cost_usd,
   };
 }
@@ -152,15 +186,25 @@ export function governanceOf(
    * `withheldFor`, read by the caller because this module reads no rows.
    */
   withheld: readonly { readonly ruleName: string; readonly count: number }[],
+  /**
+   * Every lap of the request, oldest first, so each try's cost can be listed
+   * and the request's total read across all of them (rondo#378).
+   */
+  laps: readonly Pick<IterationRecord, "status" | "lapCostUsd">[] = [record],
 ): Governance {
   const answered = record.gateOutcome !== null;
   const atGate = record.status === "awaiting_human";
   const mayPropose =
     approval !== null && approval.payload.outward_acts.includes("open_pull_request");
+  const byTry = laps.map((lap) => ({
+    costUsd: lap.lapCostUsd,
+    running: lap.lapCostUsd === null && COST_TO_COME.includes(lap.status),
+  }));
   return {
     repository,
     askedAtMs,
-    allowance: approval === null ? null : allowanceOf(approval),
+    allowance: approval === null ? null : heldFor(allowanceOf(approval), byTry),
+    byTry,
     tries:
       approval === null
         ? null
@@ -189,4 +233,16 @@ export function governanceOf(
       ),
     },
   };
+}
+
+/**
+ * Whether what is held is held for tries still going -- said *for the try in
+ * progress* -- or for some whose cost was never read, which a person cannot
+ * wait out. Only where every unread lap under the approval is a running try of
+ * this request is the first true; an approval spanning other requests, or a
+ * try that ended unread, gets the plainer sentence, which is true of both.
+ */
+function heldFor(allowance: Allowance, byTry: readonly TryCost[]): Allowance {
+  const running = byTry.filter((one) => one.running).length;
+  return { ...allowance, heldInProgress: running > 0 && running === allowance.heldTries };
 }

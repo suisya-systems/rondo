@@ -147,6 +147,29 @@ function basisRow(wording: Chrome, basis: BudgetBasis) {
 }
 
 /**
+ * **A value that rests on rondo's default says so beside itself** (rondo#378).
+ *
+ * The formula under it already names the cold start, and lap 11's owner still
+ * read $7.50 as a figure somebody had measured: a default drawn exactly like a
+ * measurement is read as one. So the sentence sits next to the number, in the
+ * words a person uses. A redo cost falling back to the reserve is not counted:
+ * that fallback is the reserve, measured or not, and the first-lap basis
+ * beside it already says which.
+ */
+function coldStartNote(wording: Chrome, bases: readonly BudgetBasis[]) {
+  const measured = bases.filter(
+    (basis) =>
+      (basis.kind === "rows" || basis.kind === "cold_start") && basis.measurement !== "redo_cost",
+  );
+  const cold = measured.filter((basis) => basis.kind === "cold_start").length;
+  return cold === 0 ? null : (
+    <p class="note text-meta leading-5 text-muted-foreground">
+      {wording.scopeColdStartNote(cold === measured.length)}
+    </p>
+  );
+}
+
+/**
  * One budget: the control in a box, the formula quietly under it, and the bases
  * one press away.
  *
@@ -163,6 +186,11 @@ function budgetField(
   label: string,
   control: unknown,
   value: BudgetValue,
+  /**
+   * The value the box holds, where it may not be the computed one: a drafter's
+   * narrowing from the person's own words is theirs, not rondo's default.
+   */
+  drawn: number = value.value,
 ) {
   return (
     <div class="min-w-0 space-y-1">
@@ -170,6 +198,7 @@ function budgetField(
         <span class="text-meta leading-5 font-medium text-muted-foreground">{label}</span>
         {control}
       </label>
+      {drawn === value.value ? coldStartNote(wording, value.bases) : null}
       <p class="note text-meta leading-5 text-faint">
         {wording.scopeFormula(formulaSaid(wording, value.formula))}
       </p>
@@ -1092,6 +1121,7 @@ async function draftedForm(
                 class={BOX}
               />,
               computed.cost_usd,
+              payload.budgets.cost_usd,
             )}
             {narrowed("cost_usd", money(computed.cost_usd.value))}
           </div>
@@ -1109,6 +1139,7 @@ async function draftedForm(
               class={BOX}
             />,
             computed.cost_reserve_usd,
+            payload.budgets.cost_reserve_usd,
           )}
           <div class="min-w-0 space-y-1">
             {budgetField(
@@ -1123,6 +1154,7 @@ async function draftedForm(
                 class={BOX}
               />,
               computed.expires_at_ms,
+              payload.budgets.expires_at_ms,
             )}
             {narrowed("expires_at_ms", localTime(computed.expires_at_ms.value))}
           </div>

@@ -199,6 +199,9 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   );
   expect(html).toContain("you can still raise it when the work comes back to you");
   expect(html.indexOf("This draft assumes")).toBeLessThan(html.indexOf('name="cost_usd"'));
+  // Measured values carry no cold-start note (rondo#378).
+  expect(html).not.toContain(EN.scopeColdStartNote(true));
+  expect(html).not.toContain(EN.scopeColdStartNote(false));
 
   // Every budget's formula, and its bases folded but present.
   expect(html).toContain("how: plans x review rounds = 1 x 3");
@@ -258,6 +261,13 @@ test("with no lap recorded, the scope screen says in Japanese that the reserve w
   );
   expect(html).toContain("依頼の大きさが過去の周回と同じくらいだと見て、予算を出しています");
   expect(html).toContain("rondo の初期値 2.50 USD で、誰かが測った値ではありません");
+  // **And next to each value that rests on it, not only in its formula**
+  // (rondo#378): lap 11's owner read $7.50 as a measured figure. The cost, the
+  // reserve and the expiry each say so; the laps and rounds are given, not
+  // measured, so they do not.
+  const cold = chromeFor("ja").scopeColdStartNote(true);
+  expect(html.split(cold).length - 1).toBe(3);
+  expect(html.indexOf(cold)).toBeGreaterThan(html.indexOf('name="cost_usd"'));
   // A tier-level sample says it is other agent types' laps, in both languages.
   expect(EN.scopeSampleRows(3, "standard", "0.22", "1.88")).toContain(
     "3 recorded first laps of other agent types on tier standard, as none of this one's is recorded, which cost 0.22 to 1.88 USD",

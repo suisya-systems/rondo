@@ -30,6 +30,7 @@ import type { ReactNode } from "react";
 import type { Governance } from "../page-logic/governance.js";
 import type { WorkStep } from "../page-logic/week.js";
 import type { Chrome } from "../wording.js";
+import { spendSaid } from "./governance.js";
 import { SideSteps } from "./steps.js";
 
 export interface ThreadSideProps {
@@ -65,7 +66,7 @@ function Agreed({
   readonly governance: Governance;
   readonly steps: readonly WorkStep[];
 }) {
-  const { allowance, tries, touches, decided } = governance;
+  const { allowance, byTry, tries, touches, decided } = governance;
   return (
     <section className="side-gov">
       <h2 className="side-heading">{wording.sideAgreed}</h2>
@@ -84,14 +85,35 @@ function Agreed({
           <>
             <div>
               <dt>{wording.weekSpentFigure}</dt>
-              <dd>
-                {wording.govSpent(allowance.spentUsd.toFixed(2), allowance.approvedUsd.toFixed(2))}
-              </dd>
+              <dd>{spendSaid(wording, allowance)}</dd>
             </div>
             <div>
               <dt>{wording.weekLeft}</dt>
-              <dd>{dollars(Math.max(0, allowance.approvedUsd - allowance.spentUsd))}</dd>
+              {/* What is held is not left: the store's check counts it as spent. */}
+              <dd>
+                {dollars(
+                  Math.max(0, allowance.approvedUsd - allowance.spentUsd - allowance.heldUsd),
+                )}
+              </dd>
             </div>
+            {/*
+             * **The request across every try, each try as the detail**
+             * (rondo#378). With one try there is nothing to add up, and the
+             * spend above already says it.
+             */}
+            {byTry.length < 2 ? null : (
+              <div className="side-week-wide">
+                <dt>{wording.govByTryLabel}</dt>
+                <dd>
+                  {wording.govByTry(
+                    byTry.reduce((sum, one) => sum + (one.costUsd ?? 0), 0).toFixed(2),
+                    byTry.map((one, index) =>
+                      wording.govTryCost(index + 1, one.costUsd?.toFixed(2) ?? null, one.running),
+                    ),
+                  )}
+                </dd>
+              </div>
+            )}
             {tries === null ? null : (
               <div>
                 <dt>{wording.govTriesLabel}</dt>

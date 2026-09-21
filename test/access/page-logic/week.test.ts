@@ -65,15 +65,47 @@ test("the approvals are summed, and what is left is never a debt", () => {
     {
       ...reads,
       allowances: [
-        { spentUsd: 4, approvedUsd: 20 },
-        { spentUsd: 1.5, approvedUsd: 30 },
+        { spentUsd: 4, heldUsd: 0, heldTries: 0, heldInProgress: false, approvedUsd: 20 },
+        { spentUsd: 1.5, heldUsd: 0, heldTries: 0, heldInProgress: false, approvedUsd: 30 },
       ],
     },
     NOW,
   );
-  expect(figures.allowance).toEqual({ spentUsd: 5.5, approvedUsd: 50, leftUsd: 44.5 });
-  const over = weekFigures({ ...reads, allowances: [{ spentUsd: 9, approvedUsd: 5 }] }, NOW);
+  expect(figures.allowance).toMatchObject({ spentUsd: 5.5, approvedUsd: 50, leftUsd: 44.5 });
+  const over = weekFigures(
+    {
+      ...reads,
+      allowances: [
+        { spentUsd: 9, heldUsd: 0, heldTries: 0, heldInProgress: false, approvedUsd: 5 },
+      ],
+    },
+    NOW,
+  );
   expect(over.allowance?.leftUsd).toBe(0);
+});
+
+test("what is held is summed apart from what was spent, and is not left", () => {
+  // rondo#378: the reserve an unread lap holds is not money spent, so it is
+  // never folded into the spend; but the store's check counts it, so it is not
+  // left either.
+  const figures = weekFigures(
+    {
+      ...reads,
+      allowances: [
+        { spentUsd: 0.79, heldUsd: 2.5, heldTries: 1, heldInProgress: true, approvedUsd: 25 },
+        { spentUsd: 1, heldUsd: 0, heldTries: 0, heldInProgress: false, approvedUsd: 5 },
+      ],
+    },
+    NOW,
+  );
+  expect(figures.allowance).toEqual({
+    spentUsd: 1.79,
+    heldUsd: 2.5,
+    heldTries: 1,
+    heldInProgress: true,
+    approvedUsd: 30,
+    leftUsd: 30 - 1.79 - 2.5,
+  });
 });
 
 test("the pair is one approval's own, so a raise is not read as a total", () => {
@@ -82,8 +114,16 @@ test("the pair is one approval's own, so a raise is not read as a total", () => 
   // successor's $10 would say "$14 approved", which is the misreading that
   // entry exists to prevent; what the predecessor spent is the scope screen's
   // to show.
-  const raised = weekFigures({ ...reads, allowances: [{ spentUsd: 2, approvedUsd: 10 }] }, NOW);
-  expect(raised.allowance).toEqual({ spentUsd: 2, approvedUsd: 10, leftUsd: 8 });
+  const raised = weekFigures(
+    {
+      ...reads,
+      allowances: [
+        { spentUsd: 2, heldUsd: 0, heldTries: 0, heldInProgress: false, approvedUsd: 10 },
+      ],
+    },
+    NOW,
+  );
+  expect(raised.allowance).toMatchObject({ spentUsd: 2, approvedUsd: 10, leftUsd: 8 });
 });
 
 test("a request still working is on its work, and nothing later is claimed", () => {

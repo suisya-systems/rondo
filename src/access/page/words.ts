@@ -214,6 +214,17 @@ export interface PageWords extends DayWords {
   readonly sideAgreed: string;
   /** What was agreed, in full (rule 6), as the labels on the right face. */
   readonly govTriesLabel: string;
+  /**
+   * What is held beside what was spent (rondo#378): `pair` is `govSpent`'s,
+   * and the reserve follows it as its own figure rather than inside the spend.
+   * `inProgress` says the tries holding it are still going; otherwise the
+   * sentence says only that their cost is not known yet, true of both.
+   */
+  readonly govHeld: (pair: string, held: string, tries: number, inProgress: boolean) => string;
+  /** The request's cost across every try, and each try's as the detail under it. */
+  readonly govByTryLabel: string;
+  readonly govByTry: (total: string, tries: readonly string[]) => string;
+  readonly govTryCost: (at: number, cost: string | null, running: boolean) => string;
   readonly govTouchLabel: string;
   readonly govStepsLabel: string;
   /**
@@ -363,6 +374,14 @@ export const PAGE_EN: PageWords = Object.freeze({
   sideKnownSoFar: "What is known so far",
   sideAgreed: "What was agreed for this",
   govTriesLabel: "Tries",
+  govHeld: (pair, held, tries, inProgress) =>
+    inProgress
+      ? `${pair}, with $${held} held for ${tries === 1 ? "the try" : `the ${String(tries)} tries`} in progress`
+      : `${pair}, with $${held} held for ${tries === 1 ? "a try" : `${String(tries)} tries`} whose cost is not known yet`,
+  govByTryLabel: "Across all tries",
+  govByTry: (total, tries) => `$${total} (${tries.join(", ")})`,
+  govTryCost: (at, cost, running) =>
+    `try ${String(at)} ${cost === null ? (running ? "in progress" : "cost not reported") : `$${cost}`}`,
   govTouchLabel: "Where it may touch",
   govStepsLabel: "What remains before this ends",
   govAct: (act) => (act === "open_pull_request" ? "open a pull request" : "push a branch"),
@@ -488,6 +507,14 @@ export const PAGE_JA: PageWords = Object.freeze({
   sideKnownSoFar: "いまわかっていること",
   sideAgreed: "この依頼の取り決め",
   govTriesLabel: "やり直し",
+  govHeld: (pair, held, tries, inProgress) =>
+    inProgress
+      ? `${pair} ・ 実行中の${tries === 1 ? "回" : ` ${String(tries)} 回`}のために $${held} を確保`
+      : `${pair} ・ 費用がまだ分からない ${String(tries)} 回分として $${held} を確保`,
+  govByTryLabel: "全回の合計",
+  govByTry: (total, tries) => `$${total}（${tries.join(" ・ ")}）`,
+  govTryCost: (at, cost, running) =>
+    `${String(at)} 回目 ${cost === null ? (running ? "実行中" : "費用の報告なし") : `$${cost}`}`,
   govTouchLabel: "触れてよい範囲",
   govStepsLabel: "終わるまでの手順",
   govAct: (act) => (act === "open_pull_request" ? "プルリクエストを開く" : "ブランチを送る"),

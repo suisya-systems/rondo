@@ -674,6 +674,13 @@ export interface Chrome extends PageWords {
    */
   readonly scopeBasisRows: (measurement: string, laps: number, tier: string | null) => string;
   readonly scopeBasisColdStart: (measurement: string) => string;
+  /**
+   * Beside a drafted value that rests on a cold start (rondo#378): said next
+   * to the number and not only in its formula, because a default drawn like a
+   * measurement is read as one. `whole` is false where only some of the
+   * listed agent types fell to it.
+   */
+  readonly scopeColdStartNote: (whole: boolean) => string;
   readonly scopeBasisPlans: (plans: number) => string;
   readonly scopeBasisRounds: (rounds: number, byDefault: boolean) => string;
   readonly scopeBasisReplyAllowance: string;
