@@ -1,0 +1,201 @@
+/**
+ * One press of the page's *merge* button (rondo#380, `D-0091`).
+ *
+ * **A person's act, per act, through the operator's own `gh`.** `D-0064` rule
+ * 3.4 keeps merging into a default branch on the irreversible list, approved
+ * by a person at the time for that act; `D-0091` lets that approval be a press
+ * on the page. rondo holds no credential (`D-0010`): the forge commands are
+ * `./forge.ts`'s, run as the operator.
+ *
+ * **Everything the button was drawn on is read again here**, because a page
+ * does not redraw itself between drawing a button and a press of it: the lap,
+ * its publish and checks reports, the questions in its thread and its line in
+ * the lane ledger go through the same {@link mergeBlock} the page asked, and
+ * the head the button carried must still be the head rondo read green. Then
+ * the forge is asked, and the merge itself is refused by the forge if the head
+ * moved in between (`--match-head-commit`).
+ */
+
+import { isDeterministicReadingDrafter, latestReading } from "../store/records.js";
+import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+import { reportToRequest } from "./conductor.js";
+import {
+  type CommandOutcome,
+  type MergeMethodReading,
+  mergePullRequest,
+  type PullRequestState,
+  readMergeMethod,
+  readPullRequest,
+} from "./forge.js";
+import { type MergeBlock, mergeBlock, resultOf } from "./page-logic/result.js";
+import { threadsOf } from "./page-logic/threads.js";
+import type { Merged, MergeInput, MergeRefusal } from "./web-app.js";
+
+/** What a merge press reads and writes, as values a test can replace. */
+export interface MergePorts {
+  readonly store: Pick<IterationStore, "read" | "readingsFor" | "laneLedger" | "readLive">;
+  readonly record: Pick<AdvisoryRecord, "threadMessages" | "recordThreadMessage">;
+  readonly now: () => number;
+  /** Tests replace the forge; the host reaches the real one. */
+  readonly forge?: {
+    readonly readPullRequest: typeof readPullRequest;
+    readonly readMergeMethod: typeof readMergeMethod;
+    readonly mergePullRequest: typeof mergePullRequest;
+  };
+}
+
+const REFUSED_BY: Readonly<Record<MergeBlock, MergeRefusal>> = {
+  notPublished: "mergeRefusedNotPublished",
+  notGreen: "mergeRefusedNotGreen",
+  asked: "mergeRefusedAsked",
+  merged: "mergeRefusedMerged",
+  landed: "mergeRefusedLanded",
+};
+
+/**
+ * The press, with one merge per lap in flight: a double press of one button is
+ * one act, which the second press waits on and reports.
+ */
+export function mergePress(ports: MergePorts): (input: MergeInput) => Promise<Merged> {
+  const running = new Map<string, Promise<Merged>>();
+  return async (input) => {
+    const already = running.get(input.iterationId);
+    if (already !== undefined) {
+      return await already;
+    }
+    const merging = mergeOnce(ports, input);
+    running.set(input.iterationId, merging);
+    try {
+      return await merging;
+    } finally {
+      running.delete(input.iterationId);
+    }
+  };
+}
+
+async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> {
+  const forge = ports.forge ?? { readPullRequest, readMergeMethod, mergePullRequest };
+  const found = await ports.store.read(input.iterationId);
+  if (found.kind !== "read") {
+    return refused("mergeRefusedGone", `iteration '${input.iterationId}' did not read`);
+  }
+  const record = found.record;
+  const read = await ports.record.threadMessages();
+  if (read.kind !== "read") {
+    return refused("mergeRefusedGone", `the request thread did not read: ${read.reason}`);
+  }
+  const threads = threadsOf(read.messages, new Set(), new Map());
+  const result = resultOf(threads.byId, record.id);
+  const holding = (await ports.store.laneLedger()).some(
+    (line) => line.releasedBy === null && line.lapIds.includes(record.id),
+  );
+  // **A question or a gate of this request still waiting on the person** is
+  // `D-0064`'s P2 to P4 item open: an ask nobody carried on, or another lap
+  // of the same request standing at its gate.
+  const gated = (await ports.store.readLive()).some(
+    (live) =>
+      live.kind === "read" &&
+      live.record.status === "awaiting_human" &&
+      live.record.requestMessageId === record.requestMessageId,
+  );
+  const block = mergeBlock(
+    result,
+    gated || [...threads.waiting].some((id) => threads.rootOf(id) === record.requestMessageId),
+    holding,
+  );
+  if (block !== null || result === null || result.url === null) {
+    return refused(REFUSED_BY[block ?? "notPublished"], `the merge is not offered: ${block}`);
+  }
+  // **The head the button was drawn for, the head rondo read green and the
+  // head `publish` pushed are one commit**, or this press is about something
+  // the person was not shown.
+  const tip = tipOf(await ports.store.readingsFor(record.id));
+  if (tip === null || input.head !== result.checksCommit || tip !== result.checksCommit) {
+    return refused(
+      "mergeRefusedMoved",
+      `the press was drawn for '${input.head}', rondo read '${result.checksCommit}' green and ` +
+        `the lap pushed '${tip ?? "(none recorded)"}'`,
+    );
+  }
+  const url = result.url;
+  const before = await forge.readPullRequest({ url });
+  if (before.kind !== "read") {
+    return refused("mergeRefusedForge", before.reason);
+  }
+  if (before.state !== "OPEN") {
+    return refused(
+      before.state === "MERGED" ? "mergeRefusedMerged" : "mergeRefusedClosed",
+      `the forge says the pull request is ${before.state}`,
+    );
+  }
+  if (before.headCommit !== tip) {
+    return refused(
+      "mergeRefusedMoved",
+      `the pull request's head is '${before.headCommit}', and rondo read '${tip}' green`,
+    );
+  }
+  const repo = repositoryOf(url);
+  const method: MergeMethodReading =
+    repo === null
+      ? { kind: "undetermined", reason: `'${url}' names no repository` }
+      : await forge.readMergeMethod(repo);
+  if (method.kind !== "read") {
+    return refused(
+      method.kind === "none" ? "mergeRefusedMethod" : "mergeRefusedForge",
+      method.kind === "none" ? "the repository allows no merge method" : method.reason,
+    );
+  }
+  const merged = await forge.mergePullRequest({
+    url,
+    method: method.method,
+    headCommit: tip,
+  });
+  const failure = commandFailure(merged);
+  if (failure !== null) {
+    return { ...refused("mergeRefusedFailed", merged.commandLine), detail: failure };
+  }
+  // **What the forge says now, and not what the command printed**: a merge
+  // queue accepts a merge it has not made, and only the state tells them apart.
+  // A forge that will not answer after a merge that exited cleanly is still a
+  // merge, said with the base read before it and no commit.
+  const after: PullRequestState = await forge.readPullRequest({ url });
+  if (after.kind === "read" && after.state !== "MERGED") {
+    return refused("mergeRefusedQueued", `the forge accepted the merge and says ${after.state}`);
+  }
+  const line = await reportToRequest(
+    ports,
+    record.id,
+    {
+      kind: "merged",
+      pullRequestUrl: url,
+      into: before.baseBranch,
+      method: method.method,
+      mergeCommit: after.kind === "read" ? after.mergeCommit : null,
+    },
+    ports.now(),
+  );
+  return { ok: true, note: line ?? "merged" };
+}
+
+function refused(why: MergeRefusal, note: string): Merged {
+  return { ok: false, why, note: `nothing was merged: ${note}` };
+}
+
+/** The lap's own reading of the commit it pushed, or null where it has none. */
+function tipOf(readings: Awaited<ReturnType<IterationStore["readingsFor"]>>): string | null {
+  const tip = latestReading(readings, isDeterministicReadingDrafter)?.evidence?.tipCommit;
+  return tip === undefined || tip === null || tip === "" ? null : tip;
+}
+
+/** `HOST/OWNER/NAME` off a pull request's address, or null where it is not one. */
+export function repositoryOf(url: string): string | null {
+  const read = /^https?:\/\/([^/\s]+)\/([^/\s]+)\/([^/\s]+)\/pull\/\d+\/?$/.exec(url);
+  return read === null ? null : `${read[1]}/${read[2]}/${read[3]}`;
+}
+
+function commandFailure(outcome: CommandOutcome): string | null {
+  if (outcome.spawnError !== null) {
+    return outcome.spawnError;
+  }
+  return outcome.status === 0 ? null : outcome.stderr.trim();
+}

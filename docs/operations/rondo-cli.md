@@ -859,11 +859,13 @@ every plan written before `D-0081` -- and a lap that names one nowhere is refuse
 and an inferred slug would be whatever that clone happened to point at (`D-0075` rule 3.1).
 `--remote` defaults to `origin`.
 
-rondo **never merges**, and nothing here runs unless a person typed `publish`: no other command in
+The command line **never merges**, and nothing here runs unless a person typed `publish`: no other command in
 the tree reaches the module that can start a process, and that module is the only one granted a
 spawn -- which `test/architecture/import-boundaries.test.ts` checks with a planted violation rather
 than asserting in prose. The credential used is the operator's own `git` and `gh` configuration,
-which rondo neither stores nor reads.
+which rondo neither stores nor reads. The one merge rondo makes is the page's merge button, which a
+person presses once per merge, where rondo has read the pull request's checks green on its head and
+nothing in the request waits on them (`D-0091`); it runs through the same `gh`.
 
 **Only work a person actually approved can be published.** `withdrawn`, `expired` and
 `unanswerable` all close a gate, and `publish` refuses every one of them by name: a closed gate is

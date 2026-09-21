@@ -1035,4 +1035,47 @@ explanation you pressed on and then answers the gate.`,
   publishRefusedNotStarted:
     "Nothing was published, and nothing here is lost. " +
     "Whoever maintains rondo on this machine can see what it said.",
+  nextStepMerge:
+    "The checks are green on the pull request's latest commit, and nothing here is waiting on " +
+    "you. Merging puts it into the branch it was opened against, the way the repository allows, " +
+    "and cannot be taken back from this page.",
+  mergeAction: "Merge the pull request",
+  mergeBusy: "Merging...",
+  mergeBusyNote:
+    "Received. rondo is asking the forge to merge the pull request; this usually takes a few " +
+    "seconds. There is no need to press again.",
+  mergeBack: "Back to the request",
+  mergeRefusedNoApprover:
+    "Nothing was merged: rondo on this machine does not yet know who you are, so nothing here " +
+    "can be decided as you.",
+  mergeRefusedPress:
+    "Nothing was merged: this is done by a person pressing this page's button, and a script " +
+    "cannot.",
+  mergeRefusedForm:
+    "Nothing was merged: that form did not come from this page. Reload it and press again.",
+  mergeRefusedGone: "Nothing was merged: this work would not read any more. Reload the page.",
+  mergeRefusedNotPublished: "Nothing was merged: there is no pull request for this work yet.",
+  mergeRefusedNotGreen:
+    "Nothing was merged: rondo has not read the checks green on the pull request's latest " +
+    "commit. Wait for them, then press again.",
+  mergeRefusedAsked:
+    "Nothing was merged: a question or a confirmation in this request is still waiting on you. " +
+    "Answer it first.",
+  mergeRefusedMerged: "Nothing was merged again: this pull request is already merged.",
+  mergeRefusedLanded:
+    "Nothing was merged: this work is already on the default branch, so there is nothing left " +
+    "to merge.",
+  mergeRefusedMoved:
+    "Nothing was merged: the pull request has changed since rondo read its checks green. Its " +
+    "new commits have to go green first; reload the page.",
+  mergeRefusedClosed: "Nothing was merged: the pull request is closed on the forge.",
+  mergeRefusedMethod: "Nothing was merged: the repository allows no way of merging a pull request.",
+  mergeRefusedForge:
+    "Nothing was merged: the forge did not answer about the pull request. Press again in a " +
+    "moment.",
+  mergeRefusedFailed: (detail) =>
+    `Nothing was merged: the forge refused the merge. It said: ${detail}`,
+  mergeRefusedQueued:
+    "The forge accepted the merge and has not made it yet -- the repository may merge through " +
+    "a queue. Look at the pull request on the forge before pressing again.",
 } satisfies Chrome);

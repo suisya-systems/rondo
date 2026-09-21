@@ -1102,7 +1102,70 @@ export class AddRepositoryPort {
   }
 }
 
-/** The ports the server is handed: the reading half, and the seven writers. */
+/**
+ * What one merge press names (rondo#380, `D-0091`): the lap, and the head the
+ * button was drawn for, so a press over a pull request that has moved since
+ * merges nothing. The person typed none of it.
+ */
+export interface MergeInput {
+  readonly iterationId: string;
+  readonly head: string;
+}
+
+/** Why a merge press merged nothing, as the wording key the page says it in. */
+export type MergeRefusal =
+  | "mergeRefusedGone"
+  | "mergeRefusedNotPublished"
+  | "mergeRefusedNotGreen"
+  | "mergeRefusedAsked"
+  | "mergeRefusedMerged"
+  | "mergeRefusedLanded"
+  | "mergeRefusedMoved"
+  | "mergeRefusedClosed"
+  | "mergeRefusedMethod"
+  | "mergeRefusedForge"
+  | "mergeRefusedFailed"
+  | "mergeRefusedQueued";
+
+/** What one merge press came to; `detail` is the forge's own line. */
+export interface Merged {
+  readonly ok: boolean;
+  readonly note: string;
+  readonly why?: MergeRefusal;
+  readonly detail?: string;
+}
+
+/** Merge one lap's pull request, on one press. */
+export type MergeFromWeb = (input: MergeInput) => Promise<Merged>;
+
+/**
+ * The eighth thing this surface may write (rondo#380, `D-0091`): a lap's pull
+ * request merged into the branch it was opened against, on a person's press --
+ * the per-act approval `D-0064` rule 3.4 asks for, given at the time.
+ *
+ * **The check is inside this capability**, as it is in every port above: whoever
+ * holds this object merges nothing without a press {@link mintPress} minted and
+ * nobody has spent. Its own class, because merging is the one irreversible act
+ * on this page, and a holder of any other port must not become able to reach it.
+ */
+export class MergePort {
+  readonly #merge: MergeFromWeb;
+
+  constructor(merge: MergeFromWeb) {
+    this.#merge = merge;
+  }
+
+  /** Merge one lap's pull request, on one press. */
+  async merge(press: Press, input: MergeInput): Promise<Merged> {
+    if (!minted.has(press)) {
+      return { ok: false, note: "nothing was merged: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#merge(input);
+  }
+}
+
+/** The ports the server is handed: the reading half, and the eight writers. */
 export interface ServedPorts extends WebPorts {
   /**
    * Null when `RONDO_APPROVER` is unset, which is also when no button is drawn
@@ -1137,6 +1200,11 @@ export interface ServedPorts extends WebPorts {
   readonly release: ReleasePort | null;
   /** Null on {@link release}'s condition: the recorded plan is the approver's, as setup's is. */
   readonly addRepository?: AddRepositoryPort | null;
+  /**
+   * Null on {@link publish}'s condition: the merge is pressed by a person the
+   * allowlist accepts (rondo#380). Absent is null.
+   */
+  readonly merge?: MergePort | null;
 }
 
 /**
@@ -1245,6 +1313,13 @@ const RELEASE_ROUTE = "/release";
 const ADD_REPOSITORY_ROUTE = "/add-repository";
 
 /**
+ * The route that merges a lap's pull request (rondo#380, `D-0091`): a press,
+ * per act, drawn in the thread only where rondo's own reading is green on the
+ * head and nothing in the thread waits on the person.
+ */
+const MERGE_ROUTE = "/merge";
+
+/**
  * The routes whose body is numbers and minted ids and never prose, and so take
  * {@link MAX_FORM_BYTES} rather than the send limit.
  */
@@ -1257,6 +1332,7 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   PUBLISH_ROUTE,
   RELEASE_ROUTE,
   ADD_REPOSITORY_ROUTE,
+  MERGE_ROUTE,
 ]);
 
 /** A whole count of at least 0, as a form posts one, or null when it is not one. */
@@ -1524,14 +1600,25 @@ function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 5
  * and `POST /reply`, the question's answer on a press, `POST /answer-ask`, the
  * scope screen's two presses, `POST /scope` and `POST /start`, the gate's
  * other answer, `POST /revise`, the one write that leaves this machine,
- * `POST /publish`, and the release of a finished line's files, `POST /release`.
+ * `POST /publish`, the release of a finished line's files, `POST /release`,
+ * and the merge of a lap's pull request, `POST /merge` (`D-0091`).
  * `test/access/web-app.test.ts` enumerates `app.routes` and
  * fails on any other non-`GET` entry.
  */
 export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // The writer is taken off before anything reading is handed the rest, so
   // the renderer does not hold it at runtime either (D-0041 rule 4).
-  const { answer, say, scope, revise, publish, release, addRepository, ...reading } = ports;
+  const {
+    answer,
+    say,
+    scope,
+    revise,
+    publish,
+    release,
+    addRepository,
+    merge = null,
+    ...reading
+  } = ports;
   const app = new Hono<PageEnv>();
   tokens.set(app, token);
 
@@ -2273,6 +2360,46 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
   });
 
+  // **The merge press** (rondo#380, `D-0091`): a lap's pull request merged by
+  // the operator's own forge CLI, on a person's press. Everything the button
+  // was drawn on is read again in the port, and the head it carried must still
+  // be the head rondo read green. Success and refusal both land where the
+  // button is -- the thread, which then says it merged or still offers it.
+  app.post(MERGE_ROUTE, async (c) => {
+    const form = await c.req.parseBody();
+    const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+    const request = typeof form["request"] === "string" ? form["request"] : "";
+    if (merge === null) {
+      return mergeRefused(c, 403, "mergeRefusedNoApprover", request);
+    }
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return mergeRefused(c, minting.status, "mergeRefusedPress", request);
+    }
+    const head = form["head"];
+    if (typeof head !== "string" || head === "" || iterationId === "") {
+      return mergeRefused(c, 400, "mergeRefusedForm", request);
+    }
+    const merged = await merge.merge(minting.press, { iterationId, head });
+    if (!merged.ok) {
+      return mergeRefused(
+        c,
+        409,
+        merged.why ?? "mergeRefusedFailed",
+        request,
+        merged.detail ?? null,
+        merged.note,
+      );
+    }
+    return c.redirect(
+      viewHref(
+        request === "" ? { kind: "summary" } : { kind: "thread", messageId: request, to: null },
+        tagOf(c),
+      ),
+      303,
+    );
+  });
+
   /**
    * Whether the thread already holds exactly this operator message.
    *
@@ -2507,6 +2634,35 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         wording.lang,
       ),
       wording.publishBack,
+      note,
+    );
+  }
+
+  /**
+   * A merge press's refusal, in the page's language, with the way back to the
+   * thread it was pressed in -- where the button still is, for another press
+   * once whatever stopped this one has been seen to.
+   */
+  function mergeRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why: "mergeRefusedNoApprover" | "mergeRefusedPress" | "mergeRefusedForm" | MergeRefusal,
+    request: string,
+    detail: string | null = null,
+    note: string | null = null,
+  ) {
+    const wording = wordingOf(c);
+    const said = wording[why];
+    return pressRefused(
+      c,
+      status,
+      wording.mergeAction,
+      typeof said === "function" ? said(detail ?? "") : said,
+      viewHref(
+        request === "" ? { kind: "summary" } : { kind: "thread", messageId: request, to: null },
+        wording.lang,
+      ),
+      wording.mergeBack,
       note,
     );
   }

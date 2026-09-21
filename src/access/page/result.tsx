@@ -10,8 +10,10 @@
  * more line down the thread.
  *
  * **Three acts, in order, each said apart**: the approval, the pull request,
- * and the merge. The merge is never said to have happened or not -- rondo does
- * not merge and does not watch one -- so its entry says whose it is.
+ * and the merge. The merge is said as done where a person's press on this page
+ * made it (rondo#380), with the branch it went into and how; otherwise as whose
+ * it is and never as not done, since a merge on the forge itself is not one
+ * rondo watches.
  */
 import type { LapResult } from "../page-logic/result.js";
 import type { Chrome } from "../wording.js";
@@ -47,7 +49,13 @@ export function ResultLine({
           </li>
         </>
       )}
-      <li className="result-ahead">{wording.resultNotMerged}</li>
+      {result?.merged == null ? (
+        <li className="result-ahead">{wording.resultNotMerged}</li>
+      ) : (
+        <li className="result-done result-merged">
+          {wording.resultMerged(result.merged.into, result.merged.method)}
+        </li>
+      )}
     </ol>
   );
 }

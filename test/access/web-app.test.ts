@@ -34,6 +34,9 @@ import {
   createApp,
   type DraftedScopeFormDraft,
   MAX_CLAIM_CHARS,
+  type Merged,
+  type MergeInput,
+  MergePort,
   mintPress,
   mintSend,
   newIterationId,
@@ -1522,6 +1525,8 @@ const WRITE_TABLE = [
   "ALL /release",
   // Adding a repository a request named (rondo#383, D-0090).
   "ALL /add-repository",
+  // The merge press (rondo#380, D-0091).
+  "ALL /merge",
   "ALL /*",
   "POST /",
   "POST /request",
@@ -1536,6 +1541,7 @@ const WRITE_TABLE = [
   "POST /publish",
   "POST /release",
   "POST /add-repository",
+  "POST /merge",
 ];
 
 /**
@@ -1574,6 +1580,8 @@ const PRESS_ROUTES = [
   "/release",
   // Cloning and recording a repository a request named (rondo#383, D-0090).
   "/add-repository",
+  // The one irreversible act on the page, per act (D-0064 rule 3.4, D-0091).
+  "/merge",
 ];
 
 /**
@@ -2739,6 +2747,79 @@ test("(start-plan) every other shape is refused and starts nothing (rondo#238 C2
 
   stop.abort();
   expect(await closed).toBe(0);
+});
+
+/** Ports whose merge press is a spy, answering `answer` to every press it lets through. */
+function mergePorts(merged: MergeInput[], answer: Merged = { ok: true, note: "" }): ServedPorts {
+  return {
+    ...spyPorts([]),
+    merge: new MergePort(async (input) => {
+      merged.push(input);
+      return await Promise.resolve(answer);
+    }),
+  };
+}
+
+function mergeForm(overrides: Record<string, string> = {}): Record<string, string> {
+  return { token: TOKEN, iteration: "i-0002", request: "req-1", head: "abc1234", ...overrides };
+}
+
+test("(merge) a person's press merges the lap it was drawn for, once, and lands on its thread", async () => {
+  const merged: MergeInput[] = [];
+  const { base, stop, closed } = await served(createApp(mergePorts(merged), TOKEN));
+  const pressed = await send(base, "/merge", "POST", pressHeaders(base), mergeForm());
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
+  expect(merged).toEqual([{ iterationId: "i-0002", head: "abc1234" }]);
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(merge) no press, no head or no approver merges nothing; the forge's refusal is said in words", async () => {
+  const merged: MergeInput[] = [];
+  const { base, stop, closed } = await served(createApp(mergePorts(merged), TOKEN));
+  const person = pressHeaders(base);
+  for (const [headers, form] of [
+    [{ ...person, "sec-fetch-user": undefined }, mergeForm()],
+    [person, mergeForm({ token: "not-the-token" })],
+    [{ ...person, origin: "https://evil.example" }, mergeForm()],
+  ] as const) {
+    expect((await send(base, "/merge", "POST", headers, form)).status).toBe(403);
+  }
+  for (const form of [mergeForm({ head: "" }), mergeForm({ iteration: "" })]) {
+    expect((await send(base, "/merge", "POST", person, form)).status).toBe(400);
+  }
+  expect((await send(base, "/merge", "GET", person)).status).toBe(404);
+  expect(merged).toEqual([]);
+  stop.abort();
+  expect(await closed).toBe(0);
+
+  const none = await served(createApp({ ...spyPorts([]), merge: null }, TOKEN));
+  const refused = await send(none.base, "/merge", "POST", pressHeaders(none.base), mergeForm());
+  expect(refused.status).toBe(403);
+  expect(refused.body).toContain(EN.mergeRefusedNoApprover);
+  none.stop.abort();
+  expect(await none.closed).toBe(0);
+
+  // The forge refused: 409, the person's sentence with the forge's own line,
+  // and the way back to the thread, where the button still is.
+  const forge = await served(
+    createApp(
+      mergePorts([], {
+        ok: false,
+        note: "nothing was merged: gh pr merge",
+        why: "mergeRefusedFailed",
+        detail: "review required",
+      }),
+      TOKEN,
+    ),
+  );
+  const answered = await send(forge.base, "/merge", "POST", pressHeaders(forge.base), mergeForm());
+  expect(answered.status).toBe(409);
+  expect(answered.body).toContain(EN.mergeRefusedFailed("review required"));
+  expect(answered.body).toContain("/?thread=req-1&amp;lang=en");
+  forge.stop.abort();
+  expect(await forge.closed).toBe(0);
 });
 
 /** Ports whose release press is a spy, answering `answer` to every press it lets through. */

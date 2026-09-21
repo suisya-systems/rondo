@@ -189,15 +189,18 @@ export interface PageWords extends DayWords {
   readonly checksWord: (checks: ChecksState) => string;
   readonly checksDetail: (checks: ChecksState) => string | null;
   /**
-   * The strip under the title: what was answered, and published. The merge is
-   * said as whose it is and never as done or not done: rondo does not watch
-   * one, so either claim would be a guess.
+   * The strip under the title: what was answered, published and merged. A
+   * merge is said as done only where a person's press on this page made it
+   * (rondo#380), with where it went and how; otherwise it is said as whose it
+   * is and never as not done, because a merge on the forge itself is not one
+   * rondo watches.
    */
   readonly resultApproved: string;
   readonly resultNotPublished: string;
   readonly resultPublished: string;
   readonly resultChecks: string;
   readonly resultNotMerged: string;
+  readonly resultMerged: (into: string, method: string) => string;
   /** The same result as a list row's one sentence. */
   readonly rowApproved: string;
   readonly rowPublished: (pullRequest: string, checks: string) => string;
@@ -366,7 +369,17 @@ export const PAGE_EN: PageWords = Object.freeze({
   resultNotPublished: "Not published yet: no pull request has been opened.",
   resultPublished: "Pull request opened:",
   resultChecks: "Checks",
-  resultNotMerged: "Merging is yours: rondo does not merge, and does not see whether it has been.",
+  resultNotMerged: "Merging is yours: once the checks pass, you can merge it from this page.",
+  resultMerged: (into, method) =>
+    `Merged into ${into}${
+      (
+        {
+          squash: " (squashed into one commit)",
+          merge: " (with a merge commit)",
+          rebase: " (rebased)",
+        } as Record<string, string>
+      )[method] ?? ""
+    }`,
   rowApproved: "Approved, not published yet",
   rowPublished: (pullRequest, checks) => `Pull request ${pullRequest}, checks ${checks}`,
   basisKind: (form) =>
@@ -501,8 +514,17 @@ export const PAGE_JA: PageWords = Object.freeze({
   resultNotPublished: "まだ公開していません（プルリクエストはありません）。",
   resultPublished: "プルリクエストを開きました:",
   resultChecks: "チェック",
-  resultNotMerged:
-    "取り込み（マージ）はあなたが行います。rondo はマージせず、済んだかどうかも見ていません。",
+  resultNotMerged: "マージはあなたが行います。チェックが通れば、このページからマージできます。",
+  resultMerged: (into, method) =>
+    `${into} にマージしました${
+      (
+        {
+          squash: "（1 つのコミットにまとめて）",
+          merge: "（マージコミットで）",
+          rebase: "（リベースで）",
+        } as Record<string, string>
+      )[method] ?? ""
+    }`,
   rowApproved: "承認済み・まだ公開していません",
   rowPublished: (pullRequest, checks) => `プルリクエスト ${pullRequest}・チェック ${checks}`,
   basisKind: (form) =>

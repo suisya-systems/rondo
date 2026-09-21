@@ -126,6 +126,12 @@ export interface WebPorts extends InboxReadPorts {
    */
   readonly releasable?: boolean;
   /**
+   * Whether the host holds a merge press (rondo#380, `D-0091`): true exactly
+   * where the merge port is not null, so no merge button is drawn where every
+   * press would be refused. Absent is false.
+   */
+  readonly mergeable?: boolean;
+  /**
    * A running lap's log, read at the directory `locateTranscript` named
    * (rondo#248 item 3). A function for {@link LapMaterial}'s reason: the
    * renderer opens no file, and what it is handed reads two named files under

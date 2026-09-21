@@ -46,6 +46,20 @@ export interface LapResult {
   readonly checks: ChecksState;
   /** When the checks answer was written; null while they are running. */
   readonly checksAtMs: number | null;
+  /**
+   * The commit the latest checks answer is about -- the head `publish` pushed
+   * -- or null where there is no answer or its sentence names none.
+   */
+  readonly checksCommit: string | null;
+  /**
+   * Where a person's merge press put it (rondo#380), or null where rondo has
+   * merged nothing. A merge made on the forge itself is not seen here.
+   */
+  readonly merged: {
+    readonly into: string;
+    readonly method: string;
+    readonly atMs: number;
+  } | null;
 }
 
 interface Said {
@@ -74,7 +88,56 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
     atMs: published.atMs,
     checks: latest === undefined ? { kind: "running" } : checksOf(latest.kind, latest.said.body),
     checksAtMs: latest?.said.atMs ?? null,
+    checksCommit:
+      latest === undefined ? null : (/on commit '([^']+)'/.exec(latest.said.body)?.[1] ?? null),
+    merged: mergedOf(byId.get(`report-merged-${iterationId}`)),
   };
+}
+
+function mergedOf(said: Said | undefined): LapResult["merged"] {
+  if (said === undefined) {
+    return null;
+  }
+  const read = / went into '([^']+)' by (\w+)/.exec(said.body);
+  return { into: read?.[1] ?? "", method: read?.[2] ?? "", atMs: said.atMs };
+}
+
+/**
+ * Why a merge press is not offered, or null where it is (rondo#380, `D-0091`
+ * rule 1).
+ *
+ * **One test for the page and for the press**: the button is drawn where this
+ * is null, and the press reads the rows again and asks it again, so a button
+ * left on a screen that has since moved merges nothing.
+ *
+ * - `notPublished`: there is no pull request to merge.
+ * - `notGreen`: rondo's own latest reading is not green, or names no commit.
+ * - `asked`: a question in the request's thread still waits on the person --
+ *   `D-0064`'s "no P2 to P4 item open".
+ * - `merged`: this press already merged it.
+ * - `landed`: the line was released, so its work is on the default branch by
+ *   some other way (`D-0073` rule 7).
+ */
+export type MergeBlock = "notPublished" | "notGreen" | "asked" | "merged" | "landed";
+
+export function mergeBlock(
+  result: LapResult | null,
+  asksWaiting: boolean,
+  holding: boolean,
+): MergeBlock | null {
+  if (result === null || result.number === null) {
+    return "notPublished";
+  }
+  if (result.merged !== null) {
+    return "merged";
+  }
+  if (!holding) {
+    return "landed";
+  }
+  if (result.checks.kind !== "green" || result.checksCommit === null) {
+    return "notGreen";
+  }
+  return asksWaiting ? "asked" : null;
 }
 
 function checksOf(kind: (typeof ANSWERS)[number], body: string): ChecksState {

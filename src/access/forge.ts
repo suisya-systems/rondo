@@ -25,8 +25,9 @@
  * `git` and `gh` configuration, which rondo neither stores nor reads. What was
  * settled when this module was written is that a button the operator presses is
  * not the same act as rondo publishing on its own: the authority stays with the
- * person, and this is the keyboard rather than the authority. Merging is absent
- * from this module in both senses.
+ * person, and this is the keyboard rather than the authority. A merge is spelled
+ * here too, on the same terms and under `D-0091`: a person presses it on the
+ * page, per act, and nothing else in the tree reaches it.
  *
  * Nothing here interprets what it ran. Both functions hand back the exit status
  * and the captured streams for the caller to relay; `git` and `gh` say what
@@ -477,9 +478,9 @@ export interface PullRequestRequest {
  * that carries none -- and refused inference a second time (rule 3.3). What
  * reaches here is still a slug somebody wrote, never one rondo worked out.
  *
- * **There is no merge here and there will not be one.** Opening a pull request
- * puts the work in front of a reviewer; merging it is a different act under a
- * different authority, and it is out of scope in both senses.
+ * **There is no merge here.** Opening a pull request puts the work in front of
+ * a reviewer; merging it is a different act under a different authority, a
+ * person's press per act (`D-0091`), and it is {@link mergePullRequest}.
  */
 export async function openPullRequest(request: PullRequestRequest): Promise<CommandOutcome> {
   return await runCommand("gh", [
@@ -889,6 +890,148 @@ function numberAt(json: unknown, key: string): number | null {
   }
   const at = (json as Record<string, unknown>)[key];
   return typeof at === "number" && Number.isFinite(at) ? at : null;
+}
+
+/**
+ * One pull request, as the merge press names it (rondo#380): **by the address
+ * the forge printed when it opened it**, so the pull request merged is the one
+ * published and never a number read against whichever repository the host is
+ * told about today.
+ */
+export interface PullRequestAt {
+  readonly url: string;
+}
+
+/** What the forge says about one pull request, just before and just after a merge. */
+export type PullRequestState =
+  | {
+      readonly kind: "read";
+      /** The forge's own word: `OPEN`, `MERGED` or `CLOSED`. */
+      readonly state: string;
+      readonly headCommit: string;
+      /** The branch it merges into: where a merge lands. */
+      readonly baseBranch: string;
+      /** The commit a merge made, or null before one. */
+      readonly mergeCommit: string | null;
+    }
+  | { readonly kind: "undetermined"; readonly reason: string };
+
+/** Read one pull request's state, head and base: one `GET` (rondo#380). */
+export async function readPullRequest(at: PullRequestAt): Promise<PullRequestState> {
+  const read = await runCommand(
+    "gh",
+    ["pr", "view", at.url, "--json", "state,headRefOid,baseRefName,mergeCommit"],
+    CHECKS_READ_TIMEOUT_MS,
+  );
+  const failure = queryFailure(read);
+  if (failure !== null) {
+    return { kind: "undetermined", reason: failure };
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(read.stdout);
+  } catch (error) {
+    return {
+      kind: "undetermined",
+      reason: `the forge's answer was not JSON: ${hostFailure(error).text}`,
+    };
+  }
+  const state = stringAt(json, "state");
+  const headCommit = stringAt(json, "headRefOid");
+  const baseBranch = stringAt(json, "baseRefName");
+  if (state === null || headCommit === null || baseBranch === null) {
+    return { kind: "undetermined", reason: "the forge's answer carried no state, head or base" };
+  }
+  const merged = (json as Record<string, unknown>)["mergeCommit"];
+  return {
+    kind: "read",
+    state,
+    headCommit,
+    baseBranch,
+    mergeCommit: stringAt(merged, "oid"),
+  };
+}
+
+/** How a merge is made; the flag `gh pr merge` takes for each. */
+export type MergeMethod = "squash" | "merge" | "rebase";
+
+/** Which method the repository's own settings leave, or why there is none. */
+export type MergeMethodReading =
+  | { readonly kind: "read"; readonly method: MergeMethod }
+  | { readonly kind: "none" }
+  | { readonly kind: "undetermined"; readonly reason: string };
+
+/**
+ * The repository's allowed merge methods (rondo#380, `D-0091` rule 3), read
+ * through the operator's own `gh`: one `GET`. `repo` is `HOST/OWNER/NAME`.
+ */
+export async function readMergeMethod(repo: string): Promise<MergeMethodReading> {
+  const read = await runCommand(
+    "gh",
+    ["repo", "view", repo, "--json", "squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed"],
+    CHECKS_READ_TIMEOUT_MS,
+  );
+  const failure = queryFailure(read);
+  return failure === null ? mergeMethodOf(read.stdout) : { kind: "undetermined", reason: failure };
+}
+
+/**
+ * The method a merge press uses, from what the repository allows.
+ *
+ * **One allowed method is the repository's setting, and it is used.** Where
+ * several are allowed, the first of squash, a merge commit and rebase, and the
+ * report and the page say which (`D-0091` rule 3, the gate's answer: a person
+ * does not choose per press).
+ */
+export function mergeMethodOf(printed: string): MergeMethodReading {
+  let json: unknown;
+  try {
+    json = JSON.parse(printed);
+  } catch (error) {
+    return {
+      kind: "undetermined",
+      reason: `the forge's answer was not JSON: ${hostFailure(error).text}`,
+    };
+  }
+  const allowed = (key: string): boolean | null => {
+    const at =
+      typeof json === "object" && json !== null ? (json as Record<string, unknown>)[key] : null;
+    return typeof at === "boolean" ? at : null;
+  };
+  const read = [
+    ["squash", allowed("squashMergeAllowed")],
+    ["merge", allowed("mergeCommitAllowed")],
+    ["rebase", allowed("rebaseMergeAllowed")],
+  ] as const;
+  // A field that is absent is a forge that did not say, never a "no": reading
+  // it as one could pick a method the repository refuses.
+  if (read.some(([, value]) => value === null)) {
+    return { kind: "undetermined", reason: "the forge did not say which merge methods it allows" };
+  }
+  const method = read.find(([, value]) => value === true)?.[0];
+  return method === undefined ? { kind: "none" } : { kind: "read", method };
+}
+
+/**
+ * Merge one pull request, on a person's press (rondo#380, `D-0091`).
+ *
+ * **`--match-head-commit` is what makes the press about the commit that was
+ * read green**: the forge refuses the merge if the head has moved since, so a
+ * push after the green reading cannot ride in on it. No `--delete-branch`, no
+ * `--auto` and no `--admin`: the branch stays, a merge the forge would not make
+ * now is not queued for later, and a protection rule is not overridden.
+ */
+export async function mergePullRequest(
+  request: PullRequestAt & { readonly method: MergeMethod; readonly headCommit: string },
+): Promise<CommandOutcome> {
+  return await runCommand("gh", [
+    "pr",
+    "merge",
+    request.url,
+    `--${request.method}`,
+    "--match-head-commit",
+    request.headCommit,
+  ]);
 }
 
 /** What reading the lap's work needs. Every value comes from the plan. */
