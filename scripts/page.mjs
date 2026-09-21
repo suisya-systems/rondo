@@ -50,6 +50,7 @@ const COPIES = {
   "keys.js": join(root, "page/keys.js"),
   "composer.js": join(root, "page/composer.js"),
   "chime.js": join(root, "page/chime.js"),
+  "text-size.js": join(root, "page/text-size.js"),
   "inter-latin-wght-normal.woff2": require.resolve(
     "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2",
   ),

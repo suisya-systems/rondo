@@ -3148,6 +3148,12 @@ export async function operatorPage(
         <title>rondo</title>
         <link rel="stylesheet" href="/app.css" />
         {
+          // **Not deferred, and before the body** (rondo#379): it puts the
+          // text size a person chose on the root element before anything is
+          // drawn, so the page does not paint at one size and jump to another.
+        }
+        <script src="/text-size.js" />
+        {
           // `defer` on all of them, in this order: htmx is defined before its
           // morph extension registers with it, and both before the key and
           // composer scripts run; none runs before the document exists. None
@@ -3307,6 +3313,33 @@ export async function operatorPage(
                 </>
               )}
             </span>
+            {/*
+             * **The text size, which a person can change** (rondo#379). Three
+             * steps of the one type scale, each an "A" drawn at the step it
+             * sets, so the control reads as what it does in either language;
+             * the step's name is the button's accessible name and its tooltip.
+             * `page/text-size.js` moves the scale and remembers the choice in
+             * this browser, and marks the pressed step (`aria-pressed`). Script
+             * only, because without it a press would do nothing; outside
+             * `#ledger`, so the redraw never draws it back.
+             */}
+            <fieldset
+              aria-label={wording.textSizeLabel}
+              class="js-only inline-flex shrink-0 items-center rounded-md border border-border"
+            >
+              {(["", "large", "larger"] as const).map((step, at) => (
+                <button
+                  type="button"
+                  data-text-size-choice={step}
+                  aria-pressed="false"
+                  aria-label={wording.textSizes[at]}
+                  title={wording.textSizes[at]}
+                  class={`inline-flex h-7 min-w-7 items-center justify-center px-1 font-semibold leading-none text-muted-foreground hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground ${["text-id", "text-body", "text-title"][at]}`}
+                >
+                  A
+                </button>
+              ))}
+            </fieldset>
             {
               // **The switch, and it is the first element of this chrome that
               // exists in order to be operated rather than read** (D-0056 rule

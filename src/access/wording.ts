@@ -410,6 +410,9 @@ export interface Chrome extends PageWords {
   readonly keyOpen: string;
   readonly keyBack: string;
   readonly keyWrite: string;
+  /** The header's text-size control (rondo#379): the group's name, and one name per step, smallest first. */
+  readonly textSizeLabel: string;
+  readonly textSizes: readonly [string, string, string];
 
   readonly inboxNote: string;
 

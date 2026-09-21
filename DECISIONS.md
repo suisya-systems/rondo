@@ -13341,6 +13341,29 @@ and R3/R4 after `D-0064`); the gate's answers are recorded in "What was put to t
 answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`, `D-0042`, `D-0007`,
 `D-0055`, `D-0056`, `D-0002`, `D-0006`, `D-0061`, `D-0064`.
 
+> **Annotation (2026-09-22, from rondo#379), and not additive.** Added after this entry was
+> accepted, **pending the answer of rondo's human gate** on rondo#379. **R3's client script gains one
+> more duty, in a file of its own: remembering the text size a person chose** (`page/text-size.js`).
+> - **What the duty is.** The header's three text-size buttons put the chosen step on the root
+>   element (`data-text-size`, the only thing `page/app.css` reads to move the type scale, `D-0082`
+>   rule 4 as annotated the same day), mark the pressed one (`aria-pressed`), and keep the choice in
+>   one `localStorage` key, so every tab and later visit in this browser opens at it; a choice made in
+>   another tab is followed.
+> - **Why its own file, and why not deferred.** Every other rondo script is `defer`red and runs after
+>   the document is parsed; a size applied then is a page painted at one size and redrawn at
+>   another. This one is loaded in the head after the stylesheet, without `defer`, so the root holds
+>   the step before the body exists. Folding it into `page/keys.js` or `page/composer.js` would
+>   either make them run before the body they read, or keep the flash.
+> - **What it does not change.** It makes no request and builds no `POST`; it reads and writes one
+>   key in this browser and nothing a server reads, so R3's vocabulary -- one polling `GET` of the
+>   page's own address and the send's `hx-post` -- and R4 at the door are unchanged. It is not a
+>   cookie: `D-0056` rule 5 still holds one. With script off the buttons are hidden (`.js-only`) and
+>   the page is the default scale, as before.
+> - **What it costs.** One more file in the audit of client script (about 70 lines, its digest in
+>   `page.manifest.json`), and the first rondo script that runs before the body. A stored value the
+>   stylesheet has no step for is ignored, not applied.
+> - Nothing else in this entry is changed, and nothing below is edited.
+
 > **Annotation (2026-09-22, from rondo#375), and not additive.** Added after this entry was
 > accepted, by the answer of rondo's human gate (relayed by the secretary on 2026-09-22). **R3's
 > client script gains a fourth duty.** R3 counted three between two rondo-owned scripts: row focus
@@ -19492,6 +19515,29 @@ on the Latin side is nothing, and that was measured rather than assumed.
 **One consequence, taken on purpose:** a request is `--text-title` at every weight, so *waiting* and
 *ended* rows no longer differ by a pixel of size. They differ by weight, by ink and by the cut, which
 is what a reader was reading anyway.
+
+> **Annotation (2026-09-22, from rondo#379), and additive.** Added after this entry was accepted.
+> **The scale above is the default, and a person can move it.** On lap 11 the owner found the text
+> small again and asked for a way to change it, not for a larger default (N-53) -- which is this
+> entry's falsifier *"the gate asking for a larger scale a second time"*, answered by a control
+> rather than by a third pricing of the default in rows per screen.
+> - **What is built.** The header carries three steps -- the default, `1.125` and `1.25` times it --
+>   and every step of this rule is multiplied by `--text-scale` on the root element. The six
+>   tokens keep their names and their defaults: `12 / 13 / 14 / 16 / 19 / 25`px is still what a page
+>   nobody has touched draws, byte for byte in pixels. The sizes the faces' stylesheets still write
+>   in pixels (slice 2's seam), Tailwind's `text-xs/sm/base`, and the line heights the views use
+>   (`leading-4/5/6`) are multiplied by the same factor, so the whole page moves together and a
+>   larger step is not squeezed into a line drawn for the smaller one.
+> - **What does not move: widths and spacing.** That is what separates the control from the
+>   browser's zoom, which scales the three faces' widths too. At a larger step a face keeps its
+>   width, a line holds fewer words, and a screen holds fewer rows; that cost -- the one point 3
+>   priced -- is the person's to choose, and at the default it is nothing.
+> - **Where the choice is kept: `localStorage`, in this browser, and nowhere a server reads.** It
+>   is applied by a script loaded without `defer` before the body, so the first paint is already
+>   at the chosen size, and it sits on the root element, which the five-second redraw does not
+>   swap. It is not a cookie, so `D-0056` rule 5's one cookie is not widened; the client-script
+>   duty it adds is recorded against `D-0059` R3 in that entry's annotation of the same day.
+> - Rules 4 and 5 otherwise stand; nothing above is edited.
 
 **5. Japanese differs by the line, and by nothing else.** The scale in rule 4 is one scale for both
 languages; what forks is the line height, which gains a step (to `1.7`) on the three prose carriers,

@@ -126,14 +126,38 @@
  * **`--text-id` is a floor and not a default**: identifiers and ages in the metadata column, and
  * nothing a person reads as prose. `--text-section` and `--text-page` are the scale's top and carry
  * nothing yet; Tailwind emits no bytes for a step no view asks for.
+ *
+ * **The scale is the default, and a person can move it** (rondo#379). The owner found the text small
+ * again on lap 11 and asked for a control rather than a larger default, so every step is multiplied
+ * by `--text-scale`, which the header's three-step control sets on the root element (`page/text-size.js`).
+ * The line heights the views use (`leading-4/5/6`) move with it, so a larger step is not squeezed
+ * into a line drawn for the smaller one; widths and spacing do not move, which is what separates this
+ * from the browser's zoom -- the faces keep their widths and a line holds fewer words. Tailwind's
+ * `text-xs/sm/base` are pinned to the pixels they always resolved to, so they move too. At the
+ * default the factor is 1 and every size is the pixel it was.
  */
+:root {
+  --text-scale: 1;
+}
+:root[data-text-size="large"] {
+  --text-scale: 1.125;
+}
+:root[data-text-size="larger"] {
+  --text-scale: 1.25;
+}
 @theme inline {
-  --text-id: 12px;
-  --text-meta: 13px;
-  --text-body: 14px;
-  --text-title: 16px;
-  --text-section: 19px;
-  --text-page: 25px;
+  --text-id: calc(12px * var(--text-scale));
+  --text-meta: calc(13px * var(--text-scale));
+  --text-body: calc(14px * var(--text-scale));
+  --text-title: calc(16px * var(--text-scale));
+  --text-section: calc(19px * var(--text-scale));
+  --text-page: calc(25px * var(--text-scale));
+  --text-xs: calc(12px * var(--text-scale));
+  --text-sm: calc(14px * var(--text-scale));
+  --text-base: calc(16px * var(--text-scale));
+  --leading-4: calc(16px * var(--text-scale));
+  --leading-5: calc(20px * var(--text-scale));
+  --leading-6: calc(24px * var(--text-scale));
   --font-sans:
     "Inter Variable", ui-sans-serif, system-ui, "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP",
     "Yu Gothic UI", sans-serif;
@@ -219,7 +243,7 @@ button[aria-disabled="true"] {
  */
 @layer components {
   .markdown {
-    font-size: 14px;
+    font-size: calc(14px * var(--text-scale));
     line-height: 1.65;
     overflow-wrap: anywhere;
   }
@@ -312,7 +336,7 @@ button[aria-disabled="true"] {
   .markdown pre code {
     padding: 0;
     background: none;
-    font-size: 13px;
+    font-size: calc(13px * var(--text-scale));
     white-space: pre-wrap;
   }
   .markdown blockquote {
