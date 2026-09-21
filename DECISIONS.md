@@ -132,7 +132,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0092 | Which answer a gate was given is recorded beside the gate answer, when rondo carries it: `approve` and `revise` stop being told apart by whether a next try exists, and a lap with no record is not called approved | accepted (point 3 pending the owner) |
 | D-0093 | The boundary test also asks which role a module plays: every module under `src/` names a row of `D-0064` section 5, a row given to cadenza or continuo is refused, and what already sits in rondo is a named, shrinking list of relocations | accepted |
 | D-0096 | The header's "Requests" link is closed, and a thread's `Esc` goes to the bare address: the link led to the new-request view the list already reaches, and the way back it carried on a thread moves to the logo | accepted |
-| D-0097 | rondo proposes which request is worth making: the advisory ranks candidates against a goal the person wrote down, reads its own record as well as the issue list, and brings one recommendation whose open points can be answered in one word; it never starts what it proposes | proposed |
+| D-0097 | rondo proposes which request is worth making: the advisory ranks candidates against a goal the person wrote down, reads its own record as well as the issue list, and brings one recommendation whose open points can be answered in one word; it never starts what it proposes | accepted |
 
 ---
 
@@ -19865,6 +19865,14 @@ it, so it is chosen now. A screen with nothing to ask of the person is quiet, wh
 claim `D-0082` rule 2 makes of colour: the ordinary state is told from the exceptional one by how
 little is on it.
 
+> **Annotation (2026-09-22, from D-0097).** Added after this entry was accepted, and **not additive**,
+> by the owner's answer to `D-0097` point 4.7. **"Nothing is drawn, and nothing is to be found to draw
+> there" no longer holds as written**: nothing *waiting on the person* is drawn there, and the
+> advisory's proposal of what to ask for next may sit directly under the request box, in ink and with
+> no amber (`D-0097` point 4). On a day nothing goes against a goal the person wrote, that proposal is
+> one sentence saying what was read and when, and the lower third stays empty. The quiet this rule
+> chose, and its falsifier (the quiet taken for a page not yet loaded), stand. Nothing above is edited.
+
 **5. Three faces, and what each holds.**
 
 | Face | 2560 | Holds |
@@ -21542,11 +21550,11 @@ At rondo `223654d`, by reading `src/access/web.tsx` and the page in a browser:
 
 ## D-0097 — rondo proposes which request is worth making: the advisory ranks candidates against a goal the person wrote down, reads its own record as well as the issue list, and brings one recommendation whose open points can be answered in one word; it never starts what it proposes
 
-**Status:** proposed (2026-09-22, rondo#320). **Nothing here is decided yet.** Section 1 records what
-is already settled by accepted entries and by the owner's direction; section 2 puts six points to the
-owner, each with options, what each gives up and one recommendation (`D-0064` section 4). The
-answers are left blank in "What was put to the human gate, and its answer" until the owner gives
-them. Supersedes nothing. Refs `D-0032`, `D-0061` rule 6, `D-0063`, `D-0064`, `D-0075`, `D-0081`,
+**Status:** accepted (2026-09-22, rondo's owner, through the window, on rondo#320). Section 1
+records what was already settled by accepted entries and by the owner's direction; section 2 put six
+points to the owner, each with options, what each gives up and one recommendation (`D-0064` section
+4), and the owner took the recommendation on every one; see "What was put to the human gate, and its
+answer". Supersedes nothing. `D-0083` rule 4 gains an annotation (listed at the end). Refs `D-0032`, `D-0061` rule 6, `D-0063`, `D-0064`, `D-0075`, `D-0081`,
 `D-0082`, `D-0083`, `D-0093`, rondo#250, rondo#298, rondo#319, rondo#320.
 
 **This entry decides and does not build.** Nothing in `src/` changes with it; the building is after
@@ -21767,35 +21775,41 @@ and because nothing in it waits on the person, it carries no amber (`D-0082` rul
 ### What was put to the human gate, and its answer
 
 1. **What it reads.** (a) issues only; (b) issues and rondo's own record, with audits proposed as
-   candidates (recommended); (c) (b) with triage running audits itself. **Answer:**
+   candidates (recommended); (c) (b) with triage running audits itself. **Answered (2026-09-22): the recommendation.**
 2. **What it ranks against.** 2.1 (a) a store record per repository written on the page
    (recommended), (b) a file in the repository, (c) a decision entry; 2.2 (a) numbered clauses each
    saying when it is unmet (recommended), (b) free prose; 2.3 (a) clause, then an explicit label,
    nothing else ranks (recommended), (b) clause then a generic score, (c) one weighted score; 2.4
    (a) before a goal, the proposal is to write one, from a draft (recommended), (b) fall back to the
-   generic ranking, (c) labels only. **Answer:**
+   generic ranking, (c) labels only. **Answered (2026-09-22): the recommendation.**
 3. **What a proposal is.** (a) a drafted request awaiting approval; (b) a list with no
    recommendation; (c) one recommendation with runners-up, taken into the request box for the person
-   to send (recommended). **Answer:**
+   to send (recommended). **Answered (2026-09-22): the recommendation.**
 4. **When it proposes, and where it is drawn.** 4.1 (d) a stored proposal, drawn on the empty
    centre and pointed to by a line in the thread that finished, not while something waits on the
    person (recommended); 4.2 (a) the centre under the request box (recommended); 4.3 one in full,
    up to four folded (recommended); 4.4 *put it in the box* and *not now*; 4.5 (a) *not now*
    recorded on the proposal row (recommended); 4.6 no candidates without a goal, one sentence when
    nothing goes against it; 4.7 (a) annotate `D-0083` rule 4, not additive (recommended).
-   **Answer:**
+   **Answered (2026-09-22): the recommendation.**
 5. **Who ranks.** (a) a model drafter, its spend in the week's allowance (recommended); (b) the
-   deterministic drafter. **Answer:**
+   deterministic drafter. **Answered (2026-09-22): the recommendation.**
 6. **What it must not do.** (a) nothing written outside rondo (recommended); (b) labels and comments
-   on issues allowed. **Answer:**
+   on issues allowed. **Answered (2026-09-22): the recommendation.**
 
 ### What this gives up
 
-- **Proposals before a goal is written**, if point 2.4 (a) is taken.
+- **Proposals before a goal is written** (point 2.4 (a)).
 - **Good work the goal does not cover** is withheld rather than proposed (point 2.3 (a)); the person
   widens the goal to see it.
 - **A spend on every proposal** (point 5 (a)).
 - **The empty lower third on a day with a candidate** (point 4.7 (a)).
+
+### Annotations this entry adds
+
+- **`D-0083` rule 4**, at *"The lower third of that centre is empty at 2560x1440, and it is meant to
+  be"*: not additive (point 4.7 (a)). Nothing waiting on the person is drawn there; the advisory's
+  proposal may be.
 
 ### What this does not do
 
