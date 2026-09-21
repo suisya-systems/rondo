@@ -752,7 +752,7 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was recorded: the work is no longer waiting for you, so there is no budget to " +
     "raise for it. Go back to see how it ended.",
 
-  publishAction: "Publish",
+  publishAction: "Open a pull request",
   published: (branch, runId) =>
     `Published: ${branch === null ? "the branch" : `the branch ${branch}`} is pushed, and ` +
     `${runId === null ? "the run" : `the run ${runId}`} is closed.`,
@@ -822,7 +822,7 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was started and nothing was spent: other work still keeps files this needs. The " +
     "approval stands; start again once that work's change is on the default branch or its files " +
     "are released.",
-  publishHeading: "Publish this work",
+  publishHeading: "Open a pull request for this work",
   publishLead:
     "Nothing has left this machine yet. This is what publishing would do, read just now; the " +
     "button below is the only thing that does it.",
@@ -899,12 +899,24 @@ explanation you pressed on and then answers the gate.`,
   publishReviewMoved: (readTip, nowTip) =>
     `The reading was taken over ${readTip} and this would push ${nowTip}, so it does not ` +
     "describe the work any more.",
-  publishDespiteFold: "Publish without that reading",
-  publishDespiteAction: "Publish anyway",
+  publishDespiteFold: "Open the pull request without that reading",
+  publishDespiteAction: "Open the pull request anyway",
   publishDespiteNote:
     "That is yours to decide, and it is a second press of its own. rondo records that you " +
     "decided it; the reading stays where it is.",
   publishDespitePlain: "Publishes this work although the reading above does not cover it.",
+  scopeBusy: "Recording the scope...",
+  approveBusy: "Recording your approval...",
+  startBusy: "Starting the work...",
+  reviseBusy: "Asking for the change...",
+  publishBusy: "Opening the pull request...",
+  lapBusyNote:
+    "Received. The work is running now, and this screen moves on when it stops for you to " +
+    "check it -- a few minutes, and sometimes tens of minutes. There is no need to press again, " +
+    "and the list in another tab shows the work under way.",
+  publishBusyNote:
+    "Received. rondo is pushing the branch and opening the pull request; this usually takes " +
+    "under a minute. There is no need to press again.",
   publishRefusedNoApprover:
     "Nothing was published: RONDO_APPROVER is not set, so there is nobody this page could " +
     "publish as.",

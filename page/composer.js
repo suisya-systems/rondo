@@ -1,4 +1,4 @@
-// The composer script (DECISIONS.md D-0059 section 5a): exactly two duties.
+// The composer script (DECISIONS.md D-0059 section 5a): three duties.
 //
 // 1. **Keep the unsent draft.** What a person types into the composer
 //    (`textarea[data-draft]`, keyed by that attribute: a new request, or one
@@ -20,6 +20,14 @@
 //    opened before a press is open on the page the press lands on. The ids are
 //    kept in `sessionStorage`; any fold with one of them that arrives shut is
 //    opened again. With script off `page/app.css` draws every fold open.
+// 3. **Show that a press was received** (rondo#375). A press is a native form
+//    post, and the page it lands on can be a whole lap away; with nothing
+//    changing meanwhile, a person could not tell a press from no press, and
+//    pressed again. So the moment a form posts, its buttons are marked
+//    disabled, the pressed one says what is happening (its `data-busy`), the
+//    note saying what it waits on (`data-busy-note`) is shown, and a second
+//    submit of that form is cancelled. The redraw leaves a pressed form alone,
+//    which would otherwise put the button back as it was drawn.
 //
 // **It makes no request and builds no `POST`.** It reads and writes
 // `sessionStorage` in this tab and nothing a server reads; the only write this
@@ -295,6 +303,11 @@ document.addEventListener("htmx:afterSwap", redrawn);
 const renamed = new WeakSet();
 if (typeof Idiomorph !== "undefined") {
   Idiomorph.defaults.callbacks.beforeNodeMorphed = (old, next) => {
+    // Duty 3: a pressed form is on its way to another page, and redrawing it
+    // would say the press had not happened.
+    if (old instanceof HTMLFormElement && old.dataset.pressed !== undefined) {
+      return false;
+    }
     if (
       old instanceof HTMLTextAreaElement &&
       old.dataset.draft !== undefined &&
@@ -312,3 +325,44 @@ if (typeof Idiomorph !== "undefined") {
         !renamed.delete(element))
     );
 }
+
+// -- 3. The press --
+
+// **Marked disabled and not made `disabled`** (rondo#375): the form's data is
+// read after this listener runs, and a disabled submitter is left out of it --
+// which for an answer's `outcome` would send a press that names no answer.
+// `aria-disabled` says it to a reader and `page/app.css` draws it; the second
+// submit is what is actually stopped, here.
+// **Only a native post**: htmx has already cancelled the send it makes, whose
+// box stays usable while it is in flight (duty 1).
+document.addEventListener("submit", (event) => {
+  const form = event.target;
+  if (!(form instanceof HTMLFormElement) || form.method !== "post" || event.defaultPrevented) {
+    return;
+  }
+  if (form.dataset.pressed !== undefined) {
+    event.preventDefault();
+    return;
+  }
+  form.dataset.pressed = "";
+  form.setAttribute("aria-busy", "true");
+  for (const button of form.querySelectorAll("button")) {
+    button.setAttribute("aria-disabled", "true");
+  }
+  const pressed = event.submitter;
+  if (pressed instanceof HTMLButtonElement && pressed.dataset.busy !== undefined) {
+    pressed.textContent = pressed.dataset.busy;
+  }
+  for (const note of form.querySelectorAll("[data-busy-note]")) {
+    note.hidden = false;
+  }
+});
+
+// **Back to a pressed page is a page to press again** (rondo#375): the browser
+// may restore it from its cache as it was left, busy, and the press it showed
+// has landed or been abandoned by then. A fresh load is drawn by the server.
+addEventListener("pageshow", (event) => {
+  if (event.persisted && document.querySelector("form[data-pressed]") !== null) {
+    location.reload();
+  }
+});

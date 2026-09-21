@@ -394,10 +394,19 @@ function publishForm(wording: Chrome, record: IterationRecord, token: string, sh
         type="submit"
         data-row=""
         aria-describedby="publish-plain"
+        data-busy={wording.publishBusy}
         class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
       >
         {wording.publishAction}
       </button>
+      <p
+        data-busy-note=""
+        hidden
+        role="status"
+        class="note text-meta leading-5 text-muted-foreground"
+      >
+        {wording.publishBusyNote}
+      </p>
       <span id="publish-plain" class="note sr-only">
         {wording.publishPlain}
       </span>
@@ -443,10 +452,19 @@ function despiteForm(wording: Chrome, record: IterationRecord, token: string, sh
           type="submit"
           data-row=""
           aria-describedby="publish-despite-plain"
+          data-busy={wording.publishBusy}
           class={`${SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
         >
           {wording.publishDespiteAction}
         </button>
+        <p
+          data-busy-note=""
+          hidden
+          role="status"
+          class="note text-meta leading-5 text-muted-foreground"
+        >
+          {wording.publishBusyNote}
+        </p>
         <span id="publish-despite-plain" class="note sr-only">
           {wording.publishDespitePlain}
         </span>

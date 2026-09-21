@@ -1319,6 +1319,7 @@ function approveView(
             type="submit"
             data-row=""
             aria-describedby={`approve-plain-${record.id}`}
+            data-busy={wording.approveBusy}
             // **The press changes shape with what it is answering over**
             // (D-0083 rule 10): ink where the readings raised nothing, and
             // amber-outlined where one of them did, which is the same
@@ -1498,10 +1499,19 @@ function reviseForm(
           type="submit"
           data-row=""
           aria-describedby="revise-plain"
+          data-busy={wording.reviseBusy}
           class={`${recommended ? PRIMARY : SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
         >
           {wording.reviseAction}
         </button>
+        <p
+          data-busy-note=""
+          hidden
+          role="status"
+          class="note text-meta leading-5 text-muted-foreground"
+        >
+          {wording.lapBusyNote}
+        </p>
         <span id="revise-plain" class="note sr-only">
           {wording.revisePlain}
         </span>
@@ -1738,6 +1748,8 @@ function noDraftView(wording: Chrome, message: ThreadMessageDraft, root: string,
             { kind: "scope", messageId: root, rounds: null, decisionId: null, plan: null },
             wording.lang,
           )}
+          // Outlined: the thread's own entrance below is the filled one
+          // while no lap has started (rondo#375), and one filled way is enough.
           class={`${SECONDARY} h-7 px-3 text-meta`}
         >
           {wording.scopeAction}
@@ -1795,6 +1807,25 @@ function threadActs(
           (lap) =>
             approvedForPublication(lap.record) && publishedReport(threads, lap.record.id) === null,
         );
+  // **Which of these is the person's next step, drawn as the press it is**
+  // (rondo#375, D-0082 rule 1: weight follows who is blocked). On lap 11 the
+  // only way forward was the quietest thing on the screen and read as *nothing
+  // is happening*: nobody but the person can set a scope or open the pull
+  // request, so when one of them is what the request is waiting on, it is
+  // filled. Never while something else in the thread waits on them -- a
+  // question, or a gate, whose own box is then the press.
+  const waitedOn =
+    [...threads.waiting].some((id) => threads.rootOf(id) === requestMessageId) ||
+    laps.some((lap) => lap.question === "waiting");
+  const next = waitedOn
+    ? null
+    : laps.length === 0
+      ? "scope"
+      : // The newest try that can be published, and only that one: two filled
+        // buttons read as a choice with no answer.
+        (publishable.at(-1)?.record.id ?? null);
+  const weight = (isNext: boolean) =>
+    isNext ? `${PRIMARY} h-9 px-4 text-sm` : `${SECONDARY} h-7 px-3 text-meta`;
   return (
     <p class="thread-acts">
       <a
@@ -1810,11 +1841,10 @@ function threadActs(
           wording.lang,
         )}
         data-open=""
-        // **A way to another screen, and not a press** (D-0082 rule 1): what
-        // these lead to is a screen with its own press on it, and drawn filled
-        // they outweighed the box further down that a person is actually being
-        // waited on by.
-        class={`${SECONDARY} h-7 px-3 text-meta`}
+        // Otherwise outlined: another scope for a request that already has
+        // work is a way to another screen, and drawn filled it outweighed the
+        // box a person is actually being waited on by.
+        class={weight(next === "scope")}
       >
         {wording.scopeAction}
       </a>
@@ -1823,7 +1853,7 @@ function threadActs(
           id={`publish-${lap.record.id}`}
           href={viewHref({ kind: "publish", iterationId: lap.record.id }, wording.lang)}
           data-open=""
-          class={`${SECONDARY} h-7 px-3 text-meta`}
+          class={weight(next === lap.record.id)}
         >
           {/* Which try, where there is more than one to tell apart: three
               buttons reading *publish* are three a person cannot choose

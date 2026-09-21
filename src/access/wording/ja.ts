@@ -772,7 +772,7 @@ export const JA: Chrome = Object.freeze({
     "何も記録していません。作業はもうあなたを待っていないので、予算を引き上げる対象が" +
     "ありません。戻って結果を確認してください。",
 
-  publishAction: "公開する",
+  publishAction: "プルリクエストを作る",
   published: (branch, runId) =>
     `公開済み: ${branch === null ? "ブランチ" : `ブランチ ${branch}`} を push し、` +
     `${runId === null ? "run" : `run ${runId}`} を閉じました。`,
@@ -843,7 +843,7 @@ export const JA: Chrome = Object.freeze({
     "何も開始せず、何も消費していません。必要なファイルを別の作業がまだ押さえています。承認は" +
     "そのまま有効です。その作業の変更が既定ブランチに入るか、ファイルが手放されたら、もう一度" +
     "開始してください。",
-  publishHeading: "この作業を公開する",
+  publishHeading: "この作業のプルリクエストを作る",
   publishLead:
     "公開すると何が起きるかを、いまの状態から読み取って示します。下のボタンを押すまで、何も起きません。",
   publishNotYetLead: "まだ何も送信していません。いまのままでは公開できません。",
@@ -913,12 +913,24 @@ export const JA: Chrome = Object.freeze({
   publishReviewMoved: (readTip, nowTip) =>
     `読み取りは ${readTip} に対して取られ、push されるのは ${nowTip} です。もうこの作業を` +
     "説明していません。",
-  publishDespiteFold: "その読み取りなしで公開する",
-  publishDespiteAction: "それでも公開する",
+  publishDespiteFold: "その読み取りなしでプルリクエストを作る",
+  publishDespiteAction: "それでもプルリクエストを作る",
   publishDespiteNote:
     "これを決めるのはあなたで、そのための押下は別に 1 回必要です。rondo はあなたが決めたことを" +
     "記録します。読み取りはそのまま残ります。",
   publishDespitePlain: "上の読み取りがこの作業を説明していないまま公開します。",
+  scopeBusy: "範囲を記録しています…",
+  approveBusy: "承認を記録しています…",
+  startBusy: "作業を始めています…",
+  reviseBusy: "変更を依頼しています…",
+  publishBusy: "プルリクエストを作っています…",
+  lapBusyNote:
+    "受け付けました。いま作業が動いていて、確認をお願いする所まで進むとこの画面が切り替わります。" +
+    "数分、長いと数十分かかります。もう一度押す必要はありません。" +
+    "別のタブで一覧を開くと、作業中だと分かります。",
+  publishBusyNote:
+    "受け付けました。ブランチを push してプルリクエストを作っています。たいてい 1 分以内に" +
+    "終わります。もう一度押す必要はありません。",
   publishRefusedNoApprover:
     "何も公開していません。RONDO_APPROVER が未設定なので、このページが誰として公開するか" +
     "決まりません。",

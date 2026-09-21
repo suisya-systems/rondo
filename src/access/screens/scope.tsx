@@ -719,6 +719,7 @@ async function scopeForm(
             type="submit"
             data-row=""
             aria-describedby="scope-plain"
+            data-busy={wording.scopeBusy}
             class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
           >
             {wording.scopeAction}
@@ -940,6 +941,7 @@ async function raiseForm(
             type="submit"
             data-row=""
             aria-describedby="raise-plain"
+            data-busy={wording.scopeBusy}
             class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
           >
             {wording.raiseAction}
@@ -1177,6 +1179,7 @@ async function draftedForm(
             type="submit"
             data-row=""
             aria-describedby="scope-draft-plain"
+            data-busy={wording.scopeBusy}
             class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
           >
             {wording.scopeDraftedAction}
@@ -1267,7 +1270,7 @@ async function planStart(
       <form
         method="post"
         action={`/start-plan?lang=${encodeURIComponent(wording.lang)}`}
-        class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-end"
+        class="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end"
       >
         <input type="hidden" name="token" value={token} />
         <input type="hidden" name="request" value={view.messageId} />
@@ -1280,10 +1283,19 @@ async function planStart(
           type="submit"
           data-row=""
           title={wording.planStartPlain}
+          data-busy={wording.startBusy}
           class={`${PRIMARY} h-9 w-full justify-center px-5 text-sm sm:w-auto`}
         >
           {wording.planStartAction}
         </button>
+        <p
+          data-busy-note=""
+          hidden
+          role="status"
+          class="note text-meta leading-5 text-muted-foreground sm:basis-full sm:text-right"
+        >
+          {wording.lapBusyNote}
+        </p>
       </form>
     );
   switch (ready.kind) {
@@ -1546,10 +1558,19 @@ async function scopeApproved(
             type="submit"
             data-row=""
             aria-describedby="start-plain"
+            data-busy={wording.startBusy}
             class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
           >
             {wording.startAction}
           </button>
+          <p
+            data-busy-note=""
+            hidden
+            role="status"
+            class="note text-meta leading-5 text-muted-foreground"
+          >
+            {wording.lapBusyNote}
+          </p>
           <span id="start-plain" class="note sr-only">
             {wording.startPlain}
           </span>
