@@ -18,6 +18,8 @@
  * The `decided` kind exists in `page/events.tsx` and is drawn the moment
  * there is something true to draw with it.
  */
+
+import { isNestedSandboxRefusal } from "../../continuo/protocol.js";
 import {
   APPROVED_OUTCOME,
   approvedForPublication,
@@ -141,7 +143,14 @@ function endedLine(
       // rule 7): this is the only place that still knows the failure was a
       // refusal rather than a stop, and the fold will not read the sentence
       // back to find out (rondo#317).
-      return { said: wording.evRefused(record.reason), yours: true };
+      // continuo's nested-sandbox refusal names its own verb and an errno, so
+      // the person is told the move in rondo's words instead (D-0076).
+      return {
+        said: isNestedSandboxRefusal(record.reason)
+          ? wording.lapNestedSandbox
+          : wording.evRefused(record.reason),
+        yours: true,
+      };
     case "defect":
       return {
         said: wording.evBroke,

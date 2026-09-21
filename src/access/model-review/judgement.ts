@@ -17,8 +17,8 @@
  * redo taken under a scope, and never by a gate a person answers.
  */
 
+import type { LapCommand } from "../../continuo/protocol.js";
 import { type ReviewerRow, reviewerFamilyCheck } from "../../continuo/roles.js";
-import type { LapTranscriptReading } from "../../continuo/transcript.js";
 import type { ReviewCriterion } from "../../refrain/plan.js";
 import { contentDigest } from "../../store/plan.js";
 import {
@@ -111,14 +111,48 @@ export interface ReviewMaterial {
   readonly commits: readonly { readonly sha: string; readonly message: string }[];
   /** What the lap ran on, including a `revise` instruction (D-0027). */
   readonly prompt: string;
-  /** The transcript reduced to commands, outputs and the final message (1.2.4). */
-  readonly transcript: LapTranscriptReading;
+  /**
+   * The commands the lap ran and their outputs (1.2.4), as `lap perform`
+   * reported them (continuo D-1112). The worker's final message is not here:
+   * it is what the gate carries, handed over as {@link rationale}.
+   */
+  readonly transcript: ReviewTranscript;
   /** The gate's rationale, handed as a claim to check, not as a description. */
   readonly rationale: string | null;
   readonly deterministicFindings: readonly string[];
   readonly criterion: ReviewCriterion;
   /** Rule file contents at `baseCommit`. */
   readonly ruleFiles: readonly { readonly path: string; readonly content: string }[];
+}
+
+/** The lap's commands, or why rondo holds none. */
+export type ReviewTranscript =
+  | { readonly kind: "read"; readonly commands: readonly LapCommand[] }
+  | { readonly kind: "unread"; readonly reason: string };
+
+/**
+ * One command as the TRANSCRIPT section shows it.
+ *
+ * **A cut output says so, at the cut** (continuo D-1112 rule 3). continuo keeps
+ * the first and last 4096 code points of a longer output; without a marker the
+ * reviewer would read head and tail as one whole output, and could build a
+ * finding on text that is merely missing from the middle.
+ */
+export function transcriptEntry(c: LapCommand): string {
+  // continuo keeps two equal halves, so the cut is at the middle code point.
+  const points = Array.from(c.output);
+  const cut = Math.ceil(points.length / 2);
+  const output =
+    c.outputOmittedChars === 0
+      ? c.output
+      : [
+          points.slice(0, cut).join(""),
+          `[... ${String(c.outputOmittedChars)} characters of this output were omitted here by continuo; ` +
+            "the text above is its start and the text below its end. Do not base a finding on the " +
+            "absence of anything that could be in the omitted middle. ...]",
+          points.slice(cut).join(""),
+        ].join("\n");
+  return `--- event ${String(c.index)}${c.isError ? " (error)" : ""}\n$ ${c.command}\n${output}`;
 }
 
 /** A rule file's lines, a trailing newline not counted as a line. */
@@ -209,10 +243,7 @@ function postImageRanges(diff: string): ReadonlyMap<string, readonly [number, nu
 function carried(material: ReviewMaterial): string[] {
   const transcript =
     material.transcript.kind === "read"
-      ? [
-          ...material.transcript.commands.flatMap((c) => [c.command, c.output]),
-          material.transcript.finalMessage ?? "",
-        ]
+      ? material.transcript.commands.flatMap((c) => [c.command, c.output])
       : [material.transcript.reason];
   return [
     material.evidence.baseRef,
@@ -262,13 +293,7 @@ export function reviewDocument(material: ReviewMaterial): string {
   const { severities } = material.criterion;
   const transcript =
     material.transcript.kind === "read"
-      ? [
-          ...material.transcript.commands.map(
-            (c) =>
-              `--- event ${String(c.index)}${c.isError ? " (error)" : ""}\n$ ${c.command}\n${c.output}`,
-          ),
-          `--- final message\n${material.transcript.finalMessage ?? "(none)"}`,
-        ].join("\n")
+      ? material.transcript.commands.map(transcriptEntry).join("\n") || "(the lap ran no commands)"
       : `The transcript could not be read: ${material.transcript.reason}`;
 
   return [

@@ -75,13 +75,33 @@ const CREDENTIALLED_LAYER = layerFor({
   },
 });
 
+/**
+ * The layer with its `rondo` project's `allowed_bash` set: the one list a
+ * worker may run (D-0094). `[]` leaves the key out, which cadenza reads the
+ * same way (D-0041).
+ */
+function withAllowedBash(layer: CatalogLayer, allowedBash: readonly string[]): CatalogLayer {
+  const projects = layer.data["project"] as Record<string, Record<string, unknown>>;
+  return {
+    ...layer,
+    data: {
+      ...layer.data,
+      project: {
+        rondo: {
+          ...projects["rondo"],
+          ...(allowedBash.length > 0 ? { allowed_bash: [...allowedBash] } : {}),
+        },
+      },
+    },
+  } as CatalogLayer;
+}
+
 function planWith(layer: CatalogLayer, allowedBash: readonly string[]): AdmittedPlan {
   const input: RunPlan = {
     db: resolve("/srv/rondo/control.db"),
     workspaceRoot: WORKSPACE_ROOT,
     baseBranch: "main",
     prompt: "teach rondo to count",
-    allowedBash,
     materialLanguage: null,
     reviewCriterion: null,
     repository: REPOSITORY,
@@ -106,7 +126,7 @@ function planWith(layer: CatalogLayer, allowedBash: readonly string[]): Admitted
     pullRequestBaseBranch: null,
     forgeRepository: null,
     invocationCeilingMs: 1_800_000,
-    catalogLayers: [layer],
+    catalogLayers: [withAllowedBash(layer, allowedBash)],
     projectName: "rondo",
     agentTypeInput: {
       agentTypeId: "worker-basic",
@@ -320,6 +340,23 @@ test("the envelope reads back the subjects it was written with (rondo#88)", () =
     expect(allowedBashIn(envelope.text)).toEqual(["npm ci --ignore-scripts", "npm run:*"]);
   } finally {
     envelope.remove();
+  }
+});
+
+test("admission and the envelope get the catalog project's list, from one resolution", () => {
+  // D-0094: the catalog project's `allowed_bash` is the one source. The
+  // conductor passes `written.allowedBash` to `run admit --allow-bash`, so the
+  // flag list, the envelope and the catalog cannot say three different things.
+  const subjects = ["npm ci --ignore-scripts", "npm run:*", "echo:*"];
+  const written = writeDelegationRecord(planWith(LOCAL_LAYER, subjects));
+  if (written.kind !== "written") {
+    throw new Error(`the record was not written: ${written.reason}`);
+  }
+  try {
+    expect(written.allowedBash).toEqual(subjects);
+    expect(allowedBashIn(readFileSync(written.record.path, "utf8"))).toEqual(subjects);
+  } finally {
+    discard(written.record);
   }
 });
 

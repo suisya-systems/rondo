@@ -110,7 +110,7 @@ async function over(options: Options = {}) {
         commit: TIP,
         reading:
           options.checks === "red"
-            ? { kind: "red", failed: ["build"] }
+            ? { kind: "red", failed: ["build"], cancelled: [], timedOut: [] }
             : { kind: "green", counted: 7, skipped: 1 },
       },
       3,

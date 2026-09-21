@@ -187,7 +187,7 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    ```
 
    **It is `npm run` and not the `node -e` one-liner this block used to carry,
-   and that is rondo#103.** `npm run:*` is in the plan's `allowed_bash` and
+   and that is rondo#103.** `npm run:*` is in the catalog project's `allowed_bash` and
    `node -e` is deliberately not, so the one-liner was a step this handbook
    documented that a lap running inside this repository was refused ten times
    (`../docs/operations/lap-4-dogfood.md` N-10). Naming the check makes it one

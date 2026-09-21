@@ -57,6 +57,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -103,9 +104,31 @@ const checkout =
 /** continuo's own fake worker CLI, inside the pinned checkout. */
 const fakeWorker =
   checkout === null ? null : join(checkout, "test", "session", "helpers", "fake-claude.mjs");
-const available = fakeWorker !== null && existsSync(fakeWorker);
+const provisioned = fakeWorker !== null && existsSync(fakeWorker);
 
-if (!available && inContinuousIntegration()) {
+/**
+ * Whether this process may not create a Unix socket -- the one condition under
+ * which the pinned continuo refuses `lap perform` (continuo D-1112 rule 4), as
+ * it does when this suite runs inside another Claude Code sandbox. The laps here
+ * are real, so under that filter they can only be refused; CI runs outside one,
+ * and there the question does not skip anything.
+ */
+async function unixSocketBlocked(): Promise<boolean> {
+  if (process.platform !== "linux") {
+    return false;
+  }
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.once("error", (error: NodeJS.ErrnoException) => resolve(error.code === "EPERM"));
+    server.listen(`\0rondo-press-path-${String(process.pid)}`, () =>
+      server.close(() => resolve(false)),
+    );
+  });
+}
+const nested = provisioned && !inContinuousIntegration() && (await unixSocketBlocked());
+const available = provisioned && !nested;
+
+if (!provisioned && inContinuousIntegration()) {
   // Not a skip and not a soft warning, for `smoke.test.ts`'s reason: under CI
   // the pinned checkout is provisioned, so its absence means the step did not
   // run -- or that the pin moved to a revision that spells the fake worker's
@@ -121,9 +144,12 @@ if (!available && inContinuousIntegration()) {
 /** Why this file is not running, in each test's own name, so a skip is legible. */
 const skipNote = available
   ? ""
-  : ` [skipped: ${CLI_PATH_ENV} is unset, or its checkout holds no ` +
-    `test/session/helpers/fake-claude.mjs; point it at a built continuo dist/cli.js at ` +
-    `${CONTINUO_REVISION}]`;
+  : nested
+    ? " [skipped: this process may not create a Unix socket, so continuo refuses every lap " +
+      "(continuo D-1112); run the suite outside the enclosing sandbox]"
+    : ` [skipped: ${CLI_PATH_ENV} is unset, or its checkout holds no ` +
+      `test/session/helpers/fake-claude.mjs; point it at a built continuo dist/cli.js at ` +
+      `${CONTINUO_REVISION}]`;
 
 /** What the stood-in worker reports, and therefore what the gate is opened over. */
 const REPORTED = "I stopped before the push. May I go on?";
@@ -180,6 +206,9 @@ function pressPlan(dir: string, repository: string): RunPlan {
             rondo: {
               source: { kind: "git_url", url: "https://example.invalid/org/rondo.git" },
               base_branch: "main",
+              // cadenza D-0041: the agent type grants command.run, so the
+              // project must declare what it may run; absent grants nothing.
+              allowed_bash: ["npm run:*"],
             },
           },
         },

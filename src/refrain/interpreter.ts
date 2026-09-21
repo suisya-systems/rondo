@@ -1359,13 +1359,16 @@ async function performStep(
           // what the fence refused; a column filled in later would be one the
           // gate screen could find empty.
           permissionDenials: lap.permissionDenials,
+          // The commands, for the same reason and in the same write (continuo
+          // D-1112): the model reviewer reads them off this row.
+          lapCommands: lap.commands,
           // **What the lap spent, written where the gate id is written and in
           // the same transaction** (`D-0046` rule 1). This is the only moment
           // the numbers exist and nobody has been asked anything yet; a row that
           // named the gate and not the cost is the row five dogfood records had
           // to read `events-000.jsonl` by hand to complete (rondo#96).
           //
-          // Three nulls when the transcript could not be read, and that is a
+          // Three nulls when continuo could not say, and that is a
           // record rather than a failure: the columns are nullable precisely so
           // an unread cost and a zero cost are different rows.
           lapCostUsd: lap.costUsd,
@@ -1821,7 +1824,7 @@ async function planOf(
  *
  * **Said even when nothing was read**, because the alternative is a report that
  * is silent about cost for two different reasons and a reader who cannot tell
- * which: a lap whose transcript rondo could not read is a fact about the lap,
+ * which: a lap continuo reported no cost for is a fact about the lap,
  * not a line to drop. The numbers are printed as read -- no rounding, no
  * currency formatting, no estimate of what a missing one might have been -- and
  * every character is ASCII (D-0004).
@@ -1846,10 +1849,8 @@ function spendLine(lap: LapPerformance): string {
 /** Why the three are null, in the words of the read that produced them. */
 function unreadSpendReason(source: LapPerformance["spendSource"]): string {
   switch (source) {
-    case "unread":
-      return "its transcript was not readable under the state root.";
-    case "resultEventAbsent":
-      return "its transcript was read and carries no terminal 'result' event.";
+    case "notReported":
+      return "continuo's lap perform reported no spend for it (the backend cannot say).";
     case "resultEvent":
       return "its terminal 'result' event was read and carried none of the three numbers.";
   }
@@ -1858,8 +1859,8 @@ function unreadSpendReason(source: LapPerformance["spendSource"]): string {
 /**
  * One number of the three, or the word for the one the event did not carry.
  *
- * Reached only when at least one of the three is a number, so the transcript
- * and its `result` event were both read: a null here is a key the event carried
+ * Reached only when at least one of the three is a number, so continuo
+ * reported a spend: a null here is a key the event carried
  * no number under, and never a read that failed.
  */
 function spelledNumber(value: number | null): string {

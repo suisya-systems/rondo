@@ -44,7 +44,6 @@ const PLAN: RunPlan = {
   workspaceRoot: "/srv/work",
   baseBranch: "main",
   prompt: "do the thing",
-  allowedBash: ["npm run:*"],
   materialLanguage: null,
   reviewCriterion: null,
   repository: "/srv/repo",

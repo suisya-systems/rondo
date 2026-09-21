@@ -40,7 +40,6 @@ export const PLAN = {
   workspaceRoot: WORKSPACE_ROOT,
   baseBranch: "main",
   prompt: "do the thing",
-  allowedBash: ["npm run:*"],
   materialLanguage: null,
   reviewCriterion: null,
   repository: REPOSITORY,
@@ -79,6 +78,7 @@ export const PLAN = {
           rondo: {
             source: { kind: "local_path", path: REPOSITORY },
             base_branch: "main",
+            allowed_bash: ["npm run:*"],
             aliases: [],
           },
         },

@@ -32,7 +32,7 @@ import {
   resolveProject,
 } from "../cadenza/facade.js";
 
-import type { AdmittedPlan } from "./plan.js";
+import { type AdmittedPlan, allowedBashRefusal } from "./plan.js";
 import type { ClassificationRecord, EffectOutcome } from "./ports.js";
 
 /**
@@ -79,7 +79,7 @@ export function classifyPlan(plan: AdmittedPlan): EffectOutcome<ClassificationRe
     if (tierDisagreement !== null) {
       return { kind: "refused", message: tierDisagreement };
     }
-    const fenceDisagreement = grantDisagreement(plan, record);
+    const fenceDisagreement = grantDisagreement(project, record);
     if (fenceDisagreement !== null) {
       return { kind: "refused", message: fenceDisagreement };
     }
@@ -248,6 +248,12 @@ const COMMAND_RUN = "command.run";
  * command vocabulary -- so the two are stated separately and this is where they
  * are made to agree.
  *
+ * **The declaration is the catalog project's `allowed_bash`** (D-0094, cadenza
+ * D-0041), the one list the contract's `config_digest` covers and the one that
+ * reaches `run admit --allow-bash` and the delegation envelope. Its subjects
+ * are checked here too, against continuo's `LapRunIntent` rules, so a
+ * mistyped subject is a refusal before any process starts.
+ *
  * **The pair is the grant and the declaration, and no longer the grant and the
  * role.** D-0039 rule 3 wrote the check over `executorPolicy.roleName`, on the
  * expectation that continuo would answer the escalation with a second
@@ -276,13 +282,18 @@ const COMMAND_RUN = "command.run";
  * cadenza validated, sorted and made unique, and reading the raw input would be
  * rondo deciding what a capability set is.
  */
-function grantDisagreement(plan: AdmittedPlan, record: AgentType): string | null {
+function grantDisagreement(project: ResolvedProject, record: AgentType): string | null {
+  const subjectRefusal = allowedBashRefusal(project.allowedBash);
+  if (subjectRefusal !== null) {
+    return `project '${project.projectId}' in the catalog: ${subjectRefusal}`;
+  }
   const granted = record.granted.includes(COMMAND_RUN);
-  const declared = plan.allowedBash.length > 0;
+  const declared = project.allowedBash.length > 0;
   if (granted && !declared) {
     return (
       `the plan disagrees with itself about whether this lap runs commands: agent type ` +
-      `'${record.agentTypeId}' grants '${COMMAND_RUN}' and 'allowed_bash' is empty, so the ` +
+      `'${record.agentTypeId}' grants '${COMMAND_RUN}' and project '${project.projectId}' in the ` +
+      `catalog has no 'allowed_bash' (cadenza D-0041: absent grants nothing), so the ` +
       `worker would be admitted to run commands under a fence that allows none. That is the ` +
       `defect rondo#67 measured: every command came back 'This command requires approval' to a ` +
       `session with nobody to ask. Declare the commands this lap needs, or stop granting ` +
@@ -292,10 +303,11 @@ function grantDisagreement(plan: AdmittedPlan, record: AgentType): string | null
   if (declared && !granted) {
     return (
       `the plan disagrees with itself about whether this lap runs commands: 'allowed_bash' ` +
-      `declares ${String(plan.allowedBash.length)} subject(s) and agent type ` +
+      `in project '${project.projectId}' declares ${String(project.allowedBash.length)} ` +
+      `subject(s) and agent type ` +
       `'${record.agentTypeId}' does not grant '${COMMAND_RUN}', so the fence would be widened ` +
       `for a capability no contract carries. Grant '${COMMAND_RUN}' on the agent type, or drop ` +
-      `the declaration`
+      `the project's declaration`
     );
   }
   return null;

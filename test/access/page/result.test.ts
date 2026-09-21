@@ -61,7 +61,7 @@ async function checked(
   world: ReturnType<typeof fresh>,
   reading:
     | { kind: "green"; counted: number; skipped: number }
-    | { kind: "red"; failed: string[] }
+    | { kind: "red"; failed: string[]; cancelled: string[]; timedOut: string[] }
     | { kind: "none" },
   atMs = 7_000,
 ) {
@@ -160,7 +160,7 @@ test("green is said as green, by colour and word, and a skipped check is not sai
 test("red names what failed, and a later green is what the state says", async () => {
   const world = await approved();
   await published(world);
-  await checked(world, { kind: "red", failed: ["build", "lint"] });
+  await checked(world, { kind: "red", failed: ["build", "lint"], cancelled: [], timedOut: [] });
   const red = await ja(world);
   expect(head(red)).toContain('class="result-checks result-checks-red"');
   expect(head(red)).toContain("<b>赤</b>");
@@ -170,6 +170,18 @@ test("red names what failed, and a later green is what the state says", async ()
   const green = await ja(world);
   expect(head(green)).toContain("<b>緑</b>");
   expect(head(green)).toContain("2 件すべて通過");
+});
+
+test("a cancelled or timed-out check is said as what it came to, and is not green (continuo D-1113)", async () => {
+  const world = await approved();
+  await published(world);
+  await checked(world, { kind: "red", failed: [], cancelled: ["deploy"], timedOut: ["e2e"] });
+  const english = await en(world);
+  expect(head(english)).toContain('class="result-checks result-checks-red"');
+  expect(head(english)).toContain("cancelled: deploy; timed out: e2e");
+  expect(head(english)).not.toContain("failed:");
+  const japanese = await ja(world);
+  expect(head(japanese)).toContain("キャンセル: deploy／タイムアウト: e2e");
 });
 
 test("a change asked for whose next try never started is not said to be approved (rondo#385)", async () => {
@@ -317,7 +329,7 @@ test("green on the head with nothing waiting, the next step is a merge press for
   expect(await ja(world)).not.toContain("/merge?");
   const red = await approved();
   await published(red);
-  await checked(red, { kind: "red", failed: ["build"] });
+  await checked(red, { kind: "red", failed: ["build"], cancelled: [], timedOut: [] });
   expect(await merging(red)).not.toContain("/merge?");
   const running = await approved();
   await published(running);
@@ -357,4 +369,23 @@ test("once merged, the strip says where it went and how, and the press is gone",
   expect(head(japanese)).not.toContain("マージはあなたが行います");
   expect(japanese).not.toContain("/merge?");
   expect(head(await merging(world, "en"))).toContain("Merged into main (squashed into one commit)");
+});
+
+test("a red written before continuo D-1113 still reads, every name as failed", () => {
+  const byId = new Map([
+    ["report-published-i-old", { body: `Opened ${PR}.`, atMs: 1 }],
+    [
+      "report-checks-i-old-red",
+      {
+        body:
+          "Lap 'i-old' is not green: on commit 'abc1234' the forge reports 'build', 'lint' as " +
+          "failed. rondo read this and did nothing else with the pull request.",
+        atMs: 2,
+      },
+    ],
+  ]);
+  expect(resultOf(byId, "i-old")).toMatchObject({
+    checks: { kind: "red", failed: ["build", "lint"], cancelled: [], timedOut: [] },
+    checksCommit: "abc1234",
+  });
 });

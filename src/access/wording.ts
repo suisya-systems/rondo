@@ -538,6 +538,14 @@ export interface Chrome extends PageWords {
    * print).
    */
   readonly secondFence: readonly string[];
+  /**
+   * A lap continuo would not start because rondo itself runs inside another
+   * sandbox (continuo D-1112 rule 4), where the worker's own sandbox cannot
+   * come up. Said instead of continuo's sentence, on the page and at the
+   * terminal, because the move is the person's and continuo's words name its
+   * own verb and a kernel error code (D-0076).
+   */
+  readonly lapNestedSandbox: string;
 
   // -- The scope screen (rondo#233 S3, D-0066 rule 1) --
   /**

@@ -12,6 +12,7 @@
  * `D-0046`'s distinction is the one to hold while reading these:
  * an unread cost is not a zero, and the three columns say so separately.
  */
+import { isNestedSandboxRefusal } from "../../continuo/protocol.js";
 import type { IterationRecord } from "../../store/records.js";
 import { ago } from "../inbox.js";
 import type { Chrome } from "../wording.js";
@@ -86,7 +87,12 @@ export function endedHow(wording: Chrome, record: IterationRecord, nowMs: number
 export function endedWhy(wording: Chrome, record: IterationRecord): string {
   return record.gateOutcome !== null
     ? wording.gateAnswered(record.gateOutcome)
-    : (record.reason ?? wording.noReasonRecorded);
+    : record.reason === null
+      ? wording.noReasonRecorded
+      : // continuo's words name its own verb and an errno (D-0076).
+        isNestedSandboxRefusal(record.reason)
+        ? wording.lapNestedSandbox
+        : record.reason;
 }
 
 /** Which of the three questions a row answers, which is what its weight is decided by. */

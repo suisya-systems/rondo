@@ -70,8 +70,17 @@ export const CONTINUO_REPOSITORY = "https://github.com/suisya-systems/continuo.g
  * `continuo D-1107` moves the delegation record into the admitting
  * transaction, which is where D-1110's `allowed_bash` then lives. The rest is
  * continuo's own suite, its Windows CI budget and its documentation.
+ *
+ * **It moves again to take `continuo D-1112` and `D-1113`**, the continuo half
+ * of the relocations `D-0093` lists: `lap perform --json` now carries the
+ * turn's `spend` and `commands` (so rondo stops reading the worker's
+ * transcript for them) and refuses a nested sandbox as `LapRefused`, exit 2
+ * (so rondo stops probing for it), and `ci observe` / `ci show` hold the CI
+ * verdict rondo used to join itself. The third commit, `D-1111`, is
+ * continuo's own Windows schedule. The added keys sit under the same
+ * `continuo.lap.perform/1`, which `protocol.ts` reads by name.
  */
-export const CONTINUO_REVISION = "fcf86eb2b7eb34d65bf73188b2b34544fab6820c";
+export const CONTINUO_REVISION = "b7162ae49f1ea381e33a070de364a08dda400794";
 
 /**
  * The exact line the pinned build's `--version` prints.
@@ -87,7 +96,7 @@ export const CONTINUO_REVISION = "fcf86eb2b7eb34d65bf73188b2b34544fab6820c";
  * rondo wrote for itself.
  */
 export const CONTINUO_VERSION_LINE =
-  "@suisya-systems/continuo 0.0.0 (rev fcf86eb2b7eb34d65bf73188b2b34544fab6820c)";
+  "@suisya-systems/continuo 0.0.0 (rev b7162ae49f1ea381e33a070de364a08dda400794)";
 
 /** What a build reports when it has no git information (`continuo`'s literal). */
 const REVISION_UNKNOWN = "unknown";

@@ -44,9 +44,11 @@
 import {
   type AgentType,
   type AgentTypeInput,
+  COMMON_BASH as CADENZA_COMMON_BASH,
   type Classification,
   type ClassificationContext,
   agentType as cadenzaAgentType,
+  allowedCommandsFor as cadenzaAllowedCommandsFor,
   classify as cadenzaClassify,
   composeCatalog as cadenzaComposeCatalog,
   contractDigest as cadenzaContractDigest,
@@ -122,6 +124,22 @@ export function resolveProject(layers: readonly CatalogLayer[], name: string): R
   );
   return cadenzaResolveProject(cadenzaComposeCatalog(documents), name);
 }
+
+/**
+ * The commands a worker may run in a repository with these top-level file
+ * names, in `allowed_bash`'s subject form (cadenza D-0040). What rondo writes
+ * into the catalog project's `allowed_bash` (D-0094) for a repository it adds.
+ */
+export function allowedCommandsFor(files: readonly string[]): readonly string[] {
+  return cadenzaAllowedCommandsFor(files);
+}
+
+/**
+ * The commands every worker may run whatever the repository builds with
+ * (cadenza D-0040): a list of only these is a repository rondo recognised no
+ * toolchain in.
+ */
+export const COMMON_BASH: readonly string[] = CADENZA_COMMON_BASH;
 
 /**
  * One path, lexically normalised exactly as cadenza normalises its own.

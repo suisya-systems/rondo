@@ -480,7 +480,6 @@ function storedPlan(): { payload: JsonRecord; contractDigest: string } {
     workspaceRoot,
     baseBranch: "main",
     prompt: "teach rondo to count",
-    allowedBash: ["npm run:*"],
     materialLanguage: null,
     reviewCriterion: null,
     repository,
@@ -517,6 +516,7 @@ function storedPlan(): { payload: JsonRecord; contractDigest: string } {
             rondo: {
               source: { kind: "local_path", path: repository },
               base_branch: "main",
+              allowed_bash: ["npm run:*"],
               aliases: [],
             },
           },

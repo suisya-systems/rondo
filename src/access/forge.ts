@@ -619,262 +619,105 @@ export async function cloneRepository(repo: string, into: string): Promise<Repos
   return { clone, branch, files };
 }
 
-/** Which commit's checks to read (rondo#310). */
-export interface ChecksRequest {
+/** Which pull request's checks to fetch (rondo#310, `continuo D-1113`). */
+export interface PullRequestChecksRequest {
   /** The forge host for `--hostname`, or null for the one `gh` is set up for. */
   readonly host: string | null;
-  /** `OWNER/NAME`. */
+  /** `OWNER/NAME`, the pull request's base repository. */
   readonly repo: string;
-  /**
-   * The commit the checks are about: the tip `publish` pushed, which is the
-   * `tipCommit` the lap's own deterministic reading recorded. Read off a row
-   * rather than off the forge, so no pull request number has to be held.
-   */
-  readonly commit: string;
+  readonly number: number;
 }
 
 /**
- * What the forge says about one commit's checks (rondo#310).
- *
- * **`undetermined` is its own answer and never a `red`**, for the reason
- * {@link LandingReading} keeps one: a forge that would not answer says nothing
- * about a pull request, and a screen that read it as a failure would send a
- * person to look at a check that never ran.
- *
- * **`none` is its own answer too, and it is not a final one.** A commit with no
- * status and no check run is indistinguishable from one whose first check has
- * not started, and the forge offers nothing that tells them apart -- so it is
- * reported as what rondo can actually see (nobody reported anything) rather
- * than sorted into green or pending, either of which would be a claim about a
- * repository's configuration. Because the two cannot be told apart, a `none`
- * does not close the reading either: `checksHost` says it once and keeps
- * looking, so a check registered a minute after the push is still read.
+ * The three documents `continuo ci observe` reads, as the forge printed them,
+ * or why they were not all fetched.
  */
-export type ChecksReading =
-  /**
-   * Nothing failed and nothing is still going. `counted` is how many checks
-   * reported, and `skipped` how many of those were `skipped` or `neutral`:
-   * counted as not failing, and never said to have passed (rondo#376).
-   */
-  | { readonly kind: "green"; readonly counted: number; readonly skipped: number }
-  /** At least one reported a failure; `failed` names them. */
-  | { readonly kind: "red"; readonly failed: readonly string[] }
-  /** Nothing failed and something has not finished; `pending` names those. */
-  | { readonly kind: "pending"; readonly pending: readonly string[] }
-  /** The forge reported no check of either kind on this commit. */
-  | { readonly kind: "none" }
-  | { readonly kind: "undetermined"; readonly reason: string };
+export type PullRequestChecksFetch =
+  | {
+      readonly kind: "fetched";
+      readonly pullRequest: string;
+      readonly checkRuns: string;
+      readonly status: string;
+    }
+  | { readonly kind: "failed"; readonly reason: string };
 
 /**
- * Read the checks on one commit (rondo#310), through the operator's own `gh`.
+ * Fetch what the forge says about one pull request's checks, through the
+ * operator's own `gh` (rondo#310, `D-0010`), and judge none of it.
  *
- * **Two `GET`s and nothing else**, which is `readIssueFromForge`'s shape and is
- * there for its reasons: `gh api` with no method is a read, the credential is
- * the one in the operator's own `gh` configuration that rondo neither stores
- * nor reads, and it runs in the host and never in a lap. Nothing here writes to
- * the forge, and this module still spells no command that could.
+ * **Three `GET`s and nothing else**, which is `readIssueFromForge`'s shape and
+ * is there for its reasons: `gh api` with no method is a read, the credential
+ * is the one in the operator's own `gh` configuration that rondo neither stores
+ * nor reads, and it runs in the host and never in a lap. Recording what came
+ * back and folding it into a verdict is continuo's (`continuo D-1113`): rondo
+ * hands it these documents and never reaches a verdict of its own.
  *
- * **Both APIs, because a repository can use either.** A commit status is what
- * an external service posts; a check run is what an app (including the forge's
- * own actions) records. Reading one would report a repository that uses the
- * other as having no checks at all.
- *
- * **Every page of both, because one page is a wrong answer and not a partial
- * one.** Both endpoints answer 30 entries by default, and a repository with
- * more checks than a page holds would have its failure sit on a page nothing
- * fetched -- reported as green, on a reading that then closes the window it was
- * read in. `--paginate --slurp` asks for all of them as an array of pages, and
- * `joinChecks` checks the forge's own `total_count` against what arrived, so a
- * short answer is `undetermined` rather than a green.
+ * **The head is the pull request document's**, so the checks fetched are the
+ * ones on the commit the pull request would merge. Both check documents are
+ * every page (`--paginate --slurp`), because one page is a wrong answer and
+ * not a partial one; continuo compares each page against the forge's own
+ * `total_count` and refuses a short answer.
  */
-export async function readChecks(request: ChecksRequest): Promise<ChecksReading> {
+export async function fetchPullRequestChecks(
+  request: PullRequestChecksRequest,
+): Promise<PullRequestChecksFetch> {
   const host = request.host === null ? [] : ["--hostname", request.host];
-  const at = `repos/${request.repo}/commits/${request.commit}`;
+  const at = `repos/${request.repo}`;
+  const pull = await runCommand(
+    "gh",
+    ["api", ...host, `${at}/pulls/${String(request.number)}`],
+    CHECKS_READ_TIMEOUT_MS,
+  );
+  const pullFailure = queryFailure(pull);
+  if (pullFailure !== null) {
+    return { kind: "failed", reason: pullFailure };
+  }
+  let head: string | null;
+  try {
+    const json: unknown = JSON.parse(pull.stdout);
+    head = stringAt(
+      typeof json === "object" && json !== null ? (json as Record<string, unknown>)["head"] : null,
+      "sha",
+    );
+  } catch (error) {
+    return {
+      kind: "failed",
+      reason: `the forge's answer was not JSON: ${hostFailure(error).text}`,
+    };
+  }
+  if (head === null || !/^[0-9a-f]{7,64}$/i.test(head)) {
+    return { kind: "failed", reason: "the pull request document carried no head commit" };
+  }
   const read = async (path: string): Promise<CommandOutcome> =>
     await runCommand(
       "gh",
-      ["api", ...host, "--paginate", "--slurp", `${at}/${path}?per_page=100`],
+      ["api", ...host, "--paginate", "--slurp", `${at}/commits/${head}/${path}?per_page=100`],
       CHECKS_READ_TIMEOUT_MS,
     );
-  const status = await read("status");
-  const statusFailure = queryFailure(status);
-  if (statusFailure !== null) {
-    return { kind: "undetermined", reason: statusFailure };
-  }
   const runs = await read("check-runs");
   const runsFailure = queryFailure(runs);
   if (runsFailure !== null) {
-    return { kind: "undetermined", reason: runsFailure };
+    return { kind: "failed", reason: runsFailure };
   }
-  return joinChecks(status.stdout, runs.stdout);
+  const status = await read("status");
+  const statusFailure = queryFailure(status);
+  if (statusFailure !== null) {
+    return { kind: "failed", reason: statusFailure };
+  }
+  return {
+    kind: "fetched",
+    pullRequest: pull.stdout,
+    checkRuns: runs.stdout,
+    status: status.stdout,
+  };
 }
 
 /**
- * How long one read of a commit's checks may take. Nothing waits on it (the
- * host reads on its own timer), so the bound only frees the reader from a forge
- * that never answers.
+ * How long one read of a pull request's checks may take. Nothing waits on it
+ * (the host reads on its own timer), so the bound only frees the reader from a
+ * forge that never answers.
  */
 const CHECKS_READ_TIMEOUT_MS = 60_000;
-
-/**
- * The two documents joined into one answer, as a total function over what the
- * forge printed (rondo#310).
- *
- * **Every entry is counted by name, and the rollup fields are not read.** The
- * combined status carries a `state` of its own, and it is a rollup over
- * statuses alone -- so a commit with a green status and a failing check run
- * reports `success` there. Joining the two lists is the only reading that
- * cannot say green over a failure.
- *
- * **A failure wins, then a pending.** A check still running cannot un-fail one
- * that already did, and a person reading "still running" over a red pull
- * request would wait for an answer that has arrived.
- *
- * Pure, so every rule about what a commit's checks come to is a unit case with
- * no forge to ask.
- */
-export function joinChecks(status: string, checkRuns: string): ChecksReading {
-  const failed: string[] = [];
-  const pending: string[] = [];
-  let counted = 0;
-  let skipped = 0;
-  const entries = readEntries(status, checkRuns);
-  if (typeof entries === "string") {
-    return { kind: "undetermined", reason: entries };
-  }
-  for (const entry of entries) {
-    counted += 1;
-    if (entry.state === "failed") {
-      failed.push(entry.name);
-    } else if (entry.state === "pending") {
-      pending.push(entry.name);
-    } else if (entry.state === "skipped") {
-      skipped += 1;
-    }
-  }
-  if (counted === 0) {
-    return { kind: "none" };
-  }
-  if (failed.length > 0) {
-    return { kind: "red", failed };
-  }
-  return pending.length > 0 ? { kind: "pending", pending } : { kind: "green", counted, skipped };
-}
-
-/** One check that reported, named as the forge named it. */
-interface CheckEntry {
-  readonly name: string;
-  readonly state: "passed" | "skipped" | "failed" | "pending";
-}
-
-/**
- * Both documents as one list of entries, or why they could not be read.
- *
- * A document that is not the shape this expects is `undetermined` and never an
- * empty list: "the forge answered with something else" and "this commit has no
- * checks" are two different facts, and the second one is written into a report.
- */
-function readEntries(status: string, checkRuns: string): readonly CheckEntry[] | string {
-  const statuses = every(status, "statuses");
-  if (typeof statuses === "string") {
-    return statuses;
-  }
-  const runs = every(checkRuns, "check_runs");
-  if (typeof runs === "string") {
-    return runs;
-  }
-  return [
-    ...statuses.map((one) => ({
-      name: stringAt(one, "context") ?? "an unnamed status",
-      // A commit status has three states worth telling apart and a fourth
-      // (`error`) that is a failure the poster could not even run.
-      state: statusState(stringAt(one, "state")),
-    })),
-    ...runs.map((one) => ({
-      name: stringAt(one, "name") ?? "an unnamed check",
-      // **The status first, and the conclusion only once it says completed.**
-      // A run in flight carries whatever conclusion it last had, or none.
-      state:
-        stringAt(one, "status") === "completed"
-          ? conclusionState(stringAt(one, "conclusion"))
-          : ("pending" as const),
-    })),
-  ];
-}
-
-/**
- * Every entry of one kind across every page, or why they could not be read.
- *
- * **`--slurp` prints an array of pages**, and one page on its own is an object,
- * so both shapes are read: a `gh` that answered with a single document is not a
- * different fact from one that answered with a list of one.
- *
- * **The forge's own count is the belt to pagination's braces.** `total_count`
- * says how many entries of this kind the commit has; fewer than that in hand
- * means a page is missing, whatever the reason -- a `--paginate` that stopped,
- * a flag a `gh` did not honour -- and a missing page is exactly where the
- * failure that makes this reading wrong would be. So it is `undetermined`,
- * which the host reads again, rather than a green over an entry nobody fetched.
- */
-function every(printed: string, key: string): readonly unknown[] | string {
-  let json: unknown;
-  try {
-    json = JSON.parse(printed);
-  } catch (error) {
-    return `the forge's answer was not JSON: ${hostFailure(error).text}`;
-  }
-  const entries: unknown[] = [];
-  let counted: number | null = null;
-  for (const page of Array.isArray(json) ? json : [json]) {
-    const list = arrayAt(page, key);
-    if (list === null) {
-      return `the forge's answer carried no '${key}' list`;
-    }
-    entries.push(...list);
-    const total = numberAt(page, "total_count");
-    counted = total === null ? counted : Math.max(counted ?? 0, total);
-  }
-  if (counted !== null && entries.length < counted) {
-    return (
-      `the forge reported ${String(counted)} '${key}' on this commit and answered with ` +
-      `${String(entries.length)}`
-    );
-  }
-  return entries;
-}
-
-function statusState(state: string | null): CheckEntry["state"] {
-  if (state === "success") {
-    return "passed";
-  }
-  return state === "pending" ? "pending" : "failed";
-}
-
-/**
- * What a completed check run's conclusion comes to.
- *
- * `neutral` and `skipped` are a check that ran and asked for nothing, so they
- * do not fail the reading -- but they are kept apart from a pass, because the
- * report counts them separately rather than saying every check passed
- * (rondo#376). Everything else -- a failure, a timeout, a cancellation, one
- * asking for an action, one the forge called stale -- is something a person has
- * to look at, and an unknown conclusion is one of those rather than a pass: a
- * conclusion this does not know the name of must not read as green.
- */
-function conclusionState(conclusion: string | null): CheckEntry["state"] {
-  if (conclusion === "neutral" || conclusion === "skipped") {
-    return "skipped";
-  }
-  return conclusion === "success" ? "passed" : "failed";
-}
-
-function arrayAt(json: unknown, key: string): readonly unknown[] | null {
-  if (typeof json !== "object" || json === null) {
-    return null;
-  }
-  const at = (json as Record<string, unknown>)[key];
-  return Array.isArray(at) ? at : null;
-}
 
 function stringAt(json: unknown, key: string): string | null {
   if (typeof json !== "object" || json === null) {
@@ -882,14 +725,6 @@ function stringAt(json: unknown, key: string): string | null {
   }
   const at = (json as Record<string, unknown>)[key];
   return typeof at === "string" && at !== "" ? at : null;
-}
-
-function numberAt(json: unknown, key: string): number | null {
-  if (typeof json !== "object" || json === null) {
-    return null;
-  }
-  const at = (json as Record<string, unknown>)[key];
-  return typeof at === "number" && Number.isFinite(at) ? at : null;
 }
 
 /**

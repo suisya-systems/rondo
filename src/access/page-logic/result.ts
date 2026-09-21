@@ -31,8 +31,17 @@ export type ChecksState =
       readonly passed: number | null;
       readonly skipped: number | null;
     }
-  /** At least one failed; the names, as the report gave them. */
-  | { readonly kind: "red"; readonly failed: readonly string[] }
+  /**
+   * At least one did not pass; the names, as the report gave them, under what
+   * each came to (`continuo D-1113`). A report written before that said every
+   * one as failed, so for it the other two lists are empty.
+   */
+  | {
+      readonly kind: "red";
+      readonly failed: readonly string[];
+      readonly cancelled: readonly string[];
+      readonly timedOut: readonly string[];
+    }
   /** The forge reported no check of any kind, so far. */
   | { readonly kind: "none" };
 
@@ -145,10 +154,19 @@ function checksOf(kind: (typeof ANSWERS)[number], body: string): ChecksState {
     return { kind: "none" };
   }
   if (kind === "red") {
-    const listed = / reports (.*) as failed\./.exec(body)?.[1] ?? "";
+    // One clause per outcome, `'a', 'b' as failed; 'c' as cancelled`, in the
+    // order `checksBody` writes them (`src/access/conductor.ts`).
+    const listed = / the forge reports (.*)\. rondo read this/.exec(body)?.[1] ?? "";
+    const as = (outcome: string): string[] =>
+      listed
+        .split("; ")
+        .filter((clause) => clause.endsWith(` as ${outcome}`))
+        .flatMap((clause) => [...clause.matchAll(/'([^']*)'/g)].map((match) => match[1] ?? ""));
     return {
       kind: "red",
-      failed: [...listed.matchAll(/'([^']*)'/g)].map((match) => match[1] ?? ""),
+      failed: as("failed"),
+      cancelled: as("cancelled"),
+      timedOut: as("timed out"),
     };
   }
   const counted = /reported (\d+) check\(s\)/.exec(body)?.[1];

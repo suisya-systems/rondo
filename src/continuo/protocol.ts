@@ -644,6 +644,37 @@ export interface GateClosed {
 }
 
 /**
+ * `ci observe`: what `gh` printed about a pull request's head, recorded
+ * (`continuo D-1113`). rondo reads the head the documents were about and how
+ * many checks they listed; the rest of the document is continuo's bookkeeping.
+ */
+export interface CiObserved {
+  readonly headSha: string;
+  readonly observed: number;
+}
+
+/**
+ * `ci show`: the verdict continuo folds over a pull request's current head
+ * (`continuo D-1113` rule 5). `verdict` is one of `failed`, `timed_out`,
+ * `cancelled`, `indeterminate`, `pending`, `passed` or `no_run`; `headSha` is
+ * null only where no head was ever recorded. Each scope keeps the forge's own
+ * word in `detail`, which is how `skipped` and `neutral` are told apart from a
+ * pass inside `passed`.
+ */
+export interface CiShown {
+  readonly headSha: string | null;
+  readonly verdict: string;
+  readonly scopes: readonly CiScope[];
+}
+
+export interface CiScope {
+  readonly checkScope: string;
+  readonly scopeId: string;
+  readonly verdict: string;
+  readonly detail: string | null;
+}
+
+/**
  * `measure report`, which is the one verb whose success is NOT an envelope.
  *
  * Exit 0 and stdout is an unwrapped document identified by `report_kind`, with
@@ -659,13 +690,14 @@ export interface MeasureReport {
 /**
  * `lap perform`: one admitted run walked to an open gate.
  *
- * The twelve fields continuo's `report()` writes under `--json`, read whole
+ * The fields continuo's `report()` writes under `--json`, read whole
  * rather than cut down: this is the one verb whose document is the *only*
  * record of what a lap did, and every field on it is either something the
  * conductor stores against the iteration or the handle on something it does.
  *
  * Eleven at the revision D-0019 read (`R-13`); the twelfth is {@link model},
- * added under the same `/1` by `continuo D-0099` and read here under D-0021.
+ * added under the same `/1` by `continuo D-0099` and read here under D-0021;
+ * `spend` and `commands` joined them under `continuo D-1112` (D-0093).
  */
 export interface LapPerformed {
   readonly runId: string;
@@ -739,6 +771,43 @@ export interface LapPerformed {
    * through is the two keys rondo reads; see {@link denialsText}.
    */
   readonly permissionDenials: string;
+  /**
+   * What the turn spent (`continuo D-1112`), or null when the backend cannot say.
+   *
+   * `null` is never a zero: it is continuo declining to report, and a number
+   * inside is null when the worker's `result` event carried none under that key.
+   */
+  readonly spend: LapSpend | null;
+  /**
+   * The tool calls the turn made, as the JSON text of what rondo read
+   * (`continuo D-1112`): `"null"` when the backend cannot say, an array's text
+   * otherwise (`[]` is a turn that ran nothing). Text for
+   * {@link permissionDenials}' reason -- its home is a rondo column -- and read
+   * back with {@link decodeLapCommands}.
+   */
+  readonly commands: string;
+}
+
+/** `lap perform`'s `spend`: the worker's three accounting numbers, each nullable. */
+export interface LapSpend {
+  readonly totalCostUsd: number | null;
+  readonly numTurns: number | null;
+  readonly durationMs: number | null;
+}
+
+/**
+ * One command a lap ran (`continuo D-1112`).
+ *
+ * `index` is the transcript's 1-based line number. `output` is capped at 8192
+ * code points by continuo: when {@link outputOmittedChars} is above 0, that many
+ * code points were cut from its middle and the text is its head and its tail.
+ */
+export interface LapCommand {
+  readonly index: number;
+  readonly command: string;
+  readonly output: string;
+  readonly outputOmittedChars: number;
+  readonly isError: boolean;
 }
 
 // --- the verb contracts -----------------------------------------------------
@@ -926,6 +995,32 @@ export const GATE_CLOSE: VerbContract<GateClosed> = {
   }),
 };
 
+export const CI_OBSERVE: VerbContract<CiObserved> = {
+  command: ["ci", "observe"],
+  schema: "continuo.ci.observe/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
+  read: (payload) => ({
+    headSha: requireString(payload, "head_sha"),
+    observed: requireNumber(payload, "observed"),
+  }),
+};
+
+export const CI_SHOW: VerbContract<CiShown> = {
+  command: ["ci", "show"],
+  schema: "continuo.ci.show/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
+  read: (payload) => ({
+    headSha: nullableString(payload, "head_sha"),
+    verdict: requireString(payload, "verdict"),
+    scopes: requireObjectArray(payload, "scopes").map((scope) => ({
+      checkScope: requireString(scope, "check_scope"),
+      scopeId: requireString(scope, "scope_id"),
+      verdict: requireString(scope, "verdict"),
+      detail: nullableString(scope, "detail"),
+    })),
+  }),
+};
+
 /**
  * The floor under `lap perform`'s ceiling, and never the ceiling itself.
  *
@@ -959,8 +1054,121 @@ export const LAP_PERFORM: VerbContract<LapPerformed> = {
     elapsedDeadlineAtMs: nullableNumber(payload, "elapsed_deadline_at_ms"),
     model: nullableString(payload, "model"),
     permissionDenials: denialsText(payload),
+    spend: spendOf(payload),
+    commands: commandsText(payload),
   }),
 };
+
+/** `spend`: always present, an object or null (`continuo D-1112`). */
+function spendOf(payload: JsonObject): LapSpend | null {
+  const spend = nullableObject(payload, "spend");
+  return spend === null
+    ? null
+    : {
+        totalCostUsd: nullableNumber(spend, "total_cost_usd"),
+        numTurns: nullableNumber(spend, "num_turns"),
+        durationMs: nullableNumber(spend, "duration_ms"),
+      };
+}
+
+/** One element of `commands`, every key required. */
+function commandOf(entry: JsonObject): LapCommand {
+  const outputOmittedChars = requireNumber(entry, "output_omitted_chars");
+  if (!Number.isSafeInteger(outputOmittedChars) || outputOmittedChars < 0) {
+    throw new PayloadMismatch(
+      `'output_omitted_chars' is ${String(outputOmittedChars)}, and a count of 0 or more was required`,
+    );
+  }
+  return {
+    index: requireNumber(entry, "index"),
+    command: requireString(entry, "command"),
+    output: requireString(entry, "output"),
+    outputOmittedChars,
+    isError: requireBoolean(entry, "is_error"),
+  };
+}
+
+/**
+ * `commands`, validated and kept as text: `"null"` or the array's text, in
+ * continuo's own keys. Absent is a mismatch, as for `permission_denials`.
+ */
+function commandsText(payload: JsonObject): string {
+  const value = fieldValue(payload, "commands");
+  if (value === undefined) {
+    throw new PayloadMismatch("'commands' is absent, and an array or null was required");
+  }
+  if (value === null) {
+    return "null";
+  }
+  return JSON.stringify(
+    requireObjectArray(payload, "commands").map((entry) => {
+      const c = commandOf(entry);
+      return {
+        index: c.index,
+        command: c.command,
+        output: c.output,
+        output_omitted_chars: c.outputOmittedChars,
+        is_error: c.isError,
+      };
+    }),
+  );
+}
+
+/**
+ * The whole of `lap perform`'s refusal when this process may not create a Unix
+ * socket (`continuo D-1112` rule 4): continuo's `unixSocketRefusal` in
+ * `src/lap/cli.ts` at the pinned revision, a fixed sentence with nothing
+ * interpolated.
+ *
+ * ponytail: matched as a pinned constant because continuo gives this refusal no
+ * code of its own -- its class is the general `LapRefused`. A reworded sentence
+ * at a later pin falls back to relaying continuo's words, which is the old
+ * behaviour rather than a wrong one; the upgrade is a refusal code upstream.
+ */
+const NESTED_SANDBOX_REFUSAL =
+  "this process may not create a Unix socket (EPERM), and the worker it would spawn " +
+  "inherits that block, so the worker's own sandbox would fail to initialize and every " +
+  "Bash call after the first would run unsandboxed. The usual cause is running continuo " +
+  "inside another Claude Code sandbox, whose seccomp filter refuses AF_UNIX for itself " +
+  "and every child; run lap perform outside it. This check is Linux-only and detects " +
+  "only this cause.";
+
+/**
+ * Whether text holds continuo's nested-sandbox refusal: a `refused` message, or
+ * a row's `reason` it was written into.
+ */
+export function isNestedSandboxRefusal(text: string): boolean {
+  return text.includes(NESTED_SANDBOX_REFUSAL);
+}
+
+/**
+ * Read back {@link LapPerformed.commands}' text, as a rondo column holds it.
+ *
+ * Three answers and no throw: the commands, continuo having said it cannot say
+ * (`"null"`), or text that is not what {@link commandsText} writes.
+ */
+export function decodeLapCommands(
+  text: string,
+):
+  | { readonly kind: "read"; readonly commands: readonly LapCommand[] }
+  | { readonly kind: "notReported" }
+  | { readonly kind: "unreadable"; readonly reason: string } {
+  try {
+    const value = JSON.parse(text) as JsonValue;
+    if (value === null) {
+      return { kind: "notReported" };
+    }
+    return {
+      kind: "read",
+      commands: requireObjectArray({ commands: value }, "commands").map(commandOf),
+    };
+  } catch (error) {
+    return {
+      kind: "unreadable",
+      reason: `the lap's recorded commands do not read: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
 
 /**
  * `permission_denials`, kept as the text of what rondo read.

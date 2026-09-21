@@ -781,6 +781,7 @@ const COLUMN_BY_FIELD = {
   sessionId: "session_id",
   sessionPath: "session_path",
   permissionDenials: "permission_denials",
+  lapCommands: "lap_commands",
   lapCostUsd: "lap_cost_usd",
   lapTurns: "lap_turns",
   lapDurationMs: "lap_duration_ms",
@@ -917,6 +918,10 @@ CREATE TABLE IF NOT EXISTS iteration (
   session_id            TEXT,
   session_path          TEXT,
   permission_denials    TEXT,
+  -- The commands the lap ran, continuo's JSON text (continuo D-1112). Three
+  -- states as permission_denials: NULL is no reading, "null" is continuo
+  -- unable to say, an array's text is what ran.
+  lap_commands          TEXT,
   -- What the lap spent (D-0046). REAL for the dollars, INTEGER for the count
   -- and the milliseconds, and every one of them nullable: a null is "rondo did
   -- not read it" and 0 is a lap that spent nothing.
@@ -1599,6 +1604,9 @@ const ADDED_COLUMNS = Object.freeze({
   // kind before it wrote the row, so an existing row's null is the truth about
   // it rather than a gap something could fill.
   failure_kind: "TEXT",
+  // continuo D-1112: nullable, no back-fill -- a row written before it was
+  // read from the transcript at review time, which this column replaces.
+  lap_commands: "TEXT",
   occupying: GENERATED_COLUMNS.occupying,
   holds_identifiers: GENERATED_COLUMNS.holds_identifiers,
 });
@@ -1801,6 +1809,7 @@ const SELECT_COLUMNS = [
   "session_id",
   "session_path",
   "permission_denials",
+  "lap_commands",
   "lap_cost_usd",
   "lap_turns",
   "lap_duration_ms",
@@ -6320,6 +6329,7 @@ function toRecord(row: SqlRow): IterationRecord {
     sessionId: optionalText(row, "session_id"),
     sessionPath: optionalText(row, "session_path"),
     permissionDenials: optionalText(row, "permission_denials"),
+    lapCommands: optionalText(row, "lap_commands"),
     lapCostUsd: optionalNumber(row, "lap_cost_usd"),
     lapTurns: optionalNumber(row, "lap_turns"),
     lapDurationMs: optionalNumber(row, "lap_duration_ms"),

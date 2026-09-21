@@ -15,7 +15,12 @@
 
 import type { BudgetRow } from "../../advisory/budget.js";
 import { readSplitPayload, type SplitPlan } from "../../advisory/proposal.js";
-import { type AgentTypeInput, agentTypeRecord } from "../../cadenza/facade.js";
+import {
+  type AgentTypeInput,
+  agentTypeRecord,
+  COMMON_BASH,
+  resolveProject,
+} from "../../cadenza/facade.js";
 import { drafterRow } from "../../continuo/roles.js";
 import { PRICED_MODEL_TIERS } from "../../refrain/classification.js";
 import { planPayload, type RunPlan, readPlan, readRunPlan } from "../../refrain/plan.js";
@@ -25,7 +30,6 @@ import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
 import type { runDrafter } from "../forge.js";
 import { hostFailure } from "../host-failure.js";
 import { type WorkRepository, workRepository } from "../issue-read.js";
-import { COMMON_BASH } from "../repository-add.js";
 import { agentTypeRecordOf } from "../scope.js";
 import {
   type DraftAgentType,
@@ -339,6 +343,23 @@ function forgeRepositoryOf(plan: JsonRecord): string | null {
 }
 
 /**
+ * The held plan's catalog project's `allowed_bash` -- the one list a worker
+ * may run (D-0094, cadenza D-0041) -- or null when the plan does not read or
+ * its project does not resolve.
+ */
+function catalogAllowedBash(plan: JsonRecord): readonly string[] | null {
+  const read = readRunPlan(plan);
+  if (read.kind !== "planned") {
+    return null;
+  }
+  try {
+    return resolveProject(read.plan.catalogLayers, read.plan.projectName).allowedBash;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Which repository one request's work runs in (rondo#383, D-0090), with the
  * held repositories whose plan gives its worker no command to build or test
  * with (`unbuilt`): what the page says before a scope is drafted, and what
@@ -371,10 +392,8 @@ export async function requestRepository(
       ? []
       : work.repos.filter((repo) => {
           const newest = held.find((t) => forgeRepositoryOf(t.plan) === repo);
-          const bash = newest?.plan["allowed_bash"];
-          return (
-            Array.isArray(bash) && bash.every((subject) => COMMON_BASH.includes(String(subject)))
-          );
+          const bash = newest === undefined ? null : catalogAllowedBash(newest.plan);
+          return bash?.every((subject) => COMMON_BASH.includes(subject)) === true;
         });
   return { work, unbuilt };
 }

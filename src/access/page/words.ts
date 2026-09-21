@@ -355,10 +355,23 @@ export const PAGE_EN: PageWords = Object.freeze({
           : checks.counted === null
             ? "none failed"
             : `${String(checks.counted)} checks, none failed`;
-      case "red":
-        return checks.failed.length === 0
-          ? null
-          : `failed: ${checks.failed.slice(0, 3).join(", ")}${checks.failed.length > 3 ? ` and ${String(checks.failed.length - 3)} more` : ""}`;
+      case "red": {
+        // Each outcome under its own word (continuo D-1113): a cancelled or
+        // timed-out check is not called a failure.
+        const said = (
+          [
+            ["failed", checks.failed],
+            ["cancelled", checks.cancelled],
+            ["timed out", checks.timedOut],
+          ] as const
+        )
+          .filter(([, names]) => names.length > 0)
+          .map(
+            ([word, names]) =>
+              `${word}: ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` and ${String(names.length - 3)} more` : ""}`,
+          );
+        return said.length === 0 ? null : said.join("; ");
+      }
       case "none":
         return "the forge has reported no check yet";
       default:
@@ -500,10 +513,21 @@ export const PAGE_JA: PageWords = Object.freeze({
           : checks.counted === null
             ? "失敗なし"
             : `${String(checks.counted)} 件、失敗なし`;
-      case "red":
-        return checks.failed.length === 0
-          ? null
-          : `失敗: ${checks.failed.slice(0, 3).join("、")}${checks.failed.length > 3 ? ` ほか ${String(checks.failed.length - 3)} 件` : ""}`;
+      case "red": {
+        const said = (
+          [
+            ["失敗", checks.failed],
+            ["キャンセル", checks.cancelled],
+            ["タイムアウト", checks.timedOut],
+          ] as const
+        )
+          .filter(([, names]) => names.length > 0)
+          .map(
+            ([word, names]) =>
+              `${word}: ${names.slice(0, 3).join("、")}${names.length > 3 ? ` ほか ${String(names.length - 3)} 件` : ""}`,
+          );
+        return said.length === 0 ? null : said.join("／");
+      }
       case "none":
         return "まだチェックが報告されていません";
       default:

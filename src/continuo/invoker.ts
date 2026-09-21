@@ -34,6 +34,10 @@ import { spawn } from "node:child_process";
 
 import { CONTINUO_REVISION, type PinVerdict, verifyVersionLine } from "./pin.js";
 import {
+  CI_OBSERVE,
+  CI_SHOW,
+  type CiObserved,
+  type CiShown,
   type ContinuoResult,
   decode,
   GATE_ACK,
@@ -646,11 +650,13 @@ export interface AdmitRunRequest {
    * The Bash subjects this run's child may run, one `--allow-bash` each
    * (`continuo D-1110`).
    *
-   * **Carried, never composed.** The set arrives on the plan and this module
+   * **Carried, never composed.** The set is the catalog project's `allowed_bash`
+   * (D-0094), handed over by the conductor, and this module
    * passes it through: a subject rondo added would be rondo naming a command,
    * which D-0039 rule 2 refuses for the same reason `roles.ts` refuses to
    * derive a role from a model. The shape of each subject is already refused by
-   * `runPlan` -- before a process exists, because continuo's own refusal for a
+   * `classifyPlan` over the catalog project's `allowed_bash` (D-0094) --
+   * before a process exists, because continuo's own refusal for a
    * malformed one is a stack and exit 1 -- so what reaches here is a list of
    * strings continuo will accept or refuse on its own document's terms.
    *
@@ -1398,4 +1404,86 @@ export async function showGate(
     throw error;
   }
   return await run(continuo, GATE_SHOW, argv);
+}
+
+/** What `ci observe` needs: the three documents the forge printed, as files. */
+export interface CiObserveRequest {
+  readonly db: string;
+  /** `OWNER/NAME`, the pull request's base repository. */
+  readonly repo: string;
+  readonly pr: number;
+  readonly pullRequest: string;
+  readonly checkRuns: string;
+  readonly status: string;
+  /** Who fetched the documents, recorded as every row's observer. */
+  readonly observer: string;
+}
+
+/**
+ * Record what the forge said about a pull request's head (`continuo D-1113`).
+ *
+ * rondo fetched the three documents with the operator's own credential
+ * (`D-0010`); continuo reads them, refuses any that disagree or are short of a
+ * page (exit 2, nothing written), and records the rest in one transaction.
+ */
+export async function ciObserve(
+  continuo: VerifiedContinuo,
+  request: CiObserveRequest,
+): Promise<ContinuoResult<CiObserved>> {
+  let argv: readonly string[];
+  try {
+    argv = [
+      "--db",
+      requireAbsolute("db", request.db),
+      "--repo",
+      requireIdentifier("repo", request.repo),
+      "--pr",
+      String(requirePositiveInteger("pr", request.pr)),
+      "--pull-request",
+      requireAbsolute("pullRequest", request.pullRequest),
+      "--check-runs",
+      requireAbsolute("checkRuns", request.checkRuns),
+      "--status",
+      requireAbsolute("status", request.status),
+      "--observer",
+      requireIdentifier("observer", request.observer),
+    ];
+  } catch (error) {
+    if (error instanceof ArgumentRefusal) {
+      return refusedArgument(CI_OBSERVE, error);
+    }
+    throw error;
+  }
+  return await run(continuo, CI_OBSERVE, argv);
+}
+
+/** What `ci show` needs. One read, and it mutates nothing. */
+export interface CiShowRequest {
+  readonly db: string;
+  readonly repo: string;
+  readonly pr: number;
+}
+
+/** The CI verdict continuo holds for a pull request's current head (`continuo D-1113`). */
+export async function ciShow(
+  continuo: VerifiedContinuo,
+  request: CiShowRequest,
+): Promise<ContinuoResult<CiShown>> {
+  let argv: readonly string[];
+  try {
+    argv = [
+      "--db",
+      requireAbsolute("db", request.db),
+      "--repo",
+      requireIdentifier("repo", request.repo),
+      "--pr",
+      String(requirePositiveInteger("pr", request.pr)),
+    ];
+  } catch (error) {
+    if (error instanceof ArgumentRefusal) {
+      return refusedArgument(CI_SHOW, error);
+    }
+    throw error;
+  }
+  return await run(continuo, CI_SHOW, argv);
 }

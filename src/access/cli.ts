@@ -27,6 +27,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
 import { type Basis, readSplitPayload } from "../advisory/proposal.js";
+import { allowedCommandsFor } from "../cadenza/facade.js";
 import {
   ackGate,
   answerGate,
@@ -38,8 +39,12 @@ import {
   startContinuo,
   type VerifiedContinuo,
 } from "../continuo/invoker.js";
-import type { ContinuoResult, GateDetail, ObservedSession } from "../continuo/protocol.js";
-import { probeUnixSocket, workerSandboxRefusal } from "../continuo/sandbox.js";
+import {
+  type ContinuoResult,
+  type GateDetail,
+  isNestedSandboxRefusal,
+  type ObservedSession,
+} from "../continuo/protocol.js";
 import { lapTranscriptDirectory, readLapLog } from "../continuo/transcript.js";
 import { allocate } from "../refrain/allocator.js";
 import { isLanguageTag, type RunPlan, readPlan, readRunPlan } from "../refrain/plan.js";
@@ -96,7 +101,7 @@ import {
   showProposal,
   type UnpromptedPorts,
 } from "./advisory.js";
-import { checksHost } from "./checks-host.js";
+import { checksHost, continuoChecksReader } from "./checks-host.js";
 import { type ParsedCommand, parseCommand } from "./cli-parse.js";
 import {
   abandon,
@@ -163,12 +168,10 @@ import type {
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
 import { notifierAt, reachThePerson } from "./reach.js";
 import {
-  allowedBashFor,
   cloneDirectory,
   planForRepository,
   repositoryParts,
   setupRootOf,
-  toolchainsOf,
 } from "./repository-add.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
 import { reviseDrafterHost } from "./revise-draft/host.js";
@@ -904,6 +907,12 @@ function sayReport(report: {
   for (const line of report.lines) {
     say(`  ${line}`);
   }
+  // continuo refused the lap because this process sits inside another sandbox
+  // (continuo D-1112 rule 4); its sentence names its own verb, so the move is
+  // said once more in rondo's words (D-0055 rule 10: the terminal takes `EN`).
+  if (report.lines.some(isNestedSandboxRefusal)) {
+    say(`  ${EN.lapNestedSandbox}`);
+  }
 }
 
 /**
@@ -1438,7 +1447,7 @@ export async function main(
     const checks = checksHost({
       store,
       record,
-      repository: (row) => publishRepository(row, asked),
+      readChecks: continuoChecksReader(environment),
       host: forgeHost(environment),
       now: Date.now,
       log: say,
@@ -1754,15 +1763,6 @@ export async function main(
   // reading back is often about a lap that has already ended.
   if (parsed.command === "show") {
     return await commandShow(parsed, store, opened.path);
-  }
-
-  // The three commands that can spawn a paid worker refuse first when that
-  // worker's own sandbox could not come up (N-16, N-21; `src/continuo/sandbox.ts`).
-  if (parsed.command === "start" || parsed.command === "retry" || parsed.command === "revise") {
-    const blocked = workerSandboxRefusal(await probeUnixSocket());
-    if (blocked !== null) {
-      return refuse(blocked);
-    }
   }
 
   const startup = await startContinuo(environment);
@@ -7075,7 +7075,7 @@ export async function addRepositoryFromPage(
     ...parts,
     into,
     baseBranch,
-    allowedBash: allowedBashFor(toolchainsOf(files)),
+    allowedBash: allowedCommandsFor(files),
   });
   const planned = readRunPlan(plan);
   if (planned.kind !== "planned") {

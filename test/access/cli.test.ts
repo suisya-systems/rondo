@@ -1366,6 +1366,7 @@ function published(parts: Partial<IterationRecord> = {}): IterationRecord {
     sessionId: "s-1",
     sessionPath: null,
     permissionDenials: null,
+    lapCommands: null,
     lapCostUsd: null,
     lapTurns: null,
     lapDurationMs: null,

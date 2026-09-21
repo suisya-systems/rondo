@@ -13,7 +13,7 @@
  */
 import { expect, test } from "vitest";
 import { lapEvents } from "../../../src/access/page-logic/thread-events.js";
-import { EN } from "../../../src/access/wording.js";
+import { chromeFor, EN } from "../../../src/access/wording.js";
 import type { IterationRecord } from "../../../src/store/records.js";
 import { fresh, openRequest, operatorPage, portsOver, reserve } from "../page-world.js";
 
@@ -116,4 +116,38 @@ test("a refusal's line is marked the person's to act on, so the fold leaves it o
   // row with no kind is the line it has always been.
   expect(ended("defect")?.yours).toBeUndefined();
   expect(ended(null)?.yours).toBeUndefined();
+});
+
+test("continuo's nested-sandbox refusal reaches the person in their own language (continuo D-1112)", () => {
+  // continuo gives this refusal no code, so rondo knows it by continuo's own
+  // pinned sentence; what the person reads is rondo's, in each shipped set,
+  // with none of continuo's verb or errno in it (D-0076, D-0079).
+  const sentence =
+    "this process may not create a Unix socket (EPERM), and the worker it would spawn " +
+    "inherits that block, so the worker's own sandbox would fail to initialize and every " +
+    "Bash call after the first would run unsandboxed. The usual cause is running continuo " +
+    "inside another Claude Code sandbox, whose seccomp filter refuses AF_UNIX for itself " +
+    "and every child; run lap perform outside it. This check is Linux-only and detects " +
+    "only this cause.";
+  for (const wording of [EN, chromeFor("ja")]) {
+    const ended = lapEvents(
+      wording,
+      {
+        id: "i-box",
+        status: "failed",
+        reason: sentence,
+        failureKind: "refusal",
+        createdAtMs: 1_000,
+        updatedAtMs: 3_000,
+      } as unknown as IterationRecord,
+      [],
+      (status) => status === "failed",
+      () => "1h",
+      null,
+    ).find((event) => event.id === "i-box:ended");
+    expect(ended?.said, wording.lang).toBe(wording.lapNestedSandbox);
+    expect(ended?.yours).toBe(true);
+    expect(wording.lapNestedSandbox).not.toMatch(/EPERM|lap perform|seccomp|AF_UNIX/);
+  }
+  expect(chromeFor("ja").lapNestedSandbox).not.toBe(EN.lapNestedSandbox);
 });

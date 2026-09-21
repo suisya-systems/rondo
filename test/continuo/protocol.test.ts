@@ -11,9 +11,12 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  CI_OBSERVE,
+  CI_SHOW,
   type ContinuoResult,
   DB_CREATE,
   decode,
+  decodeLapCommands,
   decodeMeasureReport,
   GATE_ACK,
   GATE_ANSWER,
@@ -23,6 +26,7 @@ import {
   GATE_PRESENT,
   GATE_SHOW,
   type InvocationOutput,
+  isNestedSandboxRefusal,
   LAP_PERFORM,
   RUN_ADMIT,
   RUN_CLOSE,
@@ -616,6 +620,16 @@ function lapPayload(overrides: Record<string, unknown> = {}): Record<string, unk
     elapsed_deadline_at_ms: null,
     model: "claude-opus-5",
     permission_denials: [],
+    spend: { total_cost_usd: 1.542, num_turns: 38, duration_ms: 203_324 },
+    commands: [
+      {
+        index: 2,
+        command: "npm run verify",
+        output: "ok",
+        output_omitted_chars: 0,
+        is_error: false,
+      },
+    ],
     ...overrides,
   };
 }
@@ -648,8 +662,107 @@ describe("lap perform, the verb whose document is the only record of a lap", () 
         // The thirteenth, added by `continuo D-1110` and read as text: `[]` is
         // continuo saying the fence refused nothing.
         permissionDenials: "[]",
+        // continuo D-1112: what the turn cost and what it ran.
+        spend: { totalCostUsd: 1.542, numTurns: 38, durationMs: 203_324 },
+        commands:
+          '[{"index":2,"command":"npm run verify","output":"ok","output_omitted_chars":0,"is_error":false}]',
       },
     });
+  });
+
+  test("continuo D-1112: a null spend or null commands is 'cannot say', never zero or empty", () => {
+    const read = (overrides: Record<string, unknown>) =>
+      decode(LAP_PERFORM, output({ stdout: success(LAP_PERFORM.schema, lapPayload(overrides)) }));
+
+    expect(read({ spend: null, commands: null })).toMatchObject({
+      kind: "answered",
+      payload: { spend: null, commands: "null" },
+    });
+    // A spend whose event carried no number under a key keeps that key null.
+    expect(
+      read({ spend: { total_cost_usd: null, num_turns: 3, duration_ms: null } }),
+    ).toMatchObject({
+      kind: "answered",
+      payload: { spend: { totalCostUsd: null, numTurns: 3, durationMs: null } },
+    });
+    expect(read({ commands: [] })).toMatchObject({ kind: "answered", payload: { commands: "[]" } });
+
+    // Absent keys, a number that is not one, and a command missing a key are
+    // documents rondo will not read.
+    for (const key of ["spend", "commands"]) {
+      const absent = lapPayload();
+      delete absent[key];
+      expect(
+        decode(LAP_PERFORM, output({ stdout: success(LAP_PERFORM.schema, absent) })),
+        key,
+      ).toMatchObject({ kind: "invokerDefect" });
+    }
+    expect(read({ spend: { total_cost_usd: "1.5", num_turns: 3, duration_ms: 1 } })).toMatchObject({
+      kind: "invokerDefect",
+    });
+    expect(read({ commands: [{ index: 1, command: "ls", output: "" }] })).toMatchObject({
+      kind: "invokerDefect",
+    });
+    expect(
+      read({
+        commands: [
+          { index: 1, command: "ls", output: "", output_omitted_chars: -1, is_error: false },
+        ],
+      }),
+    ).toMatchObject({ kind: "invokerDefect" });
+  });
+
+  test("continuo D-1112: the commands text reads back, with the cut counted", () => {
+    const decoded = decode(
+      LAP_PERFORM,
+      output({
+        stdout: success(
+          LAP_PERFORM.schema,
+          lapPayload({
+            commands: [
+              {
+                index: 4,
+                command: "npm test",
+                output: "headtail",
+                output_omitted_chars: 99,
+                is_error: true,
+              },
+            ],
+          }),
+        ),
+      }),
+    );
+    expect(decoded.kind).toBe("answered");
+    const text = decoded.kind === "answered" ? decoded.payload.commands : "";
+    expect(decodeLapCommands(text)).toEqual({
+      kind: "read",
+      commands: [
+        {
+          index: 4,
+          command: "npm test",
+          output: "headtail",
+          outputOmittedChars: 99,
+          isError: true,
+        },
+      ],
+    });
+    expect(decodeLapCommands("null")).toEqual({ kind: "notReported" });
+    expect(decodeLapCommands("[{}]").kind).toBe("unreadable");
+    expect(decodeLapCommands("not json").kind).toBe("unreadable");
+  });
+
+  test("continuo D-1112: the nested-sandbox refusal is recognised only by continuo's own sentence", () => {
+    const sentence =
+      "this process may not create a Unix socket (EPERM), and the worker it would spawn " +
+      "inherits that block, so the worker's own sandbox would fail to initialize and every " +
+      "Bash call after the first would run unsandboxed. The usual cause is running continuo " +
+      "inside another Claude Code sandbox, whose seccomp filter refuses AF_UNIX for itself " +
+      "and every child; run lap perform outside it. This check is Linux-only and detects " +
+      "only this cause.";
+    expect(isNestedSandboxRefusal(sentence)).toBe(true);
+    expect(isNestedSandboxRefusal(`The lap did not complete: ${sentence}`)).toBe(true);
+    expect(isNestedSandboxRefusal("the turn outlived its timeout")).toBe(false);
+    expect(isNestedSandboxRefusal("EPERM")).toBe(false);
   });
 
   test("no refusal and no reading of refusals are two different answers", () => {
@@ -1296,5 +1409,74 @@ describe("the verbs that answer a gate and settle a run", () => {
       }),
     );
     expect(kindOf(result)).toBe("invokerDefect");
+  });
+});
+
+describe("ci observe and ci show (continuo D-1113)", () => {
+  test("ci show reads the verdict, the head and each scope with the forge's own word", () => {
+    const result = decode(
+      CI_SHOW,
+      output({
+        stdout: success(CI_SHOW.schema, {
+          repo_id: "github:R_1",
+          pr_number: 12,
+          head_sha: "abc1234",
+          verdict: "passed",
+          scopes: [
+            {
+              check_scope: "check_run",
+              scope_id: "build",
+              verdict: "passed",
+              detail: "skipped",
+              attempt: 9,
+              occurred_at_ms: 1,
+            },
+          ],
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      kind: "answered",
+      db: "/tmp/cp.sqlite3",
+      payload: {
+        headSha: "abc1234",
+        verdict: "passed",
+        scopes: [
+          { checkScope: "check_run", scopeId: "build", verdict: "passed", detail: "skipped" },
+        ],
+      },
+    });
+  });
+
+  test("a head never recorded is null, and an absent one is a defect", () => {
+    const shown = (payload: Record<string, unknown>) =>
+      decode(CI_SHOW, output({ stdout: success(CI_SHOW.schema, payload) }));
+    expect(shown({ head_sha: null, verdict: "no_run", scopes: [] })).toMatchObject({
+      kind: "answered",
+      payload: { headSha: null, verdict: "no_run" },
+    });
+    expect(shown({ verdict: "no_run", scopes: [] })).toMatchObject({ kind: "invokerDefect" });
+  });
+
+  test("ci observe reads the head the documents were about", () => {
+    const result = decode(
+      CI_OBSERVE,
+      output({
+        stdout: success(CI_OBSERVE.schema, {
+          repo_id: "github:R_1",
+          pr_number: 12,
+          head_sha: "abc1234",
+          pull_request_event: null,
+          observed: 2,
+          recorded: 2,
+          duplicate: 0,
+          scopes_changed: true,
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      kind: "answered",
+      payload: { headSha: "abc1234", observed: 2 },
+    });
   });
 });

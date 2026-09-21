@@ -40,7 +40,11 @@ const WORKSPACE_ROOT = resolve("/srv/rondo/work");
  * path is under itself, so this admits exactly the target and nothing beside
  * it. `scripts/dogfood-env.sh` writes the same shape for the same reason.
  */
-function layerFor(path: string, baseBranch: string): CatalogLayer {
+function layerFor(
+  path: string,
+  baseBranch: string,
+  allowedBash: readonly string[] = ["npm run:*"],
+): CatalogLayer {
   return {
     layer: "tracked",
     origin: `${CATALOG_DIR}/projects.toml`,
@@ -53,6 +57,9 @@ function layerFor(path: string, baseBranch: string): CatalogLayer {
           source: { kind: "local_path", path },
           base_branch: baseBranch,
           aliases: [],
+          // The one list the worker may run (D-0094, cadenza D-0041). Absent
+          // and [] both grant nothing, so [] leaves the key out.
+          ...(allowedBash.length > 0 ? { allowed_bash: [...allowedBash] } : {}),
         },
       },
     },
@@ -75,7 +82,7 @@ function planWith(overrides: {
   readonly pullRequestBaseBranch?: string | null;
   readonly forgeRepository?: string | null;
   readonly projectName?: string;
-  /** The plan's declaration (`continuo D-1110`); one subject by default. */
+  /** The catalog project's `allowed_bash` (D-0094); one subject by default. */
   readonly allowedBash?: readonly string[];
   /** The agent type's capability keys; `command.run` by default. */
   readonly granted?: readonly string[];
@@ -87,7 +94,6 @@ function planWith(overrides: {
     workspaceRoot: WORKSPACE_ROOT,
     baseBranch: overrides.baseBranch ?? "main",
     prompt: "teach rondo to count",
-    allowedBash: overrides.allowedBash ?? ["npm run:*"],
     materialLanguage: null,
     reviewCriterion: null,
     repository: overrides.repository ?? REPOSITORY,
@@ -113,7 +119,11 @@ function planWith(overrides: {
     forgeRepository: overrides.forgeRepository ?? null,
     invocationCeilingMs: 1_800_000,
     catalogLayers: [
-      layerFor(overrides.catalogPath ?? REPOSITORY, overrides.catalogBaseBranch ?? "main"),
+      layerFor(
+        overrides.catalogPath ?? REPOSITORY,
+        overrides.catalogBaseBranch ?? "main",
+        overrides.allowedBash,
+      ),
     ],
     projectName: overrides.projectName ?? "rondo",
     agentTypeInput: {
@@ -275,6 +285,11 @@ describe("classifyPlan, when the grant and the fence disagree", () => {
     expect(outcome.kind).toBe("answered");
   });
 
+  test("a catalog subject continuo would refuse at run admit is refused at classify", () => {
+    const outcome = classifyPlan(planWith({ allowedBash: ["npm run:*", "Bash(npm test)"] }));
+    expect(outcome.kind === "refused" && outcome.message).toContain("allowed_bash[1]");
+  });
+
   test("the check runs before the contract, so it is not cadenza's refusal", () => {
     // Both halves of the plan are otherwise valid here, and cadenza is never
     // asked: the refusal is rondo's own words about rondo's own inputs, which
@@ -388,6 +403,7 @@ describe("classifyPlan, when the source names no directory", () => {
                 source: { kind: "git_url", url: "https://example.invalid/org/rondo.git" },
                 base_branch: "main",
                 aliases: [],
+                allowed_bash: ["npm run:*"],
               },
             },
           },

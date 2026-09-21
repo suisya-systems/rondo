@@ -17,16 +17,17 @@ import {
 } from "../../src/access/forge.js";
 import { workRepository } from "../../src/access/issue-read.js";
 import { heldPlans, requestRepository } from "../../src/access/model-draft/host.js";
-import {
-  allowedBashFor,
-  COMMON_BASH,
-  projectNameOf,
-  repositoryParts,
-  toolchainsOf,
-} from "../../src/access/repository-add.js";
+import { projectNameOf, repositoryParts } from "../../src/access/repository-add.js";
+import { allowedCommandsFor, COMMON_BASH } from "../../src/cadenza/facade.js";
 import { readRunPlan } from "../../src/refrain/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { planDocument, world } from "./fixtures/drafter.js";
+
+/** The added plan's catalog project's `allowed_bash` (D-0094). */
+function catalogAllowedBash(plan: JsonRecord): unknown {
+  const layers = plan["catalog_layers"] as { data: { project: Record<string, JsonRecord> } }[];
+  return layers[0]?.data.project[String(plan["project_name"])]?.["allowed_bash"];
+}
 
 test("the repository a request's work runs in: the named issue's, or the place the person named", () => {
   const work = (body: string, held: (string | null)[]) => workRepository([body], held);
@@ -118,29 +119,6 @@ test("the repository a request's work runs in: the named issue's, or the place t
   expect(work("Do owner/other#12.", ["owner/a", null])).toEqual({ kind: "open" });
   // Nothing held is setup's own sentence, not an offer.
   expect(work("Do owner/other#12.", [])).toEqual({ kind: "open" });
-});
-
-test("the worker's commands are read off the repository's own files, for TypeScript, Go, Python and Rust", () => {
-  expect(toolchainsOf(["package.json", "package-lock.json"])).toEqual(["npm"]);
-  expect(toolchainsOf(["package.json"])).toEqual(["npm-unlocked"]);
-  expect(allowedBashFor(["npm-unlocked"])).toContain("npm install --ignore-scripts");
-  expect(allowedBashFor(["npm-unlocked"])).not.toContain("npm ci --ignore-scripts");
-  expect(toolchainsOf(["package.json", "pnpm-lock.yaml"])).toEqual(["pnpm"]);
-  expect(toolchainsOf(["package.json", "yarn.lock"])).toEqual(["yarn"]);
-  expect(toolchainsOf(["package.json", "bun.lockb"])).toEqual(["bun"]);
-  expect(toolchainsOf(["go.mod", "go.sum"])).toEqual(["go"]);
-  expect(toolchainsOf(["pyproject.toml", "uv.lock"])).toEqual(["uv"]);
-  expect(toolchainsOf(["pyproject.toml", "poetry.lock"])).toEqual(["poetry"]);
-  expect(toolchainsOf(["requirements-dev.txt"])).toEqual(["pip"]);
-  expect(toolchainsOf(["Cargo.toml", "Cargo.lock"])).toEqual(["cargo"]);
-  expect(toolchainsOf(["Cargo.toml", "package.json", "pnpm-lock.yaml"])).toEqual(["pnpm", "cargo"]);
-  expect(toolchainsOf(["README.md", "Makefile"])).toEqual([]);
-
-  expect(allowedBashFor([])).toEqual(COMMON_BASH);
-  const both = allowedBashFor(["go", "cargo"]);
-  expect(both).toEqual(expect.arrayContaining([...COMMON_BASH, "go test:*", "cargo test:*"]));
-  expect(new Set(both).size).toBe(both.length);
-  expect(allowedBashFor(["npm"])).toContain("npm ci --ignore-scripts");
 });
 
 test("a clone already on disk is used only when its origin is the repository asked for", () => {
@@ -256,7 +234,11 @@ test("an added repository is setup's plan with the repository's own facts, and t
   expect(plan["base_branch"]).toBe("trunk");
   expect(plan["forge_repository"]).toBe("owner/other");
   expect(plan["project_name"]).toBe("owner-other");
-  expect(plan["allowed_bash"]).toEqual(allowedBashFor(["go"]));
+  // The one list the worker may run lives on the catalog project (D-0094),
+  // computed by cadenza over the clone's top-level files (cadenza D-0040).
+  expect(plan).not.toHaveProperty("allowed_bash");
+  expect(catalogAllowedBash(plan)).toEqual(allowedCommandsFor(["go.mod", "go.sum", "README.md"]));
+  expect(catalogAllowedBash(plan)).toContain("go test:*");
   // What is the host's and not the repository's is setup's, untouched.
   for (const key of ["db", "workspace_root", "claude_command", "agent_type_input", "node"]) {
     expect(plan[key], key).toEqual(setupDocument(null)[key]);
@@ -293,7 +275,7 @@ test("a repository whose build rondo cannot tell is added with the common comman
     cloned("README.md\nMakefile\n"),
   );
   expect(added).toEqual({ ok: true });
-  expect((await w.record.setupPlans())[1]?.plan["allowed_bash"]).toEqual(COMMON_BASH);
+  expect(catalogAllowedBash((await w.record.setupPlans())[1]?.plan ?? {})).toEqual(COMMON_BASH);
   const ports = { store: w.store, record: w.record, now: () => 5_000 };
   expect(await requestRepository(ports, "r1")).toEqual({
     work: { kind: "held", repos: ["owner/docs"] },

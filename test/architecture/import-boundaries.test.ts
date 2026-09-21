@@ -259,17 +259,15 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // it quietly become a second spawner. The planted corpus proves the
   // distinction is enforced rather than merely intended.
   "src/continuo/invoker.ts": { "node:child_process": ["spawn"] },
-  // One server, never exposed: the preflight that asks whether this process may
-  // create a Unix socket at all, because the worker it spawns inherits the answer
-  // (N-16, N-21). It listens on an abstract name and closes at once.
-  "src/continuo/sandbox.ts": { "node:net": ["createServer"] },
   // The one module allowed to read a lap's transcript, granted one read and one
-  // path join (D-0046 rule 4). Keyed by module for `invoker.ts`'s reason, and
-  // the narrowness is the grant: there is no `writeFileSync`, no `rmSync` and no
-  // `readdirSync`, so the module that reads what a lap cost cannot change what
-  // continuo wrote, delete it, or walk the state root looking for other
-  // sessions' transcripts. The two files it may open are computed from the state
-  // root rondo passed and the session id the lap answered with.
+  // path join (D-0046 rule 4, narrowed by D-0093's move to the running lap's
+  // log: spend and commands now come from `lap perform --json`, continuo
+  // D-1112). Keyed by module for `invoker.ts`'s reason, and the narrowness is
+  // the grant: there is no `writeFileSync`, no `rmSync` and no `readdirSync`,
+  // so the module that reads a running lap's log cannot change what continuo
+  // wrote, delete it, or walk the state root looking for other sessions'
+  // transcripts. The files it may open are computed from the state root rondo
+  // passed and the session id the lap answered with.
   "src/continuo/transcript.ts": {
     "node:fs": ["readFileSync"],
     "node:path": ["join"],
@@ -295,8 +293,10 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
       "IntendedAction",
       "IssuanceParties",
       "RawTable",
+      "COMMON_BASH",
       "ResolvedProject",
       "agentType",
+      "allowedCommandsFor",
       "classify",
       "composeCatalog",
       "contractDigest",
@@ -348,6 +348,17 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // the verb that read it would be an authorisation document accumulating in a
   // temporary directory.
   "src/access/delegation.ts": {
+    "node:fs": ["mkdtempSync", "rmSync", "writeFileSync"],
+    "node:os": ["tmpdir"],
+    "node:path": ["join"],
+  },
+  // The checks host hands continuo's `ci observe` the three documents the
+  // operator's gh fetched, by path (continuo D-1113). Granted for
+  // `src/access/delegation.ts`'s reason and with the same three builtins: the
+  // files are transport, removed as soon as `ci observe` has answered, and the
+  // durable copy is continuo's evidence row. `src/access/forge.ts`, which
+  // fetches them, stays without a write.
+  "src/access/checks-host.ts": {
     "node:fs": ["mkdtempSync", "rmSync", "writeFileSync"],
     "node:os": ["tmpdir"],
     "node:path": ["join"],
@@ -1239,7 +1250,9 @@ const ROLES_OUTSIDE_D0064: Readonly<Record<string, string>> = {
   "Seam to cadenza": "src/cadenza/",
   // D-0017: driving continuo's CLI and reading its wire protocol.
   "Seam to continuo": "src/continuo/",
-  // D-0064 O7 and D-0010: push, pull request and landing, with the operator's gh.
+  // D-0064 O7 and D-0010: push, pull request and landing, with the operator's gh
+  // -- including fetching the pull request's checks for continuo to judge
+  // (continuo D-1113 decision 1: the credential holder fetches).
   Publishing: "src/access/",
   // The barrel re-exports whatever the roles above export.
   "The public barrel": "src/index.ts",
@@ -1258,7 +1271,11 @@ const HUMAN = "Human (product manager)";
  */
 const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/advisory.ts": [DIALOGUE],
-  "src/access/checks-host.ts": ["CI and merge watch, cleanup"],
+  // continuo D-1113: the host fetches a published pull request's checks with
+  // the operator's gh and hands the documents to `ci observe`; continuo records
+  // the evidence and folds the verdict, and `ci show`'s answer is what the
+  // thread is told. Neither the recording nor the verdict is played here.
+  "src/access/checks-host.ts": ["Publishing"],
   "src/access/cli-parse.ts": [HUMAN],
   "src/access/cli.ts": [HUMAN],
   "src/access/conductor.ts": [DISPATCHER],
@@ -1270,7 +1287,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/drafted-view.ts": [SPLITTING],
   "src/access/drafter-host.ts": [SPLITTING],
   "src/access/forge-preflight.ts": ["Publishing"],
-  "src/access/forge.ts": ["Publishing", "CI and merge watch, cleanup"],
+  "src/access/forge.ts": ["Publishing"],
   "src/access/framing.ts": [SPLITTING, "Reviewer"],
   "src/access/host-failure.ts": [HUMAN],
   "src/access/inbox.ts": [DIALOGUE],
@@ -1313,7 +1330,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page/words.ts": [HUMAN],
   "src/access/pull-request.ts": ["Publishing"],
   "src/access/reach.ts": ["Dispatcher: patrolling"],
-  "src/access/repository-add.ts": [SPLITTING, "Authority and settings"],
+  "src/access/repository-add.ts": [SPLITTING],
   "src/access/review.ts": ["Reviewer"],
   "src/access/revise-draft/host.ts": [SPLITTING],
   "src/access/revise-draft/judgement.ts": [SPLITTING],
@@ -1333,7 +1350,6 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/continuo/pin.ts": ["Seam to continuo"],
   "src/continuo/protocol.ts": ["Seam to continuo"],
   "src/continuo/roles.ts": ["Seam to continuo"],
-  "src/continuo/sandbox.ts": ["Worker"],
   "src/continuo/transcript.ts": ["Worker"],
   "src/index.ts": ["The public barrel"],
   "src/refrain/allocator.ts": [DISPATCHER],
@@ -1366,33 +1382,11 @@ interface Relocation {
  */
 const RELOCATING: readonly Relocation[] = [
   {
-    module: "src/access/repository-add.ts",
-    role: "Authority and settings",
-    moving: "the allowed-command table per toolchain (BASH, COMMON_BASH), to cadenza",
-    decision: "D-0093",
-  },
-  {
-    module: "src/access/forge.ts",
-    role: "CI and merge watch, cleanup",
-    moving: "readChecks and joinChecks, to continuo",
-    decision: "D-0093",
-  },
-  {
-    module: "src/access/checks-host.ts",
-    role: "CI and merge watch, cleanup",
-    moving: "the whole module, to continuo",
-    decision: "D-0093",
-  },
-  {
     module: "src/continuo/transcript.ts",
     role: "Worker",
-    moving: "the whole module (a lap's spend), to continuo",
-    decision: "D-0093",
-  },
-  {
-    module: "src/continuo/sandbox.ts",
-    role: "Worker",
-    moving: "the whole module (the sandbox probe), to continuo",
+    moving:
+      "readLapLog (a running lap's log); spend and commands already come from lap perform " +
+      "(continuo D-1112). It waits on continuo#218: run show naming a running lap's transcript",
     decision: "D-0093",
   },
 ];
@@ -1500,7 +1494,7 @@ const PLANTED_PLACEMENTS: ReadonlyArray<
     "only under src/continuo/",
   ],
   ["another module's relocation", "src/continuo/probe.ts", ["Worker"], "assigns to continuo"],
-  ["a relocation, clean", "src/continuo/sandbox.ts", ["Worker"], null],
+  ["a relocation, clean", "src/continuo/transcript.ts", ["Worker"], null],
   ["a seam in its layer, clean", "src/continuo/probe.ts", ["Seam to continuo"], null],
   ["a row rondo holds, clean", "src/access/probe.ts", ["Reviewer", HUMAN], null],
 ];

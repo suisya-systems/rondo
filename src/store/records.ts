@@ -420,6 +420,13 @@ export interface IterationRecord {
    */
   readonly permissionDenials: string | null;
   /**
+   * The commands the lap ran, as continuo reported them with the lap
+   * (`continuo D-1112`), in {@link permissionDenials}' three states: SQL `null`
+   * is no reading, the text `"null"` is continuo unable to say, an array's text
+   * is what ran (`[]` included). The model reviewer reads it (D-0065 1.2.4).
+   */
+  readonly lapCommands: string | null;
+  /**
    * What the lap spent: dollars, turns, and the worker's own wall clock
    * (`D-0046`).
    *
