@@ -367,7 +367,20 @@ function issueLines(input: PullRequestTextInput): readonly string[] {
     forge !== undefined &&
     (issue.repo === null || issue.repo.toLowerCase() === forge.repo.toLowerCase()) &&
     (issue.host === null || issue.host.toLowerCase() === forge.host.toLowerCase());
-  const issues = namedIssues(words).filter((issue) => !/\/pull\/\d+/.test(issue.named));
+  // **One issue per issue, however many ways it was written** (Codex): `#291`
+  // and its address are the same issue, and counting them as two would say
+  // `Refs` where the request named exactly one.
+  const identity = (issue: NamedIssue) =>
+    here(issue)
+      ? `#${String(issue.number)}`
+      : `${issue.host ?? ""}/${issue.repo ?? ""}#${String(issue.number)}`.toLowerCase();
+  const issues = [
+    ...new Map(
+      namedIssues(words)
+        .filter((issue) => !/\/pull\/\d+/.test(issue.named))
+        .map((issue) => [identity(issue), issue] as const),
+    ).values(),
+  ];
   const only = issues.length === 1 ? issues[0] : undefined;
   if (only !== undefined && here(only)) {
     return [
@@ -380,10 +393,15 @@ function issueLines(input: PullRequestTextInput): readonly string[] {
   if (issues.length === 0) {
     return [];
   }
+  // Another host's issue keeps its address: `OWNER/NAME#N` is resolved on the
+  // pull request's own host, where it would be some other issue (Codex).
   const named = issues.map((issue) =>
     here(issue) || issue.repo === null
       ? `#${String(issue.number)}`
-      : `${issue.repo}#${String(issue.number)}`,
+      : issue.host !== null &&
+          (forge === undefined || issue.host.toLowerCase() !== forge.host.toLowerCase())
+        ? issue.named
+        : `${issue.repo}#${String(issue.number)}`,
   );
   return [
     `Refs ${named.join(", ")}`,

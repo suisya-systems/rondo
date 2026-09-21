@@ -2590,4 +2590,12 @@ test("a request that names one issue here closes it, and nothing else does (rond
   const elsewhere = body("suisya-systems/cadenza#40");
   expect(elsewhere).not.toContain("Closes");
   expect(elsewhere).toContain("Refs suisya-systems/cadenza#40");
+  // One issue written two ways is one issue, and is closed (Codex).
+  const twice = body("#291, i.e. https://github.com/suisya-systems/rondo/issues/291");
+  expect(twice).toContain("Closes #291");
+  expect(twice).not.toContain("Refs");
+  // Another host's issue keeps its address: its shorthand would resolve here.
+  expect(body("https://ghe.example.com/suisya-systems/rondo/issues/9")).toContain(
+    "Refs https://ghe.example.com/suisya-systems/rondo/issues/9",
+  );
 });

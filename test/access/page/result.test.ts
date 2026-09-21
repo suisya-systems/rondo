@@ -83,6 +83,8 @@ test("straight after approve, the page says approved and not published, and neve
   expect(english).not.toContain("taken in");
   expect(head(english)).toContain("Not published yet");
   expect(head(english)).toContain("rondo does not merge");
+  // Neither merged nor not merged: rondo does not watch a merge (Codex).
+  expect(head(english)).not.toMatch(/Not merged|Merged/);
 
   const japanese = await ja(world);
   expect(japanese).toContain("承認しました。まだ公開していません");
@@ -90,7 +92,8 @@ test("straight after approve, the page says approved and not published, and neve
   expect(head(japanese)).toContain("承認済み");
   expect(head(japanese)).toContain("まだ公開していません");
   // The merge is said as the person's, and never as done.
-  expect(head(japanese)).toContain("取り込み（マージ）はまだです");
+  expect(head(japanese)).toContain("取り込み（マージ）はあなたが行います");
+  expect(head(japanese)).not.toContain("まだです");
 });
 
 test("once published, the pull request is on the page as a link, in the person's language", async () => {

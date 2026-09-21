@@ -10,8 +10,8 @@
  * more line down the thread.
  *
  * **Three acts, in order, each said apart**: the approval, the pull request,
- * and the merge. The merge is never said to have happened -- rondo does not
- * merge and does not watch one -- so its entry says whose it is.
+ * and the merge. The merge is never said to have happened or not -- rondo does
+ * not merge and does not watch one -- so its entry says whose it is.
  */
 import type { LapResult } from "../page-logic/result.js";
 import type { Chrome } from "../wording.js";

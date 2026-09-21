@@ -179,7 +179,11 @@ export interface PageWords extends DayWords {
   readonly pullRequest: (number: string | null) => string;
   readonly checksWord: (checks: ChecksState) => string;
   readonly checksDetail: (checks: ChecksState) => string | null;
-  /** The strip under the title: what was answered, published and merged. */
+  /**
+   * The strip under the title: what was answered, and published. The merge is
+   * said as whose it is and never as done or not done: rondo does not watch
+   * one, so either claim would be a guess.
+   */
   readonly resultApproved: string;
   readonly resultNotPublished: string;
   readonly resultPublished: string;
@@ -338,7 +342,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   resultNotPublished: "Not published yet: no pull request has been opened.",
   resultPublished: "Pull request opened:",
   resultChecks: "Checks",
-  resultNotMerged: "Not merged. rondo does not merge; that step is yours.",
+  resultNotMerged: "Merging is yours: rondo does not merge, and does not see whether it has been.",
   rowApproved: "Approved, not published yet",
   rowPublished: (pullRequest, checks) => `Pull request ${pullRequest}, checks ${checks}`,
   basisKind: (form) =>
@@ -462,7 +466,8 @@ export const PAGE_JA: PageWords = Object.freeze({
   resultNotPublished: "まだ公開していません（プルリクエストはありません）。",
   resultPublished: "プルリクエストを開きました:",
   resultChecks: "チェック",
-  resultNotMerged: "取り込み（マージ）はまだです。rondo はマージしません。あなたが行います。",
+  resultNotMerged:
+    "取り込み（マージ）はあなたが行います。rondo はマージせず、済んだかどうかも見ていません。",
   rowApproved: "承認済み・まだ公開していません",
   rowPublished: (pullRequest, checks) => `プルリクエスト ${pullRequest}・チェック ${checks}`,
   basisKind: (form) =>
