@@ -129,6 +129,11 @@ export interface PullRequestTextInput {
    * issues it names, which is what {@link issueLines} closes or refers to.
    */
   readonly requestWords?: string | null;
+  /**
+   * How many plans the request was split into (Codex round 2). Past one, this
+   * pull request is a part of what was asked for, and closes nothing.
+   */
+  readonly plansDrafted?: number;
   /** The forge host and `OWNER/NAME` the pull request is opened in, to tell an issue here from one elsewhere. */
   readonly forge?: { readonly host: string; readonly repo: string };
 }
@@ -382,7 +387,8 @@ function issueLines(input: PullRequestTextInput): readonly string[] {
     ).values(),
   ];
   const only = issues.length === 1 ? issues[0] : undefined;
-  if (only !== undefined && here(only)) {
+  const part = (input.plansDrafted ?? 1) > 1;
+  if (only !== undefined && here(only) && !part) {
     return [
       `Closes #${String(only.number)}`,
       "",
@@ -406,8 +412,11 @@ function issueLines(input: PullRequestTextInput): readonly string[] {
   return [
     `Refs ${named.join(", ")}`,
     "",
-    "The request named these, and rondo closes none of them: which of them this work finishes is " +
-      "for whoever merges it to say.",
+    part
+      ? `The request was split into ${String(input.plansDrafted)} plans and this is one of them, ` +
+        "so it closes nothing: whether the issue is finished is for whoever merges the last to say."
+      : "The request named these, and rondo closes none of them: which of them this work " +
+        "finishes is for whoever merges it to say.",
     "",
   ];
 }

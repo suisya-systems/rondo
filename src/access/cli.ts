@@ -26,7 +26,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
-import type { Basis } from "../advisory/proposal.js";
+import { type Basis, readSplitPayload } from "../advisory/proposal.js";
 import {
   ackGate,
   answerGate,
@@ -5921,7 +5921,7 @@ export async function publishPlanFor(
    * presses passes the same one**, or the preview's digest would differ from
    * the press's.
    */
-  thread: Pick<AdvisoryRecord, "threadMessages"> | null = null,
+  thread: Pick<AdvisoryRecord, "threadMessages" | "scopesFor" | "readProposal"> | null = null,
 ): Promise<PublishPlanned> {
   if (record.status !== "closed") {
     return {
@@ -6101,6 +6101,7 @@ export async function publishPlanFor(
       predecessorRead !== null && predecessorRead.kind === "read" ? predecessorRead.record : null,
     verificationClaims: await store.verificationClaimsFor(record.id),
     requestWords: await requestWordsOf(thread, record.requestMessageId),
+    plansDrafted: await plansDraftedFor(thread, record.requestMessageId),
     forge: { host, repo },
   });
 
@@ -6210,6 +6211,40 @@ async function requestWordsOf(
 }
 
 /**
+ * How many plans the request was split into, as its approved scopes' drafted
+ * proposals say (rondo#376, Codex round 2): more than one, and no single lap's
+ * pull request is the whole of what the request asked for. One where nothing
+ * says otherwise -- a lap started by hand, or a proposal that will not read.
+ */
+async function plansDraftedFor(
+  thread: Pick<AdvisoryRecord, "scopesFor" | "readProposal"> | null,
+  requestMessageId: string,
+): Promise<number> {
+  if (thread === null) {
+    return 1;
+  }
+  let most = 1;
+  for (const scope of await thread.scopesFor(requestMessageId)) {
+    for (const basis of scope.bases) {
+      const cited =
+        typeof basis === "object" && basis !== null && !Array.isArray(basis)
+          ? (basis as JsonRecord)
+          : null;
+      const proposalId = cited?.["form"] === "proposal" ? cited["proposalId"] : undefined;
+      if (typeof proposalId !== "string") {
+        continue;
+      }
+      const read = await thread.readProposal(proposalId);
+      const split = read.kind === "read" ? readSplitPayload(read.proposal.payload) : null;
+      if (split?.kind === "split") {
+        most = Math.max(most, split.payload.plans.length);
+      }
+    }
+  }
+  return most;
+}
+
+/**
  * The dry-run as the page shows it, for one closed lap (rondo#233 S5).
  *
  * The reading half of the publish screen: the same {@link publishPlanFor} the
@@ -6220,7 +6255,7 @@ export async function publishingForPage(
   store: Pick<IterationStore, "read" | "readingsFor" | "verificationClaimsFor">,
   asked: PublishAsked,
   record: IterationRecord,
-  thread: Pick<AdvisoryRecord, "threadMessages"> | null = null,
+  thread: Pick<AdvisoryRecord, "threadMessages" | "scopesFor" | "readProposal"> | null = null,
 ): Promise<PublishShown> {
   const planned = await publishPlanFor(record, asked, environment, store, thread);
   if (planned.kind === "refused") {

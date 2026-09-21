@@ -2590,6 +2590,12 @@ test("a request that names one issue here closes it, and nothing else does (rond
   const elsewhere = body("suisya-systems/cadenza#40");
   expect(elsewhere).not.toContain("Closes");
   expect(elsewhere).toContain("Refs suisya-systems/cadenza#40");
+  // One of several plans the request was split into is a part, and a merge of
+  // a part must not close the issue (Codex round 2).
+  const split = text({ requestWords: "#291 をやって", forge, plansDrafted: 2 }).body;
+  expect(split).not.toContain("Closes");
+  expect(split).toContain("Refs #291");
+  expect(split).toContain("split into 2 plans");
   // One issue written two ways is one issue, and is closed (Codex).
   const twice = body("#291, i.e. https://github.com/suisya-systems/rondo/issues/291");
   expect(twice).toContain("Closes #291");
