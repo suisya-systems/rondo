@@ -1764,7 +1764,7 @@ function noDraftView(wording: Chrome, message: ThreadMessageDraft) {
 async function ownApproval(
   ports: WebPorts,
   requestMessageId: string,
-): Promise<{ readonly kind: "decided"; readonly scopeDecisionId: string } | null> {
+): Promise<{ readonly kind: "own"; readonly scopeDecisionId: string } | null> {
   for (const scope of (await ports.record.scopesFor(requestMessageId)).toReversed()) {
     const decided = await ports.record.scopeDecisionOf(scope.scopeId);
     if (
@@ -1772,7 +1772,7 @@ async function ownApproval(
       decided.decision.outcome === "approved" &&
       !(await ports.record.scopeSupersededByApproved(scope.scopeId))
     ) {
-      return { kind: "decided", scopeDecisionId: decided.decision.scopeDecisionId };
+      return { kind: "own", scopeDecisionId: decided.decision.scopeDecisionId };
     }
   }
   return null;
@@ -1881,10 +1881,14 @@ async function threadActs(
         )
       : standing === null
         ? null
-        : standing.kind === "decided"
+        : standing.kind === "decided" || standing.kind === "own"
           ? card(
               `scope-${requestMessageId}`,
-              scopeHref(standing.scopeDecisionId),
+              // A drafted approval's screen is reached without its decision,
+              // which is how that screen also offers a newer draft beside it
+              // (Codex); the person's own approval is named, since that
+              // screen finds only rondo's drafts by itself.
+              scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
               wording.nextStepStart,
               wording.nextStepStartAction,
             )

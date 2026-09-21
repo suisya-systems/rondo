@@ -185,3 +185,29 @@ test("a scope the person approved themselves is a start to go to, not a scope to
   expect(html).not.toContain(EN.nextStepScope);
   expect(html).toContain("decision=sd-1");
 });
+
+test("an approved draft of rondo's is reached without its decision, so a newer draft stays on its screen (Codex)", async () => {
+  const world = fresh();
+  await openRequest(world, "req-1", "add a retry budget");
+  const ports = portsOver(world);
+  const record = Object.assign(Object.create(ports.record), {
+    scopesFor: async () => [
+      {
+        scopeId: "d-1",
+        authorKind: "drafter",
+        authorId: "rondo/drafter/1/claude-opus-5",
+        supersedesScopeId: null,
+      },
+    ],
+    scopeDecisionOf: async () => ({
+      kind: "read",
+      decision: { outcome: "approved", scopeDecisionId: "sd-draft" },
+    }),
+    scopeSupersededByApproved: async () => false,
+  }) as typeof ports.record;
+  const html = await operatorPage({ ...ports, record }, "t", threadOf("req-1"));
+  drawnOnceOnTop(html, "scope-req-1");
+  expect(html).toContain(EN.nextStepStart);
+  expect(html).toContain('href="/?scope=req-1&amp;lang=en"');
+  expect(html).not.toContain("decision=sd-draft");
+});
