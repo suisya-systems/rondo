@@ -181,20 +181,24 @@ itself.
   far as the push. The pull-request leg and the run close have no end-to-end test, and this lap is
   their second walk ever. A publish that goes wrong here is more likely to be news than a bug you
   caused.
-- **Known before you start: found while this runbook was being written, and not fixed.** If one of
+- **Known before you start, and left as they are for this lap.** If one of
   these stops you, it still counts in the record sheet. Knowing about it in advance does not make
   the screen say it.
   - **The tab you press Start in keeps loading until the lap reaches its gate**, which may take
     tens of minutes. The press waits for the whole lap. The note beside the button now says a second
     press joins the first (lap 10's N-39), and other tabs show the work running.
-  - **After Publish you land on the empty page** (*What would you like to ask for?*), not on the
-    request. The redirect names an anchor, `#lap-<id>`, that nothing on the page carries. Open the
-    request from the list on the left to see what happened.
-  - **The approve button reads `approve` in English on the Japanese page** when nothing was raised.
-    It is a literal constant (`APPROVE_BODY`), not a wording entry.
   - **rondo's own report messages in the thread are in English**, for example *"Lap '...' was
-    published: ..."* and the green / red check messages. They are recorded text, and recorded text
-    stays English whatever the page's language (the header of `src/access/wording.ts`, rule 4).
+    published: ..."* and the green / red check messages. This is by design: they are recorded text,
+    and `D-0055` rule 4 keeps recorded text English whatever the page's language, so the ledger
+    never holds one claim in two versions. The lap measures it rather than fixing it first: **if
+    you had to ask what one of them meant, write it under measure 2.**
+  - **The page never shows a lap's id**, and the one thing that needs it -- `abandon`, for a lap
+    that never comes back -- is a terminal command. Section 5 says how to find the id if it comes
+    to that.
+  - **[`rondo-cli.md`](rondo-cli.md) contradicts itself about repositories.** Lines 88-93 say a
+    second repository is setup run again under the same `--root` (`D-0081`), and lines 101-104 still
+    say one root is one repository. `D-0081` is the current one. This lap uses one repository, so it
+    does not hit this, but do not take the older sentence as a reason for a second environment.
 - **`(node:NN) ExperimentalWarning: SQLite is an experimental feature`** in any terminal output is
   normal.
 - Write the times into the record sheet (section 8) as you go.
@@ -403,8 +407,8 @@ Two things this lap is likely to show you on purpose:
 
 There are two presses of the same size (#351). The filled one is what the readings point to:
 
-- **Nothing raised:** **approve** is filled (and reads `approve` in English on the Japanese page too;
-  see section 2). **Ask for a change** (変更を依頼する) is outlined.
+- **Nothing raised:** **approve** (承認する) is filled. **Ask for a change** (変更を依頼する) is
+  outlined.
 - **Something raised:** **Ask for a change** is filled. The other press reads **approve despite what
   was raised** (指摘を残したまま承認する) and is outlined in amber.
 
@@ -448,10 +452,9 @@ If the reading does not cover the work, there is no **Publish** button. Instead 
 **Publish without that reading**, with **Publish anyway** (それでも公開する) inside it. That is a
 second decision, on a screen showing what it overrules.
 
-**Where it is recorded, and where it is not.** You land on the empty page, not on the request
-(section 2). Open the request from the list. The thread should hold a message from rondo, *"Lap
-'...' was published: its branch was pushed, pull request <URL> was opened, and run '...' was closed
-completed."*, and the **Publish** link should be gone. **Record whether you could tell the publish
+**Where it is recorded.** You land back on the request's thread. It should hold a message from
+rondo, *"Lap '...' was published: its branch was pushed, pull request <URL> was opened, and run
+'...' was closed completed."*, and the **Publish** link should be gone. **Record whether you could tell the publish
 had worked without leaving the page.** That was lap 10's reach 2.
 
 If it half-finishes, the screen says which leg is done. If the pull-request leg failed, **look at
@@ -488,12 +491,8 @@ pull request being opened. Record it separately, not as a terminal trip.
     later.
 - **If the budget ran out**, see step 5: **Raise this approval's budget**, not a second **Set the
   scope**.
-- **A refusal that says *"The terminal running rondo has what it said"*.** Under the service there
-  is no such terminal. What the host said is in `journalctl --user -u rondo.service`. If you go and
-  read it, that is a terminal trip, and it counts. Record the sentence that sent you there: the
-  screen should not send anyone to a terminal that does not exist.
 - **A lap that never comes back** is still the one thing the page has no press for. The page does
-  not show lap ids, and the word does not carry the store, so it takes this:
+  not show lap ids (section 2), and the word does not carry the store, so it takes this:
 
   ```sh
   unsetopt correct correct_all
