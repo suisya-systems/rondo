@@ -24,6 +24,8 @@ import type { IterationRecord, JsonRecord, JsonValue, LaneClaimAsk } from "../..
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
 import type { runDrafter } from "../forge.js";
 import { hostFailure } from "../host-failure.js";
+import { type WorkRepository, workRepository } from "../issue-read.js";
+import { COMMON_BASH } from "../repository-add.js";
 import { agentTypeRecordOf } from "../scope.js";
 import {
   type DraftAgentType,
@@ -225,7 +227,20 @@ export async function gatherDrafterMaterial(
       templates.set(choice, template);
     }
   }
-  const offered = [...templates.values()].reverse().sort((a, b) => b.heldAtMs - a.heldAtMs);
+  const everyChoice = [...templates.values()].reverse().sort((a, b) => b.heldAtMs - a.heldAtMs);
+  // **The repository the person named is where the work runs** (rondo#383,
+  // D-0090): only its plans are offered, so the drafter, the scope screen and a
+  // bare `#N`'s read all pick among the same ones. An unheld one offers every
+  // plan here -- the drafter is held off it (`drafter-host.ts`) and a scope the
+  // person writes themselves is their own explicit act.
+  const work = workRepository(
+    thread.flatMap((m) => (m.authorKind === "operator" ? [m.body] : [])),
+    everyChoice.map((t) => forgeRepositoryOf(t.plan)),
+  );
+  const offered =
+    work.kind === "held"
+      ? everyChoice.filter((t) => work.repos.includes(forgeRepositoryOf(t.plan) ?? ""))
+      : everyChoice;
 
   // Held agent types: every digest a row names or a record holds (rule 2.1.2).
   const agentTypes = new Map<string, DraftAgentType>();
@@ -315,6 +330,53 @@ export async function gatherDrafterMaterial(
     draftedAtMs,
     language,
   };
+}
+
+/** The forge repository a held plan names, or null (D-0081 rule 3.2). */
+function forgeRepositoryOf(plan: JsonRecord): string | null {
+  const repo = plan["forge_repository"];
+  return typeof repo === "string" && repo !== "" ? repo : null;
+}
+
+/**
+ * Which repository one request's work runs in (rondo#383, D-0090), with the
+ * held repositories whose plan gives its worker no command to build or test
+ * with (`unbuilt`): what the page says before a scope is drafted, and what
+ * holds the drafter off a request naming a repository rondo does not hold.
+ */
+export async function requestRepository(
+  ports: Pick<DrafterPorts, "store" | "record" | "now">,
+  requestMessageId: string,
+): Promise<{ readonly work: WorkRepository; readonly unbuilt: readonly string[] }> {
+  const read = await ports.record.threadMessages();
+  if (read.kind !== "read") {
+    throw new Error(`the thread will not read: ${read.reason}`);
+  }
+  const inThread = threadOf(read.messages, requestMessageId);
+  const records = [
+    ...(await ports.store.readLive()),
+    ...(await ports.store.terminalIterations()),
+  ].flatMap((outcome) => (outcome.kind === "read" ? [outcome.record] : []));
+  const held = (await heldTemplates(ports, records, read.messages, inThread)).sort(
+    (a, b) => b.heldAtMs - a.heldAtMs,
+  );
+  const work = workRepository(
+    read.messages.flatMap((m) =>
+      m.authorKind === "operator" && inThread.has(m.messageId) ? [m.body] : [],
+    ),
+    held.map((t) => forgeRepositoryOf(t.plan)),
+  );
+  const unbuilt =
+    work.kind !== "held"
+      ? []
+      : work.repos.filter((repo) => {
+          const newest = held.find((t) => forgeRepositoryOf(t.plan) === repo);
+          const bash = newest?.plan["allowed_bash"];
+          return (
+            Array.isArray(bash) && bash.every((subject) => COMMON_BASH.includes(String(subject)))
+          );
+        });
+  return { work, unbuilt };
 }
 
 /**

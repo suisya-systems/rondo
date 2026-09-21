@@ -114,6 +114,7 @@ import { definitionOfDone } from "./done.js";
 import { draftedStartReadiness } from "./drafted-start.js";
 import { drafterHost } from "./drafter-host.js";
 import {
+  cloneRepository,
   fileCounts,
   inspectBranchTip,
   inspectLapWork,
@@ -132,13 +133,20 @@ import { hostFailure } from "./host-failure.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
 import {
   bareIssueRepository,
+  commandFailure as forgeCommandFailure,
   issueReader,
   issuesQuote,
   PROMPT_TRANSPORT_BOUND_BYTES,
   requestOf,
   unreadIssues,
 } from "./issue-read.js";
-import { draftedPlanRun, type HeldPlan, heldPlanByDigest, heldPlans } from "./model-draft/host.js";
+import {
+  draftedPlanRun,
+  type HeldPlan,
+  heldPlanByDigest,
+  heldPlans,
+  requestRepository,
+} from "./model-draft/host.js";
 import { isModelDrafterName } from "./model-draft/judgement.js";
 import { modelReviewPorts, takeModelReading } from "./model-review/host.js";
 import { modelReadingLines } from "./model-review/judgement.js";
@@ -151,6 +159,14 @@ import type {
 } from "./page/contract.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
 import { notifierAt, reachThePerson } from "./reach.js";
+import {
+  allowedBashFor,
+  cloneDirectory,
+  planForRepository,
+  repositoryParts,
+  setupRootOf,
+  toolchainsOf,
+} from "./repository-add.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
 import { reviseDrafterHost } from "./revise-draft/host.js";
 import {
@@ -161,6 +177,9 @@ import {
   type ScopedAdmission,
 } from "./scope.js";
 import {
+  type AddedRepository,
+  type AddRepositoryInput,
+  AddRepositoryPort,
   AnswerPort,
   type ClaimRefusal,
   newDraftId,
@@ -1339,6 +1358,11 @@ export async function main(
       language: selected.tag,
       log: say,
       issuesUnread: issues.unreadUnderway,
+      // **Nothing is drafted in a repository the work is not in** (rondo#383,
+      // D-0090 rule 1): a request naming one rondo holds no plan for waits for
+      // the person to add it from the page.
+      awaitsRepository: async (id) =>
+        (await requestRepository({ store, record, now: Date.now }, id)).work.kind === "unheld",
     });
 
     // **And the revise drafter beside it** (D-0077 rule 2.2): a model reading
@@ -1442,6 +1466,28 @@ export async function main(
         // What the page says under a message whose issue is still to be read
         // (D-0078 section 4.3), off the reader that reads it.
         issuesUnread: issues.unread,
+        // Which repository a request's work runs in, and the press that adds
+        // one it names and rondo does not hold (rondo#383, D-0090) -- on the
+        // release press's condition, since the plan it records is the
+        // approver's as setup's is. Added, the reader and the drafter look again.
+        repositoryFor: async (id) => await requestRepository({ store, record, now: Date.now }, id),
+        addable: sender !== null && !("refusal" in sender),
+        addRepository:
+          sender === null || "refusal" in sender
+            ? null
+            : new AddRepositoryPort(async (input) => {
+                const added = await addRepositoryFromPage(
+                  environment,
+                  record,
+                  sender.actorId,
+                  input,
+                );
+                if (added.ok) {
+                  issues.kick();
+                  drafter.kick();
+                }
+                return added;
+              }),
         answer:
           approver === undefined || approver === ""
             ? null
@@ -6855,6 +6901,106 @@ export async function releaseFromPage(
     default:
       return { ok: false, why: "releaseRefusedNotRecorded", note: outcome.reason };
   }
+}
+
+/**
+ * Add the repository a request named, on a press from the page (rondo#383,
+ * D-0090): clone it beside setup's other output, and record the plan setup
+ * would have recorded for it, as `rondo setup-plan` records one.
+ *
+ * **Nothing is recorded unless everything before it worked** (D-0090 rule 4):
+ * a clone that fails, a plan the reader refuses or a store that refuses the row
+ * leave the store as it was, and say why in one of the refusals a person
+ * answers differently. A clone that worked and a record that did not is picked
+ * up by the next press, which uses the clone already there.
+ */
+export async function addRepositoryFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  record: Pick<AdvisoryRecord, "setupPlans" | "recordSetupPlan">,
+  approver: string,
+  input: AddRepositoryInput,
+  clone: typeof cloneRepository = cloneRepository,
+): Promise<AddedRepository> {
+  const failed = (note: string): AddedRepository => ({
+    ok: false,
+    why: "addRepositoryRefusedFailed",
+    note,
+  });
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return failed(actor.refusal);
+  }
+  const parts = repositoryParts(input.repo);
+  if (parts === null) {
+    return failed(`'${input.repo}' is not OWNER/NAME`);
+  }
+  // **Setup's newest plan is the one this host's facts are read from**: the
+  // plan it recorded last is the one a person repaired last (D-0075 rule 2.3).
+  const template = (await record.setupPlans()).toReversed().find((setup) => {
+    const planned = readRunPlan(setup.plan);
+    return planned.kind === "planned" && planned.plan.pullRequestBaseBranch === null;
+  })?.plan;
+  const root = template === undefined ? null : setupRootOf(template);
+  if (template === undefined || root === null) {
+    return {
+      ok: false,
+      why: "addRepositoryRefusedNoSetup",
+      note: "the store holds no setup plan to add a repository beside",
+    };
+  }
+  const into = cloneDirectory(root, parts.owner, parts.name);
+  const cloned = await clone(input.repo, into);
+  for (const step of [cloned.clone, cloned.branch, cloned.files]) {
+    if (step === null) {
+      continue;
+    }
+    const failure = forgeCommandFailure(step);
+    if (failure !== null) {
+      return {
+        ok: false,
+        why:
+          failure.why === "no_gh" || failure.why === "signed_out"
+            ? "addRepositoryRefusedInstall"
+            : failure.why === "missing" || failure.why === "refused"
+              ? "addRepositoryRefusedUnseen"
+              : "addRepositoryRefusedFailed",
+        note: failure.detail,
+      };
+    }
+  }
+  const baseBranch = cloned.branch?.stdout.trim() ?? "";
+  if (baseBranch === "") {
+    return failed(`${into}: the clone's HEAD is on no branch`);
+  }
+  const files = (cloned.files?.stdout ?? "").split("\n").filter((name) => name !== "");
+  const plan = planForRepository(template, {
+    root,
+    repo: input.repo,
+    ...parts,
+    into,
+    baseBranch,
+    allowedBash: allowedBashFor(toolchainsOf(files)),
+  });
+  const planned = readRunPlan(plan);
+  if (planned.kind !== "planned") {
+    return failed(`the plan for ${input.repo} was refused: ${planned.reason}`);
+  }
+  const recorded = agentTypeRecordOf(planned.plan, plan);
+  if ("refusal" in recorded) {
+    return failed(`the plan for ${input.repo} builds no agent type: ${recorded.refusal}`);
+  }
+  const atMs = Date.now();
+  const written = await record.recordSetupPlan({
+    setupId: `setup-${String(atMs)}`,
+    plan,
+    recordedBy: actor.actorId,
+    recordedAtMs: atMs,
+  });
+  if (written.kind !== "recorded") {
+    return failed(written.reason);
+  }
+  say(`Added ${input.repo} at ${into} on a press from the page.`);
+  return { ok: true };
 }
 
 async function commandAbandon(

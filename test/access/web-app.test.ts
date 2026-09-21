@@ -27,6 +27,9 @@ import { type Context, Hono } from "hono";
 import { expect, test } from "vitest";
 
 import {
+  type AddedRepository,
+  type AddRepositoryInput,
+  AddRepositoryPort,
   AnswerPort,
   createApp,
   type DraftedScopeFormDraft,
@@ -1517,6 +1520,8 @@ const WRITE_TABLE = [
   "ALL /publish",
   // The release press (D-0073 rule 4.3, rondo#288).
   "ALL /release",
+  // Adding a repository a request named (rondo#383, D-0090).
+  "ALL /add-repository",
   "ALL /*",
   "POST /",
   "POST /request",
@@ -1530,6 +1535,7 @@ const WRITE_TABLE = [
   "POST /revise",
   "POST /publish",
   "POST /release",
+  "POST /add-repository",
 ];
 
 /**
@@ -1566,6 +1572,8 @@ const PRESS_ROUTES = [
   // The two acts that leave this machine (D-0060, D-0073 rule 4.3).
   "/publish",
   "/release",
+  // Cloning and recording a repository a request named (rondo#383, D-0090).
+  "/add-repository",
 ];
 
 /**
@@ -2836,6 +2844,89 @@ test("(release) no press, no form, or no approver releases nothing; a line that 
   expect(moved).toHaveLength(1);
   stale.stop.abort();
   expect(await stale.closed).toBe(0);
+});
+
+function addPorts(
+  added: AddRepositoryInput[],
+  answer: AddedRepository = { ok: true },
+): ServedPorts {
+  return {
+    ...spyPorts([]),
+    addRepository: new AddRepositoryPort(async (input) => {
+      added.push(input);
+      return await Promise.resolve(answer);
+    }),
+  };
+}
+
+const ADD_FORM = { token: TOKEN, request: "m-1", repository: "owner/other" };
+
+test("(add-repository) a person's press adds the repository the request named, and lands on its thread", async () => {
+  const added: AddRepositoryInput[] = [];
+  const { base, stop, closed } = await served(createApp(addPorts(added), TOKEN));
+  const pressed = await send(base, "/add-repository", "POST", pressHeaders(base), ADD_FORM);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?thread=m-1&lang=en");
+  expect(added).toEqual([{ requestMessageId: "m-1", repo: "owner/other" }]);
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(add-repository) no press, no form or no approver adds nothing; a failed clone is said in words with the way back", async () => {
+  const added: AddRepositoryInput[] = [];
+  const { base, stop, closed } = await served(createApp(addPorts(added), TOKEN));
+  const person = pressHeaders(base);
+  for (const headers of [
+    { ...person, "sec-fetch-user": undefined },
+    { ...person, "sec-fetch-mode": "cors", "sec-fetch-user": undefined },
+  ]) {
+    expect((await send(base, "/add-repository", "POST", headers, ADD_FORM)).status).toBe(403);
+  }
+  expect(
+    (await send(base, "/add-repository", "POST", person, { ...ADD_FORM, repository: "" })).status,
+  ).toBe(400);
+  expect(added).toEqual([]);
+  stop.abort();
+  expect(await closed).toBe(0);
+
+  const none = await served(createApp({ ...spyPorts([]), addRepository: null }, TOKEN));
+  const refused = await send(
+    none.base,
+    "/add-repository",
+    "POST",
+    pressHeaders(none.base),
+    ADD_FORM,
+  );
+  expect(refused.status).toBe(403);
+  expect(refused.body).toContain(EN.addRepositoryRefusedNoApprover);
+  none.stop.abort();
+  expect(await none.closed).toBe(0);
+
+  // Each refusal a person answers differently reaches them as its own sentence,
+  // rondo's reason kept in the fold, and the way back is the request's thread
+  // where the button still is.
+  for (const why of [
+    "addRepositoryRefusedInstall",
+    "addRepositoryRefusedUnseen",
+    "addRepositoryRefusedFailed",
+  ] as const) {
+    const failing = await served(
+      createApp(addPorts([], { ok: false, why, note: "gh: exited 1" }), TOKEN),
+    );
+    const answered = await send(
+      failing.base,
+      "/add-repository",
+      "POST",
+      pressHeaders(failing.base),
+      ADD_FORM,
+    );
+    expect(answered.status, why).toBe(409);
+    expect(answered.body, why).toContain(EN[why].slice(0, 60).replaceAll("'", "&#39;"));
+    expect(answered.body, why).toContain("gh: exited 1");
+    expect(answered.body, why).toContain("/?thread=m-1&amp;lang=en");
+    failing.stop.abort();
+    expect(await failing.closed).toBe(0);
+  }
 });
 
 test("(release) the port refuses anything but a minted, unspent press", async () => {

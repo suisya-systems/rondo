@@ -933,6 +933,35 @@ explanation you pressed on and then answers the gate.`,
   nextStepPublish:
     "The work is approved. Opening a pull request pushes its branch and puts it up for review; " +
     "nothing is merged.",
+  nextStepAddRepository: (named, repo) =>
+    `This request names ${named}, but rondo does not work in ${repo} yet, so nothing has been ` +
+    `drafted. Adding it copies ${repo} onto this computer beside rondo's other repositories, and ` +
+    `its pull requests go to ${repo}.`,
+  addRepositoryAction: "Add this repository",
+  addRepositoryBack: "Back to the request",
+  repositoryUnbuilt: (repo) =>
+    `rondo could not tell how ${repo} is built, so the worker can change and commit its files ` +
+    "but cannot run its build or tests.",
+  addRepositoryRefusedNoApprover:
+    "Nothing was added: rondo on this machine does not yet know who you are, so nothing here " +
+    "can be decided as you.",
+  addRepositoryRefusedPress:
+    "Nothing was added: this is done by a person pressing this page's button, and a script " +
+    "cannot.",
+  addRepositoryRefusedForm:
+    "Nothing was added: that form did not come from this page. Reload it and press again.",
+  addRepositoryRefusedInstall:
+    "Nothing was added: rondo on this computer cannot reach GitHub as you. Whoever installed " +
+    "rondo here is the one who can look; once they have, the button is still there to press again.",
+  addRepositoryRefusedUnseen:
+    "Nothing was added: GitHub has no such repository, or your account cannot see it. If the " +
+    "name in your request is wrong, say the right one in a reply.",
+  addRepositoryRefusedFailed:
+    "Nothing was added: rondo could not copy the repository this time. Pressing again is safe; " +
+    "it carries on from where this stopped.",
+  addRepositoryRefusedNoSetup:
+    "Nothing was added: rondo's setup on this computer has not given it anywhere to put a " +
+    "repository. Whoever installed rondo here is the one who can look.",
   approveBusy: "Recording your approval...",
   startBusy: "Starting the work...",
   reviseBusy: "Asking for the change...",

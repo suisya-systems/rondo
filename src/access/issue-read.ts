@@ -113,6 +113,84 @@ export function namedIssues(body: string): readonly NamedIssue[] {
   return [...found.values()];
 }
 
+/**
+ * Where the work of one request runs, as the issues and repositories its
+ * person named say (rondo#383, D-0090).
+ */
+export type WorkRepository =
+  /** Nothing named settles it: every held plan is offered, as before. */
+  | { readonly kind: "open" }
+  /** The work belongs in these held repositories (`OWNER/NAME` as the plans spell them). */
+  | { readonly kind: "held"; readonly repos: readonly string[] }
+  /**
+   * Named, and no held plan is for it: nothing is drafted until the person
+   * adds it from the page. `named` is what they wrote that named it.
+   */
+  | { readonly kind: "unheld"; readonly repo: string; readonly named: string };
+
+// A repository named as the place of the work: its forge address, or
+// `OWNER/NAME` not glued to a path, an issue number or a word.
+const REPOSITORY =
+  /https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?(?![\w./#-])|(?<![\w&/.:@#-])([\w-][\w.-]*)\/([\w.-]*\w)(?![\w/#-])/g;
+
+/**
+ * Which repository one request's work runs in (rondo#383, D-0090 rules 1-3),
+ * from every operator message in its thread and the forge repository of each
+ * plan rondo holds for it (null where a plan names none).
+ *
+ * - **A repository the person named as the place wins** (D-0090 rule 3): *"do
+ *   owner/a#12 in owner/b"* is owner/b's work. A forge address always counts;
+ *   a bare `OWNER/NAME` counts when a held plan is for it or when it shares an
+ *   owner with a named issue, so a path like `src/access` is not read as one.
+ * - **Otherwise the named issues' repositories are the place** (rule 1): the
+ *   person who writes *"do this issue"* expects the work where it lives.
+ * - A bare `#N` names no repository and keeps its rule (D-0081 rule 3.4).
+ *
+ * ponytail: **a held plan naming no forge repository could be any of them**,
+ * so where one is held an unheld name is `open` -- the drafter's own choice,
+ * as before -- rather than an offer to add a repository that may be held.
+ * Only `github.com` addresses name a place; an enterprise forge's work is
+ * named by `OWNER/NAME`.
+ */
+export function workRepository(
+  bodies: readonly string[],
+  held: readonly (string | null)[],
+): WorkRepository {
+  if (held.length === 0) {
+    return { kind: "open" };
+  }
+  // Forge repositories are named without regard to case.
+  const known = new Map(
+    held.flatMap((slug) => (slug === null ? [] : [[slug.toLowerCase(), slug] as const])),
+  );
+  const issues = bodies
+    .flatMap((body) => namedIssues(body))
+    .flatMap((ref) => (ref.repo === null ? [] : [{ repo: ref.repo, named: ref.named }]));
+  const owners = new Set(issues.map((issue) => issue.repo.split("/")[0]?.toLowerCase()));
+  const places = bodies.flatMap((body) =>
+    [...body.replace(REFERENCE, " ").matchAll(REPOSITORY)].flatMap((m) => {
+      const [, urlOwner, urlName, owner, name] = m;
+      if (urlOwner !== undefined && urlName !== undefined) {
+        return [`${urlOwner}/${urlName}`];
+      }
+      const repo = `${String(owner)}/${String(name)}`;
+      return known.has(repo.toLowerCase()) || owners.has(String(owner).toLowerCase()) ? [repo] : [];
+    }),
+  );
+  const wanted = places.length > 0 ? places.map((repo) => ({ repo, named: repo })) : issues;
+  if (wanted.length === 0) {
+    return { kind: "open" };
+  }
+  const unheld = wanted.find((w) => !known.has(w.repo.toLowerCase()));
+  if (unheld !== undefined) {
+    return held.includes(null) ? { kind: "open" } : { kind: "unheld", ...unheld };
+  }
+  return {
+    kind: "held",
+    repos: [...new Set(wanted.map((w) => known.get(w.repo.toLowerCase()) ?? w.repo))],
+  };
+}
+
 /** Why a reference was not read, in the terms D-0076 rule 4 sorts them by. */
 export type IssueReadFailure =
   /** No `gh` on this machine: only installation repairs it (rule 4.3). */
@@ -414,7 +492,7 @@ export async function readNamedIssue(
 }
 
 /** Why a command did not answer, sorted by who can repair it, or null when it did. */
-function commandFailure(
+export function commandFailure(
   outcome: CommandOutcome,
 ): { readonly why: IssueReadFailure; readonly detail: string } | null {
   if (outcome.spawnError !== null) {
@@ -431,7 +509,7 @@ function commandFailure(
   if (/gh auth login|HTTP 401|not logged in/i.test(said)) {
     return { why: "signed_out", detail };
   }
-  if (/HTTP 404|Not Found/i.test(said)) {
+  if (/HTTP 404|Not Found|Could not resolve to a Repository/i.test(said)) {
     return { why: "missing", detail };
   }
   if (/HTTP 403/i.test(said)) {

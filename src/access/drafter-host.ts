@@ -57,6 +57,13 @@ export interface DrafterHostPorts extends DrafterPorts {
   readonly issuesUnread?: (
     messages: readonly ThreadMessageDraft[],
   ) => Promise<ReadonlyMap<string, unknown>>;
+  /**
+   * Whether a request names a repository rondo holds no plan for (rondo#383,
+   * D-0090 rule 1): such a request is not due until the person adds it from
+   * the page, so no draft is composed in a repository the work is not in.
+   * Absent where nothing asks, and then nothing waits.
+   */
+  readonly awaitsRepository?: (requestMessageId: string) => Promise<boolean>;
 }
 
 export interface DrafterHost {
@@ -225,13 +232,17 @@ async function scan(
       (before.has(m.messageId) ? past : uncovered).add(root);
     }
   }
-  const due = [...uncovered].flatMap((root) => {
-    if (reading.has(root)) {
-      return [];
-    }
+  const due: Due[] = [];
+  for (const root of uncovered) {
     const key = [...(operatorIds.get(root) ?? [])].sort().join("\n");
-    return givenUp.get(root) === key ? [] : [{ requestMessageId: root, operatorKey: key }];
-  });
+    if (
+      !reading.has(root) &&
+      givenUp.get(root) !== key &&
+      (ports.awaitsRepository === undefined || !(await ports.awaitsRepository(root)))
+    ) {
+      due.push({ requestMessageId: root, operatorKey: key });
+    }
+  }
   return { due, past: [...past].filter((root) => !uncovered.has(root)).length };
 }
 

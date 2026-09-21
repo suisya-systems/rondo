@@ -1050,7 +1050,58 @@ export class ReleasePort {
   }
 }
 
-/** The ports the server is handed: the reading half, and the six writers. */
+/** What one add-repository press names (rondo#383): the request, and the repository it named. */
+export interface AddRepositoryInput {
+  readonly requestMessageId: string;
+  /** `OWNER/NAME`, as the page read it off the request. */
+  readonly repo: string;
+}
+
+/**
+ * Why an add-repository press added nothing, as the wording key the page says
+ * it in (D-0090 rule 4): the three a person answers differently -- this
+ * computer's setup, what the account can see, and anything else, which a press
+ * again may clear -- and a store setup never finished, which no press repairs.
+ */
+export type AddRepositoryRefusal =
+  | "addRepositoryRefusedInstall"
+  | "addRepositoryRefusedUnseen"
+  | "addRepositoryRefusedFailed"
+  | "addRepositoryRefusedNoSetup";
+
+/** What adding a repository did: added, or why not with rondo's own reason. */
+export type AddedRepository =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly why: AddRepositoryRefusal; readonly note: string };
+
+/**
+ * The seventh thing this surface may write (rondo#383, D-0090): a repository
+ * cloned and recorded as setup records one, on the person's press. Its own
+ * class for {@link ReleasePort}'s reason: adding a repository is not answering
+ * a gate, and a holder of the other ports must not be able to do it.
+ */
+export class AddRepositoryPort {
+  readonly #add: (input: AddRepositoryInput) => Promise<AddedRepository>;
+
+  constructor(add: (input: AddRepositoryInput) => Promise<AddedRepository>) {
+    this.#add = add;
+  }
+
+  /** Add one repository, on one press. */
+  async add(press: Press, input: AddRepositoryInput): Promise<AddedRepository> {
+    if (!minted.has(press)) {
+      return {
+        ok: false,
+        why: "addRepositoryRefusedFailed",
+        note: "nothing was added: this was not a person's press",
+      };
+    }
+    minted.delete(press);
+    return await this.#add(input);
+  }
+}
+
+/** The ports the server is handed: the reading half, and the seven writers. */
 export interface ServedPorts extends WebPorts {
   /**
    * Null when `RONDO_APPROVER` is unset, which is also when no button is drawn
@@ -1083,6 +1134,8 @@ export interface ServedPorts extends WebPorts {
    * judgement, so it needs an actor the allowlist accepts (D-0073 rule 4.3).
    */
   readonly release: ReleasePort | null;
+  /** Null on {@link release}'s condition: the recorded plan is the approver's, as setup's is. */
+  readonly addRepository?: AddRepositoryPort | null;
 }
 
 /**
@@ -1185,6 +1238,12 @@ const PUBLISH_ROUTE = "/publish";
 const RELEASE_ROUTE = "/release";
 
 /**
+ * The route that adds a repository a request named and rondo does not work in
+ * (rondo#383, D-0090): a press, pressed from the request's own thread.
+ */
+const ADD_REPOSITORY_ROUTE = "/add-repository";
+
+/**
  * The routes whose body is numbers and minted ids and never prose, and so take
  * {@link MAX_FORM_BYTES} rather than the send limit.
  */
@@ -1196,6 +1255,7 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   START_PLAN_ROUTE,
   PUBLISH_ROUTE,
   RELEASE_ROUTE,
+  ADD_REPOSITORY_ROUTE,
 ]);
 
 /** A whole count of at least 0, as a form posts one, or null when it is not one. */
@@ -1470,7 +1530,7 @@ function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 5
 export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // The writer is taken off before anything reading is handed the rest, so
   // the renderer does not hold it at runtime either (D-0041 rule 4).
-  const { answer, say, scope, revise, publish, release, ...reading } = ports;
+  const { answer, say, scope, revise, publish, release, addRepository, ...reading } = ports;
   const app = new Hono<PageEnv>();
   tokens.set(app, token);
 
@@ -2187,6 +2247,31 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     return c.redirect(viewHref({ kind: "release", iterationId }, tagOf(c)), 303);
   });
 
+  // **The add-repository press** (rondo#383, D-0090): the one confirmation a
+  // person gives for a repository their request named. Back to the request's
+  // thread, whose draft now waits on nothing; refused, a page that says why in
+  // their words, with the way back to the same button.
+  app.post(ADD_REPOSITORY_ROUTE, async (c) => {
+    const form = await c.req.parseBody();
+    const request = typeof form["request"] === "string" ? form["request"] : "";
+    const repo = typeof form["repository"] === "string" ? form["repository"] : "";
+    if (addRepository === undefined || addRepository === null) {
+      return addRepositoryRefused(c, 403, "addRepositoryRefusedNoApprover", request);
+    }
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return addRepositoryRefused(c, minting.status, "addRepositoryRefusedPress", request);
+    }
+    if (request === "" || repo === "") {
+      return addRepositoryRefused(c, 400, "addRepositoryRefusedForm", request);
+    }
+    const added = await addRepository.add(minting.press, { requestMessageId: request, repo });
+    if (!added.ok) {
+      return addRepositoryRefused(c, 409, added.why, request, added.note);
+    }
+    return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
+  });
+
   /**
    * Whether the thread already holds exactly this operator message.
    *
@@ -2444,6 +2529,32 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         wording.lang,
       ),
       wording.releaseBack,
+    );
+  }
+
+  function addRepositoryRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why:
+      | "addRepositoryRefusedNoApprover"
+      | "addRepositoryRefusedPress"
+      | "addRepositoryRefusedForm"
+      | AddRepositoryRefusal,
+    request: string,
+    note: string | null = null,
+  ) {
+    const wording = wordingOf(c);
+    return pressRefused(
+      c,
+      status,
+      wording.addRepositoryAction,
+      wording[why],
+      viewHref(
+        request === "" ? { kind: "summary" } : { kind: "thread", messageId: request, to: null },
+        wording.lang,
+      ),
+      wording.addRepositoryBack,
+      note,
     );
   }
 

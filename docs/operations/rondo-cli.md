@@ -92,6 +92,15 @@ repository's pair is left where it is, and the store keeps every plan it has bee
 page offers each of them as a plan to run on, newest first. Two targets whose directory names agree
 derive one project name; the script refuses that rather than overwriting the first one's pair.
 
+**A person does not need this to add a repository their request names** (D-0090). A request naming
+an issue in a repository no plan is for is not drafted; the page says so in the request's thread and
+offers *Add this repository*. The press clones it under `--root` as `repositories/OWNER/NAME` through
+the host's own `gh`, and records a plan that is this script's newest one with the repository's own
+facts swapped in -- its path, its branch, its forge repository, its project, and the worker's
+commands, read off its top-level files for TypeScript and JavaScript (npm, pnpm, yarn, bun), Go,
+Python (uv, poetry, pip) and Rust. A repository matching none is still added with the commands every
+worker has, and the page says its worker cannot run its build or tests.
+
 **It cannot demonstrate `publish` to the end, and it says so.** The bare `origin` makes the push leg
 real -- it is an ordinary push to an ordinary repository. The pull-request leg is not reachable from
 here at all: a bare repository on disk is not a forge, no `OWNER/NAME` names it, and there is
