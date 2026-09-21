@@ -133,6 +133,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0093 | The boundary test also asks which role a module plays: every module under `src/` names a row of `D-0064` section 5, a row given to cadenza or continuo is refused, and what already sits in rondo is a named, shrinking list of relocations | accepted |
 | D-0096 | The header's "Requests" link is closed, and a thread's `Esc` goes to the bare address: the link led to the new-request view the list already reaches, and the way back it carried on a thread moves to the logo | accepted |
 | D-0097 | rondo proposes which request is worth making: the advisory ranks candidates against a goal the person wrote down, reads its own record as well as the issue list, and brings one recommendation whose open points can be answered in one word; it never starts what it proposes | accepted |
+| D-0098 | Parallel control beyond the lane ledger: an order across repositories released only by a landing, a line that takes over landed paths first takes in the default branch, decision-record numbers reserved so decision entries are written in parallel, a worker's question carried at the lap's end and never answered by silence, and a review stopped by the scope's numbers | accepted |
 
 ---
 
@@ -3837,6 +3838,10 @@ waiting, not the working.
     > An overlap refuses as a capacity bound does, and the refusal row names which bound refused, with
     > the holding lineage and the shared paths for a claim refusal. The counts and their bounds are
     > unchanged (`D-0073` rule 3.6). Rules 10 and 14 are unedited.
+
+    > **Annotation (2026-09-22, from D-0098).** Added after this entry was accepted, and additive, for
+    > rule 10. The same `BEGIN IMMEDIATE` also writes the line's `number_reservation` rows for a named
+    > decision record, both or neither with the iteration row (`D-0098` rule 3.3). Rule 10 is unedited.
 
 15. **The sites that change together are a closed list**, and it includes four that carry no
     `rondo#8` comment because they are types and API shapes rather than DDL: `readLiveRow`'s
@@ -12735,6 +12740,13 @@ itself.
 > Merge watch and cleanup (`pr_merged`, `removeWorktree`) are still not driven. The table and the list
 > above are not edited.
 
+> **Annotation (2026-09-22, from D-0098).** Added after this entry was accepted, and additive. The
+> "Secretary: relaying a worker's question" row is filled at the lap boundary by `D-0098` rule 4: the
+> worker commits what does not depend on the answer and ends its lap with the question, which reaches
+> the person as P2 or P3 with one recommendation, is never answered by silence or a deadline, and is
+> carried byte for byte into the next lap. A question raised in the middle of a lap still has no relay
+> (`D-0061` rule 6). The table and the list above are not edited.
+
 ### 6. Existing entries that have to move
 
 **None is edited here.** "Supersede" means a later entry retires what the named rule asserts (the
@@ -13346,6 +13358,13 @@ same date, read only (`JA/`), and the survey `JA/notes/lap-gap-survey-2026-09-13
    scope's threshold. Read literally as "the model reading is `clear`", O5 could never apply, since
    any below-threshold finding would block. That this reading of rule 3.6 touches ratified rules
    outside `D-0064` was put to the gate, and its answer is below.
+
+> **Annotation (2026-09-22, from D-0098).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0098`'s fifth point. **Rule 5.2** holds under a scope whose
+> `below_threshold` is `leave`, the default. Under `fix_unread`, one closing lap after the exit fixes
+> the below-threshold findings still open, a test with each fix; it counts as a lap and not as a
+> round, its tip is not read again, and the report and the merge press say so and name the commit
+> the reviewer last read (`D-0098` rule 5). Nothing above is edited.
 
 ### 6. The three defects a person caught
 
@@ -14342,6 +14361,10 @@ number.
    7. **`irreversible_additions`**: names added to `D-0064` rule 3.4's list. The list itself is
       not stored on the row, so **a scope cannot shorten it by construction**; the effective list is
       rule 3.4's plus this field.
+   > **Annotation (2026-09-22, from D-0098).** Added after this entry was accepted, and additive. The
+   > payload gains an eighth field, **`below_threshold`**: `leave` (default) or `fix_unread`, which
+   > allows the one closing lap of `D-0098` rule 5. The seven fields above are unedited.
+
 3. **What is approved is the row, by `scope_digest`**, written before it is shown (`D-0022`
    rule 18's order). Showing it writes a `presented` row in `operator_attention` with subject kind
    `scope` (`D-0032` rule 10, `D-0036` rule 1, `D-0042`).
@@ -14961,6 +14984,14 @@ names. Line numbers drift; re-measure the claim, not the number.
 >   rule 7). Without a resident host it is read at the next admission the surface attempts.
 >
 > The text above is not edited.
+
+> **Annotation (2026-09-22, from D-0098).** Added after this entry was accepted, and additive, by the
+> answer of rondo's human gate to `D-0098`'s first point. **Rule 3.4**: `first_landed` joins the closed
+> list of release facts: `first`'s claim was released by `D-0073` rule 6's landing reading. It is the
+> `first_merged` this rule anticipated, in the form rondo can read. **A `sequence` whose `first` and
+> `then` are in different repositories uses `first_landed` and no other fact**, since `paths_free` is
+> always true between them and `first_terminal` would release on an abandoned `first` (`D-0098` rule
+> 1). The text above is not edited.
 
 ### 2. The five cases of 2026-09-13, under this entry
 
@@ -16958,6 +16989,27 @@ number.
     closed line that has not landed shows what its landing releases. **The person never types a path
     or a lineage id and never has to remember which line owns what**: the drafter writes claims, and
     an operator who writes a plan by hand writes none (rule 2.5).
+
+> **Annotation (2026-09-22, from D-0098).** Added after this entry was accepted, and additive, by the
+> answers of rondo's human gate to `D-0098`'s points (rondo#250).
+> - **Rule 3**: a repository's named decision record (here `DECISIONS.md`) is a **shared-append
+>   path**. Two open lines may both change it, each within its own reserved numbers and index rows and
+>   by dated annotations, and changing it does not serialise them (`D-0098` rules 3.5 and 3.6).
+> - **Rule 6**: landing on the decision record is read by reserved numbers and added lines, not tree
+>   entries: the default branch's record holds a heading and an index row for each of the line's
+>   reservations and every line its closed tips added to the record (`D-0098` rule 3.7). Rule 6.1's
+>   soundness is kept for every other path.
+> - **Rule 7.1**: a `revise` that continues a line onto paths another line landed first takes in the
+>   default branch commit the release was read at, and the gate tests that it is an ancestor of the
+>   lap's tip (`D-0098` rule 2). The same redo settles a merge conflict on the decision record
+>   (`D-0098` rule 3.8).
+> - **Rule 10**: the end-of-lap question is `D-0098` rule 4: work that does not depend on the answer
+>   is committed first, no default is taken on silence, and the answer is carried into the next lap.
+> - **Section 5 and the residuals**: "append-only files serialise", and the residual for a
+>   shared-append path, are answered for a named decision record by `D-0098` rule 3. Other
+>   append-only files still serialise.
+>
+> The text above is not edited.
 
 ### 2. The six capabilities of 2026-09-17, under this entry
 
@@ -21826,3 +21878,370 @@ and because nothing in it waits on the person, it carries no amber (`D-0082` rul
   reads the wrong things.
 - **A proposal answered with anything longer than "as recommended" as a rule**, not an exception: its
   open points were not the ones the person had to decide.
+
+## D-0098 — Parallel control beyond the lane ledger: an order across repositories released only by a landing, a line that takes over landed paths first takes in the default branch, decision-record numbers reserved so decision entries are written in parallel, a worker's question carried at the lap's end and never answered by silence, and a review stopped by the scope's numbers
+
+**Status:** accepted (2026-09-22, rondo's owner, through the window, rondo#250). Five points were put
+to the gate; it took the recommendation on points 1, 2, 4 and 5, and on point 3 chose reserved
+numbers over serialising (rule 3). The answers are in section "What was put to the human gate, and its
+answer". Refs
+`D-0012`, `D-0023`, `D-0027`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`, `D-0067`,
+`D-0068`, `D-0073`, `D-0081`, `D-0093`, rondo#250.
+
+**This entry decides and does not build.** Nothing in `src/` changes with it. The annotations it
+adds are listed in "Annotations this entry adds", and are written with its acceptance.
+
+**Why an entry is needed.** On **2026-09-22** the operator's organisation, outside rondo, landed 11
+pull requests across rondo, cadenza and continuo in one day, and its coordinator did five things
+`D-0073` does not cover (rondo#250, comment of 2026-09-22; the sixth, running five or six laps at once,
+is `D-0073` and `D-0023`'s):
+
+1. **Ordered work across repositories**: change cadenza, merge, move rondo's pin (re-running the
+   artifact-delivery bridge), then replace rondo's copy; and dispatched the promised next cadenza
+   change **right after** the first merged.
+2. **Told running laps the ground moved**: after every merge, each open lap on the same repository was
+   told the new `origin/main` and asked to rebase before reporting; laps touching the same files were
+   named to each other.
+3. **Reserved shared numbers**: `D-0089` to `D-0092` were handed out in advance to four laps writing
+   entries the same afternoon.
+4. **Carried mid-work questions to the person and back**, about fifteen times. Each worker kept building
+   what did not depend on the answer. A worker's "no reply means the recommendation" was refused:
+   silence is not an answer.
+5. **Stopped review loops by count and severity**: a round limit stated as a number, and after it the
+   remaining lower-severity findings fixed with tests and not reviewed again, on the owner's call.
+
+Some of this is already decided and only needs saying; some is new. Each is placed below as one or the
+other.
+
+### What was measured, and how
+
+At rondo `fbebe37` on **2026-09-22**, by reading. Line numbers drift; re-measure the claim, not the
+number.
+
+- **The lane ledger's store half is built** (`src/store/lanes.ts`, `lane_claim` in
+  `src/store/records.ts` and `src/store/sqlite.ts`; rondo#280). Nothing drafts a narrower claim, so
+  every line claims `/` (rondo#281) and one repository runs one line at a time.
+- **`D-0067`'s `sequence` is not built**: no `sequence` record, no release fact, in `src/`. Its closed
+  list of release facts is, as decided text, `first_terminal` and `paths_free` (`D-0073` rule 3.5), and
+  `D-0067` rule 3.4 anticipates a `first_merged` "once merge is observed".
+- **`D-0073` rule 3 is per repository** ("no path is held by two open lines of one repository"), and
+  `paths_free` compares claims. Two lines in different repositories share no path, so a `sequence`
+  between them with `until` `paths_free` releases at once.
+- **`first_terminal` releases on any terminal status**, `abandoned` and `failed` included.
+- **A redo starts from its predecessor's branch** (`D-0027`), not from the default branch; a first
+  admission starts from the default branch as admission reads it.
+- **`D-0073` rule 10** already has a held line end its lap "at a committed point with its question
+  rather than guess"; "the mid-lap relay stays empty (`D-0061` rule 6)". `D-0064` section 5's row
+  "Secretary: relaying a worker's question" reads **empty**.
+- **`D-0064` rule 4.2**: "Nothing runs on it until the person answers."
+- **The round budget and the threshold are scope fields** (`D-0066` rule 2.4 `review_rounds`, default
+  3; rule 2.5 `severity_threshold`, default `major`); exit is "no finding at or above the threshold in
+  the latest reading", and a finding below it is left and listed (`D-0065` rules 4.3 and 5.2, O5).
+  `src/advisory/budget.ts` carries `reviewRounds`.
+- **`RONDO_MAX_OCCUPYING` defaults to 1** (`src/access/cli.ts`). `D-0012`'s single flight has become
+  `D-0023`'s counted bound.
+
+### 1. The five, placed
+
+| # | On 2026-09-22 | Already decided | New here | Stays with the person |
+|---|---|---|---|---|
+| **1. Order across repositories** | cadenza change, merge, pin move, copy replaced; next change dispatched on the merge | `sequence` (`D-0067` rule 3); the tick reads landings and attempts the held admission (`D-0073` rule 7) | **`first_landed`**, the one release fact that holds across repositories (rule 1) | The merge that lands `first` (`D-0064` rule 3.4); what `then` becomes when `first` ends without landing (P3) |
+| **2. "The ground moved"** | Every open lap told to rebase after each merge; same-file laps named to each other | Same-file lines do not run together (`D-0073` rule 3); disjoint lines need nothing from each other's landing | **A line that takes over paths another line landed first takes in the default branch** (rule 2) | Nothing new |
+| **3. Shared numbers** | `D-0089`-`D-0092` handed out in advance | Two lines appending one file share a path and serialise (`D-0073` section 5) | **rondo reserves decision-record numbers at admission, and the record becomes a shared-append path** (rule 3) | Naming the repository's record at setup |
+| **4. Mid-work questions** | About fifteen, carried both ways; independent work continued; silence refused | A held line keeps its claim and holds no capacity (`D-0073` rule 10); nothing runs on a recommendation (`D-0064` rule 4.2) | **The relay is filled at the lap's end**: what the worker must do before it asks, and how the answer comes back (rule 4) | The answer |
+| **5. Stopping review** | Round limit as a number; lighter findings fixed with tests and not read again | Count and threshold are the scope's (`D-0065` section 4, `D-0066` rule 2) | **One closing lap that fixes below-threshold findings and is not read again**, when the scope says so (rule 5) | Setting it on a scope; the merge |
+
+### Decision
+
+1. **An order across repositories is released only by a landing.**
+   1. **`first_landed` joins `D-0067` rule 3.4's closed list of release facts**: `first`'s claim was
+      released by `D-0073` rule 6's landing reading, in `first`'s own repository. It is the
+      `first_merged` `D-0067` anticipated, in the form `D-0073` rule 6.3 says rondo can read.
+   2. **A `sequence` whose `first` and `then` are in different repositories uses `first_landed`, and
+      no other fact.** `paths_free` is always true between them, and `first_terminal` would admit
+      `then` after `first` was abandoned, which is the case the order exists to prevent.
+   3. **The drafter drafts the chain in the split** (`D-0063` rule 4), one `sequence` per link: the
+      cadenza or continuo change, then rondo's pin move, then rondo's replacement of its copy. A scope
+      covers several repositories by its `workspaces` field (`D-0066` rule 2.2, `D-0081`); a link whose
+      repository no approved scope covers is not admitted and is P3 (`D-0064` rule 3.3).
+   4. **"Right after the merge" is `D-0073` rule 7's tick**: it reads `first` landed, writes the
+      release, and the surface attempts the held admission then. The follow-up is not a new request
+      and not a press.
+   5. **When `first` ends without landing** (`abandoned`, `failed`, or `closed` and released by the
+      person's press of `D-0073` rule 4.3), `first_landed` is never written. The hold does not
+      release; the wait reading (`D-0068`) shows `then` held behind a line that will not land, and what
+      `then` becomes is P3 with a recommendation.
+   6. **What `then` builds on is read at its admission**: the dependency's default-branch commit the
+      landing was read at is a basis of the admission, and the drafted instruction names it (the pin
+      target). No version is guessed before the landing.
+
+2. **A line that takes over paths another line landed first takes in the default branch.**
+   1. **The case**: a line at its gate widens onto paths another line held (`D-0073` rule 4.1), the
+      other line lands, `paths_free` fires, and the line continues by `revise` (`D-0073` rule 7.1). The
+      redo starts from the line's own branch (`D-0027`), which does not hold what just landed on those
+      paths. Left alone, it edits stale files and meets the landed change at merge.
+   2. **The drafted `revise` instruction says so, with bases**: the default branch moved to commit
+      *X*, *X* holds the landed change on the paths this lap now takes, and the lap first brings *X*
+      into its branch (merge or rebase is the worker's choice), resolves any conflict inside the lap, and
+      only then changes those paths. A conflict is the worker's to settle, never a question to the
+      person.
+   3. **The gate tests it**: when a lap's line widened onto landed paths, *X* must be an ancestor of
+      the lap's `tipCommit`. A lap that fails this is not landed-ready; the gate's drafted answer is a
+      `revise` quoting the test, and the person sees why.
+   4. **Nothing else is told anything.** A line whose paths no landing touched needs nothing from it:
+      `D-0073` rule 3 kept their paths apart, and the forge judges the pull request against the current
+      default branch (`D-0095`). **"Rebase after every merge" is not taken** (option 2b). A collision
+      on a path outside both claims is `D-0073` rule 5's, found at the gate as before.
+   5. **"Same-file laps named to each other" has no counterpart**, since same-file lines do not run
+      together under `D-0073`.
+
+3. **Decision-record numbers are reserved by rondo, and decision entries are written in parallel**
+   (the gate's answer to point 3, which departs from the recommendation).
+   1. **What it covers is a repository's decision record**: one file of numbered entries with an
+      index table, here `DECISIONS.md` with its `D-NNNN` headings and one index row each. The
+      repository names its record when it is set up, as naming the repository is (installation,
+      `D-0075`); a repository that names none has none, and its files are ordinary paths. Numbers
+      other conventions hand out (an ADR, a migration) are not covered.
+   2. **A reservation is a row in rondo's store**, `number_reservation`, immutable and append-only
+      with no status column (`D-0073` rule 2.1's shape): `repository`, `record`, `number`,
+      `lineage_id`, `bases`, `created_at_ms`, and a successor row that releases it. **`(repository,
+      record, number)` is unique over every row ever written**, so a number is handed out once and a
+      second reservation of it is refused by the database.
+   3. **A number is reserved when the line is admitted**, in `reserve()`'s `BEGIN IMMEDIATE` beside
+      its first `lane_claim` row, both or neither. The drafter says beside the claim how many new
+      entries the plan writes (`D-0063` rule 4; not a plan field). The number is the next above both
+      the highest heading in the default branch's record, fetched as `D-0073` rule 6 fetches it, and
+      the highest number ever reserved. The drafted instruction names it: "your entry is `D-0112`,
+      with its index row". A line found at its gate to need one more is reserved it there, as
+      `D-0073` rule 5 widens a claim, and told in its next lap.
+   4. **A reservation the line did not land is released, and its number is not handed out again.** The
+      release row is written in the transaction that releases the line's claim (`D-0073` rule 4.3). The
+      number stays a gap in the file: a number already written into a kept branch is treated as
+      assigned, which is the file's own "never reused".
+   5. **The record is a shared-append path in the lane ledger, not a path one line holds.** Two open
+      lines may both change it, and changing it does not serialise them (`D-0073` rule 3 as annotated).
+      What a line may do to it is what the file's rules already make additive: append its own entries
+      and index rows, and add dated annotations to earlier entries.
+   6. **The gate tests the numbers.** Every entry heading and index row a lap added must be one of its
+      line's reservations; any other number is a gate finding, and the drafted `revise` renumbers it
+      from a new reservation.
+   7. **Landing on the record is read by numbers, not by tree entries.** `D-0073` rule 6.1 is sound
+      because no other line held the line's paths, which a shared-append path gives up. So a line has
+      landed on the record when the default branch's record holds a heading and an index row for each
+      of its reservations **and every line its closed tips added to the record**, annotations included;
+      a line with no reservation (one that only annotates) is read by the added lines alone, and an
+      empty reservation set is never read as landed. Its other paths are read as `D-0073` rule 6 reads
+      them. A landed line's reservations are kept, not released.
+   8. **A conflict at merge on the record is expected, and is settled by the line that conflicts.** Two
+      lines appending at the file's end and at the index conflict on the forge when the second is
+      merged. That line continues by a redo that first takes in the default branch and keeps both sets
+      of entries (rule 2's instruction and ancestry test, unchanged), offered as the person's `revise`
+      press while `D-0064` rule 3.6 is closed. This is the rebase the coordinator of 2026-09-22 asked of
+      every lap, asked here only of the line whose merge conflicts. Reading that a pull request does
+      not merge is the building change's, with the operator's own forge credential as `D-0095` reads
+      checks.
+
+4. **A worker's question is carried at its lap's end, and silence never answers it.** This fills
+   `D-0064` section 5's "Secretary: relaying a worker's question" at the lap boundary; the mid-lap
+   channel stays absent (`D-0061` rule 6).
+   1. **Before asking, the worker builds everything that does not depend on the answer, commits it, and
+      ends its lap with the question**: what it asks, the options, what each gives up, one
+      recommendation, and which part of the work waits on the answer. This is the drafted instruction's
+      wording (`D-0063` rule 4.3, `D-0064` O3), and it widens `D-0073` rule 10's "end at a committed
+      point with its question".
+   2. **The question reaches the person as P2 or P3 through the request thread** (`D-0061`), drafted by
+      the advisory from the lap's end, **with what was built and committed and what waits on the
+      answer** (a question about nothing the person can see is not put), keeping the recommendation's
+      author as a column (`D-0064` rule 4.4): the worker's recommendation and the organisation's, if
+      they differ, are both shown.
+   3. **The line waits at its gate and nothing else does.** It keeps its claim and holds no capacity
+      (`D-0073` rule 10, `D-0023` rule 2); every other line keeps running. `D-0068` reads it as waiting
+      on the person, with what answering releases.
+   4. **No question carries a default.** "No reply means the recommendation", a deadline after which
+      the recommendation is taken, and a patrol finding that acts on an unanswered question are all
+      refused (`D-0064` rule 4.2). An unanswered question costs its line's paths and nothing else.
+   5. **The answer is carried byte for byte into the next lap's instruction** (`D-0009`), with the
+      question and the committed work as bases, and the line continues by `revise`. Until `D-0064` rule
+      3.6 opens, that `revise` is the person's press, offered with the answer already in it.
+
+5. **A review is stopped by the scope's numbers; a closing fix is the scope's option.**
+   1. **The round limit and the severity that must be cleared are the scope's `review_rounds` and
+      `severity_threshold`** (`D-0066` rule 2), which the person approves with the scope (P1). This is
+      decided, and "a round limit stated as a number" is it.
+   2. **The scope gains one field, `below_threshold`: `leave` (default) or `fix_unread`.** `leave` is
+      `D-0065` rule 5.2 unchanged. `fix_unread` allows **one closing lap** after the exit: a `revise`
+      whose instruction quotes the below-threshold findings still open, with their bases, and requires
+      a test for each fix.
+   3. **The closing lap's tip is not read again, and says so.** It counts as a lap against `laps` and
+      not as a round. The report (P5) and the merge press (`D-0091`) state that the last commit was not
+      re-read, which commit the reviewer last read, and which findings it answers. The checks on the pull request still run (`D-0095`).
+   4. **A fix that fails its own test, or a closing lap that finds a finding at or above the threshold,
+      is not closed quietly**: the line stops as `D-0064` rule 3.3's scope exit.
+
+6. **Where it sits (`D-0093`).** Every part is rondo's, in rows of `D-0064` section 5 that are
+   rondo's: drafting the chain and the instructions is "Secretary: splitting and handing over"; the
+   tick's admission is "Dispatcher: starting workers"; rule 4 is "Secretary: relaying a worker's
+   question"; rule 5 is the reviewer's budget (`D-0065`); rule 8 is the page's. The landing reading stays where `D-0073`
+   rule 6 put it; if `D-0093`'s relocation list moves it to continuo's merge watch, `first_landed`
+   reads continuo's observation instead, and nothing here changes. **Nothing is asked of cadenza or
+   continuo.**
+
+7. **`D-0012` is not touched.** Its conditions are answered by `D-0023` and continuo; this entry adds
+   no bound, no capacity and no condition.
+
+8. **What the page shows.** Nothing here is a new view: it is the thread, its three faces and the
+   list (`D-0083`), at every width, in the person's words (`D-0076`). No lineage, claim, `sequence`
+   or wait-reason name reaches the person as itself.
+   1. **A request run as several lines is one row in the list, and its sentence of state counts them**:
+      *2 of 3 parts running, 1 waiting for cadenza's change to land*. What each part holds is said as
+      the person's files and branch, never as a claim. Nothing is amber for a wait rondo clears itself;
+      amber is only *your turn* (`D-0082` rule 1, `D-0083` rule 2).
+   2. **Each line's wait is one sentence among "what remains before this ends"** on the right face
+      (`D-0083` rule 6), one step per line, joined from `D-0068`'s wait reading: *waiting until cadenza
+      #131 is merged; then rondo's pin bump starts by itself*. A cross-repository wait names the other
+      repository and links the pull request it waits on, and, since one host serves both repositories
+      (`D-0081`), the other request's thread. When `first` ended without landing, the step turns amber
+      and the question of rule 1.5 is asked in the thread, with a recommendation.
+   3. **A worker's question is a *your turn* like any other, and the other lines are seen to keep
+      running.** The answering box (`D-0083` rule 9) quotes the question, its options and one
+      recommendation; directly above it, one event line says what the worker built and committed
+      before stopping and what waits on the answer, linking the commit (rule 4.2). The line under the
+      title keeps the other parts' state (*2 parts still running*).
+   4. **The box says what answering releases, and nothing about a deadline, because there is none**:
+      *answering starts this part's next attempt*, and, where lines wait behind it, *answering also
+      releases: the docs part* (`D-0068`'s "answering this releases B"). It shows how long the question
+      has waited, and no countdown and no "rondo will assume".
+   5. **A line that must first take in what another line landed says so on its step and inside its
+      `revise` press's box** (`D-0082` rule 7): *another part changed these files and was merged; the
+      next attempt starts by merging it in*, linking the merged pull request. The attempt's event line
+      then says whether it was taken in; a failure is a gate finding in the person's words.
+   6. **The merge press names a closing fix that was not re-read, before the press** (rule 5.3). The
+      material on the right face carries one card: *closing fix: 2 minor findings fixed with tests in
+      one attempt; the reviewer last read commit X, not this one (your limit was N rounds)*, each
+      finding leading to its text and the commit. The press's box repeats *not re-read* (`D-0091`),
+      and the report says the same. It is not drawn as a standing finding, so the plain merge press
+      stays.
+
+### 2. What this is not
+
+- **Not a live channel into a running lap.** A worker cannot be told anything mid-lap, and cannot ask
+  anything mid-lap.
+- **Not a rebase service.** rondo rewrites no branch; the worker does, when rule 2 says so.
+- **Not a general allocator.** Only a named decision record's numbers are reserved (rule 3.1).
+- **Not a timeout.** Nothing waiting on the person is ever decided by the clock.
+- **Not a coordinator** (`D-0067` option A, `D-0073` option D stay refused).
+
+### 3. What this gives up
+
+- **A dependency that ends without landing stops its chain** (rule 1.5) until the person answers,
+  where the coordinator of 2026-09-22 could re-plan on the spot.
+- **A held question costs a model session.** The dependent part is built by a fresh lap from the branch
+  and the words (`D-0073` rule 10); what the worker had in mind but did not write is lost.
+- **A second decision writer costs a redo at merge** (rule 3.8), and numbers not landed leave gaps
+  in the file (rule 3.4).
+- **A closing fix merges unread bytes** (rule 5.3), guarded by its tests, the checks and the person's
+  merge press.
+- **Rule 2's test is ancestry**, so a worker that re-applies the landed change by hand instead of
+  merging fails it and redoes a lap.
+
+### What was put to the human gate, and its answer
+
+The points are kept as put, and the answer follows them.
+
+1. **What releases an order across repositories.**
+   - **(a) `first_landed` only, read on the tick** (recommended, rule 1). The follow-up starts on the
+     landing with no press. *Loses:* a dependency that ends without landing stops the chain until the
+     person answers.
+   - **(b) Draw the order beside the person's press as a recommendation** (`D-0067` case 4). *Loses:*
+     every cross-repository follow-up waits on the person remembering to start it, which is what the
+     coordinator did for them.
+2. **What a running line is told when the default branch moves.**
+   - **(a) Only a line that takes over landed paths, and only at its next lap** (recommended, rule 2).
+     *Loses:* a line far behind the default branch is not refreshed until the forge or a collision says
+     so.
+   - **(b) Every open line of the repository, at its next lap, after every landing.** *Loses:* a merge
+     step in every lap for changes `D-0073` rule 3 already keeps apart, and a lap's worth of risk each
+     time for nothing it guards.
+3. **Shared numbers.**
+   - **(a) No allocator; serialise on the shared file** (recommended, rule 3). *Loses:* two decision
+     writers never run together in one repository.
+   - **(b) A reservation row per named counter, and the shared file made a shared-append path.**
+     *Loses:* rondo learns each repository's numbering convention, and needs the merge rule `D-0073`
+     left as a residual.
+4. **A worker's question.**
+   - **(a) At the lap's end, with independent work committed first, no default on silence**
+     (recommended, rule 4). *Loses:* the model session; the dependent part is re-read by a fresh lap.
+   - **(b) A live relay into a running lap.** *Loses:* a lap holds capacity and its session while a
+     person sleeps, runs into its ceiling (`D-0068`), and needs an inbound channel through continuo's
+     fence that does not exist.
+5. **A closing fix after the review exit.**
+   - **(a) The scope's `below_threshold` field, `leave` by default and `fix_unread` when the person
+     sets it** (recommended, rule 5). Matches the owner's call of 2026-09-22, made once per scope
+     instead of per line. *Loses:* bytes merged that no reviewer read, said as that.
+   - **(b) Keep `D-0065` as is**: below-threshold findings are left and listed. *Loses:* the lighter
+     fixes wait for a new request.
+
+**The gate's answer (2026-09-22, rondo's owner, through the window):**
+
+1. **(a).**
+2. **(a).**
+3. **Neither (a) nor (b) as put: rondo reserves the numbers of the decision record** (the `D-`
+   number and its index row), and entry bodies are written in parallel. The reservation is taken when
+   the work starts and released when it does not land. The lane ledger treats `DECISIONS.md` as a
+   special case, numbers and index rows split by reservation and the body append-only, so that writing
+   `DECISIONS.md` alone never serialises two lines. The reason given: on 2026-09-22 four or five lines
+   writing decision entries ran at once, and that was where the speed came from; serialising them
+   gives it up. Rule 3 is written to this answer, and (b)'s "rondo learns each repository's
+   convention" is narrowed to a record the repository names (rule 3.1).
+4. **(a).**
+5. **(a).**
+
+### Annotations this entry adds
+
+Written with this entry's acceptance, each dated 2026-09-22 and additive:
+
+| Entry | What the annotation says | Additive? |
+|---|---|---|
+| `D-0067` rule 3.4 | `first_landed` joins the closed list; it is the anticipated `first_merged` in `D-0073` rule 6's reading, and the only fact used across repositories (`D-0098` rule 1) | additive |
+| `D-0073` rule 7.1 | A `revise` continuing onto landed paths first takes in the default branch, and the gate tests ancestry (`D-0098` rule 2) | additive |
+| `D-0073` rule 10 | The end-of-lap question is `D-0098` rule 4: independent work first, no default on silence, answer carried into the next lap | additive |
+| `D-0073` rule 3 | A named decision record is a shared-append path: two open lines may both change it, each within its reservations (`D-0098` rule 3.5) | additive |
+| `D-0073` rule 6 | Landing on the decision record is read by reserved numbers and added lines, not tree entries (`D-0098` rule 3.7) | additive |
+| `D-0073` section 5 and residuals | "Append-only files serialise" and the shared-append residual are answered for a named decision record by `D-0098` rule 3 | additive |
+| `D-0023` rule 10 | `reserve()` also writes the line's number reservations, in the same transaction (`D-0098` rule 3.3) | additive |
+| `D-0064` section 5 | "Secretary: relaying a worker's question" is filled at the lap boundary by `D-0098` rule 4; the mid-lap relay stays empty | additive |
+| `D-0066` rule 2 | The scope gains `below_threshold`, `leave` by default (`D-0098` rule 5.2) | additive |
+| `D-0065` rule 5.2 | Under `fix_unread`, one closing lap fixes below-threshold findings and is not a round (`D-0098` rule 5) | additive |
+
+### What this does not do
+
+- **It does not build** the `sequence` record, the release facts, the number reservation, the
+  gate's ancestry test, the question's drafting, the scope field or any screen.
+- **It does not answer `D-0073`'s residuals** (migration, quiescence, scope binding, sibling tips,
+  shared-append merge rule).
+- **It does not keep a model session** across a question.
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| Whether a lap's workspace can reach the default-branch commit rule 2.2 names (the fetch is into a ref rondo owns, `D-0073` rule 6) | Depends on how continuo materialises a redo's workspace | the building change; continuo if the workspace cannot reach it |
+| A chain whose `first` is outside every approved scope | Rule 1.3 makes it P3; whether a scope may name another repository's line as a dependency without covering it is a scope-shape question | a later entry, if cross-repository chains are routinely stopped on it |
+| A question the worker should have asked and did not | A worker that guesses is not caught by this entry | the reviewer's criterion (`D-0065` section 1.2.6) |
+
+### What would falsify it
+
+- **A cross-repository follow-up admitted before its dependency landed**, or after it was abandoned:
+  rule 1.2 is not holding.
+- **A handed-over line merging with the landed change undone**, or conflicting at merge on the paths it
+  took over: rule 2 is not holding.
+- **Two lines under this entry landing the same `D-` number**, or an entry landing under a number its
+  line did not reserve: rule 3.2 or 3.6 is not holding.
+- **Parallel decision writers costing more in merge redos than serialising would have** (rule 3.8):
+  the shared-append path is the wrong trade for this file.
+- **A line continuing on a recommendation nobody answered**: rule 4.4 is not holding.
+- **Workers routinely ending a lap with a question after building nothing**, so that questions cost a
+  lap each: rule 4.1's wording is not doing its work, and option 4 (b) comes back.
+- **Closing fixes routinely introducing a defect a re-read would have found**: `fix_unread` is wrong as
+  a scope option.
+- Any measurement in "What was measured" failing to reproduce at rondo `fbebe37`.
