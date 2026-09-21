@@ -1103,18 +1103,11 @@ test("the scope screen shows the definition of done beside the request, naming t
   const world = fresh();
   const requestId = "request-scope-done";
   await seedScopeRequest(world, requestId, "#291 をやってほしい");
-  const view = {
-    kind: "scope",
-    messageId: requestId,
-    rounds: null,
-    decisionId: null,
-    plan: null,
-  } as const;
-  const drawn = async (wording: Chrome) => {
+  const drawn = async (wording: Chrome, plan: string | null = null) => {
     const page = await operatorPage(
       portsOver(world, "ada", []),
       "t",
-      view,
+      { kind: "scope", messageId: requestId, rounds: null, decisionId: null, plan },
       wording,
       mint,
       () => "x",
@@ -1155,6 +1148,25 @@ test("the scope screen shows the definition of done beside the request, naming t
   expect(inJa).toContain(ja.scopeDoneHeading);
   for (const ask of ja.scopeDoneAsks) expect(inJa).toContain(ask);
   expect(inJa).toContain(ja.scopeDoneRules(["AGENTS.md"]));
+
+  // A newer setup names other files; the plan the address names is the one
+  // a start runs on, so its files are the ones said, not the newer plan's.
+  const newer = {
+    ...plan,
+    review_criterion: { ...plan.review_criterion, rule_files: ["CONTRIBUTING.md"] },
+  };
+  expect(
+    await world.record.recordSetupPlan({
+      setupId: "setup-2",
+      plan: newer,
+      recordedBy: "ada",
+      recordedAtMs: 3_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  expect(await drawn(EN)).toContain("CONTRIBUTING.md");
+  const named = await drawn(EN, planDigest(plan));
+  expect(named).toContain(EN.scopeDoneRules(["AGENTS.md"]));
+  expect(named).not.toContain("CONTRIBUTING.md");
 });
 
 test("with two plans held, the screen offers the choice, the first marked, and the address picks the other (rondo#238)", async () => {

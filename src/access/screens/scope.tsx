@@ -331,7 +331,7 @@ export async function scopeView(
         {request.body}
       </p>
       {scopeIssues(wording, threads, view.messageId)}
-      {scopeDone(wording, await ruleFilesFor(ports, wording, view.messageId, nowMs))}
+      {scopeDone(wording, await ruleFilesFor(ports, wording, view, nowMs))}
     </header>
   );
   // **The third state** (D-0074 rule 4.2): raising the approval a waiting lap
@@ -466,22 +466,25 @@ function scopeDone(wording: Chrome, ruleFiles: readonly string[]) {
 }
 
 /**
- * The rule files the plans rondo holds for this request name (their
- * `review_criterion.rule_files`), each once: what the definition of done
- * points the worker at. One repository's plans name the same files, so the
- * union is what any of them would send.
+ * The rule files the definition of done points the worker at (each plan's
+ * `review_criterion.rule_files`): the plan the address names, wherever rondo
+ * holds it, since that is the plan a start runs on; with none named, every
+ * plan offered for this request, each file once. One repository's plans name
+ * the same files, so the union is what any of them would send.
  *
- * ponytail: a union, not per plan -- two held plans naming different files
- * show both here. Say it per plan when a request is seen with plans in two
- * repositories.
+ * ponytail: with no plan named, a union -- two held plans naming different
+ * files show both here. Say it per plan when a request is seen with plans in
+ * two repositories.
  */
 async function ruleFilesFor(
   ports: WebPorts,
   wording: Chrome,
-  messageId: string,
+  view: Extract<PageView, { kind: "scope" }>,
   nowMs: number,
 ): Promise<readonly string[]> {
-  const plans = await plansFor(ports, wording, messageId, nowMs);
+  const drawn = await chosenPlan(ports, view, nowMs);
+  const plans =
+    drawn !== null ? { plans: [drawn] } : await plansFor(ports, wording, view.messageId, nowMs);
   if (!("plans" in plans)) {
     return [];
   }
