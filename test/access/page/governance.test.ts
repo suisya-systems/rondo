@@ -33,10 +33,11 @@ test("the governance line is under the title, permanent, and carries all six of 
   // The chain, in rule 6's order, with the step the work is stopped on marked
   // and the last step never rondo's.
   expect(head).toContain("your answer");
-  expect(head).toContain("proposal");
+  // The middle step is named as what it is, a pull request (rondo#376).
+  expect(head).toContain("pull request");
   expect(head).toContain("merge");
-  expect(head.indexOf("your answer")).toBeLessThan(head.indexOf("proposal"));
-  expect(head.indexOf("proposal")).toBeLessThan(head.indexOf("merge"));
+  expect(head.indexOf("your answer")).toBeLessThan(head.indexOf("pull request"));
+  expect(head.indexOf("pull request")).toBeLessThan(head.indexOf("merge"));
   expect(head).toContain('class="gov-step gov-waiting">your answer');
   expect(head).toContain('class="gov-step gov-yours">merge');
 

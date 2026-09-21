@@ -209,7 +209,7 @@ export const JA: Chrome = Object.freeze({
   govSpent: (spent, approved) => `$${spent} ／ $${approved}`,
   govTries: (at, of) => `${String(at)} 回目 ／ ${String(of)} 回まで`,
   chainAnswer: "あなたの答え",
-  chainProposal: "提案",
+  chainProposal: "プルリクエスト",
   chainMerge: "マージ",
   noSuchThread: "そのメッセージを含む依頼スレッドはありません。",
   threadsUnreadable: (reason) => `依頼スレッドを読めませんでした: ${reason}`,

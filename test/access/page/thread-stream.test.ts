@@ -105,7 +105,7 @@ test("a message written while the work ran sits between the events around it", a
   const positions = [
     html.indexOf("Work started."),
     html.indexOf("and one more thing"),
-    html.indexOf("Finished, and the work was taken in."),
+    html.indexOf("Finished."),
   ];
   expect(positions.every((at) => at > -1)).toBe(true);
   expect(positions).toEqual([...positions].toSorted((left, right) => left - right));

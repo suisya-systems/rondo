@@ -582,8 +582,12 @@ export interface ChecksRequest {
  * looking, so a check registered a minute after the push is still read.
  */
 export type ChecksReading =
-  /** Every check that reported has passed. `counted` is how many did. */
-  | { readonly kind: "green"; readonly counted: number }
+  /**
+   * Nothing failed and nothing is still going. `counted` is how many checks
+   * reported, and `skipped` how many of those were `skipped` or `neutral`:
+   * counted as not failing, and never said to have passed (rondo#376).
+   */
+  | { readonly kind: "green"; readonly counted: number; readonly skipped: number }
   /** At least one reported a failure; `failed` names them. */
   | { readonly kind: "red"; readonly failed: readonly string[] }
   /** Nothing failed and something has not finished; `pending` names those. */
@@ -664,6 +668,7 @@ export function joinChecks(status: string, checkRuns: string): ChecksReading {
   const failed: string[] = [];
   const pending: string[] = [];
   let counted = 0;
+  let skipped = 0;
   const entries = readEntries(status, checkRuns);
   if (typeof entries === "string") {
     return { kind: "undetermined", reason: entries };
@@ -674,6 +679,8 @@ export function joinChecks(status: string, checkRuns: string): ChecksReading {
       failed.push(entry.name);
     } else if (entry.state === "pending") {
       pending.push(entry.name);
+    } else if (entry.state === "skipped") {
+      skipped += 1;
     }
   }
   if (counted === 0) {
@@ -682,13 +689,13 @@ export function joinChecks(status: string, checkRuns: string): ChecksReading {
   if (failed.length > 0) {
     return { kind: "red", failed };
   }
-  return pending.length > 0 ? { kind: "pending", pending } : { kind: "green", counted };
+  return pending.length > 0 ? { kind: "pending", pending } : { kind: "green", counted, skipped };
 }
 
 /** One check that reported, named as the forge named it. */
 interface CheckEntry {
   readonly name: string;
-  readonly state: "passed" | "failed" | "pending";
+  readonly state: "passed" | "skipped" | "failed" | "pending";
 }
 
 /**
@@ -778,15 +785,18 @@ function statusState(state: string | null): CheckEntry["state"] {
  * What a completed check run's conclusion comes to.
  *
  * `neutral` and `skipped` are a check that ran and asked for nothing, so they
- * are passes. Everything else -- a failure, a timeout, a cancellation, one
+ * do not fail the reading -- but they are kept apart from a pass, because the
+ * report counts them separately rather than saying every check passed
+ * (rondo#376). Everything else -- a failure, a timeout, a cancellation, one
  * asking for an action, one the forge called stale -- is something a person has
  * to look at, and an unknown conclusion is one of those rather than a pass: a
  * conclusion this does not know the name of must not read as green.
  */
 function conclusionState(conclusion: string | null): CheckEntry["state"] {
-  return conclusion === "success" || conclusion === "neutral" || conclusion === "skipped"
-    ? "passed"
-    : "failed";
+  if (conclusion === "neutral" || conclusion === "skipped") {
+    return "skipped";
+  }
+  return conclusion === "success" ? "passed" : "failed";
 }
 
 function arrayAt(json: unknown, key: string): readonly unknown[] | null {

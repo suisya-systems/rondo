@@ -107,10 +107,10 @@
   white-space: nowrap;
 }
 
-/* The five steps, across the card: the order is the order they happen in. */
+/* The six steps, across the card: the order is the order they happen in (the pull request is its own step, rondo#376). */
 .side-steps {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 6px;
   margin-top: 10px;
   list-style: none;

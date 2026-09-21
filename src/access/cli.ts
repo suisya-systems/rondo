@@ -26,7 +26,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
-import type { Basis } from "../advisory/proposal.js";
+import { type Basis, readSplitPayload } from "../advisory/proposal.js";
 import {
   ackGate,
   answerGate,
@@ -1582,7 +1582,14 @@ export async function main(
         publishing:
           sender === null || "refusal" in sender
             ? null
-            : async (row) => await publishingForPage(environment, store, asked, row),
+            : async (row) =>
+                await publishingForPage(
+                  environment,
+                  store,
+                  asked,
+                  row,
+                  openAdvisoryRecord(opened.path),
+                ),
         // Read for the same reason and on the same condition: the material is
         // what a person is shown before they press, so it is drawn exactly
         // where the button is (D-0029 rule 2 and D-0041 rule 6).
@@ -1700,7 +1707,7 @@ export async function main(
         continuo,
       );
     default:
-      return await commandPublish(parsed, environment, store, continuo, ports);
+      return await commandPublish(parsed, environment, store, opened.path, continuo, ports);
   }
 }
 
@@ -5907,6 +5914,14 @@ export async function publishPlanFor(
   asked: PublishAsked,
   environment: Readonly<Record<string, string | undefined>>,
   store: Pick<IterationStore, "read" | "readingsFor" | "verificationClaimsFor">,
+  /**
+   * Where the request's own words are read from, for the issue its pull
+   * request closes (rondo#376). Null leaves the body naming no issue, which is
+   * what it said before. **Every caller that previews and every caller that
+   * presses passes the same one**, or the preview's digest would differ from
+   * the press's.
+   */
+  thread: Pick<AdvisoryRecord, "threadMessages" | "scopesFor" | "readProposal"> | null = null,
 ): Promise<PublishPlanned> {
   if (record.status !== "closed") {
     return {
@@ -6085,6 +6100,9 @@ export async function publishPlanFor(
     predecessor:
       predecessorRead !== null && predecessorRead.kind === "read" ? predecessorRead.record : null,
     verificationClaims: await store.verificationClaimsFor(record.id),
+    requestWords: await requestWordsOf(thread, record.requestMessageId),
+    plansDrafted: await plansDraftedFor(thread, record.requestMessageId),
+    forge: { host, repo },
   });
 
   const readings = await store.readingsFor(record.id);
@@ -6176,6 +6194,57 @@ function publishShownDigest(plan: PublishPlan): string {
 }
 
 /**
+ * The message a lap was asked for in, as the person wrote it (rondo#376), or
+ * null where there is no thread to read or it would not read.
+ */
+async function requestWordsOf(
+  thread: Pick<AdvisoryRecord, "threadMessages"> | null,
+  messageId: string,
+): Promise<string | null> {
+  if (thread === null) {
+    return null;
+  }
+  const read = await thread.threadMessages();
+  return read.kind === "read"
+    ? (read.messages.find((message) => message.messageId === messageId)?.body ?? null)
+    : null;
+}
+
+/**
+ * How many plans the request was split into, as its approved scopes' drafted
+ * proposals say (rondo#376, Codex round 2): more than one, and no single lap's
+ * pull request is the whole of what the request asked for. One where nothing
+ * says otherwise -- a lap started by hand, or a proposal that will not read.
+ */
+async function plansDraftedFor(
+  thread: Pick<AdvisoryRecord, "scopesFor" | "readProposal"> | null,
+  requestMessageId: string,
+): Promise<number> {
+  if (thread === null) {
+    return 1;
+  }
+  let most = 1;
+  for (const scope of await thread.scopesFor(requestMessageId)) {
+    for (const basis of scope.bases) {
+      const cited =
+        typeof basis === "object" && basis !== null && !Array.isArray(basis)
+          ? (basis as JsonRecord)
+          : null;
+      const proposalId = cited?.["form"] === "proposal" ? cited["proposalId"] : undefined;
+      if (typeof proposalId !== "string") {
+        continue;
+      }
+      const read = await thread.readProposal(proposalId);
+      const split = read.kind === "read" ? readSplitPayload(read.proposal.payload) : null;
+      if (split?.kind === "split") {
+        most = Math.max(most, split.payload.plans.length);
+      }
+    }
+  }
+  return most;
+}
+
+/**
  * The dry-run as the page shows it, for one closed lap (rondo#233 S5).
  *
  * The reading half of the publish screen: the same {@link publishPlanFor} the
@@ -6186,8 +6255,9 @@ export async function publishingForPage(
   store: Pick<IterationStore, "read" | "readingsFor" | "verificationClaimsFor">,
   asked: PublishAsked,
   record: IterationRecord,
+  thread: Pick<AdvisoryRecord, "threadMessages" | "scopesFor" | "readProposal"> | null = null,
 ): Promise<PublishShown> {
-  const planned = await publishPlanFor(record, asked, environment, store);
+  const planned = await publishPlanFor(record, asked, environment, store, thread);
   if (planned.kind === "refused") {
     return { kind: "refused", block: planned.block };
   }
@@ -6334,7 +6404,13 @@ async function publishPage(
     };
   }
   const record = found.record;
-  const planned = await publishPlanFor(record, asked, environment, store);
+  const planned = await publishPlanFor(
+    record,
+    asked,
+    environment,
+    store,
+    openAdvisoryRecord(storePath),
+  );
   if (planned.kind === "refused") {
     const block = planned.block;
     return {
@@ -6484,6 +6560,7 @@ async function commandPublish(
   parsed: ParsedCommand,
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
+  storePath: string,
   continuo: VerifiedContinuo,
   ports: ReportingPorts,
 ): Promise<number> {
@@ -6534,6 +6611,7 @@ async function commandPublish(
     },
     environment,
     store,
+    openAdvisoryRecord(storePath),
   );
   if (planned.kind === "refused") {
     return refuse(planned.reason);

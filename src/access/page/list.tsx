@@ -39,12 +39,24 @@ function headingFor(wording: Chrome, cut: DayCut): string {
 }
 
 /** A row's one sentence of state, from the set in force. */
-function stateFor(wording: Chrome, state: RowState): string {
+function stateFor(wording: Chrome, row: RequestRow): string {
+  const state: RowState = row.state;
   switch (state) {
     case "waitingOnYou":
       return wording.rowWaitingOnYou;
     case "running":
       return wording.rowRunning;
+    case "approved": {
+      // **What became of it after the approval** (rondo#376): published or
+      // not, and the checks' one word, so the list answers without the forge.
+      const published = row.published ?? null;
+      return published === null
+        ? wording.rowApproved
+        : wording.rowPublished(
+            wording.pullRequest(published.number),
+            wording.checksWord(published.checks),
+          );
+    }
     case "finished":
       return wording.rowFinished;
     case "stopped":
@@ -92,6 +104,10 @@ function Row({
   readonly agoOf: (atMs: number) => string;
 }) {
   const waiting = row.state === "waitingOnYou";
+  // Green or red where the checks have said so (D-0082 rule 2), and the
+  // neutral dot otherwise: the colour is the whole of what it says.
+  const checks = row.published?.checks.kind;
+  const tone = checks === "green" ? " list-dot-ok" : checks === "red" ? " list-dot-fail" : "";
   return (
     <a className={`list-row${waiting ? " list-row-mine" : ""}`} href={hrefOf(row.messageId)}>
       {/*
@@ -99,14 +115,14 @@ function Row({
        * carries a neutral one, so the column stays aligned and the colour is
        * the whole of what it says (D-0082 rule 2).
        */}
-      <i className={`list-dot${waiting ? " list-dot-wait" : ""}`} aria-hidden="true" />
+      <i className={`list-dot${waiting ? " list-dot-wait" : tone}`} aria-hidden="true" />
       <div className="list-row-body">
         {/* The person's own words. `lang=""` because rondo does not know what
             language they wrote in (D-0055 rule 8). */}
         <b lang="">{row.title}</b>
         <p>
           {row.repository === null ? null : <span className="list-repo">{row.repository}</span>}
-          {stateFor(wording, row.state)}
+          {stateFor(wording, row)}
         </p>
       </div>
       <time>{agoOf(row.atMs)}</time>

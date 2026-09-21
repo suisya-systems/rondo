@@ -27,6 +27,7 @@ import {
   planField,
 } from "../store/records.js";
 import { fileCounts, type LapWorkInspection } from "./forge.js";
+import { type NamedIssue, namedIssues } from "./issue-read.js";
 import { LIST_LIMIT } from "./review.js";
 
 /**
@@ -122,6 +123,19 @@ export interface PullRequestTextInput {
    * they said nothing, which is what it means and not more than that.
    */
   readonly verificationClaims: readonly OperatorVerificationClaim[];
+  /**
+   * The request's own words -- the message the person wrote, not the lap's
+   * prompt -- or null where the thread was not read (rondo#376). Read for the
+   * issues it names, which is what {@link issueLines} closes or refers to.
+   */
+  readonly requestWords?: string | null;
+  /**
+   * How many plans the request was split into (Codex round 2). Past one, this
+   * pull request is a part of what was asked for, and closes nothing.
+   */
+  readonly plansDrafted?: number;
+  /** The forge host and `OWNER/NAME` the pull request is opened in, to tell an issue here from one elsewhere. */
+  readonly forge?: { readonly host: string; readonly repo: string };
 }
 
 export interface PullRequestText {
@@ -324,10 +338,87 @@ function composeBody(input: PullRequestTextInput, withRequest: boolean): string 
           "",
         ]),
   );
+  lines.push(...issueLines(input));
   lines.push(
     "This pull request was opened by `rondo publish`, which an operator ran. Merging it is not.",
   );
   return lines.join("\n");
+}
+
+/**
+ * The issue the request named, as the forge's own keyword (rondo#376, lap 11's
+ * N-52: #291 stayed open after the pull request made from it was merged).
+ *
+ * **Read off the person's own words and nothing else.** The lap's prompt can
+ * quote an issue's body, and an issue body names other issues; closing one of
+ * those would be rondo acting on something nobody asked it to finish. The
+ * request message is what the person wrote (`D-0078`), so an issue named there
+ * is the issue the work was asked for.
+ *
+ * **`Closes` only where that is unambiguous**: exactly one issue, in the
+ * repository this pull request is opened in. A merge then closes it, which is
+ * the forge doing what the person's merge says -- rondo does not merge. More
+ * than one, or one elsewhere, is linked with `Refs` and closed by nobody but
+ * the person: rondo cannot tell which of several the work finishes. A pull
+ * request the words point at is not an issue and is not named.
+ */
+function issueLines(input: PullRequestTextInput): readonly string[] {
+  const words = input.requestWords ?? null;
+  if (words === null) {
+    return [];
+  }
+  const forge = input.forge;
+  const here = (issue: NamedIssue) =>
+    forge !== undefined &&
+    (issue.repo === null || issue.repo.toLowerCase() === forge.repo.toLowerCase()) &&
+    (issue.host === null || issue.host.toLowerCase() === forge.host.toLowerCase());
+  // **One issue per issue, however many ways it was written** (Codex): `#291`
+  // and its address are the same issue, and counting them as two would say
+  // `Refs` where the request named exactly one.
+  const identity = (issue: NamedIssue) =>
+    here(issue)
+      ? `#${String(issue.number)}`
+      : `${issue.host ?? ""}/${issue.repo ?? ""}#${String(issue.number)}`.toLowerCase();
+  const issues = [
+    ...new Map(
+      namedIssues(words)
+        .filter((issue) => !/\/pull\/\d+/.test(issue.named))
+        .map((issue) => [identity(issue), issue] as const),
+    ).values(),
+  ];
+  const only = issues.length === 1 ? issues[0] : undefined;
+  const part = (input.plansDrafted ?? 1) > 1;
+  if (only !== undefined && here(only) && !part) {
+    return [
+      `Closes #${String(only.number)}`,
+      "",
+      "The request named this issue, so merging this pull request closes it.",
+      "",
+    ];
+  }
+  if (issues.length === 0) {
+    return [];
+  }
+  // Another host's issue keeps its address: `OWNER/NAME#N` is resolved on the
+  // pull request's own host, where it would be some other issue (Codex).
+  const named = issues.map((issue) =>
+    here(issue) || issue.repo === null
+      ? `#${String(issue.number)}`
+      : issue.host !== null &&
+          (forge === undefined || issue.host.toLowerCase() !== forge.host.toLowerCase())
+        ? issue.named
+        : `${issue.repo}#${String(issue.number)}`,
+  );
+  return [
+    `Refs ${named.join(", ")}`,
+    "",
+    part
+      ? `The request was split into ${String(input.plansDrafted)} plans and this is one of them, ` +
+        "so it closes nothing: whether the issue is finished is for whoever merges the last to say."
+      : "The request named these, and rondo closes none of them: which of them this work " +
+        "finishes is for whoever merges it to say.",
+    "",
+  ];
 }
 
 /**

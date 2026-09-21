@@ -1009,9 +1009,21 @@ function checksBody(
     "rondo read this and did nothing else with the pull request: it does not merge, comment on or " +
     "retry one.";
   if (reading.kind === "green") {
+    // **A skipped check is not said to have passed** (rondo#376): the forge's
+    // `skipped` and `neutral` do not fail the reading, and the sentence says
+    // how many there were rather than folding them into "every one passed".
+    // The page reads the two figures back off this sentence
+    // (`page-logic/result.ts`), so its shape is pinned by a test.
+    // Both figures every time, zero included: a report written before this
+    // said "every one of them passed" over skipped checks too, so that phrase
+    // is left meaning *none failed* and nothing more.
+    const tally =
+      `${String(reading.counted - reading.skipped)} passed and ` +
+      `${String(reading.skipped)} ${reading.skipped === 1 ? "was" : "were"} skipped, ` +
+      "and none failed";
     return (
       `Lap '${iterationId}' is green: the forge reported ${String(reading.counted)} check(s) ` +
-      `${on}, and every one of them passed. ${nothingElse}`
+      `${on}, and ${tally}. ${nothingElse}`
     );
   }
   if (reading.kind === "red") {

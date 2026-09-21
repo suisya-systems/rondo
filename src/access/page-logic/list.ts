@@ -20,9 +20,23 @@
  */
 import type { IterationRecord } from "../../store/records.js";
 import { byDay, type DayCut } from "./days.js";
+import type { LapResult } from "./result.js";
+import { approvedAt } from "./thread-events.js";
 
-/** What a request's row says about its state, as a name the wording set says. */
-export type RowState = "waitingOnYou" | "running" | "finished" | "stopped" | "notStarted";
+/**
+ * What a request's row says about its state, as a name the wording set says.
+ *
+ * `approved` is a gate answered yes (rondo#376), apart from `finished`: what a
+ * row says next is whether it was published and what its checks came to, and
+ * a row that read *finished* there said nothing about either.
+ */
+export type RowState =
+  | "waitingOnYou"
+  | "running"
+  | "approved"
+  | "finished"
+  | "stopped"
+  | "notStarted";
 
 /** One request, as the list draws it. */
 export interface RequestRow {
@@ -33,6 +47,8 @@ export interface RequestRow {
   /** The repository this request's work is in (D-0081), or null where no lap names one. */
   readonly repository: string | null;
   readonly state: RowState;
+  /** Where the row is `approved`: what its publish came to, or null before one. */
+  readonly published?: LapResult | null;
   /** When the request last moved, which is what the day cut reads. */
   readonly atMs: number;
 }
@@ -78,7 +94,7 @@ export function rowStateOf(
   if (!isTerminal(record)) {
     return "running";
   }
-  return record.status === "closed" ? "finished" : "stopped";
+  return record.status !== "closed" ? "stopped" : approvedAt(record) ? "approved" : "finished";
 }
 
 /**

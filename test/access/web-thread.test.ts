@@ -168,8 +168,11 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   // D-0083 there is no page-wide place a lap id leads to, so it is named.
   expect(ask).toContain('href="#request-a"');
   expect(ask).toContain("you: Please look at the flaky test.");
-  expect(ask).toMatch(/<span class="basis" title="iteration i-0001">/);
-  expect(ask).toMatch(/<span class="basis" title="continuo run rondo-i-0001">/);
+  // Named by what it is and never by its id (D-0076, rondo#376): lap 11 had a
+  // proposal's store id on the screen.
+  expect(ask).toMatch(/<span class="basis" title="the work on this request">/);
+  expect(ask).toMatch(/<span class="basis" title="the run of the work">/);
+  expect(ask).not.toContain("i-0001");
   // A report replies to the request, which is how every reply reads by
   // default, so it names no parent line of its own.
   expect(report).not.toContain("in reply to");

@@ -51,7 +51,7 @@ test("a run that is not finished is pending whatever conclusion it carries", () 
   ).toEqual({ kind: "pending", pending: ["build"] });
 });
 
-test("neutral and skipped are checks that ran and asked for nothing", () => {
+test("neutral and skipped are checks that ran and asked for nothing, counted apart from a pass", () => {
   expect(
     joinChecks(
       status({ context: "ci/lint", state: "success" }),
@@ -60,7 +60,7 @@ test("neutral and skipped are checks that ran and asked for nothing", () => {
         { name: "unchanged", status: "completed", conclusion: "skipped" },
       ),
     ),
-  ).toEqual({ kind: "green", counted: 3 });
+  ).toEqual({ kind: "green", counted: 3, skipped: 2 });
 });
 
 test("a conclusion this does not know the name of is never green", () => {
@@ -203,7 +203,7 @@ test("a published lap whose line still holds is read, and its answer is one mess
 
 test("a lap that was never published is not asked about", async () => {
   const over = await hostOver({
-    reading: { kind: "green", counted: 1 },
+    reading: { kind: "green", counted: 1, skipped: 0 },
     messageIds: ["request-1"],
   });
   expect(over).toMatchObject({ written: [], asked: 0 });
@@ -211,7 +211,7 @@ test("a lap that was never published is not asked about", async () => {
 
 test("a lap with an answer already is not asked again", async () => {
   const over = await hostOver({
-    reading: { kind: "green", counted: 1 },
+    reading: { kind: "green", counted: 1, skipped: 0 },
     messageIds: ["request-1", "report-published-lap-1", "report-checks-lap-1-red"],
   });
   expect(over).toMatchObject({ written: [], asked: 0 });
@@ -219,7 +219,7 @@ test("a lap with an answer already is not asked again", async () => {
 
 test("a line the ledger has released is out of the window", async () => {
   const over = await hostOver({
-    reading: { kind: "green", counted: 1 },
+    reading: { kind: "green", counted: 1, skipped: 0 },
     messageIds: ["request-1", "report-published-lap-1"],
     releasedBy: "rondo",
   });
