@@ -211,3 +211,55 @@ test("an approved draft of rondo's is reached without its decision, so a newer d
   expect(html).toContain('href="/?scope=req-1&amp;lang=en"');
   expect(html).not.toContain("decision=sd-draft");
 });
+
+test("a request naming a repository rondo does not work in says so, and its one step is adding it (rondo#383)", async () => {
+  const world = fresh();
+  await openRequest(world, "req-1", "Do owner/other#12.");
+  const ports = {
+    ...portsOver(world),
+    addable: true,
+    repositoryFor: async () =>
+      await Promise.resolve({
+        work: { kind: "unheld" as const, repo: "owner/other", named: "owner/other#12" },
+        unbuilt: [],
+      }),
+  };
+  const html = await operatorPage(ports, "t", threadOf("req-1"));
+  drawnOnceOnTop(html, "add-repository-req-1");
+  expect(classOf(html, "add-repository-req-1")).toBe(NEXT);
+  // Up to the first apostrophe, which the renderer escapes its own way.
+  const said = EN.nextStepAddRepository("owner/other#12", "owner/other");
+  expect(html).toContain(said.slice(0, said.indexOf("'")));
+  expect(html).toContain('action="/add-repository?lang=en"');
+  expect(html).toContain('name="repository" value="owner/other"');
+  // No scope is offered for work in a repository rondo does not hold.
+  expect(html).not.toContain('id="scope-req-1"');
+
+  // A page that cannot write still says why nothing is drafted; only the
+  // button needs a writer.
+  for (const [readOnly, token] of [
+    [{ ...ports, addable: false }, "t"],
+    [ports, null],
+  ] as const) {
+    const said = await operatorPage(readOnly, token, threadOf("req-1"));
+    expect(said).toContain(EN.nextStepHeading);
+    expect(said).toContain("rondo does not work in owner/other yet");
+    expect(said).not.toContain('id="add-repository-req-1"');
+    expect(said).not.toContain('action="/add-repository');
+  }
+
+  // Added, and rondo could not tell how it builds: said where the work is.
+  const unbuilt = {
+    ...portsOver(world),
+    addable: true,
+    repositoryFor: async () =>
+      await Promise.resolve({
+        work: { kind: "held" as const, repos: ["owner/other"] },
+        unbuilt: ["owner/other"],
+      }),
+  };
+  const after = await operatorPage(unbuilt, "t", threadOf("req-1"));
+  expect(after).not.toContain('id="add-repository-req-1"');
+  expect(after).toContain(EN.repositoryUnbuilt("owner/other"));
+  expect(classOf(after, "scope-req-1")).toBe(NEXT);
+});

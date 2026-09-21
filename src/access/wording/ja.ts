@@ -946,6 +946,40 @@ export const JA: Chrome = Object.freeze({
   nextStepPublish:
     "作業は承認済みです。プルリクエストを作ると、ブランチを push してレビューに出します。" +
     "マージはしません。",
+  nextStepAddRepository: (named, repo) =>
+    `この依頼は ${named} を名指ししていますが、rondo はまだ ${repo} で作業していないので、` +
+    `何も下書きしていません。追加すると、${repo} を rondo のほかのリポジトリと同じ場所に` +
+    `このコンピュータへコピーし、プルリクエストは ${repo} に出します。`,
+  addRepositoryAction: "このリポジトリを追加する",
+  addRepositoryBack: "依頼に戻る",
+  repositoryUnbuilt: (repo) =>
+    `rondo には ${repo} のビルド方法が分からなかったので、作業者はファイルの変更とコミットは` +
+    "できますが、ビルドやテストは実行できません。",
+  addRepositoryRefusedNoApprover:
+    "何も追加していません。この端末の rondo はまだあなたが誰かを知らないので、ここでは" +
+    "あなたとして何も決められません。",
+  addRepositoryRefusedPress:
+    "何も追加していません。これは人がこのページのボタンを押して行うもので、スクリプトからは" +
+    "できません。",
+  addRepositoryRefusedForm:
+    "何も追加していません。そのフォームはこのページのものではありません。読み込み直してから" +
+    "押してください。",
+  addRepositoryRefusedInstall:
+    "何も追加していません。このコンピュータの rondo は、あなたとして GitHub に届きません。" +
+    "見られるのは、ここに rondo を入れた人です。直ったら、ボタンはそのまま残っているので" +
+    "もう一度押せます。",
+  addRepositoryRefusedUnseen:
+    "何も追加していません。GitHub にそのリポジトリが無いか、あなたのアカウントからは見えません。" +
+    "依頼に書いた名前が違っていれば、返信で正しい名前を伝えてください。",
+  addRepositoryRefusedFailed:
+    "何も追加していません。今回はリポジトリをコピーできませんでした。もう一度押しても" +
+    "大丈夫です。止まったところから続けます。",
+  addRepositoryRefusedChanged:
+    "何も追加していません。この依頼はもう、rondo が作業していないリポジトリを名指ししていません。" +
+    "戻っていまの状態を確かめてください。",
+  addRepositoryRefusedNoSetup:
+    "何も追加していません。このコンピュータの rondo の設定が、リポジトリを置く場所をまだ" +
+    "rondo に渡していません。見られるのは、ここに rondo を入れた人です。",
   approveBusy: "承認を記録しています…",
   startBusy: "作業を始めています…",
   reviseBusy: "変更を依頼しています…",

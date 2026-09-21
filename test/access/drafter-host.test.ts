@@ -408,3 +408,35 @@ test("a run whose material could not be read is tried again on the next scan, no
   await host.idle();
   expect(handed).toHaveLength(1);
 });
+
+test("a request naming a repository rondo does not work in is not drafted until it is added (rondo#383)", async () => {
+  const { w, templateDigest, typeDigest } = await requestWithPlan();
+  let unheld = true;
+  const handed: string[] = [];
+  let n = 0;
+  const host = drafterHost({
+    store: w.store,
+    record: w.record,
+    now: () => 10_000,
+    language: null,
+    log: () => undefined,
+    mintId: (kind) => {
+      n += 1;
+      return `${kind}-${String(n)}`;
+    },
+    runDrafter: async (_row, document) => {
+      handed.push(document);
+      return await Promise.resolve(split(templateDigest, typeDigest));
+    },
+    awaitsRepository: async (id) => await Promise.resolve(id === "r1" && unheld),
+  });
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(0);
+  expect(await drafterMessages(w)).toEqual([]);
+  // Added from the page: the same request is due on the next scan.
+  unheld = false;
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+});

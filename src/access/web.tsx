@@ -1798,8 +1798,39 @@ async function threadActs(
   laps: readonly LapUnderRequest[],
   threads: Threads,
 ) {
+  // **Where the work would run, before a scope is drafted** (rondo#383,
+  // D-0090 rule 1): a request naming a repository rondo does not work in is
+  // not drafted, and its next step is adding that repository. Said on a page
+  // that cannot write too, since the drafter is held either way; only the
+  // button needs a writer. A reckoning that will not read says nothing rather
+  // than taking the thread down.
+  const where =
+    ports.repositoryFor === undefined
+      ? null
+      : await ports.repositoryFor(requestMessageId).catch(() => null);
+  const unheld = where?.work.kind === "unheld" ? where.work : null;
+  const unheldCard = (work: { readonly repo: string; readonly named: string }) => (
+    <section class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3">
+      <h2 class="text-meta leading-5 font-semibold text-wait-ink">{wording.nextStepHeading}</h2>
+      <p class="mt-1 text-body leading-6">{wording.nextStepAddRepository(work.named, work.repo)}</p>
+      {token === null || ports.addable !== true ? null : (
+        <form method="post" action={`/add-repository?lang=${encodeURIComponent(wording.lang)}`}>
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="request" value={requestMessageId} />
+          <input type="hidden" name="repository" value={work.repo} />
+          <button
+            type="submit"
+            id={`add-repository-${requestMessageId}`}
+            class={`${PRIMARY} mt-3 h-10 justify-center px-6 text-sm`}
+          >
+            {wording.addRepositoryAction}
+          </button>
+        </form>
+      )}
+    </section>
+  );
   if (token === null) {
-    return null;
+    return unheld === null ? null : { next: unheldCard(unheld), acts: <span /> };
   }
   // **Every lap that could still be published, and not the first of them**
   // (Codex): `approvedForPublication` reads a closed row with an approved
@@ -1827,7 +1858,9 @@ async function threadActs(
   // read as a choice with no answer.
   const nextPublish = waitedOn ? null : (publishable.at(-1) ?? null);
   const drafted =
-    waitedOn || laps.length > 0 ? null : await draftedStanding(ports, requestMessageId);
+    waitedOn || laps.length > 0 || unheld !== null
+      ? null
+      : await draftedStanding(ports, requestMessageId);
   // **A scope the person set and approved themselves stands too** (Codex):
   // `draftedStanding` follows rondo's drafts only, and saying *nothing has
   // been set* over an approval already given would send them to approve again.
@@ -1872,41 +1905,51 @@ async function threadActs(
     </section>
   );
   const next =
-    nextPublish !== null
-      ? card(
-          `publish-${nextPublish.record.id}`,
-          viewHref({ kind: "publish", iterationId: nextPublish.record.id }, wording.lang),
-          wording.nextStepPublish,
-          tryName(nextPublish),
-        )
-      : standing === null
-        ? null
-        : standing.kind === "decided" || standing.kind === "own"
-          ? card(
-              `scope-${requestMessageId}`,
-              // A drafted approval's screen is reached without its decision,
-              // which is how that screen also offers a newer draft beside it
-              // (Codex); the person's own approval is named, since that
-              // screen finds only rondo's drafts by itself.
-              scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
-              wording.nextStepStart,
-              wording.nextStepStartAction,
-            )
-          : card(
-              `scope-${requestMessageId}`,
-              scopeHref(null),
-              standing.kind === "drafted" ? wording.nextStepDrafted : wording.nextStepScope,
-              wording.scopeAction,
-            );
+    unheld !== null
+      ? unheldCard(unheld)
+      : nextPublish !== null
+        ? card(
+            `publish-${nextPublish.record.id}`,
+            viewHref({ kind: "publish", iterationId: nextPublish.record.id }, wording.lang),
+            wording.nextStepPublish,
+            tryName(nextPublish),
+          )
+        : standing === null
+          ? null
+          : standing.kind === "decided" || standing.kind === "own"
+            ? card(
+                `scope-${requestMessageId}`,
+                // A drafted approval's screen is reached without its decision,
+                // which is how that screen also offers a newer draft beside it
+                // (Codex); the person's own approval is named, since that
+                // screen finds only rondo's drafts by itself.
+                scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
+                wording.nextStepStart,
+                wording.nextStepStartAction,
+              )
+            : card(
+                `scope-${requestMessageId}`,
+                scopeHref(null),
+                standing.kind === "drafted" ? wording.nextStepDrafted : wording.nextStepScope,
+                wording.scopeAction,
+              );
   const others = publishable.filter((lap) => lap !== nextPublish);
+  // A repository added from the page whose build rondo could not tell: said
+  // where the work is, since it bounds what the worker can check (D-0090).
+  const unbuilt = where?.work.kind === "held" ? where.unbuilt : [];
   return {
     next,
     acts: (
       <p class="thread-acts">
+        {unbuilt.map((repo) => (
+          <span class="block text-meta leading-5 text-muted-foreground">
+            {wording.repositoryUnbuilt(repo)}
+          </span>
+        ))}
         {/* Outlined: another scope for a request that already has work is a
             way to another screen, and drawn filled it outweighed the box a
             person is actually being waited on by. */}
-        {standing !== null ? null : (
+        {standing !== null || unheld !== null ? null : (
           <a
             id={`scope-${requestMessageId}`}
             href={scopeHref(null)}

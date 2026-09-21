@@ -1078,6 +1078,29 @@ export interface Chrome extends PageWords {
   readonly nextStepStart: string;
   readonly nextStepStartAction: string;
   readonly nextStepPublish: string;
+  /**
+   * A request that names a repository rondo does not work in yet (rondo#383,
+   * D-0090): what was named, that nothing was drafted, and what adding does.
+   */
+  readonly nextStepAddRepository: (named: string, repo: string) => string;
+  /** The one confirmation adding a repository takes. */
+  readonly addRepositoryAction: string;
+  readonly addRepositoryBack: string;
+  /** A repository whose worker can run no build or test, because rondo could not tell how. */
+  readonly repositoryUnbuilt: (repo: string) => string;
+  readonly addRepositoryRefusedNoApprover: string;
+  readonly addRepositoryRefusedPress: string;
+  readonly addRepositoryRefusedForm: string;
+  /** No `gh`, or not signed in: this computer's setup, so whoever installed rondo. */
+  readonly addRepositoryRefusedInstall: string;
+  /** The forge has no such repository, or this account cannot see it. */
+  readonly addRepositoryRefusedUnseen: string;
+  /** Anything else: the network, a timeout, a copy rondo could not read. */
+  readonly addRepositoryRefusedFailed: string;
+  /** Setup never recorded a plan to add one beside. */
+  readonly addRepositoryRefusedNoSetup: string;
+  /** The request no longer names that repository, or rondo already works in it. */
+  readonly addRepositoryRefusedChanged: string;
   readonly approveBusy: string;
   readonly startBusy: string;
   readonly reviseBusy: string;

@@ -20,7 +20,7 @@ import type { IterationRecord, ThreadMessageDraft } from "../../store/records.js
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
 import type { LapWorkInspection } from "../forge.js";
 import type { InboxReadPorts } from "../inbox.js";
-import type { NamedIssue } from "../issue-read.js";
+import type { NamedIssue, WorkRepository } from "../issue-read.js";
 import type { Chrome } from "../wording.js";
 
 /**
@@ -140,6 +140,19 @@ export interface WebPorts extends InboxReadPorts {
   readonly issuesUnread?: (
     messages: readonly ThreadMessageDraft[],
   ) => Promise<ReadonlyMap<string, readonly NamedIssue[]>>;
+  /**
+   * Which repository a request's work runs in (rondo#383, D-0090), with the
+   * held ones whose worker can run no build or test (`requestRepository`), or
+   * absent where nothing reckons it, and then the thread says nothing of it.
+   */
+  readonly repositoryFor?: (
+    requestMessageId: string,
+  ) => Promise<{ readonly work: WorkRepository; readonly unbuilt: readonly string[] }>;
+  /**
+   * Whether the host holds the add-repository press: true exactly where its
+   * port is not null, as {@link releasable} is. Absent is false.
+   */
+  readonly addable?: boolean;
 }
 
 /**

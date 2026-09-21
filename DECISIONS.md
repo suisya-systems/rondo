@@ -17407,6 +17407,12 @@ number.
    `D-0025` rule 5 (the plan reader infers nothing) hold unchanged. **This is the line this entry
    protects**: the fence around a lap is decided once, by the step that also creates it, and never
    re-derived by a long-running process from an environment that can drift under it.
+   > **Annotation (2026-09-22, from D-0090).** Added after this entry was accepted, and **not
+   > additive**, by the answer of rondo's human gate on rondo#383. **The host composes one plan**: a
+   > repository's a request named, added on the person's press. Every host fact in it -- the control
+   > plane, the workspace root, the fence roots, the worker CLI, `node` -- is setup's newest row's
+   > byte for byte; only the repository's own facts are read off the clone. The host still reads
+   > nothing from its environment to compose it. Nothing below is edited.
 2. **Setup discovers what it discovers today** (`claude` on `PATH`, `node`'s real path, the target's
    own base branch) **and is told what it is told today** (the target repository, the fence roots, the
    review criterion, the approver). This entry moves where its output goes, not how it is made.
@@ -19164,6 +19170,11 @@ binding to one repository lives in installation and in publishing, which is wher
    still installation** -- setup is run for it, it is told the repository and the fence roots around
    it, and it records what it composed. What changes is where that lands: the store and host the
    person already has, instead of a second root with a second store, a second port and a second page.
+   > **Annotation (2026-09-22, from D-0090).** Added after this entry was accepted, and **not
+   > additive**, by the answer of rondo's human gate on rondo#383. **A repository a request names is
+   > added from the page**, on the person's one press: rondo clones it and records its plan as setup
+   > records one, composed from setup's newest row and the clone alone. "Adding a repository is still
+   > installation" holds only for a repository no request names. Nothing below is edited.
 3. **A line is one repository's.** `D-0073` rule 3's "of one repository" is untouched, and nothing
    here proposes a lap that spans two. Work that spans repositories is several lines, shown together.
 
@@ -19245,6 +19256,10 @@ binding to one repository lives in installation and in publishing, which is wher
    under one root are setup's record of what it did, and rondo reads neither again (`D-0075` rule
    2.5), so giving them per-repository names is the whole of the change there. It is the building
    change's, and it is why setup's "one repository per root" check can go.
+   > **Annotation (2026-09-22, from D-0090).** Added after this entry was accepted, and **not
+   > additive**. Setup run again is one way to add a repository; the page's press for a repository a
+   > request named (`D-0090` rule 1.4) is the other, and the one a person is sent to. Nothing below
+   > is edited.
 3. **A store whose host still carries `--repo` keeps working.** Under the gate's answer 2 (a), a lap whose
    plan carries no slug publishes against the host's `--repo` as it does today; the flag stays what
    an installer may type and what a pre-entry store uses.
@@ -19345,6 +19360,8 @@ binding to one repository lives in installation and in publishing, which is wher
   this entry protects too.
 - **It does not give the person a way to add a repository from the page.** Adding one is
   installation, and `D-0075`'s residual on that is unchanged.
+  > **Annotation (2026-09-22, from D-0090).** No longer holds, and **not additive**: a repository a
+  > request names is added from the page (`D-0090`). Nothing above is edited.
 - **It does not decide the bounds.** `RONDO_MAX_LIVE` and `RONDO_MAX_OCCUPYING` stay the host's
   (`D-0023`), counted across repositories, and whether a person wants a bound per repository is not
   asked here.
@@ -20584,3 +20601,174 @@ number.
   would then be worth its bounds.
 - **A drafter that keeps restating the definition** in its own words. That would mean the split in
   rule 4 is not holding, and the drafter's instructions need to say that rondo supplies it.
+
+## D-0090 — A request that names an issue in a repository rondo does not work in is not started: the page says so before a scope is drafted, and the person adds that repository from the page with one press, while rondo infers everything else
+
+**Status:** accepted (2026-09-22, rondo's human gate, on rondo#383). The issue's three open decisions
+and four questions the building change raised were put to the gate through the window, and the
+answers are recorded in "What was put to the human gate, and its answer". Supersedes nothing.
+`D-0081` rules 1.2 and 6.2 and its "What this does not do" item on adding from the page, and `D-0075`
+rule 3.1, are changed by the annotations this entry adds (listed at the end). Refs `D-0063`, `D-0064`,
+`D-0071`, `D-0075`, `D-0076`, `D-0078`, `D-0080`, `D-0081`, rondo#376, rondo#383.
+
+**Why an entry is needed.** On a store that registered only rondo, a request saying *"do
+owner/other#12"* read owner/other's issue (`D-0078`: an explicit name is read where it points) and
+then drafted and ran the work **in rondo**, and opened the pull request there: nothing compared the
+issue's repository with the repository the work would run in. Getting it right meant a terminal and
+setup run again (`D-0081` rule 6.2), which is the completion definition's K3 failing at exactly the
+moment a person moves to another repository. Adding a repository from the page is a change to what
+the resident host may do, which `D-0075` rule 3.1 and `D-0081` rule 1.2 had kept as installation, so
+it is decided here rather than built quietly.
+
+### What was measured, and how
+
+On **2026-09-22**, at rondo `47ea4bd`, by reading. Line numbers drift; re-measure the claim.
+
+- **Nothing compares the two repositories.** `namedIssues` (`src/access/issue-read.ts`) reads an
+  address or `OWNER/NAME#N` in the repository it names; the plans a request is drafted from are
+  `heldPlans` / `gatherDrafterMaterial` (`src/access/model-draft/host.ts`), which offered every held
+  plan whatever the request named.
+- **Everything a new repository's plan needs beyond the repository itself is already in setup's
+  newest row.** A setup plan carries the control plane, the workspace root, the fence roots, the
+  worker CLI, `node`, the agent type and the review criterion (`scripts/dogfood-env.sh`, "Plan"); of
+  its fields only `repository`, `base_branch`, `forge_repository`, the catalog layer, `project_name`,
+  `allowed_bash` and the placeholder `prompt` are the target's.
+- **Setup's command vocabulary is npm's.** `allowed_bash` is written for a node/npm target, and
+  setup's own comment says a repository that builds some other way needs a declaration of its own.
+- **The host already runs the operator's own `gh`** for issue reads and pull requests
+  (`src/access/forge.ts`), so a clone through it adds no credential and no program.
+
+### 1. The line
+
+1. **The mismatch is noticed before a scope is drafted.** When a request names an issue (an address
+   or `OWNER/NAME#N`) in a repository no held plan is for, the drafter does not draft it and the
+   page says so in the request's thread, in the person's language, as the request's next step. A
+   bare `#N` keeps `D-0081` rule 3.4, and in such a request it waits until the repository is added:
+   read in one of the held repositories, it would be the wrong issue, recorded for good.
+   **The newest message in the thread that names a place decides**, so a reply is how a person
+   corrects a wrong name (*"I meant owner/right#12"*); a reply naming a second place replaces the
+   first rather than adding to it.
+2. **Where the named repository is held, the request is drafted there.** Only that repository's
+   plans are offered -- to the drafter, on the scope screen, and to a bare `#N`'s read -- so the
+   choice of template is not a choice between repositories any more.
+3. **A request may span two repositories when the person says so.** A repository named as the place
+   of the work -- its forge address, or `OWNER/NAME` written without an issue number -- decides where
+   the work runs: *"owner/a#12 の件を owner/b で直して"* is owner/b's work. Without such words, an
+   issue in one repository and work in another is the mismatch of rule 1, and nothing starts. **A
+   wrong reading errs towards asking**: beside a named issue, anything shaped like `OWNER/NAME` that
+   does not read as a path is taken as a place, because work drafted silently in the issue's
+   repository is the failure this entry exists to stop, and a wrong place only asks.
+4. **Where the named repository is not held, the page offers to add it, and the one press is the
+   whole of what the person does.** Adding clones it and records its plan exactly as setup records
+   one (a `setup_plan` row under the approver's name, `D-0075` rule 2), and the request is then
+   drafted there. **Nothing is recorded unless the clone and the plan both worked.** A failure is
+   said in the person's words as one of three things a person answers differently -- this
+   computer's setup cannot reach GitHub as them (whoever installed rondo is who can look), GitHub has
+   no such repository or their account cannot see it, or anything else -- with rondo's own reason
+   in the fold (`D-0076` rule 4), and the button stays, so pressing again is how it is retried.
+   A page that cannot write -- no approver -- still says why nothing is drafted, without the button.
+   **The press adds only the repository the request names when it is pressed**: the host reads the
+   request again first, so a stale page or a hand-written post adds nothing else. A clone already at
+   the path is used only when its origin is that repository on github.com.
+
+### 2. What rondo infers, and what it asks
+
+1. **Asked: only "add this repository".** Everything below is inferred, and a person is asked a
+   further question only where something that cannot be inferred is actually met, once, and then
+   remembered.
+2. **Where it is cloned:** under the same root as setup's other output,
+   `ROOT/repositories/OWNER/NAME`, where `ROOT` is the directory setup cut its workspaces under.
+3. **Where it publishes:** the repository the issue is in (or the one the person named as the
+   place), recorded on the plan as `forge_repository` (`D-0081` rule 3.2).
+4. **Its branch:** the branch the clone's HEAD is on, as setup takes a target's.
+5. **Everything that is the host's and not the repository's** -- the store, the control plane, the
+   workspace root, the fence roots, the worker CLI, `node`, the agent type and the review criterion --
+   is **setup's newest plan's, copied unchanged**. So the host still chooses no fence root and
+   resolves no program of its own; what it composes is only the repository's own facts, read off
+   the clone.
+6. **What the worker may run is read off the repository.** Its top-level files say which of four
+   families it builds with, and the worker's commands are composed for each found, together with
+   the commands every worker has (`echo`, and the two exact `git switch` moves): **TypeScript and
+   JavaScript** by lockfile (npm, pnpm, yarn, bun), **Go** (`go.mod`), **Python** by lockfile (uv,
+   poetry, otherwise pip into a local `.venv`), and **Rust** (`Cargo.toml`). A repository with
+   several gets each one's. **A repository matching none is still added**, with only the common
+   commands, and the page says under the request that rondo could not tell how it is built, so the
+   worker can change and commit its files but cannot run its build or tests.
+
+### What was put to the human gate, and its answer
+
+All seven were answered through the window on 2026-09-22.
+
+1. **Whether the page may add a repository at all** (the issue's open decision 1). **Answered: yes**
+   -- the owner's words: *"止まるのは正しい、画面から追加するのが本来の姿だと思う"*.
+2. **What adding needs from the person** (open decision 2). **Answered: what can be inferred is
+   rondo's, and is not asked**; the clone goes where the other repositories are, the forge is where
+   the issue is, and the person presses "add this repository" once. Something that cannot be
+   inferred is asked once, when it is actually met, and remembered.
+3. **Whether a request may span two repositories** (open decision 3). **Answered: when the request
+   plainly says so**, in the person's own words naming where the work is done; otherwise the page
+   asks back and nothing starts -- the owner's words: *"指示の中に明確にそういった指示があれば
+   受けても良いのでは？"*.
+4. **What a failed clone or missing authentication does.** Put with a recommendation (nothing
+   recorded; the reason said in three kinds in the person's language; the button kept for a retry)
+   against sending the person to setup in a terminal. **Answered: the recommendation.**
+5. **What the added repository's worker may run.** Put with a recommendation to copy setup's npm
+   list and record the limit. **Answered otherwise**: rondo reads TypeScript, Go, Python and Rust off
+   the repository and composes the list for each -- the owner's words: *"生成AI時代はTS、Go、Python、
+   Rustくらいは対応できないと不味いのでは？"* -- and never asks a person what to allow.
+6. **What a repository none of the four matches does.** Put with a recommendation (added with the
+   common commands only, said on the page) against refusing to add it. **Answered: the
+   recommendation.**
+7. **Which message decides where the work is, when a reply names another place.** Put after a review
+   found that a reply correcting a wrong name (*"I meant owner/right#12"*) left the request waiting
+   on the wrong repository, with a recommendation: the newest message in the thread that names a
+   place decides, replacing rather than adding to an earlier one. **Answered: the recommendation**
+   (rule 1.1).
+
+### What this gives up
+
+- **`D-0075` rule 3.1's "the resident host composes nothing", for one case.** The host now writes a
+  plan. What keeps it from being the configuration layer rule 3.1 refuses: it composes only from
+  setup's own row and the clone, never from its environment, and every host fact in the plan is
+  setup's byte for byte.
+- **A repository matching none of the four families gets a worker that cannot check its own work.**
+  The page says so; a lap there relies on the model reading and the person's review.
+- **A top-level read only.** A monorepo whose manifests sit in subdirectories reads as none of the
+  four and gets the common commands.
+- **Telling a path from a repository by a word list.** `src/access` and `docs/README.md` read as
+  paths; so does a repository whose name ends like a file (`vercel/next.js`), which is then not read
+  as a place.
+
+### What this does not do
+
+- **It does not let rondo discover repositories.** A repository is added only on a person's press,
+  and only one their own request named.
+- **It does not change setup.** `scripts/dogfood-env.sh` still writes its npm list; reading the four
+  families there too is a later change, and a small one, since the reckoning is one pure function.
+- **It does not read an enterprise forge's address as a place.** Only `github.com` addresses name a
+  place, and an issue linked on another host names none, since the clone is by `OWNER/NAME` and
+  would find github.com's repository of that name; `OWNER/NAME` written as such names one on any
+  forge.
+- **It claims nothing where a held plan names no forge repository.** Such a plan could be for the
+  repository named, so a store holding one keeps the drafter's own choice (`D-0081` rule 2.4) rather
+  than offering to add a repository that may already be held.
+
+### Annotations this entry adds
+
+| Entry | What the annotation says | Additive? |
+|---|---|---|
+| `D-0081` rule 1.2 | "Adding a repository is still installation" no longer holds for a repository a request names: the page adds it on the person's press (this entry, rules 1.4 and 2) | **not additive** |
+| `D-0081` rule 6.2 | Setup run again is one way to add a repository; the page's press is the other, and the one a person is sent to | **not additive** |
+| `D-0081` "What this does not do" | "It does not give the person a way to add a repository from the page" no longer holds | **not additive** |
+| `D-0075` rule 3.1 | The host composes one plan: an added repository's, from setup's newest row and the clone alone (this entry, rule 2.5) | **not additive** |
+
+### What would falsify it
+
+- **Work drafted in one repository for an issue in another without the person having said so**:
+  rule 1's reckoning missed a way of naming a repository.
+- **A path or a word read as a repository and offered for adding**: rule 3's reading of `OWNER/NAME`
+  is too wide.
+- **A person asked what to allow, or sent to a terminal, to add a repository**: rule 2 is not
+  holding.
+- **An added repository's plan differing from setup's in anything but the repository's own facts**:
+  rule 2.5 is not holding, and the host is composing a fence.

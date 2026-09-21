@@ -550,6 +550,74 @@ export async function readIssueFromForge(request: IssueReadRequest): Promise<{
   return { issue, comments };
 }
 
+/**
+ * Whether a remote URL names `repo` (`OWNER/NAME`) on github.com, case aside:
+ * the HTTPS and SSH spellings `gh repo clone` writes, and nothing on another
+ * host or on this disk that merely ends in the same two names.
+ */
+export function sameForgeRepository(url: string, repo: string): boolean {
+  const m =
+    /^(?:https:\/\/(?:[^@/\s]+@)?github\.com\/|ssh:\/\/git@github\.com\/|git@github\.com:)([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/i.exec(
+      url,
+    );
+  return m?.[1]?.toLowerCase() === repo.toLowerCase();
+}
+
+/** What cloning a repository for the page did (rondo#383), step by step. */
+export interface RepositoryClone {
+  /** The clone, or null when `into` already held a clone to use. */
+  readonly clone: CommandOutcome | null;
+  /** The branch the clone's HEAD is on; null when the clone did not answer. */
+  readonly branch: CommandOutcome | null;
+  /** The clone's top-level file names, one per line; null likewise. */
+  readonly files: CommandOutcome | null;
+}
+
+/**
+ * Clone `repo` (`OWNER/NAME`) into `into` through the operator's own `gh`, and
+ * read what setup reads of a target: the branch its HEAD is on and, for the
+ * worker's commands, the names of its top-level files (rondo#383, D-0090).
+ *
+ * **A clone already at `into` is used, not cloned again**, so a press that
+ * cloned and then failed to record is repaired by pressing again. Only a
+ * clone whose own top level is `into` counts: a directory inside some other
+ * repository is not one. Anything else at `into` fails the clone and says so.
+ */
+export async function cloneRepository(repo: string, into: string): Promise<RepositoryClone> {
+  const top = await runCommand("git", ["-C", into, "rev-parse", "--show-toplevel"]);
+  const held = top.status === 0 && top.stdout.trim() === into;
+  if (held) {
+    // **Only a clone of `repo`**: a checkout of something else at this path
+    // would be recorded as `repo`'s plan and the work run in the wrong tree.
+    const origin = await runCommand("git", ["-C", into, "remote", "get-url", "origin"]);
+    if (!sameForgeRepository(origin.stdout.trim(), repo)) {
+      return {
+        clone: {
+          ...origin,
+          status: origin.status === 0 ? 1 : origin.status,
+          stderr: `${into} holds a clone whose origin is '${origin.stdout.trim()}', not ${repo}`,
+        },
+        branch: null,
+        files: null,
+      };
+    }
+  }
+  const clone = held ? null : await runCommand("gh", ["repo", "clone", repo, into]);
+  if (clone !== null && (clone.spawnError !== null || clone.status !== 0)) {
+    return { clone, branch: null, files: null };
+  }
+  const branch = await runCommand("git", [
+    "-C",
+    into,
+    "symbolic-ref",
+    "--quiet",
+    "--short",
+    "HEAD",
+  ]);
+  const files = await runCommand("git", ["-C", into, "ls-tree", "--name-only", "HEAD"]);
+  return { clone, branch, files };
+}
+
 /** Which commit's checks to read (rondo#310). */
 export interface ChecksRequest {
   /** The forge host for `--hostname`, or null for the one `gh` is set up for. */
