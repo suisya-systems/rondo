@@ -46,6 +46,7 @@ const COPIES = {
   "htmx.min.js": require.resolve("htmx.org/dist/htmx.min.js"),
   "keys.js": join(root, "page/keys.js"),
   "composer.js": join(root, "page/composer.js"),
+  "chime.js": join(root, "page/chime.js"),
   "inter-latin-wght-normal.woff2": require.resolve(
     "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2",
   ),

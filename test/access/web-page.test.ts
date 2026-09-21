@@ -13,6 +13,7 @@ import {
   keysCode,
   mint,
   openGate,
+  openRequest,
   operatorPage,
   type Pressed,
   portsOver,
@@ -522,6 +523,7 @@ test("liveness is per view: two views poll and swap, and the answer view updates
       '<script src="/htmx.min.js" defer="">',
       '<script src="/keys.js" defer="">',
       '<script src="/composer.js" defer="">',
+      '<script src="/chime.js" defer="">',
     ]);
     expect(html).not.toContain("//cdn");
     expect(scriptTagsIn(html).filter((tag) => tag.includes("://"))).toEqual([]);
@@ -531,7 +533,10 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     // status groups while the page was a ledger of laps; the name is kept
     // because `hx-get` and `hx-select` have to agree with each other.
     expect(html).toContain(
-      `<div id="ledger" hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML" hx-select-oob="#waiting-count">`,
+      '<div id="ledger" data-waits="[&quot;gate:i-0001:awaiting_human&quot;]" ' +
+        `data-chime="${EN.reachYourTurn}" ` +
+        `hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-swap="outerHTML" ` +
+        'hx-select-oob="#waiting-count">',
     );
     // The boxes are inside the faces now, so each says it survives the swap
     // -- and nothing else on the page asks htmx for anything.
@@ -619,9 +624,13 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     decisionId: null,
     plan: null,
   });
+  // `chime.js` is served here as the other two are, and does nothing here as
+  // they largely do: a still view has no `#ledger` and no htmx to swap it, so
+  // there is no reading for it to compare and no event to compare it on.
   expect(scriptTagsIn(still)).toEqual([
     '<script src="/keys.js" defer="">',
     '<script src="/composer.js" defer="">',
+    '<script src="/chime.js" defer="">',
   ]);
   expect(still).not.toMatch(/hx-[a-z]+=/);
   expect(still).not.toContain("htmx");
@@ -779,4 +788,71 @@ test("rondo's own script moves focus and follows the server's links, and asks fo
     "htmx:beforeRequest",
     "htmx:beforeSwap",
   ]);
+});
+
+test("the page carries the waits and the sentence a tab rings with", async () => {
+  // rondo#311, plan 2. The tab is not allowed its own idea of *waiting*: it
+  // reads the number off the element the five-second poll swaps, written from
+  // the same reading the list's *your turn* is drawn from. What this holds
+  // down is that the two move together -- a page whose count stayed at zero
+  // while a gate opened is a tab that never rings, and one whose count is high
+  // while nothing waits is a person sent to an empty screen (#206's shape).
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const ports = portsOver(world, "ada", []);
+
+  const quiet = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(quiet).toContain('data-waits="[]"');
+
+  await openGate(world, "i-0001");
+  const waiting = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  // **The waits themselves and not a count of them** (Codex, round 3): a
+  // second question in a request that was already waiting leaves a count
+  // where it was, and on a machine with no notification program the tab is
+  // the only way anybody hears. Each key is new exactly when its wait is.
+  expect(waiting).toContain('data-waits="[&quot;gate:i-0001:awaiting_human&quot;]"');
+  // And what the list lifted out of the time order is the same pass read as
+  // requests, rather than a second reading beside it.
+  expect(waiting).toContain(EN.yourTurn);
+
+  // The sentence rides with it, in the set this request resolved: a browser
+  // has no way to compose the person's language, and the host's own tick
+  // (`src/access/reach.ts`) is not the one drawing this page.
+  expect(waiting).toContain(EN.reachYourTurn);
+  const japanese = await operatorPage(ports, "t", { kind: "summary" }, chromeFor("ja"), mint);
+  expect(japanese).toContain(chromeFor("ja").reachYourTurn);
+  expect(japanese).not.toContain(EN.reachYourTurn);
+});
+
+test("a second wait in an already-waiting request changes what the tab compares", async () => {
+  // Codex, round 3, and the case a count cannot see: the request was already
+  // waiting and is still one row, so a number would sit still while something
+  // new arrived for the person. On a machine with no notification program the
+  // tab is the only way they hear at all.
+  const world = fresh();
+  await openRequest(world, "req-a", "have a look at this");
+  const asked = await world.record.recordThreadMessage({
+    messageId: "ask",
+    body: "which of these did you mean?",
+    authorKind: "drafter",
+    authorId: "the drafter",
+    inReplyTo: "req-a",
+    atMs: 600,
+    bases: [{ form: "message", messageId: "req-a" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  const ports = portsOver(world, "ada", []);
+
+  const first = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(first).toContain('data-waits="[&quot;ask:ask&quot;]"');
+
+  // A lap of the same request reaches its gate. One row on the screen still,
+  // and one more thing waiting on the person.
+  await reserve(world, "i-0001", "do the thing", null, "req-a");
+  await openGate(world, "i-0001");
+  const second = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(second).toContain(
+    'data-waits="[&quot;ask:ask&quot;,&quot;gate:i-0001:awaiting_human&quot;]"',
+  );
 });

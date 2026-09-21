@@ -149,6 +149,7 @@ import type {
   ReviewBlock,
 } from "./page/contract.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
+import { notifierAt, reachThePerson } from "./reach.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
 import { reviseDrafterHost } from "./revise-draft/host.js";
 import {
@@ -182,7 +183,7 @@ import {
   type Started,
   serveOperatorPage,
 } from "./web-app.js";
-import { type Chrome, EN } from "./wording.js";
+import { type Chrome, chromeFor, EN } from "./wording.js";
 
 /**
  * The whole surface on one screen.
@@ -472,6 +473,20 @@ const APPROVER_ENV = "RONDO_APPROVER";
  * carried to the page is the tag and not a resolved set.
  */
 const OPERATOR_LANGUAGE_ENV = "RONDO_OPERATOR_LANGUAGE";
+
+/**
+ * The program setup found for putting one line in front of the person when
+ * they are not looking at the page (rondo#311), written into the service by
+ * `scripts/start-command.sh`.
+ *
+ * **Absent is an ordinary state and never a refusal.** A machine with nothing
+ * that shows a notification is a machine where rondo waits to be looked at,
+ * which is what rondo did before this existed -- so an unset variable starts
+ * a host that reaches nobody, and does not stop one from starting. The path
+ * is not checked here either: setup resolved it, and whether it still runs is
+ * answered by running it (`notifierAt`), which is the only honest way to ask.
+ */
+const NOTIFIER_ENV = "RONDO_NOTIFIER";
 
 /**
  * The tag one host stated about its operator, or a refusal naming this
@@ -1351,6 +1366,24 @@ export async function main(
       now: Date.now,
       log: say,
     });
+    /**
+     * **Reaching a person who is not looking at the page** (rondo#311), on the
+     * same minute the rescan already runs on.
+     *
+     * The tick is the one D-0068 rule 2.2 describes and this process already
+     * has; what is added is a reader of the waiting set, not a second timer
+     * and not a second process. `chromeFor` because what it writes is read by
+     * the person: the terminal's own lines stay English through D-0004's
+     * escape, and this one is not a terminal line.
+     */
+    const reaching = {
+      store,
+      record,
+      now: Date.now,
+      words: chromeFor(selected.tag),
+      notify: notifierAt(environment[NOTIFIER_ENV] ?? null),
+      say,
+    };
     // ponytail: a fixed one-minute rescan for messages and readings written
     // outside this process; a changedSince watch when that minute is felt.
     let rescan: ReturnType<typeof setInterval> | null = null;
@@ -1363,11 +1396,30 @@ export async function main(
         drafter.kick();
         reviser.kick();
         checks.kick();
+        // **Reaching starts a minute in, and not in the burst above.** The
+        // person who has just started rondo is looking at it this second, and
+        // what was already waiting when the host was last stopped is on the
+        // screen in front of them. One minute is not a policy about staleness;
+        // it is the tick this process already has.
         rescan = setInterval(() => {
           issues.kick();
           drafter.kick();
           reviser.kick();
           checks.kick();
+          // **Order on the tick buys nothing, and nothing here depends on
+          // it**: every kick above returns before its own pass finishes, so
+          // this reads what is committed when it runs and not what the same
+          // minute is still writing. A wait that lands a moment later is sent
+          // on the next minute rather than lost, because what has been sent is
+          // a row and not a thing this pass remembers. Not awaited -- nothing
+          // here waits on a notification -- and its own failures are said on
+          // this console rather than thrown.
+          void reachThePerson(reaching).catch((error: unknown) => {
+            say(
+              "rondo could not look for anything to tell you about: " +
+                (error instanceof Error ? error.message : String(error)),
+            );
+          });
         }, 60_000);
         rescan.unref();
       }

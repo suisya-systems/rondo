@@ -62,6 +62,7 @@ import { canonicalJson, contentDigest, planDigest } from "./plan.js";
 import {
   type AdmissionRefusal,
   type AnswerOutcome,
+  type AttentionClaim,
   type AttentionCount,
   type AttentionInterval,
   askStandsOver,
@@ -2762,6 +2763,27 @@ export interface AdvisoryRecord {
    */
   recordAttention(row: OperatorAttention): Promise<RecordOutcome>;
   /**
+   * Count a presentation **and say whether this call was the one that counted
+   * it** (D-0036 rule 1, from the writer's side).
+   *
+   * `recordAttention` reports `recorded` either way, because a repeat is a
+   * no-op by design and that is right for a surface whose only duty is to be
+   * counted once. A caller that *acts* on the first presentation and must not
+   * act twice needs the difference, and rondo#311's tick is the first such
+   * caller: a second notification about a thing the person has already been
+   * told about is the reminder `D-0068` section 2 rule 5 refuses.
+   *
+   * **Asked as one statement, and not as a read and then a write** (Codex,
+   * round 2). Two hosts over one store -- which nothing stops, and which two
+   * `rondo web` processes on two ports are -- would both read an episode as
+   * unsent before either wrote its row, and both would send. The unique index
+   * deduplicates rows and not deliveries; what makes a delivery unique is
+   * being the writer whose `INSERT` actually inserted, which is what this
+   * answers. A single statement takes the write lock for its own duration, so
+   * there is no window here to serialise.
+   */
+  claimAttention(row: OperatorAttention): Promise<AttentionClaim>;
+  /**
    * Every proposal nobody has answered, oldest first (D-0032 rule 6).
    *
    * **A left anti-join and not a status column.** There is no `answered` flag
@@ -3726,6 +3748,24 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
           "ON CONFLICT (subject_kind, subject_id) WHERE disposition = 'presented' DO NOTHING",
         [row.atMs, row.subjectKind, row.subjectId, row.disposition, row.ruleName],
       );
+    },
+
+    async claimAttention(row: OperatorAttention): Promise<AttentionClaim> {
+      try {
+        // The same statement `recordAttention` writes, read for what it did:
+        // `ON CONFLICT ... DO NOTHING` changes one row when it inserted and
+        // none when the subject was already counted.
+        const done = connection
+          .prepare(
+            "INSERT INTO operator_attention (at_ms, subject_kind, subject_id, disposition, " +
+              "rule_name) VALUES (?, ?, ?, ?, ?) " +
+              "ON CONFLICT (subject_kind, subject_id) WHERE disposition = 'presented' DO NOTHING",
+          )
+          .run(row.atMs, row.subjectKind, row.subjectId, row.disposition, row.ruleName);
+        return Number(done.changes) > 0 ? { kind: "claimed" } : { kind: "alreadyCounted" };
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
     },
 
     async openProposals(uptoMs: number): Promise<readonly OpenProposal[]> {

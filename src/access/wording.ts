@@ -483,6 +483,42 @@ export interface Chrome extends PageWords {
 
   // -- The page's chrome under stack H (D-0059 rule 5): the live indicator and
   // the key hints, both drawn only once the key script has run --
+  // -- Reaching a person who is not looking at the screen (rondo#311) --
+  /**
+   * The line the host puts in front of the person when their turn has come,
+   * and the line an open tab rings with.
+   *
+   * **It says only enough to decide whether to come and look** (`D-0076`):
+   * what is waiting is on the page, in its own words, and a notification that
+   * tried to carry it would be composing a second account of the same thing
+   * somewhere it cannot be answered. It names nothing rondo minted -- no
+   * request, no lap, no count -- and it is the same sentence however many
+   * things turned over in the minute, because the act it asks for is one act.
+   *
+   * **One sentence, because one sentence is all a call carries** (measured
+   * 2026-09-21): `wsl-notify-send.exe` takes the line as a single positional
+   * argument and answers a second one with its usage and an exit code of 0.
+   */
+  readonly reachYourTurn: string;
+  /**
+   * The same, for `D-0068`'s F1: a lap that has been going longer than the
+   * patience its own plan declared.
+   *
+   * **It does not say what is wrong, because rondo does not know** (`D-0068`'s
+   * measurement, and `D-0036` rule 5's refusal of a liveness reading). What it
+   * says is that the time the plan allowed has passed, which is a fact rondo
+   * holds, and that the person may want to look -- which is the only thing
+   * they can do about it.
+   */
+  readonly reachLate: string;
+  /**
+   * The button that asks the browser for leave to ring (rondo#311, plan 2).
+   *
+   * Drawn only while the browser has not been asked: once it has an answer it
+   * keeps it, and a button offering a choice that has been made is a button
+   * that does nothing (`D-0076`: what the person cannot use is not shown).
+   */
+  readonly chimeAsk: string;
   readonly liveLabel: string;
   readonly keyMove: string;
   readonly keyOpen: string;
@@ -1379,6 +1415,9 @@ explanation you pressed on and then answers the gate.`,
   recordsFold: (count) => `What approve records (${String(count)} fields), and the full text`,
   denialUnreadable: "rondo could not record which command this was.",
   modelMayArrive: "The model review may still arrive.",
+  reachYourTurn: "rondo is waiting for your answer.",
+  reachLate: "Something in rondo has been going longer than it was meant to.",
+  chimeAsk: "Tell me here when it is my turn",
   liveLabel: "live",
   keyMove: "move",
   keyOpen: "open",
@@ -2256,6 +2295,9 @@ const JA: Chrome = Object.freeze({
   recordsFold: (count) => `approve で記録される内容 (${String(count)} 項目) と記録全文`,
   denialUnreadable: "どのコマンドだったかを rondo は記録できませんでした。",
   modelMayArrive: "モデルレビューはこれから届くかもしれません。",
+  reachYourTurn: "rondo があなたの答えを待っています。",
+  reachLate: "rondo に、かかると決めていた時間を過ぎても終わらないものがあります。",
+  chimeAsk: "自分の番になったら、このタブで知らせる",
   liveLabel: "ライブ",
   keyMove: "移動",
   keyOpen: "開く",
