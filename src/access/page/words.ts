@@ -201,9 +201,32 @@ export interface PageWords extends DayWords {
   readonly resultChecks: string;
   readonly resultNotMerged: string;
   readonly resultMerged: (into: string, method: string) => string;
+  /**
+   * What the pull request came to on the forge after rondo read it
+   * (rondo#411 to #413): a conflict that is why no check runs, and what the
+   * person can do about it; a head somebody moved, with the commits it carries
+   * (`resultMovedNone` where the forge lists none between the two, and
+   * `resultMovedMore` for the ones the list leaves out); and a merge or a close
+   * made on the forge rather than from the page.
+   */
+  readonly resultConflict: (pullRequest: string, base: string) => string;
+  readonly resultConflictDo: (base: string) => string;
+  readonly resultMoved: (from: string, to: string, count: number) => string;
+  readonly resultMovedNone: (from: string, to: string) => string;
+  readonly resultMovedMore: (count: number) => string;
+  readonly resultMergedOutside: (into: string, by: string | null) => string;
+  readonly resultClosed: string;
   /** The same result as a list row's one sentence. */
   readonly rowApproved: string;
   readonly rowPublished: (pullRequest: string, checks: string) => string;
+  readonly rowMerged: (pullRequest: string) => string;
+  readonly rowClosed: (pullRequest: string) => string;
+  readonly rowConflict: (pullRequest: string) => string;
+  /**
+   * The governance line's time once the request has ended on the forge
+   * (rondo#413): how long it took, in place of a clock that keeps counting.
+   */
+  readonly govEnded: (took: string, how: "merged" | "closed") => string;
   /**
    * What a basis names where it is not a message (D-0076): the kind of thing
    * it is, and never the identifier the store holds it under (lap 11, N-52).
@@ -344,7 +367,13 @@ export const PAGE_EN: PageWords = Object.freeze({
   stepLanding: "Merge",
   pullRequest: (number) => (number === null ? "the pull request" : `#${number}`),
   checksWord: (checks) =>
-    ({ running: "running", green: "green", red: "red", none: "none reported" })[checks.kind],
+    ({
+      running: "running",
+      green: "green",
+      red: "red",
+      none: "none reported",
+      conflict: "not run",
+    })[checks.kind],
   checksDetail: (checks) => {
     switch (checks.kind) {
       case "green":
@@ -374,6 +403,8 @@ export const PAGE_EN: PageWords = Object.freeze({
       }
       case "none":
         return "the forge has reported no check yet";
+      case "conflict":
+        return null;
       default:
         return "not finished yet";
     }
@@ -393,8 +424,26 @@ export const PAGE_EN: PageWords = Object.freeze({
         } as Record<string, string>
       )[method] ?? ""
     }`,
+  resultConflict: (pullRequest, base) =>
+    `${pullRequest} conflicts with ${base}, so the forge runs no checks on it.`,
+  resultConflictDo: (base) =>
+    `Resolve it on the pull request's branch (merge ${base} in, or rebase) and push. rondo reads the checks again once they run.`,
+  resultMoved: (from, to, count) =>
+    `The branch moved after rondo read it: ${from} is now ${to}, with ${String(count)} commit${count === 1 ? "" : "s"} this work did not make:`,
+  resultMovedNone: (from, to) =>
+    `The branch changed after rondo read it: ${from} is now ${to}, and the forge lists no commit the new head carries beyond the old one -- the branch was reset to an earlier commit, or its history rewritten.`,
+  resultMovedMore: (count) => `and ${String(count)} more`,
+  resultMergedOutside: (into, by) =>
+    by === null
+      ? `Merged into ${into} on the forge, not from this page.`
+      : `Merged into ${into} by ${by} on the forge, not from this page.`,
+  resultClosed: "Closed on the forge without merging.",
   rowApproved: "Approved, not published yet",
   rowPublished: (pullRequest, checks) => `Pull request ${pullRequest}, checks ${checks}`,
+  rowMerged: (pullRequest) => `Pull request ${pullRequest}, merged`,
+  rowClosed: (pullRequest) => `Pull request ${pullRequest}, closed without merging`,
+  rowConflict: (pullRequest) => `Pull request ${pullRequest}, conflicts with its base`,
+  govEnded: (took, how) => (how === "merged" ? `merged after ${took}` : `closed after ${took}`),
   basisKind: (form) =>
     ({
       iteration: "the work on this request",
@@ -502,7 +551,9 @@ export const PAGE_JA: PageWords = Object.freeze({
   stepLanding: "取り込み（マージ）",
   pullRequest: (number) => (number === null ? "プルリクエスト" : `#${number}`),
   checksWord: (checks) =>
-    ({ running: "実行中", green: "緑", red: "赤", none: "報告なし" })[checks.kind],
+    ({ running: "実行中", green: "緑", red: "赤", none: "報告なし", conflict: "未実行" })[
+      checks.kind
+    ],
   checksDetail: (checks) => {
     switch (checks.kind) {
       case "green":
@@ -530,6 +581,8 @@ export const PAGE_JA: PageWords = Object.freeze({
       }
       case "none":
         return "まだチェックが報告されていません";
+      case "conflict":
+        return null;
       default:
         return "終わるのを待っています";
     }
@@ -549,8 +602,27 @@ export const PAGE_JA: PageWords = Object.freeze({
         } as Record<string, string>
       )[method] ?? ""
     }`,
+  resultConflict: (pullRequest, base) =>
+    `${pullRequest} は ${base} と競合しているため、チェックが動きません。`,
+  resultConflictDo: (base) =>
+    `プルリクエストのブランチ側で競合を解消し（${base} を取り込むか、リベースする）、push してください。チェックが動けば rondo が読み直します。`,
+  resultMoved: (from, to, count) =>
+    `rondo が読んだあとにブランチが進みました。${from} → ${to} で、この作業のものではないコミットが ${String(count)} 件:`,
+  resultMovedNone: (from, to) =>
+    `rondo が読んだあとにブランチが変わりました。${from} → ${to} ですが、${to} が ${from} より先に持つコミットを GitHub は挙げていません。以前のコミットへ戻されたか、履歴が書き換えられています。`,
+  resultMovedMore: (count) => `ほか ${String(count)} 件`,
+  resultMergedOutside: (into, by) =>
+    by === null
+      ? `GitHub 上で ${into} にマージされました（このページからではありません）。`
+      : `GitHub 上で ${by} が ${into} にマージしました（このページからではありません）。`,
+  resultClosed: "マージされないまま、GitHub 上で閉じられました。",
   rowApproved: "承認済み・まだ公開していません",
   rowPublished: (pullRequest, checks) => `プルリクエスト ${pullRequest}・チェック ${checks}`,
+  rowMerged: (pullRequest) => `プルリクエスト ${pullRequest}・マージ済み`,
+  rowClosed: (pullRequest) => `プルリクエスト ${pullRequest}・マージされずに閉じられました`,
+  rowConflict: (pullRequest) => `プルリクエスト ${pullRequest}・取り込み先と競合`,
+  govEnded: (took, how) =>
+    how === "merged" ? `依頼から${took}でマージ` : `依頼から${took}で閉じられた`,
   basisKind: (form) =>
     ({
       iteration: "この依頼の作業",

@@ -131,6 +131,7 @@ import {
   openPullRequest,
   pushTopicBranch,
   readChangedPaths,
+  readCommitsBetween,
   readIssueFromForge,
   runDrafter,
 } from "./forge.js";
@@ -1444,10 +1445,15 @@ export async function main(
     // that has an answer. It writes one line into the request's thread and
     // wakes nobody: whether a person who is not on the page is told is
     // rondo#311's, and lives in rondo#311's mechanism.
+    // The laps a merge press is working on, which the checks host leaves
+    // alone until the press has written what it did (rondo#413).
+    const pressing = new Set<string>();
     const checks = checksHost({
       store,
       record,
       readChecks: continuoChecksReader(environment),
+      readCommits: readCommitsBetween,
+      pressing,
       host: forgeHost(environment),
       now: Date.now,
       log: say,
@@ -1688,7 +1694,18 @@ export async function main(
         merge:
           sender === null || "refusal" in sender
             ? null
-            : new MergePort(mergePress({ store, record, now: Date.now })),
+            : new MergePort(
+                mergePress({
+                  store,
+                  record,
+                  now: Date.now,
+                  pressing,
+                  readAgain: async () => {
+                    checks.kick();
+                    await checks.idle();
+                  },
+                }),
+              ),
         release:
           sender === null || "refusal" in sender
             ? null

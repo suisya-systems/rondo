@@ -1873,7 +1873,16 @@ async function threadActs(
               (line) => line.releasedBy === null && line.lapIds.includes(resultRecord.id),
             ),
           ) === null
-        ? { record: resultRecord, head: result.checksCommit ?? "" }
+        ? {
+            record: resultRecord,
+            head: result.checksCommit ?? "",
+            // **A head the lap did not push** (rondo#412, `D-0102`): the card
+            // says what merging it takes in, which the strip lists above.
+            carried:
+              result.moved !== null && result.moved.to === result.checksCommit
+                ? result.moved.commits.length + result.moved.more
+                : null,
+          }
         : null;
   const drafted =
     waitedOn || laps.length > 0 || unheld !== null
@@ -1924,10 +1933,16 @@ async function threadActs(
   );
   // The merge press (D-0091 rule 1): a press and not a link, since the
   // approval is this button, per act, with no screen between it and the act.
-  const mergeCard = (lap: { readonly record: { readonly id: string }; readonly head: string }) => (
+  const mergeCard = (lap: {
+    readonly record: { readonly id: string };
+    readonly head: string;
+    readonly carried: number | null;
+  }) => (
     <section class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3">
       <h2 class="text-meta leading-5 font-semibold text-wait-ink">{wording.nextStepHeading}</h2>
-      <p class="mt-1 text-body leading-6">{wording.nextStepMerge}</p>
+      <p class="mt-1 text-body leading-6">
+        {lap.carried === null ? wording.nextStepMerge : wording.nextStepMergeMoved(lap.carried)}
+      </p>
       <form
         id={`merge-${lap.record.id}`}
         method="post"
@@ -1943,7 +1958,7 @@ async function threadActs(
           data-busy={wording.mergeBusy}
           class={`${PRIMARY} h-10 justify-center self-start px-6 text-sm`}
         >
-          {wording.mergeAction}
+          {lap.carried === null ? wording.mergeAction : wording.mergeMovedAction}
         </button>
         <p
           data-busy-note=""
@@ -2666,7 +2681,15 @@ export async function operatorPage(
       spent: await ports.record.scopeSpent(tip.scopeDecisionId),
     };
   };
-  const selectedGovernance =
+  // **What became of the selected request's work** (rondo#376), read once for
+  // the strip under the title, the line's clock and the steps: a request whose
+  // pull request was merged or closed has ended (rondo#413).
+  const selectedResult = (() => {
+    const lap = resultLap(selectedLaps.map((each) => each.record));
+    return lap === null ? null : resultOf(threads.byId, lap.id);
+  })();
+  const endedAtMs = selectedResult?.merged?.atMs ?? selectedResult?.closedAtMs ?? null;
+  const governed =
     governedLap === null || selectedRoot === null
       ? null
       : governanceOf(
@@ -2688,6 +2711,25 @@ export async function operatorPage(
           // and each try's stays as the detail (rondo#378).
           selectedLaps.map((lap) => lap.record),
         );
+  // The merge is done where rondo has seen it made, by a press or on the
+  // forge (rondo#413), and is no step at all once the pull request was closed
+  // unmerged: nothing remains, and it was not merged. `governanceOf` reads no
+  // thread, so it is said here.
+  const selectedGovernance =
+    governed === null
+      ? null
+      : {
+          ...governed,
+          chain: governed.chain.flatMap((link) =>
+            link.step !== "merge"
+              ? [link]
+              : selectedResult?.merged != null
+                ? [{ ...link, state: "done" as const }]
+                : selectedResult?.closedAtMs != null
+                  ? []
+                  : [link],
+          ),
+        };
   /*
    * **The two messages whose body is not prose**, rendered here because this
    * renderer still owns them: what rondo read of a named issue (D-0078 section
@@ -2944,17 +2986,23 @@ export async function operatorPage(
                 : GovernanceLine({
                     wording,
                     governance: selectedGovernance,
-                    askedSaid: wording.age(ago(selectedGovernance.askedAtMs, nowMs)),
+                    // **The clock stops where the request ended** (rondo#413):
+                    // how long it took, and no longer how long ago it began.
+                    askedSaid:
+                      endedAtMs === null
+                        ? wording.age(ago(selectedGovernance.askedAtMs, nowMs))
+                        : wording.govEnded(
+                            wording.age(ago(selectedGovernance.askedAtMs, endedAtMs)),
+                            selectedResult?.merged == null ? "closed" : "merged",
+                          ),
                   }),
             // **What became of the work, as a state** (rondo#376): approved,
             // the pull request and its checks, and the merge that is the
             // person's -- said once, here, for the lap the result belongs to.
-            result: (() => {
-              const lap = resultLap(selectedLaps.map((each) => each.record));
-              return lap === null
+            result:
+              resultLap(selectedLaps.map((each) => each.record)) === null
                 ? null
-                : ResultLine({ wording, result: resultOf(threads.byId, lap.id) });
-            })(),
+                : ResultLine({ wording, result: selectedResult }),
             items: folds(wording, threadItems, lastLookedAbove),
             foldOpen: wording.foldOpen,
             lastLookedAbove,
@@ -3087,7 +3135,16 @@ export async function operatorPage(
             // **What remains before this ends** (rule 6), as the five steps
             // rule 4 draws under a running request: one reading of where the
             // work stands, drawn in two places by one component.
-            steps: stepsOf(sideLap, sideReadings, publishedReport(threads, sideLap.id) !== null),
+            steps: (() => {
+              const sideResult = resultOf(threads.byId, sideLap.id);
+              // Closed unmerged: the merge is no longer a step (rondo#413).
+              return stepsOf(
+                sideLap,
+                sideReadings,
+                publishedReport(threads, sideLap.id) !== null,
+                sideResult?.merged != null,
+              ).filter((step) => step.name !== "landing" || sideResult?.closedAtMs == null);
+            })(),
             material: sideMaterial === null ? null : Raw({ html: sideMaterial }),
             asking: sideAsking,
           }),

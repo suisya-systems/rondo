@@ -36,6 +36,17 @@ export interface MergePorts {
   readonly store: Pick<IterationStore, "read" | "readingsFor" | "laneLedger" | "readLive">;
   readonly record: Pick<AdvisoryRecord, "threadMessages" | "recordThreadMessage">;
   readonly now: () => number;
+  /**
+   * Shared with the checks host, which leaves a lap alone while its press is
+   * in flight (rondo#413): the lap ids a press is working on now.
+   */
+  readonly pressing?: Set<string>;
+  /**
+   * Read the pull requests again, after a press found the head moved
+   * (rondo#412): the thread the person lands back on then says what moved
+   * rather than offering the same button. The host's checks pass.
+   */
+  readonly readAgain?: () => Promise<void>;
   /** Tests replace the forge; the host reaches the real one. */
   readonly forge?: {
     readonly readPullRequest: typeof readPullRequest;
@@ -49,6 +60,7 @@ const REFUSED_BY: Readonly<Record<MergeBlock, MergeRefusal>> = {
   notGreen: "mergeRefusedNotGreen",
   asked: "mergeRefusedAsked",
   merged: "mergeRefusedMerged",
+  closed: "mergeRefusedClosed",
   landed: "mergeRefusedLanded",
 };
 
@@ -65,11 +77,19 @@ export function mergePress(ports: MergePorts): (input: MergeInput) => Promise<Me
     }
     const merging = mergeOnce(ports, input);
     running.set(input.iterationId, merging);
+    ports.pressing?.add(input.iterationId);
+    let merged: Merged;
     try {
-      return await merging;
+      merged = await merging;
     } finally {
       running.delete(input.iterationId);
+      ports.pressing?.delete(input.iterationId);
     }
+    // After the press has let go of the lap, so the pass reads it.
+    if (merged.why === "mergeRefusedMoved") {
+      await ports.readAgain?.();
+    }
+    return merged;
   };
 }
 
@@ -108,12 +128,19 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
   }
   // **The head the button was drawn for, the head rondo read green and the
   // head `publish` pushed are one commit**, or this press is about something
-  // the person was not shown.
+  // the person was not shown. **Or the head it moved to** (rondo#412, `D-0102`):
+  // one the page showed as moved, with what it carries, and read green there.
   const tip = tipOf(await ports.store.readingsFor(record.id));
-  if (tip === null || input.head !== result.checksCommit || tip !== result.checksCommit) {
+  const head = result.checksCommit;
+  if (
+    tip === null ||
+    head === null ||
+    input.head !== head ||
+    (tip !== head && result.moved?.to !== head)
+  ) {
     return refused(
       "mergeRefusedMoved",
-      `the press was drawn for '${input.head}', rondo read '${result.checksCommit}' green and ` +
+      `the press was drawn for '${input.head}', rondo read '${head}' green and ` +
         `the lap pushed '${tip ?? "(none recorded)"}'`,
     );
   }
@@ -135,11 +162,17 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
   // reads it.
   const revisionBase = planField(record, "pull_request_base_branch");
   const opened = revisionBase === "" ? planField(record, "base_branch") : revisionBase;
-  if (before.headCommit !== tip || before.baseBranch !== opened) {
+  if (before.headCommit !== head) {
     return refused(
       "mergeRefusedMoved",
-      `the pull request is '${before.headCommit}' into '${before.baseBranch}', and rondo read ` +
-        `'${tip}' green into '${opened}'`,
+      `the pull request is at '${before.headCommit}', and rondo read '${head}' green`,
+    );
+  }
+  // Its own refusal: nothing rondo reads again would redraw the page for it.
+  if (before.baseBranch !== opened) {
+    return refused(
+      "mergeRefusedRetargeted",
+      `the pull request goes into '${before.baseBranch}', and was opened into '${opened}'`,
     );
   }
   if (before.mergeQueue) {
@@ -159,7 +192,7 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
   const merged = await forge.mergePullRequest({
     url,
     method: method.method,
-    headCommit: tip,
+    headCommit: head,
   });
   const failure = commandFailure(merged);
   if (failure !== null) {

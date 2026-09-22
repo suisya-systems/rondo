@@ -33,6 +33,10 @@ interface Options {
   readonly tip?: string;
   /** Another lap of the same request standing at its gate. */
   readonly gated?: boolean;
+  /** The pull request moved to this head after the green (rondo#412). */
+  readonly movedTo?: string;
+  /** And the moved head was read green. */
+  readonly movedGreen?: boolean;
 }
 
 const open: PullRequestState = {
@@ -116,6 +120,33 @@ async function over(options: Options = {}) {
       3,
     );
   }
+  if (options.movedTo !== undefined) {
+    await reportToRequest(
+      thread,
+      "lap-1",
+      {
+        kind: "moved",
+        pullRequestUrl: PR,
+        from: TIP,
+        to: options.movedTo,
+        commits: [{ sha: options.movedTo, subject: "resolve the conflict" }],
+      },
+      5,
+    );
+    if (options.movedGreen === true) {
+      await reportToRequest(
+        thread,
+        "lap-1",
+        {
+          kind: "checks",
+          commit: options.movedTo,
+          reading: { kind: "green", counted: 7, skipped: 0 },
+          moved: true,
+        },
+        6,
+      );
+    }
+  }
   if (options.asking === true) {
     messages.push({
       messageId: "ask-1",
@@ -130,10 +161,18 @@ async function over(options: Options = {}) {
   }
   const asked: string[] = [];
   let reads = 0;
+  const pressing = new Set<string>();
+  const world = { rereads: 0, pressedDuring: [] as string[] };
   const press = mergePress({
     store,
     record,
     now: () => 9,
+    pressing,
+    readAgain: async () => {
+      // The press has let go of the lap by now, so the checks host reads it.
+      world.pressedDuring.push(...pressing);
+      world.rereads += 1;
+    },
     forge: {
       readPullRequest: async ({ url }) => {
         asked.push(`view ${url}`);
@@ -144,6 +183,7 @@ async function over(options: Options = {}) {
       },
       readMergeMethod: async (repo) => {
         asked.push(`methods ${repo}`);
+        world.pressedDuring.push(...pressing);
         return options.method ?? { kind: "read", method: "squash" };
       },
       mergePullRequest: async (request) => {
@@ -160,7 +200,7 @@ async function over(options: Options = {}) {
       },
     },
   });
-  return { press, asked, messages };
+  return { press, asked, messages, world };
 }
 
 const input = { iterationId: "lap-1", head: TIP };
@@ -211,7 +251,8 @@ test("a pull request that moved, closed or merged on the forge is not merged aga
     [{ ...open, headCommit: "fff0000" }, "mergeRefusedMoved"],
     // Retargeted on the forge: the head and its green are the same, the
     // destination is not the one it was published against.
-    [{ ...open, baseBranch: "release" }, "mergeRefusedMoved"],
+    // Its own refusal (rondo#412): nothing rondo reads again redraws it.
+    [{ ...open, baseBranch: "release" }, "mergeRefusedRetargeted"],
     // A queue merges later, not on this press.
     [{ ...open, mergeQueue: true }, "mergeRefusedQueue"],
     [{ ...open, state: "CLOSED" }, "mergeRefusedClosed"],
@@ -276,4 +317,49 @@ test("the repository is read off the address the forge printed", () => {
   expect(repositoryOf(PR)).toBe("github.com/owner/name");
   expect(repositoryOf("https://ghe.example/o/n/pull/9")).toBe("ghe.example/o/n");
   expect(repositoryOf("https://github.com/owner/name/issues/372")).toBeNull();
+});
+
+test("a press refused because the head moved has the pull request read again, after it lets go", async () => {
+  const world = await over({ before: { ...open, headCommit: "fff0000" } });
+  expect(await world.press(input)).toMatchObject({ ok: false, why: "mergeRefusedMoved" });
+  expect(world.world.rereads).toBe(1);
+  // The lap was in the press's hands while it asked, and not when it re-read.
+  expect(world.world.pressedDuring).toEqual([]);
+  const other = await over({ before: { ...open, baseBranch: "release" } });
+  await other.press(input);
+  expect(other.world.rereads).toBe(0);
+});
+
+test("while a press is in flight the checks host is told to leave the lap alone", async () => {
+  const world = await over();
+  expect((await world.press(input)).ok).toBe(true);
+  expect(world.world.pressedDuring).toEqual(["lap-1"]);
+});
+
+test("a head the page showed as moved, and read green there, is merged by that head (D-0102)", async () => {
+  const moved = "fff0000";
+  const world = await over({
+    movedTo: moved,
+    movedGreen: true,
+    before: { ...open, headCommit: moved },
+  });
+  expect((await world.press({ iterationId: "lap-1", head: moved })).ok).toBe(true);
+  expect(world.asked).toContain(`merge ${PR} --squash ${moved}`);
+});
+
+test("a moved head is not merged on the green of the head the lap pushed", async () => {
+  // Moved, and nothing read on the new head yet: the old green is not its.
+  const pending = await over({ movedTo: "fff0000", before: { ...open, headCommit: "fff0000" } });
+  expect(await pending.press(input)).toMatchObject({ ok: false, why: "mergeRefusedNotGreen" });
+  expect(await pending.press({ iterationId: "lap-1", head: "fff0000" })).toMatchObject({
+    ok: false,
+    why: "mergeRefusedNotGreen",
+  });
+  // A head nobody showed the person is not one a press can name.
+  const unshown = await over({ before: { ...open, headCommit: "fff0000" } });
+  expect(await unshown.press({ iterationId: "lap-1", head: "fff0000" })).toMatchObject({
+    ok: false,
+    why: "mergeRefusedMoved",
+  });
+  expect(pending.asked.concat(unshown.asked).some((line) => line.startsWith("merge "))).toBe(false);
 });

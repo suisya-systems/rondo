@@ -1051,6 +1051,9 @@ explanation you pressed on and then answers the gate.`,
     "you. Merging puts it into the branch it was opened against, the way the repository allows, " +
     "and cannot be taken back from this page.",
   mergeAction: "Merge the pull request",
+  nextStepMergeMoved: (count) =>
+    `The checks are green on the pull request's latest commit. That commit carries ${String(count)} commit${count === 1 ? "" : "s"} this work did not make (listed above), and merging merges ${count === 1 ? "it" : "them"} too, into the branch it was opened against, the way the repository allows. It cannot be taken back from this page. If you do not want ${count === 1 ? "it" : "them"} merged, do not press.`,
+  mergeMovedAction: "Merge the pull request, those commits included",
   mergeBusy: "Merging...",
   mergeBusyNote:
     "Received. rondo is asking the forge to merge the pull request; this usually takes a few " +
@@ -1077,8 +1080,11 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was merged: this work is already on the default branch, so there is nothing left " +
     "to merge.",
   mergeRefusedMoved:
-    "Nothing was merged: the pull request has changed since rondo read its checks green -- new " +
-    "commits, or another branch to merge into. Reload the page, and look at it on the forge.",
+    "Nothing was merged: the pull request has new commits since rondo read its checks green. " +
+    "Reload the page to see them.",
+  mergeRefusedRetargeted:
+    "Nothing was merged: the pull request now targets a different branch than the one rondo " +
+    "opened it against. Look at it on the forge.",
   mergeRefusedClosed: "Nothing was merged: the pull request is closed on the forge.",
   mergeRefusedMethod: "Nothing was merged: the repository allows no way of merging a pull request.",
   mergeRefusedForge:

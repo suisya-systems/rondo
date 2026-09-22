@@ -245,6 +245,11 @@ export function stepsOf(
    * person's, and anything earlier has it still ahead.
    */
   published = false,
+  /**
+   * Whether rondo has seen it merged, by a press or on the forge (rondo#413):
+   * the one fact that makes the person's last step done.
+   */
+  merged = false,
 ): readonly WorkStep[] {
   const read = readings.filter((reading) => reading.verdict !== "unavailable");
   const atGate = record.status === "awaiting_human";
@@ -269,6 +274,6 @@ export function stepsOf(
       // The person's only on a recorded approval (D-0092).
       state: published ? "done" : approvedForPublication(record) ? "yours" : "ahead",
     },
-    { name: "landing", state: "yours" },
+    { name: "landing", state: merged ? "done" : "yours" },
   ];
 }

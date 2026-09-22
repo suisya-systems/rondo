@@ -1147,6 +1147,13 @@ export interface Chrome extends PageWords {
    */
   readonly nextStepMerge: string;
   readonly mergeAction: string;
+  /**
+   * The same press over a head the lap did not push (rondo#412): what the
+   * head carries is said above it, and the card and the button say that
+   * merging merges it too.
+   */
+  readonly nextStepMergeMoved: (count: number) => string;
+  readonly mergeMovedAction: string;
   readonly mergeBusy: string;
   readonly mergeBusyNote: string;
   readonly mergeBack: string;
@@ -1160,6 +1167,7 @@ export interface Chrome extends PageWords {
   readonly mergeRefusedMerged: string;
   readonly mergeRefusedLanded: string;
   readonly mergeRefusedMoved: string;
+  readonly mergeRefusedRetargeted: string;
   readonly mergeRefusedClosed: string;
   readonly mergeRefusedMethod: string;
   readonly mergeRefusedForge: string;

@@ -712,6 +712,86 @@ export async function fetchPullRequestChecks(
   };
 }
 
+/** The commits a pull request's head carries past another commit (rondo#412). */
+export interface CommitsBetweenRequest {
+  readonly host: string | null;
+  /** `OWNER/NAME`, the pull request's base repository. */
+  readonly repo: string;
+  readonly from: string;
+  readonly to: string;
+}
+
+/** One commit, as a person reads it: its sha and the first line of its message. */
+export interface CommitLine {
+  readonly sha: string;
+  readonly subject: string;
+}
+
+export type CommitsBetween =
+  | {
+      readonly kind: "read";
+      readonly commits: readonly CommitLine[];
+      /** How many it carries: the forge lists at most 250 (`total_commits`). */
+      readonly total: number;
+    }
+  | { readonly kind: "failed"; readonly reason: string };
+
+/**
+ * What `to` carries that `from` does not, through the operator's own `gh`
+ * (rondo#412): one `GET` of the forge's comparison, which writes nothing.
+ * Oldest first, as the forge lists them.
+ */
+export async function readCommitsBetween(request: CommitsBetweenRequest): Promise<CommitsBetween> {
+  const host = request.host === null ? [] : ["--hostname", request.host];
+  const read = await runCommand(
+    "gh",
+    ["api", ...host, `repos/${request.repo}/compare/${request.from}...${request.to}`],
+    CHECKS_READ_TIMEOUT_MS,
+  );
+  const failure = queryFailure(read);
+  if (failure !== null) {
+    return { kind: "failed", reason: failure };
+  }
+  try {
+    const json: unknown = JSON.parse(read.stdout);
+    const commits = commitsOf(json);
+    const total =
+      typeof json === "object" && json !== null
+        ? (json as Record<string, unknown>)["total_commits"]
+        : null;
+    return {
+      kind: "read",
+      commits,
+      total: typeof total === "number" && total > commits.length ? total : commits.length,
+    };
+  } catch (error) {
+    return {
+      kind: "failed",
+      reason: `the forge's comparison did not read: ${hostFailure(error).text}`,
+    };
+  }
+}
+
+/** The comparison document's commits, or a throw where it carries none. */
+export function commitsOf(json: unknown): readonly CommitLine[] {
+  const commits =
+    typeof json === "object" && json !== null ? (json as Record<string, unknown>)["commits"] : null;
+  if (!Array.isArray(commits)) {
+    throw new Error("the comparison carried no list of commits");
+  }
+  return commits.map((one: unknown) => {
+    const sha = stringAt(one, "sha");
+    const message = stringAt(
+      typeof one === "object" && one !== null ? (one as Record<string, unknown>)["commit"] : null,
+      "message",
+    );
+    if (sha === null) {
+      throw new Error("a commit in the comparison carried no sha");
+    }
+    return { sha, subject: (message ?? "").split("\n")[0] ?? "" };
+  });
+}
+
 /**
  * How long one read of a pull request's checks may take. Nothing waits on it
  * (the host reads on its own timer), so the bound only frees the reader from a
