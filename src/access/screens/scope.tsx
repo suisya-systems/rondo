@@ -1427,7 +1427,7 @@ async function planStart(
           role="status"
           class="note text-meta leading-5 text-muted-foreground sm:basis-full sm:text-right"
         >
-          {wording.lapBusyNote}
+          {wording.startBusyNote}
         </p>
       </form>
     );
@@ -1656,7 +1656,7 @@ async function scopeApproved(
             role="status"
             class="note text-meta leading-5 text-muted-foreground"
           >
-            {wording.lapBusyNote}
+            {wording.startBusyNote}
           </p>
           <span id="start-plain" class="note sr-only">
             {wording.startPlain}

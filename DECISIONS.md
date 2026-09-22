@@ -23261,3 +23261,86 @@ so a route added without a class still fails there.
   being trusted. Rule 3's placement is what moves.
 - **A tab that rings for a wait the person was already looking at** often enough to be ignored.
   Rule 1's cross-navigation memory is what to narrow.
+
+## D-0109 — A start press answers once its lap's row is there, not once the lap is at its gate: a refusal before the row is still the press's answer, and a start that ends badly after it is an ask in the request's thread
+
+**Status:** accepted (2026-09-23, rondo#409). Refs `D-0066`, `D-0069`, `D-0083`, `D-0106`,
+`D-0108`, rondo#409, rondo#414.
+
+**Numbering.** `D-0109` was assigned to this lane in advance.
+
+**Why an entry is needed.** In lap 12 the tab's loading indicator spun for the whole lap, tens of
+minutes. Both page start presses (`POST /start`, the scoped start, and `POST /start-plan`, one
+drafted plan's start) awaited `startScopedFromPage` / `startSplitFromPage`, which return when the
+lap stops at its gate (`admitScopedPlan` awaits `admit`, which drives continuo through the whole
+lap, then takes the model reading). No entry said when a press answers, or what becomes of a start
+that fails after its press has answered.
+
+### The decision
+
+**1. The press answers when the lap's row exists, or when the start has ended without one,
+whichever comes first.** The row is written by `reserve()`, and the list and the thread draw a
+running lap from it, so from that moment the page shows the work by its own means. The start goes on
+in the host process. The page's two presses are wrapped in `answerOnceReserved`
+(`src/access/cli.ts`), which reads the row every quarter second while the start runs. The command
+line, the resident host's order tick and `startScopedFromPage` / `startSplitFromPage` themselves are
+unchanged: they still return at the gate.
+
+**2. Every refusal before the row is still the press's own answer.** Nothing writes a row before
+`reserve()`, so a refusal is a start that ended before a row appeared. The press waits for it and
+the refusal screen says it as before. A throw before the row is now that screen's
+`startRefusedNotAdmitted`, where it used to be the server's error page, and the error's words go to
+the host's console, escaped.
+
+**3. A start that ends badly after its press has answered ends its lap, and is an ask in the
+request's thread, in the person's own words.** After the row exists, `admitScopedPlan` has no
+refusal left to return; only a throw, from continuo or from rondo, can end the start badly. rondo
+then does two things, in this order.
+
+First it ends the lap itself, at `failed` with `defect` (`faulted` in `src/refrain/interpreter.ts`,
+re-exported as `endFaulted`). `abandoned` would file a raise inside rondo as a request that ended
+correctly, which it is not. The store releases the line's claim in the transaction that writes the
+status (`D-0073` rule 4.3), and a terminal row gives back its place on the host and the money held
+for it. So nobody has to open a terminal to clear it, which the definition of done asks (2026-09-23,
+the owner): before this, `rondo abandon` was the only way.
+
+Then it writes one drafter message with `asks` set, `start-stopped-<lap>`, into the request's
+thread. An ask counts as a wait, so the tab's *your turn* (`D-0108`) and the host's notification both
+reach the person, and `D-0106` puts it at the top of the thread. It holds the request's line until it
+is answered, as every stop does (`D-0069` rule 5). Its id is the lap's, so a second press joined to
+the first writes it once.
+
+**The message is the person's language and the person's words** (`D-0079`, `D-0076` rule 4.2). It is
+a `Chrome` entry, `startStoppedSaid`, resolved for this host exactly as the notification's sentence
+is, and it offers the two presses the answering box draws: starting again, and stopping. rondo's own
+sentence for what went wrong -- `continuo went away: the sandbox helper exited 137` and its like --
+is not in it. That goes on the lap's own row, as its reason, and to the host's console, escaped.
+
+**A lap the start reserved and then lost before the press could answer is ended too**, without an
+ask: the press is still holding the refusal screen, which says it all. So a row is never left
+holding its place because a throw beat the quarter-second poll.
+
+**rondo says the lap ended only when the store says it did.** `endFaulted` answers a report rather
+than raising when the row will not decode, when this process is still driving it, or when the write
+was refused. The ask then carries `startStoppedHeldSaid` instead: that it could not be ended, that
+it may still hold its place, its money and its files, and that this is a fault to look at rondo's
+own log for. Inviting somebody to start again over a lap that still holds everything would be the
+page lying about its own state.
+
+The stop is written only while the row still reads a status before the gate (`planned` through
+`performing`), or will not read. A lap past them when the throw arrives failed in the model reading
+taken once its gate opened, a gate the person may already have answered, or it ended on its own with
+a status the page already shows. Nothing is ended and no stop is written then, and the error goes to
+the host's console.
+
+**4. The start presses no longer say the screen waits for the gate.** Their busy note was
+`lapBusyNote` ("this screen moves on when it stops for you to check it -- a few minutes, and
+sometimes tens of minutes"), which is now false for them. They say `startBusyNote` instead: the page
+moves to the request's thread once the work is under way. The revise and conflict-fix presses keep
+`lapBusyNote`, which is still true for them. The stop's options name the answering box's own two
+presses: starting again, and stopping.
+
+**5. What is not done.** The revise press and the conflict-fix press also run a lap to its gate
+inside the press. rondo#409 names the start press, so they are left as they are. The same wrapper
+applies to them if the owner wants it. The row is polled rather than signalled from `reserve()`,
+which would have to be threaded through four layers to save at most a quarter second.

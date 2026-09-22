@@ -1161,8 +1161,27 @@ export interface Chrome extends PageWords {
   readonly startBusy: string;
   readonly reviseBusy: string;
   readonly publishBusy: string;
-  /** What a start or a change asked for is waiting on, and for how long. */
+  /** What a change asked for is waiting on, and for how long. */
   readonly lapBusyNote: string;
+  /** What a start press is waiting on: the lap's row, after which the thread shows it (D-0109). */
+  readonly startBusyNote: string;
+  /**
+   * What rondo writes into the request's thread when a start it had already
+   * answered stopped with a fault of rondo's own (D-0109 rule 3).
+   *
+   * **The person's language and the person's words**, for the reason
+   * {@link reachYourTurn} is in them: this is read by the person and by nobody
+   * else. What went wrong is on the lap's own row and on the host's console,
+   * because rondo's internal sentence is not a thing to put in front of anybody
+   * (D-0076 rule 4.2).
+   */
+  readonly startStoppedSaid: string;
+  /**
+   * The same stop, when rondo could not end the lap either (D-0109 rule 3):
+   * said as itself, because inviting somebody to start again over work that is
+   * still holding its place would be the page lying about its own state.
+   */
+  readonly startStoppedHeldSaid: string;
   readonly publishBusyNote: string;
   /** Why a publish press published nothing, one sentence each. */
   readonly publishRefusedNoApprover: string;
