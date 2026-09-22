@@ -132,14 +132,19 @@ const report = (waits, outcome) => {
   if (to === null || token === null || typeof fetch !== "function") {
     return;
   }
-  const body = new URLSearchParams({ token, outcome });
-  for (const wait of waits) {
-    body.append("wait", wait);
-  }
-  try {
-    fetch(to, { method: "POST", body, credentials: "same-origin" }).catch(() => {});
-  } catch {
-    // Nothing on the screen depends on it.
+  // In batches of the route's own limit (Codex, round 1): one navigation can
+  // bring more new waits than one report may carry, and a refused report is
+  // one never sent again.
+  for (let at = 0; at < waits.length; at += 32) {
+    const body = new URLSearchParams({ token, outcome });
+    for (const wait of waits.slice(at, at + 32)) {
+      body.append("wait", wait);
+    }
+    try {
+      fetch(to, { method: "POST", body, credentials: "same-origin" }).catch(() => {});
+    } catch {
+      // Nothing on the screen depends on it.
+    }
   }
 };
 

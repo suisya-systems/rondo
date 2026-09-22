@@ -23188,7 +23188,9 @@ once.
 
 **2. The title and the icon change without anybody's leave.**
 - The title is the header's count (`(N) rondo`, or `rondo` with nothing waiting). The server draws
-  it, and the script keeps it current from `#ledger`.
+  it, and the script keeps it current from `#ledger`. htmx's own title handling is off
+  (`ignoreTitle`): it writes the response's `<title>` straight after the swap the script reads, and
+  would take *your turn* back off the tab.
 - A new wait that rings while the tab is not visible and focused puts *Your turn - rondo* /
   *あなたの番 — rondo* in the title until the tab is looked at. The words that catch the eye come
   first, because a tab strip cuts a title after a couple of dozen characters.

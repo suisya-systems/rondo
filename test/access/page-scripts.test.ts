@@ -236,6 +236,12 @@ test("the host is told what the notice did, for each wait it rang for", async ()
     // The title and the icon need no leave from anybody.
     expect(tab.title).toBe("Your turn - rondo");
   }
+  // More new waits than one report may carry go in batches the route accepts.
+  const many = chimeTab([], { permission: "denied" });
+  many.redraw(Array.from({ length: 40 }, (_, at) => `ask:m-${String(at)}`));
+  expect(many.reports.map((sent) => new URLSearchParams(sent.body).getAll("wait").length)).toEqual([
+    32, 8,
+  ]);
 });
 
 class HTMLDetailsElement {}

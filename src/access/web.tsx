@@ -3619,6 +3619,10 @@ export async function operatorPage(
                   allowScriptTags: false,
                   historyEnabled: false,
                   includeIndicatorStyles: false,
+                  // **The tab's title is `page/chime.js`'s** (rondo#414): htmx
+                  // would write the response's `<title>` straight after
+                  // `htmx:afterSwap` and take *your turn* back off the tab.
+                  ignoreTitle: true,
                   // **A refused send is shown where the draft is** (#220 S1):
                   // htmx swaps no error by default, so a `409` would change
                   // nothing on the screen. The send routes answer htmx with a

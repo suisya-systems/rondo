@@ -598,6 +598,9 @@ test("liveness is per view: two views poll and swap, and the answer view updates
       allowScriptTags: false,
       historyEnabled: false,
       includeIndicatorStyles: false,
+      // The tab's title is `chime.js`'s, and a redraw must not take *your
+      // turn* back off it (rondo#414, Codex round 1).
+      ignoreTitle: true,
       // A refused send lands under the draft rather than nowhere (#220 S1).
       responseHandling: [
         { code: "204", swap: false },
