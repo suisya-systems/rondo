@@ -1007,7 +1007,7 @@ export type LapWorkInspection =
   | {
       readonly kind: "unreadable";
       /**
-       * Which half could not be read (D-0097). `history` is the base, the
+       * Which half could not be read (D-0099). `history` is the base, the
        * tip, the log or the diff; nothing after it was asked, so the
        * uncommitted state is unknown too, and the rule above still stands: the
        * publish degrades rather than stops. `status` is the history read and

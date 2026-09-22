@@ -269,7 +269,7 @@ export type PublishBlock =
   | { readonly why: "target"; readonly reason: string }
   /**
    * `git status` failed, so what the push would leave behind is unknown
-   * (D-0097). Its own arm because its answer is repairing the workspace,
+   * (D-0099). Its own arm because its answer is repairing the workspace,
    * not the paths; and, like `uncommitted`, no press here overrules it.
    */
   | { readonly why: "statusUnreadable"; readonly reason: string }

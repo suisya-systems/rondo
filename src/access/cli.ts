@@ -3451,7 +3451,7 @@ export function reviewLines(reading: LapReading): readonly string[] {
  * this is git reporting that the push would leave named files behind, the
  * class of `publishPreflight`'s "has no branch", which no flag reaches either.
  *
- * **A `git status` that fails is refused here too** (D-0097), on rule 5's
+ * **A `git status` that fails is refused here too** (D-0099), on rule 5's
  * own ground: what the push would leave behind is a fact, and not knowing it
  * is not a judgement an override can answer. A workspace whose *history* could
  * not be read is not refused here: it is `reviewGate`'s refusal, and
