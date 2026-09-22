@@ -22726,6 +22726,82 @@ The defaults of rules 1, 3, 4 and 5 above were accepted as built.
 - **A worker's question closed by anything but a person's press.**
 ---
 
+## D-0104 — The gate's checks card says what the worker itself ran, apart from what the reading says about itself: the last test run rondo can read off the lap's recorded commands, with the runner's counts and where they came from, and "not recorded" rather than a zero where nothing reads
+
+**Status:** accepted (2026-09-22, rondo#410). **Additive** to `D-0065` 5.5 (the checks card) and to
+rondo#69's coverage line, which are unchanged; keeps `D-0029` rule 9 (no module under `src/` runs a
+test suite) and `D-0089` (the repository, not rondo, defines its verification). Refs `D-0029`,
+`D-0065`, `D-0082`, `D-0089`, `D-0106`, continuo `D-1112`, rondo#69, rondo#410.
+
+**Numbering.** `D-0104` was assigned to this lane in advance; `D-0105` and `D-0106` are held by
+other lanes.
+
+**Why an entry is needed.** Lap 12's gate (2026-09-22) showed, under *Checks*, only the reading's
+statement about itself: it built nothing, ran nothing and tested nothing, and whether the lap's
+verification ran is neither checked nor claimed. The owner read that as "the tests were not run"
+and had to ask. The worker had run `npm run verify` (98 files, 1844 tests passed), and the run was
+on the lap's own record. A statement about the reader was being read as a statement about the
+worker, because it was the only statement on the card.
+
+### What was measured
+
+At rondo `7d4d8d9` and continuo `b7162ae`, by reading:
+- **The worker's commands are already on the row.** `lap perform` reports every tool call the turn
+  made with its output (continuo `D-1112`), read from the verified transcript generation, and the
+  interpreter writes that text into `lap_commands` at the suspend, in the same write as the gate id.
+  The model reviewer already reads it (`transcriptOfRow`); the page did not.
+- **A test runner's summary survives the cap.** continuo keeps the first and the last 4096 code
+  points of an output longer than 8192 and counts what it cut (`COMMAND_OUTPUT_LIMIT` in
+  `src/lap/cli.ts`), because a failing run's summary is at the end. vitest, jest and pytest all
+  print theirs last.
+- **rondo does not know a repository's verification command.** `D-0089` asks the worker to run
+  "the repository's own install and verification, as the repository defines them", in its rule
+  files; the plan names no command.
+
+### Decision
+
+1. **The source is `lap_commands`, and the page says so.** rondo reads the commands continuo
+   recorded for the lap; it runs nothing. The card names the transcript line of the run it shows
+   and says that rondo read it and did not run it.
+2. **A test run is a command whose output ends in a summary rondo can read**, with ANSI escapes
+   stripped: vitest's `Tests  … (N)` line (not `Test Files`), jest's `Tests: … N total`, pytest's
+   `==== … in Ns ====`. The counts are the runner's own: passed; failed (with pytest's errors);
+   skipped (with todo). A command is not recognised by its name: a name is a guess and carries no
+   counts. `ponytail:` another runner reads as rule 3's `none`, and the upgrade is its summary line
+   added to the one pattern.
+3. **Three answers, and none of them is a zero.**
+   - *not recorded*: the row holds no commands, continuo said it cannot say (`null`), or the column
+     does not read. Nothing is said about whether tests ran.
+   - *none readable*: the commands read and none printed a summary rondo knows. The card says rondo
+     found no test run it could read among N commands, which is not "no tests ran".
+   - *ran*: the **last** such run, which is the worker's latest check before it reported, with how
+     many earlier runs there were. The command's own error flag is shown beside the counts: a green
+     suite inside a `verify` whose lint then failed is both.
+4. **Placed in the checks card, above the reading's statement and under its own label.** The
+   reading's sentences (`READING_COVERAGE`) are unchanged: they are true of the reader. They now sit
+   under a label that names the reader. The worker's block is drawn whatever state the reading is
+   in, because the worker's run does not depend on it. Nothing moves above a press (`D-0106`).
+5. **The terminal is unchanged.** `rondo answer`'s gate report still prints the reading's lines
+   alone; a follow-up issue carries it there.
+
+### What this entry does not do
+
+- **It does not check that the lap ran the verification it was asked for.** It shows the last test
+  run the record holds; whether that run is the repository's whole verification is still the
+  person's reading, and the model reviewer's.
+- **It does not read the transcript file.** A lap that is still running has no `lap_commands` yet,
+  and its card says *not recorded*.
+
+### What would falsify it
+
+- **A gate whose card says a run passed while the lap's transcript holds a later failing run** of a
+  runner rule 2 names: rule 3's "last" is not holding.
+- **A card that shows a zero** (`0 passed`) for a lap whose record holds no readable run.
+- **A person who reads the worker's block as rondo's own check**: the source line is not doing its
+  work.
+
+---
+
 ## D-0106 — What a person acts on sits at the top of every screen, and the thread runs newest first: presses, boxes and decisions come before any history or long content, nothing is stuck to the window's foot, and the answering box keeps every element it inherited
 
 **Status:** accepted (2026-09-22, the owner's request on rondo#408). **Not additive** to `D-0083`

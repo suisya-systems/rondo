@@ -300,6 +300,19 @@ explanation you pressed on and then answers the gate.`,
   checksCounted: (commits, files) =>
     `Read ${String(commits)} commit${commits === 1 ? "" : "s"} and ${String(files)} file${files === 1 ? "" : "s"}.`,
   whatItRead: "What it read, and what it did not",
+  checksReader: "rondo's checks",
+  workerRan: "What the worker ran",
+  workerRanUnrecorded:
+    "What the worker ran is not recorded for this lap, so rondo cannot say whether it ran any test.",
+  workerRanNone: (commands) =>
+    `Among the ${String(commands)} command${commands === 1 ? "" : "s"} recorded for this lap, rondo ` +
+    "found no test run it can read. That does not mean none was run.",
+  workerCount: (kind, count) => `${String(count)} ${kind}`,
+  workerRanErrored: "The command itself ended in error.",
+  workerRanEarlier: (runs) => `and ${String(runs)} earlier run${runs === 1 ? "" : "s"}`,
+  workerRanSource: (line) =>
+    `Read by rondo from the commands continuo recorded for this lap (transcript line ${String(line)}); ` +
+    "rondo did not run it.",
   // A reach this build does not know says its reach is not recorded, as an
   // unknown drafter does, rather than guessing at it.
   readingCovered: (reach) => (READING_COVERAGE[reach] ?? READING_COVERAGE.unrecorded).join(" "),

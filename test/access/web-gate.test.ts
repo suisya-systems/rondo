@@ -962,3 +962,67 @@ test("what a reading did not look at is beside its verdict and not behind a fold
   expect(model).toContain("ran nothing itself");
   expect(model).toContain("that it was understood is not provable");
 });
+
+test("what the worker ran is on the checks card above the reviewer's account of itself, with its source (D-0104, #410)", async () => {
+  // **Lap 12's misreading**: the reviewer's *it built nothing, ran nothing*
+  // was taken as *the tests were not run*, while the transcript held a green
+  // `npm run verify`. The page showed nothing of the worker's own run.
+  const world = fresh();
+  await gateWithChecks(world);
+  const summary = (line: string) => ({
+    index: 41,
+    command: "npm run verify",
+    output: `> verify\n\n      Tests  ${line}\n`,
+    output_omitted_chars: 0,
+    is_error: false,
+  });
+  const carried = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "awaiting_human",
+    {
+      lapCommands: JSON.stringify([
+        { ...summary("1 failed | 1842 passed (1843)"), index: 12 },
+        {
+          index: 20,
+          command: "git status",
+          output: "clean",
+          output_omitted_chars: 0,
+          is_error: false,
+        },
+        summary("1844 passed | 2 skipped (1846)"),
+      ]),
+    },
+    5_000,
+  );
+  expect(carried.kind).toBe("transitioned");
+  const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+    kind: "summary",
+  });
+  const checks = html.slice(html.indexOf('id="checks"'), html.indexOf('id="model-review"'));
+  expect(checks).toContain(EN.workerRan);
+  expect(checks).toContain("npm run verify");
+  expect(checks).toContain("1844 passed");
+  expect(checks).toContain("2 skipped");
+  expect(checks).toContain(EN.workerRanEarlier(1));
+  // Read, not run -- and read from where, at which transcript line.
+  expect(checks).toContain(EN.workerRanSource(41));
+  // The worker's run is read before the reviewer's statement about itself, and
+  // that statement now says whose it is.
+  expect(checks.indexOf("1844 passed")).toBeLessThan(checks.indexOf(EN.whatItRead));
+  expect(checks).toContain(`${EN.checksReader} · </span>${EN.whatItRead}`);
+  expect(checks).toContain("It built nothing, ran nothing and tested nothing");
+});
+
+test("a lap whose commands are not recorded says so on the checks card, and never a zero (D-0104, #410)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+    kind: "summary",
+  });
+  const checks = html.slice(html.indexOf('id="checks"'), html.indexOf('id="model-review"'));
+  expect(checks).toContain(EN.workerRan);
+  expect(checks).toContain(EN.workerRanUnrecorded);
+  expect(checks).not.toContain("0 passed");
+  expect(checks).not.toContain(EN.workerRanSource(41).slice(0, 12));
+});

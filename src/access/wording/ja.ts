@@ -302,6 +302,20 @@ export const JA: Chrome = Object.freeze({
   checksCounted: (commits, files) =>
     `コミット ${String(commits)} 件とファイル ${String(files)} 件を読みました。`,
   whatItRead: "読んだものと読んでいないもの",
+  checksReader: "rondo のチェック",
+  workerRan: "作業者が実行したもの",
+  workerRanUnrecorded:
+    "この周回で作業者が何を実行したかは記録に残っていません。テストが走ったかどうかは rondo には言えません。",
+  workerRanNone: (commands) =>
+    `この周回に記録されたコマンド ${String(commands)} 件の中に、rondo が読み取れるテスト実行はありませんでした。` +
+    "テストが走らなかった、という意味ではありません。",
+  workerCount: (kind, count) =>
+    `${{ passed: "成功", failed: "失敗", skipped: "スキップ" }[kind]} ${String(count)}`,
+  workerRanErrored: "コマンド自体はエラーで終わっています。",
+  workerRanEarlier: (runs) => `これより前にも ${String(runs)} 回実行しています`,
+  workerRanSource: (line) =>
+    `continuo がこの周回について記録したコマンド (作業記録 ${String(line)} 行目) を rondo が読み取ったものです。` +
+    "rondo が実行したのではありません。",
   readingCovered: (reach) => {
     const built =
       "ビルドもテストも、何かの実行もしていません。rondo は周回の作業を動かせないためです。" +

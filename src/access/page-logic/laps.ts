@@ -12,7 +12,7 @@
  * `D-0046`'s distinction is the one to hold while reading these:
  * an unread cost is not a zero, and the three columns say so separately.
  */
-import { isNestedSandboxRefusal } from "../../continuo/protocol.js";
+import { decodeLapCommands, isNestedSandboxRefusal } from "../../continuo/protocol.js";
 import type { IterationRecord } from "../../store/records.js";
 import { ago } from "../inbox.js";
 import type { Chrome } from "../wording.js";
@@ -140,4 +140,87 @@ export function endedRecently(records: readonly IterationRecord[]): readonly Ite
   return records
     .toSorted((left, right) => right.updatedAtMs - left.updatedAtMs)
     .slice(0, RECENT_ENDED);
+}
+
+/**
+ * One test run the worker made, as rondo read it off the lap's commands
+ * (D-0104, rondo#410): the command, the runner's own counts, and whether the
+ * command itself ended in error (a green suite under a `verify` whose lint
+ * then failed is both). `index` is the transcript line continuo cites.
+ */
+export interface WorkerTestRun {
+  readonly index: number;
+  readonly command: string;
+  readonly passed: number;
+  readonly failed: number;
+  readonly skipped: number;
+  readonly isError: boolean;
+}
+
+/**
+ * What the worker itself ran, apart from any reader's statement about itself
+ * (D-0104, rondo#410). Three answers, and none of them is a zero:
+ *
+ * - `unrecorded`: the row holds no commands, continuo said it cannot say, or
+ *   the column does not read -- so nothing can be said about the worker's run.
+ * - `none`: the commands read, and none of them printed a test summary rondo
+ *   knows. That is not "no tests ran": a runner rondo cannot read is the same
+ *   row.
+ * - `ran`: the last run the worker made, and how many it made before it.
+ *
+ * rondo reads this; it runs nothing (D-0029 rule 9 is unchanged).
+ */
+export type WorkerRuns =
+  | { readonly kind: "unrecorded" }
+  | { readonly kind: "none"; readonly commandCount: number }
+  | { readonly kind: "ran"; readonly last: WorkerTestRun; readonly earlier: number };
+
+export function workerRuns(lapCommands: string | null): WorkerRuns {
+  const decoded = lapCommands === null ? null : decodeLapCommands(lapCommands);
+  if (decoded === null || decoded.kind !== "read") {
+    return { kind: "unrecorded" };
+  }
+  const runs = decoded.commands.flatMap((c) => {
+    const counts = testSummary(c.output);
+    return counts === null
+      ? []
+      : [{ index: c.index, command: c.command, ...counts, isError: c.isError }];
+  });
+  const last = runs.at(-1);
+  return last === undefined
+    ? { kind: "none", commandCount: decoded.commands.length }
+    : { kind: "ran", last, earlier: runs.length - 1 };
+}
+
+// vitest `Tests  1 failed | 1842 passed (1843)`, jest `Tests: 1 failed, 40
+// passed, 41 total`, pytest `==== 1 failed, 40 passed in 1.20s ====`. `Test
+// Files` is vitest's other line and deliberately not matched.
+// ponytail: three runners by their summary line; another runner reads as
+// `none`, and the upgrade is a runner's line added here.
+const SUMMARY_LINE =
+  /^\s*(?:Tests:?\s+\d.*(?:\(\d+\)|\d+ total)|=+ .*\d+ \w+.* in [\d.]+s.*=+)\s*$/;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ESC opens the colour codes stripped here
+const ANSI = /\u001b\[[0-9;]*m/g;
+
+/** The last test summary in one command's output, or null. */
+export function testSummary(
+  output: string,
+): { readonly passed: number; readonly failed: number; readonly skipped: number } | null {
+  const line = output
+    .replace(ANSI, "")
+    .split("\n")
+    .findLast((l) => SUMMARY_LINE.test(l));
+  if (line === undefined) {
+    return null;
+  }
+  const count = (words: string) =>
+    [...line.matchAll(new RegExp(`(\\d+) (?:${words})\\b`, "g"))].reduce(
+      (sum, m) => sum + Number(m[1]),
+      0,
+    );
+  return {
+    passed: count("passed"),
+    failed: count("failed|errors?"),
+    skipped: count("skipped|todo"),
+  };
 }
