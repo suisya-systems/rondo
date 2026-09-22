@@ -22799,6 +22799,20 @@ screen open rather than in a fold. They stay open and are drawn under the press:
 fold holding what the press needs, not a press above what it sends. What releasing does stays
 above the release press for the same rule; the files held and why are under it.
 
+**7. A long form repeats its press under its last box.** The scope form, the drafted scope's form
+and the raise form draw the same press at the form's top and again under the last box (point 2's
+answer), as the goal page does. The top one is the press rule 1 asks for; the repeat is for a person
+who has just changed the last number.
+
+### What was put to the owner, and the answer
+
+Put through the window on **2026-09-22**, each with a recommendation.
+
+| # | Point | Recommendation | Answer |
+|---|---|---|---|
+| 1 | Publish: the pull request's title and body drawn open **under** the press (rule 6), or inside the press's box above it | **under**, open: `D-0082` rule 7 forbids a fold, not a press above what it sends | **as recommended** |
+| 2 | Long forms (scope, raise): the press at the form's top only, or also repeated under the last box as the goal page does | top only | **repeat it**: the top press stays, and the same press is drawn again under the last box (rule 7) |
+
 ### What this does to earlier entries
 
 | Entry | What happens to it | |
@@ -22810,16 +22824,16 @@ above the release press for the same rule; the files held and why are under it.
 | `D-0083` rule 9, the box inherits the gate whole | Every element kept; their order inside the box is rule 5 here | kept |
 | `D-0086` rule 3, *one line over the top* | The same fold of what was already read, now at the foot of the thread under the new lines, since the thread runs the other way | **not additive** |
 | `D-0082` rule 7 | Unchanged; rule 6 here says how it is read with the press above | kept |
-| `D-0097` point 2 (the goal page's press above its clauses, repeated under them) | Unchanged; it was the first screen built this way | kept |
+| `D-0097` point 2 (the goal page's press above its clauses, repeated under them) | Unchanged; it was the first screen built this way, and rule 7 takes its repeat to the scope and raise forms | kept |
 
 ### What this gives up
 
 - **Reading a thread from its beginning is reading upwards.** A person who wants the story in order
   starts at the foot. Time is still the axis, and the request's own first line is the thread's title.
-- **A press is not in reach while a long form is scrolled.** The scope form's press was stuck to the
-  foot so that changing the last box left the press in view; now it is at the form's top, and a
-  person who edits the last box scrolls back up. The goal page repeats its press under its clauses;
-  this entry does not add repeats elsewhere.
+- **A long form's press is not stuck in view while it is scrolled.** The scope form's press was stuck
+  to the foot so that changing the last box left the press in view. Now it is at the form's top and,
+  by the owner's answer to point 2, repeated under the last box, as the goal page's is; between the
+  two, in the middle of the form, neither is on screen.
 
 ### What would falsify it
 

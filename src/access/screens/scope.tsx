@@ -773,6 +773,20 @@ async function scopeForm(
         </section>
         {/* D-0066's first gate answer, on the screen and not only in a terminal. */}
         <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
+        {/* **The same press again under the last box** (D-0106, the owner's answer
+            to point 2): a person who changed a number at the foot presses here
+            rather than scrolling back up; the goal page does the same. */}
+        <div class="flex flex-col">
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby="scope-plain"
+            data-busy={wording.scopeBusy}
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+          >
+            {wording.scopeAction}
+          </button>
+        </div>
       </form>
       {/* The plan card is what the form runs on, and long: under the form
           and its press rather than above them (D-0106, rondo#408). */}
@@ -1035,6 +1049,20 @@ async function raiseForm(
         <p class="note text-meta leading-5 text-muted-foreground">{wording.raiseFromHere}</p>
         <p class="note text-meta leading-5 text-muted-foreground">{wording.raiseRetires}</p>
         <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
+        {/* **The same press again under the last box** (D-0106, the owner's answer
+            to point 2): a person who changed a number at the foot presses here
+            rather than scrolling back up; the goal page does the same. */}
+        <div class="flex flex-col">
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby="raise-plain"
+            data-busy={wording.scopeBusy}
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+          >
+            {wording.raiseAction}
+          </button>
+        </div>
       </form>
     </>
   );
@@ -1275,6 +1303,20 @@ async function draftedForm(
           {cite("irreversible_additions", wording.scopeNarrowedAdded)}
         </section>
         <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
+        {/* **The same press again under the last box** (D-0106, the owner's answer
+            to point 2): a person who changed a number at the foot presses here
+            rather than scrolling back up; the goal page does the same. */}
+        <div class="flex flex-col">
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby="scope-draft-plain"
+            data-busy={wording.scopeBusy}
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+          >
+            {wording.scopeDraftedAction}
+          </button>
+        </div>
       </form>
       {/* The drafted plans under the form and its press (D-0106, rondo#408):
           the lead above still says the work is below. */}
