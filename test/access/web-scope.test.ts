@@ -128,6 +128,7 @@ async function seedEndedLap(
   // Every lap names a request (D-0083); the budgets are what this seeds for.
   await openRequest(world.connection);
   const outcome = await world.store.reserve({
+    numbers: null,
     id,
     request: "seeded for the scope screen's budgets",
     // The plan `heldAgentType`'s "iteration" source rebuilds `agentTypeInput`
@@ -801,6 +802,7 @@ test(
     });
     const iterationId = "lap-already-there";
     const reserved = await store.reserve({
+      numbers: null,
       id: iterationId,
       request: "Please do it.",
       plan: planFor(iterationId),
@@ -851,6 +853,7 @@ test(
     await openRequest(connection);
     const ended = "lap-ended";
     const reserved = await store.reserve({
+      numbers: null,
       id: ended,
       request: "Please do it.",
       plan: planFor(ended),
@@ -880,6 +883,7 @@ test(
     // compared against the admission row and never trusted).
     const gated = "lap-gated";
     const openedReserve = await store.reserve({
+      numbers: null,
       id: gated,
       request: "Please do it.",
       plan: planFor(gated),

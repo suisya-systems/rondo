@@ -125,6 +125,8 @@ function planWith(layer: CatalogLayer, allowedBash: readonly string[]): Admitted
     gateDeadlineAtMs: null,
     pullRequestBaseBranch: null,
     forgeRepository: null,
+    takeIn: null,
+    decisionRecord: null,
     invocationCeilingMs: 1_800_000,
     catalogLayers: [withAllowedBash(layer, allowedBash)],
     projectName: "rondo",

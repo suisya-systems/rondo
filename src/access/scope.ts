@@ -87,6 +87,14 @@ export type ScopeAct =
       readonly predecessorId: string;
       /** The predecessor row's own `requestMessageId`, inherited (D-0061 rule 4). */
       readonly requestMessageId: string;
+      /**
+       * The person pressed this redo as the **closing lap** (D-0098 rule 5.2):
+       * one lap after the review exit that fixes the findings left below the
+       * threshold and is not read again. Never derived from the state of the
+       * line: an answer or conflict-fix revise after the exit is an ordinary
+       * redo, and must not be left unread by inference.
+       */
+      readonly closing: boolean;
     };
 
 export type ScopeVerdict =
@@ -135,6 +143,7 @@ export function reviewScopeOf(payload: ScopePayload): ReviewScope {
   return Object.freeze({
     budgets: Object.freeze({ reviewRounds: payload.budgets.review_rounds }),
     severityThreshold: payload.severity_threshold,
+    ...(payload.below_threshold === undefined ? {} : { belowThreshold: payload.below_threshold }),
   });
 }
 
@@ -325,12 +334,68 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
       `the predecessor '${act.predecessorId}' has no model reading, so there is no round to test`,
     );
   }
+  const policy = reviewPolicyOf(reviewScopeOf(payload));
   const round = reviewRoundDecision({
     latest: readings.latestModelReading,
     roundsTaken: readings.roundsTaken,
-    policy: reviewPolicyOf(reviewScopeOf(payload)),
+    policy,
   });
-  return round.kind === "stop" ? outside("readings", round.reason) : { kind: "inside" };
+  if (round.kind === "stop") {
+    return outside("readings", round.reason);
+  }
+  // D-0098 rule 5.2: a closing lap is the scope's option, after the exit, and
+  // only with something left below the threshold for it to fix.
+  if (act.closing) {
+    const refusal =
+      policy.belowThreshold !== "fix_unread"
+        ? "the scope's below_threshold is 'leave', so no closing lap is allowed (D-0098 rule 5.2)"
+        : round.kind !== "exit"
+          ? `the predecessor '${act.predecessorId}' has findings at or above the threshold, and a ` +
+            "closing lap follows the review exit only (D-0098 rule 5.2)"
+          : round.leftBelowThreshold.length === 0
+            ? `the predecessor '${act.predecessorId}' left no finding below the threshold, so a ` +
+              "closing lap has nothing to fix (D-0098 rule 5.2)"
+            : readings.latestModelReading.evidence === null
+              ? `the predecessor's model reading names no tip commit, so what the reviewer last ` +
+                "read cannot be said (D-0098 rule 5.3)"
+              : null;
+    if (refusal !== null) {
+      return outside("readings", refusal);
+    }
+  }
+  return { kind: "inside" };
+}
+
+/**
+ * What a closing redo records (D-0098 rule 5.3), or null for any other act.
+ * Read from the snapshot {@link scopeVerdict} passed as `inside`, so it is the
+ * same reading and the same decision.
+ */
+function closingSpend(
+  act: ScopeAct,
+  snapshot: ScopeSnapshot,
+): NonNullable<ScopeSpend["closing"]> | null {
+  if (act.kind !== "redo" || !act.closing) {
+    return null;
+  }
+  const readings = snapshot.predecessor?.readings;
+  const latest = readings?.kind === "read" ? readings.latestModelReading : null;
+  if (readings?.kind !== "read" || latest === null || latest.evidence === null) {
+    throw new Error("an inside closing verdict without a predecessor's reading is a defect");
+  }
+  const round = reviewRoundDecision({
+    latest,
+    roundsTaken: readings.roundsTaken,
+    policy: reviewPolicyOf(reviewScopeOf(snapshot.scope.payload)),
+  });
+  if (round.kind !== "exit") {
+    throw new Error("an inside closing verdict after no exit is a defect");
+  }
+  return {
+    readTipCommit: latest.evidence.tipCommit,
+    readingReadAtMs: latest.readAtMs,
+    findings: round.leftBelowThreshold,
+  };
 }
 
 /**
@@ -712,6 +777,7 @@ export async function admitUnderScope(
       // Drift between this classification and the store's write is D-0047
       // rule 6's bounded race, which D-0066 rule 4.3 accepts.
       agentTypeDigest: snapshot.classification.agentTypeDigest,
+      closing: closingSpend(act, snapshot),
     },
   );
   if (report.scopeRefusal !== undefined) {

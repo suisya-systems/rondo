@@ -115,6 +115,7 @@ export async function reserve(
     await openRequest(world, requestMessageId, request);
   }
   const outcome = await world.store.reserve({
+    numbers: null,
     id,
     request,
     plan: planFor(id, materialLanguage),
@@ -161,6 +162,8 @@ export const PLAN: RunPlan = {
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
   forgeRepository: null,
+  takeIn: null,
+  decisionRecord: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [{ layer: "git_url", origin: "o", baseDir: "/srv/catalog", data: {} }],
   projectName: "rondo",

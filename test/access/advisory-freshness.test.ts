@@ -87,6 +87,8 @@ const PLAN_INPUT: RunPlan = {
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
   forgeRepository: null,
+  takeIn: null,
+  decisionRecord: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [CATALOG_LAYER],
   projectName: "rondo",
@@ -128,6 +130,7 @@ const reserveWithPlan = async (
   plan: RunPlan = PLAN_INPUT,
 ) =>
   store.reserve({
+    numbers: null,
     id,
     request: "teach rondo to count",
     plan: realPlan(id, plan),

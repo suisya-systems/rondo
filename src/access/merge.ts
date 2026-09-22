@@ -33,7 +33,10 @@ import type { Merged, MergeInput, MergeRefusal } from "./web-app.js";
 
 /** What a merge press reads and writes, as values a test can replace. */
 export interface MergePorts {
-  readonly store: Pick<IterationStore, "read" | "readingsFor" | "laneLedger" | "readLive">;
+  readonly store: Pick<
+    IterationStore,
+    "read" | "readingsFor" | "laneLedger" | "readLive" | "closingLapOf"
+  >;
   readonly record: Pick<AdvisoryRecord, "threadMessages" | "recordThreadMessage">;
   readonly now: () => number;
   /**
@@ -211,6 +214,9 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
         : `the forge accepted the merge and did not answer after it: ${after.reason}`,
     );
   }
+  // D-0098 rule 5.3: a closing lap's merge says it merged bytes no reviewer
+  // read, and which commit the reviewer last read.
+  const closing = await ports.store.closingLapOf(record.id);
   const line = await reportToRequest(
     ports,
     record.id,
@@ -220,6 +226,7 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
       into: before.baseBranch,
       method: method.method,
       mergeCommit: after.mergeCommit,
+      notReread: closing,
     },
     ports.now(),
   );

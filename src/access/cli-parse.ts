@@ -73,6 +73,8 @@ export interface ParsedCommand {
   readonly dryRun: boolean;
   readonly allowRemoteMismatch: boolean;
   readonly despiteReview: boolean;
+  /** `revise --closing-fix`: the person presses the closing lap (D-0098 rule 5.2). */
+  readonly closingFix: boolean;
 }
 
 /** A command rondo understood, or the first reason it did not. */
@@ -111,6 +113,7 @@ const FLAGS = {
   "dry-run": { type: "boolean" },
   "allow-remote-mismatch": { type: "boolean" },
   "despite-review": { type: "boolean" },
+  "closing-fix": { type: "boolean" },
 } as const;
 
 export const COMMANDS = [
@@ -161,7 +164,9 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   answer: ["actor-id", "body", "iteration-id", "verified"],
   // `--scope-decision-id` spends a scope on the second lap (D-0070): the gate
   // answer stays the person's, and the lap is the `redo` arm's admission.
-  revise: ["actor-id", "body", "iteration-id", "scope-decision-id"],
+  // `--closing-fix` presses the closing lap (D-0098 rule 5.2): a scope's
+  // option, so it is refused without `--scope-decision-id` in `parseCommand`.
+  revise: ["actor-id", "body", "iteration-id", "scope-decision-id", "closing-fix"],
   publish: [
     "repo",
     "actor-id",
@@ -343,6 +348,18 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     };
   }
 
+  // **A closing lap is the scope's option** (D-0098 rule 5.2): with no scope
+  // there is no `below_threshold` to allow it, and a flag that did nothing
+  // would read as a lap that was not re-read on purpose.
+  if (values["closing-fix"] === true && values["scope-decision-id"] === undefined) {
+    return {
+      kind: "refused",
+      reason:
+        "--closing-fix presses the closing lap a scope's below_threshold allows, so it needs " +
+        "--scope-decision-id naming that scope's approval.",
+    };
+  }
+
   const text = (name: string): string | null => {
     const value = values[name];
     return typeof value === "string" ? value : null;
@@ -419,6 +436,7 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       dryRun: values["dry-run"] === true,
       allowRemoteMismatch: values["allow-remote-mismatch"] === true,
       despiteReview: values["despite-review"] === true,
+      closingFix: values["closing-fix"] === true,
     },
   };
 }
@@ -455,5 +473,6 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     dryRun: false,
     allowRemoteMismatch: false,
     despiteReview: false,
+    closingFix: false,
   };
 }

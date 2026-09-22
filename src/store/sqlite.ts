@@ -205,6 +205,16 @@ export interface ReserveInput {
    * this call does not write.
    */
   readonly claim: LaneClaimAsk | null;
+  /**
+   * The decision-record numbers this admission reserves (D-0098 rule 3.3), or
+   * null for none: consecutive, and the first the next above both the default
+   * branch's record (the caller's read, named in the prompt already) and every
+   * number ever reserved (read here, under the write lock). A first lap's are
+   * written beside its first `lane_claim` row, both or neither; a redo's are
+   * the one more its gate found it needs. Required for
+   * `supersedesIterationId`'s reason.
+   */
+  readonly numbers: readonly number[] | null;
   readonly nowMs: number;
 }
 
@@ -230,6 +240,27 @@ export interface ScopeSpend {
   /** The split proposal the plan came from, or null for an in-scope retry (rule 3.3). */
   readonly proposalId: string | null;
   readonly agentTypeDigest: string;
+  /**
+   * D-0098 rule 5: this redo is the closing lap, and what the reviewer last
+   * read. Written to `closing_lap` beside the consumption, both or neither.
+   * Absent or null for every other admission.
+   */
+  readonly closing?: ClosingLapSpend | null;
+}
+
+/** A closing lap as its admission names it (D-0098 rule 5.3). */
+export interface ClosingLapSpend {
+  /** The tip commit of the predecessor's model reading: what the reviewer last read. */
+  readonly readTipCommit: string;
+  readonly readingReadAtMs: number;
+  /** The below-threshold finding indexes (0-based) of that reading, which the lap answers. */
+  readonly findings: readonly number[];
+}
+
+/** A closing lap as {@link IterationStore.closingLapOf} reads it back. */
+export interface ClosingLap extends ClosingLapSpend {
+  readonly iterationId: string;
+  readonly predecessorId: string;
 }
 
 /**
@@ -325,6 +356,13 @@ export type ReserveOutcome =
       readonly paths: readonly string[];
       readonly holders: readonly LaneHolder[];
     }
+  /**
+   * A number asked for is not above the highest this record has ever had
+   * reserved (D-0098 rule 3.3): another admission took it since the caller
+   * read. Nothing is written; the caller composes the numbers again from
+   * `highest` and retries.
+   */
+  | { readonly kind: "numbersMoved"; readonly highest: number }
   | { readonly kind: "defect"; readonly reason: string };
 
 /** Which of {@link HostPolicy}'s two bounds an admission was refused by. */
@@ -631,6 +669,46 @@ export interface IterationStore {
    * work landed. Writes nothing.
    */
   laneLedger(): Promise<readonly LedgerLine[]>;
+  /**
+   * The decision-record numbers the line of `iterationId` was handed (D-0098
+   * rule 3.2), ascending, each with whether a release row names it. Empty for
+   * a line that reserved none or is not in this store. Writes nothing.
+   */
+  numberReservations(iterationId: string): Promise<readonly NumberReservation[]>;
+  /**
+   * The highest number ever reserved in `record` of `repository` (as
+   * `repositoryKey` spells it), released ones included, or 0 (D-0098 rule
+   * 3.3): half of the floor an admission's numbers start above.
+   */
+  highestReserved(repository: string, record: string): Promise<number>;
+  /**
+   * `first_landed` (D-0098 rule 1.1): the landing that released the line
+   * `iterationId` belongs to, or null. Read from its release rows' `landing`
+   * basis, which only the landing reading writes (rule 1.5): a release by
+   * `abandon`, `fail`, the person's press or "ended with nothing to land"
+   * carries none. The latest one, and still read after a retry takes the claim
+   * back. Writes nothing.
+   */
+  landingOf(iterationId: string): Promise<LineLanding | null>;
+  /**
+   * D-0098 rule 5.3: the closing-lap row `iterationId` was admitted with, or
+   * null when it is an ordinary lap. Writes nothing.
+   */
+  closingLapOf(iterationId: string): Promise<ClosingLap | null>;
+}
+
+/** One split an approval admitted a plan of ({@link AdvisoryRecord.admittedSplits}). */
+export interface AdmittedSplit {
+  readonly scopeDecisionId: string;
+  readonly proposalId: string;
+  readonly requestMessageId: string;
+}
+
+/** What {@link IterationStore.landingOf} reads: the default branch and the commit the landing was read at. */
+export interface LineLanding {
+  readonly branch: string;
+  readonly commit: string;
+  readonly atMs: number;
 }
 
 /** One line as the page is told about it ({@link IterationStore.laneLedger}). */
@@ -655,6 +733,12 @@ export interface LedgerLine {
    * land, which `closedTips` tells apart.
    */
   readonly releasedBy: "person" | "rondo" | null;
+}
+
+/** One reserved decision-record number ({@link IterationStore.numberReservations}). */
+export interface NumberReservation {
+  readonly number: number;
+  readonly released: boolean;
 }
 
 export interface LaneCompareInput {
@@ -697,6 +781,14 @@ export interface LaneReleaseInput {
     readonly claimId: string | null;
     readonly lapIds: readonly string[];
   } | null;
+  /**
+   * Whether this release is a landing reading's "landed" (D-0098 rule 3.7): a
+   * landed line's number reservations are kept; every other release -- a line
+   * that ended with nothing to land, the person's press -- releases them in
+   * this transaction (rule 3.4). `takenOver` cannot tell the two apart, so
+   * the caller says which.
+   */
+  readonly landed: boolean;
   readonly authorKind: "operator" | "drafter";
   readonly authorId: string;
   readonly bases: readonly JsonValue[];
@@ -1545,6 +1637,48 @@ CREATE TABLE IF NOT EXISTS triage_decline (
   declined_by                 TEXT    NOT NULL,
   declined_at_ms              INTEGER NOT NULL
 );
+
+-- D-0098 rule 3.2. A decision-record number a line was handed at admission.
+--
+-- **Immutable and append-only, with no status column** (lane_claim's shape).
+-- A release is a successor row naming the reservation it releases in
+-- releases_reservation_id and repeating its triple; a released number is a gap
+-- in the record and is never handed out again (rule 3.4). **(repository,
+-- record, number) is unique over every reservation row ever written**: the
+-- partial index below leaves out only release rows, which repeat the triple of
+-- the row they release. record is the repository-relative path the plan's
+-- decision_record names; lineage_id is the lineage's first iteration id.
+CREATE TABLE IF NOT EXISTS number_reservation (
+  reservation_id              TEXT    PRIMARY KEY,
+  repository                  TEXT    NOT NULL,
+  record                      TEXT    NOT NULL,
+  number                      INTEGER NOT NULL,
+  lineage_id                  TEXT    NOT NULL,
+  releases_reservation_id     TEXT    UNIQUE,
+  bases                       TEXT    NOT NULL,
+  created_at_ms               INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS number_reservation_once
+  ON number_reservation(repository, record, number) WHERE releases_reservation_id IS NULL;
+
+-- D-0098 rule 5.3. A closing lap: one redo after the review exit, under a scope
+-- whose below_threshold is fix_unread, that is **not read again**.
+--
+-- **Immutable and append-only**, written by reserve() beside the redo's
+-- scope_consumption row, both or neither. Its presence is the whole marker: the
+-- model reading is skipped for iteration_id, which is what keeps the lap from
+-- being a round and a further redo from being decidable (one closing lap by
+-- construction). read_tip_commit is the tip the reviewer last read (the
+-- predecessor's model reading), reading_read_at_ms that reading's clock, and
+-- findings the canonical JSON of the below-threshold finding indexes it answers.
+CREATE TABLE IF NOT EXISTS closing_lap (
+  iteration_id                TEXT    PRIMARY KEY,
+  predecessor_id              TEXT    NOT NULL,
+  read_tip_commit             TEXT    NOT NULL,
+  reading_read_at_ms          INTEGER NOT NULL,
+  findings                    TEXT    NOT NULL,
+  created_at_ms               INTEGER NOT NULL
+);
 `;
 
 /**
@@ -2123,6 +2257,13 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
               ? lane
               : { kind: "laneRefused", paths: lane.paths, holders: lane.holders };
           }
+          // **The numbers, beside the claim and for the claim's reason**
+          // (D-0098 rule 3.3): tested before the spends so a refusal consumes
+          // nothing, and written after the row below, both or neither.
+          const numbers = numberAdmission(connection, input);
+          if (numbers.kind !== "write" && numbers.kind !== "none") {
+            return numbers;
+          }
           // **A successor's request link is its predecessor's, read here**
           // (rondo#195): a revision or a retry is the same request continued,
           // so the link is derived from the row it supersedes rather than
@@ -2197,6 +2338,9 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
             );
           if (lane.kind === "write") {
             insertClaim(connection, lane.write, input.nowMs);
+          }
+          if (numbers.kind === "write") {
+            insertReservations(connection, numbers, input.id, input.nowMs);
           }
           const written = readRow(input.id);
           if (written === null) {
@@ -2433,6 +2577,11 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
             },
             input.nowMs,
           );
+          // A landed line's numbers are in the record and stay its (D-0098
+          // rule 3.7); any other release gives them up here (rule 3.4).
+          if (!input.landed) {
+            releaseReservations(connection, root.id, input.bases, input.nowMs);
+          }
           return { kind: "released", lineageId: root.id };
         });
       } catch (error) {
@@ -2452,7 +2601,13 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
         if (head === null) {
           return { kind: "compared", lineageId: root, unheld: [], held: [] };
         }
-        const outside = input.paths.filter((path) => !claimCovers(head.paths, path));
+        // The decision record is a shared-append path (D-0098 rule 3.5):
+        // changing it is neither outside a claim nor a collision; the gate's
+        // number test reads it instead (rule 3.6).
+        const record = lineRecord(connection, root);
+        const outside = input.paths.filter(
+          (path) => path !== record && !claimCovers(head.paths, path),
+        );
         const held = openLines(connection, head.repository, root).flatMap((line) => {
           const shared = sharedPaths(outside, line.paths);
           return shared.length === 0 ? [] : [{ lineageId: line.lineageId, sharedPaths: shared }];
@@ -2471,6 +2626,80 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
 
     async laneLedger(): Promise<readonly LedgerLine[]> {
       return ledgerLines(connection);
+    },
+
+    async numberReservations(iterationId: string): Promise<readonly NumberReservation[]> {
+      const root = lineageOf(connection, iterationId)?.[0];
+      if (root === undefined) {
+        return [];
+      }
+      return (
+        connection
+          .prepare(
+            "SELECT r.number, EXISTS (SELECT 1 FROM number_reservation s " +
+              "WHERE s.releases_reservation_id = r.reservation_id) AS released " +
+              "FROM number_reservation r WHERE r.lineage_id = ? " +
+              "AND r.releases_reservation_id IS NULL ORDER BY r.number",
+          )
+          .all(root) as SqlRow[]
+      ).map((row) => ({ number: Number(row["number"]), released: Number(row["released"]) === 1 }));
+    },
+
+    async highestReserved(repository: string, record: string): Promise<number> {
+      return highestNumber(connection, repository, record);
+    },
+
+    async closingLapOf(iterationId: string): Promise<ClosingLap | null> {
+      const row = connection
+        .prepare(
+          "SELECT iteration_id, predecessor_id, read_tip_commit, reading_read_at_ms, findings " +
+            "FROM closing_lap WHERE iteration_id = ?",
+        )
+        .get(iterationId) as SqlRow | undefined;
+      if (row === undefined) {
+        return null;
+      }
+      return Object.freeze({
+        iterationId: String(row["iteration_id"]),
+        predecessorId: String(row["predecessor_id"]),
+        readTipCommit: String(row["read_tip_commit"]),
+        readingReadAtMs: Number(row["reading_read_at_ms"]),
+        findings: Object.freeze((JSON.parse(String(row["findings"])) as number[]).map(Number)),
+      });
+    },
+
+    async landingOf(iterationId: string): Promise<LineLanding | null> {
+      const root = lineageOf(connection, iterationId)?.[0];
+      if (root === undefined) {
+        return null;
+      }
+      const rows = connection
+        .prepare(
+          "SELECT bases, created_at_ms FROM lane_claim WHERE lineage_id = ? AND paths = '[]' " +
+            "ORDER BY created_at_ms DESC, claim_id DESC",
+        )
+        .all(root) as SqlRow[];
+      for (const row of rows) {
+        const bases: unknown = JSON.parse(String(row["bases"]));
+        const landing = Array.isArray(bases)
+          ? (bases as unknown[]).find(
+              (basis): basis is { branch: string; commit: string } =>
+                typeof basis === "object" &&
+                basis !== null &&
+                (basis as Record<string, unknown>)["form"] === "landing" &&
+                typeof (basis as Record<string, unknown>)["branch"] === "string" &&
+                typeof (basis as Record<string, unknown>)["commit"] === "string",
+            )
+          : undefined;
+        if (landing !== undefined) {
+          return {
+            branch: landing.branch,
+            commit: landing.commit,
+            atMs: Number(row["created_at_ms"]),
+          };
+        }
+      }
+      return null;
     },
 
     async readLive(): Promise<readonly ReadOutcome[]> {
@@ -3121,6 +3350,13 @@ export interface AdvisoryRecord {
    * reader has no business choosing between.
    */
   scopeDecisionAdmitting(iterationId: string): Promise<string | null>;
+  /**
+   * Every split an approved scope has admitted a plan of (D-0098 rule 1.4):
+   * the approval, the proposal and the request, one row each, read off the
+   * `admission` consumption rows naming a proposal. Where the order tick looks
+   * for a `then` whose `first` may have landed. Writes nothing.
+   */
+  admittedSplits(): Promise<readonly AdmittedSplit[]>;
   /**
    * Whether some successor of this scope, at any depth, carries an `approved`
    * decision (D-0066 rule 1.4). A drafted-only or declined successor retires
@@ -4633,6 +4869,23 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return admittedUnder(connection, iterationId);
     },
 
+    async admittedSplits(): Promise<readonly AdmittedSplit[]> {
+      const rows = connection
+        .prepare(
+          "SELECT DISTINCT c.scope_decision_id, c.proposal_id, i.request_message_id " +
+            "FROM scope_consumption c JOIN iteration i ON i.id = c.subject_id " +
+            "WHERE c.act_kind = 'admission' AND c.proposal_id IS NOT NULL " +
+            "AND i.request_message_id IS NOT NULL " +
+            "ORDER BY c.scope_decision_id, c.proposal_id, i.request_message_id",
+        )
+        .all() as SqlRow[];
+      return rows.map((row) => ({
+        scopeDecisionId: String(row["scope_decision_id"]),
+        proposalId: String(row["proposal_id"]),
+        requestMessageId: String(row["request_message_id"]),
+      }));
+    },
+
     async scopeSupersededByApproved(scopeId: string): Promise<boolean> {
       return supersededByApproved(connection, scopeId);
     },
@@ -5538,6 +5791,28 @@ function spendScope(
           "consumed_at_ms) VALUES (?, ?, ?, ?, ?)",
       )
       .run(spend.scopeDecisionId, actKind, input.id, spend.proposalId, input.nowMs);
+    // D-0098 rule 5.3: the closing lap's marker, in the same transaction.
+    const closing = spend.closing ?? null;
+    if (closing !== null) {
+      if (input.supersedesIterationId === null) {
+        throw new Error(
+          `the closing lap '${input.id}' names no predecessor, and only a redo closes a review`,
+        );
+      }
+      connection
+        .prepare(
+          "INSERT INTO closing_lap (iteration_id, predecessor_id, read_tip_commit, " +
+            "reading_read_at_ms, findings, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          input.id,
+          input.supersedesIterationId,
+          closing.readTipCommit,
+          closing.readingReadAtMs,
+          JSON.stringify(closing.findings),
+          input.nowMs,
+        );
+    }
   } catch (error) {
     if (isUniqueViolation(error)) {
       return {
@@ -5892,6 +6167,149 @@ function planRepository(plan: JsonRecord): string | null {
   return repositoryKey(plan["repository"]);
 }
 
+/** The decision record a stored plan names (D-0098 rule 3.1), or null. */
+function planRecord(plan: JsonRecord): string | null {
+  const record = plan["decision_record"];
+  return typeof record === "string" ? record : null;
+}
+
+/** The decision record the root lap of `lineageId` names, or null. */
+function lineRecord(connection: DatabaseSync, lineageId: string): string | null {
+  const row = connection
+    .prepare(
+      "SELECT json_extract(plan, '$.decision_record') AS r FROM iteration " +
+        "WHERE id = ? AND json_valid(plan)",
+    )
+    .get(lineageId) as SqlRow | undefined;
+  return typeof row?.["r"] === "string" ? row["r"] : null;
+}
+
+/**
+ * The number half of an admission, decided under `reserve()`'s write lock
+ * (D-0098 rule 3.3): nothing to reserve, the rows to write beside the
+ * iteration row, `numbersMoved` when another admission took a number since
+ * the caller read, or a defect in the caller. **The store checks above what
+ * it can read**, every number ever reserved in the record; the default
+ * branch's floor is the caller's git read, already named in the prompt.
+ */
+type NumberAdmission =
+  | { readonly kind: "none" }
+  | {
+      readonly kind: "write";
+      readonly repository: string;
+      readonly record: string;
+      readonly lineageId: string;
+      readonly numbers: readonly number[];
+    }
+  | { readonly kind: "numbersMoved"; readonly highest: number }
+  | { readonly kind: "defect"; readonly reason: string };
+
+function numberAdmission(connection: DatabaseSync, input: ReserveInput): NumberAdmission {
+  if (input.numbers === null) {
+    return { kind: "none" };
+  }
+  const repository = planRepository(input.plan);
+  const record = planRecord(input.plan);
+  const numbers = input.numbers;
+  const first = numbers[0];
+  if (repository === null || record === null) {
+    return {
+      kind: "defect",
+      reason: `iteration '${input.id}' was handed numbers, and its plan names no decision record`,
+    };
+  }
+  if (
+    first === undefined ||
+    !numbers.every((number, i) => Number.isSafeInteger(number) && number === first + i) ||
+    first < 1
+  ) {
+    return {
+      kind: "defect",
+      reason: `iteration '${input.id}' was handed numbers that are not consecutive whole numbers`,
+    };
+  }
+  const lineageId =
+    input.supersedesIterationId === null
+      ? input.id
+      : lineageOf(connection, input.supersedesIterationId)?.[0];
+  if (lineageId === undefined) {
+    return { kind: "defect", reason: `the lineage of '${input.id}' is unreadable` };
+  }
+  const highest = highestNumber(connection, repository, record);
+  return first <= highest
+    ? { kind: "numbersMoved", highest }
+    : { kind: "write", repository, record, lineageId, numbers };
+}
+
+/** The highest number ever reserved in `record` of `repository`, released ones included, or 0. */
+function highestNumber(connection: DatabaseSync, repository: string, record: string): number {
+  const row = connection
+    .prepare("SELECT MAX(number) AS n FROM number_reservation WHERE repository = ? AND record = ?")
+    .get(repository, record) as SqlRow;
+  return row["n"] === null ? 0 : Number(row["n"]);
+}
+
+/** Write a line's reservations. Inside the caller's transaction. */
+function insertReservations(
+  connection: DatabaseSync,
+  write: Extract<NumberAdmission, { kind: "write" }>,
+  iterationId: string,
+  nowMs: number,
+): void {
+  const insert = connection.prepare(
+    "INSERT INTO number_reservation (reservation_id, repository, record, number, lineage_id, " +
+      "releases_reservation_id, bases, created_at_ms) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)",
+  );
+  for (const number of write.numbers) {
+    insert.run(
+      `${write.lineageId}:n${String(number)}`,
+      write.repository,
+      write.record,
+      number,
+      write.lineageId,
+      canonicalJson([{ form: "iteration", iterationId }]),
+      nowMs,
+    );
+  }
+}
+
+/**
+ * Release every reservation of `lineageId` no row releases yet (D-0098 rule
+ * 3.4): a successor row each, repeating the triple. Inside the transaction
+ * that releases the line's claim, or ends it.
+ */
+function releaseReservations(
+  connection: DatabaseSync,
+  lineageId: string,
+  bases: readonly JsonValue[],
+  nowMs: number,
+): void {
+  const open = connection
+    .prepare(
+      "SELECT reservation_id, repository, record, number FROM number_reservation r " +
+        "WHERE r.lineage_id = ? AND r.releases_reservation_id IS NULL AND NOT EXISTS " +
+        "(SELECT 1 FROM number_reservation s WHERE s.releases_reservation_id = r.reservation_id)",
+    )
+    .all(lineageId) as SqlRow[];
+  const insert = connection.prepare(
+    "INSERT INTO number_reservation (reservation_id, repository, record, number, lineage_id, " +
+      "releases_reservation_id, bases, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  );
+  for (const row of open) {
+    const id = String(row["reservation_id"]);
+    insert.run(
+      `${id}:released`,
+      row["repository"] as string,
+      row["record"] as string,
+      Number(row["number"]),
+      lineageId,
+      id,
+      canonicalJson([...bases]),
+      nowMs,
+    );
+  }
+}
+
 /**
  * Every open line of `repository` but `exceptLineage`, with the paths it holds
  * (D-0073 rules 3.1 and 3.3). Read inside the caller's transaction.
@@ -6132,7 +6550,7 @@ function laneAdmission(connection: DatabaseSync, input: ReserveInput): LaneAdmis
     };
   }
   const holders = openLines(connection, repository, write.lineageId).flatMap((line) => {
-    const shared = sharedPaths(write.paths, line.paths);
+    const shared = sharedPaths(write.paths, line.paths, planRecord(input.plan));
     return shared.length === 0 ? [] : [{ lineageId: line.lineageId, sharedPaths: shared }];
   });
   return holders.length === 0
@@ -6153,6 +6571,10 @@ function releaseIfEnded(connection: DatabaseSync, iterationId: string, nowMs: nu
   if (laps === null || root === undefined || mayBeOpen(lineShape(laps))) {
     return;
   }
+  // Before the claim and whatever the claim is: a line that holds no paths
+  // may still hold numbers, and nothing of an ended line lands (D-0098 rule
+  // 3.4).
+  releaseReservations(connection, root.id, [{ form: "iteration", iterationId }], nowMs);
   const head = claimHead(connection, root.id);
   if (head === null || head.paths.length === 0) {
     return;

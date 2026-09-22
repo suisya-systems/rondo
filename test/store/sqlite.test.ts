@@ -85,6 +85,7 @@ const tripleFor = (id: string) => ({
 
 const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowMs = 1_000) =>
   store.reserve({
+    numbers: null,
     id,
     request: "do the thing",
     plan: somePlan(),
@@ -155,6 +156,7 @@ test("the plan digest does not depend on the order the plan's keys were written 
   };
 
   await store.reserve({
+    numbers: null,
     id: "i-0001",
     request: "one",
     plan: forwards,
@@ -168,6 +170,7 @@ test("the plan digest does not depend on the order the plan's keys were written 
   });
   await store.transition("i-0001", "planned", "closed", {}, 2);
   await store.reserve({
+    numbers: null,
     id: "i-0002",
     request: "two",
     plan: backwards,
@@ -584,6 +587,7 @@ test("openIterationStore opens a store by path, schema applied", async () => {
   await openRequest(new DatabaseSync(path));
 
   const reserved = await store.reserve({
+    numbers: null,
     id: "iter-open",
     request: "do the thing",
     plan: somePlan(),

@@ -74,6 +74,7 @@ const REDO: ScopeAct = {
   plan: PLAN,
   predecessorId: "i-1",
   requestMessageId: "m-1",
+  closing: false,
 };
 
 const asks = (...open: { messageId?: string; iterationIds: string[]; answeredStop?: boolean }[]) =>
@@ -387,6 +388,48 @@ test("redo readings: exit and revise are inside, stop is outside, none is undeci
   ).toMatchObject({ kind: "undecidable", test: "readings" });
 });
 
+test("D-0098 rule 5.2: a closing redo is inside only under fix_unread, after an exit, with something below", () => {
+  const CLOSING: ScopeAct = { ...REDO, closing: true };
+  const withReading = (latest: LapReading | null, payload: Partial<ScopePayload>) =>
+    snapshot(
+      {
+        predecessor: {
+          ...PREDECESSOR,
+          readings: { kind: "read", latestModelReading: latest, roundsTaken: 1 },
+        },
+      },
+      payload,
+    );
+  const read = (severities: Parameters<typeof reading>[0]) =>
+    ({ ...reading(severities), evidence: { tipCommit: "f".repeat(40) } }) as LapReading;
+  const fix = { below_threshold: "fix_unread" } as const;
+  // Inside: the exit left a minor below 'major'.
+  expect(scopeVerdict(CLOSING, withReading(read(["minor"]), fix))).toEqual(INSIDE);
+  const refused = (latest: LapReading | null, payload: Partial<ScopePayload>, reason: string) =>
+    expect(scopeVerdict(CLOSING, withReading(latest, payload))).toMatchObject({
+      kind: "outside",
+      test: "readings",
+      reason: expect.stringContaining(reason),
+    });
+  // leave, spelled or absent.
+  refused(read(["minor"]), {}, "below_threshold is 'leave'");
+  refused(read(["minor"]), { below_threshold: "leave" }, "below_threshold is 'leave'");
+  // A revise-kind decision: something at or above the threshold is open.
+  refused(read(["major"]), fix, "follows the review exit only");
+  // Nothing below the threshold.
+  refused(read([]), fix, "nothing to fix");
+  // No tip to name as last read.
+  refused(reading(["minor"]), fix, "names no tip commit");
+  // Control: the same exits as an ordinary redo are inside under leave.
+  expect(scopeVerdict(REDO, withReading(read(["minor"]), {}))).toEqual(INSIDE);
+  // A redo from the closing lap itself: it holds no model reading, so undecidable.
+  expect(scopeVerdict(REDO, withReading(null, fix))).toMatchObject({
+    kind: "undecidable",
+    test: "readings",
+  });
+  expect(reviewScopeOf({ ...PAYLOAD, ...fix })).toMatchObject({ belowThreshold: "fix_unread" });
+});
+
 test("the review budget is the scope's: 0 stops where 3 revises", () => {
   const round1 = { predecessor: PREDECESSOR };
   expect(
@@ -503,6 +546,8 @@ function storedPlan(): { payload: JsonRecord; contractDigest: string } {
     gateDeadlineAtMs: null,
     pullRequestBaseBranch: null,
     forgeRepository: null,
+    takeIn: null,
+    decisionRecord: null,
     invocationCeilingMs: 1_800_000,
     catalogLayers: [
       {
@@ -716,7 +761,7 @@ test("inside: a retry is admitted as its predecessor's request, with the classif
       "i-2",
       "i-1",
       "m-root",
-      { scopeDecisionId: "sd-1", proposalId: null, agentTypeDigest: agentType },
+      { scopeDecisionId: "sd-1", proposalId: null, agentTypeDigest: agentType, closing: null },
     ],
   ]);
   // Control: the same retry naming a request the scope does not list is refused and admits nothing.
@@ -725,4 +770,51 @@ test("inside: a retry is admitted as its predecessor's request, with the classif
     await admitUnderScope(admitPorts, "sd-1", { ...act, requestMessageId: "m-other" }),
   ).toMatchObject({ kind: "refused", verdict: "outside", test: "request" });
   expect(calls).toEqual([]);
+});
+
+test("D-0098 rule 5.3: a closing redo carries what the reviewer last read into the spend", async () => {
+  const { payload } = storedPlan();
+  const decoded = readPlan(payload);
+  if (decoded.kind !== "planned") throw new Error(decoded.reason);
+  const plan = decoded.plan;
+  const allocation = allocate("i-2", plan.workspaceRoot);
+  if (allocation.kind !== "allocated") throw new Error(allocation.reason);
+  const admittedTwo = admittedPlan(plan, allocation.allocation);
+  if (admittedTwo.kind !== "planned") throw new Error(admittedTwo.reason);
+  const classified = classifyPlan(admittedTwo.plan);
+  if (classified.kind !== "answered") throw new Error("the fixture plan did not classify");
+  const snap = snapshot(
+    {},
+    {
+      requests: ["m-root"],
+      workspaces: [{ repository: plan.repository, workspace_root: plan.workspaceRoot }],
+      agent_types: [classified.value.agentTypeDigest],
+      below_threshold: "fix_unread",
+    },
+  );
+  const exit = {
+    ...reading(["nit", "major", "minor"]),
+    graded: ["nit", "minor", "minor"].map((severity) => ({
+      severity,
+      bases: [],
+      basisResolved: true,
+    })),
+    evidence: { tipCommit: "e".repeat(40) },
+    readAtMs: 7,
+  } as unknown as LapReading;
+  const calls: unknown[][] = [];
+  const reads = gatherPorts({ "i-1": { supersedes: null, readings: [exit] } });
+  const admitPorts: ScopeAdmitPorts = {
+    ...ports(snap, []),
+    store: reads.store,
+    admit: async (...args) => {
+      calls.push(args);
+      return { iterationId: "i-2", status: "closed", lines: [] };
+    },
+  };
+  const act: ScopeAct = { ...REDO, plan, requestMessageId: "m-root", closing: true };
+  expect(await admitUnderScope(admitPorts, "sd-1", act)).toMatchObject({ kind: "admitted" });
+  expect(calls[0]?.[4]).toMatchObject({
+    closing: { readTipCommit: "e".repeat(40), readingReadAtMs: 7, findings: [0, 1, 2] },
+  });
 });

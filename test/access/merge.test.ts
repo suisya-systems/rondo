@@ -37,6 +37,8 @@ interface Options {
   readonly movedTo?: string;
   /** And the moved head was read green. */
   readonly movedGreen?: boolean;
+  /** The lap is a closing lap (D-0098 rule 5.3). */
+  readonly closing?: boolean;
 }
 
 const open: PullRequestState = {
@@ -95,6 +97,16 @@ async function over(options: Options = {}) {
       [
         { lineageId: "lap-1", lapIds: ["lap-1"], releasedBy: options.released ? "rondo" : null },
       ] as never,
+    closingLapOf: async (id: string) =>
+      options.closing === true
+        ? {
+            iterationId: id,
+            predecessorId: "lap-0",
+            readTipCommit: "f".repeat(40),
+            readingReadAtMs: 1,
+            findings: [0, 2],
+          }
+        : null,
   };
   const record = {
     threadMessages: async () => ({ kind: "read", messages }) as never,
@@ -221,6 +233,19 @@ test("a green head with nothing waiting merges by the repository's method and sa
       "'main' by squash as commit 'def5678'.",
   );
   expect(report?.inReplyTo).toBe("request-1");
+});
+
+test("D-0098 rule 5.3: a closing lap's merge says it was not re-read and names what the reviewer last read", async () => {
+  const world = await over({ closing: true });
+  const merged = await world.press(input);
+  expect(merged.ok).toBe(true);
+  const report = world.messages.find((message) => message.messageId === "report-merged-lap-1");
+  expect(report?.body).toBe(
+    `Lap 'lap-1' was merged on a person's press on the page: pull request ${PR} went into ` +
+      "'main' by squash as commit 'def5678'. This was the closing lap and it was not re-read: " +
+      `the reviewer last read commit '${"f".repeat(40)}', not this one. It answers the ` +
+      "finding(s) left below the threshold numbered 1, 3 in that reading.",
+  );
 });
 
 test("nothing is asked of the forge where the button would not be drawn", async () => {

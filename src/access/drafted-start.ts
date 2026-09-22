@@ -25,6 +25,7 @@ import type { AdvisoryRecord, IterationStore, LedgerLine } from "../store/sqlite
 import { DONE_OPENING } from "./done.js";
 import { ISSUES_QUOTE_OPENING } from "./issue-read.js";
 import { type DraftedPlanRun, draftedPlanRun } from "./model-draft/host.js";
+import { NUMBERS_OPENING } from "./record-numbers.js";
 import { gatherScopeSnapshot, type ScopeReadPorts, scopeVerdict } from "./scope.js";
 
 /** The id the verdict is asked about: a shape `allocate` accepts, and no row's. */
@@ -37,6 +38,15 @@ export type DraftedStartReadiness =
     }
   /** A lap of this request already runs, or ran, on this plan. */
   | { readonly kind: "started"; readonly iterationId: string }
+  /**
+   * The plan waits on an earlier plan of its split (D-0098 rule 1): `first`
+   * has not landed, so this one is not admitted, by a press or by the tick.
+   */
+  | {
+      readonly kind: "ordered";
+      readonly after: number;
+      readonly first: Extract<PlanOrder, { kind: "waiting" }>["first"];
+    }
   /** Another lap holds the one execution slot this host allows (D-0012). */
   | { readonly kind: "busy"; readonly occupying: number; readonly limit: number }
   /** As many laps are open as this host allows (D-0023). */
@@ -64,7 +74,13 @@ export type DraftedStartReadiness =
 export interface DraftedStartPorts {
   readonly store: Pick<
     IterationStore,
-    "read" | "readingsFor" | "readLive" | "terminalIterations" | "occupancy" | "laneLedger"
+    | "read"
+    | "readingsFor"
+    | "readLive"
+    | "terminalIterations"
+    | "occupancy"
+    | "laneLedger"
+    | "landingOf"
   >;
   readonly record: ScopeReadPorts["record"] &
     Pick<AdvisoryRecord, "readProposal" | "heldAgentType">;
@@ -91,6 +107,10 @@ export async function draftedStartReadiness(
   const started = await startedFrom(ports, requestMessageId, run);
   if (started !== null) {
     return { kind: "started", iterationId: started };
+  }
+  const order = await planOrder(ports, requestMessageId, proposalId, run);
+  if (order.kind === "waiting") {
+    return { kind: "ordered", after: order.after, first: order.first };
   }
   const occupancy = await ports.store.occupancy();
   if (occupancy.live >= ports.policy.maxLive) {
@@ -131,6 +151,118 @@ export async function draftedStartReadiness(
   return holders.length === 0 ? { kind: "ready", run } : { kind: "held", run, holders };
 }
 
+/** The landing a `then` is admitted on (D-0098 rule 1.6): `first`'s line, repository and default-branch commit. */
+export interface OrderLanding {
+  readonly lineageId: string;
+  readonly repository: string;
+  readonly branch: string;
+  readonly commit: string;
+}
+
+/**
+ * Where a plan stands in its split's order (D-0098 rule 1): no order; waiting
+ * on plan `after`, which has not started (`first: null`), is running, has ended
+ * and awaits its landing reading, or ended without landing (rule 1.5: released
+ * by `abandon`, `fail`, the person's press or with nothing to land -- none of
+ * which writes `first_landed`, so this never releases); or released by
+ * `first`'s landing.
+ *
+ * **`first` is a plan of the same split, resolved when read** through
+ * {@link startedFrom}: the lap started from plan `after` is `first`'s line.
+ * The release fact is `first_landed` for every link, across repositories and
+ * within one (D-0098 rule 1.2; stricter than `paths_free` within one, which
+ * D-0067 rule 5.1 allows).
+ */
+export type PlanOrder =
+  | { readonly kind: "none" }
+  | {
+      readonly kind: "waiting";
+      readonly after: number;
+      readonly first: {
+        readonly lineageId: string;
+        readonly state: "running" | "awaitingLanding" | "endedUnlanded";
+      } | null;
+    }
+  | { readonly kind: "landed"; readonly landing: OrderLanding };
+
+export async function planOrder(
+  ports: Pick<DraftedStartPorts, "store" | "record">,
+  requestMessageId: string,
+  proposalId: string,
+  run: Extract<DraftedPlanRun, { kind: "runnable" }>,
+): Promise<PlanOrder> {
+  const after = run.split.after;
+  if (after === undefined) {
+    return { kind: "none" };
+  }
+  const firstRun = await draftedPlanRun(ports, requestMessageId, proposalId, after);
+  const lineageId =
+    firstRun.kind === "runnable" ? await startedFrom(ports, requestMessageId, firstRun) : null;
+  if (firstRun.kind !== "runnable" || lineageId === null) {
+    return { kind: "waiting", after, first: null };
+  }
+  const landing = await ports.store.landingOf(lineageId);
+  if (landing !== null) {
+    return {
+      kind: "landed",
+      landing: {
+        lineageId,
+        repository: firstRun.repository,
+        branch: landing.branch,
+        commit: landing.commit,
+      },
+    };
+  }
+  const line = (await ports.store.laneLedger()).find((one) => one.lineageId === lineageId);
+  const state =
+    line?.inFlight === true
+      ? "running"
+      : (line?.releasedBy ?? null) === null
+        ? "awaitingLanding"
+        : "endedUnlanded";
+  return { kind: "waiting", after, first: { lineageId, state } };
+}
+
+/** How {@link orderSection} opens: what {@link startedFrom} strips. */
+export const ORDER_OPENING = "\n\n---\nWhat this work builds on";
+
+/**
+ * The prompt section a `then` is admitted with (D-0098 rule 1.6): the
+ * dependency's repository, default branch and the commit its landing was read
+ * at, which is the pin target. rondo's words, ASCII (D-0004), after the drafted
+ * prompt and before the definition of done. No version is guessed before the
+ * landing, so the commit is named only once it is read.
+ */
+export function orderSection(landing: OrderLanding): string {
+  return [
+    `${ORDER_OPENING} (rondo adds this because this work waits on another):`,
+    `The work this follows has landed in ${landing.repository}: its default branch ` +
+      `${landing.branch} is at commit ${landing.commit}, which holds it.`,
+    "Build on that commit (it is the pin target). Do not use an earlier or a later one.",
+  ].join("\n");
+}
+
+/**
+ * `run`'s plan and claim as a `then` is admitted on `first`'s landing (D-0098
+ * rule 1.6): the section after the prompt, and the landing as a basis of the
+ * claim row `reserve()` writes in the admission's transaction. A split drafted
+ * with no claim is admitted claiming the whole repository (D-0073 rule 2.5)
+ * with no claim row of its own asking, so the basis is carried by the prompt
+ * alone there.
+ */
+export function onLanding(
+  run: Extract<DraftedPlanRun, { kind: "runnable" }>,
+  landing: OrderLanding,
+): Pick<Extract<DraftedPlanRun, { kind: "runnable" }>, "plan" | "claim"> {
+  return {
+    plan: { ...run.plan, prompt: run.plan.prompt + orderSection(landing) },
+    claim:
+      run.claim === null
+        ? null
+        : { ...run.claim, bases: [...run.claim.bases, { form: "landing", ...landing }] },
+  };
+}
+
 /** The open lines of the plan's repository holding a path its claim asks for. */
 function heldBy(
   ledger: readonly LedgerLine[],
@@ -139,7 +271,9 @@ function heldBy(
   const repository = repositoryKey(run.repository);
   const asked = run.claim?.paths ?? [WHOLE_REPOSITORY];
   return ledger.flatMap((line) => {
-    const paths = line.repository === repository ? sharedPaths(asked, line.paths) : [];
+    // The decision record is shared-append (D-0098 rule 3.5): never held.
+    const paths =
+      line.repository === repository ? sharedPaths(asked, line.paths, run.plan.decisionRecord) : [];
     return paths.length === 0 ? [] : [{ line, paths }];
   });
 }
@@ -186,8 +320,8 @@ async function startedFrom(
     // and the issues it was given after it (D-0078 section 3.4); those
     // sections are the lap's, not the plan's. A lap admitted before rondo#377
     // has the issues alone.
-    const prompt = [DONE_OPENING, ISSUES_QUOTE_OPENING].some((opening) =>
-      ran.plan.prompt.startsWith(run.plan.prompt + opening),
+    const prompt = [DONE_OPENING, ISSUES_QUOTE_OPENING, ORDER_OPENING, NUMBERS_OPENING].some(
+      (opening) => ran.plan.prompt.startsWith(run.plan.prompt + opening),
     )
       ? run.plan.prompt
       : ran.plan.prompt;

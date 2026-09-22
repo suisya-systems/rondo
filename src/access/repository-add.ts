@@ -90,6 +90,10 @@ export function planForRepository(
     base_branch: added.baseBranch,
     prompt: PLACEHOLDER_PROMPT,
     forge_repository: added.repo,
+    // A record is a fact of the repository named at setup (D-0098 rule 3.1),
+    // and the template's is another repository's: the page asks nothing but
+    // "add it", so an added repository names none and its files are ordinary.
+    decision_record: null,
     pull_request_base_branch: null,
     // What cadenza reads. setup also writes it out to `origin`; nothing reads
     // that file back, so the page does not.

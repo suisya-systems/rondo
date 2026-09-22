@@ -8,7 +8,7 @@
 import { expect, test } from "vitest";
 
 import { withNamedIssues } from "../../src/access/cli.js";
-import { DONE_OPENING, definitionOfDone } from "../../src/access/done.js";
+import { closingLapSection, DONE_OPENING, definitionOfDone } from "../../src/access/done.js";
 import { readRunPlan } from "../../src/refrain/plan.js";
 import { planDocument, world } from "./fixtures/drafter.js";
 
@@ -57,4 +57,13 @@ test("the section is ASCII, so it reaches continuo's command line on a cp932 con
   for (const files of [[], ["AGENTS.md"], ["AGENTS.md", "CONTRIBUTING.md"]]) {
     expect(definitionOfDone(files)).toMatch(/^[\x20-\x7e\n]*$/);
   }
+});
+
+test("D-0098 rule 5.2: a closing lap's section asks a test per fix, quotes no finding, and is ASCII", () => {
+  const section = closingLapSection();
+  expect(section).toMatch(/^[\x20-\x7e\n]*$/);
+  expect(section).toContain("Write a test for each fix");
+  expect(section).toContain("No reviewer reads this lap again");
+  // rondo's own words only: the findings are the person's instruction's (D-0009).
+  expect(section).not.toContain("[minor]");
 });

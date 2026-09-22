@@ -42,6 +42,8 @@ export interface WebPorts extends InboxReadPorts {
     | "verificationClaimsFor"
     // D-0073 rule 12: what each line holds, and whether its work landed.
     | "laneLedger"
+    // D-0098 rule 1: whether a drafted plan's `first` has landed.
+    | "landingOf"
   >;
   readonly record: InboxReadPorts["record"] &
     Pick<

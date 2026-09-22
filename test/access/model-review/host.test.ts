@@ -62,6 +62,8 @@ const PLAN: RunPlan = {
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
   forgeRepository: null,
+  takeIn: null,
+  decisionRecord: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [{ layer: "git_url", origin: "o", baseDir: "/srv/catalog", data: {} }],
   projectName: "rondo",
@@ -159,6 +161,7 @@ async function world(
     });
   }
   await store.reserve({
+    numbers: null,
     id,
     request: "do the thing",
     plan: planFor(
@@ -241,7 +244,7 @@ async function world(
     },
     now: () => 3_000,
   };
-  return { store, record, id, ports, calls };
+  return { connection, store, record, id, ports, calls };
 }
 
 test("a reading is taken over the deterministic range, appended, and printed from the row", async () => {
@@ -378,6 +381,7 @@ test("the gate screen keeps the deterministic reading as the review and adds the
   // A row with no range, so the screen reaches no git (fence-material.test.ts).
   const store = storeWithRequest(new DatabaseSync(":memory:"), { maxOccupying: 4, maxLive: 6 });
   await store.reserve({
+    numbers: null,
     id: "i-0002",
     request: "do the thing",
     plan: { run_id: "rondo-i-0002", repository: "/srv/repo" },
@@ -472,4 +476,68 @@ test("a plan with no material language hands the prompt over as written", async 
   const document = calls.run[0] ?? "";
   expect(document).toContain("do the thing");
   expect(document).not.toContain("IETF language tag");
+});
+
+// --- D-0098 rule 5: a closing lap is not read again -------------------------
+
+async function closingWorld(reading: LapReadingDraft) {
+  const w = await world({ requestMessageId: "req-1", reading });
+  w.connection
+    .prepare(
+      "INSERT INTO closing_lap (iteration_id, predecessor_id, read_tip_commit, " +
+        "reading_read_at_ms, findings, created_at_ms) VALUES (?, 'i-0000', ?, 1, '[0,2]', 1)",
+    )
+    .run(w.id, "e".repeat(40));
+  const written: ThreadMessageDraft[] = [];
+  const thread = {
+    store: w.store,
+    record: {
+      recordThreadMessage: async (message: ThreadMessageDraft) => {
+        written.push(message);
+        return await w.record.recordThreadMessage(message);
+      },
+    },
+  };
+  const lines = await takeModelReading({ ...w.ports, thread }, w.id);
+  return { ...w, written, lines };
+}
+
+test("D-0098 rule 5.3: a closing lap appends no model reading and says it was not re-read", async () => {
+  const { store, id, calls, written, lines } = await closingWorld(DETERMINISTIC);
+  expect(calls.gather + calls.rationale + calls.run.length).toBe(0);
+  expect((await store.readingsFor(id)).map((r) => r.drafter)).toEqual(["rondo/deterministic/2"]);
+  expect(written).toHaveLength(1);
+  expect(written[0]).toMatchObject({
+    messageId: `report-closing-${id}`,
+    inReplyTo: "req-1",
+    asks: false,
+  });
+  const body = String(written[0]?.["body"]);
+  expect(body).toContain("not re-read");
+  expect(body).toContain(`reviewer last read commit '${"e".repeat(40)}'`);
+  expect(body).toContain("numbered 1, 3");
+  expect(lines[0]).toContain("model review  not re-read.");
+  // Control: the lap is clear, so no stop is written.
+  expect(written.some((message) => message.asks)).toBe(false);
+});
+
+test("D-0098 rule 5.4: a closing lap whose own reading is not clear stops the line with one ask", async () => {
+  const { id, written, lines } = await closingWorld({
+    ...DETERMINISTIC,
+    verdict: "concerns",
+    findings: ["the verification did not pass"],
+  });
+  const stops = written.filter((message) => message.asks);
+  expect(stops).toHaveLength(1);
+  expect(stops[0]).toMatchObject({
+    messageId: `closing-stop-${id}`,
+    authorKind: "drafter",
+    inReplyTo: "req-1",
+    bases: [
+      { form: "message", messageId: "req-1" },
+      { form: "iteration", iterationId: id },
+    ],
+  });
+  expect(String(stops[0]?.["body"])).toContain("Recommended:");
+  expect(lines.join("\n")).toContain("so the line stops (D-0098 rule 5.4)");
 });

@@ -42,7 +42,7 @@ import {
   type RunPlan,
   runPlan,
 } from "../../src/refrain/plan.js";
-import { revisionPlan } from "../../src/refrain/revision.js";
+import { revisionPlan, takeInSection } from "../../src/refrain/revision.js";
 import type { IterationRecord, JsonRecord } from "../../src/store/records.js";
 import { REQUEST } from "../request-fixture.js";
 
@@ -103,6 +103,8 @@ const FIRST_INPUT: RunPlan = {
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
   forgeRepository: null,
+  takeIn: null,
+  decisionRecord: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [CATALOG_LAYER],
   projectName: "rondo",
@@ -202,6 +204,7 @@ function revised(overrides: Partial<Parameters<typeof revisionPlan>[0]> = {}): R
     predecessor: PREDECESSOR,
     iterationId: FRESH_ITERATION_ID,
     instruction: "use the existing helper instead of a new one",
+    takeIn: null,
     ...overrides,
   });
   if (outcome.kind !== "planned") {
@@ -216,6 +219,7 @@ function refusalOf(overrides: Partial<Parameters<typeof revisionPlan>[0]>): stri
     predecessor: PREDECESSOR,
     iterationId: FRESH_ITERATION_ID,
     instruction: "use the existing helper instead of a new one",
+    takeIn: null,
     ...overrides,
   });
   if (outcome.kind !== "refused") {
@@ -350,6 +354,51 @@ test("the pull request still targets the branch the first lap was cut from", () 
   expect(revised().pullRequestBaseBranch).toBe(FIRST.baseBranch);
 });
 
+/** D-0098 rule 2: a take-in is the lap's own, and a successor never inherits it. */
+test("a predecessor's take-in is not carried into its successor", () => {
+  const second = {
+    ...revised(),
+    takeIn: {
+      commit: "b".repeat(40),
+      branch: "rondo/base/run-x",
+      remoteBranch: "main",
+      paths: ["src/"],
+      cause: "landed" as const,
+    },
+  };
+  const third = revisionPlan({
+    predecessor: closedRecord(FRESH_ITERATION_ID, admit(FRESH_ITERATION_ID, second)),
+    iterationId: "iter-3",
+    instruction: "again",
+    takeIn: null,
+  });
+  expect(third.kind === "planned" && third.plan.takeIn).toBe(null);
+});
+
+/** D-0098 rule 2.2: a take-in the caller decided reaches the plan and the prompt. */
+test("a take-in is carried as given and its section closes the prompt", () => {
+  const takeIn = {
+    commit: "c".repeat(40),
+    branch: "rondo/base/run-y",
+    remoteBranch: "main",
+    paths: ["src/a.ts", "docs/"],
+    cause: "landed" as const,
+  };
+  const plan = revised({ takeIn });
+  expect(plan.takeIn).toEqual(takeIn);
+  expect(plan.prompt.endsWith(takeInSection(takeIn))).toBe(true);
+  expect(plan.prompt).toContain(`'rondo/base/run-y' holds it`);
+  expect(plan.prompt).toContain("'src/a.ts', 'docs/'");
+  expect(plan.prompt).toContain(`${"c".repeat(40)} is an ancestor of this lap's last commit`);
+  expect(/^[\x20-\x7e\n]*$/.test(plan.prompt)).toBe(true);
+  // rondo#417's cause names no paths and says why instead.
+  expect(takeInSection({ ...takeIn, paths: [], cause: "conflict" })).toContain(
+    "The pull request this line opened conflicts with it.",
+  );
+  // No take-in, no section: the prompt is exactly what it was.
+  expect(revised().prompt).not.toContain("Bring the default branch in first");
+});
+
 test("a chain of revisions keeps the first lap's base rather than walking back one link", () => {
   const second = revised();
   const secondAdmitted = admit(FRESH_ITERATION_ID, second);
@@ -357,6 +406,7 @@ test("a chain of revisions keeps the first lap's base rather than walking back o
     predecessor: closedRecord(FRESH_ITERATION_ID, secondAdmitted),
     iterationId: "iter-3",
     instruction: "closer, but the helper takes two arguments",
+    takeIn: null,
   });
   if (third.kind !== "planned") {
     throw new Error(`expected a successor plan, got a refusal: ${third.reason}`);
@@ -451,6 +501,7 @@ test("a migrated predecessor whose typed run id collides with the derived one is
     predecessor: legacy,
     iterationId: "revision",
     instruction: "use the existing helper",
+    takeIn: null,
   });
 
   expect(outcome.kind).toBe("refused");

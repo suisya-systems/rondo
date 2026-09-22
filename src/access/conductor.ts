@@ -66,6 +66,7 @@ import type {
 } from "../refrain/ports.js";
 import { claimCover, lineShape, WHOLE_REPOSITORY } from "../store/lanes.js";
 import {
+  type IterationRecord,
   isDeterministicReadingDrafter,
   isModelReadingDrafter,
   type LaneClaimAsk,
@@ -84,14 +85,17 @@ import {
   type CommitLine,
   fetchLapBase,
   inspectLapWork,
+  isAncestor,
   type LandingReading,
   type LandingRequest,
   type MergeMethod,
   readChangedPaths,
   readLanding,
+  readRecordAdditions,
 } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
 import { modelReadingLines } from "./model-review/judgement.js";
+import { relayQuestion } from "./question.js";
 import { LIST_LIMIT, READING_REMOTE, readingOf } from "./review.js";
 
 export type { ConductorReport };
@@ -263,7 +267,21 @@ export function conductorPorts(
   const port: StorePort = store;
   return {
     store: port,
-    thread: record === null ? null : { record, store },
+    thread:
+      record === null
+        ? null
+        : {
+            record,
+            store,
+            // The same read `model-review/host.ts` makes; continuo's words are
+            // passed on unread except for the worker's block (D-0098 rule 4.2).
+            rationale: async (row) => {
+              const db = row.plan["db"];
+              if (row.gateId === null || typeof db !== "string") return null;
+              const observed = await showGate(continuo, { db, gateId: row.gateId });
+              return observed.kind === "answered" ? observed.payload.rationale : null;
+            },
+          },
     lanes: { store, readLanding, readChangedPaths, remote: READING_REMOTE },
     now,
     classify: async (plan) => classifyPlan(plan),
@@ -397,17 +415,55 @@ export function conductorPorts(
     // the type because the port is a promise this module keeps and not one it
     // is entitled to assume, and the interpreter maps them to the same
     // `unavailable` if a later wiring ever produces one.
-    readLapWork: async (plan): Promise<EffectOutcome<LapReadingDraft>> => ({
-      kind: "answered",
-      value: readingOf(
-        await inspectLapWork({
-          workspace: plan.workspace,
-          remote: READING_REMOTE,
-          baseBranch: plan.baseBranch,
-          topicBranch: plan.topicBranch,
+    readLapWork: async (plan, iterationId): Promise<EffectOutcome<LapReadingDraft>> => {
+      const inspection = await inspectLapWork({
+        workspace: plan.workspace,
+        remote: READING_REMOTE,
+        baseBranch: plan.baseBranch,
+        topicBranch: plan.topicBranch,
+      });
+      // D-0098 rule 2.3: a lap told to take the default branch in is read
+      // for it, against the tip the inspection itself read.
+      const takeIn =
+        plan.takeIn === null || inspection.kind !== "read"
+          ? undefined
+          : {
+              commit: plan.takeIn.commit,
+              remoteBranch: plan.takeIn.remoteBranch,
+              ancestor: await isAncestor({
+                repository: plan.workspace,
+                ancestor: plan.takeIn.commit,
+                descendant: inspection.tipCommit,
+              }),
+            };
+      // D-0098 rule 3.6: the numbers this lap added to its record, tested
+      // against its line's reservations over the range the inspection read.
+      const recordPath = plan.decisionRecord;
+      const record =
+        recordPath === null || inspection.kind !== "read"
+          ? undefined
+          : {
+              path: recordPath,
+              reserved: (await store.numberReservations(iterationId)).flatMap((one) =>
+                one.released ? [] : [one.number],
+              ),
+              added: await readRecordAdditions({
+                repository: plan.workspace,
+                baseCommit: inspection.baseCommit,
+                tipCommit: inspection.tipCommit,
+                record: recordPath,
+              }).then((read) =>
+                read.kind === "read" ? read.numbers : { undetermined: read.reason },
+              ),
+            };
+      return {
+        kind: "answered",
+        value: readingOf(inspection, {
+          ...(takeIn === undefined ? {} : { takeIn }),
+          ...(record === undefined ? {} : { record }),
         }),
-      ),
-    }),
+      };
+    },
   };
 }
 
@@ -482,6 +538,7 @@ export async function admit(
   requestMessageId: string,
   scopeSpend: ScopeSpend | null = null,
   claim: LaneClaimAsk | null = null,
+  numbers: readonly number[] | null = null,
 ): Promise<ConductorReport> {
   const attempt = () =>
     admitIteration(
@@ -494,6 +551,7 @@ export async function admit(
       requestMessageId,
       scopeSpend,
       claim,
+      numbers,
     );
   let report = await attempt();
   // **A refusal by a line whose work may have landed reads that landing now**
@@ -537,7 +595,12 @@ async function readHolders(
   return { released, lines };
 }
 
-async function readHolder(
+/**
+ * Read one line's landing and release it if it landed or ended with nothing to
+ * land. Exported for the resident host's order tick (D-0098 rule 1.4), which
+ * reads a waiting `first` the same way an admission refusal does.
+ */
+export async function readHolder(
   lanes: LandingPorts,
   lineageId: string,
   nowMs: number,
@@ -564,13 +627,26 @@ async function readHolder(
       line: `Line ${lineageId} has a lap that has not ended, so it holds its paths until it does.`,
     };
   }
-  const release = async (bases: readonly string[], said: string) => {
+  const release = async (
+    bases: readonly string[],
+    said: string,
+    landing: { readonly branch: string; readonly commit: string } | null = null,
+  ) => {
     const outcome = await lanes.store.releaseLane({
       iterationId: lineageId,
       takenOver: { claimId: line.claim?.claimId ?? null, lapIds: line.laps.map((lap) => lap.id) },
+      // A landed line keeps its decision-record numbers; one that ended with
+      // nothing to land gives them up (D-0098 rules 3.4 and 3.7).
+      landed: landing !== null,
       authorKind: "drafter",
       authorId: LANE_LEDGER_AUTHOR,
-      bases: bases.map((iterationId) => ({ form: "iteration", iterationId })),
+      // **The landing basis is the release fact `first_landed`** (D-0098 rule
+      // 1.1): only a release written by a landing carries it, so a line that
+      // ended with nothing to land never releases an order (rule 1.5).
+      bases: [
+        ...bases.map((iterationId) => ({ form: "iteration", iterationId })),
+        ...(landing === null ? [] : [{ form: "landing", ...landing }]),
+      ],
       nowMs,
     });
     return outcome.kind === "released"
@@ -609,11 +685,23 @@ async function readHolder(
     }
     tipCommits.push(evidence.tipCommit);
   }
+  // D-0098 rule 3.7: the record is read by the line's numbers and added
+  // lines, never by its tree entry.
+  const recordPath = root.plan["decision_record"];
   const landing = await lanes.readLanding({
     repository,
     remote: lanes.remote,
     baseCommit,
     tipCommits,
+    record:
+      typeof recordPath === "string"
+        ? {
+            path: recordPath,
+            reserved: (await lanes.store.numberReservations(lineageId)).flatMap((one) =>
+              one.released ? [] : [one.number],
+            ),
+          }
+        : null,
   });
   if (landing.kind === "undetermined") {
     return undetermined(landing.reason);
@@ -629,6 +717,7 @@ async function readHolder(
   return await release(
     shape.closedTips,
     `Line ${lineageId}'s work is on ${lanes.remote}/${landing.branch}`,
+    { branch: landing.branch, commit: landing.headCommit },
   );
 }
 
@@ -715,14 +804,38 @@ export async function compareClaim(
   if (typeof repository !== "string" || evidence === undefined || evidence === null) {
     return uncompared("its reading carries no base and tip to take the changed paths from");
   }
-  const changed = await lanes.readChangedPaths({
+  // **What the lap took in is not what it changed** (D-0098 rule 2, D-0103):
+  // a lap that merged the default branch's commit X would otherwise report
+  // every path X brought as outside its claim. So a path counts only if it
+  // also changed from X to the tip, as `readLanding` counts a landing.
+  const takeIn = lap.line.laps.find((each) => each.id === iterationId)?.plan["take_in"];
+  const takenIn =
+    typeof takeIn === "object" && takeIn !== null && "commit" in takeIn ? takeIn.commit : null;
+  const lapChanged = await lanes.readChangedPaths({
     repository,
     baseCommit: evidence.baseCommit,
     tipCommit: evidence.tipCommit,
   });
-  if (changed.kind === "undetermined") {
-    return uncompared(changed.reason);
+  if (lapChanged.kind === "undetermined") {
+    return uncompared(lapChanged.reason);
   }
+  const sinceTakeIn =
+    typeof takenIn === "string"
+      ? await lanes.readChangedPaths({
+          repository,
+          baseCommit: takenIn,
+          tipCommit: evidence.tipCommit,
+        })
+      : null;
+  if (sinceTakeIn?.kind === "undetermined") {
+    return uncompared(sinceTakeIn.reason);
+  }
+  const changed = {
+    paths:
+      sinceTakeIn === null
+        ? lapChanged.paths
+        : lapChanged.paths.filter((path) => sinceTakeIn.paths.includes(path)),
+  };
   if (changed.paths.length === 0) {
     return inside;
   }
@@ -839,7 +952,10 @@ export interface ReportingPorts extends ConductorPorts {
 
 /** What {@link admit} reads and writes to release a line whose work has landed. */
 export interface LandingPorts {
-  readonly store: Pick<IterationStore, "laneLine" | "readingsFor" | "releaseLane" | "compareLane">;
+  readonly store: Pick<
+    IterationStore,
+    "laneLine" | "readingsFor" | "releaseLane" | "compareLane" | "numberReservations"
+  >;
   readonly readLanding: (request: LandingRequest) => Promise<LandingReading>;
   /** What reads the paths a lap at its gate changed (D-0073 rule 5). */
   readonly readChangedPaths: (request: ChangedPathsRequest) => Promise<ChangedPathsReading>;
@@ -851,6 +967,34 @@ export interface LandingPorts {
 export interface RequestThread {
   readonly record: Pick<AdvisoryRecord, "recordThreadMessage">;
   readonly store: Pick<IterationStore, "read" | "readingsFor">;
+  /**
+   * The gate's rationale, where a worker's question arrives (D-0098 rule 4.2),
+   * or null when there is no gate or it could not be read. Absent where no
+   * question is relayed -- a test's hand-built thread, or a reader of the
+   * thread that only reports.
+   */
+  readonly rationale?: ((record: IterationRecord) => Promise<string | null>) | undefined;
+}
+
+/** What a closing lap's reports say was not read (D-0098 rule 5.3). */
+export interface ClosingNotReread {
+  /** The tip the reviewer last read: the predecessor's model reading's. */
+  readonly readTipCommit: string;
+  /** The below-threshold finding indexes (0-based) the lap answers. */
+  readonly findings: readonly number[];
+}
+
+/**
+ * The sentence every closing-lap report carries (D-0098 rule 5.3): not
+ * re-read, which commit the reviewer last read, and which findings it
+ * answers, numbered from 1 as the gate lists them. ASCII (D-0004).
+ */
+export function notRereadSentence(closing: ClosingNotReread): string {
+  return (
+    "This was the closing lap and it was not re-read: the reviewer last read commit " +
+    `'${closing.readTipCommit}', not this one. It answers the finding(s) left below the ` +
+    `threshold numbered ${closing.findings.map((i) => String(i + 1)).join(", ")} in that reading.`
+  );
 }
 
 /** What a report says happened to the lap (D-0061 step 5.3). */
@@ -870,7 +1014,17 @@ export type LapEvent =
       readonly into: string;
       readonly method: MergeMethod;
       readonly mergeCommit: string | null;
+      /**
+       * The merged lap was a closing lap (D-0098 rule 5.3): the commit the
+       * reviewer last read and the findings it answers, or absent/null.
+       */
+      readonly notReread?: ClosingNotReread | null;
     }
+  /**
+   * A closing lap reached its gate and was not read again (D-0098 rule 5.3):
+   * no model reading follows, and the thread says so instead.
+   */
+  | ({ readonly kind: "closingFix" } & ClosingNotReread)
   /**
    * What the forge said about the published commit's checks (rondo#310).
    *
@@ -966,7 +1120,20 @@ async function withGateReport(
     { kind: "gate" },
     ports.now(),
   );
-  return line === null ? report : { ...report, lines: [...report.lines, line] };
+  // **D-0098 rule 4.2: the worker's question, after the gate's report**, so
+  // the thread reads "reached its gate" and then what it asks. A lap that
+  // asked nothing writes nothing more.
+  const rationale = ports.thread.rationale;
+  const asked =
+    rationale === undefined
+      ? null
+      : await relayQuestion(
+          { record: ports.thread.record, store: ports.thread.store, rationale },
+          report.iterationId,
+          ports.now(),
+        );
+  const lines = [line, asked].filter((one): one is string => one !== null);
+  return lines.length === 0 ? report : { ...report, lines: [...report.lines, ...lines] };
 }
 
 /**
@@ -1046,7 +1213,10 @@ export async function reportToRequest(
     body =
       `Lap '${iterationId}' was merged on a person's press on the page: pull request ` +
       `${event.pullRequestUrl} went into '${event.into}' by ${event.method}` +
-      (event.mergeCommit === null ? "." : ` as commit '${event.mergeCommit}'.`);
+      (event.mergeCommit === null ? "." : ` as commit '${event.mergeCommit}'.`) +
+      (event.notReread === undefined || event.notReread === null
+        ? ""
+        : ` ${notRereadSentence(event.notReread)}`);
   } else if (event.kind === "mergedOutside") {
     // The same message as a press's merge, so a lap is said merged once
     // whichever way it went (rondo#413).
@@ -1074,6 +1244,12 @@ export async function reportToRequest(
   } else if (event.kind === "moved") {
     messageId = `report-moved-${iterationId}-${event.to}`;
     body = movedBody(iterationId, event);
+  } else if (event.kind === "closingFix") {
+    // One per lap: a closing lap is never read, so it reaches this once.
+    messageId = `report-closing-${iterationId}`;
+    body =
+      `Lap '${iterationId}' reached gate '${row.gateId ?? "(none recorded)"}'. ` +
+      `${notRereadSentence(event)} The pull request's checks still run.`;
   } else {
     // **One message per answer, and the answer is in the id**, so a reading
     // taken again over the same commit writes nothing (the store's

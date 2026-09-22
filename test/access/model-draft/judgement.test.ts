@@ -127,7 +127,7 @@ function refusal(answer: unknown, material: DrafterMaterial = MATERIAL): string 
 }
 
 test("the row name counts the drafter's instructions and names the table's model (D-0071 rule 1.4)", () => {
-  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/4/claude-opus-5");
+  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/5/claude-opus-5");
 });
 
 test("the document carries the thread, the templates, the agent types and the measurements, and never a ceiling", () => {
@@ -542,6 +542,21 @@ test.each([
   expect(outcome.kind === "unavailable" && outcome.reason).toContain(reason);
 });
 
+test("a plan may wait on an earlier plan of its split, and says so beside its claim (D-0098 rule 1.3)", () => {
+  const plan = SPLIT.plans[0];
+  const outcome = drafted(
+    draftOf(MATERIAL, answered({ ...SPLIT, plans: [plan, { ...plan, after: 0 }] })),
+  );
+  expect(outcome.split?.plans[0]?.after).toBeUndefined();
+  expect(outcome.split?.plans[1]?.after).toBe(0);
+  for (const after of [1, 2, -1, 0.5, "0"]) {
+    const refused = draftOf(MATERIAL, answered({ ...SPLIT, plans: [plan, { ...plan, after }] }));
+    expect(refused.kind, String(after)).toBe("unavailable");
+    expect(refused.kind === "unavailable" && refused.reason).toContain("no earlier plan");
+  }
+  expect(drafterDocument(MATERIAL)).toContain('"after"');
+});
+
 test("a plan's claim is kept as the store would write it: deduplicated and sorted (D-0073 rule 2.3)", () => {
   const outcome = drafted(
     draftOf(
@@ -624,4 +639,22 @@ test.each([
   ["a run that drafts nothing", { act: "none", holes: ["the docs"] }],
 ])("holes are refused on %s: a hole is named by a question (rule 6.1)", (_what, answer) => {
   expect(refusal(answer)).toContain("names holes it asks nobody about");
+});
+
+test("a plan says how many decision entries it writes, only where its template names a record (D-0098 rule 3.3)", () => {
+  const plan = { ...SPLIT.plans[0], entries: 2 };
+  const template = MATERIAL.templates[0] as DrafterMaterial["templates"][number];
+  const recorded: DrafterMaterial = {
+    ...MATERIAL,
+    templates: [{ ...template, plan: { ...template.plan, decision_record: "DECISIONS.md" } }],
+  };
+  const outcome = drafted(draftOf(recorded, answered({ ...SPLIT, plans: [plan] })));
+  expect(outcome.split?.plans[0]?.entries).toBe(2);
+  expect(refusal({ ...SPLIT, plans: [plan] })).toContain("names no decision record");
+  for (const entries of [0, 1.5, "1"]) {
+    expect(refusal({ ...SPLIT, plans: [{ ...plan, entries }] }, recorded)).toContain(
+      "not 1 or more",
+    );
+  }
+  expect(drafterDocument(MATERIAL)).toContain('"entries"');
 });

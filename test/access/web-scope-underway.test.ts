@@ -323,6 +323,7 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   const admitted = admittedPlan(run.plan, allocation.allocation);
   if (admitted.kind !== "planned") throw new Error(admitted.reason);
   const reserved = await w.store.reserve({
+    numbers: null,
     id: "lap-plan-0",
     request: "Two things, please.",
     plan: planPayload(admitted.plan),

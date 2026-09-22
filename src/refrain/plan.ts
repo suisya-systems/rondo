@@ -43,6 +43,7 @@ import type {
   IntendedAction,
   IssuanceParties,
 } from "../cadenza/facade.js";
+import { claimPathRefusal } from "../store/lanes.js";
 import type { JsonRecord, JsonValue } from "../store/records.js";
 import type { Allocation } from "./allocator.js";
 
@@ -243,6 +244,33 @@ export interface RunPlan {
    */
   readonly forgeRepository: string | null;
   /**
+   * The default branch this lap must bring in before it changes anything, or
+   * null for a lap that takes nothing in (D-0098 rule 2).
+   *
+   * **Set by rondo on a revision, never by an operator and never inherited.**
+   * A line that takes over paths another line landed first starts from a
+   * default branch that has moved, and a revision fetches nothing (D-0100 rule
+   * 4) -- so the commit it must take in is recorded here, beside the local
+   * branch rondo fetched it into. `revisionPlan` sets it explicitly on every
+   * successor, because a spread predecessor would carry a take-in the next lap
+   * has already done.
+   *
+   * rondo's own: continuo is never told about it. Read by the revision prompt
+   * and by the gate's ancestry check.
+   */
+  readonly takeIn: TakeIn | null;
+  /**
+   * The repository-relative path of the target repository's decision record
+   * (`DECISIONS.md`), or null for a repository that keeps none (D-0098 rule 3).
+   *
+   * **A repository fact, recorded at setup** beside {@link forgeRepository}:
+   * the record is the one path several lines append to at once, so rondo
+   * reserves its entry numbers at admission and treats the path as shared.
+   * Null is not "look for one": a repository that names no record gets no
+   * reservation and no shared-append exemption.
+   */
+  readonly decisionRecord: string | null;
+  /**
    * How long rondo will wait for the whole `lap perform` invocation.
    *
    * **The caller's, because rondo cannot compute it.** The turn timer is not
@@ -345,6 +373,23 @@ export interface ReviewCriterion {
  * bound (D-0065 section 2.3) is what actually refuses over-large material.
  */
 export const MAX_REVIEW_RULE_FILES = 20;
+
+/**
+ * What a lap must take in before it works (D-0098 rule 2), and why.
+ *
+ * `commit` is the forge default branch's tip rondo fetched (40 hex digits),
+ * `branch` the local ref holding it (`rondo/base/<runId>`), `remoteBranch` the
+ * forge's own name for it (`main`). `cause` is `landed` when another line
+ * landed first on `paths`, and `conflict` when the pull request conflicts with
+ * the default branch (rondo#417), in which case `paths` may be empty.
+ */
+export interface TakeIn {
+  readonly commit: string;
+  readonly branch: string;
+  readonly remoteBranch: string;
+  readonly paths: readonly string[];
+  readonly cause: "landed" | "conflict";
+}
 
 /**
  * The largest delay `setTimeout` can hold: 2^31 - 1 milliseconds, about 24.8
@@ -538,6 +583,8 @@ export function runPlan(input: RunPlan): PlanOutcome {
         input.forgeRepository === null
           ? null
           : requireNotOptionShaped("forgeRepository", input.forgeRepository),
+      takeIn: optionalTakeIn(input.takeIn),
+      decisionRecord: optionalDecisionRecord(input.decisionRecord),
       invocationCeilingMs: requireCeiling(input),
       catalogLayers: requireCatalogLayers(input.catalogLayers),
       projectName: requireNonEmpty("projectName", input.projectName),
@@ -886,6 +933,82 @@ function refuse(reason: string): never {
 }
 
 /**
+ * `takeIn`, checked field by field (D-0098 rule 2). Strict because rondo, not
+ * a person, writes it: a malformed one is a defect or an edit, and is refused
+ * by the field's name rather than repaired.
+ */
+function optionalTakeIn(value: TakeIn | null): TakeIn | null {
+  if (value === null) {
+    return null;
+  }
+  const found: unknown = value;
+  if (typeof found !== "object" || found === null || Array.isArray(found)) {
+    return refuse(
+      "'takeIn' is not a table, and a take-in is a commit, two branches, paths and a cause",
+    );
+  }
+  const commit: unknown = value.commit;
+  if (typeof commit !== "string" || !/^[0-9a-f]{40}$/.test(commit)) {
+    return refuse(
+      `'takeIn.commit' is ${JSON.stringify(commit)}, and a commit is 40 lowercase hex digits`,
+    );
+  }
+  const branch = (field: "branch" | "remoteBranch"): string => {
+    const text: unknown = value[field];
+    if (typeof text !== "string") {
+      return refuse(`'takeIn.${field}' is not a string, and it names a branch`);
+    }
+    return requireIdentifier(`takeIn.${field}`, text);
+  };
+  const paths: unknown = value.paths;
+  if (!Array.isArray(paths)) {
+    return refuse("'takeIn.paths' is not an array, and it lists repository paths");
+  }
+  const checked = paths.map((path: unknown, index) => {
+    const reason = typeof path === "string" ? claimPathRefusal(path) : "it is not a string";
+    if (reason !== null) {
+      return refuse(`'takeIn.paths[${String(index)}]' is refused: ${reason}`);
+    }
+    return path as string;
+  });
+  const cause: unknown = value.cause;
+  if (cause !== "landed" && cause !== "conflict") {
+    return refuse(
+      `'takeIn.cause' is ${JSON.stringify(cause)}, and a cause is 'landed' or 'conflict'`,
+    );
+  }
+  return Object.freeze({
+    commit,
+    branch: branch("branch"),
+    remoteBranch: branch("remoteBranch"),
+    paths: Object.freeze(checked),
+    cause,
+  });
+}
+
+/**
+ * `decisionRecord`: one repository-relative file (D-0098 rule 3), so a claim
+ * path's rules, and not a directory -- neither a trailing '/' nor '/' alone,
+ * which a claim reads as the whole repository.
+ */
+function optionalDecisionRecord(value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+  if (typeof (value as unknown) !== "string") {
+    return refuse("'decisionRecord' is not a string, and it names one file");
+  }
+  const reason = claimPathRefusal(value);
+  if (reason !== null) {
+    return refuse(`'decisionRecord' is refused: ${reason}`);
+  }
+  if (value.endsWith("/")) {
+    return refuse(`'decisionRecord' is '${value}', a directory, and the record is one file`);
+  }
+  return value;
+}
+
+/**
  * Put the allocator's three identifiers onto a validated plan.
  *
  * **The shape checks that used to run on the caller's typing now run on
@@ -987,6 +1110,17 @@ export function planPayload(plan: AdmittedPlan): JsonRecord {
     gate_deadline_at_ms: plan.gateDeadlineAtMs,
     pull_request_base_branch: plan.pullRequestBaseBranch,
     forge_repository: plan.forgeRepository,
+    take_in:
+      plan.takeIn === null
+        ? null
+        : {
+            commit: plan.takeIn.commit,
+            branch: plan.takeIn.branch,
+            remote_branch: plan.takeIn.remoteBranch,
+            paths: [...plan.takeIn.paths],
+            cause: plan.takeIn.cause,
+          },
+    decision_record: plan.decisionRecord,
     invocation_ceiling_ms: plan.invocationCeilingMs,
     catalog_layers: plan.catalogLayers.map((layer) => ({
       layer: layer.layer,
@@ -1149,6 +1283,15 @@ const PAYLOAD_UPGRADES: readonly ((payload: JsonRecord) => JsonRecord)[] = [
    * The stored bytes are not changed by the climb, as in every rung above it.
    */
   (payload) => withForgeRepository(payload),
+  /**
+   * v5 -> v6: the take-in and the decision record (D-0098 rules 2 and 3), one
+   * rung for both because they arrived together.
+   *
+   * **Absent means null for each**: no lap before D-0098 was asked to take a
+   * default branch in, and no repository had a record rondo reserved numbers
+   * in. The stored bytes are not changed by the climb.
+   */
+  (payload) => withTakeInAndDecisionRecord(payload),
 ];
 
 /**
@@ -1343,6 +1486,19 @@ function withForgeRepository(payload: JsonRecord): JsonRecord {
 }
 
 /**
+ * A payload from before D-0098, given what it had: no take-in and no record.
+ * A present key is left as it is, including a malformed one, which the readers
+ * still refuse by name.
+ */
+function withTakeInAndDecisionRecord(payload: JsonRecord): JsonRecord {
+  return {
+    ...payload,
+    take_in: payload["take_in"] === undefined ? null : payload["take_in"],
+    decision_record: payload["decision_record"] === undefined ? null : payload["decision_record"],
+  };
+}
+
+/**
  * The caller's half of a plan, read from a document (D-0023 rule 9).
  *
  * What an operator's plan file holds: everything except the three identifiers
@@ -1388,6 +1544,8 @@ export function readRunPlan(payload: JsonRecord): PlanOutcome {
       gateDeadlineAtMs: readNullableNumber(current, "gate_deadline_at_ms"),
       pullRequestBaseBranch: readNullableString(current, "pull_request_base_branch"),
       forgeRepository: readNullableString(current, "forge_repository"),
+      takeIn: readTakeIn(current),
+      decisionRecord: readNullableString(current, "decision_record"),
       invocationCeilingMs: readNumber(current, "invocation_ceiling_ms"),
       catalogLayers: readCatalogLayers(current),
       projectName: readString(current, "project_name"),
@@ -1482,6 +1640,35 @@ function readReviewCriterion(payload: JsonRecord): ReviewCriterion | null {
       nit: read("nit"),
     },
     ruleFiles: readStringArray(value, "rule_files"),
+  };
+}
+
+/**
+ * `take_in`: null, or `{commit, branch, remote_branch, paths, cause}`. Shapes
+ * only; {@link runPlan} checks the rules.
+ */
+function readTakeIn(payload: JsonRecord): TakeIn | null {
+  const found = payload["take_in"];
+  if (found === null) {
+    return null;
+  }
+  if (typeof found !== "object" || Array.isArray(found)) {
+    return refuse("the persisted plan's 'take_in' is not an object or null");
+  }
+  const value = found as JsonRecord;
+  const read = (key: string): string => {
+    const text = value[key];
+    if (typeof text !== "string") {
+      return refuse(`the persisted plan's 'take_in.${key}' is not a string`);
+    }
+    return text;
+  };
+  return {
+    commit: read("commit"),
+    branch: read("branch"),
+    remoteBranch: read("remote_branch"),
+    paths: readStringArray(value, "paths"),
+    cause: read("cause") as TakeIn["cause"],
   };
 }
 

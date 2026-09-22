@@ -99,9 +99,46 @@ export function claimCovers(claim: readonly string[], path: string): boolean {
   return claim.some((held) => covers(held, path));
 }
 
-/** The paths of `asked` that overlap some path of `held`, in `asked`'s order. */
-export function sharedPaths(asked: readonly string[], held: readonly string[]): readonly string[] {
-  return asked.filter((path) => held.some((other) => pathsOverlap(path, other)));
+/**
+ * The paths of `asked` that overlap some path of `held`, in `asked`'s order.
+ *
+ * `record` is the repository's decision record, or null when it names none: a
+ * shared-append path (D-0098 rule 3.5), so two open lines may both change it.
+ * It is left out on both sides, **by equality only**: a claim on `/` or on the
+ * record's directory still overlaps every other path under it.
+ */
+export function sharedPaths(
+  asked: readonly string[],
+  held: readonly string[],
+  record: string | null = null,
+): readonly string[] {
+  return asked.filter(
+    (path) =>
+      path !== record && held.some((other) => other !== record && pathsOverlap(path, other)),
+  );
+}
+
+/**
+ * The entry numbers a decision record's text spells (D-0098 rule 3.1): each
+ * `## D-NNNN \u2014 ` heading and each `| D-NNNN |` index row, in the order
+ * written. **The one spelling of the format**, read by the floor at admission,
+ * the gate's number test and the landing reading, so the three cannot drift.
+ * Four digits or more; a `D-NNNN` in body text is neither.
+ */
+export function recordNumbers(text: string): {
+  readonly headings: readonly number[];
+  readonly indexRows: readonly number[];
+} {
+  const all = (pattern: RegExp) => [...text.matchAll(pattern)].map((match) => Number(match[1]));
+  return {
+    headings: all(/^## D-(\d{4,}) \u2014 /gm),
+    indexRows: all(/^\| D-(\d{4,}) \|/gm),
+  };
+}
+
+/** A decision-record number as the record spells it: `D-0112` (D-0098 rule 3.1). */
+export function recordNumber(number: number): string {
+  return `D-${String(number).padStart(4, "0")}`;
 }
 
 /** One lap of a lineage tree, as the ledger reads it. */

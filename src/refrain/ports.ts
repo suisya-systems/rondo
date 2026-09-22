@@ -234,6 +234,8 @@ export type ReserveOutcome =
       readonly paths: readonly string[];
       readonly holders: readonly LaneHolder[];
     }
+  /** A number asked for was reserved since the caller read (D-0098 rule 3.3). Nothing is written. */
+  | { readonly kind: "numbersMoved"; readonly highest: number }
   | { readonly kind: "defect"; readonly reason: string };
 
 /** Which of the host's two bounds an admission was refused by (D-0023 rule 8). */
@@ -419,6 +421,8 @@ export interface ReserveInput {
    * (D-0073 rules 2.3 and 2.5). Carried and never read, for `spend`'s reason.
    */
   readonly claim: LaneClaimAsk | null;
+  /** The decision-record numbers this admission reserves, or null (D-0098 rule 3.3). */
+  readonly numbers: readonly number[] | null;
   readonly nowMs: number;
 }
 
@@ -435,6 +439,16 @@ export interface ScopeSpend {
   readonly scopeDecisionId: string;
   readonly proposalId: string | null;
   readonly agentTypeDigest: string;
+  /**
+   * D-0098 rule 5.3: the redo is the closing lap, with what the reviewer last
+   * read and the below-threshold finding indexes it answers. Absent or null for
+   * every other admission. Carried and never read, for `spend`'s reason.
+   */
+  readonly closing?: {
+    readonly readTipCommit: string;
+    readonly readingReadAtMs: number;
+    readonly findings: readonly number[];
+  } | null;
 }
 
 /** One approval, as the admission that spends it names it (D-0022 rule 9). */
@@ -496,5 +510,9 @@ export interface ConductorPorts {
    * is D-0029 rule 3 as a shape rather than a promise: a reading that cannot be
    * taken costs a keystroke at `publish` and never a person's gate.
    */
-  readonly readLapWork: (plan: AdmittedPlan) => Promise<EffectOutcome<LapReadingDraft>>;
+  readonly readLapWork: (
+    plan: AdmittedPlan,
+    /** The lap's iteration id, whose line's number reservations the gate tests (D-0098 rule 3.6). */
+    iterationId: string,
+  ) => Promise<EffectOutcome<LapReadingDraft>>;
 }

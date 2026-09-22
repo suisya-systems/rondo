@@ -71,6 +71,7 @@ const reserve = (
   supersedesIterationId: string | null = null,
 ) =>
   store.reserve({
+    numbers: null,
     id,
     request: "do the thing",
     plan: { run_id: `rondo-${id}`, repository: "/srv/repo" },

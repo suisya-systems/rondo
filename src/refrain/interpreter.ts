@@ -123,6 +123,12 @@ export interface ConductorReport {
     readonly paths: readonly string[];
     readonly holders: readonly LaneHolder[];
   };
+  /**
+   * The store refused the decision-record numbers as taken (D-0098 rule 3.3):
+   * the highest now reserved, so the caller can compose them again and retry
+   * once. Absent on every other report.
+   */
+  readonly numbersMoved?: number;
 }
 
 /**
@@ -192,6 +198,7 @@ export async function admit(
   requestMessageId: string,
   scopeSpend: ScopeSpend | null = null,
   claim: LaneClaimAsk | null = null,
+  numbers: readonly number[] | null = null,
 ): Promise<ConductorReport> {
   const lines: string[] = [];
   const admission = nextStep(null, policy);
@@ -273,6 +280,8 @@ export async function admit(
     // Carried, never read, for `spend`'s reason (D-0073 rule 2.3): a drafted
     // split's claim, or null for the whole repository (rule 2.5).
     claim,
+    // Carried, never read, for `spend`'s reason (D-0098 rule 3.3).
+    numbers,
     nowMs: ports.now(),
   });
   switch (reservation.kind) {
@@ -360,6 +369,20 @@ export async function admit(
         status: null,
         lines: Object.freeze(lines),
         laneRefusal: Object.freeze({ paths: reservation.paths, holders: reservation.holders }),
+      };
+    case "numbersMoved":
+      // D-0098 rule 3.3: another admission took a number since the caller
+      // read; the caller composes its numbers again above `highest`.
+      lines.push(
+        `Refused: a decision-record number this admission names was reserved by another line ` +
+          `since it was read (the highest reserved is now ${String(reservation.highest)}).`,
+        "Nothing was written and nothing was spent.",
+      );
+      return {
+        iterationId: null,
+        status: null,
+        lines: Object.freeze(lines),
+        numbersMoved: reservation.highest,
       };
     case "defect":
       lines.push(`The store could not reserve an iteration: ${reservation.reason}`);
@@ -1292,7 +1315,7 @@ async function performStep(
       // outcome of the port that is not an answer becomes an `unavailable`
       // reading rather than a stall, because a reading nobody could take must
       // not cost an iteration whose gate is already open.
-      const read = await ports.readLapWork(plan.plan);
+      const read = await ports.readLapWork(plan.plan, record.id);
       const reading: LapReadingDraft =
         read.kind === "answered"
           ? read.value

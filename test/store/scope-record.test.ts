@@ -21,6 +21,7 @@ import {
   type AnswerOutcome,
   isApprovableKind,
   type JsonRecord,
+  readScopePayload,
   type ScopeDecisionDraft,
   type ScopeDraft,
   scopePayloadWithDefaults,
@@ -146,6 +147,7 @@ function reserveInput(
     spend: null,
     scopeSpend,
     claim: laneFor(id, parts.supersedesIterationId ?? null),
+    numbers: null,
     nowMs: 5_000,
     ...parts,
   };
@@ -223,6 +225,11 @@ const PAYLOAD_REFUSALS: readonly (readonly [string, JsonRecord, string])[] = [
     "an unknown top-level key",
     { ...PAYLOAD, predicate: "all" },
     "'predicate' is not a scope field",
+  ],
+  [
+    "a below_threshold that is neither leave nor fix_unread",
+    { ...PAYLOAD, below_threshold: "fix" },
+    "below_threshold must be one of leave, fix_unread",
   ],
   [
     "an unknown workspace key",
@@ -1121,4 +1128,56 @@ test("the three tables are changes the operator is shown", async () => {
   admitted(connection, "i-a", null);
   const kinds = (await record.changedSince(1)).map((change) => change.kind);
   expect(kinds).toEqual(expect.arrayContaining(["scope", "scope_decision", "scope_consumption"]));
+});
+
+// --- D-0098 rule 5: below_threshold and the closing lap ---------------------
+
+test("D-0098 rule 5.2: below_threshold reads when present, and an absent key stays absent", () => {
+  const fix = readScopePayload({ ...PAYLOAD, below_threshold: "fix_unread" });
+  expect(fix.kind === "read" ? fix.payload.below_threshold : null).toBe("fix_unread");
+  const leave = readScopePayload({ ...PAYLOAD, below_threshold: "leave" });
+  expect(leave.kind === "read" ? leave.payload.below_threshold : null).toBe("leave");
+  // Absent means leave, and is neither filled by the defaults nor by the
+  // reader: an existing scope's payload, and its digest, are unchanged.
+  expect("below_threshold" in scopePayloadWithDefaults(PAYLOAD)).toBe(false);
+  const bare = readScopePayload(PAYLOAD);
+  expect(bare.kind === "read" && "below_threshold" in bare.payload).toBe(false);
+  expect(contentDigest((bare.kind === "read" ? bare.payload : {}) as unknown as JsonRecord)).toBe(
+    contentDigest(PAYLOAD),
+  );
+});
+
+const CLOSING = { readTipCommit: "f".repeat(40), readingReadAtMs: 4_000, findings: [0, 2] };
+
+test("D-0098 rule 5.3: a closing redo writes its marker beside the consumption, and reads back", async () => {
+  const { connection, store } = await approved(withBudgets({ laps: 50, cost_usd: 1_000 }));
+  await reserves(
+    store,
+    reserveInput("i-close", spendOf({ closing: CLOSING }), { supersedesIterationId: "i-held" }),
+  );
+  expect(await store.closingLapOf("i-close")).toEqual({
+    iterationId: "i-close",
+    predecessorId: "i-held",
+    ...CLOSING,
+  });
+  expect(
+    count(
+      connection,
+      "SELECT COUNT(*) AS n FROM scope_consumption WHERE subject_id = ?",
+      "i-close",
+    ),
+  ).toBe(1);
+  // Control: an ordinary redo writes no marker.
+  await store.settle("i-close", "test", 6_000);
+  await reserves(store, reserveInput("i-plain", spendOf(), { supersedesIterationId: "i-held" }));
+  expect(await store.closingLapOf("i-plain")).toBeNull();
+});
+
+test("D-0098 rule 5.3: a refused closing redo writes no marker (both or neither)", async () => {
+  const { connection, store } = await approved(withBudgets({ laps: 0 }));
+  await refusalOf(
+    store,
+    reserveInput("i-close", spendOf({ closing: CLOSING }), { supersedesIterationId: "i-held" }),
+  );
+  expect(count(connection, "SELECT COUNT(*) AS n FROM closing_lap")).toBe(0);
 });

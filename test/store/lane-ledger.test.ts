@@ -58,6 +58,7 @@ const input = (
     spend: null,
     scopeSpend: null,
     claim: null,
+    numbers: null,
     nowMs: 1_000,
     ...rest,
   };
@@ -285,6 +286,7 @@ test("a line from before the ledger holds '/' only while a lap of it has not end
 const press = (iterationId: string) => ({
   iterationId,
   takenOver: null,
+  landed: false,
   authorKind: "operator" as const,
   authorId: "oidc|operator-1",
   bases: [{ form: "iteration", iterationId }],
@@ -301,6 +303,7 @@ test("a landing's release is refused as stale when a claim row or a lap was writ
   const landed = (lapIds: readonly string[], claimId: string | null) => ({
     iterationId: "a",
     takenOver: { claimId, lapIds },
+    landed: true,
     authorKind: "drafter" as const,
     authorId: LANE_LEDGER_AUTHOR,
     bases: [],
@@ -315,6 +318,47 @@ test("a landing's release is refused as stale when a claim row or a lap was writ
   // Released once: a second reading over the same line holds nothing to release.
   expect((await store.releaseLane(landed(["a"], "a:2"))).kind).toBe("refused");
   await reserved(store, input("b"));
+});
+
+test("first_landed is only a landing's release: never an abandon, a failure or the person's press (D-0098 rules 1.1 and 1.5)", async () => {
+  const { store } = fresh();
+  const landing = { form: "landing", branch: "main", commit: "c".repeat(40) };
+  // The landing reading's release carries the landing basis.
+  await reserved(store, input("a", { claim: asking(["src/"]) }));
+  await walk(store, "a", "closed");
+  expect(await store.landingOf("a")).toBeNull();
+  expect(
+    (
+      await store.releaseLane({
+        iterationId: "a",
+        takenOver: { claimId: "a:1", lapIds: ["a"] },
+        landed: true,
+        authorKind: "drafter",
+        authorId: LANE_LEDGER_AUTHOR,
+        bases: [{ form: "iteration", iterationId: "a" }, landing],
+        nowMs: 9,
+      })
+    ).kind,
+  ).toBe("released");
+  expect(await store.landingOf("a")).toEqual({ branch: "main", commit: "c".repeat(40), atMs: 9 });
+  // Still read after a retry takes the claim back and ends without landing.
+  await reserved(store, input("a-r2", { supersedesIterationId: "a" }));
+  expect(await store.landingOf("a-r2")).toEqual({
+    branch: "main",
+    commit: "c".repeat(40),
+    atMs: 9,
+  });
+  // The person's press, an abandon and a failure release with no landing.
+  await reserved(store, input("b", { claim: asking(["docs/"]) }));
+  await walk(store, "b", "closed");
+  expect((await store.releaseLane(press("b"))).kind).toBe("released");
+  await reserved(store, input("c", { claim: asking(["test/"]) }));
+  expect((await store.transition("c", "planned", "abandoned", {}, 5)).kind).toBe("transitioned");
+  await reserved(store, input("d", { claim: asking(["lib/"]) }));
+  expect((await store.transition("d", "planned", "failed", {}, 5)).kind).toBe("transitioned");
+  for (const id of ["b", "c", "d", "nobody"]) {
+    expect(await store.landingOf(id), id).toBeNull();
+  }
 });
 
 test("one in-force claim per line is the database's: a second successor of one head, or a second root, is refused", () => {
@@ -372,6 +416,7 @@ test("the ledger as the page reads it: what each line holds, whether it is in fl
     await store.releaseLane({
       iterationId: "landed",
       takenOver: { claimId: "landed:1", lapIds: ["landed"] },
+      landed: true,
       authorKind: "drafter",
       authorId: LANE_LEDGER_AUTHOR,
       bases: [],

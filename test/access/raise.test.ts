@@ -63,6 +63,7 @@ async function world() {
   expect(said.kind).toBe("recorded");
   // A lap that ran on the agent type, so the scope lists one rondo holds (D-0066 rule 1.2.3).
   const held = await store.reserve({
+    numbers: null,
     id: "lap-held",
     request: "earlier work",
     plan: { run_id: "r-held", repository: "/srv/repo", workspace_root: "/srv/work" },
@@ -105,6 +106,7 @@ async function world() {
   ).toEqual({ kind: "recorded" });
   for (const id of ["lap-gated", "lap-ended"]) {
     const reserved = await store.reserve({
+      numbers: null,
       id,
       request: "Please fix the parser.",
       plan: { run_id: `r-${id}`, repository: "/srv/repo", workspace_root: "/srv/work" },

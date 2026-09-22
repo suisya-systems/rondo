@@ -1300,7 +1300,11 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   // D-0091: the merge press, through the operator's gh.
   "src/access/merge.ts": ["Publishing"],
   "src/access/model-draft/host.ts": [SPLITTING],
+  // D-0098 rule 1.4: the tick that admits a `then` on its `first`'s landing.
+  "src/access/order-host.ts": [DISPATCHER],
   "src/access/model-draft/judgement.ts": [SPLITTING],
+  // D-0098 rule 3.3: the reserved numbers are wording a worker runs on (D-0064 O3).
+  "src/access/record-numbers.ts": [SPLITTING],
   "src/access/model-review/host.ts": ["Reviewer"],
   "src/access/model-review/judgement.ts": ["Reviewer"],
   "src/access/page/contract.ts": [HUMAN],
@@ -1333,6 +1337,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page/vocabulary.tsx": [HUMAN],
   "src/access/page/words.ts": [HUMAN],
   "src/access/pull-request.ts": ["Publishing"],
+  "src/access/question.ts": ["Secretary: relaying a worker's question"],
   "src/access/reach.ts": ["Dispatcher: patrolling"],
   "src/access/repository-add.ts": [SPLITTING],
   "src/access/review.ts": ["Reviewer"],

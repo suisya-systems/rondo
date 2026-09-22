@@ -69,6 +69,7 @@ const reserveOne = async (
   supersedesIterationId: string | null = null,
 ) =>
   store.reserve({
+    numbers: null,
     id,
     request: `do ${id}`,
     plan: somePlan(),
@@ -282,6 +283,7 @@ test("a terminal spent row holds its triple for ever", async () => {
   // A second iteration handed the same names is refused by the database, which
   // is what stops a later run being given a branch a merged pull request owns.
   const collided = await store.reserve({
+    numbers: null,
     id: "b",
     request: "do b",
     plan: somePlan(),
@@ -312,6 +314,7 @@ test("the observed-red control: a terminal unspent row releases its triple", asy
   putAt(connection, "a", "abandoned");
 
   const inheriting = await store.reserve({
+    numbers: null,
     id: "b",
     request: "do b",
     plan: somePlan(),
@@ -353,6 +356,7 @@ test("two live iterations may not hold one name even before either is spent", as
   const { store } = storeUnder({ maxOccupying: 9, maxLive: 9 });
   await reserveOne(store, "a");
   const collided = await store.reserve({
+    numbers: null,
     id: "b",
     request: "do b",
     plan: somePlan(),
@@ -622,6 +626,7 @@ test("a legacy row that spent its identifiers keeps holding them after the migra
 
   // So the admitted run id is still held, and cannot be reissued.
   const reissued = await store.reserve({
+    numbers: null,
     id: "new",
     request: "do new",
     plan: somePlan(),
@@ -683,6 +688,7 @@ test("a legacy row's branch and workspace are back-filled from its plan and then
 
   // And the names it holds cannot be handed to a new iteration.
   const collided = await store.reserve({
+    numbers: null,
     id: "new",
     request: "do new",
     plan: somePlan(),
