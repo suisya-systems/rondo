@@ -22588,8 +22588,10 @@ At rondo `24294fa` and the pinned cadenza, by reading:
    6. **Released on every end but a landing**: abandon, failure, settle, "ended with nothing to land"
       and the person's release press. `LaneReleaseInput.landed` is explicit because `takenOver`
       could not tell a landing from the others. Released numbers stay gaps.
-   7. **The shared-append exemption is by exact path, on both sides.** A claim on `/` or on a
-      directory above the record still overlaps it.
+   7. **The shared-append exemption is by exact path, on both sides.** The record is taken out of
+      the asked claim and the held one before they are compared, so a line asking for the record
+      alone runs beside a line holding `/` (rule 3.5: changing the record never serialises two
+      lines), and a claim on `/` or on a directory still overlaps every other path under it.
    8. **Rule 3.6 is read both ways.** An added number is tested against every number the line was
       handed, a released one included: nobody else can ever be handed it, so a retried lap whose
       prompt names it keeps it. A number the line still holds that the tip's record does not spell
@@ -22603,7 +22605,10 @@ At rondo `24294fa` and the pinned cadenza, by reading:
    11. **Known limits**: the counter is keyed by the plan's local clone path, as the lane ledger is,
       so two clones of one forge repository count apart; and only numbers are tested on the record
       -- a lap that deletes or rewrites a landed line of it is seen in the diff at the gate, not
-      found.
+      found; and the gate's number test reads one lap's own `base...tip`, so a revision does not
+      test again an unreserved number its predecessor wrote and left in place. The predecessor's
+      gate found it, and its revise was drafted to renumber it; a revise that did not is not caught
+      a second time (a lineage-wide reading is the fix, left for a later change).
 
 4. **Rule 4: the question is a fenced block, relayed as an ask.**
    1. **The instruction** is two ASCII lines of the definition of done (`D-0089`): build, verify and
