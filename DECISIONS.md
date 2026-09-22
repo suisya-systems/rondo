@@ -22479,7 +22479,7 @@ At rondo `77c41d7`, by reading `src/access/checks-host.ts`, `src/access/merge.ts
 build of `D-0098` decided where `D-0098` left the choice to the building change. Three points were
 put to the owner while the build ran; the answers are in "What was put to the gate, and its
 answer". Refs `D-0098`, `D-0100`, `D-0073`, `D-0067`, `D-0065`, `D-0066`, `D-0064`, `D-0015`,
-`D-0009`, `D-0089`, rondo#250, rondo#417, cadenza#TBD.
+`D-0009`, `D-0089`, rondo#250, rondo#417, cadenza#74.
 
 **Why an entry is needed.** `D-0098` "decides and does not build". Building it took choices its
 text does not make: where a release fact is stored, how an order is written into a split, where a
@@ -22547,7 +22547,7 @@ At rondo `24294fa` and the pinned cadenza, by reading:
       `revisionPlan`; `takeInSection`, whose conflict wording is written; and the ancestry finding
       (`readLapWork` -> `isAncestor` -> `readingOf({takeIn})`). `D-0098` rule 3.8 (a merge conflict
       on the decision record) is the same path and is not built until #417 is.
-   7. **The trigger stays off until cadenza's fence allows a merge** (cadenza#TBD), and `revise`
+   7. **The trigger stays off until cadenza's fence allows a merge** (cadenza#74), and `revise`
       passes no take-in: under the measured fence no worker can pass rule 2.3's test, so a trigger
       would only turn every handed-over line into a failing lap. The gate's answer to point 1.
 
@@ -22641,7 +22641,7 @@ At rondo `24294fa` and the pinned cadenza, by reading:
 
 **The gate's answer (2026-09-22, rondo's owner, through the window):**
 
-1. **(c) now, and (a) asked of cadenza** as its own issue (cadenza#TBD) by the organisation. The
+1. **(c) now, and (a) asked of cadenza** as its own issue (cadenza#74) by the organisation. The
    trigger stays off until (a) lands.
 2. **Two presses**: the answer, then `revise`. Rule 8.4's sentence goes on the revise box.
 3. **A follow-up**: no page change in this one.
