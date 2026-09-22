@@ -122,12 +122,10 @@ test("the thread runs in the order it happened, and a reply names the line it an
     mint,
   );
 
-  // **The axis is time** (D-0083 rule 2). rondo#199 used to lift an open ask
-  // above the reports that came before it, so a person met the question
-  // first; D-0083 replaced that with one stream in the order things happened
-  // -- the question is marked where it is, and the box to answer it is under
-  // the thread whatever the order.
-  expect(bodiesIn(html)).toEqual(["request-a", "report-b", "report-c", "ask-d"]);
+  // **The axis is time** (D-0083 rule 2), drawn newest first (D-0106). The
+  // question is marked where it is, and the box to answer it is above the
+  // thread whatever the order.
+  expect(bodiesIn(html)).toEqual(["ask-d", "report-c", "report-b", "request-a"]);
   expect(messageIn(html, "ask-d")).toContain("data-waiting");
   // A message drawn right under the one it answers needs no line saying so.
   expect(messageIn(html, "ask-d")).not.toContain("in reply to");
@@ -145,9 +143,9 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
     mint,
   );
 
-  // **The words as written, in order, with their paragraphs and their spaces**
-  // (D-0061 rule 2.2, rondo#90), and a `<b>` in them is text.
-  expect(bodiesIn(html)).toEqual([ROOT_BODY, ASK_BODY, LATER_BODY]);
+  // **The words as written, newest first (D-0106), with their paragraphs and
+  // their spaces** (D-0061 rule 2.2, rondo#90), and a `<b>` in them is text.
+  expect(bodiesIn(html)).toEqual([LATER_BODY, ASK_BODY, ROOT_BODY]);
   expect(html).not.toContain("<b>one run");
 
   // **Two voices, told apart by more than the prose** (rule 2.3): who wrote it
@@ -455,7 +453,7 @@ test("the threads speak Japanese where the page does, tokens and words untouched
   expect(html).toContain(">続ける</button>");
   expect(html).toContain(">この線を止める</button>");
   expect(html).toContain('action="/answer-ask?lang=ja"');
-  expect(bodiesIn(html)).toEqual([ROOT_BODY, ASK_BODY, LATER_BODY]);
+  expect(bodiesIn(html)).toEqual([LATER_BODY, ASK_BODY, ROOT_BODY]);
 });
 
 /** `page/composer.js` with its commentary removed, so a claim is read off code. */

@@ -868,7 +868,7 @@ explanation you pressed on and then answers the gate.`,
   publishNoticedHeading: "What rondo noticed",
   publishModelHeading: "What the model read",
   publishModelNote:
-    "Material for you to weigh. It is not an approval, and nothing above was decided by it.",
+    "Material for you to weigh. It is not an approval, and nothing on this screen was decided by it.",
   publishNote:
     "rondo pushes, opens the pull request and closes the run, as you. It merges nothing; that " +
     "is still yours. If any of this has changed since the page was drawn, the press stops and " +

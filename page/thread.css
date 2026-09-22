@@ -470,8 +470,8 @@
 
 /*
  * Where this request can be taken next (D-0083 rule 6's chain, as addresses).
- * Under the record and above the box a person answers in: what has happened,
- * then what can happen, then the press.
+ * Between the answering box and the box a person adds to (D-0106): what waits
+ * on them, then where this request can go, then the box.
  */
 .thread-acts {
   display: flex;

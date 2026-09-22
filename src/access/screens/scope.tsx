@@ -330,7 +330,6 @@ export async function scopeView(
         {request.body}
       </p>
       {scopeIssues(wording, threads, view.messageId)}
-      {scopeDone(wording)}
     </header>
   );
   // **The third state** (D-0074 rule 4.2): raising the approval a waiting lap
@@ -340,6 +339,7 @@ export async function scopeView(
       <div id="scope" class="space-y-4">
         {head}
         {await raiseForm(ports, wording, view, view.raise, threads, token, newScopeId, nowMs)}
+        {scopeDone(wording)}
       </div>
     );
   }
@@ -377,6 +377,9 @@ export async function scopeView(
     <div id="scope" class="space-y-4">
       {head}
       {body}
+      {/* Rondo's own definition of done is the same on every lap and long, so
+          it sits under whatever is pressed here (D-0106, rondo#408). */}
+      {scopeDone(wording)}
     </div>
   );
 }
@@ -660,44 +663,6 @@ async function scopeForm(
         {wording.scopeMaybeApproved}
       </p>
       {planChoice(wording, view, offered, chosen.planDigest)}
-      <section class={`${CARD} space-y-1`}>
-        {/* **The card says what it holds**: the plan, where it runs, and what
-            its agent type is allowed. Its heading named only the last of those
-            until rondo#233 S3's screen review, so the plan rondo would run was
-            the one thing the card never said out loud. */}
-        <h3 class={CARD_HEADING}>{wording.scopePlanHeading}</h3>
-        {drafted.workspaces.map((workspace) => (
-          <p class="text-body leading-5 text-muted-foreground">
-            {wording.scopeWorkspace(workspace.repository, workspace.workspace_root)}
-          </p>
-        ))}
-        {planDone(wording, planRuleFiles(chosen.document))}
-        <p class="text-meta leading-5 font-medium text-muted-foreground">
-          {wording.scopeAgentTypeBounds}
-        </p>
-        {drafted.heldLines.map((line) => (
-          <p class="text-meta leading-5 wrap-anywhere text-muted-foreground">{line}</p>
-        ))}
-        {/* **Folded, because there is nothing to do with a hash.** Three
-            71-character digests as plain text were a third of the first
-            screenful at 420px and not one of them was actionable; they are
-            still on the screen, because what rondo records is what rondo
-            shows. */}
-        <details class="group rounded-md border border-border">
-          <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
-            {chevron()}
-            {wording.scopeDigestsFold}
-          </summary>
-          <div class="space-y-1 border-t border-border px-3 py-2">
-            <p class="font-mono text-id leading-5 wrap-anywhere text-faint">
-              {wording.scopePlanDigest(drafted.planDigest)}
-            </p>
-            <p class="font-mono text-id leading-5 wrap-anywhere text-faint">
-              {wording.scopeAgentType(drafted.agentTypeDigest)}
-            </p>
-          </div>
-        </details>
-      </section>
       {/*
        * **Explicit links, and not a `method="get"` form** (rondo#233 S3). This
        * view carries no htmx to fight; a `get` form would need every other
@@ -751,6 +716,21 @@ async function scopeForm(
          */}
         <input type="hidden" name="plan_digest" value={drafted.planDigest} />
         <input type="hidden" name="agent_type" value={drafted.agentTypeDigest} />
+        <div class="flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3">
+          <p class="note text-meta leading-5 text-muted-foreground">{wording.scopePressNote}</p>
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby="scope-plain"
+            data-busy={wording.scopeBusy}
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+          >
+            {wording.scopeAction}
+          </button>
+          <span id="scope-plain" class="note sr-only">
+            {wording.scopePlain}
+          </span>
+        </div>
         {sampleCaveat(wording, budgets.cost_reserve_usd.bases)}
         {budgetBoxes(wording, budgets, true)}
         <section class={`${CARD} space-y-3`}>
@@ -793,22 +773,61 @@ async function scopeForm(
         </section>
         {/* D-0066's first gate answer, on the screen and not only in a terminal. */}
         <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
-        <div class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]">
-          <p class="note text-meta leading-5 text-muted-foreground">{wording.scopePressNote}</p>
+        {/* **The same press again under the last box** (D-0106, the owner's answer
+            to point 2): a person who changed a number at the foot presses here
+            rather than scrolling back up; the goal page does the same. */}
+        <div class="flex flex-col">
           <button
             type="submit"
             data-row=""
             aria-describedby="scope-plain"
             data-busy={wording.scopeBusy}
-            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
           >
             {wording.scopeAction}
           </button>
-          <span id="scope-plain" class="note sr-only">
-            {wording.scopePlain}
-          </span>
         </div>
       </form>
+      {/* The plan card is what the form runs on, and long: under the form
+          and its press rather than above them (D-0106, rondo#408). */}
+      <section class={`${CARD} space-y-1`}>
+        {/* **The card says what it holds**: the plan, where it runs, and what
+            its agent type is allowed. Its heading named only the last of those
+            until rondo#233 S3's screen review, so the plan rondo would run was
+            the one thing the card never said out loud. */}
+        <h3 class={CARD_HEADING}>{wording.scopePlanHeading}</h3>
+        {drafted.workspaces.map((workspace) => (
+          <p class="text-body leading-5 text-muted-foreground">
+            {wording.scopeWorkspace(workspace.repository, workspace.workspace_root)}
+          </p>
+        ))}
+        {planDone(wording, planRuleFiles(chosen.document))}
+        <p class="text-meta leading-5 font-medium text-muted-foreground">
+          {wording.scopeAgentTypeBounds}
+        </p>
+        {drafted.heldLines.map((line) => (
+          <p class="text-meta leading-5 wrap-anywhere text-muted-foreground">{line}</p>
+        ))}
+        {/* **Folded, because there is nothing to do with a hash.** Three
+            71-character digests as plain text were a third of the first
+            screenful at 420px and not one of them was actionable; they are
+            still on the screen, because what rondo records is what rondo
+            shows. */}
+        <details class="group rounded-md border border-border">
+          <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+            {chevron()}
+            {wording.scopeDigestsFold}
+          </summary>
+          <div class="space-y-1 border-t border-border px-3 py-2">
+            <p class="font-mono text-id leading-5 wrap-anywhere text-faint">
+              {wording.scopePlanDigest(drafted.planDigest)}
+            </p>
+            <p class="font-mono text-id leading-5 wrap-anywhere text-faint">
+              {wording.scopeAgentType(drafted.agentTypeDigest)}
+            </p>
+          </div>
+        </details>
+      </section>
     </>
   );
 }
@@ -1010,25 +1029,39 @@ async function raiseForm(
         {/* Minted when drawn, as the person's own form's is: one form pressed
             twice records one new approval. */}
         <input type="hidden" name="scope_id" value={newScopeId()} />
-        {sampleCaveat(wording, budgets.cost_reserve_usd.bases)}
-        {budgetBoxes(wording, budgets, false)}
-        <p class="note text-meta leading-5 text-muted-foreground">{wording.raiseFromHere}</p>
-        <p class="note text-meta leading-5 text-muted-foreground">{wording.raiseRetires}</p>
-        <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
-        <div class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]">
+        <div class="flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3">
           <p class="note text-meta leading-5 text-muted-foreground">{wording.raisePressNote}</p>
           <button
             type="submit"
             data-row=""
             aria-describedby="raise-plain"
             data-busy={wording.scopeBusy}
-            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
           >
             {wording.raiseAction}
           </button>
           <span id="raise-plain" class="note sr-only">
             {wording.raisePlain}
           </span>
+        </div>
+        {sampleCaveat(wording, budgets.cost_reserve_usd.bases)}
+        {budgetBoxes(wording, budgets, false)}
+        <p class="note text-meta leading-5 text-muted-foreground">{wording.raiseFromHere}</p>
+        <p class="note text-meta leading-5 text-muted-foreground">{wording.raiseRetires}</p>
+        <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
+        {/* **The same press again under the last box** (D-0106, the owner's answer
+            to point 2): a person who changed a number at the foot presses here
+            rather than scrolling back up; the goal page does the same. */}
+        <div class="flex flex-col">
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby="raise-plain"
+            data-busy={wording.scopeBusy}
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+          >
+            {wording.raiseAction}
+          </button>
         </div>
       </form>
     </>
@@ -1104,7 +1137,6 @@ async function draftedForm(
   return (
     <>
       {lead}
-      {plans}
       <form
         id="scope-draft-form"
         method="post"
@@ -1119,6 +1151,23 @@ async function draftedForm(
         <input type="hidden" name="draft_digest" value={drafted.scope.scopeDigest} />
         {/* Minted at draw for the person's version, should they change a value. */}
         <input type="hidden" name="scope_id" value={newScopeId()} />
+        <div class="flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3">
+          <p class="note text-meta leading-5 text-muted-foreground">
+            {wording.scopeDraftedPressNote}
+          </p>
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby="scope-draft-plain"
+            data-busy={wording.scopeBusy}
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+          >
+            {wording.scopeDraftedAction}
+          </button>
+          <span id="scope-draft-plain" class="note sr-only">
+            {wording.scopeDraftedPlain}
+          </span>
+        </div>
         {sampleCaveat(wording, computed.cost_reserve_usd.bases)}
         <div class={`${CARD} grid gap-4 sm:grid-cols-2`}>
           <div class="min-w-0 space-y-1">
@@ -1254,24 +1303,24 @@ async function draftedForm(
           {cite("irreversible_additions", wording.scopeNarrowedAdded)}
         </section>
         <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
-        <div class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]">
-          <p class="note text-meta leading-5 text-muted-foreground">
-            {wording.scopeDraftedPressNote}
-          </p>
+        {/* **The same press again under the last box** (D-0106, the owner's answer
+            to point 2): a person who changed a number at the foot presses here
+            rather than scrolling back up; the goal page does the same. */}
+        <div class="flex flex-col">
           <button
             type="submit"
             data-row=""
             aria-describedby="scope-draft-plain"
             data-busy={wording.scopeBusy}
-            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
           >
             {wording.scopeDraftedAction}
           </button>
-          <span id="scope-draft-plain" class="note sr-only">
-            {wording.scopeDraftedPlain}
-          </span>
         </div>
       </form>
+      {/* The drafted plans under the form and its press (D-0106, rondo#408):
+          the lead above still says the work is below. */}
+      {plans}
     </>
   );
 }
@@ -1548,6 +1597,72 @@ async function scopeApproved(
   const runsOn = gone ? null : (drawn ?? (allowed.length === 1 ? (allowed[0] as HeldPlan) : null));
   return (
     <>
+      {/* **What can be started comes first** (D-0106, rondo#408): the start
+          press, the plans to choose from, or why there is none -- then the
+          approval it runs under, which is a record and not a thing to do. */}
+      {retired ? (
+        <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
+          {wording.scopeRetired}
+        </p>
+      ) : null}
+      {draftedStarts !== null ? (
+        draftedStarts
+      ) : retired || token === null || newIterationId === null ? null : runsOn === null &&
+        allowed.length === 0 ? (
+        <>
+          {gone ? note(wording.scopePlanGone) : null}
+          {note("plans" in plans ? wording.scopeNoPlanForScope : plans.note)}
+        </>
+      ) : runsOn === null ? (
+        <>
+          {gone ? note(wording.scopePlanGone) : null}
+          {planChoice(wording, view, allowed, null)}
+        </>
+      ) : (
+        <form
+          id="start-form"
+          method="post"
+          action={`/start?lang=${encodeURIComponent(wording.lang)}`}
+          class="flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3"
+        >
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="request" value={view.messageId} />
+          <input type="hidden" name="scope_decision" value={decisionId} />
+          <input type="hidden" name="plan" value={runsOn.planDigest} />
+          <p class="text-body leading-5 wrap-anywhere text-muted-foreground">
+            {`${wording.scopePlanAsk}: ${planLine(wording, runsOn)}`}
+          </p>
+          {planDone(wording, planRuleFiles(runsOn.document))}
+          {/* Minted at render, as the scope id is, and for its reason: rondo
+              names the lap (D-0023) and a double press is one lap. */}
+          <input type="hidden" name="iteration" value={newIterationId()} />
+          <p class="note text-meta leading-5 text-muted-foreground">{wording.startNote}</p>
+          {/* **The one press that spends money, saying what the refusals
+              already say** (rondo#244): the join is real, and a guarantee
+              nobody is told about is paid for in suspicion. */}
+          <p class="note text-meta leading-5 text-muted-foreground">{wording.startAgainSafe}</p>
+          <button
+            type="submit"
+            data-row=""
+            aria-describedby="start-plain"
+            data-busy={wording.startBusy}
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
+          >
+            {wording.startAction}
+          </button>
+          <p
+            data-busy-note=""
+            hidden
+            role="status"
+            class="note text-meta leading-5 text-muted-foreground"
+          >
+            {wording.lapBusyNote}
+          </p>
+          <span id="start-plain" class="note sr-only">
+            {wording.startPlain}
+          </span>
+        </form>
+      )}
       <section class={`${CARD} space-y-1`}>
         <h3 class={CARD_HEADING}>
           {wording.scopeApproved(wording.age(ago(decided.decision.decidedAtMs, nowMs)))}
@@ -1602,69 +1717,6 @@ async function scopeApproved(
         </p>
       )}
       <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
-      {retired ? (
-        <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
-          {wording.scopeRetired}
-        </p>
-      ) : null}
-      {draftedStarts !== null ? (
-        draftedStarts
-      ) : retired || token === null || newIterationId === null ? null : runsOn === null &&
-        allowed.length === 0 ? (
-        <>
-          {gone ? note(wording.scopePlanGone) : null}
-          {note("plans" in plans ? wording.scopeNoPlanForScope : plans.note)}
-        </>
-      ) : runsOn === null ? (
-        <>
-          {gone ? note(wording.scopePlanGone) : null}
-          {planChoice(wording, view, allowed, null)}
-        </>
-      ) : (
-        <form
-          id="start-form"
-          method="post"
-          action={`/start?lang=${encodeURIComponent(wording.lang)}`}
-          class="sticky bottom-0 z-[1] -mx-4 flex flex-col gap-2 border-t border-border bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]"
-        >
-          <input type="hidden" name="token" value={token} />
-          <input type="hidden" name="request" value={view.messageId} />
-          <input type="hidden" name="scope_decision" value={decisionId} />
-          <input type="hidden" name="plan" value={runsOn.planDigest} />
-          <p class="text-body leading-5 wrap-anywhere text-muted-foreground">
-            {`${wording.scopePlanAsk}: ${planLine(wording, runsOn)}`}
-          </p>
-          {planDone(wording, planRuleFiles(runsOn.document))}
-          {/* Minted at render, as the scope id is, and for its reason: rondo
-              names the lap (D-0023) and a double press is one lap. */}
-          <input type="hidden" name="iteration" value={newIterationId()} />
-          <p class="note text-meta leading-5 text-muted-foreground">{wording.startNote}</p>
-          {/* **The one press that spends money, saying what the refusals
-              already say** (rondo#244): the join is real, and a guarantee
-              nobody is told about is paid for in suspicion. */}
-          <p class="note text-meta leading-5 text-muted-foreground">{wording.startAgainSafe}</p>
-          <button
-            type="submit"
-            data-row=""
-            aria-describedby="start-plain"
-            data-busy={wording.startBusy}
-            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
-          >
-            {wording.startAction}
-          </button>
-          <p
-            data-busy-note=""
-            hidden
-            role="status"
-            class="note text-meta leading-5 text-muted-foreground"
-          >
-            {wording.lapBusyNote}
-          </p>
-          <span id="start-plain" class="note sr-only">
-            {wording.startPlain}
-          </span>
-        </form>
-      )}
     </>
   );
 }

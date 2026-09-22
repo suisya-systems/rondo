@@ -183,10 +183,11 @@ test("the presses that start a lap carry their busy label and what a lap waits o
   expect(revise.match(/\{wording\.lapBusyNote\}/g)).toHaveLength(1);
   const scope = source("src/access/screens/scope.tsx");
   // Both starts -- the plan's own and the one under an approval -- and every
-  // scope press.
+  // scope press, each of the three drawn twice: at the form's top and again
+  // under its last box (D-0106 rule 7).
   expect(scope.match(/data-busy=\{wording\.startBusy\}/g)).toHaveLength(2);
   expect(scope.match(/\{wording\.lapBusyNote\}/g)).toHaveLength(2);
-  expect(scope.match(/data-busy=\{wording\.scopeBusy\}/g)).toHaveLength(3);
+  expect(scope.match(/data-busy=\{wording\.scopeBusy\}/g)).toHaveLength(6);
 });
 
 test("setup's last word is the one that opens the page, and no terminal step comes after it", () => {

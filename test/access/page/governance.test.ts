@@ -107,10 +107,11 @@ test("the line where the reading stopped is drawn once, above the first thing th
   // carries a *new* mark of its own.
   const lines = [...html.matchAll(/class="thread-since"/g)];
   expect(lines).toHaveLength(1);
-  // Above the message that arrived after the look, and below the one before it.
+  // Newest first (D-0106): under the message that arrived after the look, and
+  // above the one before it.
   const at = html.indexOf('class="thread-since"');
-  expect(html.indexOf('id="req-old"')).toBeLessThan(at);
-  expect(at).toBeLessThan(html.indexOf('id="m-new"'));
+  expect(html.indexOf('id="m-new"')).toBeLessThan(at);
+  expect(at).toBeLessThan(html.indexOf('id="req-old"'));
 });
 
 test("a person who has never looked gets no line, because nothing is below it", async () => {

@@ -138,6 +138,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0100 | A first lap is cut from the forge's base branch as it is at admission: rondo fetches it into a branch of the lap's own, `rondo/base/<runId>`, admits continuo against that, and refuses the lap when the fetch fails | accepted |
 | D-0102 | rondo reads what the forge did to a published pull request, and not only its checks: a conflict is said as why no check runs, a head somebody else pushed is shown with its commits and can be merged by a press that names it, and a merge or a close made on the forge ends the request | accepted |
 | D-0103 | How D-0098's five rules are built: a landing basis on the claim's release is `first_landed`, a split plan orders its parts by `after`, a take-in is a plan field with no trigger yet, decision numbers are rows beside the claim, a worker's question is a fenced block relayed as an ask, and a closing lap is a press the review host does not read | accepted |
+| D-0106 | What a person acts on sits at the top of every screen, and the thread runs newest first: presses, boxes and decisions come before any history or long content, nothing is stuck to the window's foot, and the answering box keeps every element it inherited | accepted |
 
 ---
 
@@ -19907,6 +19908,9 @@ month*), not by status. The one exception is `D-0082` rule 1's: requests waiting
 lifted to the top under *your turn*, drawn bold with one amber dot, untruncated. Nothing else in the
 list is amber, and a finished request's line may be cut to one line.
 
+> **Annotation (2026-09-22, from D-0106).** Not additive (rondo#408): the axis stays time and is
+> drawn **newest first** (`D-0106` rule 2). Nothing above is edited.
+
 **3. The summary and the gate are one screen.** There is no separate decision screen. Arriving from a
 notification and opening the page land on the same screen: from a notification the request it names
 is selected; opened by hand, the oldest request waiting on the person is selected; with nothing
@@ -19944,6 +19948,10 @@ little is on it.
 | Centre | up to 1,040px | The thread: the person's words, rondo's reading of them with its way back to the words (`D-0061` rule 2.6), event lines, reports, the question or confirmation, and **the box to answer in**; under it, always, a box to add to the request |
 | Right | 720px | Above, **the material for this confirmation** (what changed, the checks, the model review, each leading to its full text); below, **what was agreed for this request** (rule 6). With nothing being asked, the agreement moves to the top and *what is known so far* sits under it |
 
+> **Annotation (2026-09-22, from D-0106).** Not additive (rondo#408): the centre's order is the
+> next step, the box to answer in, the screens the request leads to and the box to add to it, **then**
+> the thread (`D-0106` rules 1 and 4); *under it, always* no longer holds. Nothing above is edited.
+
 **6. Governance is permanent, in one line under the title, and in full on the right.** Under every
 thread's title, at every width: repository | when it was asked | spent / approved | which try of how
 many | how many things rondo decided without asking | what remains, as a chain (*your answer ->
@@ -19961,6 +19969,11 @@ is therefore on the time axis at the moment it was made, and the count on the ri
 things. **One line -- "you last looked down to here" (`D-0061` rule 2.5) -- is drawn once in the list
 and once in the thread**, and no row carries a *new* mark of its own.
 
+> **Annotation (2026-09-22, from D-0106).** Additive (rondo#408): with the thread newest first, the
+> last-looked line sits *under* what arrived after the mark, so it reads as "what is below here you
+> have seen", which is what its words already say. Still drawn once in the list and once in the
+> thread. Nothing above is edited.
+
 **8. The folds.**
 
 | Width | Faces | What folds |
@@ -19971,6 +19984,10 @@ and once in the thread**, and no row carries a *new* mark of its own.
 
 What drops below the thread at 1280 is evidence only. `D-0082` rule 7 holds at every width: what a
 press needs is inside the box that holds the press.
+
+> **Annotation (2026-09-22, from D-0106).** Not additive (rondo#408): *the page scrolls to the
+> answering box on arrival* is withdrawn, because the box is at the top of the thread at every width
+> (`D-0106` rule 3). The faces' folds in this table stand. Nothing above is edited.
 
 **9. The answering box inherits the gate, whole.** The box in the thread replaces the gate screen and
 carries every element it had:
@@ -19985,6 +20002,9 @@ carries every element it had:
 **An element of the gate leaves the box only by a decision that names it and says why.** A redesign
 that omits one has not decided anything; it has a bug. This is stated because both lanes' mock-ups
 dropped the first two once without anyone choosing to.
+
+> **Annotation (2026-09-22, from D-0106).** Kept whole (rondo#408). Inside the box the order is the
+> findings, then the presses with the field above them, then the folded records (`D-0106` rule 5).
 
 **10. Tone is `D-0082`'s, unchanged.** The six-step scale, the 1.7 Japanese line, amber only for *a
 person must act*, blue only for what can be touched. The primary press is ink, not amber; the despite
@@ -20337,6 +20357,10 @@ fold, and it is taken to **every width** rather than kept at one: what it folds 
 is not being asked about*, which is a fact about the reader and not about the window. It happens
 only where there is a line to fold above, so a person who has never looked loses nothing. Opening it
 gives back the folded tries, not the raw lines.
+
+> **Annotation (2026-09-22, from D-0106).** Not additive (rondo#408): the thread is drawn newest
+> first, so this fold of what was already read sits at the **foot** of the thread, under the new
+> lines, rather than over the top. What it folds is unchanged. Nothing above is edited.
 
 **4. No threshold, and that is a claim and not an omission.** Neither fold counts lines. A request
 tried once has no settled try; a person who has read nothing has nothing already-read. **The unit
@@ -22700,3 +22724,123 @@ The defaults of rules 1, 3, 4 and 5 above were accepted as built.
 - **Two reservation rows for one number**, or a reservation without its claim row: rule 3.3.
 - **A closing lap with a model reading**, or a second closing lap on one line: rule 5.5.
 - **A worker's question closed by anything but a person's press.**
+---
+
+## D-0106 — What a person acts on sits at the top of every screen, and the thread runs newest first: presses, boxes and decisions come before any history or long content, nothing is stuck to the window's foot, and the answering box keeps every element it inherited
+
+**Status:** accepted (2026-09-22, the owner's request on rondo#408). **Not additive** to `D-0083`
+rules 2, 5, 8 and 9 and to `D-0086` rule 3: each is annotated where it stands, and what changes is
+said rule by rule below. Keeps `D-0083` rule 9 (every element of the gate stays in the box) and
+`D-0082` rule 7 (what a press needs is inside the box that holds it) unchanged. Refs `D-0059`,
+`D-0074`, `D-0082`, `D-0083`, `D-0086`, `D-0097`, rondo#375, rondo#408.
+
+**Numbering.** `D-0106` was assigned to this lane in advance; `D-0103`, `D-0104` and `D-0105` are
+held by other lanes, and no entry on `main` carries any of them.
+
+**Why an entry is needed.** `D-0083` made the axis of a thread time and drew it oldest first, with
+the question, the box to answer in and the box to add to the request under all of it; rule 8 then
+had to scroll the page to that box on arrival at 1600, and `D-0086` had to fold what the person had
+already read *over the top* so the box would not sit a screen below. The screens that came after
+it -- scope, publish, release -- put their presses in a bar stuck to the window's foot for the same
+reason. The owner's reading of the built page (rondo#408) was that a person should never scroll to
+find what waits on them: the next step already moved above the messages in rondo#375, and the goal
+page (`D-0097` point 2) was built with its press above its clauses, but the answering box, the reply
+box and every other screen's press still sat at the bottom.
+
+### What was measured, and how
+
+On **2026-09-22**, at rondo `9ef713a`, by reading the rendered HTML of `scripts/page-preview.mjs`'s
+seeded store (every address the preview prints) in document order, before and after this change.
+Screenshots at 2560x1600 and 1600x1500, light and dark, are taken outside the worker's sandbox by
+the shoot script attached to the pull request; nothing here claims a pixel.
+
+| Screen (preview) | Before: what came first in the centre | After |
+|---|---|---|
+| Thread with a gate (`request-preview-0001`) | the request, rondo's reading, the event lines as `D-0086` folds them, then the box: findings, three folded record blocks, the presses in a bar stuck to the window's foot; *Set the scope*; the reply box stuck 12px above the foot | title, governance and *your turn*, then the box: findings, the presses, the folded records; *Set the scope*; the reply box; then the thread, newest first |
+| Thread with a next step (`request-preview-0002`) | the next-step band (rondo#375), the messages, then the reply box | the band, the reply box, then the messages, newest first |
+| Scope screen | the request, the definition of done, the plan card, then the form whose press was stuck to the foot | the request, the choices (plan, rounds), the form with its press at its top, then the plan card and the definition of done |
+| Publish screen | the target, the pull request's title and body, the model's reading, then the press | the target, anything noticed, a standing refusal, the press, then the title and body and the model's reading |
+
+### The decision
+
+**1. On every screen, what a person acts on comes before any history or long content.** A press,
+a box to write in, and a choice (a plan, a number of rounds) sit at the top of the centre, under the
+screen's own title and the one-line facts that name what is being decided (`D-0083` rule 6's
+governance line, the publish target, the approval a raise changes). A record -- the thread, the
+claims a press records, a pull request's body, the definition of done, the plan card -- comes after.
+
+**2. The thread runs newest first.** The axis is still time (`D-0083` rule 2); it is drawn the other
+way up. The folds are computed over the order things happened, exactly as `D-0086` says, and only
+drawn reversed, inside a fold as well as outside. The last-looked line is drawn under the first
+thing that arrived after the mark, so what is new sits above it and what was read below it.
+
+**3. Nothing a person presses is stuck to the window's foot.** The answering box's bar, the reply
+box, and the scope, raise, drafted-scope and start presses were `position: sticky` at the bottom so
+they stayed in reach below long content. With the content below them, they are ordinary blocks at
+the top and need no stickiness; a sticky top would sit under the page's own sticky header. The
+reply box no longer scrolls the window to its bottom after a send.
+
+**4. The order at the top of a thread**: the next step (rondo#375), the answering box, the screens
+the request leads to (*Set the scope*, publish), the box to add to the request, then the thread.
+The answering box comes before the reply box because it is the one thing only the person can clear
+(`D-0082` rule 1); the next step is not drawn while a question or a gate in the thread waits on
+the person (rondo#375), so the two do not compete.
+
+**5. Inside the answering box: the findings, then the presses, then the records.** `D-0083` rule 9
+holds whole: the findings stay quoted and unfolded in the box (9.4) and come first, because they are
+what the press is answered over (`D-0082` rule 7); the bar with both readings' verdicts, the *what
+you checked* field directly above the presses (9.1), `approveDespite` with its plain sentence (9.2)
+and the withheld plain approve (9.3) come next; the claims the press records, folded as they were,
+come last. No element leaves the box.
+
+**6. Where the press needs long content, the content stays on the screen, open, under it.** The
+publish press sends a pull request's title and body, which `D-0082` rule 7 (rondo#317) put on the
+screen open rather than in a fold. They stay open and are drawn under the press: rule 7 forbids a
+fold holding what the press needs, not a press above what it sends. What releasing does stays
+above the release press for the same rule; the files held and why are under it.
+
+**7. A long form repeats its press under its last box.** The scope form, the drafted scope's form
+and the raise form draw the same press at the form's top and again under the last box (point 2's
+answer), as the goal page does. The top one is the press rule 1 asks for; the repeat is for a person
+who has just changed the last number.
+
+### What was put to the owner, and the answer
+
+Put through the window on **2026-09-22**, each with a recommendation.
+
+| # | Point | Recommendation | Answer |
+|---|---|---|---|
+| 1 | Publish: the pull request's title and body drawn open **under** the press (rule 6), or inside the press's box above it | **under**, open: `D-0082` rule 7 forbids a fold, not a press above what it sends | **as recommended** |
+| 2 | Long forms (scope, raise): the press at the form's top only, or also repeated under the last box as the goal page does | top only | **repeat it**: the top press stays, and the same press is drawn again under the last box (rule 7) |
+
+### What this does to earlier entries
+
+| Entry | What happens to it | |
+|---|---|---|
+| `D-0083` rule 2, the axis is time | Kept; drawn newest first (rule 2 here) | **not additive** |
+| `D-0083` rule 5, the centre holds the thread and then the box to answer in, and *under it, always, a box to add* | The boxes and presses come first and the thread under them (rules 1 and 4 here) | **not additive** |
+| `D-0083` rule 8, *the page scrolls to the answering box on arrival* at 1600 | Withdrawn: the box is at the top at every width, so there is nothing to scroll to. Rule 8's folds of the faces are untouched | **not additive** |
+| `D-0083` rule 7, the last-looked line | Drawn under the new lines instead of over them; still once in the list and once in the thread | additive |
+| `D-0083` rule 9, the box inherits the gate whole | Every element kept; their order inside the box is rule 5 here | kept |
+| `D-0086` rule 3, *one line over the top* | The same fold of what was already read, now at the foot of the thread under the new lines, since the thread runs the other way | **not additive** |
+| `D-0082` rule 7 | Unchanged; rule 6 here says how it is read with the press above | kept |
+| `D-0097` point 2 (the goal page's press above its clauses, repeated under them) | Unchanged; it was the first screen built this way, and rule 7 takes its repeat to the scope and raise forms | kept |
+
+### What this gives up
+
+- **Reading a thread from its beginning is reading upwards.** A person who wants the story in order
+  starts at the foot. Time is still the axis, and the request's own first line is the thread's title.
+- **A long form's press is not stuck in view while it is scrolled.** The scope form's press was stuck
+  to the foot so that changing the last box left the press in view. Now it is at the form's top and,
+  by the owner's answer to point 2, repeated under the last box, as the goal page's is; between the
+  two, in the middle of the form, neither is on screen.
+
+### What would falsify it
+
+- **A person who presses without reading what the press sends**, because the pull request's body is
+  now below the press: then rule 6's reading of `D-0082` rule 7 is wrong and the body belongs in the
+  box above the press.
+- **A person who reads a thread's history bottom-up every time** to follow it, and stops using the
+  thread for that: newest first cost more than the scroll it saved.
+- **A screen found with a press, a box or a choice under history or long content** at 2560x1600 or
+  1600x1500: rule 1 is not held by statement alone and needs a test over every screen.

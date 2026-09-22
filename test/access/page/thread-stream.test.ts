@@ -108,7 +108,8 @@ test("a message written while the work ran sits between the events around it", a
     html.indexOf("Finished."),
   ];
   expect(positions.every((at) => at > -1)).toBe(true);
-  expect(positions).toEqual([...positions].toSorted((left, right) => left - right));
+  // Drawn newest first (D-0106), so the order on the page is the reverse.
+  expect(positions).toEqual([...positions].toSorted((left, right) => right - left));
 });
 
 test("a request waits on the person while any of its laps does", async () => {

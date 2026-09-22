@@ -155,13 +155,16 @@ export function FoldedLine({ fold, open }: { readonly fold: FoldLine; readonly o
         <span className="ev-fold-open">{open}</span>
         <time>{fold.at}</time>
       </summary>
-      {fold.inside.map((item) =>
-        item.kind === "fold" ? (
-          <FoldedLine key={item.id} fold={item} open={open} />
-        ) : item.kind === "event" ? (
-          <EventLine key={item.event.id} event={item.event} />
-        ) : null,
-      )}
+      {/* Newest first, as the thread around it is drawn (D-0106). */}
+      {fold.inside
+        .toReversed()
+        .map((item) =>
+          item.kind === "fold" ? (
+            <FoldedLine key={item.id} fold={item} open={open} />
+          ) : item.kind === "event" ? (
+            <EventLine key={item.event.id} event={item.event} />
+          ) : null,
+        )}
     </details>
   );
 }

@@ -1406,6 +1406,6 @@ test("a drafter run that drafted nothing is said as what happened, with the way 
     () => "y",
   );
   const summary = drafted.slice(drafted.indexOf('id="drafter-summary"'));
-  expect(summary.slice(0, summary.indexOf("</li>"))).not.toContain(EN.drafterNoDraft);
+  expect(summary.slice(0, summary.indexOf("</article>"))).not.toContain(EN.drafterNoDraft);
   expect(summary).toContain("One plan: fix the flaky test.");
 });

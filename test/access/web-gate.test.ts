@@ -33,8 +33,10 @@ import {
  * slice stops where that box does. (The readings' coverage was a second such
  * fold until rondo#317 drew it open, under `D-0082` rule 7.)
  */
+// The bar ends where the folded records begin: they sit under the presses
+// since D-0106, and the thread's history under them.
 const barOf = (html: string): string =>
-  html.slice(html.indexOf('id="answer-bar"'), html.indexOf('class="face face-side"'));
+  html.slice(html.indexOf('id="answer-bar"'), html.indexOf('<details id="records"'));
 
 test("both readings are drawn from the rows on the right face, with the warning by approve (#220 S2)", async () => {
   const world = fresh();
@@ -261,7 +263,7 @@ test("the gate offers a change beside approve, drafted from the findings and edi
     /<button type="submit"[^>]*class="[^"]*border-wait[^"]*">approve despite what was raised</,
   );
   expect(bar).not.toMatch(/<button type="submit"[^>]*class="[^"]*bg-wait /);
-  expect(bar.slice(0, bar.indexOf(">"))).toContain("border-t-2 border-wait");
+  expect(bar.slice(0, bar.indexOf(">"))).toContain("border-t-2 border-t-wait");
 });
 
 test("a lap admitted under no approval is told so where the change would be (#233 S4)", async () => {
