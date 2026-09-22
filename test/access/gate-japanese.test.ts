@@ -68,3 +68,12 @@ test("a workspace that would not read says so, and git's own line stays in the f
     expect(readableWithoutOpening(html, GIT_SAID)).toBe(false);
   }
 });
+
+test("the Japanese gate says what the worker ran in Japanese, apart from the reviewer's account (D-0104, #410)", async () => {
+  const ja = chromeFor("ja");
+  const html = await gatePage(ja);
+  expect(html).toContain(ja.workerRan);
+  expect(html).toContain(ja.workerRanUnrecorded);
+  expect(html).toContain(`${ja.checksReader} · </span>${ja.whatItRead}`);
+  expect(html).not.toContain(EN.workerRanUnrecorded);
+});

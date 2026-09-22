@@ -482,7 +482,28 @@ const finalTransition = await store.transition(
   waitingLapId,
   "performing",
   "awaiting_human",
-  { gateId: waitingGateId },
+  {
+    gateId: waitingGateId,
+    // What the worker ran, as continuo reports it with the lap (D-0104,
+    // rondo#410): the checks card shows the last test run apart from the
+    // reading's own statement. lap 12's own `npm run verify`, in its shape.
+    lapCommands: JSON.stringify([
+      {
+        index: 12,
+        command: "npm ci --ignore-scripts",
+        output: "added 412 packages in 9s",
+        output_omitted_chars: 0,
+        is_error: false,
+      },
+      {
+        index: 41,
+        command: "npm run verify",
+        output: " Test Files  98 passed (98)\n      Tests  1844 passed (1844)\n   Duration  42.10s",
+        output_omitted_chars: 0,
+        is_error: false,
+      },
+    ]),
+  },
   now - 18 * MINUTE,
   checksReading,
 );

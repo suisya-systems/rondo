@@ -309,6 +309,35 @@ export interface Chrome extends PageWords {
   readonly checksCounted: (commits: number, files: number) => string;
   readonly whatItRead: string;
   /**
+   * Whose statement {@link whatItRead} is, put in front of it on the checks
+   * card (D-0104, rondo#410). The sentences under that label are rondo's own
+   * checks' account of themselves -- *it built nothing, ran nothing* -- and lap
+   * 12's owner read them as *the tests were not run*, over a transcript in
+   * which the worker had run `npm run verify` green. Naming rondo's checks is
+   * what makes *it* refer to them once the worker's own run sits above it; not
+   * "the reviewer", which the model review card beside it already is.
+   */
+  readonly checksReader: string;
+  /**
+   * What the worker itself ran, apart from any reader's statement about itself
+   * (D-0104, rondo#410): the block's label, its three answers, and the source
+   * line that says rondo *read* the figure and did not run anything (D-0029
+   * rule 9 holds). `workerRanUnrecorded` and `workerRanNone` are two different
+   * facts and neither is a zero: no readable record of the commands, and a
+   * record in which rondo found no runner summary it can read (which is not
+   * *no tests ran*; a runner rondo does not know is the same row).
+   */
+  readonly workerRan: string;
+  readonly workerRanUnrecorded: string;
+  readonly workerRanNone: (commands: number) => string;
+  /** One of the runner's three counts, as `1844 passed`. */
+  readonly workerCount: (kind: "passed" | "failed" | "skipped", count: number) => string;
+  /** The command itself ended in error, whatever its tests said (a `verify` whose lint failed after them). */
+  readonly workerRanErrored: string;
+  readonly workerRanEarlier: (runs: number) => string;
+  /** Where the figure came from: continuo's record of the lap's commands, at that transcript line. */
+  readonly workerRanSource: (line: number) => string;
+  /**
    * What a reader reached and what it did not (rondo#69), from the store's
    * {@link ReadingReach}. The `en` set is the terminal's own lines, joined, so
    * the page and the terminal still say one thing about one drafter.

@@ -167,6 +167,7 @@ import {
   type LapUnderRequest,
   materialLanguage,
   saysMore,
+  workerRuns,
 } from "./page-logic/laps.js";
 import { repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
 import { mergeBlock, resultOf } from "./page-logic/result.js";
@@ -441,11 +442,20 @@ const SEVERITY_TONE: Readonly<Record<FindingSeverity, Tone>> = {
  * was still shut.
  *
  * The label the summary carried stays, as the line above the sentences.
+ *
+ * **`who` names whose statement this is** (D-0104, rondo#410): on the checks
+ * card the worker's own run now sits above these sentences, and *it built
+ * nothing, ran nothing* said under a bare *it* was read as being about the lap
+ * (lap 12: *tests were not run*, over a green `npm run verify` in the
+ * transcript). The label's own words are unchanged; the name goes in front.
  */
-function coverageLine(id: string, wording: Chrome, drafter: string) {
+function coverageLine(id: string, wording: Chrome, drafter: string, who: string | null = null) {
   return (
     <div id={id} class="mt-2">
-      <p class="text-meta leading-5 text-faint">{wording.whatItRead}</p>
+      <p class="text-meta leading-5 text-faint">
+        {who === null ? null : <span class="font-medium text-muted-foreground">{who} · </span>}
+        {wording.whatItRead}
+      </p>
       <p class="mt-1 text-meta leading-5 text-muted-foreground">
         {wording.readingCovered(readingReach(drafter))}
       </p>
@@ -682,17 +692,74 @@ function notTakenView(wording: Chrome, id: string, reason: string | null) {
 }
 
 /**
+ * What the worker itself ran, as rondo read it off the lap's recorded commands
+ * (D-0104, rondo#410): the last test run's command and the runner's own counts,
+ * or the plain fact that there is no readable record, or that none of the
+ * recorded commands printed a summary rondo reads. Drawn whatever the reviewer
+ * said or did not say, because the worker's run does not depend on the
+ * reviewer; drawn *above* the reviewer's account so that the reviewer's *ran
+ * nothing* is read as being about the reviewer. The source line says both
+ * where the figure came from and that rondo read it rather than ran it, which
+ * is the fact D-0029 rule 9 keeps true.
+ */
+function workerRanView(wording: Chrome, record: IterationRecord) {
+  const runs = workerRuns(record.lapCommands);
+  return (
+    <div id="checks-worker" class="mt-1">
+      <p class="text-meta leading-5 text-faint">{wording.workerRan}</p>
+      {runs.kind === "unrecorded" ? (
+        <p class="mt-1 text-body leading-5 text-muted-foreground">{wording.workerRanUnrecorded}</p>
+      ) : runs.kind === "none" ? (
+        <p class="mt-1 text-body leading-5 text-muted-foreground">
+          {wording.workerRanNone(runs.commandCount)}
+        </p>
+      ) : (
+        <>
+          <p class="mt-1 font-mono text-id leading-5 wrap-anywhere" lang="">
+            {runs.last.command}
+          </p>
+          <p class="mt-1 text-body leading-5">
+            {wording.workerCount("passed", runs.last.passed)}
+            <span class="text-faint"> · </span>
+            <span class={runs.last.failed > 0 ? "text-fail" : ""}>
+              {wording.workerCount("failed", runs.last.failed)}
+            </span>
+            <span class="text-faint"> · </span>
+            {wording.workerCount("skipped", runs.last.skipped)}
+            {runs.earlier > 0 ? (
+              <span class="text-muted-foreground"> {wording.workerRanEarlier(runs.earlier)}</span>
+            ) : null}
+          </p>
+          {runs.last.isError ? (
+            <p class="mt-1 text-body leading-5 text-fail">{wording.workerRanErrored}</p>
+          ) : null}
+          <p class="mt-1 text-meta leading-5 text-muted-foreground">
+            {wording.workerRanSource(runs.last.index)}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * `workGone` is decided by the caller rather than here (rondo#237): the bar
  * pins this same verdict above the button, and one judgement drawn in two
  * places must be made once or the two will disagree.
  */
-function checksView(wording: Chrome, reading: LapReading | null, workGone: boolean) {
+function checksView(
+  wording: Chrome,
+  record: IterationRecord,
+  reading: LapReading | null,
+  workGone: boolean,
+) {
   return (
     <section id="checks" class={`${CARD} scroll-mt-16`}>
       <div class="flex items-center gap-2">
         <h3 class={CARD_HEADING}>{wording.checksHeading}</h3>
         {checksPill(wording, reading, workGone)}
       </div>
+      {workerRanView(wording, record)}
       {reading === null ? (
         <p class="mt-1 text-body leading-5 text-muted-foreground">{wording.checksNone}</p>
       ) : reading.verdict === "unavailable" ? (
@@ -720,7 +787,7 @@ function checksView(wording: Chrome, reading: LapReading | null, workGone: boole
               reading.evidence?.fileCount ?? 0,
             )}
           </p>
-          {coverageLine("checks-coverage", wording, reading.drafter)}
+          {coverageLine("checks-coverage", wording, reading.drafter, wording.checksReader)}
         </>
       )}
     </section>
@@ -1010,7 +1077,7 @@ function materialView(
        * to a 720px face, which is rule 8's *cards go one across* met early
        * rather than a second layout.
        */}
-      {checksView(wording, checks, workGone)}
+      {checksView(wording, record, checks, workGone)}
       {modelView(wording, model, modelDue, reload)}
       <p class="note text-meta leading-5 text-faint">{wording.readingsNote}</p>
     </div>
