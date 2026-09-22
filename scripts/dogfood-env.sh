@@ -1001,9 +1001,21 @@ step "Store (the plan above, recorded where the page reads it)"
 # **The last step, and the one that ends installation** (D-0075 rule 2): the
 # plan goes to the store the host will serve, not to a person to paste. Each
 # run records one row, so the newest setup is the one the page offers first.
-RONDO_STORE="$env_root/rondo-iterations.sqlite3" RONDO_APPROVER="$approver" \
+#
+# **A failure here is said, not just stopped on** (rondo#406). Under `set -e`
+# a failed record ended setup with rondo's own refusal as the last line and no
+# word from setup that its last step had not happened -- so a person read the
+# screen above it as a finished install. The store now waits for the host it
+# was racing (D-0107), and anything else that stops the record lands here.
+if ! RONDO_STORE="$env_root/rondo-iterations.sqlite3" RONDO_APPROVER="$approver" \
   node "$repo_root/bin/rondo.mjs" setup-plan --plan "$plan" --actor-id "$approver" |
-  sed 's/^/   /'
+  sed 's/^/   /'; then
+  printf '\n' >&2
+  die "the last step did not happen: the plan was not recorded, so the page will not offer it.
+Everything above it is in place. Record it alone, after the reason above is fixed:
+  RONDO_STORE=$(printf %q "$env_root/rondo-iterations.sqlite3") RONDO_APPROVER=$(printf %q "$approver") \\
+    node $(printf %q "$repo_root/bin/rondo.mjs") setup-plan --plan $(printf %q "$plan") --actor-id $(printf %q "$approver")"
+fi
 
 # The same quoting for the commands printed below, which are meant to be copied
 # into a shell verbatim.

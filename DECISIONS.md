@@ -140,6 +140,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0103 | How D-0098's five rules are built: a landing basis on the claim's release is `first_landed`, a split plan orders its parts by `after`, a take-in is a plan field with no trigger yet, decision numbers are rows beside the claim, a worker's question is a fenced block relayed as an ask, and a closing lap is a press the review host does not read | accepted |
 | D-0105 | rondo resolves a conflicting pull request on the page: the pin moves to cadenza `2c56970` so a worker may run `git merge --no-edit`, `D-0098` rule 2's take-in is switched on, and a conflict fix is one more attempt that takes the base in, stops at its gate, and is pushed onto the pull request it fixes | accepted |
 | D-0106 | What a person acts on sits at the top of every screen, and the thread runs newest first: presses, boxes and decisions come before any history or long content, nothing is stuck to the window's foot, and the answering box keeps every element it inherited | accepted |
+| D-0107 | Every connection to the store waits five seconds for another one's write lock instead of failing at once, and setup says so when its last step did not happen | accepted |
 
 ---
 
@@ -23091,3 +23092,49 @@ Put through the window on **2026-09-22**, each with a recommendation.
   thread for that: newest first cost more than the scroll it saved.
 - **A screen found with a press, a box or a choice under history or long content** at 2560x1600 or
   1600x1500: rule 1 is not held by statement alone and needs a test over every screen.
+
+## D-0107 — Every connection to the store waits five seconds for another one's write lock instead of failing at once, and setup says so when its last step did not happen
+
+**Status:** accepted (2026-09-22, rondo#406). **Not additive** to the stance `openAdvisoryRecord`'s
+comment stated -- "a concurrent writer is reported as a defect rather than waited on" -- which is
+replaced; the comment is rewritten. Keeps `D-0075` rule 2 (the plan is recorded by setup's last
+step, after the host is installed) unchanged. Refs `D-0024`, `D-0075`, `D-0080`, rondo#406.
+
+**Numbering.** `D-0107` was assigned to this lane in advance.
+
+### What was measured
+
+At rondo `985d57b`, by reading the code. Lap 12's setup ran `systemctl --user try-restart
+rondo.service` and then `setup-plan`, and `setup-plan` failed with "database is locked". Every open
+of the store -- the host's, every command's, `setup-plan`'s -- goes through `openIterationStore`,
+whose `migrate` takes `BEGIN IMMEDIATE`, and nothing set a busy timeout, so SQLite's default of no
+wait applied: two processes opening the file at the same moment race for the write lock and the
+loser fails on the spot. The restarted host opening its store is exactly such a moment. The host
+could as easily have been the loser, and a host that fails its open does not serve the page.
+
+### The decision
+
+**1. Both openers set `PRAGMA busy_timeout = 5000`** (`openIterationStore`, `openAdvisoryRecord`),
+so a connection that meets another's write lock waits for it. Five seconds is far above any write
+rondo holds; only a lock that is really stuck reaches it, and that still fails with the same text.
+A pragma rather than `DatabaseSync`'s `timeout` option, which arrived in Node 22.16 while `engines`
+admits 22.14.
+
+**2. The race is fixed at the store and not by moving setup's last step before the restart.**
+Reordering would have spared setup alone, and only in this script: any command opened while the
+host opens or writes meets the same lock, and the host is one of the two racers.
+
+**3. Setup says when its last step did not happen.** Under `set -e` a failed `setup-plan` ended the
+script with rondo's refusal as its last line and nothing from setup, so the screen above it read as
+a finished install. Now setup ends on a line of its own saying the plan was not recorded and the
+page will not offer it, with the one command that records it alone.
+
+### What this gives up
+
+- **The node:sqlite connection is synchronous**, so the host's event loop is blocked for as long as
+  it waits -- at most five seconds, and only while another process holds the write lock.
+
+### What would reopen this
+
+- **A "database is locked" reported by any rondo process** after this change: a writer holds the
+  lock longer than five seconds, and the answer is that writer, not a longer wait.
