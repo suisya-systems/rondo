@@ -261,6 +261,31 @@ export async function publishView(
           ))}
         </section>
       )}
+      {review === null ? null : (
+        <section
+          id="publish-review"
+          class="min-w-0 space-y-1 rounded-lg border border-warn/40 bg-card px-4 py-3"
+        >
+          <h3 class={CARD_HEADING}>{wording.publishReviewHeading}</h3>
+          <p class="text-body leading-5 wrap-anywhere">{reviewBlockLine(wording, review)}</p>
+        </section>
+      )}
+      {/* **No approver, no press, and no sentence here either**: nothing was
+          pressed on this screen, so a refusal's wording would be a report of
+          something that did not happen. The page already says at the top of
+          every view that an unset approver is why there are no buttons
+          (D-0020 rule 2, `noApproverNote`). */}
+      {token === null
+        ? null
+        : review === null
+          ? publishForm(wording, record, token, shown.shown)
+          : despiteForm(wording, record, token, shown.shown)}
+      <p class="note text-meta leading-5 text-muted-foreground">{wording.publishNote}</p>
+      {/* **The press above what it sends** (D-0106, rondo#408): the target,
+          anything noticed and a standing refusal are short and come first,
+          then the press, then the pull request's own title and body -- still
+          drawn open, never folded (D-0082 rule 7), and under the press
+          rather than above it, because the body is long. */}
       {/* **The text a reviewer will read, on the screen that publishes it.**
           Drawn open, and not a fold (D-0082 rule 7, rondo#317): publish is an
           outward press nobody can take back, and the body is not evidence to
@@ -300,26 +325,6 @@ export async function publishView(
           <p class="note text-meta leading-5 text-muted-foreground">{wording.publishModelNote}</p>
         </section>
       )}
-      {review === null ? null : (
-        <section
-          id="publish-review"
-          class="min-w-0 space-y-1 rounded-lg border border-warn/40 bg-card px-4 py-3"
-        >
-          <h3 class={CARD_HEADING}>{wording.publishReviewHeading}</h3>
-          <p class="text-body leading-5 wrap-anywhere">{reviewBlockLine(wording, review)}</p>
-        </section>
-      )}
-      {/* **No approver, no press, and no sentence here either**: nothing was
-          pressed on this screen, so a refusal's wording would be a report of
-          something that did not happen. The page already says at the top of
-          every view that an unset approver is why there are no buttons
-          (D-0020 rule 2, `noApproverNote`). */}
-      {token === null
-        ? null
-        : review === null
-          ? publishForm(wording, record, token, shown.shown)
-          : despiteForm(wording, record, token, shown.shown)}
-      <p class="note text-meta leading-5 text-muted-foreground">{wording.publishNote}</p>
     </>,
   );
 }

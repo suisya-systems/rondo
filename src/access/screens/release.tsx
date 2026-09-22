@@ -84,18 +84,6 @@ export async function releaseView(
           );
         })}
       </section>
-      <section id="release-files" class={`${CARD} space-y-1`}>
-        <h3 class={CARD_HEADING}>{wording.releaseHoldsHeading}</h3>
-        <p class="font-mono text-meta leading-5 wrap-anywhere" lang="">
-          {wording.holds(line.paths)}
-        </p>
-      </section>
-      <section id="release-why" class={`${CARD} space-y-1`}>
-        <h3 class={CARD_HEADING}>{wording.releaseWhyHeading}</h3>
-        {wording.releaseWhy.map((said) => (
-          <p class="text-body leading-5">{said}</p>
-        ))}
-      </section>
       <section id="release-effect" class={`${CARD} space-y-1`}>
         <h3 class={CARD_HEADING}>{wording.releaseEffectHeading}</h3>
         {wording.releaseEffect.map((said) => (
@@ -127,6 +115,21 @@ export async function releaseView(
           </span>
         </form>
       )}
+      {/* What the line holds and why it is held, under the press (D-0106,
+          rondo#408): what releasing does stays above it, since that is what
+          the press needs (D-0082 rule 7). */}
+      <section id="release-files" class={`${CARD} space-y-1`}>
+        <h3 class={CARD_HEADING}>{wording.releaseHoldsHeading}</h3>
+        <p class="font-mono text-meta leading-5 wrap-anywhere" lang="">
+          {wording.holds(line.paths)}
+        </p>
+      </section>
+      <section id="release-why" class={`${CARD} space-y-1`}>
+        <h3 class={CARD_HEADING}>{wording.releaseWhyHeading}</h3>
+        {wording.releaseWhy.map((said) => (
+          <p class="text-body leading-5">{said}</p>
+        ))}
+      </section>
     </>,
   );
 }

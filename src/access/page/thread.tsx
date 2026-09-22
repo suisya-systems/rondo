@@ -2,11 +2,13 @@
 /**
  * The centre face: one request's thread (DECISIONS.md D-0083 rule 5).
  *
- * **The unit of the page is this** (rule 2). A request's own words open it,
- * rondo's reading of them answers, and then the record of the work runs down
- * the middle: event lines for what happened, reports for what was produced,
- * the question when there is one, the box to answer in, and under all of it --
- * always -- a box to add to the request.
+ * **The unit of the page is this** (rule 2). What the person acts on comes
+ * first -- their next step, the box to answer in when a question stands, the
+ * screens the request leads to, and the box to add to it, which is always
+ * there -- and under all of it the record of the work runs **newest first**
+ * (D-0106, rondo#408, changing rule 5's order): event lines for what happened,
+ * reports for what was produced, rondo's reading of the request, and at the
+ * foot the person's own words that opened it.
  *
  * **Prose stays at 45 to 90 characters at every width** (rule 1). Width buys
  * faces, so the centre does not grow with the window; `page/thread.css` holds
@@ -110,10 +112,11 @@ export interface ThreadProps {
    * The thread in the order it happened, messages and event lines together.
    *
    * **One stream rather than two lists.** Rule 5 names the parts in the order
-   * a person meets them -- the words, rondo's reading, the event lines, the
+   * they happened -- the words, rondo's reading, the event lines, the
    * reports, the question -- and that order is time. Drawing the messages and
    * then the events would put the record of the work after the report it
-   * produced, which is not how it happened.
+   * produced, which is not how it happened. The face draws it the other way
+   * up, newest first (D-0106); the folds are computed over this order.
    */
   readonly items: readonly FoldedItem[];
   /** What a fold offers on its own line, in the person's language. */
@@ -269,10 +272,25 @@ export function ThreadFace({
           </p>
         )}
       </header>
+      {/*
+       * **Everything a person acts on comes first, then the record** (D-0106,
+       * rondo#408): the next step, the answering box, the screens this
+       * request leads to and the box to add to it all sit above the thread,
+       * so nobody scrolls past history to find what waits on them.
+       */}
       {next}
-      {items.map((item) => (
+      {answering}
+      {acts}
+      {adding}
+      {/*
+       * **Newest first** (D-0106). The items arrive in the order they
+       * happened, which is the order the folds are computed in, and are only
+       * drawn the other way up -- so the last-looked line, which marks the
+       * first thing that arrived after the mark, is drawn *under* it: what is
+       * new sits above the line and what was already read below it.
+       */}
+      {items.toReversed().map((item) => (
         <div key={idOf(item)}>
-          {idOf(item) === lastLookedAbove ? <LastLookedLine said={lastLookedSaid} /> : null}
           {item.kind === "message" ? (
             <Message message={item.message} />
           ) : item.kind === "fold" ? (
@@ -280,11 +298,9 @@ export function ThreadFace({
           ) : (
             <EventLine event={item.event} />
           )}
+          {idOf(item) === lastLookedAbove ? <LastLookedLine said={lastLookedSaid} /> : null}
         </div>
       ))}
-      {acts}
-      {answering}
-      {adding}
     </div>
   );
 }

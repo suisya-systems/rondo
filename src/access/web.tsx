@@ -1026,11 +1026,12 @@ function materialView(
  * says a gate is open and the row does not name one, which `answer` refuses
  * too). A button drawn anyway would be one that fails when pressed.
  *
- * **The framing first and the button in a bar that stays in reach** (D-0059
- * section 2): the form sticks to the bottom of the window for as long as the
- * framing it answers is on screen, so a 21-claim table never puts `approve`
- * below the fold -- and it is still after every claim in the document, so a
- * reader without CSS meets the press where it always was.
+ * **The findings, then the presses, then the records** (D-0106, rondo#408,
+ * replacing D-0059 section 2's bar stuck to the window's foot): what the press
+ * is answered over is quoted first, the presses come straight after it, and
+ * the claims it records -- 21 rows of them, folded -- come last, so a person
+ * arriving meets the question and its answers without scrolling, with or
+ * without CSS.
  *
  * **A native form, and nothing else can press it** (D-0059 section 5): no
  * `hx-post`, no script, a real `<button type="submit">`. `method="post"` is not
@@ -1123,77 +1124,6 @@ function approveView(
         </section>
       )}
       {/*
-       * **What the press records, folded by default** (the S2 design pass on
-       * #220): every claim is still in the document and still recorded as
-       * shown (D-0042) -- folded is not dropped, and with script off
-       * `page/app.css` draws the fold open -- but the readings above already
-       * say what these rows say, and the rows pushed the claim box a screen
-       * below them. The summary counts what is inside.
-       */}
-      <details id="records" class="group rounded-md border border-border">
-        <summary
-          data-row=""
-          class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] [&::-webkit-details-marker]:hidden"
-        >
-          {chevron()}
-          {wording.recordsFold(framing.claims.length)}
-        </summary>
-        <div class="space-y-3 border-t border-border p-3">
-          <p class="note text-meta leading-5 text-muted-foreground">{wording.pressNote}</p>
-          {/*
-           * **The claims that carry a value first, the undetermined ones in one
-           * fold** (the third design pass on #220). Folded is not dropped: the fold
-           * and every claim in it are in the document (D-0042), and with script
-           * off `page/app.css` draws it open.
-           */}
-          {known.length === 0 ? null : claimsView(known, framing.snapshot, true)}
-          {unknown.length === 0 ? null : (
-            <details id="undetermined" class="group rounded-md border border-border">
-              <summary
-                data-row=""
-                class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] [&::-webkit-details-marker]:hidden"
-              >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.6"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="size-3.5 shrink-0 text-faint transition-transform group-open:rotate-90"
-                >
-                  <path d="m6 3.5 4.5 4.5L6 12.5" />
-                </svg>
-                {wording.undeterminedFold(unknown.length)}
-              </summary>
-              <div class="border-t border-border [&>div]:rounded-none [&>div]:border-0">
-                {claimsView(unknown, framing.snapshot, true)}
-              </div>
-            </details>
-          )}
-          {framing.material === null ? null : (
-            // **Folded is not dropped** (D-0029 rule 2): `rondo answer`'s material
-            // whole, for what the layout above does not draw -- the fence's
-            // allowance and its standing sentences, the gate's options, the
-            // readings' evidence -- and its label says so rather than promising a
-            // repeat.
-            <details id="material-text" class="group rounded-md border border-border">
-              <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
-                {chevron()}
-                {wording.allAsText}
-              </summary>
-              <pre
-                class="material overflow-x-auto border-t border-border bg-muted/50 p-3 font-mono text-id leading-5 wrap-anywhere whitespace-pre-wrap"
-                lang={materialLanguage(record)}
-              >
-                {framing.material.lines.join("\n")}
-              </pre>
-            </details>
-          )}
-        </div>
-      </details>
-      {/*
        * **The bar holds both of the gate's answers** (rondo#233 S4, the critic
        * gap S2 left open): approving, and asking for a change. Two forms and
        * not one, because a form cannot nest and each posts to its own address
@@ -1202,27 +1132,22 @@ function approveView(
        */}
       <div
         id="answer-bar"
-        // A solid bar with a rule and a lift on top, so where it overlaps the
-        // claims it reads as the window's footer and not as a row of the
-        // table; full width under `sm`, where it is the bottom sheet. The lift
-        // is shallow and the material ends a gap above it, so where the bar
-        // rests at the end of the framing it covers nothing.
-        // **And it never takes more than three-quarters of the window**
-        // (rondo#233 S4): with the change opened, a bar that grew without a
-        // ceiling covered the readings it sits under at a phone width. Past
-        // that it scrolls inside itself, so the gate is still readable behind
-        // it and nothing in the bar is out of reach.
+        // **At the top of the box, under the findings it answers over, and
+        // not stuck to the window's foot** (D-0106, rondo#408): it used to
+        // stick to the bottom of the window beneath the folded records, which
+        // left the press below the fold on arrival. The records it answers
+        // over are folded under it now, so nothing scrolls it away.
         // **Its rule is amber and two pixels, and every other card's is one
         // pixel of border** (D-0082 rule 1): this bar is the one thing on the
         // screen that nothing but the person can clear, and it was drawn with
         // the same edge as the evidence stacked above it. The colour is the
         // page's one claim that a person must act, spent on the one element
         // that makes it (rule 2).
-        class="sticky bottom-0 z-[1] -mx-4 mt-5 flex max-h-[75svh] flex-col gap-2 overflow-y-auto border-t-2 border-wait bg-card px-4 py-3 shadow-[0_-4px_10px_-8px_rgb(0_0_0/0.3)]"
+        class="flex flex-col gap-2 border-t-2 border-wait bg-card px-4 py-3"
       >
         {/*
          * **Both readings' verdicts pinned in the bar** (the S2 design pass on
-         * #220): the bar stays on screen at every scroll, so the decision's
+         * #220): the bar is the first thing in the box, so the decision's
          * material shows before any reading is scrolled to, at a phone width
          * too. Side by side and in the same weight, no recommendation between
          * them (D-0065 as annotated from #220). The model's blocker or major
@@ -1347,6 +1272,77 @@ function approveView(
         </form>
         {reviseForm(wording, record, token, framing, newIterationId, raised !== null)}
       </div>
+      {/*
+       * **What the press records, folded by default** (the S2 design pass on
+       * #220): every claim is still in the document and still recorded as
+       * shown (D-0042) -- folded is not dropped, and with script off
+       * `page/app.css` draws the fold open -- but the readings above already
+       * say what these rows say, and the rows pushed the claim box a screen
+       * below them. The summary counts what is inside.
+       */}
+      <details id="records" class="group rounded-md border border-border">
+        <summary
+          data-row=""
+          class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] [&::-webkit-details-marker]:hidden"
+        >
+          {chevron()}
+          {wording.recordsFold(framing.claims.length)}
+        </summary>
+        <div class="space-y-3 border-t border-border p-3">
+          <p class="note text-meta leading-5 text-muted-foreground">{wording.pressNote}</p>
+          {/*
+           * **The claims that carry a value first, the undetermined ones in one
+           * fold** (the third design pass on #220). Folded is not dropped: the fold
+           * and every claim in it are in the document (D-0042), and with script
+           * off `page/app.css` draws it open.
+           */}
+          {known.length === 0 ? null : claimsView(known, framing.snapshot, true)}
+          {unknown.length === 0 ? null : (
+            <details id="undetermined" class="group rounded-md border border-border">
+              <summary
+                data-row=""
+                class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)] [&::-webkit-details-marker]:hidden"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="size-3.5 shrink-0 text-faint transition-transform group-open:rotate-90"
+                >
+                  <path d="m6 3.5 4.5 4.5L6 12.5" />
+                </svg>
+                {wording.undeterminedFold(unknown.length)}
+              </summary>
+              <div class="border-t border-border [&>div]:rounded-none [&>div]:border-0">
+                {claimsView(unknown, framing.snapshot, true)}
+              </div>
+            </details>
+          )}
+          {framing.material === null ? null : (
+            // **Folded is not dropped** (D-0029 rule 2): `rondo answer`'s material
+            // whole, for what the layout above does not draw -- the fence's
+            // allowance and its standing sentences, the gate's options, the
+            // readings' evidence -- and its label says so rather than promising a
+            // repeat.
+            <details id="material-text" class="group rounded-md border border-border">
+              <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+                {chevron()}
+                {wording.allAsText}
+              </summary>
+              <pre
+                class="material overflow-x-auto border-t border-border bg-muted/50 p-3 font-mono text-id leading-5 wrap-anywhere whitespace-pre-wrap"
+                lang={materialLanguage(record)}
+              >
+                {framing.material.lines.join("\n")}
+              </pre>
+            </details>
+          )}
+        </div>
+      </details>
     </div>
   );
 }
@@ -2123,7 +2119,9 @@ function composerView(
             "hx-post": action,
             "hx-target": "#ledger",
             "hx-select": "#ledger",
-            "hx-swap": "outerHTML show:window:bottom",
+            // No `show:`: the box and the newest message are both at the top
+            // of the thread now (D-0106), so the window stays where it is.
+            "hx-swap": "outerHTML",
             // **The form is inside what the swap replaces now** (D-0083 rule
             // 5, Codex). It used to sit outside `#ledger` and be swapped out
             // of band, so that a send could change its mode -- the thread's
@@ -2141,7 +2139,7 @@ function composerView(
       class={
         replying === null
           ? "rounded-xl border border-border bg-card shadow-xs focus-within:border-ring/60"
-          : "sticky bottom-3 z-[5] rounded-xl sm:ml-10 border border-border bg-card shadow-[0_6px_24px_-12px_rgb(0_0_0/0.35)] focus-within:border-ring/60"
+          : "rounded-xl sm:ml-10 border border-border bg-card shadow-xs focus-within:border-ring/60"
       }
     >
       {replying === null ? (
