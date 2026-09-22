@@ -5157,12 +5157,13 @@ export async function answerOnceReserved(
         if (late.ok) {
           return;
         }
-        // A lap already at its gate failed only in its model reading: the gate
-        // is the wait the person is called to, and a stop would say otherwise.
+        // A lap past its pre-gate statuses failed only in the model reading
+        // taken once its gate opened -- a gate it may already have been
+        // answered at: the gate is the wait, and a stop would say otherwise.
         const now = await store.read(input.iterationId).catch(() => null);
-        if (now?.kind === "read" && now.record.status === "awaiting_human") {
+        if (now?.kind === "read" && !BEFORE_THE_GATE.has(now.record.status)) {
           consoleSeams.writeError(
-            `${asciiEscape(`lap '${input.iterationId}' is at its gate; after it: ${late.note}`)}\n`,
+            `${asciiEscape(`lap '${input.iterationId}' reached its gate; after it: ${late.note}`)}\n`,
           );
           return;
         }
@@ -5174,6 +5175,15 @@ export async function answerOnceReserved(
   }
   return await ended;
 }
+
+/** The statuses a lap passes through before its gate opens (`IterationStatus`). */
+const BEFORE_THE_GATE: ReadonlySet<string> = new Set([
+  "planned",
+  "classified",
+  "admitting",
+  "admitted",
+  "performing",
+]);
 
 /** D-0109 rule 3: a start that ended badly after its press answered, as an ask in its thread. */
 async function sayStartStopped(

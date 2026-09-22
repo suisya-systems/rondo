@@ -23303,9 +23303,10 @@ at the top of the thread. It holds the request's line until it is answered, as e
 once. If the message cannot be written, the host's console says so, escaped like every other line
 (`D-0004`).
 
-A lap whose row already reads `awaiting_human` when the throw arrives failed only in the model
-reading taken after the gate opened. The gate is then the wait the person is called to, so no stop
-is written, and the error goes to the host's console.
+The stop is written only while the row still reads a status before the gate (`planned` through
+`performing`), or will not read. A lap past them when the throw arrives failed in the model reading
+taken once its gate opened, a gate the person may already have answered, or it ended on its own with
+a status the page already shows. No stop is written then, and the error goes to the host's console.
 
 **4. The start presses no longer say the screen waits for the gate.** Their busy note was
 `lapBusyNote` ("this screen moves on when it stops for you to check it -- a few minutes, and
