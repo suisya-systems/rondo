@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { expect, test } from "vitest";
 
 import {
+  fetchLapBase,
   gatherReviewMaterialFacts,
   inspectLapWork,
   readChangedPaths,
@@ -662,3 +663,83 @@ test(
   },
   REAL_GIT_TIMEOUT_MS,
 );
+
+// --- fetchLapBase (rondo#407, D-0100) ----------------------------------------
+
+const revParse = (cwd: string, ref: string): string =>
+  execFileSync("git", ["rev-parse", ref], { cwd, encoding: "utf8" }).trim();
+
+/**
+ * A clone with `main` checked out, one commit behind its forge: the shape lap
+ * 12 ran on. Answers the clone, the commit it has and the forge's head.
+ */
+function staleClone(): { clone: string; stale: string; current: string } {
+  const root = mkdtempSync(join(tmpdir(), "rondo-lap-base-"));
+  const remote = join(root, "remote.git");
+  const clone = join(root, "clone");
+  const other = join(root, "other");
+  git(root, "init", "--bare", remote);
+  git(root, "clone", remote, other);
+  writeFileSync(join(other, "a.txt"), "base\n");
+  git(other, "add", ".");
+  git(other, "commit", "-m", "base");
+  git(other, "push", "origin", "main");
+  git(root, "clone", remote, clone);
+  writeFileSync(join(other, "a.txt"), "moved on\n");
+  git(other, "commit", "-am", "main moved on");
+  git(other, "push", "origin", "main");
+  return { clone, stale: revParse(clone, "main"), current: revParse(other, "main") };
+}
+
+const lapBase = (repository: string, runId: string, baseBranch = "main", remote = "origin") => ({
+  repository,
+  remote,
+  baseBranch,
+  runId,
+});
+
+test("a first lap's base is the forge's main as it is now, not the clone's stale main", async () => {
+  const { clone, stale, current } = staleClone();
+
+  const base = await fetchLapBase(lapBase(clone, "run-a"));
+
+  expect(base).toEqual({ kind: "fetched", branch: "rondo/base/run-a" });
+  expect(revParse(clone, "refs/heads/rondo/base/run-a")).toBe(current);
+  // Moved afterwards, so the reading's base is the one the lap was cut from.
+  expect(revParse(clone, "refs/remotes/origin/main")).toBe(current);
+  // The person's checkout is not touched.
+  expect(revParse(clone, "main")).toBe(stale);
+  expect(revParse(clone, "HEAD")).toBe(stale);
+});
+
+test("two laps admitted at once each get their own base, and neither waits on a shared ref", async () => {
+  const { clone, current } = staleClone();
+  // A concurrent fetch mid-write, held for the whole test: the remote-tracking
+  // ref's lock is the one ref every plain fetch of `main` takes. A lap whose
+  // start depended on it would be refused here.
+  writeFileSync(join(clone, ".git", "refs", "remotes", "origin", "main.lock"), "");
+
+  const [first, second] = await Promise.all([
+    fetchLapBase(lapBase(clone, "run-a")),
+    fetchLapBase(lapBase(clone, "run-b")),
+  ]);
+
+  expect(first).toEqual({ kind: "fetched", branch: "rondo/base/run-a" });
+  expect(second).toEqual({ kind: "fetched", branch: "rondo/base/run-b" });
+  expect(revParse(clone, "refs/heads/rondo/base/run-a")).toBe(current);
+  expect(revParse(clone, "refs/heads/rondo/base/run-b")).toBe(current);
+});
+
+test("a base the forge cannot hand over is a lap that does not start, and says why", async () => {
+  const work = workspace();
+
+  const missing = await fetchLapBase(lapBase(work, "run-a", "gone"));
+  const noRemote = await fetchLapBase(lapBase(work, "run-b", "main", "nowhere"));
+
+  for (const refused of [missing, noRemote]) {
+    expect(refused.kind).toBe("refused");
+    if (refused.kind !== "refused") return;
+    expect(refused.reason).toContain("could not fetch it");
+    expect(refused.reason).toContain("No run was admitted");
+  }
+});

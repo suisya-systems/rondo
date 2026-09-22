@@ -135,6 +135,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0097 | rondo proposes which request is worth making: the advisory ranks candidates against a goal the person wrote down, reads its own record as well as the issue list, and brings one recommendation whose open points can be answered in one word; it never starts what it proposes | accepted |
 | D-0098 | Parallel control beyond the lane ledger: an order across repositories released only by a landing, a line that takes over landed paths first takes in the default branch, decision-record numbers reserved so decision entries are written in parallel, a worker's question carried at the lap's end and never answered by silence, and a review stopped by the scope's numbers | accepted |
 | D-0099 | A `git status` that fails is refused by `publish` whatever overrides it: the inspection says which half it could not read, and only unreadable history stays publishable past `--despite-review` | accepted |
+| D-0100 | A first lap is cut from the forge's base branch as it is at admission: rondo fetches it into a branch of the lap's own, `rondo/base/<runId>`, admits continuo against that, and refuses the lap when the fetch fails | accepted |
 
 ---
 
@@ -22315,3 +22316,58 @@ repository test in `test/access/forge.test.ts`:
 - **A history read that starts depending on the index**, so that a corrupt index reads as `history`
   and passes under the override again. The real repository test in `test/access/forge.test.ts`
   would fail on this.
+
+## D-0100 — A first lap is cut from the forge's base branch as it is at admission: rondo fetches it into a branch of the lap's own, `rondo/base/<runId>`, admits continuo against that, and refuses the lap when the fetch fails
+
+**Status:** accepted (2026-09-22, rondo's owner, in rondo#407's comment: "fetch the forge, and cut
+the lap's worktree from `origin/<default branch>` as it is at that moment"). Supersedes nothing.
+Refs rondo#407, `D-0098` (the decision-number collision a stale lap also reaches), continuo's
+materialiser at the pinned revision.
+
+**Why an entry is needed.** Lap 12 ran on `rondo-gh`'s local `main`, cloned at setup and stale by
+the switch. The lap recorded `D-0097`, which `main` already had, and its pull request (#405)
+conflicted. Refreshing the clone at setup would not hold: it goes stale again between laps.
+
+### What was measured
+
+At rondo `77c41d7` and continuo `b7162ae`, by reading `src/access/conductor.ts` and continuo's
+`src/workspace/materializer.ts`:
+- continuo's `--base-branch` must name `refs/heads/<name>`. The materialiser refuses anything else
+  and resolves it to a commit before `git worktree add`. A remote-tracking ref cannot be passed.
+- Lap 12's target (runbook step 1a) is a plain clone with `main` checked out. `git fetch` refuses
+  to move a branch checked out in any worktree, so fast-forwarding the clone's own `main` fails.
+
+### Decision
+
+1. **At admission, a first lap fetches the plan's base branch from `origin`** into
+   `refs/heads/rondo/base/<runId>`, forced, and admits continuo with that branch as
+   `--base-branch`. The branch is the lap's: no other lap writes it and it holds nobody's commits,
+   so a forced update loses nothing. The clone's own `main` and its checkout are not touched.
+2. **The fetch that decides the lap writes nothing shared.** It runs with `--refmap=` (empty) and
+   `--no-write-fetch-head`, so it takes no lock on `refs/remotes/origin/<branch>` or `FETCH_HEAD`,
+   and two laps admitted at once are not refused for each other (the parallel lanes of `D-0098`).
+   A second, plain fetch then moves `refs/remotes/origin/<branch>`, and its failure is ignored:
+   `inspectLapWork` reads the base there first, and a lock lost to a concurrent fetch is that
+   fetch writing the same forge head.
+3. **A fetch that fails refuses the admission**, before the delegation record is written and before
+   continuo is spawned. The reason names the remote, the branch and git's words. A repository with
+   no `origin`, or a forge without the branch, is a lap that does not start.
+4. **A revision fetches nothing.** Its base is its predecessor's topic branch (`pullRequestBaseBranch`
+   is set), which is local and never pushed.
+5. **The plan is unchanged.** `baseBranch` still names the forge's branch. The pull request, the
+   reading and the delegation record use it, and only continuo is told the mirror's name.
+6. **No runbook step.** The lap does this itself, so a runbook needs no step to refresh the target.
+
+### What it costs
+
+- **One more branch in the target clone per first lap**, which `git branch` lists and nothing
+  removes. Deleting it is safe once the lap's worktree exists.
+- **A second fetch per admission**, whose failure leaves `refs/remotes/origin/<branch>` where it was.
+- **The base is read at admission, not at perform.** They run back to back in one conductor pass.
+
+### What would falsify it
+
+- **continuo accepting a remote-tracking start point.** The mirror branch would then be a workaround
+  for a restriction that no longer exists, and the lap should pass `origin/<branch>` itself.
+- **A target whose base branch is not on `origin`**, such as a fork setup that pushes to one remote
+  and bases on another. Every first lap there would be refused.
