@@ -137,6 +137,66 @@ export interface PageWords extends DayWords {
   readonly emptyAsk: string;
   readonly emptyLead: string;
   /**
+   * What rondo would ask for next (D-0097 point 4), under the request box, and
+   * the goal it is ranked against (point 2). No amber in any of it: nothing
+   * here waits on the person.
+   */
+  readonly triageHeading: string;
+  readonly triageGoesAgainst: string;
+  readonly triageWhy: string;
+  readonly triageOpenPoints: string;
+  readonly triageFrom: string;
+  readonly triageIssue: (repository: string, number: number) => string;
+  readonly triageStopped: string;
+  readonly triageReadIssues: (count: number) => string;
+  readonly triageReadStopped: (count: number) => string;
+  /** `parts` are the non-zero counts above; `when` is an age; `cost` is dollars without the sign, or null. */
+  readonly triageRead: (parts: readonly string[], when: string, cost: string | null) => string;
+  readonly triagePutInBox: string;
+  readonly triageNotNow: string;
+  readonly triageMoreBelow: (count: number) => string;
+  readonly triageNoGoal: string;
+  readonly triageWriteGoal: string;
+  readonly triageEditGoal: string;
+  readonly triageNothingAgainst: string;
+  readonly triageNotReadYet: string;
+  readonly triageUnavailable: string;
+  /** The drafted request's lines under the request itself (point 4.4). */
+  readonly triageBoxAgainst: (clause: string) => string;
+  readonly triageBoxPoints: string;
+  readonly triageBoxRepository: (repository: string) => string;
+  /** The issue a taken request came from, as the issue reader reads it (`D-0078`). */
+  readonly triageBoxFrom: (issue: string) => string;
+  readonly goalHeading: (repository: string) => string;
+  readonly goalLead: string;
+  readonly goalNumber: (count: number) => string;
+  readonly goalClauseLabel: string;
+  readonly goalUnmetLabel: string;
+  readonly goalClausePlaceholder: string;
+  readonly goalUnmetPlaceholder: string;
+  readonly goalKeep: string;
+  readonly goalKeptAt: (when: string) => string;
+  readonly goalDraft: string;
+  /** Under an empty form: there is no draft for a repository that is not rondo. */
+  readonly goalNotKept: string;
+  readonly goalBack: string;
+  /** rondo's own completion definition (`D-0075` K1-K4), as the draft for rondo itself (point 2.4 (a)). */
+  readonly goalDraftClauses: readonly string[];
+  readonly goalDraftUnmet: readonly string[];
+  readonly goalAction: string;
+  readonly goalRefusedNoApprover: string;
+  readonly goalRefusedPress: string;
+  readonly goalRowIncomplete: string;
+  readonly goalRefusedEmpty: string;
+  readonly goalRefused: string;
+  readonly triageNotNowAction: string;
+  readonly triageNotNowRefusedNoApprover: string;
+  readonly triageNotNowRefusedPress: string;
+  readonly triageNotNowRefused: string;
+  readonly triageBack: string;
+  readonly evProposal: string;
+  readonly evProposalLink: string;
+  /**
    * The empty state's right face (rule 4): the last seven days, and what is
    * running.
    *
@@ -347,6 +407,75 @@ export const PAGE_EN: PageWords = Object.freeze({
   saidByRondo: "rondo",
   emptyAsk: "What would you like to ask for?",
   emptyLead: "Write it in your own words. If anything is unclear, rondo asks before it starts.",
+  triageHeading: "What rondo would ask for next",
+  triageGoesAgainst: "Goes against",
+  triageWhy: "Why",
+  triageOpenPoints: "Open points, with rondo's suggestion after each",
+  triageFrom: "From",
+  triageIssue: (repository, number) => `${repository}#${String(number)}`,
+  triageStopped: "the request whose work stopped",
+  triageReadIssues: (count) => (count === 1 ? "1 open issue" : `${String(count)} open issues`),
+  triageReadStopped: (count) =>
+    count === 1 ? "1 request whose work stopped" : `${String(count)} requests whose work stopped`,
+  triageRead: (parts, when, cost) =>
+    (parts.length === 0 ? `Nothing to read, ${when}` : `Read ${parts.join(", ")}, ${when}`) +
+    (cost === null ? "." : `; this reading cost $${cost}.`),
+  triagePutInBox: "Put it in the box",
+  triageNotNow: "Not now",
+  triageMoreBelow: (count) =>
+    count === 1 ? "1 more, ranked below" : `${String(count)} more, ranked below`,
+  triageNoGoal: "Nothing can be ranked until a goal is written.",
+  triageWriteGoal: "Write the goal",
+  triageEditGoal: "See the goal",
+  triageNothingAgainst: "Nothing rondo read goes against the goal.",
+  triageNotReadYet: "The goal is written. rondo has not read against it yet.",
+  triageUnavailable:
+    "rondo could not rank this time. It tries again within the hour, or sooner if what it reads changes.",
+  triageBoxAgainst: (clause) => `This goes against the goal: ${clause}`,
+  triageBoxPoints: "Open points, as rondo suggested:",
+  triageBoxRepository: (repository) => `In ${repository}.`,
+  triageBoxFrom: (issue) => `From ${issue}.`,
+  goalHeading: (repository) => `The goal for ${repository}`,
+  goalLead:
+    "Numbered clauses, in your own words. Each says when it is unmet, so rondo can name the one a " +
+    "request goes against.",
+  goalNumber: (count) => `${String(count)}.`,
+  goalClauseLabel: "Clause",
+  goalUnmetLabel: "Unmet if",
+  goalClausePlaceholder: "e.g. they never open a terminal",
+  goalUnmetPlaceholder: "e.g. a terminal is ever required",
+  goalKeep: "Keep this goal",
+  goalKeptAt: (when) => `Kept ${when}.`,
+  goalDraft: "Not kept yet. This is rondo's draft: change anything, then keep it.",
+  goalNotKept: "Not kept yet. Write the clauses, then keep them.",
+  goalBack: "Back to the front",
+  goalDraftClauses: [
+    "You write the request and rondo goes as far as opening the pull request.",
+    "In between, you only approve and answer disputes.",
+    "You never open a terminal.",
+    "No word on screen has to be asked about.",
+  ],
+  goalDraftUnmet: [
+    "a pull request is not what the work ends in",
+    "anything else is asked of you before the pull request",
+    "a terminal is ever required",
+    "a word on screen has to be asked about",
+  ],
+  goalAction: "Keep this goal",
+  goalRefusedNoApprover:
+    "Nothing was kept: no approver is set for this rondo, so it writes nothing from the page.",
+  goalRefusedPress: "Nothing was kept: this did not come from a press on this page.",
+  goalRowIncomplete: "Each clause needs both parts: the clause and when it is unmet.",
+  goalRefusedEmpty: "A goal needs at least one clause.",
+  goalRefused: "Nothing was kept: rondo's store refused the goal.",
+  triageNotNowAction: "Not now",
+  triageNotNowRefusedNoApprover:
+    "Nothing was put aside: no approver is set for this rondo, so it writes nothing from the page.",
+  triageNotNowRefusedPress: "Nothing was put aside: this did not come from a press on this page.",
+  triageNotNowRefused: "Nothing was put aside: the proposal has moved on since the page was drawn.",
+  triageBack: "Back to the front",
+  evProposal: "rondo has a proposal for what to ask next.",
+  evProposalLink: "See it",
   sevenDays: "The last seven days",
   weekAsked: "Asked",
   weekFinished: "Finished",
@@ -531,6 +660,73 @@ export const PAGE_JA: PageWords = Object.freeze({
   saidByRondo: "rondo",
   emptyAsk: "何を頼みますか",
   emptyLead: "ふだんの言葉で書いてください。はっきりしないところがあれば、始める前に聞き返します。",
+  triageHeading: "rondo が次に勧める依頼",
+  triageGoesAgainst: "反している目標",
+  triageWhy: "理由",
+  triageOpenPoints: "決めること（あとに rondo の案）",
+  triageFrom: "もとにしたもの",
+  triageIssue: (repository, number) => `${repository}#${String(number)}`,
+  triageStopped: "作業が止まった依頼",
+  triageReadIssues: (count) => `開いている課題 ${String(count)} 件`,
+  triageReadStopped: (count) => `作業が止まった依頼 ${String(count)} 件`,
+  triageRead: (parts, when, cost) =>
+    `${parts.length === 0 ? "読むものはありませんでした" : `${parts.join("、")}を読みました`}（${when}）` +
+    (cost === null ? "。" : `。この読み取りの費用は $${cost}。`),
+  triagePutInBox: "依頼の欄に入れる",
+  triageNotNow: "今はやらない",
+  triageMoreBelow: (count) => `ほかの候補 ${String(count)} 件`,
+  triageNoGoal: "目標が書かれていないので、順位をつけられません。",
+  triageWriteGoal: "目標を書く",
+  triageEditGoal: "目標を見る",
+  triageNothingAgainst: "読んだ範囲では、目標に反するものはありませんでした。",
+  triageNotReadYet: "目標は書かれています。rondo はまだ照らし合わせていません。",
+  triageUnavailable:
+    "今回は順位をつけられませんでした。1 時間以内に、または読む対象が変わったら、もう一度読みます。",
+  triageBoxAgainst: (clause) => `目標のこの項目に反しています: ${clause}`,
+  triageBoxPoints: "決めること（rondo の案のとおり）:",
+  triageBoxRepository: (repository) => `対象は ${repository}。`,
+  triageBoxFrom: (issue) => `もとにした課題: ${issue}`,
+  goalHeading: (repository) => `${repository} の目標`,
+  goalLead:
+    "番号つきの項目を、ふだんの言葉で書きます。それぞれに「どうなったら満たしていないか」を添えると、" +
+    "rondo は依頼がどの項目に反するかを言えます。",
+  goalNumber: (count) => `${String(count)}.`,
+  goalClauseLabel: "項目",
+  goalUnmetLabel: "満たしていない条件",
+  goalClausePlaceholder: "例: ターミナルを開かせない",
+  goalUnmetPlaceholder: "例: 一度でもターミナルが必要になったとき",
+  goalKeep: "この目標を保存する",
+  goalKeptAt: (when) => `${when}に保存しました。`,
+  goalDraft: "まだ保存していません。これは rondo の下書きです。直してから保存してください。",
+  goalNotKept: "まだ保存していません。項目を書いてから保存してください。",
+  goalBack: "最初の画面へ戻る",
+  goalDraftClauses: [
+    "依頼を書けば、rondo がプルリクエストを開くところまで進める。",
+    "その間にあなたがするのは、承認と、異論への返事だけ。",
+    "ターミナルを開かせない。",
+    "画面の言葉に、聞き返さないと分からないものがない。",
+  ],
+  goalDraftUnmet: [
+    "プルリクエストで終わらなかったとき",
+    "プルリクエストの前に、それ以外を求められたとき",
+    "一度でもターミナルが必要になったとき",
+    "画面の言葉を聞き返す必要があったとき",
+  ],
+  goalAction: "この目標を保存する",
+  goalRefusedNoApprover:
+    "保存していません。この rondo には承認者が設定されていないので、画面からは何も書き込みません。",
+  goalRefusedPress: "保存していません。この画面のボタンから送られたものではありません。",
+  goalRowIncomplete: "項目には両方が要ります。項目そのものと、満たしていない条件です。",
+  goalRefusedEmpty: "目標には項目が 1 つ以上要ります。",
+  goalRefused: "保存していません。rondo のストアが目標を受け付けませんでした。",
+  triageNotNowAction: "今はやらない",
+  triageNotNowRefusedNoApprover:
+    "見送っていません。この rondo には承認者が設定されていないので、画面からは何も書き込みません。",
+  triageNotNowRefusedPress: "見送っていません。この画面のボタンから送られたものではありません。",
+  triageNotNowRefused: "見送っていません。画面を開いたあとで、提案が新しくなっています。",
+  triageBack: "最初の画面へ戻る",
+  evProposal: "次に頼むことについて、rondo に提案があります。",
+  evProposalLink: "見る",
   sevenDays: "この 7 日間",
   weekAsked: "頼んだ",
   weekFinished: "終わった",

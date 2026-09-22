@@ -72,6 +72,7 @@ import {
   type FindingBasis,
   type FindingSeverity,
   type GateAnswer,
+  type GoalDraft,
   type GradedFinding,
   type HumanDecisionDraft,
   type IterationFields,
@@ -104,13 +105,17 @@ import {
   type ScopeTest,
   type SetupPlanDraft,
   type StoredDecision,
+  type StoredGoal,
   type StoredProposal,
   type StoredScope,
   type StoredScopeDecision,
   type StoredSetupPlan,
+  type StoredTriage,
+  type StoredTriageDecline,
   SUSPENDED_STATUSES,
   TERMINAL_STATUSES,
   type ThreadMessageDraft,
+  type TriageDeclineDraft,
   type UnconsumedDecision,
   type WithheldByRule,
   WRITABLE_SCOPE_ACT_KINDS,
@@ -1513,6 +1518,33 @@ CREATE TABLE IF NOT EXISTS lane_claim (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS lane_claim_one_root
   ON lane_claim(lineage_id) WHERE supersedes_claim_id IS NULL;
+
+-- D-0097 point 2.1 (a). The goal a person wrote down for one repository, as
+-- numbered clauses each saying when it is unmet (point 2.2 (a)). **Append-only
+-- with its date**: an edit is a new row, the newest row of a repository is its
+-- goal, and a triage proposal names the goal_id it was ranked against, so what
+-- a proposal was ranked against stays readable after the goal moves on.
+-- clauses is canonical JSON, [{said, unmetIf}, ...] in the goal's order.
+CREATE TABLE IF NOT EXISTS goal (
+  goal_id                     TEXT    PRIMARY KEY,
+  repository                  TEXT    NOT NULL,
+  clauses                     TEXT    NOT NULL,
+  written_by                  TEXT    NOT NULL,
+  written_at_ms               INTEGER NOT NULL
+);
+
+-- D-0097 point 4.5 (a). A person's *not now* on one candidate of one triage
+-- proposal: who, when, and which candidate. A row beside the proposal and not
+-- a column on it, because a proposal row is immutable (D-0022 rule 4); it is
+-- read with the proposal it names. The next reading withholds that candidate,
+-- and says it was put aside.
+CREATE TABLE IF NOT EXISTS triage_decline (
+  decline_id                  TEXT    PRIMARY KEY,
+  proposal_id                 TEXT    NOT NULL,
+  candidate                   TEXT    NOT NULL,
+  declined_by                 TEXT    NOT NULL,
+  declined_at_ms              INTEGER NOT NULL
+);
 `;
 
 /**
@@ -2997,6 +3029,22 @@ export interface AdvisoryRecord {
   /** Every setup row, oldest first. A row whose bytes will not parse is skipped. */
   setupPlans(): Promise<readonly StoredSetupPlan[]>;
   /**
+   * Append one goal row (D-0097 point 2.1 (a)). Refused for an id already
+   * held, a goal with no clause, and a clause with nothing said in either half.
+   */
+  recordGoal(draft: GoalDraft): Promise<RecordOutcome>;
+  /** Every goal row, oldest first; the newest of a repository is its goal. */
+  goals(): Promise<readonly StoredGoal[]>;
+  /**
+   * Record a *not now* (D-0097 point 4.5 (a)). Refused when the proposal is
+   * not a triage row, or the candidate is not one it proposed.
+   */
+  recordTriageDecline(draft: TriageDeclineDraft): Promise<RecordOutcome>;
+  /** Every *not now*, oldest first. */
+  triageDeclines(): Promise<readonly StoredTriageDecline[]>;
+  /** The newest triage proposal of each repository, oldest repository first. */
+  latestTriage(): Promise<readonly StoredTriage[]>;
+  /**
    * What one model drafter run writes, **all in one transaction or nothing**
    * (D-0071 rule 7.3): its proposal row, the scope it drafted, and its thread
    * messages -- or, for an unavailable run, its one message. `stale` when the
@@ -3198,6 +3246,35 @@ const CHANGES_SINCE_SQL = `${CHANGE_SOURCES.map(
     `SELECT '${source.kind}' AS kind, ${source.id} AS id, ${source.at} AS at_ms ` +
     `FROM ${source.table} WHERE ${source.at} >= ?`,
 ).join(" UNION ALL ")} ORDER BY at_ms, kind, id`;
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** The repository a triage payload was read for, or null when it names none. */
+function triageRepository(payload: string): string | null {
+  try {
+    const read: unknown = JSON.parse(payload);
+    return isRecord(read) && typeof read["repository"] === "string" ? read["repository"] : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The candidate keys a triage payload proposed: its recommendation and runners-up. */
+function triageKeys(payload: string): readonly string[] {
+  try {
+    const read: unknown = JSON.parse(payload);
+    const ranked = isRecord(read) ? read["ranked"] : null;
+    return Array.isArray(ranked)
+      ? ranked.flatMap((one: unknown) =>
+          isRecord(one) && typeof one["key"] === "string" ? [one["key"]] : [],
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * The advisory record over an open connection.
@@ -4302,6 +4379,164 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
           .run(draft.setupId, plan, planDigest(draft.plan), draft.recordedBy, draft.recordedAtMs);
         return { kind: "recorded" };
       });
+    },
+
+    async recordGoal(draft: GoalDraft): Promise<RecordOutcome> {
+      if (draft.repository.trim() === "") {
+        return { kind: "refused", reason: "a goal names the repository it is for" };
+      }
+      if (draft.clauses.length === 0) {
+        return { kind: "refused", reason: "a goal holds at least one clause (D-0097 point 2.2)" };
+      }
+      if (draft.clauses.some((clause) => clause.said.trim() === "")) {
+        return { kind: "refused", reason: "every clause of a goal says something" };
+      }
+      const clauses = canonicalJson(
+        draft.clauses.map((clause) => ({ said: clause.said, unmetIf: clause.unmetIf })),
+      );
+      return immediateTransaction(connection, () => {
+        if (
+          connection.prepare("SELECT 1 FROM goal WHERE goal_id = ?").get(draft.goalId) !== undefined
+        ) {
+          return { kind: "refused", reason: `a goal row '${draft.goalId}' is already recorded` };
+        }
+        connection
+          .prepare(
+            "INSERT INTO goal (goal_id, repository, clauses, written_by, written_at_ms) " +
+              "VALUES (?, ?, ?, ?, ?)",
+          )
+          .run(draft.goalId, draft.repository, clauses, draft.writtenBy, draft.writtenAtMs);
+        return { kind: "recorded" };
+      });
+    },
+
+    async goals(): Promise<readonly StoredGoal[]> {
+      return (
+        connection.prepare("SELECT * FROM goal ORDER BY written_at_ms, rowid").all() as SqlRow[]
+      ).flatMap((row) => {
+        let clauses: unknown;
+        try {
+          clauses = JSON.parse(String(row["clauses"]));
+        } catch {
+          return [];
+        }
+        if (!Array.isArray(clauses)) {
+          return [];
+        }
+        return [
+          {
+            goalId: String(row["goal_id"]),
+            repository: String(row["repository"]),
+            clauses: clauses.flatMap((clause: unknown) =>
+              typeof clause === "object" &&
+              clause !== null &&
+              typeof (clause as JsonRecord)["said"] === "string" &&
+              typeof (clause as JsonRecord)["unmetIf"] === "string"
+                ? [
+                    {
+                      said: String((clause as JsonRecord)["said"]),
+                      unmetIf: String((clause as JsonRecord)["unmetIf"]),
+                    },
+                  ]
+                : [],
+            ),
+            writtenBy: String(row["written_by"]),
+            writtenAtMs: Number(row["written_at_ms"]),
+          },
+        ];
+      });
+    },
+
+    async recordTriageDecline(draft: TriageDeclineDraft): Promise<RecordOutcome> {
+      return immediateTransaction(connection, () => {
+        const row = connection
+          .prepare("SELECT kind, payload FROM proposal WHERE proposal_id = ?")
+          .get(draft.proposalId) as SqlRow | undefined;
+        if (row === undefined || row["kind"] !== "triage") {
+          return {
+            kind: "refused",
+            reason: `'${draft.proposalId}' is not a proposal of what to ask next`,
+          };
+        }
+        if (!triageKeys(String(row["payload"])).includes(draft.candidate)) {
+          return {
+            kind: "refused",
+            reason: `'${draft.candidate}' is not a candidate that proposal named`,
+          };
+        }
+        if (
+          connection
+            .prepare("SELECT 1 FROM triage_decline WHERE decline_id = ?")
+            .get(draft.declineId) !== undefined
+        ) {
+          return { kind: "refused", reason: `a decline '${draft.declineId}' is already recorded` };
+        }
+        connection
+          .prepare(
+            "INSERT INTO triage_decline (decline_id, proposal_id, candidate, declined_by, " +
+              "declined_at_ms) VALUES (?, ?, ?, ?, ?)",
+          )
+          .run(
+            draft.declineId,
+            draft.proposalId,
+            draft.candidate,
+            draft.declinedBy,
+            draft.declinedAtMs,
+          );
+        return { kind: "recorded" };
+      });
+    },
+
+    async triageDeclines(): Promise<readonly StoredTriageDecline[]> {
+      return (
+        connection
+          .prepare(
+            "SELECT d.*, p.payload FROM triage_decline d JOIN proposal p " +
+              "ON p.proposal_id = d.proposal_id ORDER BY d.declined_at_ms, d.rowid",
+          )
+          .all() as SqlRow[]
+      ).map((row) => ({
+        declineId: String(row["decline_id"]),
+        proposalId: String(row["proposal_id"]),
+        candidate: String(row["candidate"]),
+        declinedBy: String(row["declined_by"]),
+        declinedAtMs: Number(row["declined_at_ms"]),
+        repository: triageRepository(String(row["payload"])) ?? "",
+      }));
+    },
+
+    async latestTriage(): Promise<readonly StoredTriage[]> {
+      const newest = new Map<string, StoredTriage>();
+      for (const row of connection
+        .prepare(
+          "SELECT proposal_id, drafter, payload, snapshot, created_at_ms FROM proposal " +
+            "WHERE kind = 'triage' ORDER BY created_at_ms, rowid",
+        )
+        .all() as SqlRow[]) {
+        let payload: unknown;
+        let snapshot: unknown;
+        try {
+          payload = JSON.parse(String(row["payload"]));
+          snapshot = JSON.parse(String(row["snapshot"]));
+        } catch {
+          continue;
+        }
+        const repository = triageRepository(String(row["payload"]));
+        if (repository === null || !isRecord(payload) || !isRecord(snapshot)) {
+          continue;
+        }
+        // Deleted first so the map's order is each repository's newest row.
+        newest.delete(repository);
+        newest.set(repository, {
+          proposalId: String(row["proposal_id"]),
+          drafter: String(row["drafter"]),
+          repository,
+          payload,
+          snapshot,
+          createdAtMs: Number(row["created_at_ms"]),
+        });
+      }
+      return [...newest.values()];
     },
 
     async setupPlans(): Promise<readonly StoredSetupPlan[]> {

@@ -116,17 +116,28 @@ class HTMLTextAreaElement {
   defaultValue = "";
 }
 
-/** A page running `page/composer.js` over one draft box and its note. */
-function composerPage() {
+/**
+ * A page running `page/composer.js` over one draft box and its note; or, with
+ * `take`, over the new-request box drawn holding a request taken from what
+ * rondo would ask for next (D-0097 point 4.4), over `kept` storage.
+ */
+function composerPage(
+  take: { key: string; drawn: string; kept: [string, string][] } | null = null,
+) {
   const heard = new Map<string, ((event?: unknown) => void)[]>();
-  const stored = new Map<string, string>([
-    ["rondo:draft:reply:m-0001", "my own words"],
-    ["rondo:drew:reply:m-0001", "rondo's first draft"],
-  ]);
+  const stored = new Map<string, string>(
+    take === null
+      ? [
+          ["rondo:draft:reply:m-0001", "my own words"],
+          ["rondo:drew:reply:m-0001", "rondo's first draft"],
+        ]
+      : take.kept,
+  );
   const box = new HTMLTextAreaElement();
-  box.dataset = { draft: "reply:m-0001" };
-  box.value = "my own words";
-  box.defaultValue = "rondo's first draft";
+  box.dataset =
+    take === null ? { draft: "reply:m-0001" } : { draft: "request", draftTake: take.key };
+  box.value = take === null ? "my own words" : take.drawn;
+  box.defaultValue = take === null ? "rondo's first draft" : take.drawn;
   const arrived = { dataset: { draftArrived: "reply:m-0001" }, hidden: true };
   const holds = { dataset: { draftState: "reply:m-0001" }, hidden: false };
   const Idiomorph: {
@@ -162,11 +173,15 @@ function composerPage() {
       querySelectorAll: (selector: string) =>
         selector === "textarea[data-draft]"
           ? [box]
-          : selector === "[data-draft-arrived]"
-            ? [arrived]
-            : selector === "[data-draft-state]"
-              ? [holds]
-              : [],
+          : selector === "textarea[data-draft-take]"
+            ? take === null
+              ? []
+              : [box]
+            : selector === "[data-draft-arrived]"
+              ? [arrived]
+              : selector === "[data-draft-state]"
+                ? [holds]
+                : [],
       addEventListener: (type: string, listener: (event?: unknown) => void) => {
         heard.set(type, [...(heard.get(type) ?? []), listener]);
       },
@@ -187,6 +202,7 @@ function composerPage() {
       return event.defaultPrevented;
     },
     box,
+    stored,
     arrived,
     holds,
     Idiomorph,
@@ -415,4 +431,30 @@ test("a choice made in another tab is followed here", () => {
   tab.otherTab("large");
   expect(tab.root.getAttribute("data-text-size")).toBe("large");
   expect(tab.pressed()).toEqual(["false", "true", "false"]);
+});
+
+test("a taken request wins over a draft kept for another take, and a reload of the same take keeps the edits", () => {
+  // A was taken once, then B was taken and edited; now the person presses A
+  // again (Codex, round 2: a marker per take kept B's words here).
+  const switched = composerPage({
+    key: "p-1:A",
+    drawn: "A's request",
+    kept: [
+      ["rondo:took:p-1:A", "1"],
+      ["rondo:took", "p-1:B"],
+      ["rondo:draft:request", "B, edited"],
+    ],
+  });
+  expect(switched.box.value).toBe("A's request");
+  expect(switched.stored.get("rondo:took")).toBe("p-1:A");
+  // The same address again (a reload): what they typed since stays.
+  const reloaded = composerPage({
+    key: "p-1:A",
+    drawn: "A's request",
+    kept: [
+      ["rondo:took", "p-1:A"],
+      ["rondo:draft:request", "A, edited"],
+    ],
+  });
+  expect(reloaded.box.value).toBe("A, edited");
 });
