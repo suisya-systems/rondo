@@ -2712,14 +2712,22 @@ export async function operatorPage(
           selectedLaps.map((lap) => lap.record),
         );
   // The merge is done where rondo has seen it made, by a press or on the
-  // forge (rondo#413); `governanceOf` reads no thread, so it is said here.
+  // forge (rondo#413), and is no step at all once the pull request was closed
+  // unmerged: nothing remains, and it was not merged. `governanceOf` reads no
+  // thread, so it is said here.
   const selectedGovernance =
-    governed === null || selectedResult?.merged == null
-      ? governed
+    governed === null
+      ? null
       : {
           ...governed,
-          chain: governed.chain.map((link) =>
-            link.step === "merge" ? { ...link, state: "done" as const } : link,
+          chain: governed.chain.flatMap((link) =>
+            link.step !== "merge"
+              ? [link]
+              : selectedResult?.merged != null
+                ? [{ ...link, state: "done" as const }]
+                : selectedResult?.closedAtMs != null
+                  ? []
+                  : [link],
           ),
         };
   /*
@@ -3127,12 +3135,16 @@ export async function operatorPage(
             // **What remains before this ends** (rule 6), as the five steps
             // rule 4 draws under a running request: one reading of where the
             // work stands, drawn in two places by one component.
-            steps: stepsOf(
-              sideLap,
-              sideReadings,
-              publishedReport(threads, sideLap.id) !== null,
-              resultOf(threads.byId, sideLap.id)?.merged != null,
-            ),
+            steps: (() => {
+              const sideResult = resultOf(threads.byId, sideLap.id);
+              // Closed unmerged: the merge is no longer a step (rondo#413).
+              return stepsOf(
+                sideLap,
+                sideReadings,
+                publishedReport(threads, sideLap.id) !== null,
+                sideResult?.merged != null,
+              ).filter((step) => step.name !== "landing" || sideResult?.closedAtMs == null);
+            })(),
             material: sideMaterial === null ? null : Raw({ html: sideMaterial }),
             asking: sideAsking,
           }),
