@@ -443,6 +443,18 @@ export interface Chrome extends PageWords {
    * that does nothing (`D-0076`: what the person cannot use is not shown).
    */
   readonly chimeAsk: string;
+  /**
+   * The tab's title (rondo#414): what waits on the person, counted as the
+   * header counts it, so a tab among twenty says so without being opened.
+   */
+  readonly tabTitle: (count: number) => string;
+  /**
+   * The tab's title from a new wait until the tab is looked at (rondo#414).
+   * The words that catch the eye come first: a tab strip cuts a title after
+   * a couple of dozen characters. No count: the arrival is the news, and the
+   * count comes back with {@link tabTitle} once the tab is looked at.
+   */
+  readonly tabTitleTurn: string;
   readonly liveLabel: string;
   readonly keyMove: string;
   readonly keyOpen: string;

@@ -416,6 +416,10 @@ function verdictTone(verdict: string): Tone {
   return verdict === "clear" ? "ok" : verdict === "concerns" ? "revise" : "muted";
 }
 
+/** The tab's icon: the plain mark, or the mark with the amber badge while anything waits (rondo#414). */
+const tabIcon = (waitingCount: number): string =>
+  waitingCount === 0 ? "/icon.svg" : "/icon-wait.svg";
+
 const SEVERITY_TONE: Readonly<Record<FindingSeverity, Tone>> = {
   blocker: "fail",
   major: "revise",
@@ -3637,7 +3641,14 @@ export async function operatorPage(
             </>
           ) : null
         }
-        <title>rondo</title>
+        {/*
+         * **The count and the badge in the tab strip** (rondo#414), drawn by
+         * the server so a document says them before any script runs;
+         * `page/chime.js` keeps them current from `#ledger` as the poll
+         * redraws it.
+         */}
+        <title>{wording.tabTitle(waitingCount)}</title>
+        <link rel="icon" type="image/svg+xml" href={tabIcon(waitingCount)} />
         <link rel="stylesheet" href="/app.css" />
         {
           // **Not deferred, and before the body** (rondo#379): it puts the
@@ -3754,7 +3765,7 @@ export async function operatorPage(
                   type="button"
                   id="chime-ask"
                   hidden
-                  class={`js-only ${PILL} gap-1.5 font-sans ${TONE.muted} hover:text-foreground`}
+                  class={`js-only ${PILL} gap-1.5 font-sans border-link/40 text-link hover:underline`}
                 >
                   {wording.chimeAsk}
                 </button>
@@ -3934,6 +3945,10 @@ export async function operatorPage(
             id="ledger"
             data-waits={JSON.stringify(waits.map((wait) => wait.episode))}
             data-chime={wording.reachYourTurn}
+            data-title={wording.tabTitle(waitingCount)}
+            data-title-turn={wording.tabTitleTurn}
+            data-icon={tabIcon(waitingCount)}
+            {...(token === null ? {} : { "data-notice-to": "/notice", "data-notice-token": token })}
             {...(keepsCurrent
               ? {
                   "hx-get": here,

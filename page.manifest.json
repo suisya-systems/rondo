@@ -1,9 +1,11 @@
 {
-  "app.css": "d5894880cbee1932ee5b82301b7a7b943a7aa816b2cdedd1864a6ee5912b6d76",
+  "app.css": "8c674a19c38a452dd7d4a6da55b052f269c80c0c87d1a5968d17ca815ae8f4c4",
   "assets/main-BIaLqNsC.js": "d1c4f2c0acfa17a4352888ddf3ffb5d8af85257d4ade3a90080e4cbe4a92d2b0",
-  "chime.js": "4ef4399a51232889d252d9d40e0e7409de5f181dbb468a4b42fd08293745a6c6",
+  "chime.js": "a9b5d9c55645cbc59262d4063f0cbf433384f63bcab9712cdfb96373a3c20dbb",
   "composer.js": "1335b92792a15047f745540b5db73df8389c726d9e4decb32ce3ff44405409f9",
   "htmx.min.js": "71ea67185bfa8c98c39d31717c6fce5d852370fcdfd129db4543774d3145c0de",
+  "icon-wait.svg": "79c1dfd873e76972f8ab62b6ee696e307e545c692ba0a1b247e5431143bf009a",
+  "icon.svg": "e6f2ca749b9539bf1fefae581c5f3869ee6fc6327c35da5d3625ffff870f9a30",
   "idiomorph-ext.min.js": "5811b9a7eda14878b7dab4378bf60432e1bb6f11fcfb970cc26540642650181e",
   "inter-latin-wght-normal.woff2": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
   "jetbrains-mono-latin-wght-normal.woff2": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e",
