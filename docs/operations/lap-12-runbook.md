@@ -25,7 +25,7 @@ The completion definition is the operator's, quoted in `D-0075`, with K3 redrawn
 As in lap 11, this lap walks one repository. It cannot test `D-0081` rule 1.1, which judges K1 to
 K3 across a person's day, and the record should not claim it.
 
-Record these five things as you go:
+Record these six things. The first five are recorded during the walk, the sixth after it:
 
 1. **Times you opened a terminal**, apart from starting and stopping the page, and why. (K3)
 2. **Times you left the screen**: going to GitHub, or reading a file or a log. lap 11 had one, to
@@ -35,6 +35,11 @@ Record these five things as you go:
 4. **Every question you asked the secretary, and what it was.** Each one counts as a place where
    the screen was not enough, whatever the answer was.
 5. **Words you had to ask the meaning of**, exactly as the screen printed them. (K4)
+6. **What the one pull request cost**, in rondo and in the organisation (claude-org-ja), side by
+   side. This is not one of K1 to K4. The owner decided on 2026-09-22 to test the claim that the
+   stack costs less than the organisation, and this lap is the first place to measure it. The
+   secretary collects it after the walk, from the store and the host's log. It is not a terminal
+   trip. How to read it is below.
 
 For measure 4, check lap 11's eight questions against the screen. The question is whether the
 screen now answers each one before you think to ask:
@@ -49,6 +54,84 @@ screen now answers each one before you think to ask:
 | what to press after approving | **プルリクエストを作る** (step 6) |
 | whether the publish worked, and where | the result band (step 6) |
 | whether it was green | **チェック** in the result band (step 7) |
+
+### Measure 6: what one pull request cost, beside the organisation's
+
+**The rondo side** has three parts. Read the store read-only (`node:sqlite`, `readOnly: true`), as
+lap 11 did. Read the log with `journalctl --user -u rondo.service`. `$R/rondo-iterations.sqlite3`
+is fresh, so every row in it belongs to this lap. The optional second request adds drafter rows,
+but no laps.
+
+1. **The worker, per try and in total.** Each finished lap's spend comes from continuo's
+   `lap perform` document (`continuo D-1112`: `spend.total_cost_usd`, `num_turns`, `duration_ms`).
+   rondo stores it on the `iteration` row as `lap_cost_usd`, `lap_turns` and `lap_duration_ms`
+   (`src/access/conductor.ts`, `lapSpendFields`). A null there means continuo could not say. It is
+   not a zero. The page's **全回の合計** is the sum of `lap_cost_usd` over the tries, so it should
+   match the rows.
+
+   ```sh
+   STORE="$HOME/rondo-lap-12/rondo-iterations.sqlite3" node - <<'EOF'
+   const { DatabaseSync } = require("node:sqlite");
+   const db = new DatabaseSync(process.env.STORE, { readOnly: true });
+   console.table(db.prepare(`SELECT id, status, model, lap_cost_usd, lap_turns, lap_duration_ms
+     FROM iteration ORDER BY created_at_ms`).all());
+   console.table(db.prepare(`SELECT kind, drafter, json_extract(snapshot, '$.cost_usd') AS cost_usd, created_at_ms
+     FROM proposal WHERE kind IN ('split', 'revise_draft') ORDER BY created_at_ms`).all());
+   console.table(db.prepare(`SELECT iteration_id, drafter, verdict FROM lap_reading WHERE graded IS NOT NULL`).all());
+   EOF
+   ```
+
+   **Tokens: rondo does not record them for this lap's worker.** `src/continuo/protocol.ts`
+   (`spendOf`) reads only the three keys above. A token count that continuo reports for a Codex
+   worker (`continuo D-1114`) therefore never reaches the store. Record the dollars. If the
+   worker was not Claude and `lap_cost_usd` is null, write "not reported". Do not write 0.
+2. **The drafter and the revise drafter.** These are rondo's own model runs. They are not laps,
+   and **全回の合計 leaves them out**. lap 11 took them from the log alone
+   ([`lap-11-dogfood.md`](lap-11-dogfood.md) section 5: 0.0911 / 0.0474, "journal"). Each run's
+   `total_cost_usd` is also kept in its `proposal` row's snapshot, as `cost_usd`
+   (`src/access/drafter-host.ts`, `src/access/revise-draft/host.ts`). That is the second table
+   the command above prints. Read both sources, and write down any row where they disagree:
+
+   ```sh
+   journalctl --user -u rondo.service | grep -E 'drafter  '
+   ```
+
+   Each line ends with `($0.NNNN)`, or with `(cost not reported)`. Only the dollars are kept. The
+   drafter's token counts are not stored or logged anywhere.
+3. **The model reviewer.** This is `codex exec` (`src/access/forge.ts`, `runReviewer`). rondo
+   keeps neither its cost nor its tokens: `lap_reading` has no spend column, and the run is not
+   logged. Write down how many model readings there were (the third table: `lap_reading` rows
+   with a non-null `graded`), and write "not recorded" for the cost. lap 10 and lap 11 did the
+   same (`D-0065` rule 3.4).
+
+**The organisation side.** After the walk, give claude-org-ja one issue about the same size.
+Delegate it the usual way, and let it run through to an open pull request. What makes it
+comparable is that it is small in the same way #179 is (section 0): a change of a few lines in wording or a refusal message, with its tests, and one pull request. It
+needs no decision first, and no design discussion. A documentation-only task is too small, and a
+task that runs to several pull requests is too large. Write down which issue it was and why it
+matched.
+
+The owner's `~/.claude/settings.json` already sends Claude Code's OpenTelemetry. Read the token
+metric `claude_code.token.usage` from wherever that setting sends it. The metric is split by
+`type` (input, output, cache read, cache creation). Record those four counts separately, because
+cache reads dominate the total and are billed differently. Count:
+
+- **the worker's session or sessions** for that task. This is the main number.
+- **the secretary's and the dispatcher's sessions** while the task ran, recorded on their own row.
+  They are the organisation's equivalent of rondo's drafter. Other work runs in the same sessions,
+  so this number is an upper bound.
+- a Codex self-review, if the task's depth ran one. Its usage is not in Claude Code's OpenTelemetry.
+  Record it from Codex's own output if there is any, and otherwise write "not recorded".
+
+**The two sides use different units, and the record keeps both.** The organisation runs on a
+subscription, so it spends no metered dollars per pull request. Compare it in tokens, and in how
+much of the plan's usage limit the task used. Read the limit before and after the task. It is an
+upper bound for the same reason as above. Claude Code's cost metric is an estimate at API prices.
+Record it at most as a reference, not as the organisation's cost. rondo's worker bills in dollars,
+and the dollars are what the store holds. **Compare the two in tokens per pull request where both
+sides have them. Compare rondo in dollars as well.** If the only rondo number is dollars, the
+tokens column stays empty on that side. The record then says the two cannot be put on one scale
+yet, and that gap is itself a finding. Do not convert between the units.
 
 ## 0. This lap's request
 
@@ -327,6 +410,7 @@ node bin/rondo.mjs abandon --iteration-id lap-THE-UUID --reason "did not come ba
 | questions to the secretary | not counted | 8 | measure 4 |
 | words asked about | 3 | 4, including 「変更は取り込み済みです」 | measure 5 |
 | merge | on GitHub | on GitHub | step 8 |
+| cost of the pull request | not compared | laps $1.645 (two tries), drafters $0.1385, reviewer not read | measure 6, beside the organisation's |
 
 ## 8. The record sheet
 
@@ -383,6 +467,22 @@ Overall:
 - Decisions (scope, gate, a question, publish, merge), and whether each was an approval or a dispute:
 - **全回の合計** against the approved scope:
 - **K1 to K4, each met or not, with the row that decides it.**
+
+**Measure 6: cost per pull request** (empty cells are "not recorded", never 0)
+
+| | rondo (this lap) | organisation (claude-org-ja) |
+|---|---|---|
+| the work | this lap's issue and pull request | issue #___, pull request #___, and why it matched #179's size |
+| worker, per try | `lap_cost_usd` / `lap_turns` / `lap_duration_ms` for each `iteration` row | tokens for each worker session: input / output / cache read / cache creation |
+| worker, total | the sum of `lap_cost_usd` (and whether it matches **全回の合計**) | the sum of the four token counts |
+| worker tokens | not recorded by rondo (`spendOf`), unless there is another source, named here | the four counts above |
+| drafting | drafter and revise drafter `cost_usd`, from the `proposal` rows and the journal, and whether the two agree | the secretary's and dispatcher's tokens while the task ran (an upper bound) |
+| model review | number of model readings; cost "not recorded" | Codex self-review usage, or "not recorded" |
+| usage limit | not applicable (metered) | the plan's usage before and after the task (an upper bound) |
+| **per pull request** | **dollars**, and tokens if any | **tokens**, and the share of the usage limit |
+
+- The claim tested: does the stack cost less than the organisation for one pull request of this
+  size? Say which unit the answer rests on, and what could not be compared.
 
 ## 9. Found while preparing this lap
 
