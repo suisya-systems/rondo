@@ -42,7 +42,9 @@ import { describe, expect, test } from "vitest";
 import {
   type AgentType,
   agentTypeRecord,
+  allowedCommandsFor,
   type CatalogLayer,
+  COMMON_BASH,
   classifyAction,
   issueInitialContract,
   type ResolvedProject,
@@ -227,5 +229,58 @@ describe("classification is an answer rondo reads, not a second enforcement", ()
       reason: "askable",
       contractDigest: CONTRACT_DIGEST,
     });
+  });
+});
+
+describe("the merge a worker may run arrives only through a list composed again (cadenza D-0042, D-0105)", () => {
+  // The list every worker had at cadenza 3c6ed28, the pin before this one: what
+  // every catalog project written before the move still stores.
+  const BEFORE_D0042 = ["echo:*", "git switch --detach HEAD~1", "git switch -"];
+  const withList = (allowedBash: readonly string[]): ResolvedProject =>
+    resolveProject(
+      [
+        {
+          ...TRACKED,
+          data: {
+            schema_version: 1,
+            project: {
+              rondo: {
+                source: { kind: "git_url", url: "https://example.invalid/org/rondo.git" },
+                base_branch: "main",
+                aliases: ["host"],
+                allowed_bash: [...allowedBash],
+              },
+            },
+          },
+        },
+      ],
+      "host",
+    );
+
+  test("a list composed now carries the merge, and still no push, reset, rebase or cherry-pick", () => {
+    const composed = allowedCommandsFor(["package.json"]);
+    expect(composed).toContain("git merge --no-edit:*");
+    expect(COMMON_BASH).toContain("git merge --no-edit:*");
+    for (const refused of ["git push", "git reset", "git rebase", "git cherry-pick"]) {
+      expect(composed.some((subject) => subject.startsWith(refused))).toBe(false);
+    }
+  });
+
+  test("a stored list is not widened by the pin: its project keeps its list and its digest", () => {
+    expect(withList(BEFORE_D0042).allowedBash).toEqual(BEFORE_D0042);
+  });
+
+  test("composing it again moves config_digest, so a contract issued before reads stale_subject", () => {
+    const before = withList(BEFORE_D0042);
+    const after = withList(allowedCommandsFor([]));
+    expect(after.configDigest).not.toBe(before.configDigest);
+    const contract = issueInitialContract(record(), before, { issuer: "rondo", grantee: RUN_ID });
+    expect(
+      classifyAction(
+        contract,
+        { capabilities: ["command.run"] },
+        { runId: RUN_ID, configDigest: after.configDigest },
+      ),
+    ).toMatchObject({ outcome: "refused", reason: "stale_subject" });
   });
 });

@@ -180,7 +180,9 @@ test("the presses that start a lap carry their busy label and what a lap waits o
   // *Ask for a change* starts the second lap, and waits on it as a start does.
   const revise = source("src/access/web.tsx");
   expect(revise).toContain("data-busy={wording.reviseBusy}");
-  expect(revise.match(/\{wording\.lapBusyNote\}/g)).toHaveLength(1);
+  // And so does the conflict fix's attempt (rondo#417, D-0105).
+  expect(revise).toContain("data-busy={wording.conflictFixBusy}");
+  expect(revise.match(/\{wording\.lapBusyNote\}/g)).toHaveLength(2);
   const scope = source("src/access/screens/scope.tsx");
   // Both starts -- the plan's own and the one under an approval -- and every
   // scope press, each of the three drawn twice: at the form's top and again

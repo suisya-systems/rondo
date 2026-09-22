@@ -170,14 +170,14 @@ import {
   workerRuns,
 } from "./page-logic/laps.js";
 import { repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
-import { mergeBlock, resultOf } from "./page-logic/result.js";
+import { asksOverLine, conflictFixBlock, mergeBlock, resultOf } from "./page-logic/result.js";
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
 import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
 import { waitsOnYou } from "./page-logic/waits.js";
 import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
-import { denialLine, LIST_LIMIT } from "./review.js";
+import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal } from "./scope.js";
 import { publishView } from "./screens/publish.js";
@@ -962,17 +962,29 @@ async function reviseBox(
   iterationId: string,
   readings: readonly LapReading[],
 ): Promise<ReviseBox> {
+  // **A take-in the lap did not pass is drafted by rondo itself** (D-0098
+  // rule 2.3, D-0105): the test and its one fix are fixed, so the box quotes
+  // the reading's own finding first, with or without the model's draft.
+  const takeIn = (reviewedReading(readings)?.findings ?? [])
+    .filter((finding) => finding.includes(TAKE_IN_FINDING))
+    .map(wording.reviseDraftTakeIn);
+  const drafted = (text: string): ReviseBox => ({
+    kind: "drafted",
+    text: [...takeIn, text].filter((part) => part !== "").join("\n\n"),
+  });
   const model = latestReading(readings, isModelReadingDrafter);
   if (model === null || model.verdict !== "concerns" || model.findings.length === 0) {
-    return { kind: "none" };
+    return takeIn.length === 0 ? { kind: "none" } : drafted("");
   }
   const row = await ports.record.reviseDraftFor(iterationId, model);
   if (row === null) {
-    return { kind: "pending" };
+    return takeIn.length === 0 ? { kind: "pending" } : drafted("");
   }
   if (row.payload["kind"] === "unavailable") {
     const reason = row.payload["reason"];
-    return { kind: "unavailable", reason: typeof reason === "string" ? reason : "" };
+    return takeIn.length === 0
+      ? { kind: "unavailable", reason: typeof reason === "string" ? reason : "" }
+      : drafted("");
   }
   const text = reviseText(model, row.payload, {
     finding: wording.reviseDraftFinding,
@@ -983,7 +995,7 @@ async function reviseBox(
   // none, never in part (D-0077 rule 4.1: not shown and not repaired).
   return text === null
     ? { kind: "unavailable", reason: "the stored draft does not read as a draft of this reading" }
-    : { kind: "drafted", text };
+    : drafted(text);
 }
 
 /** Whether a row carries a question this page can put a button under. */
@@ -1466,38 +1478,7 @@ function reviseForm(
   // budget afterwards would not lift (rule 3.4).
   const closed = framing.closedBy;
   if (closed !== null && record.requestMessageId !== null) {
-    const { budgets, spent } = closed;
-    const why =
-      closed.test === "laps"
-        ? wording.raiseWhyLaps(budgets.laps)
-        : closed.test === "cost"
-          ? wording.raiseWhyCost(
-              money(spent.readCostUsd + spent.unreadLaps * budgets.cost_reserve_usd),
-              money(budgets.cost_reserve_usd),
-              money(budgets.cost_usd),
-            )
-          : wording.raiseWhyExpiry(localTime(budgets.expires_at_ms).replace("T", " "));
-    return (
-      <div id="raise" class="space-y-2">
-        <p class="note text-meta leading-5 text-muted-foreground">{wording.raiseNeeded(why)}</p>
-        <a
-          href={viewHref(
-            {
-              kind: "scope",
-              messageId: record.requestMessageId,
-              rounds: null,
-              decisionId: null,
-              plan: null,
-              raise: { decisionId: framing.scopeDecisionId, iterationId: record.id },
-            },
-            wording.lang,
-          )}
-          class={`${SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
-        >
-          {wording.raiseLink}
-        </a>
-      </div>
-    );
+    return raiseBlock(wording, closed, record.requestMessageId, framing.scopeDecisionId, record.id);
   }
   const box = framing.revise;
   const draftKey = `revise:${record.id}:${record.gateId ?? ""}`;
@@ -1620,6 +1601,52 @@ interface Shown {
   readonly closedBy: BudgetClosed | null;
   /** The revise box's content and what is said beside it (D-0077 section 4). */
   readonly revise: ReviseBox;
+}
+
+/**
+ * The way to raise a budget that closes the change path, in place of a press
+ * it would refuse (D-0074 rule 4.1): the revise form's, and the conflict-fix
+ * card's (rondo#417, D-0105), since both start one more attempt.
+ */
+function raiseBlock(
+  wording: Chrome,
+  closed: BudgetClosed,
+  requestMessageId: string,
+  scopeDecisionId: string,
+  iterationId: string,
+) {
+  const { budgets, spent } = closed;
+  const why =
+    closed.test === "laps"
+      ? wording.raiseWhyLaps(budgets.laps)
+      : closed.test === "cost"
+        ? wording.raiseWhyCost(
+            money(spent.readCostUsd + spent.unreadLaps * budgets.cost_reserve_usd),
+            money(budgets.cost_reserve_usd),
+            money(budgets.cost_usd),
+          )
+        : wording.raiseWhyExpiry(localTime(budgets.expires_at_ms).replace("T", " "));
+  return (
+    <div id="raise" class="space-y-2">
+      <p class="note text-meta leading-5 text-muted-foreground">{wording.raiseNeeded(why)}</p>
+      <a
+        href={viewHref(
+          {
+            kind: "scope",
+            messageId: requestMessageId,
+            rounds: null,
+            decisionId: null,
+            plan: null,
+            raise: { decisionId: scopeDecisionId, iterationId },
+          },
+          wording.lang,
+        )}
+        class={`${SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
+      >
+        {wording.raiseLink}
+      </a>
+    </div>
+  );
 }
 
 /** Which budget closes the change path, and the numbers the sentence says it with. */
@@ -1868,6 +1895,7 @@ async function threadActs(
   /** Oldest first, so the index is the try (`lapEvents`'s `tryAt`). */
   laps: readonly LapUnderRequest[],
   threads: Threads,
+  newIterationId: MintIterationId | null = null,
 ) {
   // **Where the work would run, before a scope is drafted** (rondo#383,
   // D-0090 rule 1): a request naming a repository rondo does not work in is
@@ -1955,6 +1983,43 @@ async function threadActs(
                 : null,
           }
         : null;
+  // **The conflict fix, where the strip's pull request conflicts** (rondo#417,
+  // D-0105): offered on the one test the press asks again, under the approval
+  // the lap ran under, and never beside a budget that would refuse it -- the
+  // way to raise that budget is drawn in its place (D-0074 rule 4.1).
+  // Every lap of the result lap's line, as the ledger holds it and the press
+  // reads it (`laneLine`), so a question about a sibling attempt withholds the
+  // card here as it refuses the press there (Codex).
+  const lineOfResult = async (id: string): Promise<readonly string[]> =>
+    (await ports.store.laneLedger()).find((line) => line.lapIds.includes(id))?.lapIds ?? [id];
+  const fixTip =
+    ports.fixesConflicts !== true || newIterationId === null || resultRecord === null
+      ? null
+      : conflictFixBlock(result, {
+            // A gate waiting, or a question about this line (D-0105): a question
+            // about the request as a whole is answered in its own box below.
+            asksWaiting:
+              laps.some((lap) => lap.record.status === "awaiting_human") ||
+              laps.some((lap) => lap.question === "waiting") ||
+              asksOverLine(threads, requestMessageId, await lineOfResult(resultRecord.id)),
+            holding: (await ports.store.laneLedger()).some(
+              (line) => line.releasedBy === null && line.lapIds.includes(resultRecord.id),
+            ),
+            succeeded: laps.some((lap) => lap.record.supersedesIterationId === resultRecord.id),
+          }) !== null
+        ? null
+        : await approvalTip(ports.record, resultRecord.id);
+  const nextFix =
+    fixTip?.kind !== "tip" || resultRecord === null || result === null || newIterationId === null
+      ? null
+      : {
+          record: resultRecord,
+          scopeDecisionId: fixTip.scopeDecisionId,
+          closed: await budgetClosing(ports, fixTip.scopeDecisionId, ports.now()),
+          pullRequest: wording.pullRequest(result.number),
+          base: result.conflictsWith ?? "",
+          successor: newIterationId(),
+        };
   const drafted =
     waitedOn || laps.length > 0 || unheld !== null
       ? null
@@ -2042,37 +2107,94 @@ async function threadActs(
       </form>
     </section>
   );
+  // **A lap below a published one updates that pull request** (rondo#417,
+  // D-0105): its publish pushes onto it and opens none, so the step says which.
+  // Walked up its own line, as `pullRequestUpdated` walks it, never across lines.
+  const byLap = new Map(laps.map((lap) => [lap.record.id, lap.record]));
+  let above = nextPublish?.record.supersedesIterationId ?? null;
+  while (above !== null && publishedReport(threads, above) === null) {
+    above = byLap.get(above)?.supersedesIterationId ?? null;
+  }
+  const openedResult = above === null ? null : resultOf(threads.byId, above);
+  const updating = openedResult === null ? null : wording.pullRequest(openedResult.number);
+  // The conflict fix (rondo#417, D-0105): a press, since the attempt it starts
+  // is counted against the approval and nothing is between it and the act.
+  const fixCard = (fix: NonNullable<typeof nextFix>) => (
+    <section class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3">
+      <h2 class="text-meta leading-5 font-semibold text-wait-ink">{wording.nextStepHeading}</h2>
+      <p class="mt-1 text-body leading-6">
+        {wording.nextStepConflictFix(fix.pullRequest, fix.base)}
+      </p>
+      {fix.closed !== null ? (
+        <div class="mt-3">
+          {raiseBlock(wording, fix.closed, requestMessageId, fix.scopeDecisionId, fix.record.id)}
+        </div>
+      ) : (
+        <form
+          id={`fix-conflict-${fix.record.id}`}
+          method="post"
+          action={`/fix-conflict?lang=${encodeURIComponent(wording.lang)}`}
+          class="mt-3 flex flex-col gap-2"
+        >
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="iteration" value={fix.record.id} />
+          <input type="hidden" name="request" value={requestMessageId} />
+          <input type="hidden" name="scope_decision" value={fix.scopeDecisionId} />
+          <input type="hidden" name="successor" value={fix.successor} />
+          <button
+            type="submit"
+            data-busy={wording.conflictFixBusy}
+            class={`${PRIMARY} h-10 justify-center self-start px-6 text-sm`}
+          >
+            {wording.conflictFixAction}
+          </button>
+          <p
+            data-busy-note=""
+            hidden
+            role="status"
+            class="note text-meta leading-5 text-muted-foreground"
+          >
+            {wording.lapBusyNote}
+          </p>
+        </form>
+      )}
+    </section>
+  );
   const next =
     unheld !== null
       ? unheldCard(unheld)
-      : nextMerge !== null
-        ? mergeCard(nextMerge)
-        : nextPublish !== null
-          ? card(
-              `publish-${nextPublish.record.id}`,
-              viewHref({ kind: "publish", iterationId: nextPublish.record.id }, wording.lang),
-              wording.nextStepPublish,
-              tryName(nextPublish),
-            )
-          : standing === null
-            ? null
-            : standing.kind === "decided" || standing.kind === "own"
-              ? card(
-                  `scope-${requestMessageId}`,
-                  // A drafted approval's screen is reached without its decision,
-                  // which is how that screen also offers a newer draft beside it
-                  // (Codex); the person's own approval is named, since that
-                  // screen finds only rondo's drafts by itself.
-                  scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
-                  wording.nextStepStart,
-                  wording.nextStepStartAction,
-                )
-              : card(
-                  `scope-${requestMessageId}`,
-                  scopeHref(null),
-                  standing.kind === "drafted" ? wording.nextStepDrafted : wording.nextStepScope,
-                  wording.scopeAction,
-                );
+      : nextFix !== null
+        ? fixCard(nextFix)
+        : nextMerge !== null
+          ? mergeCard(nextMerge)
+          : nextPublish !== null
+            ? card(
+                `publish-${nextPublish.record.id}`,
+                viewHref({ kind: "publish", iterationId: nextPublish.record.id }, wording.lang),
+                updating === null
+                  ? wording.nextStepPublish
+                  : wording.nextStepPublishUpdate(updating),
+                updating === null ? tryName(nextPublish) : wording.publishUpdateAction(updating),
+              )
+            : standing === null
+              ? null
+              : standing.kind === "decided" || standing.kind === "own"
+                ? card(
+                    `scope-${requestMessageId}`,
+                    // A drafted approval's screen is reached without its decision,
+                    // which is how that screen also offers a newer draft beside it
+                    // (Codex); the person's own approval is named, since that
+                    // screen finds only rondo's drafts by itself.
+                    scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
+                    wording.nextStepStart,
+                    wording.nextStepStartAction,
+                  )
+                : card(
+                    `scope-${requestMessageId}`,
+                    scopeHref(null),
+                    standing.kind === "drafted" ? wording.nextStepDrafted : wording.nextStepScope,
+                    wording.scopeAction,
+                  );
   const others = publishable.filter((lap) => lap !== nextPublish);
   // A repository added from the page whose build rondo could not tell: said
   // where the work is, since it bounds what the worker can check (D-0090).
@@ -2083,6 +2205,7 @@ async function threadActs(
     unbuilt.length === 0 && others.length === 0 && (standing !== null || unheld !== null);
   return {
     next,
+    fixOffered: nextFix !== null && nextFix.closed === null,
     acts: empty ? null : (
       <p class="thread-acts">
         {unbuilt.map((repo) => (
@@ -2777,6 +2900,20 @@ export async function operatorPage(
     return lap === null ? null : resultOf(threads.byId, lap.id);
   })();
   const endedAtMs = selectedResult?.merged?.atMs ?? selectedResult?.closedAtMs ?? null;
+  // **A later attempt of a request whose pull request conflicts is its fix**
+  // (rondo#417, D-0105): the result stays the approved lap's until the fix is
+  // approved, so the band says the fix is under way rather than asking the
+  // person to resolve it by hand over the top of it.
+  const fixRunning = (() => {
+    const lap = resultLap(selectedLaps.map((each) => each.record));
+    return (
+      lap !== null &&
+      selectedResult?.checks.kind === "conflict" &&
+      selectedLaps.some(
+        (each) => each.record.createdAtMs > lap.createdAtMs && !isTerminal(each.record.status),
+      )
+    );
+  })();
   const governed =
     governedLap === null || selectedRoot === null
       ? null
@@ -3103,7 +3240,15 @@ export async function operatorPage(
   const acts =
     selectedRoot === null
       ? null
-      : await threadActs(wording, ports, token, selectedRoot, selectedLaps, threads);
+      : await threadActs(
+          wording,
+          ports,
+          token,
+          selectedRoot,
+          selectedLaps,
+          threads,
+          newIterationId,
+        );
   const actsMarkup = acts?.acts == null ? null : ((await acts.acts.toString()) ?? null);
   const nextMarkup = acts?.next == null ? null : ((await acts.next.toString()) ?? null);
   const centreContent = noSuchThread
@@ -3190,7 +3335,12 @@ export async function operatorPage(
               result:
                 resultLap(selectedLaps.map((each) => each.record)) === null
                   ? null
-                  : ResultLine({ wording, result: selectedResult }),
+                  : ResultLine({
+                      wording,
+                      result: selectedResult,
+                      conflictFix:
+                        acts?.fixOffered === true ? "offered" : fixRunning ? "running" : null,
+                    }),
               items: folds(wording, threadItems, lastLookedAbove),
               foldOpen: wording.foldOpen,
               lastLookedAbove,

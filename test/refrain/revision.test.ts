@@ -390,11 +390,22 @@ test("a take-in is carried as given and its section closes the prompt", () => {
   expect(plan.prompt).toContain(`'rondo/base/run-y' holds it`);
   expect(plan.prompt).toContain("'src/a.ts', 'docs/'");
   expect(plan.prompt).toContain(`${"c".repeat(40)} is an ancestor of this lap's last commit`);
+  // D-0105: the one way in the fence admits (cadenza D-0042), spelled as it runs.
+  expect(plan.prompt).toContain(`git merge --no-edit ${"c".repeat(40)}`);
+  expect(plan.prompt).not.toContain("by rebase");
   expect(/^[\x20-\x7e\n]*$/.test(plan.prompt)).toBe(true);
   // rondo#417's cause names no paths and says why instead.
   expect(takeInSection({ ...takeIn, paths: [], cause: "conflict" })).toContain(
     "The pull request this line opened conflicts with it.",
   );
+  // rondo#417 (D-0105): the conflict fix is a press with no words of the person's.
+  const fix = {
+    plan: revised({ instruction: null, takeIn: { ...takeIn, paths: [], cause: "conflict" } }),
+  };
+  expect(fix.plan.prompt).toContain("--- The pull request conflicts with its base ---");
+  expect(fix.plan.prompt).not.toContain("Revision requested at the gate");
+  expect(fix.plan.prompt).toContain("Change nothing else");
+  expect(/^[\x20-\x7e\n]*$/.test(fix.plan.prompt)).toBe(true);
   // No take-in, no section: the prompt is exactly what it was.
   expect(revised().prompt).not.toContain("Bring the default branch in first");
 });

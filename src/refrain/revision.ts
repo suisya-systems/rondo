@@ -75,8 +75,14 @@ export interface RevisionRequest {
    * refusal that depends on it can be made before the gate is touched.
    */
   readonly iterationId: string;
-  /** What the person asked for, byte for byte as they wrote it. */
-  readonly instruction: string;
+  /**
+   * What the person asked for, byte for byte as they wrote it -- or null for
+   * rondo#417's conflict fix (D-0105), which is a press with no words: the
+   * person approved this work, it was published, and its pull request then
+   * conflicted. rondo writes no words into the person's place (D-0009); the
+   * prompt says what was pressed and the take-in section says what to do.
+   */
+  readonly instruction: string | null;
   /**
    * What this lap must bring in first, or null (D-0098 rule 2).
    *
@@ -185,15 +191,28 @@ export function revisionPlan(input: RevisionRequest): PlanOutcome {
  * reaches continuo's command line and a cp932 console on the Windows cell.
  */
 function revisionPrompt(plan: AdmittedPlan, input: RevisionRequest): string {
+  const asked =
+    input.instruction === null
+      ? [
+          "--- The pull request conflicts with its base ---",
+          "",
+          `A previous lap (run '${plan.runId}', iteration '${input.predecessor.id}') did this work.` +
+            " A person approved it and it was published as a pull request, which now conflicts" +
+            " with the branch it merges into. The person asked rondo to settle the conflict." +
+            " Change nothing else: the work itself was already approved.",
+        ]
+      : [
+          "--- Revision requested at the gate ---",
+          "",
+          `A previous lap (run '${plan.runId}', iteration '${input.predecessor.id}') did this work and` +
+            " stopped at a gate. A person read it and asked for a change:",
+          "",
+          input.instruction,
+        ];
   return [
     plan.prompt,
     "",
-    "--- Revision requested at the gate ---",
-    "",
-    `A previous lap (run '${plan.runId}', iteration '${input.predecessor.id}') did this work and` +
-      " stopped at a gate. A person read it and asked for a change:",
-    "",
-    input.instruction,
+    ...asked,
     "",
     `That lap's commits are already on '${plan.topicBranch}', which is the branch this` +
       " workspace was cut from. Continue from them rather than starting the request over.",
@@ -211,7 +230,11 @@ function revisionPrompt(plan: AdmittedPlan, input: RevisionRequest): string {
  * (the lap cannot fetch; rondo already did, D-0100), why, what to do in which
  * order, and the test the gate will apply -- ancestry, so a change re-applied
  * by hand fails it (D-0098 section 3). A conflict is the worker's to settle and
- * never a question (rule 2.2). ASCII only (`D-0004`).
+ * never a question (rule 2.2). **A merge and only a merge** (D-0105): the fence
+ * admits `git merge --no-edit` and no rebase, reset or abort (cadenza D-0042),
+ * so the one way in is spelled out, and so is what a worker that cannot settle
+ * it does -- the gate's ancestry finding is then what the person reads. ASCII
+ * only (`D-0004`).
  */
 export function takeInSection(takeIn: TakeIn): string {
   const why =
@@ -224,9 +247,13 @@ export function takeInSection(takeIn: TakeIn): string {
     `The default branch '${takeIn.remoteBranch}' has moved to commit ${takeIn.commit}. The local` +
       ` branch '${takeIn.branch}' holds it. ${why}`,
     "",
-    `Before anything else, bring ${takeIn.commit} into this branch, by merge or by rebase, as` +
-      " you choose. Settle any conflict inside this lap yourself; do not ask about it. Only then" +
-      " make the change asked above.",
+    `Before anything else, bring it in with: git merge --no-edit ${takeIn.commit}` +
+      " -- a merge is the one way in: rebase, reset and cherry-pick are not open to this lap," +
+      " and neither is git merge --abort. Settle any conflict inside this lap yourself and" +
+      " commit the merge; do not ask about it. Only then make the change asked above.",
+    "",
+    "If you cannot settle it, leave the merge uncommitted, change nothing else, and say in" +
+      " your report which files conflict and why you could not settle them.",
     "",
     `rondo checks that ${takeIn.commit} is an ancestor of this lap's last commit. Re-applying the` +
       " change by hand does not pass that check.",

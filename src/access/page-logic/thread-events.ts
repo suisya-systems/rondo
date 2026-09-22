@@ -255,7 +255,7 @@ export function lapEvents(
     events.push({
       id: `${record.id}:published`,
       kind: "other",
-      said: said(wording.evPublished),
+      said: said(result.pushedOnto ? wording.evPushedOnto : wording.evPublished),
       at: at(result.atMs),
       atMs: result.atMs,
       tryAt,

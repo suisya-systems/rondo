@@ -9,6 +9,7 @@
  * kept here.
  */
 import { expect, test } from "vitest";
+import { pullRequestUpdated } from "../../../src/access/cli.js";
 import { reportToRequest } from "../../../src/access/conductor.js";
 import { basisWord } from "../../../src/access/page/vocabulary.js";
 import { resultOf } from "../../../src/access/page-logic/result.js";
@@ -21,6 +22,7 @@ import {
   openGate,
   openRequest,
   operatorPage,
+  planFor,
   portsOver,
   recordAnswer,
   reserve,
@@ -552,4 +554,211 @@ test("a lap reads only its own lines, and a branch pushed back to its head reads
   );
   // Back on its own head: not moved, and the red on the other head is not its.
   expect(back).toMatchObject({ moved: null, checks: { kind: "green" }, checksCommit: "aaa" });
+});
+
+// --- rondo#417 (D-0105): rondo offers to settle the conflict ----------------
+
+/** A page whose host can start a conflict fix, the lap admitted under `dec-1`. */
+const fixing = async (world: ReturnType<typeof fresh>, lang: "en" | "ja" = "ja") =>
+  await operatorPage(
+    { ...portsOver(world, "ada", null, lang, "dec-1"), mergeable: true, fixesConflicts: true },
+    "t",
+    view,
+    chromeFor(lang),
+    null,
+    null,
+    () => "i-fix",
+  );
+
+async function conflicting() {
+  const world = await approved();
+  await published(world);
+  await reportToRequest(
+    threadOf(world),
+    "i-r",
+    { kind: "conflict", pullRequestUrl: PR, head: "abc1234", base: "main", baseCommit: "b1" },
+    7_000,
+  );
+  return world;
+}
+
+test("a conflicting pull request is offered rondo's fix at the top, as a press under the lap's approval", async () => {
+  const world = await conflicting();
+  const japanese = await fixing(world);
+  expect(japanese).toContain('action="/fix-conflict?lang=ja"');
+  expect(japanese).toContain('name="iteration" value="i-r"');
+  expect(japanese).toContain('name="scope_decision" value="dec-1"');
+  expect(japanese).toContain('name="successor" value="i-fix"');
+  expect(japanese).toContain("rondo に競合を解消してもらう");
+  expect(japanese).toContain("#372 は main と競合していて、チェックが動きません。");
+  // The band names both ways while the press is there (D-0106: the press is above it).
+  expect(head(japanese)).toContain("すぐ下の「次にやること」のボタンで rondo に解消させるか");
+  expect(japanese.indexOf("/fix-conflict?")).toBeLessThan(japanese.indexOf('class="thread-acts'));
+  const english = await fixing(world, "en");
+  expect(english).toContain("Have rondo resolve the conflict");
+  // No port, no approval, or no conflict: no press, and the band says the old way.
+  const bare = await merging(world);
+  expect(bare).not.toContain("/fix-conflict?");
+  expect(head(bare)).toContain("push してください");
+  expect(
+    await operatorPage(
+      { ...portsOver(world, "ada", null, "ja"), fixesConflicts: true },
+      "t",
+      view,
+      chromeFor("ja"),
+      null,
+      null,
+      () => "i-fix",
+    ),
+  ).not.toContain("/fix-conflict?");
+  const green = await approved();
+  await published(green);
+  await checked(green, { kind: "green", counted: 2, skipped: 0 });
+  expect(await fixing(green)).not.toContain("/fix-conflict?");
+});
+
+test("while the fix's attempt runs, no press is drawn and the band says rondo is settling it", async () => {
+  const world = await conflicting();
+  const succeeded = await world.store.reserve({
+    numbers: null,
+    id: "i-fix",
+    request: "#291 の文言を分けて",
+    plan: planFor("i-fix"),
+    spend: null,
+    scopeSpend: null,
+    claim: null,
+    nowMs: 8_000,
+    supersedesIterationId: "i-r",
+    requestMessageId: "req-r",
+    runId: "rondo-i-fix",
+    topicBranch: "rondo/i-fix",
+    workspace: "/srv/work/i-fix",
+  });
+  expect(succeeded.kind).toBe("reserved");
+  const japanese = await fixing(world);
+  expect(japanese).not.toContain("/fix-conflict?");
+  expect(head(japanese)).toContain("rondo が main を取り込む新しい回で、競合を解消しています。");
+  expect(head(japanese)).not.toContain("push してください");
+});
+
+test("a fix's publish names the open pull request and its branch, up the line, and opens nothing", async () => {
+  const world = await conflicting();
+  const fixPlan = (id: string) => ({
+    ...planFor(id),
+    take_in: {
+      commit: "c".repeat(40),
+      branch: `rondo/base/rondo-${id}`,
+      remote_branch: "main",
+      paths: [],
+      cause: "conflict",
+    },
+  });
+  for (const [id, above] of [
+    ["i-fix", "i-r"],
+    ["i-fix2", "i-fix"],
+  ] as const) {
+    const reserved = await world.store.reserve({
+      numbers: null,
+      id,
+      request: "#291 の文言を分けて",
+      plan: fixPlan(id),
+      spend: null,
+      scopeSpend: null,
+      claim: null,
+      nowMs: 8_000,
+      supersedesIterationId: above,
+      requestMessageId: "req-r",
+      runId: `rondo-${id}`,
+      topicBranch: `rondo/${id}`,
+      workspace: `/srv/work/${id}`,
+    });
+    expect(reserved.kind).toBe("reserved");
+  }
+  const read = async (id: string) => {
+    const row = await world.store.read(id);
+    if (row.kind !== "read") throw new Error(id);
+    return await pullRequestUpdated(row.record, world.store, world.record);
+  };
+  // The first fix goes onto the branch the lap opened the pull request from.
+  expect(await read("i-fix")).toEqual({ url: PR, onto: "rondo/i-r" });
+  // A fix of that fix, once it is published onto it, goes onto the same branch.
+  await reportToRequest(
+    threadOf(world),
+    "i-fix",
+    { kind: "published", pullRequestUrl: PR, onto: "rondo/i-r" },
+    9_000,
+  );
+  expect(await read("i-fix2")).toEqual({ url: PR, onto: "rondo/i-r" });
+  // A lap that is below no published one opens its own, as before.
+  expect(await read("i-r")).toBeNull();
+  // A fix that took the base in and was then revised hands its pull request on:
+  // the revision takes nothing in, and still goes onto the same branch (Codex round 1).
+  const revisedFix = await world.store.reserve({
+    numbers: null,
+    id: "i-fix3",
+    request: "#291 の文言を分けて",
+    plan: planFor("i-fix3"),
+    spend: null,
+    scopeSpend: null,
+    claim: null,
+    nowMs: 9_500,
+    supersedesIterationId: "i-fix2",
+    requestMessageId: "req-r",
+    runId: "rondo-i-fix3",
+    topicBranch: "rondo/i-fix3",
+    workspace: "/srv/work/i-fix3",
+  });
+  expect(revisedFix.kind).toBe("reserved");
+  expect(await read("i-fix3")).toEqual({ url: PR, onto: "rondo/i-r" });
+  // A pull request merged since is not pushed onto.
+  await reportToRequest(
+    threadOf(world),
+    "i-fix",
+    { kind: "merged", pullRequestUrl: PR, into: "main", method: "squash", mergeCommit: "d1" },
+    9_800,
+  );
+  expect(await read("i-fix3")).toMatchObject({
+    refusal: expect.stringContaining("merged or closed"),
+  });
+  // And the result is the fix's once it is published: the same pull request.
+  const said = await world.record.threadMessages();
+  if (said.kind !== "read") throw new Error(said.reason);
+  const byId = threadsOf(said.messages, new Set(), new Map()).byId;
+  expect(resultOf(byId, "i-fix")?.url).toBe(PR);
+});
+
+test("D-0105: a question about the request leaves the fix offered; one about this line withholds it", async () => {
+  const world = await conflicting();
+  const ask = async (messageId: string, bases: { form: string; [key: string]: string }[]) =>
+    expect(
+      await world.record.recordThreadMessage({
+        messageId,
+        body: "Which one did you mean?",
+        authorKind: "drafter",
+        authorId: "the drafter",
+        inReplyTo: "req-r",
+        atMs: 8_000,
+        bases,
+        asks: true,
+      }),
+    ).toMatchObject({ kind: "recorded" });
+  // The drafter's question about the request: answered in its own box, and the
+  // fix is still the next step, above it (D-0106 rule 4 as D-0105 reads it).
+  await ask("ask-request", [{ form: "message", messageId: "req-r" }]);
+  const offered = await fixing(world);
+  expect(offered).toContain('action="/fix-conflict?lang=ja"');
+  // A question about this line's own lap withholds it, as the scope's verdict would.
+  await ask("ask-line", [{ form: "iteration", iterationId: "i-r" }]);
+  expect(await fixing(world)).not.toContain("/fix-conflict?");
+});
+
+test("D-0105: the thread's conflict line says rondo can resolve it, and the update's note opens nothing", async () => {
+  const world = await conflicting();
+  const said = await world.record.threadMessages();
+  if (said.kind !== "read") throw new Error(said.reason);
+  const conflict = said.messages.find((one) => one.messageId.startsWith("report-conflict-i-r-"));
+  expect(conflict?.body).toContain("rondo can resolve it in one more attempt");
+  expect(conflict?.body).not.toContain("does not resolve");
+  expect(EN.publishNoteUpdate).toContain("opens no pull request");
+  expect(chromeFor("ja").publishNoteUpdate).toContain("プルリクエストは作らず");
 });

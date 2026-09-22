@@ -886,6 +886,38 @@ export interface Revised {
 export type ReviseFromWeb = (input: ReviseInput) => Promise<Revised>;
 
 /**
+ * What one *resolve the conflict* press names (rondo#417, D-0105): the
+ * approved lap whose pull request conflicts, the attempt minted at render,
+ * and the approval the lap ran under. No words: the press is the ask.
+ */
+export interface ConflictFixInput {
+  readonly iterationId: string;
+  readonly successorId: string;
+  readonly scopeDecisionId: string;
+}
+
+/** Why a conflict-fix press started nothing, as the wording key the page says it in. */
+export type ConflictFixRefusal =
+  | "conflictFixRefusedGone"
+  | "conflictFixRefusedNotItsScope"
+  | "conflictFixRefusedForked"
+  | "conflictFixRefusedNoContinuo"
+  | "conflictFixRefusedNotSetUp"
+  | "conflictFixRefusedOutside"
+  | "conflictFixRefusedNotStarted";
+
+/** What one conflict-fix press came to; `test` as on {@link Revised}. */
+export interface ConflictFixed {
+  readonly ok: boolean;
+  readonly note: string;
+  readonly why?: ConflictFixRefusal;
+  readonly test?: string;
+}
+
+/** Start the attempt that settles a published pull request's conflict. */
+export type ConflictFixFromWeb = (input: ConflictFixInput) => Promise<ConflictFixed>;
+
+/**
  * The fourth thing this surface may write (D-0059 section 5a, the rondo#233 S4
  * row): a gate answered with what to change, and the second lap it starts under
  * the approval the first was admitted under (D-0070).
@@ -900,9 +932,30 @@ export type ReviseFromWeb = (input: ReviseInput) => Promise<Revised>;
  */
 export class RevisePort {
   readonly #revise: ReviseFromWeb;
+  readonly #fixConflict: ConflictFixFromWeb | null;
 
-  constructor(revise: ReviseFromWeb) {
+  /**
+   * `fixConflict` rides on this capability (rondo#417, D-0105): the attempt it
+   * starts is a revise of an approved lap, counted against the same approval,
+   * and the holder that may start one may start the other.
+   */
+  constructor(revise: ReviseFromWeb, fixConflict: ConflictFixFromWeb | null = null) {
     this.#revise = revise;
+    this.#fixConflict = fixConflict;
+  }
+
+  /** Whether this port can start a conflict fix, so the page draws the card only then. */
+  get fixesConflicts(): boolean {
+    return this.#fixConflict !== null;
+  }
+
+  /** Start the attempt that settles a pull request's conflict, on one press. */
+  async fixConflict(press: Press, input: ConflictFixInput): Promise<ConflictFixed> {
+    if (!minted.has(press) || this.#fixConflict === null) {
+      return { ok: false, note: "nothing was started: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#fixConflict(input);
   }
 
   /** Answer one gate with a change and start the second lap, on one press. */
@@ -1398,6 +1451,13 @@ const MERGE_ROUTE = "/merge";
 const NOT_NOW_ROUTE = "/not-now";
 
 /**
+ * The route that starts the attempt settling a published pull request's
+ * conflict (rondo#417, D-0105): a press, drawn in the thread only where the
+ * forge says the pull request conflicts and nothing waits on the person.
+ */
+export const FIX_CONFLICT_ROUTE = "/fix-conflict";
+
+/**
  * The routes whose body is numbers and minted ids and never prose, and so take
  * {@link MAX_FORM_BYTES} rather than the send limit.
  */
@@ -1412,6 +1472,7 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   ADD_REPOSITORY_ROUTE,
   MERGE_ROUTE,
   NOT_NOW_ROUTE,
+  FIX_CONFLICT_ROUTE,
 ]);
 
 /** A whole count of at least 0, as a form posts one, or null when it is not one. */
@@ -2508,6 +2569,55 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // was drawn on is read again in the port, and the head it carried must still
   // be the head rondo read green. Success and refusal both land where the
   // button is -- the thread, which then says it merged or still offers it.
+  // **The conflict fix** (rondo#417, D-0105): one more attempt of an approved
+  // lap whose pull request conflicts, under the approval it ran under. Three
+  // ids and none typed, as the revise press's: the lap, the approval, and the
+  // attempt minted when the card was drawn, so a double press is one attempt.
+  app.post(FIX_CONFLICT_ROUTE, async (c) => {
+    const form = await c.req.parseBody();
+    const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+    const request = typeof form["request"] === "string" ? form["request"] : "";
+    if (revise === null || !revise.fixesConflicts) {
+      return conflictFixRefused(c, 403, "conflictFixRefusedNoApprover", request);
+    }
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return conflictFixRefused(c, minting.status, "conflictFixRefusedPress", request);
+    }
+    const successorId = form["successor"];
+    const decision = typeof form["scope_decision"] === "string" ? form["scope_decision"] : "";
+    if (
+      typeof successorId !== "string" ||
+      !PAGE_ITERATION_ID.test(successorId) ||
+      iterationId === "" ||
+      decision === ""
+    ) {
+      return conflictFixRefused(c, 400, "conflictFixRefusedForm", request);
+    }
+    const fixed = await revise.fixConflict(minting.press, {
+      iterationId,
+      successorId,
+      scopeDecisionId: decision,
+    });
+    if (!fixed.ok) {
+      return conflictFixRefused(
+        c,
+        409,
+        fixed.why ?? "conflictFixRefusedNotStarted",
+        request,
+        fixed.test ?? null,
+        fixed.note,
+      );
+    }
+    return c.redirect(
+      viewHref(
+        request === "" ? { kind: "summary" } : { kind: "thread", messageId: request, to: null },
+        tagOf(c),
+      ),
+      303,
+    );
+  });
+
   app.post(MERGE_ROUTE, async (c) => {
     const form = await c.req.parseBody();
     const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
@@ -2692,6 +2802,40 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
    * person may have edited only exists in the browser's own history: a refusal
    * that landed them on the summary would lose words they wrote.
    */
+  /** A conflict-fix press's refusal, with the way back to the thread it was pressed in. */
+  function conflictFixRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why:
+      | "conflictFixRefusedNoApprover"
+      | "conflictFixRefusedPress"
+      | "conflictFixRefusedForm"
+      | ConflictFixRefusal,
+    requestMessageId: string,
+    test: string | null = null,
+    note: string | null = null,
+  ) {
+    const wording = wordingOf(c);
+    const line =
+      why === "conflictFixRefusedOutside"
+        ? wording.conflictFixRefusedOutside(test ?? "")
+        : wording[why];
+    return pressRefused(
+      c,
+      status,
+      wording.conflictFixAction,
+      line,
+      viewHref(
+        requestMessageId === ""
+          ? { kind: "summary" }
+          : { kind: "thread", messageId: requestMessageId, to: null },
+        wording.lang,
+      ),
+      wording.conflictFixBack,
+      note,
+    );
+  }
+
   function reviseRefused(
     c: Context<PageEnv>,
     status: 400 | 403 | 409,

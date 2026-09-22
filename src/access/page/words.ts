@@ -94,6 +94,8 @@ export interface PageWords extends DayWords {
   readonly evClosedUnapproved: string;
   /** The line a publish is said as; the pull request is the link after it. */
   readonly evPublished: string;
+  /** A conflict fix's publish, pushed onto the pull request already open (rondo#417). */
+  readonly evPushedOnto: string;
   /** The line a checks answer is said as: the pull request, and what its checks came to. */
   readonly evChecks: (pullRequest: string, word: string, detail: string | null) => string;
   readonly evStopped: string;
@@ -258,6 +260,7 @@ export interface PageWords extends DayWords {
   readonly resultApproved: string;
   readonly resultNotPublished: string;
   readonly resultPublished: string;
+  readonly resultPushedOnto: string;
   readonly resultChecks: string;
   readonly resultNotMerged: string;
   readonly resultMerged: (into: string, method: string) => string;
@@ -271,6 +274,12 @@ export interface PageWords extends DayWords {
    */
   readonly resultConflict: (pullRequest: string, base: string) => string;
   readonly resultConflictDo: (base: string) => string;
+  /**
+   * rondo#417 (D-0105): the conflict's second line while the card above
+   * offers rondo's fix -- both ways -- and while that fix is running.
+   */
+  readonly resultConflictDoOffered: (base: string) => string;
+  readonly resultConflictFixing: (base: string) => string;
   readonly resultMoved: (from: string, to: string, count: number) => string;
   readonly resultMovedNone: (from: string, to: string) => string;
   readonly resultMovedMore: (count: number) => string;
@@ -385,6 +394,7 @@ export const PAGE_EN: PageWords = Object.freeze({
     "a change request, so no pull request is offered for it.",
   evClosedUnapproved: "The confirmation closed without an approval.",
   evPublished: "Published, and a pull request was opened:",
+  evPushedOnto: "Published onto the pull request already open:",
   evChecks: (pullRequest, word, detail) =>
     `The checks on ${pullRequest}: ${word}${detail === null ? "" : ` (${detail})`}.`,
   evStopped: "Stopped.",
@@ -541,6 +551,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   resultApproved: "Approved",
   resultNotPublished: "Not published yet: no pull request has been opened.",
   resultPublished: "Pull request opened:",
+  resultPushedOnto: "Pushed onto the open pull request:",
   resultChecks: "Checks",
   resultNotMerged: "Merging is yours: once the checks pass, you can merge it from this page.",
   resultMerged: (into, method) =>
@@ -557,6 +568,10 @@ export const PAGE_EN: PageWords = Object.freeze({
     `${pullRequest} conflicts with ${base}, so the forge runs no checks on it.`,
   resultConflictDo: (base) =>
     `Resolve it on the pull request's branch (merge ${base} in, or rebase) and push. rondo reads the checks again once they run.`,
+  resultConflictDoOffered: (base) =>
+    `Press the button under Your next step, below, and rondo resolves it here, or resolve it yourself on the pull request's branch (merge ${base} in, or rebase) and push. Either way rondo reads the checks again once they run.`,
+  resultConflictFixing: (base) =>
+    `rondo is settling the conflict in a new attempt that brings ${base} in. Its result is yours to check here before anything is pushed.`,
   resultMoved: (from, to, count) =>
     `The branch moved after rondo read it: ${from} is now ${to}, with ${String(count)} commit${count === 1 ? "" : "s"} this work did not make:`,
   resultMovedNone: (from, to) =>
@@ -641,6 +656,7 @@ export const PAGE_JA: PageWords = Object.freeze({
     "確認には答えていますが、承認か変更依頼か、記録がありません。そのため、プルリクエストは出しません。",
   evClosedUnapproved: "承認されないまま、確認が閉じました。",
   evPublished: "公開しました。プルリクエストを開きました:",
+  evPushedOnto: "公開しました。開いているプルリクエストに push しました:",
   evChecks: (pullRequest, word, detail) =>
     `${pullRequest} のチェック: ${word}${detail === null ? "" : `（${detail}）`}`,
   evStopped: "取りやめました。",
@@ -786,6 +802,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   resultApproved: "承認済み",
   resultNotPublished: "まだ公開していません（プルリクエストはありません）。",
   resultPublished: "プルリクエストを開きました:",
+  resultPushedOnto: "開いているプルリクエストに push しました:",
   resultChecks: "チェック",
   resultNotMerged: "マージはあなたが行います。チェックが通れば、このページからマージできます。",
   resultMerged: (into, method) =>
@@ -802,6 +819,10 @@ export const PAGE_JA: PageWords = Object.freeze({
     `${pullRequest} は ${base} と競合しているため、チェックが動きません。`,
   resultConflictDo: (base) =>
     `プルリクエストのブランチ側で競合を解消し（${base} を取り込むか、リベースする）、push してください。チェックが動けば rondo が読み直します。`,
+  resultConflictDoOffered: (base) =>
+    `すぐ下の「次にやること」のボタンで rondo に解消させるか、プルリクエストのブランチ側で自分で解消して（${base} を取り込むか、リベースする）push してください。どちらでも、チェックが動けば rondo が読み直します。`,
+  resultConflictFixing: (base) =>
+    `rondo が ${base} を取り込む新しい回で、競合を解消しています。その結果は、push の前にここで確認してもらいます。`,
   resultMoved: (from, to, count) =>
     `rondo が読んだあとにブランチが進みました。${from} → ${to} で、この作業のものではないコミットが ${String(count)} 件:`,
   resultMovedNone: (from, to) =>

@@ -36,6 +36,7 @@ try {
     plan: await import(dist("refrain/plan.js")),
     allocator: await import(dist("refrain/allocator.js")),
     cli: await import(dist("access/cli.js")),
+    conductor: await import(dist("access/conductor.js")),
     scope: await import(dist("access/scope.js")),
     drafterHost: await import(dist("access/drafter-host.js")),
     storePlan: await import(dist("store/plan.js")),
@@ -132,8 +133,8 @@ const refuse = (line) => {
 };
 
 /** The plan the seeded laps ran on, admitted under one id: what the scope screen offers. */
-function planDocument(id) {
-  const planned = modules.plan.runPlan(PLAN);
+function planDocument(id, overrides = {}) {
+  const planned = modules.plan.runPlan({ ...PLAN, ...overrides });
   if (planned.kind !== "planned") {
     refuse(`the preview plan is not valid: ${planned.reason}`);
   }
@@ -721,6 +722,229 @@ const refusingLapId = await publishableLap("lap-preview-0006", true, false, 5 * 
 // describes it, so the only press offered is the one that overrules it.
 const staleLapId = await publishableLap("lap-preview-0007", false, true, 3 * HOUR);
 
+// Seeded before the drafter's epoch below, so a preview run where a real
+// claude is installed does not draft replies to them (the three are about the
+// page's conflict fix, not about what a drafter would say).
+// --- rondo#417 (D-0105): a published pull request that conflicts ------------
+//
+// Three requests, one per state of the conflict fix, each with one approved
+// lap admitted under an approval and published as pull request #417:
+//  - request-preview-0005: the forge says it conflicts, and the page offers
+//    rondo's fix as the next step;
+//  - request-preview-0006: the fix's attempt is running, so no press;
+//  - request-preview-0007: the fix is approved, and its publish updates #417
+//    rather than opening a pull request (the publish screen is real: it reads
+//    a git workspace, as the ones above do).
+const CONFLICT_PR = `https://github.com/${PREVIEW_REPO}/pull/417`;
+// The requests first: a scope over a request nobody made is refused (D-0066 rule 1.2.1).
+for (const requestId of ["request-preview-0005", "request-preview-0006", "request-preview-0007"]) {
+  await say({
+    messageId: requestId,
+    body:
+      "Keep the cost line honest: when a lap's cost is not read yet, say so on the line instead " +
+      "of adding a guess into the sum.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: now - 5 * HOUR,
+    bases: [],
+    asks: false,
+  });
+}
+const conflictScopeId = "scope-preview-0005";
+const conflictScope = await record.recordScope({
+  scopeId: conflictScopeId,
+  payload: modules.records.scopePayloadWithDefaults({
+    requests: ["request-preview-0005", "request-preview-0006", "request-preview-0007"],
+    workspaces: [{ repository, workspace_root: workspaceRoot }],
+    agent_types: [drafted.kind === "drafted" ? drafted.agentTypeDigest : ""],
+    budgets: {
+      laps: 6,
+      review_rounds: 3,
+      cost_usd: 50,
+      cost_reserve_usd: 5,
+      expires_at_ms: now + 24 * HOUR,
+    },
+    severity_threshold: "major",
+    outward_acts: [],
+    irreversible_additions: [],
+  }),
+  supersedesScopeId: null,
+  authorKind: "operator",
+  authorId: "ada",
+  bases: [],
+  createdAtMs: now - 6 * HOUR,
+  agentTypeRecords: [],
+});
+if (conflictScope.kind !== "recorded") {
+  refuse(`the conflict preview's scope did not record: ${JSON.stringify(conflictScope)}`);
+}
+const conflictScopeRead = await record.readScope(conflictScopeId);
+if (conflictScopeRead.kind !== "read") {
+  refuse(`the conflict preview's scope will not read back: ${JSON.stringify(conflictScopeRead)}`);
+}
+const conflictDecisionId = `scope-decision-${conflictScopeId}`;
+const conflictDecided = await record.recordScopeDecision({
+  scopeDecisionId: conflictDecisionId,
+  scopeId: conflictScopeId,
+  scopeDigest: conflictScopeRead.scope.scopeDigest,
+  outcome: "approved",
+  actorId: "ada",
+  recordedBy: "rondo/page",
+  decidedAtMs: now - 6 * HOUR,
+});
+if (conflictDecided.kind !== "recorded") {
+  refuse(`the conflict preview's decision did not record: ${JSON.stringify(conflictDecided)}`);
+}
+
+/**
+ * One lap of a conflict request, walked to `to` ("performing" or "closed" and
+ * approved), with a reading over a real workspace where `workspaceReal`.
+ */
+async function conflictLap(id, requestId, supersedes, overrides, to, startedMsAgo, workspaceReal) {
+  const payload = planDocument(id, overrides);
+  if (workspaceReal) {
+    workOn(payload.workspace, payload.topic_branch, false);
+    if (payload.base_branch !== "main") {
+      execFileSync("git", ["-C", payload.workspace, "branch", payload.base_branch, "main"]);
+    }
+  }
+  const reserved = await store.reserve({
+    id,
+    request: "keep the cost line honest",
+    plan: payload,
+    spend: null,
+    scopeSpend: {
+      scopeDecisionId: conflictDecisionId,
+      proposalId: null,
+      agentTypeDigest: drafted.kind === "drafted" ? drafted.agentTypeDigest : "",
+    },
+    nowMs: now - startedMsAgo,
+    supersedesIterationId: supersedes,
+    claim: laneFor(id, supersedes),
+    numbers: null,
+    requestMessageId: requestId,
+    runId: `rondo-${id}`,
+    topicBranch: payload.topic_branch,
+    workspace: payload.workspace,
+  });
+  if (reserved.kind !== "reserved") {
+    refuse(`the conflict preview lap did not reserve: ${JSON.stringify(reserved)}`);
+  }
+  let reading = checksOf([]);
+  if (workspaceReal) {
+    const read = await modules.forge.inspectLapWork({
+      workspace: payload.workspace,
+      remote: modules.review.READING_REMOTE,
+      baseBranch: payload.base_branch,
+      topicBranch: payload.topic_branch,
+    });
+    if (read.kind !== "read") {
+      refuse(`the conflict preview workspace would not read: ${JSON.stringify(read)}`);
+    }
+    reading = { ...checksOf([]), evidence: modules.review.evidenceOf(read) };
+  }
+  const startedAt = now - startedMsAgo;
+  const lapMs = 16 * MINUTE;
+  const steps = [
+    ["planned", "admitting", {}, undefined, startedAt],
+    ["admitting", "admitted", {}, undefined, startedAt],
+    [
+      "admitted",
+      "performing",
+      {
+        agentTypeDigest: drafted.kind === "drafted" ? drafted.agentTypeDigest : null,
+        modelTier: "standard",
+      },
+      undefined,
+      startedAt,
+    ],
+  ];
+  if (to === "closed") {
+    steps.push(
+      [
+        "performing",
+        "awaiting_human",
+        { gateId: `gate-${id}` },
+        reading,
+        startedAt + lapMs - MINUTE,
+      ],
+      [
+        "awaiting_human",
+        "closed",
+        { gateOutcome: "answered_and_forwarded", lapCostUsd: 0.9, lapDurationMs: lapMs },
+        undefined,
+        startedAt + lapMs,
+      ],
+    );
+  }
+  for (const [from, into, fields, taken, at] of steps) {
+    if (into === "closed") {
+      // What the person pressed, as the gate press records it (D-0092).
+      await store.recordGateAnswer(id, `gate-${id}`, "approve", "ada", at - 1);
+    }
+    const moved = await store.transition(id, from, into, fields, at, taken);
+    if (moved.kind !== "transitioned") {
+      refuse(`the conflict preview lap did not reach '${into}': ${JSON.stringify(moved)}`);
+    }
+  }
+}
+
+/** The fix's plan fields: cut from the lap's branch, taking in main (D-0105). */
+const fixOf = (predecessor, fixId) => ({
+  baseBranch: `rondo/${predecessor}`,
+  pullRequestBaseBranch: "main",
+  prompt:
+    "keep the cost line honest\n\n--- The pull request conflicts with its base ---\n\n" +
+    "The person asked rondo to settle the conflict. Change nothing else.",
+  takeIn: {
+    commit: "e".repeat(40),
+    branch: `rondo/base/rondo-${fixId}`,
+    remoteBranch: "main",
+    paths: [],
+    cause: "conflict",
+  },
+});
+
+const reportPorts = { record, store };
+for (const [requestId, lapId, fixId, state] of [
+  ["request-preview-0005", "lap-preview-0010", null, "offered"],
+  ["request-preview-0006", "lap-preview-0011", "lap-preview-0012", "running"],
+  ["request-preview-0007", "lap-preview-0013", "lap-preview-0014", "fixed"],
+]) {
+  await conflictLap(lapId, requestId, null, {}, "closed", 4 * HOUR, false);
+  await modules.conductor.reportToRequest(
+    reportPorts,
+    lapId,
+    { kind: "published", pullRequestUrl: CONFLICT_PR },
+    now - 3 * HOUR,
+  );
+  await modules.conductor.reportToRequest(
+    reportPorts,
+    lapId,
+    {
+      kind: "conflict",
+      pullRequestUrl: CONFLICT_PR,
+      head: "a".repeat(40),
+      base: "main",
+      baseCommit: "f".repeat(40),
+    },
+    now - 2 * HOUR,
+  );
+  if (fixId !== null) {
+    await conflictLap(
+      fixId,
+      requestId,
+      lapId,
+      fixOf(lapId, fixId),
+      state === "fixed" ? "closed" : "performing",
+      state === "fixed" ? 90 * MINUTE : 10 * MINUTE,
+      state === "fixed",
+    );
+  }
+}
+const fixedLapId = "lap-preview-0014";
+
 // Two requests the model drafter drafted (rondo#238 C2b), written the way a
 // run writes them -- a real host over this store, with a fixed answer standing
 // in for claude. The drafter's epoch is taken first, so everything seeded above
@@ -889,6 +1113,13 @@ process.stdout.write(
     "The drafter runs in this process too: a message sent from the page is drafted",
     "by a real claude, if one is installed here. The seeded rows predate it and are",
     "left alone.",
+    "",
+    "A published pull request that conflicts (rondo#417, D-0105): the offer, the fix",
+    "running, and the approved fix whose publish updates the same pull request:",
+    `also:    ${base}/?thread=request-preview-0005&lang=ja`,
+    `also:    ${base}/?thread=request-preview-0006&lang=ja`,
+    `also:    ${base}/?thread=request-preview-0007&lang=ja`,
+    `also:    ${base}/?publish=${fixedLapId}&lang=ja`,
     "",
     "The scoped start press refuses in words under this preview, because there is no",
     "continuo here to run a lap. That refusal screen is one of the screens worth",

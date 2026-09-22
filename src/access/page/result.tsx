@@ -31,10 +31,16 @@ function short(sha: string): string {
 export function ResultLine({
   wording,
   result,
+  conflictFix = null,
 }: {
   readonly wording: Chrome;
   /** The approved lap's publish, or null where it has not been published. */
   readonly result: LapResult | null;
+  /**
+   * Where rondo's fix of a conflict stands (rondo#417, D-0105): offered by the
+   * card above, or an attempt at it running; null for neither.
+   */
+  readonly conflictFix?: "offered" | "running" | null;
 }) {
   const detail = result === null ? null : wording.checksDetail(result.checks);
   const moved = result?.moved ?? null;
@@ -47,7 +53,7 @@ export function ResultLine({
       ) : (
         <>
           <li className="result-done">
-            {wording.resultPublished}{" "}
+            {result.pushedOnto ? wording.resultPushedOnto : wording.resultPublished}{" "}
             {result.url === null ? (
               <b>{wording.pullRequest(result.number)}</b>
             ) : (
@@ -86,7 +92,11 @@ export function ResultLine({
                 {wording.resultConflict(wording.pullRequest(result.number), result.conflictsWith)}
               </li>
               <li className="result-note result-act">
-                {wording.resultConflictDo(result.conflictsWith)}
+                {conflictFix === "running"
+                  ? wording.resultConflictFixing(result.conflictsWith)
+                  : conflictFix === "offered"
+                    ? wording.resultConflictDoOffered(result.conflictsWith)
+                    : wording.resultConflictDo(result.conflictsWith)}
               </li>
             </>
           )}

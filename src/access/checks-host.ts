@@ -305,6 +305,20 @@ async function scan(ports: ChecksHostPorts): Promise<readonly Due[]> {
       .filter((line) => line.releasedBy === null)
       .flatMap((line) => line.lapIds),
   );
+  // **A pull request a later lap was pushed onto is that lap's to read**
+  // (rondo#417, D-0105): a conflict fix moves the head of the pull request
+  // it fixes, and the lap it fixed would otherwise read its own head as moved
+  // and, at the merge, a merge made outside rondo.
+  const takenOver = (message: { readonly body: string; readonly atMs: number }): boolean => {
+    const url = pullRequestIn(message.body)?.url;
+    return read.messages.some(
+      (later) =>
+        later.messageId.startsWith(PUBLISHED_PREFIX) &&
+        later.atMs > message.atMs &&
+        later.body.includes("were pushed onto") &&
+        pullRequestIn(later.body)?.url === url,
+    );
+  };
   return read.messages.flatMap((message) => {
     if (!message.messageId.startsWith(PUBLISHED_PREFIX)) {
       return [];
@@ -312,7 +326,8 @@ async function scan(ports: ChecksHostPorts): Promise<readonly Due[]> {
     const iterationId = message.messageId.slice(PUBLISHED_PREFIX.length);
     return said.has(`report-merged-${iterationId}`) ||
       said.has(`report-closed-${iterationId}`) ||
-      !holding.has(iterationId)
+      !holding.has(iterationId) ||
+      takenOver(message)
       ? []
       : [{ iterationId, published: message.body, said, shown: resultOf(byId, iterationId) }];
   });

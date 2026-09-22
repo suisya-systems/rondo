@@ -220,6 +220,13 @@ export interface PushRequest {
   readonly workspace: string;
   readonly remote: string;
   readonly topicBranch: string;
+  /**
+   * The remote branch to push onto, when it is not the topic branch's own
+   * name: an open pull request's branch, which a conflict fix brings forward
+   * (rondo#417, D-0105). Still no force: its tip is a descendant of that
+   * branch's, and a rejection is the answer that it moved.
+   */
+  readonly onto?: string;
 }
 
 /**
@@ -240,7 +247,9 @@ export async function pushTopicBranch(request: PushRequest): Promise<CommandOutc
     request.workspace,
     "push",
     request.remote,
-    request.topicBranch,
+    request.onto === undefined
+      ? request.topicBranch
+      : `${request.topicBranch}:refs/heads/${request.onto}`,
   ]);
 }
 

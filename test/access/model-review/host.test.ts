@@ -87,11 +87,13 @@ function planFor(
   id: string,
   criterion: ReviewCriterion | null,
   materialLanguage: RunPlan["materialLanguage"],
+  takeIn: RunPlan["takeIn"] = null,
 ): JsonRecord {
   const validated = runPlan({
     ...PLAN,
     reviewCriterion: criterion,
     materialLanguage,
+    takeIn,
   });
   if (validated.kind !== "planned") throw new Error(validated.reason);
   const allocation = allocate(id, PLAN.workspaceRoot);
@@ -143,6 +145,7 @@ async function world(
     readonly lapCommands?: string | null;
     readonly materialLanguage?: RunPlan["materialLanguage"];
     readonly requestMessageId?: string | null;
+    readonly takeIn?: RunPlan["takeIn"];
   } = {},
 ) {
   const connection = new DatabaseSync(":memory:");
@@ -169,6 +172,7 @@ async function world(
       id,
       options.criterion === undefined ? CRITERION : options.criterion,
       options.materialLanguage === undefined ? "ja" : options.materialLanguage,
+      options.takeIn ?? null,
     ),
     spend: null,
     scopeSpend: null,
@@ -235,7 +239,11 @@ async function world(
     gather: async (request) => {
       calls.gather += 1;
       calls.evidence.push(request.evidence);
-      expect(request.evidence).toEqual(EVIDENCE);
+      expect(request.evidence).toEqual(
+        options.takeIn === undefined || options.takeIn === null
+          ? EVIDENCE
+          : { ...EVIDENCE, baseRef: options.takeIn.branch, baseCommit: options.takeIn.commit },
+      );
       expect(request.ruleFiles).toEqual(["AGENTS.md"]);
       return FACTS;
     },
@@ -467,6 +475,25 @@ test("a row that holds no commands is not reviewed, and says why", async () => {
     expect(model?.unavailableReason).toContain("transcript");
     expect(model?.unavailableReason).toContain(reason);
   }
+});
+
+test("D-0105: a lap that took the default branch in is handed over from the take-in commit to the same tip", async () => {
+  const takeIn = {
+    commit: "d".repeat(40),
+    branch: "rondo/base/rondo-i-0002",
+    remoteBranch: "main",
+    paths: [],
+    cause: "conflict" as const,
+  };
+  const { store, ports, id, calls } = await world({ takeIn });
+
+  await takeModelReading(ports, id);
+
+  expect(calls.gather).toBe(1);
+  expect(calls.run[0]).toContain(`base rondo/base/rondo-i-0002 ${"d".repeat(40)}`);
+  const model = (await store.readingsFor(id)).at(-1);
+  expect(model?.evidence?.baseCommit).toBe("d".repeat(40));
+  expect(model?.evidence?.tipCommit).toBe(EVIDENCE.tipCommit);
 });
 
 test("a plan with no material language hands the prompt over as written", async () => {

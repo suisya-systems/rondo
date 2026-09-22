@@ -31,6 +31,7 @@ import {
   type AddRepositoryInput,
   AddRepositoryPort,
   AnswerPort,
+  type ConflictFixInput,
   createApp,
   type DraftedScopeFormDraft,
   type GoalInput,
@@ -878,6 +879,58 @@ test("(revise) a person's native press answers the gate with a change, once", as
   expect(await closed).toBe(0);
 });
 
+test("(fix-conflict) a person's press starts the fix once; a script, a stale form or no port starts nothing", async () => {
+  const fixed: ConflictFixInput[] = [];
+  const withFix = (fix: boolean) => {
+    const ports = spyPorts([]);
+    return {
+      ...ports,
+      revise: new RevisePort(
+        async () => await Promise.resolve({ ok: true, note: "" }),
+        fix
+          ? async (input) => {
+              fixed.push(input);
+              return await Promise.resolve({ ok: true, note: "" });
+            }
+          : null,
+      ),
+    } as ServedPorts;
+  };
+  const { base, stop, closed } = await served(createApp(withFix(true), TOKEN));
+  const person = pressHeaders(base);
+  const { body: _words, ...form } = reviseForm();
+
+  const pressed = await send(base, "/fix-conflict", "POST", person, form);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
+  expect(fixed).toEqual([
+    { iterationId: "i-0001", successorId: form["successor"], scopeDecisionId: "decision-1" },
+  ]);
+  const script = await send(
+    base,
+    "/fix-conflict",
+    "POST",
+    { ...person, "sec-fetch-user": undefined },
+    form,
+  );
+  expect(script.status).toBe(403);
+  const stale = await send(base, "/fix-conflict", "POST", person, {
+    ...form,
+    successor: "NOT AN ID",
+  });
+  expect(stale.status).toBe(400);
+  expect(fixed).toHaveLength(1);
+  stop.abort();
+  expect(await closed).toBe(0);
+
+  const none = await served(createApp(withFix(false), TOKEN));
+  const refused = await send(none.base, "/fix-conflict", "POST", pressHeaders(none.base), form);
+  expect(refused.status).toBe(403);
+  expect(fixed).toHaveLength(1);
+  none.stop.abort();
+  expect(await none.closed).toBe(0);
+});
+
 test("(revise) every other shape of request to the revise route is refused and writes nothing", async () => {
   const revised: Revised = [];
   const { base, stop, closed } = await served(createApp(spyPorts([], [], [], [], revised), TOKEN));
@@ -1535,6 +1588,8 @@ const WRITE_TABLE = [
   "ALL /merge",
   // *Not now* on a candidate rondo proposed (D-0097 point 4.5 (a)).
   "ALL /not-now",
+  // The conflict fix of a published pull request (rondo#417, D-0105).
+  "ALL /fix-conflict",
   "ALL /*",
   "POST /",
   "POST /request",
@@ -1551,6 +1606,7 @@ const WRITE_TABLE = [
   "POST /add-repository",
   "POST /goal",
   "POST /not-now",
+  "POST /fix-conflict",
   "POST /merge",
 ];
 
@@ -1595,6 +1651,8 @@ const PRESS_ROUTES = [
   // The person's say over what rondo ranks (D-0097 points 2.1 (a) and 4.5 (a)).
   "/goal",
   "/not-now",
+  // One more attempt that settles a published pull request's conflict (rondo#417, D-0105).
+  "/fix-conflict",
 ];
 
 /**

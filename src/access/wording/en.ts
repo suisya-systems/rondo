@@ -671,6 +671,9 @@ explanation you pressed on and then answers the gate.`,
   reviseDraftFinding: (severity, text) => `- [${severity}] ${text}`,
   reviseDraftBases: (bases) => `  where: ${bases}`,
   reviseDraftChange: (words) => `  to change: ${words}`,
+  reviseDraftTakeIn: (finding) =>
+    `- ${finding}\n  to change: bring that commit in with git merge --no-edit, settle any ` +
+    "conflict and commit the merge, before anything else.",
   reviseDrafted:
     "rondo drafted this from what the review found. Edit it as you like: what you send is yours.",
   reviseDrafting:
@@ -1112,4 +1115,51 @@ explanation you pressed on and then answers the gate.`,
     "The forge accepted the merge, and rondo could not see it made -- the repository may merge " +
     "through a queue, or the forge did not answer. Look at the pull request on the forge before " +
     "pressing again.",
+  nextStepConflictFix: (pullRequest, base) =>
+    `${pullRequest} conflicts with ${base}, so the forge runs no checks on it. rondo can bring ` +
+    `${base} into the branch and settle the conflict, changing nothing else; the result comes ` +
+    "back here for you to check before anything is pushed.",
+  conflictFixAction: "Have rondo resolve the conflict",
+  conflictFixBusy: "Starting the fix...",
+  conflictFixBack: "Back to the request",
+  conflictFixRefusedNoApprover:
+    "Nothing was started: rondo on this machine does not yet know who you are, so nothing here " +
+    "can be decided as you.",
+  conflictFixRefusedPress:
+    "Nothing was started: this is done by a person pressing this page's button, and a script " +
+    "cannot.",
+  conflictFixRefusedForm:
+    "Nothing was started: that form did not come from this page. Reload it and press again.",
+  conflictFixRefusedGone:
+    "Nothing was started: the pull request no longer needs this, or a fix is already under way. " +
+    "Reload the page to see where it stands.",
+  conflictFixRefusedNotItsScope:
+    "Nothing was started: the approval this asks to spend is not the one this work ran under. " +
+    "Reload the page and press again.",
+  conflictFixRefusedForked:
+    "Nothing was started: this work's approval was raised twice, separately, and rondo does not " +
+    "pick one of them.",
+  conflictFixRefusedNoContinuo:
+    "Nothing was started: the part of rondo that runs the work will not start.",
+  conflictFixRefusedNotSetUp:
+    "Nothing was started: the fix could not be set up. Whoever maintains rondo on this machine " +
+    "can see what it said.",
+  conflictFixRefusedOutside: (test) =>
+    `Nothing was started and nothing was spent: one more attempt is outside the scope this work ` +
+    `ran under, at the ${test} test. A message in the request's thread says what the choices are.`,
+  conflictFixRefusedNotStarted:
+    "Nothing was started, and nothing here is lost. Whoever maintains rondo on this machine can " +
+    "see what it said.",
+  nextStepPublishUpdate: (pullRequest) =>
+    `The conflict fix is approved. Publishing pushes it onto ${pullRequest}; the checks run ` +
+    "there again, and nothing is merged.",
+  publishUpdates: (pullRequest, base) =>
+    `Push onto ${pullRequest}, already open against ${base}; no new pull request is opened.`,
+  publishUpdateAction: (pullRequest) => `Update pull request ${pullRequest}`,
+  publishBusyUpdate: "Updating the pull request...",
+  publishPlainUpdate: "Pushes this branch onto the open pull request and closes the run.",
+  publishNoteUpdate:
+    "rondo pushes onto the open pull request and closes the run, as you; it opens no pull " +
+    "request and merges nothing. If any of this has changed since the page was drawn, or the " +
+    "pull request is no longer open, the press stops and says so.",
 } satisfies Chrome);
