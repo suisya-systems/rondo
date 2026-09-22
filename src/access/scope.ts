@@ -142,6 +142,13 @@ export interface ScopeSnapshot {
        * where a caller did not gather it, which a closing act reads as unknown.
        */
       readonly latestTipCommit?: string | null;
+      /**
+       * A lap of this line that was already its closing lap, or null (D-0098
+       * rule 5.5). Read here as well as in `reserve()`, so the verdict refuses
+       * a second closing lap **before** the predecessor's gate is answered.
+       * Absent where a caller did not gather it; the store still refuses.
+       */
+      readonly earlierClosingLap?: string | null;
     }>;
   } | null;
 }
@@ -354,24 +361,28 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
   // D-0098 rule 5.2: a closing lap is the scope's option, after the exit, and
   // only with something left below the threshold for it to fix.
   if (act.closing) {
+    const earlier = readings.earlierClosingLap ?? null;
     const refusal =
-      policy.belowThreshold !== "fix_unread"
-        ? "the scope's below_threshold is 'leave', so no closing lap is allowed (D-0098 rule 5.2)"
-        : round.kind !== "exit"
-          ? `the predecessor '${act.predecessorId}' has findings at or above the threshold, and a ` +
-            "closing lap follows the review exit only (D-0098 rule 5.2)"
-          : round.leftBelowThreshold.length === 0
-            ? `the predecessor '${act.predecessorId}' left no finding below the threshold, so a ` +
-              "closing lap has nothing to fix (D-0098 rule 5.2)"
-            : readings.latestModelReading.evidence === null
-              ? `the predecessor's model reading names no tip commit, so what the reviewer last ` +
-                "read cannot be said (D-0098 rule 5.3)"
-              : readings.latestModelReading.evidence.tipCommit !== readings.latestTipCommit
-                ? `the predecessor's model reading is of commit ` +
-                  `'${readings.latestModelReading.evidence.tipCommit}', and its last gate stood ` +
-                  `at '${String(readings.latestTipCommit ?? "(unknown)")}': the commits between ` +
-                  "were never read, and a closing lap is not read again (D-0098 rule 5.3)"
-                : null;
+      earlier !== null
+        ? `the lap '${earlier}' of this line was already its closing lap, and a scope's ` +
+          "fix_unread allows one closing lap per line (D-0098 rule 5.5)"
+        : policy.belowThreshold !== "fix_unread"
+          ? "the scope's below_threshold is 'leave', so no closing lap is allowed (D-0098 rule 5.2)"
+          : round.kind !== "exit"
+            ? `the predecessor '${act.predecessorId}' has findings at or above the threshold, and a ` +
+              "closing lap follows the review exit only (D-0098 rule 5.2)"
+            : round.leftBelowThreshold.length === 0
+              ? `the predecessor '${act.predecessorId}' left no finding below the threshold, so a ` +
+                "closing lap has nothing to fix (D-0098 rule 5.2)"
+              : readings.latestModelReading.evidence === null
+                ? `the predecessor's model reading names no tip commit, so what the reviewer last ` +
+                  "read cannot be said (D-0098 rule 5.3)"
+                : readings.latestModelReading.evidence.tipCommit !== readings.latestTipCommit
+                  ? `the predecessor's model reading is of commit ` +
+                    `'${readings.latestModelReading.evidence.tipCommit}', and its last gate stood ` +
+                    `at '${String(readings.latestTipCommit ?? "(unknown)")}': the commits between ` +
+                    "were never read, and a closing lap is not read again (D-0098 rule 5.3)"
+                  : null;
     if (refusal !== null) {
       return outside("readings", refusal);
     }
@@ -484,7 +495,8 @@ function unproposedStart(act: ScopeAct): boolean {
 
 /** The store half the gatherer reads, and nothing it could write with. */
 export interface ScopeReadPorts {
-  readonly store: Pick<IterationStore, "read" | "readingsFor">;
+  readonly store: Pick<IterationStore, "read" | "readingsFor"> &
+    Partial<Pick<IterationStore, "closingLapOf">>;
   readonly record: Pick<
     AdvisoryRecord,
     | "readScope"
@@ -578,12 +590,35 @@ export async function gatherScopeSnapshot(
                         )?.evidence?.tipCommit ?? null,
                       // The whole lineage, a branch's sibling laps included (D-0065 4.1).
                       roundsTaken: reviewRoundsAlong(lineage.links),
+                      earlierClosingLap: await earlierClosingLap(
+                        ports,
+                        act,
+                        lineage.links.map((link) => link.id),
+                      ),
                     }
                   : lineage,
             }
           : null,
     }),
   };
+}
+
+/** The first lap of the line that was a closing lap, read only for a closing act (D-0098 rule 5.5). */
+async function earlierClosingLap(
+  ports: ScopeReadPorts,
+  act: ScopeAct,
+  ids: readonly string[],
+): Promise<string | null> {
+  const closingLapOf = ports.store.closingLapOf;
+  if (act.kind !== "redo" || !act.closing || closingLapOf === undefined) {
+    return null;
+  }
+  for (const id of ids) {
+    if ((await closingLapOf(id)) !== null) {
+      return id;
+    }
+  }
+  return null;
 }
 
 /** cadenza's classification of a plan under one admission identity, with its agent type's grants. */

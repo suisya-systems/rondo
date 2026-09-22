@@ -431,6 +431,32 @@ test("D-0098 rule 5.2: a closing redo is inside only under fix_unread, after an 
     test: "readings",
     reason: expect.stringContaining("never read"),
   });
+  // The line already had its closing lap (rule 5.5): refused before the gate
+  // is answered, not only by the store after it.
+  expect(
+    scopeVerdict(
+      CLOSING,
+      snapshot(
+        {
+          predecessor: {
+            ...PREDECESSOR,
+            readings: {
+              kind: "read",
+              latestModelReading: read(["minor"]),
+              roundsTaken: 1,
+              latestTipCommit: "f".repeat(40),
+              earlierClosingLap: "i-close",
+            },
+          },
+        },
+        fix,
+      ),
+    ),
+  ).toMatchObject({
+    kind: "outside",
+    test: "readings",
+    reason: expect.stringContaining("'i-close' of this line was already its closing lap"),
+  });
   // Control: the same exits as an ordinary redo are inside under leave.
   expect(scopeVerdict(REDO, withReading(read(["minor"]), {}))).toEqual(INSIDE);
   // A redo from the closing lap itself: it holds no model reading, so undecidable.

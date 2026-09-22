@@ -1752,7 +1752,10 @@ export async function readRecordFloor(request: {
  * line's reservations. **A number the take-in commit's record already spells
  * is not the lap's** (D-0098 rules 2 and 3.8): a tip that merged the default
  * branch's X adds, since its base, every entry X brought, and those are
- * another line's landed entries, not numbers to renumber.
+ * another line's landed entries, not numbers to renumber. **Nor is one the
+ * base's record already spells**: a changed index row (a status gone to
+ * superseded) or an annotation that repeats a heading is an edit of an
+ * existing entry, whose ID is permanent, not a new number.
  */
 export async function readRecordAdditions(request: {
   readonly repository: string;
@@ -1781,6 +1784,11 @@ export async function readRecordAdditions(request: {
     return { kind: "undetermined", reason: taken.failure };
   }
   const theirs = recordNumbers(taken);
+  const atBase = await textAt(git, request.baseCommit, request.record);
+  if (typeof atBase !== "string") {
+    return { kind: "undetermined", reason: atBase.failure };
+  }
+  const existing = recordNumbers(atBase);
   const atTip = await textAt(git, request.tipCommit, request.record);
   if (typeof atTip !== "string") {
     return { kind: "undetermined", reason: atTip.failure };
@@ -1791,7 +1799,12 @@ export async function readRecordAdditions(request: {
     kind: "read",
     spelled: tipNumbers.headings.filter((number) => tipNumbers.indexRows.includes(number)),
     numbers: [...new Set([...numbers.headings, ...numbers.indexRows])]
-      .filter((number) => !theirs.headings.includes(number) && !theirs.indexRows.includes(number))
+      .filter(
+        (number) =>
+          ![theirs, existing].some(
+            (record) => record.headings.includes(number) || record.indexRows.includes(number),
+          ),
+      )
       .sort((a, b) => a - b),
   };
 }

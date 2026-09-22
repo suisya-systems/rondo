@@ -161,6 +161,34 @@ test(
 );
 
 test(
+  "an edit of an existing entry's index row is not a new number: its ID is permanent",
+  async () => {
+    const { work, baseCommit } = recordWorld();
+    // D-0001 goes to superseded by D-0002: its index row is replaced, so the
+    // diff adds a `| D-0001 |` line that the base already spelled.
+    writeFileSync(
+      join(work, RECORD),
+      record(
+        "| D-0001 | first | superseded by D-0002 |\n" + row("0002", "second"),
+        entry("0001", "first") + entry("0002", "second"),
+      ),
+    );
+    git(work, "commit", "-q", "-am", "supersede");
+    const tipCommit = git(work, "rev-parse", "HEAD");
+    expect(
+      await readRecordAdditions({
+        repository: work,
+        baseCommit,
+        tipCommit,
+        record: RECORD,
+        takenIn: null,
+      }),
+    ).toMatchObject({ kind: "read", numbers: [2] });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
   "a landing on the record is read by numbers and added lines, not by its tree entry",
   async () => {
     const { landing, land } = recordWorld();
