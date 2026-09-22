@@ -135,6 +135,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0097 | rondo proposes which request is worth making: the advisory ranks candidates against a goal the person wrote down, reads its own record as well as the issue list, and brings one recommendation whose open points can be answered in one word; it never starts what it proposes | accepted |
 | D-0098 | Parallel control beyond the lane ledger: an order across repositories released only by a landing, a line that takes over landed paths first takes in the default branch, decision-record numbers reserved so decision entries are written in parallel, a worker's question carried at the lap's end and never answered by silence, and a review stopped by the scope's numbers | accepted |
 | D-0099 | A `git status` that fails is refused by `publish` whatever overrides it: the inspection says which half it could not read, and only unreadable history stays publishable past `--despite-review` | accepted |
+| D-0102 | rondo reads what the forge did to a published pull request, and not only its checks: a conflict is said as why no check runs, a head somebody else pushed is shown with its commits and can be merged by a press that names it, and a merge or a close made on the forge ends the request | accepted |
 
 ---
 
@@ -22315,3 +22316,94 @@ repository test in `test/access/forge.test.ts`:
 - **A history read that starts depending on the index**, so that a corrupt index reads as `history`
   and passes under the override again. The real repository test in `test/access/forge.test.ts`
   would fail on this.
+
+## D-0102 — rondo reads what the forge did to a published pull request, and not only its checks: a conflict is said as why no check runs, a head somebody else pushed is shown with its commits and can be merged by a press that names it, and a merge or a close made on the forge ends the request
+
+**Status:** accepted (2026-09-22, rondo's owner, in the lap request that dispatched rondo#411,
+rondo#412 and rondo#413 together). Supersedes nothing. `D-0095` and `D-0091` gain the annotations
+this entry adds (listed at the end). Refs `D-0095`, `D-0091` rule 1, `D-0064` rule 3.4, rondo#411,
+rondo#412, rondo#413, rondo#417.
+
+**Why an entry is needed.** `D-0095` made rondo read a pull request's checks and stop at the first
+green or red. Lap 12 (2026-09-22) found three things that happened after that stop and that the page
+never said: pull request #405 conflicted with main, so GitHub ran no checks and the page waited for
+ever; a commit pushed from outside rondo made the merge press refuse with a bare page and no way
+back; and a merge made with `gh` left the request saying *merge the pull request* with its clock
+still counting. Each fix reads something `D-0095` chose not to read, and one of them lets a press
+merge a commit the lap did not push, which `D-0091` rule 1 did not allow.
+
+### What was measured
+
+At rondo `77c41d7`, by reading `src/access/checks-host.ts`, `src/access/merge.ts` and
+`src/access/forge.ts`:
+- `fetchPullRequestChecks` already `GET`s the pull request's own document every pass, to hand it
+  to continuo's `ci observe`. That document carries `state`, `merged_at`, `merged_by`,
+  `mergeable` and `base`. `ci show` answers none of them, and nothing in continuo reads
+  `mergeable` or who merged.
+- `checksHost.scan` dropped a lap from the window at its first green or red answer, so nothing that
+  happened to the pull request afterwards was read.
+- `mergePress` refused `mergeRefusedMoved` both for new commits and for a retargeted base, and the
+  refusal page said to reload, which redrew the same press.
+
+### Decision
+
+1. **The reading ends with the pull request, and not with its checks.** The host keeps reading a
+   published lap while its line holds, until the forge says the pull request is merged or closed.
+   It reads the same pull request document it already fetches, so this adds no request. Because the
+   reading now outlives its first answer, a rerun that flips a head back to an answer it already
+   had (red, green, red) is written again under an id that carries its time. Otherwise the page
+   would keep showing the green and offer a merge on a red head.
+2. **Merged or closed on the forge ends the request on the page.** A merge writes
+   `report-merged-<lap>`, the same id a press's merge writes, naming the base, the merging user
+   where the forge names one, and the merge commit. A close without a merge writes
+   `report-closed-<lap>`. Either one removes the merge press, marks the chain's last step, and
+   stops the governance line's clock at the time rondo saw it. rondo does not reopen anything.
+3. **A conflict is said as the reason no check runs.** `mergeable: false` writes one
+   `report-conflict-<lap>-<head>` line per head, and the result band says that the pull request
+   conflicts with its base and that the person resolves it on the branch and pushes.
+   `mergeable: null` (not worked out yet) is not a conflict. A green or a red on that head that is
+   newer than the conflict line ends it. rondo does not resolve conflicts here; that is rondo#417.
+4. **A head the lap did not push is shown before any check about it.** Where the pull request's
+   head is not the tip the lap's deterministic reading recorded, the host reads the forge's
+   comparison (`GET repos/O/N/compare/FROM...TO`, read-only) and writes
+   `report-moved-<lap>-<head>` with both heads and the commits between them, at most `LIST_LIMIT`
+   of them. Checks on that head are written under ids that name the head, and the band reads only
+   those, so a green on the lap's own head does not count for the new head.
+5. **That head can be merged, by a press that names it.** `D-0091` rule 1 required the head the
+   press names, the head read green and the head the lap pushed to be one commit. Now the third may
+   instead be the head the thread said the pull request moved to. The card and the button say that
+   merging includes commits this work did not make, and give their count. A press refused because
+   the head moved again has the host read again before it answers, and it lands the person back
+   on the thread, which now shows the new head, rather than on a refusal page. A retargeted base
+   gets its own refusal, `mergeRefusedRetargeted`, because nothing rondo reads again would redraw
+   the page for it.
+6. **A press in flight is left alone by the host**, so a merge the press has just made is not
+   written as a merge outside rondo before the press records its own line.
+
+### What it costs
+
+- **There is no *send it back* press for a moved head.** rondo#412 asked for one. Not pressing
+  leaves the pull request as it is, and undoing someone else's push is a git act rondo does not make
+  here. rondo#417 is where rondo starts acting on the branch.
+- **The host keeps asking the forge about a green pull request until it is merged, closed or
+  landed**: three `GET`s a minute for each such lap, where `D-0095` made none after the answer.
+- **A merge made outside rondo counts as the person's last step being done.** rondo does not know
+  whether the person meant it. It says that rondo did not make the merge, and who did.
+
+### Annotations this entry adds
+
+| Entry | What the annotation says | Additive? |
+|---|---|---|
+| `D-0095` | A green or a red no longer ends the reading; the pull request's merge or close does (`D-0102` rule 1) | additive |
+| `D-0091` | Rule 1's three heads may be one head the thread said the pull request moved to, read green there, with the carried commits said on the card (`D-0102` rule 5) | additive |
+
+### What would falsify it
+
+- **A forge whose pull request document stops carrying `mergeable`, `merged_at` or `merged_by`.**
+  `pullRequestFactsOf` then returns null and the page goes back to `D-0095`'s behaviour without
+  saying so; the unit test on the document's shape pins it.
+- **A merge press answered as a merge outside rondo**, because the host read the pull request
+  between the forge's merge and the press's own line. Rule 6 is what prevents it, and the merge
+  tests pin that the lap is held while the press runs.
+- **Rewritten history that the comparison lists as zero commits being common.** The band then says
+  the history was rewritten, and the person has only the two heads to go on.

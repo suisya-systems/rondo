@@ -165,10 +165,11 @@ export function allowanceOf(approval: {
  *   abandoned, or closed and still waiting for the separate publish press, and
  *   a chain that marked those *done* would say a pull request exists when none
  *   does.
- * - *merge* is always `yours`. `merge_default_branch` is not a member of
+ * - *merge* is always `yours` here. `merge_default_branch` is not a member of
  *   {@link SCOPE_OUTWARD_ACTS} and the writer refuses it by name, so no scope
  *   can put rondo on this step. Drawing it as *ahead* would suggest rondo were
- *   going to do it.
+ *   going to do it. The page marks it `done` once the thread says it was
+ *   merged (rondo#413), which is a row this module does not read.
  */
 export function governanceOf(
   record: IterationRecord,

@@ -366,6 +366,59 @@
 }
 
 /*
+ * What the forge did after rondo read it (rondo#411 to #413). A sentence is
+ * not a pill, so the lines that explain leave the pill shape and take the
+ * band's whole width. Amber goes to the conflict alone: nothing moves there
+ * until the person pushes (D-0082 rule 2); a moved head's amber is the press
+ * card's, and a merge or a close made on the forge asks nothing.
+ */
+.result li.result-note,
+.result li.result-moved {
+  flex-basis: 100%;
+  display: block;
+  border: 0;
+  padding: 0;
+  color: var(--color-muted-foreground);
+}
+
+.result-checks-conflict {
+  border-color: var(--color-wait);
+  background: var(--color-wait-wash);
+}
+
+.result-checks-conflict b,
+.result li.result-act {
+  color: var(--color-wait-ink);
+}
+
+.result li.result-moved {
+  color: var(--color-foreground);
+}
+
+.result-commits {
+  margin: 4px 0 0 18px;
+  padding: 0;
+  list-style: disc;
+  font-size: var(--text-meta);
+  color: var(--color-muted-foreground);
+}
+
+.result .result-commits li {
+  display: list-item;
+  border: 0;
+  padding: 0;
+}
+
+.result code {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+}
+
+.result-ended {
+  color: var(--color-muted-foreground);
+}
+
+/*
  * Rule 3's walk: where this request stands among the ones waiting, and the
  * way on. Right-aligned under the governance line, because it is navigation
  * and not a fact about the request.

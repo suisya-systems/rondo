@@ -81,6 +81,7 @@ import { discard, writeDelegationRecord } from "./delegation.js";
 import {
   type ChangedPathsReading,
   type ChangedPathsRequest,
+  type CommitLine,
   inspectLapWork,
   type LandingReading,
   type LandingRequest,
@@ -854,16 +855,76 @@ export type LapEvent =
   /**
    * What the forge said about the published commit's checks (rondo#310).
    *
-   * **Only the three answers that end the reading.** A `pending` or an
+   * **Only the three answers a thread keeps.** A `pending` or an
    * `undetermined` is read again on the next tick and writes nothing, so a
-   * thread never carries a line rondo is about to contradict -- and the three
-   * kinds here are exactly the ones `checksHost` stops on.
+   * thread never carries a line rondo is about to contradict.
+   *
+   * `moved` is a reading of a head the lap did not push (rondo#412): its
+   * answer is named by that head too, so the answers about the lap's own head
+   * do not stand for it.
    */
   | {
       readonly kind: "checks";
       readonly commit: string;
       readonly reading: Extract<ChecksReading, { kind: "green" | "red" | "none" }>;
+      readonly moved?: boolean;
+      /** Said again at this time: a rerun flipped the head back to an answer already said. */
+      readonly retold?: number;
+    }
+  /**
+   * The pull request was merged on the forge, and not by a press on the page
+   * (rondo#413): where it went, and who the forge says merged it.
+   */
+  | {
+      readonly kind: "mergedOutside";
+      readonly pullRequestUrl: string;
+      readonly into: string;
+      readonly by: string | null;
+      readonly mergeCommit: string | null;
+    }
+  /** The pull request was closed on the forge without a merge (rondo#413). */
+  | { readonly kind: "closed"; readonly pullRequestUrl: string }
+  /**
+   * The forge will not merge the pull request as it stands at `head`, so it
+   * runs no checks on it (rondo#411).
+   */
+  | {
+      readonly kind: "conflict";
+      readonly pullRequestUrl: string;
+      readonly head: string;
+      readonly base: string;
+      /** The base commit it conflicts with, where the forge named one. */
+      readonly baseCommit: string | null;
+    }
+  /**
+   * The pull request's head is `to`, and not the `from` the lap pushed and
+   * rondo read (rondo#412): somebody pushed to its branch outside rondo.
+   * `commits` are what `to` carries that `from` does not.
+   */
+  | {
+      readonly kind: "moved";
+      readonly pullRequestUrl: string;
+      readonly from: string;
+      readonly to: string;
+      readonly commits: readonly CommitLine[];
     };
+
+/**
+ * The message a checks answer is written under: one per answer, and per head
+ * where the head is not the one the lap pushed (rondo#412).
+ */
+export function checksAnswerId(
+  iterationId: string,
+  kind: "green" | "red" | "none",
+  commit: string,
+  moved: boolean,
+  retold?: number,
+): string {
+  return (
+    `report-checks-${iterationId}-${kind}${moved ? `-${commit}` : ""}` +
+    (retold === undefined ? "" : `-t${String(retold)}`)
+  );
+}
 
 async function gateIdOf(ports: ConductorPorts, iterationId: string): Promise<string | null> {
   const after = await ports.store.read(iterationId);
@@ -964,12 +1025,45 @@ export async function reportToRequest(
       `Lap '${iterationId}' was merged on a person's press on the page: pull request ` +
       `${event.pullRequestUrl} went into '${event.into}' by ${event.method}` +
       (event.mergeCommit === null ? "." : ` as commit '${event.mergeCommit}'.`);
+  } else if (event.kind === "mergedOutside") {
+    // The same message as a press's merge, so a lap is said merged once
+    // whichever way it went (rondo#413).
+    messageId = `report-merged-${iterationId}`;
+    body =
+      `Lap '${iterationId}' was merged outside rondo: pull request ${event.pullRequestUrl} is ` +
+      `merged into '${event.into}'` +
+      (event.by === null ? "" : ` by '${event.by}'`) +
+      (event.mergeCommit === null ? "" : ` as commit '${event.mergeCommit}'`) +
+      ". It was not merged by a press on the page, and rondo did not merge it.";
+  } else if (event.kind === "closed") {
+    messageId = `report-closed-${iterationId}`;
+    body =
+      `Lap '${iterationId}' ended unmerged: pull request ${event.pullRequestUrl} was closed on ` +
+      "the forge without being merged. rondo did not close it, and it does not reopen one.";
+  } else if (event.kind === "conflict") {
+    messageId = `report-conflict-${iterationId}-${event.head}`;
+    body =
+      `Lap '${iterationId}' conflicts: pull request ${event.pullRequestUrl} conflicts with its ` +
+      `base '${event.base}'` +
+      (event.baseCommit === null ? "" : ` at commit '${event.baseCommit}'`) +
+      ` on commit '${event.head}', so the forge will not merge it as it ` +
+      "stands and runs no checks on it until the conflict is resolved. rondo does not resolve " +
+      "a conflict.";
+  } else if (event.kind === "moved") {
+    messageId = `report-moved-${iterationId}-${event.to}`;
+    body = movedBody(iterationId, event);
   } else {
     // **One message per answer, and the answer is in the id**, so a reading
     // taken again over the same commit writes nothing (the store's
     // `alreadyRecorded`) and a pull request that goes from red to green leaves
     // both lines in the thread rather than one overwriting the other.
-    messageId = `report-checks-${iterationId}-${event.reading.kind}`;
+    messageId = checksAnswerId(
+      iterationId,
+      event.reading.kind,
+      event.commit,
+      event.moved === true,
+      event.retold,
+    );
     body = checksBody(iterationId, event.commit, event.reading);
   }
   const outcome = await thread.record.recordThreadMessage({
@@ -1055,6 +1149,24 @@ function checksBody(
     `The forge reported no check of any kind ${on}, the head of the pull request lap '${iterationId}' published. ` +
     "rondo cannot say whether this work is green. If a check reports later, it says so here."
   );
+}
+
+/**
+ * What moved on a published pull request (rondo#412): both heads, and the
+ * commits the new one carries, one line each and bounded by `LIST_LIMIT`. The
+ * page reads the lines back (`page-logic/result.ts`), so their shape is pinned
+ * by a test.
+ */
+function movedBody(iterationId: string, event: Extract<LapEvent, { kind: "moved" }>): string {
+  const hidden = event.commits.length - LIST_LIMIT;
+  return [
+    `Lap '${iterationId}' moved: pull request ${event.pullRequestUrl} is at commit ` +
+      `'${event.to}', and the head the lap pushed and rondo read is '${event.from}'. ` +
+      `${String(event.commits.length)} commit(s) on it are not the lap's:`,
+    ...event.commits.slice(0, LIST_LIMIT).map((one) => `- '${one.sha}' ${one.subject}`),
+    ...(hidden > 0 ? [`- and ${String(hidden)} more`] : []),
+    "rondo merges the new head only on a person's press that names it.",
+  ].join("\n");
 }
 
 /** A bounded list of names, saying how many it did not name. */

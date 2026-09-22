@@ -1122,6 +1122,7 @@ export type MergeRefusal =
   | "mergeRefusedMerged"
   | "mergeRefusedLanded"
   | "mergeRefusedMoved"
+  | "mergeRefusedRetargeted"
   | "mergeRefusedClosed"
   | "mergeRefusedMethod"
   | "mergeRefusedForge"
@@ -2383,6 +2384,12 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       return mergeRefused(c, 400, "mergeRefusedForm", request);
     }
     const merged = await merge.merge(minting.press, { iterationId, head });
+    // **A head that moved is said on the thread and not on a page of its own**
+    // (rondo#412): the press read the pull request again before answering, so
+    // the thread now says what moved and offers what can be merged instead.
+    if (!merged.ok && merged.why === "mergeRefusedMoved" && request !== "") {
+      return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
+    }
     if (!merged.ok) {
       return mergeRefused(
         c,

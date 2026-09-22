@@ -50,12 +50,18 @@ function stateFor(wording: Chrome, row: RequestRow): string {
       // **What became of it after the approval** (rondo#376): published or
       // not, and the checks' one word, so the list answers without the forge.
       const published = row.published ?? null;
-      return published === null
-        ? wording.rowApproved
-        : wording.rowPublished(
-            wording.pullRequest(published.number),
-            wording.checksWord(published.checks),
-          );
+      if (published === null) {
+        return wording.rowApproved;
+      }
+      const pullRequest = wording.pullRequest(published.number);
+      // What the forge did after rondo read it comes first (rondo#411, #413).
+      return published.merged !== null
+        ? wording.rowMerged(pullRequest)
+        : published.closedAtMs !== null
+          ? wording.rowClosed(pullRequest)
+          : published.conflictsWith !== null
+            ? wording.rowConflict(pullRequest)
+            : wording.rowPublished(pullRequest, wording.checksWord(published.checks));
     }
     case "finished":
       return wording.rowFinished;
