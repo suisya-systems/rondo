@@ -96,7 +96,13 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
     }
     const row = latest.get(repository);
     const payload = row === undefined ? undefined : reads.payloads.get(row.proposalId);
-    if (row === undefined || payload === undefined) {
+    // A reading against a goal the person has since changed is not drawn: its
+    // clause numbers name the old goal's clauses.
+    if (
+      row === undefined ||
+      payload === undefined ||
+      payload.goalId !== current.get(repository)?.goalId
+    ) {
       return { kind: "notRead", repository, goalHref };
     }
     const readSaid = readLine(wording, payload, row, nowMs);
