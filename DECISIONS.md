@@ -22765,7 +22765,7 @@ At rondo `7d4d8d9` and continuo `b7162ae`, by reading:
    and says that rondo read it and did not run it.
 2. **A test run is a command whose output ends in a summary rondo can read**, with ANSI escapes
    stripped: vitest's `Tests  … (N)` line (not `Test Files`), jest's `Tests: … N total`, pytest's
-   `==== … in Ns ====`. The counts are the runner's own: passed; failed (with pytest's errors);
+   `==== … in Ns ====` with or without its rules (`-q`), opening on a count. The counts are the runner's own: passed; failed (with pytest's errors);
    skipped (with todo). A command is not recognised by its name: a name is a guess and carries no
    counts. `ponytail:` another runner reads as rule 3's `none`, and the upgrade is its summary line
    added to the one pattern.

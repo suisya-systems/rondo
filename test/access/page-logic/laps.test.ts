@@ -36,6 +36,19 @@ test("each runner's summary line is read, and vitest's `Test Files` line is not"
     skipped: 0,
   });
   expect(testSummary("===== short test summary info =====")).toBeNull();
+  // pytest -q drops the rules; a line that only ends in a duration is not one.
+  expect(testSummary("1 failed, 3 passed in 0.20s")).toEqual({ passed: 3, failed: 1, skipped: 0 });
+  expect(testSummary("Done in 0.20s")).toBeNull();
+});
+
+test("a later failing quiet pytest run is the one shown, not an earlier passing one", () => {
+  const runs = workerRuns(
+    JSON.stringify([
+      command(5, "pytest", "==== 4 passed in 0.30s ===="),
+      command(9, "pytest -q", "..F.\n1 failed, 3 passed in 0.20s", true),
+    ]),
+  );
+  expect(runs).toMatchObject({ kind: "ran", last: { index: 9, failed: 1 }, earlier: 1 });
 });
 
 test("the last run is shown with how many came before, and its own error flag", () => {

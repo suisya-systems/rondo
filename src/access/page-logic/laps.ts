@@ -193,12 +193,14 @@ export function workerRuns(lapCommands: string | null): WorkerRuns {
 }
 
 // vitest `Tests  1 failed | 1842 passed (1843)`, jest `Tests: 1 failed, 40
-// passed, 41 total`, pytest `==== 1 failed, 40 passed in 1.20s ====`. `Test
-// Files` is vitest's other line and deliberately not matched.
+// passed, 41 total`, pytest `==== 1 failed, 40 passed in 1.20s ====` and its
+// `-q` form without the rules. `Test Files` is vitest's other line and
+// deliberately not matched; pytest's form must open on a count, so a line that
+// merely ends in a duration is not taken for one.
 // ponytail: three runners by their summary line; another runner reads as
 // `none`, and the upgrade is a runner's line added here.
 const SUMMARY_LINE =
-  /^\s*(?:Tests:?\s+\d.*(?:\(\d+\)|\d+ total)|=+ .*\d+ \w+.* in [\d.]+s.*=+)\s*$/;
+  /^\s*(?:Tests:?\s+\d.*(?:\(\d+\)|\d+ total)|(?:=+ )?\d+ (?:passed|failed|errors?|skipped|xfailed|xpassed|deselected|warnings?)\b.* in [\d.]+s\b.*)\s*$/;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ESC opens the colour codes stripped here
 const ANSI = /\u001b\[[0-9;]*m/g;
 
