@@ -1987,16 +1987,11 @@ async function threadActs(
   // D-0105): offered on the one test the press asks again, under the approval
   // the lap ran under, and never beside a budget that would refuse it -- the
   // way to raise that budget is drawn in its place (D-0074 rule 4.1).
-  // The laps of one line, from a lap up to the first (`supersedesIterationId`).
-  const lineUp = (id: string): readonly string[] => {
-    const byId = new Map(laps.map((lap) => [lap.record.id, lap.record]));
-    const ids: string[] = [];
-    for (let at: string | null = id; at !== null && !ids.includes(at); ) {
-      ids.push(at);
-      at = byId.get(at)?.supersedesIterationId ?? null;
-    }
-    return ids;
-  };
+  // Every lap of the result lap's line, as the ledger holds it and the press
+  // reads it (`laneLine`), so a question about a sibling attempt withholds the
+  // card here as it refuses the press there (Codex).
+  const lineOfResult = async (id: string): Promise<readonly string[]> =>
+    (await ports.store.laneLedger()).find((line) => line.lapIds.includes(id))?.lapIds ?? [id];
   const fixTip =
     ports.fixesConflicts !== true || newIterationId === null || resultRecord === null
       ? null
@@ -2006,7 +2001,7 @@ async function threadActs(
             asksWaiting:
               laps.some((lap) => lap.record.status === "awaiting_human") ||
               laps.some((lap) => lap.question === "waiting") ||
-              asksOverLine(threads, requestMessageId, lineUp(resultRecord.id)),
+              asksOverLine(threads, requestMessageId, await lineOfResult(resultRecord.id)),
             holding: (await ports.store.laneLedger()).some(
               (line) => line.releasedBy === null && line.lapIds.includes(resultRecord.id),
             ),
