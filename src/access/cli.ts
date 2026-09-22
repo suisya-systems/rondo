@@ -128,6 +128,7 @@ import {
   inspectTopicBranch,
   type LapWorkInspection,
   type LapWorkRequest,
+  listOpenIssues,
   openPullRequest,
   pushTopicBranch,
   readChangedPaths,
@@ -182,6 +183,7 @@ import {
   heldAgentTypeLines,
   type ScopedAdmission,
 } from "./scope.js";
+import { triageHost } from "./triage-host.js";
 import {
   type AddedRepository,
   type AddRepositoryInput,
@@ -209,6 +211,7 @@ import {
   type ScopeRecorded,
   type Started,
   serveOperatorPage,
+  TriagePort,
 } from "./web-app.js";
 import { type Chrome, chromeFor, EN } from "./wording.js";
 
@@ -1452,6 +1455,32 @@ export async function main(
       now: Date.now,
       log: say,
     });
+    // **What rondo would ask for next** (D-0097), read on the same rescan and
+    // after a goal or a *not now* is kept. The repositories are the ones rondo
+    // works in (`D-0081`): `--repo`, and every repository a setup plan names.
+    const triageRepositories = async (): Promise<readonly string[]> => [
+      ...new Set([
+        ...(parsed.repo === null ? [] : [parsed.repo]),
+        ...(await record.setupPlans()).flatMap((setup) => {
+          const planned = readRunPlan(setup.plan);
+          return planned.kind === "planned" && planned.plan.forgeRepository !== null
+            ? [planned.plan.forgeRepository]
+            : [];
+        }),
+      ]),
+    ];
+    const triage = triageHost({
+      store,
+      record,
+      repositories: triageRepositories,
+      listIssues: listOpenIssues,
+      runDrafter,
+      forgeHost: forgeHost(environment),
+      now: Date.now,
+      mintId: () => newDraftId("triage"),
+      language: selected.tag,
+      log: say,
+    });
     /**
      * **Reaching a person who is not looking at the page** (rondo#311), on the
      * same minute the rescan already runs on.
@@ -1482,6 +1511,7 @@ export async function main(
         drafter.kick();
         reviser.kick();
         checks.kick();
+        triage.kick();
         // **Reaching starts a minute in, and not in the burst above.** The
         // person who has just started rondo is looking at it this second, and
         // what was already waiting when the host was last stopped is on the
@@ -1492,6 +1522,7 @@ export async function main(
           drafter.kick();
           reviser.kick();
           checks.kick();
+          triage.kick();
           // **Order on the tick buys nothing, and nothing here depends on
           // it**: every kick above returns before its own pass finishes, so
           // this reads what is committed when it runs and not what the same
@@ -1684,6 +1715,50 @@ export async function main(
         // **The merge press** (rondo#380, `D-0091`): a person's press per act,
         // on `release`'s condition -- an approver the allowlist accepts -- and
         // through the operator's own forge CLI, as publish is (`D-0010`).
+        // **The goal and *not now* presses** (D-0097 points 2.1 (a) and 4.5
+        // (a)), on `merge`'s condition: both are the person's say over what
+        // rondo ranks, written as rows in rondo's store and nowhere else.
+        triageRepositories,
+        triageWritable: sender !== null && !("refusal" in sender),
+        triage:
+          sender === null || "refusal" in sender
+            ? null
+            : new TriagePort(
+                async (input) => {
+                  // A hand-written post must not keep a goal for a repository
+                  // rondo does not work in: the host would never read it.
+                  if (!(await triageRepositories()).includes(input.repository)) {
+                    return {
+                      ok: false,
+                      note: `rondo does not work in '${input.repository}'`,
+                    };
+                  }
+                  const kept = await record.recordGoal({
+                    goalId: newDraftId("goal"),
+                    repository: input.repository,
+                    clauses: input.clauses,
+                    writtenBy: sender.actorId,
+                    writtenAtMs: Date.now(),
+                  });
+                  if (kept.kind === "recorded") {
+                    triage.kick();
+                  }
+                  return kept.kind === "recorded" ? { ok: true } : { ok: false, note: kept.reason };
+                },
+                async (input) => {
+                  const put = await record.recordTriageDecline({
+                    declineId: newDraftId("not-now"),
+                    proposalId: input.proposalId,
+                    candidate: input.candidate,
+                    declinedBy: sender.actorId,
+                    declinedAtMs: Date.now(),
+                  });
+                  if (put.kind === "recorded") {
+                    triage.kick();
+                  }
+                  return put.kind === "recorded" ? { ok: true } : { ok: false, note: put.reason };
+                },
+              ),
         mergeable: sender !== null && !("refusal" in sender),
         merge:
           sender === null || "refusal" in sender

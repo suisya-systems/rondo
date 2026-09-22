@@ -57,12 +57,14 @@ import {
   type AnswerOutcome as AskAnswer,
   FINDING_SEVERITIES,
   type FindingSeverity,
+  type GoalClause,
   SCOPE_OUTWARD_ACTS,
   type ScopeBudgets,
   type ScopeOutwardAct,
 } from "../store/records.js";
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
 import type { WebPorts } from "./page/contract.js";
+import { postedClauses } from "./page/triage.js";
 import {
   isSwitch,
   LANG_COOKIE,
@@ -621,7 +623,15 @@ export function newIterationId(): string {
  * granted `randomUUID`.
  */
 export function newDraftId(
-  kind: "draft" | "drafted-scope" | "drafter" | "drafter-host" | "forge",
+  kind:
+    | "draft"
+    | "drafted-scope"
+    | "drafter"
+    | "drafter-host"
+    | "forge"
+    | "triage"
+    | "goal"
+    | "not-now",
 ): string {
   return `${kind}-${randomUUID()}`;
 }
@@ -1167,6 +1177,59 @@ export class MergePort {
   }
 }
 
+/** What one goal press keeps (D-0097 point 2.1 (a)). */
+export interface GoalInput {
+  readonly repository: string;
+  readonly clauses: readonly GoalClause[];
+}
+
+/** What one *not now* press puts aside (D-0097 point 4.5 (a)). */
+export interface NotNowInput {
+  readonly proposalId: string;
+  readonly candidate: string;
+}
+
+/** What a triage press did; `note` is rondo's own reason when it did nothing. */
+export type TriageWritten = { readonly ok: true } | { readonly ok: false; readonly note: string };
+
+/**
+ * The ninth thing this surface may write (D-0097): a goal a person kept, and a
+ * *not now* on a candidate rondo proposed. Both are rows in rondo's own store
+ * and nothing outside it (point 6 (a)). One class for the two, because both
+ * are the person's say over what rondo ranks, and neither may be reached by a
+ * holder of any other port.
+ */
+export class TriagePort {
+  readonly #keepGoal: (input: GoalInput) => Promise<TriageWritten>;
+  readonly #notNow: (input: NotNowInput) => Promise<TriageWritten>;
+
+  constructor(
+    keepGoal: (input: GoalInput) => Promise<TriageWritten>,
+    notNow: (input: NotNowInput) => Promise<TriageWritten>,
+  ) {
+    this.#keepGoal = keepGoal;
+    this.#notNow = notNow;
+  }
+
+  /** Keep one goal, on one press. */
+  async keepGoal(press: Press, input: GoalInput): Promise<TriageWritten> {
+    if (!minted.has(press)) {
+      return { ok: false, note: "nothing was kept: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#keepGoal(input);
+  }
+
+  /** Put one candidate aside, on one press. */
+  async notNow(press: Press, input: NotNowInput): Promise<TriageWritten> {
+    if (!minted.has(press)) {
+      return { ok: false, note: "nothing was put aside: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#notNow(input);
+  }
+}
+
 /** The ports the server is handed: the reading half, and the eight writers. */
 export interface ServedPorts extends WebPorts {
   /**
@@ -1207,6 +1270,8 @@ export interface ServedPorts extends WebPorts {
    * allowlist accepts (rondo#380). Absent is null.
    */
   readonly merge?: MergePort | null;
+  /** Null on {@link release}'s condition: a goal and a *not now* are the person's (D-0097). Absent is null. */
+  readonly triage?: TriagePort | null;
 }
 
 /**
@@ -1264,6 +1329,12 @@ const ANSWER_ASK_ROUTE = "/answer-ask";
 const REVISE_ROUTE = "/revise";
 
 /**
+ * The goal a repository's triage is ranked against (D-0097 point 2.1 (a)): a
+ * press, whose body is the person's words and so takes the send limit.
+ */
+const GOAL_ROUTE = "/goal";
+
+/**
  * The routes whose body is a person's words, and so takes the larger limit.
  *
  * Two of them are presses and not sends -- the answer to a waiting ask, and the
@@ -1274,6 +1345,7 @@ const MESSAGE_ROUTES: ReadonlySet<string> = new Set([
   ...SEND_ROUTES.keys(),
   ANSWER_ASK_ROUTE,
   REVISE_ROUTE,
+  GOAL_ROUTE,
 ]);
 
 /**
@@ -1321,6 +1393,9 @@ const ADD_REPOSITORY_ROUTE = "/add-repository";
  */
 const MERGE_ROUTE = "/merge";
 
+/** *Not now* on one candidate rondo proposed (D-0097 point 4.5 (a)): a press. */
+const NOT_NOW_ROUTE = "/not-now";
+
 /**
  * The routes whose body is numbers and minted ids and never prose, and so take
  * {@link MAX_FORM_BYTES} rather than the send limit.
@@ -1335,6 +1410,7 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   RELEASE_ROUTE,
   ADD_REPOSITORY_ROUTE,
   MERGE_ROUTE,
+  NOT_NOW_ROUTE,
 ]);
 
 /** A whole count of at least 0, as a form posts one, or null when it is not one. */
@@ -1561,7 +1637,15 @@ function viewOf(query: URLSearchParams): PageView {
     };
   }
   if (query.get("requests") === "open") {
-    return { kind: "requests" };
+    const take = query.get("take");
+    const candidate = query.get("candidate");
+    return take === null || take === "" || candidate === null || candidate === ""
+      ? { kind: "requests" }
+      : { kind: "requests", take: { proposalId: take, candidate } };
+  }
+  const goal = query.get("goal");
+  if (goal !== null && goal !== "") {
+    return { kind: "goal", repository: goal };
   }
   const publishing = query.get("publish");
   if (publishing !== null && publishing !== "") {
@@ -1619,6 +1703,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     release,
     addRepository,
     merge = null,
+    triage = null,
     ...reading
   } = ports;
   const app = new Hono<PageEnv>();
@@ -2362,6 +2447,61 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
   });
 
+  // **The goal press** (D-0097 point 2.1 (a)): numbered clauses, each with
+  // when it is unmet, kept as a new goal row. Back to the front, where the
+  // triage now reads against it; refused, a page that says why, with the way
+  // back to the goal.
+  app.post(GOAL_ROUTE, async (c) => {
+    const form = await c.req.parseBody();
+    const repository = typeof form["repository"] === "string" ? form["repository"] : "";
+    if (triage === null) {
+      return triageRefused(c, 403, "goalRefusedNoApprover", repository);
+    }
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return triageRefused(c, minting.status, "goalRefusedPress", repository);
+    }
+    const posted = postedClauses(form);
+    if (repository === "" || "refused" in posted) {
+      return triageRefused(
+        c,
+        400,
+        "refused" in posted && posted.refused === "incomplete"
+          ? "goalRowIncomplete"
+          : "goalRefusedEmpty",
+        repository,
+      );
+    }
+    const kept = await triage.keepGoal(minting.press, { repository, clauses: posted.clauses });
+    if (!kept.ok) {
+      return triageRefused(c, 409, "goalRefused", repository, kept.note);
+    }
+    return c.redirect(viewHref({ kind: "requests" }, tagOf(c)), 303);
+  });
+
+  // **The *not now* press** (D-0097 point 4.5 (a)): recorded beside the
+  // proposal, and the next reading withholds that candidate.
+  app.post(NOT_NOW_ROUTE, async (c) => {
+    const form = await c.req.parseBody();
+    const proposalId = typeof form["proposal"] === "string" ? form["proposal"] : "";
+    const candidate = typeof form["candidate"] === "string" ? form["candidate"] : "";
+    if (triage === null) {
+      return triageRefused(c, 403, "triageNotNowRefusedNoApprover", null);
+    }
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return triageRefused(c, minting.status, "triageNotNowRefusedPress", null);
+    }
+    if (proposalId === "" || candidate === "") {
+      return triageRefused(c, 400, "triageNotNowRefused", null);
+    }
+    const put = await triage.notNow(minting.press, { proposalId, candidate });
+    if (!put.ok) {
+      return triageRefused(c, 409, "triageNotNowRefused", null, put.note);
+    }
+    return c.redirect(`${viewHref({ kind: "requests" }, tagOf(c))}#triage-heading`, 303);
+  });
+
   // **The merge press** (rondo#380, `D-0091`): a lap's pull request merged by
   // the operator's own forge CLI, on a person's press. Everything the button
   // was drawn on is read again in the port, and the head it carried must still
@@ -2689,6 +2829,46 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       ),
       wording.releaseBack,
     );
+  }
+
+  /** A goal or *not now* press that wrote nothing: back to the goal, or to the front. */
+  function triageRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why:
+      | "goalRefusedNoApprover"
+      | "goalRefusedPress"
+      | "goalRowIncomplete"
+      | "goalRefusedEmpty"
+      | "goalRefused"
+      | "triageNotNowRefusedNoApprover"
+      | "triageNotNowRefusedPress"
+      | "triageNotNowRefused",
+    repository: string | null,
+    note: string | null = null,
+  ) {
+    const wording = wordingOf(c);
+    return repository === null
+      ? pressRefused(
+          c,
+          status,
+          wording.triageNotNowAction,
+          wording[why],
+          viewHref({ kind: "requests" }, wording.lang),
+          wording.triageBack,
+          note,
+        )
+      : pressRefused(
+          c,
+          status,
+          wording.goalAction,
+          wording[why],
+          repository === ""
+            ? viewHref({ kind: "requests" }, wording.lang)
+            : viewHref({ kind: "goal", repository }, wording.lang),
+          wording.goalBack,
+          note,
+        );
   }
 
   function addRepositoryRefused(

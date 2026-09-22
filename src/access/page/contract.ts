@@ -79,6 +79,10 @@ export interface WebPorts extends InboxReadPorts {
       // D-0077 rule 2.2: the revise draft that holds the lap's latest model
       // reading, which is what the box is filled from.
       | "reviseDraftFor"
+      // D-0097: the goals and the latest proposal of what to ask next, which
+      // the empty centre draws under the request box.
+      | "goals"
+      | "latestTriage"
     >;
   readonly policy: HostPolicy;
   readonly actorId: string | null;
@@ -131,6 +135,16 @@ export interface WebPorts extends InboxReadPorts {
    * press would be refused. Absent is false.
    */
   readonly mergeable?: boolean;
+  /**
+   * The repositories rondo triages (D-0097, `D-0081`): the empty centre draws
+   * one block for each. Absent is none, and then no triage section is drawn.
+   */
+  readonly triageRepositories?: () => Promise<readonly string[]>;
+  /**
+   * Whether the host holds the goal and *not now* presses: true exactly where
+   * their port is not null. Absent is false.
+   */
+  readonly triageWritable?: boolean;
   /**
    * A running lap's log, read at the directory `locateTranscript` named
    * (rondo#248 item 3). A function for {@link LapMaterial}'s reason: the

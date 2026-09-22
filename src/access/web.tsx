@@ -89,6 +89,7 @@
 
 import { raw } from "hono/html";
 import { type AdvisorySnapshot, type Claim, propose, UNDETERMINED } from "../advisory/proposal.js";
+import { readTriagePayload, type TriagePayload } from "../advisory/triage.js";
 import {
   approvedForPublication,
   type FindingSeverity,
@@ -131,6 +132,13 @@ import { ResultLine } from "./page/result.js";
 import { Raw } from "./page/shell.js";
 import { ThreadFace, type ThreadItem } from "./page/thread.js";
 import { ThreadSide } from "./page/thread-side.js";
+import {
+  currentGoals,
+  GoalScreen,
+  TriageSection,
+  takenRequest,
+  triageBlocks,
+} from "./page/triage.js";
 import {
   basisWord,
   CARD,
@@ -2065,6 +2073,12 @@ function composerView(
   newId: MintMessageId | null,
   actorId: string | null,
   nowMs: number,
+  /**
+   * The drafted request a person took from a triage proposal (D-0097 point
+   * 4.4), which the new-request box is drawn holding; `key` names the take, so
+   * `page/composer.js` lets it win over a kept unsent draft once.
+   */
+  taken: { readonly key: string; readonly text: string } | null = null,
 ) {
   if (view.kind !== "requests" && view.kind !== "thread") {
     return null;
@@ -2212,12 +2226,17 @@ function composerView(
         rows={replying === null ? 4 : 3}
         placeholder={replying === null ? wording.requestPlaceholder : wording.replyPlaceholder}
         data-draft={replying === null ? "request" : `reply:${replying.root}`}
+        {...(replying === null && taken !== null
+          ? { "data-draft-take": taken.key, autofocus: true }
+          : {})}
         {...(view.kind === "thread" && view.to !== null ? { autofocus: true } : {})}
         // **The box grows with the words** (the S1 design pass): at a fixed
         // two rows a three-line draft scrolled its first line out of sight
         // under the line above it. Capped, then it scrolls.
         class="block max-h-[40vh] min-h-[4.5rem] w-full resize-y bg-transparent px-4 pt-2 text-body leading-6 outline-none [field-sizing:content] placeholder:text-faint"
-      />
+      >
+        {replying === null && taken !== null ? taken.text : ""}
+      </textarea>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pt-1 pb-2.5">
         <span class="note px-1 text-meta leading-5 text-faint">
           {answers ? wording.answerOutcomeNote : wording.sendNote}
@@ -2565,7 +2584,7 @@ export async function operatorPage(
    * would answer a person who came to write with somebody else's question.
    */
   const selectedRoot =
-    noSuchThread || view.kind === "requests" || selection.kind !== "request"
+    noSuchThread || view.kind === "requests" || view.kind === "goal" || selection.kind !== "request"
       ? null
       : selection.messageId;
   const selectedLap = selectedRoot === null ? null : lapUnder(selectedRoot);
@@ -2713,6 +2732,53 @@ export async function operatorPage(
   );
   /** Each message's moment, for rule 7's line: the items themselves do not carry it. */
   const messageTimes = new Map(selectedMessages.map((m) => [m.messageId, m.atMs]));
+  /*
+   * **What rondo would ask for next** (D-0097), read here and drawn on the
+   * empty centre, on the goal page, in the box a person took a candidate into,
+   * and as one line in a finished thread. Reads only: the host writes the rows.
+   */
+  const triageRepositories = (await ports.triageRepositories?.()) ?? [];
+  const goals = triageRepositories.length === 0 ? [] : await ports.record.goals();
+  const latestTriage = triageRepositories.length === 0 ? [] : await ports.record.latestTriage();
+  const triagePayloads = new Map(
+    latestTriage.flatMap((row): [string, TriagePayload][] => {
+      const payload = readTriagePayload(row.payload);
+      return payload === null ? [] : [[row.proposalId, payload]];
+    }),
+  );
+  const triageLine = (() => {
+    const last = selectedLaps.at(-1)?.record;
+    // Not while something is in the person's turn (point 4.1 (d)), as on the
+    // empty centre: they came to answer.
+    if (last === undefined || last.status !== "closed" || requestsList.yourTurn.length > 0) {
+      return [];
+    }
+    const named = last.plan["forge_repository"];
+    const row = latestTriage
+      .filter(
+        (one) =>
+          one.createdAtMs > last.updatedAtMs &&
+          (triagePayloads.get(one.proposalId)?.ranked.length ?? 0) > 0 &&
+          (typeof named !== "string" || named === "" || named === one.repository),
+      )
+      .at(-1);
+    return row === undefined
+      ? []
+      : [
+          {
+            kind: "event" as const,
+            event: {
+              id: `triage:${row.proposalId}`,
+              kind: "other" as const,
+              said: wording.evProposal,
+              at: wording.age(ago(row.createdAtMs, nowMs)),
+              atMs: row.createdAtMs,
+              href: `${viewHref({ kind: "requests" }, wording.lang)}#triage-heading`,
+              linkSaid: wording.evProposalLink,
+            },
+          },
+        ];
+  })();
   const threadItems: ThreadItem[] = [
     ...selectedMessages.map((message, at): ThreadItem => {
       const waits = threads.waiting.has(message.messageId);
@@ -2803,6 +2869,7 @@ export async function operatorPage(
         },
       ).map((event): ThreadItem => ({ kind: "event", event })),
     ),
+    ...triageLine,
   ]
     /*
      * **One stream, in the order it happened** (D-0083 rule 2, and
@@ -2861,6 +2928,22 @@ export async function operatorPage(
   // **Composed whether or not there is a write port**: with none, the box's
   // own part says the threads can be read and not written to, and D-0020 rule
   // 2 wants that where a person is looking rather than on one screen.
+  // **A candidate the person took** (D-0097 point 4.4): the box is drawn
+  // holding its drafted request, by the server, so it works without script.
+  const taken = (() => {
+    if (view.kind !== "requests" || view.take === undefined) {
+      return null;
+    }
+    const take = view.take;
+    const row = latestTriage.find((one) => one.proposalId === take.proposalId);
+    const payload = row === undefined ? undefined : triagePayloads.get(row.proposalId);
+    if (payload === undefined) {
+      return null;
+    }
+    const clauses = goals.find((goal) => goal.goalId === payload.goalId)?.clauses ?? [];
+    const text = takenRequest(wording, payload, clauses, take.candidate);
+    return text === null ? null : { key: `${take.proposalId}:${take.candidate}`, text };
+  })();
   const askBox = await composerView(
     wording,
     { kind: "requests" },
@@ -2869,6 +2952,7 @@ export async function operatorPage(
     newId,
     ports.actorId,
     nowMs,
+    taken,
   )?.toString();
   const addBox =
     selectedRoot === null
@@ -2907,67 +2991,96 @@ export async function operatorPage(
   const nextMarkup = acts?.next == null ? null : ((await acts.next.toString()) ?? null);
   const centreContent = noSuchThread
     ? { rendered: await note(wording.noSuchThread).toString() }
-    : selectedRoot === null
+    : view.kind === "goal"
       ? {
-          react: EmptyCentre({
+          react: GoalScreen({
             wording,
-            composer: askBox === null || askBox === undefined ? null : Raw({ html: askBox }),
+            repository: view.repository,
+            goal: currentGoals(goals).get(view.repository) ?? null,
+            nowMs,
+            token: ports.triageWritable === true ? token : null,
           }),
         }
-      : {
-          react: ThreadFace({
-            title: firstLine(threads.byId.get(selectedRoot)?.body ?? ""),
-            walk: (() => {
-              // **The walk is over what waits on the person** (D-0083 rule 3),
-              // in the list's own order, so *next* is the next-oldest thing
-              // waiting rather than the next row of anything.
-              const at = walkPosition(selectedRoot, requestsList);
-              if (at === null) {
-                return null;
-              }
-              const next = requestsList.yourTurn[at.at];
-              return {
-                said: wording.walkAt(at.at, at.of),
-                nextHref:
-                  next === undefined
-                    ? null
-                    : viewHref(
-                        { kind: "thread", messageId: next.messageId, to: null },
-                        wording.lang,
+      : selectedRoot === null
+        ? {
+            react: EmptyCentre({
+              wording,
+              composer: askBox === null || askBox === undefined ? null : Raw({ html: askBox }),
+              // **Not while something is in the person's turn** (D-0097 point
+              // 4.1 (d)): they came to answer, and D-0083 rule 3 opens that.
+              triage:
+                requestsList.yourTurn.length > 0
+                  ? null
+                  : TriageSection({
+                      wording,
+                      blocks: triageBlocks(
+                        wording,
+                        {
+                          repositories: triageRepositories,
+                          goals,
+                          latest: latestTriage,
+                          payloads: triagePayloads,
+                        },
+                        nowMs,
                       ),
-                nextSaid: wording.walkNext,
-              };
-            })(),
-            governance:
-              selectedGovernance === null
-                ? null
-                : GovernanceLine({
-                    wording,
-                    governance: selectedGovernance,
-                    askedSaid: wording.age(ago(selectedGovernance.askedAtMs, nowMs)),
-                  }),
-            // **What became of the work, as a state** (rondo#376): approved,
-            // the pull request and its checks, and the merge that is the
-            // person's -- said once, here, for the lap the result belongs to.
-            result: (() => {
-              const lap = resultLap(selectedLaps.map((each) => each.record));
-              return lap === null
-                ? null
-                : ResultLine({ wording, result: resultOf(threads.byId, lap.id) });
-            })(),
-            items: folds(wording, threadItems, lastLookedAbove),
-            foldOpen: wording.foldOpen,
-            lastLookedAbove,
-            lastLookedSaid:
-              lastLookedMs === null
-                ? wording.lastLookedNever
-                : wording.lastLookedHere(wording.age(ago(lastLookedMs, nowMs))),
-            acts: actsMarkup === null ? null : Raw({ html: actsMarkup }),
-            next: nextMarkup === null ? null : Raw({ html: nextMarkup }),
-            answering: answeringBox === null ? null : Raw({ html: answeringBox }),
-            adding: addBox === null || addBox === undefined ? null : Raw({ html: addBox }),
-          }),
-        };
+                      token: ports.triageWritable === true ? token : null,
+                    }),
+            }),
+          }
+        : {
+            react: ThreadFace({
+              title: firstLine(threads.byId.get(selectedRoot)?.body ?? ""),
+              walk: (() => {
+                // **The walk is over what waits on the person** (D-0083 rule 3),
+                // in the list's own order, so *next* is the next-oldest thing
+                // waiting rather than the next row of anything.
+                const at = walkPosition(selectedRoot, requestsList);
+                if (at === null) {
+                  return null;
+                }
+                const next = requestsList.yourTurn[at.at];
+                return {
+                  said: wording.walkAt(at.at, at.of),
+                  nextHref:
+                    next === undefined
+                      ? null
+                      : viewHref(
+                          { kind: "thread", messageId: next.messageId, to: null },
+                          wording.lang,
+                        ),
+                  nextSaid: wording.walkNext,
+                };
+              })(),
+              governance:
+                selectedGovernance === null
+                  ? null
+                  : GovernanceLine({
+                      wording,
+                      governance: selectedGovernance,
+                      askedSaid: wording.age(ago(selectedGovernance.askedAtMs, nowMs)),
+                    }),
+              // **What became of the work, as a state** (rondo#376): approved,
+              // the pull request and its checks, and the merge that is the
+              // person's -- said once, here, for the lap the result belongs to.
+              result: (() => {
+                const lap = resultLap(selectedLaps.map((each) => each.record));
+                return lap === null
+                  ? null
+                  : ResultLine({ wording, result: resultOf(threads.byId, lap.id) });
+              })(),
+              items: folds(wording, threadItems, lastLookedAbove),
+              foldOpen: wording.foldOpen,
+              lastLookedAbove,
+              lastLookedSaid:
+                lastLookedMs === null
+                  ? wording.lastLookedNever
+                  : wording.lastLookedHere(wording.age(ago(lastLookedMs, nowMs))),
+              acts: actsMarkup === null ? null : Raw({ html: actsMarkup }),
+              next: nextMarkup === null ? null : Raw({ html: nextMarkup }),
+              answering: answeringBox === null ? null : Raw({ html: answeringBox }),
+              adding: addBox === null || addBox === undefined ? null : Raw({ html: addBox }),
+            }),
+          };
   /*
    * **The right face, with nothing waiting** (D-0083 rule 4, and gate point
    * 7's last slice): the last seven days, and each running request with its

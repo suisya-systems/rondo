@@ -552,6 +552,34 @@ export async function readIssueFromForge(request: IssueReadRequest): Promise<{
 }
 
 /**
+ * List one repository's open issues for triage (D-0097 point 1 (b)): number,
+ * title and label names, one JSON object per line, pull requests left out.
+ *
+ * A read through the operator's own `gh`, as {@link readIssueFromForge} is,
+ * and it writes nothing on the forge (point 6 (a)).
+ *
+ * ponytail: the newest 100 open issues, one page; `--paginate` when a
+ * repository rondo triages holds more open issues than that.
+ */
+export async function listOpenIssues(request: {
+  readonly host: string | null;
+  readonly repo: string;
+}): Promise<CommandOutcome> {
+  const host = request.host === null ? [] : ["--hostname", request.host];
+  return await runCommand(
+    "gh",
+    [
+      "api",
+      ...host,
+      `repos/${request.repo}/issues?state=open&per_page=100`,
+      "--jq",
+      ".[] | select(.pull_request == null) | {number, title, labels: [.labels[].name]}",
+    ],
+    ISSUE_READ_TIMEOUT_MS,
+  );
+}
+
+/**
  * Whether a remote URL names `repo` (`OWNER/NAME`) on github.com, case aside:
  * the HTTPS and SSH spellings `gh repo clone` writes, and nothing on another
  * host or on this disk that merely ends in the same two names.

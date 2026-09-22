@@ -1263,6 +1263,8 @@ const SPLITTING = "Secretary: splitting and handing over";
 const DIALOGUE = "Secretary: dialogue";
 const DISPATCHER = "Dispatcher: starting workers";
 const HUMAN = "Human (product manager)";
+// D-0097 section 1 rule 1: triage is the advisory's, and names this row.
+const WORK_DISCOVERY = "Work discovery";
 
 /**
  * Every module under `src/`, and the roles it plays. A module missing here is
@@ -1286,6 +1288,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/drafted-start.ts": [SPLITTING],
   "src/access/drafted-view.ts": [SPLITTING],
   "src/access/drafter-host.ts": [SPLITTING],
+  "src/access/triage-host.ts": [WORK_DISCOVERY],
   "src/access/forge-preflight.ts": ["Publishing"],
   "src/access/forge.ts": ["Publishing"],
   "src/access/framing.ts": [SPLITTING, "Reviewer"],
@@ -1303,6 +1306,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page/contract.ts": [HUMAN],
   "src/access/page/empty-side.tsx": [HUMAN],
   "src/access/page/empty.tsx": [HUMAN],
+  "src/access/page/triage.tsx": [HUMAN, WORK_DISCOVERY],
   "src/access/page/events.tsx": [HUMAN],
   "src/access/page/faces.tsx": [HUMAN],
   "src/access/page/governance.tsx": [HUMAN],
@@ -1345,6 +1349,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/wording.ts": [HUMAN],
   "src/advisory/budget.ts": [SPLITTING],
   "src/advisory/proposal.ts": [DIALOGUE, SPLITTING],
+  "src/advisory/triage.ts": [WORK_DISCOVERY],
   "src/cadenza/facade.ts": ["Seam to cadenza"],
   "src/continuo/invoker.ts": ["Seam to continuo"],
   "src/continuo/pin.ts": ["Seam to continuo"],

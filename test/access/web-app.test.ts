@@ -33,12 +33,14 @@ import {
   AnswerPort,
   createApp,
   type DraftedScopeFormDraft,
+  type GoalInput,
   MAX_CLAIM_CHARS,
   type Merged,
   type MergeInput,
   MergePort,
   mintPress,
   mintSend,
+  type NotNowInput,
   newIterationId,
   newMessageId,
   newScopeId,
@@ -61,6 +63,8 @@ import {
   type SentMessage,
   type ServedPorts,
   serveApp,
+  TriagePort,
+  type TriageWritten,
 } from "../../src/access/web-app.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import { advisoryRecord } from "../../src/store/sqlite.js";
@@ -1513,6 +1517,8 @@ const WRITE_TABLE = [
   "ALL /reply",
   "ALL /answer-ask",
   "ALL /revise",
+  // The goal a repository's triage is ranked against (D-0097 point 2.1 (a)).
+  "ALL /goal",
   "ALL /scope",
   "ALL /start",
   // The drafted scope's two presses (rondo#238 C2b, D-0071 rule 5.3).
@@ -1527,6 +1533,8 @@ const WRITE_TABLE = [
   "ALL /add-repository",
   // The merge press (rondo#380, D-0091).
   "ALL /merge",
+  // *Not now* on a candidate rondo proposed (D-0097 point 4.5 (a)).
+  "ALL /not-now",
   "ALL /*",
   "POST /",
   "POST /request",
@@ -1541,6 +1549,8 @@ const WRITE_TABLE = [
   "POST /publish",
   "POST /release",
   "POST /add-repository",
+  "POST /goal",
+  "POST /not-now",
   "POST /merge",
 ];
 
@@ -1582,6 +1592,9 @@ const PRESS_ROUTES = [
   "/add-repository",
   // The one irreversible act on the page, per act (D-0064 rule 3.4, D-0091).
   "/merge",
+  // The person's say over what rondo ranks (D-0097 points 2.1 (a) and 4.5 (a)).
+  "/goal",
+  "/not-now",
 ];
 
 /**
@@ -3022,4 +3035,115 @@ test("(release) the port refuses anything but a minted, unspent press", async ()
       .ok,
   ).toBe(false);
   expect(released).toEqual([]);
+});
+
+/** Ports whose goal and *not now* presses are spies (D-0097). */
+function triagePorts(
+  goals: GoalInput[],
+  asides: NotNowInput[],
+  answer: TriageWritten = { ok: true },
+): ServedPorts {
+  return {
+    ...spyPorts([]),
+    triage: new TriagePort(
+      async (input) => {
+        goals.push(input);
+        return await Promise.resolve(answer);
+      },
+      async (input) => {
+        asides.push(input);
+        return await Promise.resolve(answer);
+      },
+    ),
+  };
+}
+
+test("(triage) a person's press keeps a goal of whole rows and puts a candidate aside, each once", async () => {
+  const goals: GoalInput[] = [];
+  const asides: NotNowInput[] = [];
+  const { base, stop, closed } = await served(createApp(triagePorts(goals, asides), TOKEN));
+  const person = pressHeaders(base);
+  const kept = await send(base, "/goal", "POST", person, {
+    token: TOKEN,
+    repository: "o/r",
+    "clause-1": "they never open a terminal",
+    "unmet-1": "a terminal is ever required",
+    "clause-2": "",
+    "unmet-2": "",
+  });
+  expect(kept.status).toBe(303);
+  expect(kept.location).toBe("/?requests=open&lang=en");
+  expect(goals).toEqual([
+    {
+      repository: "o/r",
+      clauses: [{ said: "they never open a terminal", unmetIf: "a terminal is ever required" }],
+    },
+  ]);
+  const put = await send(base, "/not-now", "POST", person, {
+    token: TOKEN,
+    proposal: "triage-1",
+    candidate: "issue:o/r#7",
+  });
+  expect(put.status).toBe(303);
+  expect(put.location).toBe("/?requests=open&lang=en#triage-heading");
+  expect(asides).toEqual([{ proposalId: "triage-1", candidate: "issue:o/r#7" }]);
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(triage) no press, a half row or no approver writes nothing, and says why", async () => {
+  const goals: GoalInput[] = [];
+  const asides: NotNowInput[] = [];
+  const { base, stop, closed } = await served(createApp(triagePorts(goals, asides), TOKEN));
+  const person = pressHeaders(base);
+  const goalForm = { token: TOKEN, repository: "o/r", "clause-1": "a", "unmet-1": "b" };
+  const asideForm = { token: TOKEN, proposal: "triage-1", candidate: "issue:o/r#7" };
+  for (const [route, form] of [
+    ["/goal", goalForm],
+    ["/not-now", asideForm],
+  ] as const) {
+    for (const [headers, body] of [
+      [{ ...person, "sec-fetch-user": undefined }, form],
+      [person, { ...form, token: "not-the-token" }],
+      [{ ...person, origin: "https://evil.example" }, form],
+    ] as const) {
+      expect((await send(base, route, "POST", headers, body)).status).toBe(403);
+    }
+  }
+  // A clause without its *unmet if* cannot be ranked against (point 2.2 (a)).
+  const half = await send(base, "/goal", "POST", person, { ...goalForm, "unmet-1": "" });
+  expect(half.status).toBe(400);
+  expect(half.body).toContain(EN.goalRowIncomplete);
+  expect(half.body).toContain("/?goal=o%2Fr&amp;lang=en");
+  expect(
+    (await send(base, "/goal", "POST", person, { ...goalForm, "clause-1": "", "unmet-1": "" }))
+      .status,
+  ).toBe(400);
+  expect(
+    (await send(base, "/not-now", "POST", person, { ...asideForm, candidate: "" })).status,
+  ).toBe(400);
+  expect(goals).toEqual([]);
+  expect(asides).toEqual([]);
+  stop.abort();
+  expect(await closed).toBe(0);
+
+  const none = await served(createApp({ ...spyPorts([]), triage: null }, TOKEN));
+  const refused = await send(none.base, "/goal", "POST", pressHeaders(none.base), goalForm);
+  expect(refused.status).toBe(403);
+  expect(refused.body).toContain(EN.goalRefusedNoApprover);
+  none.stop.abort();
+  expect(await none.closed).toBe(0);
+
+  // The store refused: 409, rondo's own reason beside the person's sentence.
+  const store = await served(
+    createApp(
+      triagePorts([], [], { ok: false, note: "not a candidate that proposal named" }),
+      TOKEN,
+    ),
+  );
+  const answered = await send(store.base, "/not-now", "POST", pressHeaders(store.base), asideForm);
+  expect(answered.status).toBe(409);
+  expect(answered.body).toContain("not a candidate that proposal named");
+  store.stop.abort();
+  expect(await store.closed).toBe(0);
 });
