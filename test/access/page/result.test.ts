@@ -170,6 +170,19 @@ test("red names what failed, and a later green is what the state says", async ()
   const green = await ja(world);
   expect(head(green)).toContain("<b>緑</b>");
   expect(head(green)).toContain("2 件すべて通過");
+  // A rerun that goes red again is retold under its time, and is what the state says.
+  await reportToRequest(
+    threadOf(world),
+    "i-r",
+    {
+      kind: "checks",
+      commit: "abc1234",
+      reading: { kind: "red", failed: ["build"], cancelled: [], timedOut: [] },
+      retold: 9_000,
+    },
+    9_000,
+  );
+  expect(head(await ja(world))).toContain("<b>赤</b>");
 });
 
 test("a cancelled or timed-out check is said as what it came to, and is not green (continuo D-1113)", async () => {
@@ -388,4 +401,109 @@ test("a red written before continuo D-1113 still reads, every name as failed", (
     checks: { kind: "red", failed: ["build", "lint"], cancelled: [], timedOut: [] },
     checksCommit: "abc1234",
   });
+});
+
+// --- what the forge did after rondo read it (rondo#411 to #413) --------------
+
+test("a conflict is said as why no check runs, with what to do, and no press (rondo#411)", async () => {
+  const world = await approved();
+  await published(world);
+  await reportToRequest(
+    threadOf(world),
+    "i-r",
+    { kind: "conflict", pullRequestUrl: PR, head: "abc1234", base: "main", baseCommit: "b1" },
+    7_000,
+  );
+  await checked(world, { kind: "none" }, 7_000);
+  const japanese = await merging(world);
+  expect(head(japanese)).toContain('class="result-checks result-checks-conflict"');
+  expect(head(japanese)).toContain("#372 は main と競合しているため、チェックが動きません。");
+  expect(head(japanese)).toContain("push してください");
+  expect(japanese).not.toContain("/merge?");
+  const english = await en(world);
+  expect(head(english)).toContain("#372 conflicts with main, so the forge runs no checks on it.");
+  const requests = await operatorPage(
+    portsOver(world, "ada", null, "ja"),
+    "t",
+    { kind: "requests" },
+    chromeFor("ja"),
+  );
+  expect(requests).toContain("プルリクエスト #372・取り込み先と競合");
+  // A green on that head later means it was resolved without a push.
+  await checked(world, { kind: "green", counted: 2, skipped: 0 }, 8_000);
+  expect(head(await ja(world))).not.toContain("競合");
+});
+
+test("a head moved outside rondo is shown with its commits, and the press names the new head (rondo#412)", async () => {
+  const world = await approved();
+  await published(world);
+  await checked(world, { kind: "green", counted: 2, skipped: 0 });
+  await reportToRequest(
+    threadOf(world),
+    "i-r",
+    {
+      kind: "moved",
+      pullRequestUrl: PR,
+      from: "abc1234",
+      to: "fff0000aa",
+      commits: [{ sha: "fff0000aa", subject: "resolve the conflict with main" }],
+    },
+    8_000,
+  );
+  // Moved, and nothing read on the new head: the old green is not its.
+  const waiting = await merging(world);
+  expect(head(waiting)).toContain("abc1234 → fff0000");
+  expect(head(waiting)).toContain("resolve the conflict with main");
+  expect(head(waiting)).toContain("実行中");
+  expect(waiting).not.toContain("/merge?");
+  await reportToRequest(
+    threadOf(world),
+    "i-r",
+    {
+      kind: "checks",
+      commit: "fff0000aa",
+      reading: { kind: "green", counted: 2, skipped: 0 },
+      moved: true,
+    },
+    9_000,
+  );
+  const green = await merging(world);
+  expect(green).toContain('name="head" value="fff0000aa"');
+  expect(green).toContain("そのコミットも含めてマージする");
+  expect(green).toContain("この作業のものではないコミットが 1 件");
+});
+
+test("merged outside rondo ends the request: who merged it, no press, and the clock stops (rondo#413)", async () => {
+  const world = await approved();
+  await published(world);
+  await checked(world, { kind: "green", counted: 2, skipped: 0 });
+  await reportToRequest(
+    threadOf(world),
+    "i-r",
+    { kind: "mergedOutside", pullRequestUrl: PR, into: "main", by: "someone", mergeCommit: "m1" },
+    61_000,
+  );
+  const japanese = await merging(world);
+  expect(head(japanese)).toContain("GitHub 上で someone が main にマージしました");
+  expect(head(japanese)).toContain("でマージ");
+  expect(japanese).not.toContain("/merge?");
+  expect(head(await merging(world, "en"))).toContain("Merged into main by someone on the forge");
+});
+
+test("closed unmerged on the forge ends the request, and no press is offered (rondo#413)", async () => {
+  const world = await approved();
+  await published(world);
+  await checked(world, { kind: "green", counted: 2, skipped: 0 });
+  await reportToRequest(threadOf(world), "i-r", { kind: "closed", pullRequestUrl: PR }, 61_000);
+  const japanese = await merging(world);
+  expect(head(japanese)).toContain("マージされないまま、GitHub 上で閉じられました。");
+  expect(head(japanese)).not.toContain("マージはあなたが行います");
+  expect(japanese).not.toContain("/merge?");
+  const requests = await operatorPage(
+    portsOver(world, "ada", null, "ja"),
+    "t",
+    { kind: "requests" },
+    chromeFor("ja"),
+  );
+  expect(requests).toContain("プルリクエスト #372・マージせずに閉じられました");
 });

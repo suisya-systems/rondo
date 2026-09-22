@@ -13,6 +13,8 @@ import {
   type ChecksReaders,
   type ChecksReading,
   checksHost,
+  type PullRequestFacts,
+  pullRequestFactsOf,
   pullRequestIn,
   readChecks,
   readingOf,
@@ -76,6 +78,7 @@ test("indeterminate, or a verdict with no name here, is undetermined and never g
 
 test("the pull request is named by the address its publish report printed", () => {
   expect(pullRequestIn("Opened https://github.com/o/n/pull/12 against 'main'.")).toEqual({
+    url: "https://github.com/o/n/pull/12",
     repo: "o/n",
     number: 12,
   });
@@ -125,6 +128,7 @@ test("fetch, observe and show, and the head is ci show's", async () => {
   expect(await readChecks(readers({ calls }), REQUEST)).toEqual({
     reading: { kind: "green", counted: 1, skipped: 0 },
     head: "abc1234",
+    pullRequest: null,
   });
   expect(calls).toEqual(["fetch", "observe o/n#12 /state/control.db", "show o/n#12"]);
 });
@@ -166,6 +170,12 @@ async function hostOver(options: {
   readonly readings?: Readonly<Record<string, ChecksReading>>;
   /** How many ticks to run. One by default. */
   readonly passes?: number;
+  /** The head the forge reads, where it is not the one the lap pushed. */
+  readonly head?: string;
+  /** What the pull request's own document said (rondo#411, #413). */
+  readonly pullRequest?: PullRequestFacts;
+  /** The laps a merge press holds. */
+  readonly pressing?: ReadonlySet<string>;
 }): Promise<{
   readonly written: readonly Recorded[];
   readonly asked: number;
@@ -174,16 +184,19 @@ async function hostOver(options: {
 }> {
   const written: Recorded[] = [];
   const askedIds: string[] = [];
-  const messages = options.messageIds.map((messageId) => ({
+  const messages = options.messageIds.map((messageId, at) => ({
     messageId,
-    // A publish report prints its pull request's address; lap-N opened #N.
+    // A publish report prints its pull request's address; lap-N opened #N. An
+    // answer names the lap's own head, as the real writer's does.
     body: messageId.startsWith("report-published-lap-")
       ? `Opened https://github.com/owner/name/pull/${messageId.slice("report-published-lap-".length)}.`
-      : "",
+      : messageId.startsWith("report-checks-lap-1-")
+        ? "on commit 'commit-of-lap-1'"
+        : "",
     authorKind: "drafter" as const,
     authorId: "rondo/deterministic",
     inReplyTo: "request-1",
-    atMs: 1,
+    atMs: 1 + at,
     bases: [],
     asks: false,
   }));
@@ -229,8 +242,17 @@ async function hostOver(options: {
     readChecks: async (request) => {
       const id = `lap-${String(request.number)}`;
       askedIds.push(id);
-      return { reading: options.readings?.[id] ?? options.reading, head: `head-of-${id}` };
+      return {
+        reading: options.readings?.[id] ?? options.reading,
+        head: options.head ?? `commit-of-${id}`,
+        pullRequest: options.pullRequest ?? null,
+      };
     },
+    readCommits: async (request) => ({
+      kind: "read",
+      commits: [{ sha: request.to, subject: "resolve the conflict" }],
+    }),
+    ...(options.pressing === undefined ? {} : { pressing: options.pressing }),
     host: "github.com",
     now: () => 2,
     log: () => {},
@@ -263,12 +285,14 @@ test("a lap that was never published is not asked about", async () => {
   expect(over).toMatchObject({ written: [], asked: 0 });
 });
 
-test("a lap with an answer already is not asked again", async () => {
+test("an answer already written is not written again, and the pull request is still read", async () => {
+  // A green or a red no longer ends the reading (rondo#411 to #413): what the
+  // forge does to the pull request afterwards is still the page's.
   const over = await hostOver({
-    reading: { kind: "green", counted: 1, skipped: 0 },
+    reading: { kind: "red", failed: ["build"], cancelled: [], timedOut: [] },
     messageIds: ["request-1", "report-published-lap-1", "report-checks-lap-1-red"],
   });
-  expect(over).toMatchObject({ written: [], asked: 0 });
+  expect(over).toMatchObject({ written: [], asked: 1 });
 });
 
 test("a line the ledger has released is out of the window", async () => {
@@ -353,4 +377,135 @@ test("an undetermined reading writes nothing: a forge that will not answer is no
     messageIds: ["request-1", "report-published-lap-1"],
   });
   expect(over.written).toEqual([]);
+});
+
+// --- what the forge did to the pull request (rondo#411 to #413) --------------
+
+const OPEN: PullRequestFacts = {
+  state: "open",
+  conflicting: false,
+  base: "main",
+  baseCommit: "base123",
+  mergedBy: null,
+  mergeCommit: null,
+};
+
+test("the pull request's document gives its state, its conflict and who merged it", () => {
+  const doc = (fields: object) =>
+    JSON.stringify({ state: "open", base: { ref: "main", sha: "base123" }, ...fields });
+  expect(pullRequestFactsOf(doc({ mergeable: false }))).toEqual({ ...OPEN, conflicting: true });
+  // Not worked out yet is not a conflict.
+  expect(pullRequestFactsOf(doc({ mergeable: null }))).toEqual(OPEN);
+  expect(
+    pullRequestFactsOf(
+      doc({
+        state: "closed",
+        merged_at: "2026-09-22T00:00:00Z",
+        merged_by: { login: "someone" },
+        merge_commit_sha: "m1",
+      }),
+    ),
+  ).toMatchObject({ state: "merged", mergedBy: "someone", mergeCommit: "m1" });
+  expect(pullRequestFactsOf(doc({ state: "closed", merged_at: null }))).toMatchObject({
+    state: "closed",
+    mergedBy: null,
+  });
+  expect(pullRequestFactsOf("{}")).toBeNull();
+  expect(pullRequestFactsOf("not json")).toBeNull();
+});
+
+test("a conflict is said once per head, with why no check runs", async () => {
+  const over = await hostOver({
+    reading: { kind: "none" },
+    pullRequest: { ...OPEN, conflicting: true },
+    messageIds: ["request-1", "report-published-lap-1"],
+  });
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-conflict-lap-1-commit-of-lap-1",
+    "report-checks-lap-1-none",
+  ]);
+  expect(over.written[0]?.body).toContain("runs no checks");
+  const again = await hostOver({
+    reading: { kind: "none" },
+    pullRequest: { ...OPEN, conflicting: true },
+    messageIds: [
+      "request-1",
+      "report-published-lap-1",
+      "report-conflict-lap-1-commit-of-lap-1",
+      "report-checks-lap-1-none",
+    ],
+  });
+  expect(again.written).toEqual([]);
+});
+
+test("a head the lap did not push is said with what it carries, and its checks are its own", async () => {
+  const over = await hostOver({
+    reading: { kind: "green", counted: 1, skipped: 0 },
+    head: "fff0000",
+    pullRequest: OPEN,
+    messageIds: ["request-1", "report-published-lap-1", "report-checks-lap-1-green"],
+  });
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-moved-lap-1-fff0000",
+    "report-checks-lap-1-green-fff0000",
+  ]);
+  expect(over.written[0]?.body).toContain("- 'fff0000' resolve the conflict");
+});
+
+test("merged or closed on the forge ends the reading with one line", async () => {
+  const merged = await hostOver({
+    reading: { kind: "green", counted: 1, skipped: 0 },
+    pullRequest: { ...OPEN, state: "merged", mergedBy: "someone", mergeCommit: "m1" },
+    messageIds: ["request-1", "report-published-lap-1"],
+  });
+  expect(merged.written.map((one) => one.messageId)).toEqual(["report-merged-lap-1"]);
+  expect(merged.written[0]?.body).toContain("by 'someone'");
+  const closed = await hostOver({
+    reading: { kind: "none" },
+    pullRequest: { ...OPEN, state: "closed" },
+    messageIds: ["request-1", "report-published-lap-1"],
+  });
+  expect(closed.written.map((one) => one.messageId)).toEqual(["report-closed-lap-1"]);
+  // And the scan leaves the lap alone afterwards.
+  for (const ended of ["report-merged-lap-1", "report-closed-lap-1"]) {
+    const after = await hostOver({
+      reading: { kind: "none" },
+      messageIds: ["request-1", "report-published-lap-1", ended],
+    });
+    expect(after.asked).toBe(0);
+  }
+});
+
+test("a lap a merge press holds is left alone", async () => {
+  const over = await hostOver({
+    reading: { kind: "green", counted: 1, skipped: 0 },
+    pullRequest: { ...OPEN, state: "merged" },
+    messageIds: ["request-1", "report-published-lap-1"],
+    pressing: new Set(["lap-1"]),
+  });
+  expect(over).toMatchObject({ written: [], asked: 0 });
+});
+
+test("a rerun that flips a head back to an answer already said is said again, so red is not read as green", async () => {
+  const over = await hostOver({
+    reading: { kind: "red", failed: ["build"], cancelled: [], timedOut: [] },
+    messageIds: [
+      "request-1",
+      "report-published-lap-1",
+      "report-checks-lap-1-red",
+      "report-checks-lap-1-green",
+    ],
+  });
+  expect(over.written.map((one) => one.messageId)).toEqual(["report-checks-lap-1-red-t2"]);
+  // The same answer as the newest is not said again.
+  const same = await hostOver({
+    reading: { kind: "green", counted: 1, skipped: 0 },
+    messageIds: [
+      "request-1",
+      "report-published-lap-1",
+      "report-checks-lap-1-red",
+      "report-checks-lap-1-green",
+    ],
+  });
+  expect(same.written).toEqual([]);
 });

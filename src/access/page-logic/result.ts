@@ -43,7 +43,12 @@ export type ChecksState =
       readonly timedOut: readonly string[];
     }
   /** The forge reported no check of any kind, so far. */
-  | { readonly kind: "none" };
+  | { readonly kind: "none" }
+  /**
+   * The pull request conflicts with its base, so the forge runs no check on
+   * it (rondo#411): nothing will come until somebody resolves it.
+   */
+  | { readonly kind: "conflict" };
 
 export interface LapResult {
   /** The pull request's address, or null where the report printed none. */
@@ -61,13 +66,33 @@ export interface LapResult {
    */
   readonly checksCommit: string | null;
   /**
-   * Where a person's merge press put it (rondo#380), or null where rondo has
-   * merged nothing. A merge made on the forge itself is not seen here.
+   * Where it was merged, or null where it has not been: by a person's press on
+   * the page (rondo#380), with how, or on the forge outside rondo (rondo#413),
+   * with who the forge says merged it where it said.
    */
   readonly merged: {
     readonly into: string;
-    readonly method: string;
+    /** How a press merged it; null for a merge made outside rondo. */
+    readonly method: string | null;
+    readonly outside: boolean;
+    readonly by: string | null;
     readonly atMs: number;
+  } | null;
+  /** When it was closed on the forge without a merge (rondo#413), or null. */
+  readonly closedAtMs: number | null;
+  /** The base it conflicts with, where that is why no check runs now (rondo#411). */
+  readonly conflictsWith: string | null;
+  /**
+   * Where the pull request moved to after rondo read it (rondo#412), or null:
+   * the head the lap pushed, the head it is at now, and what that carries. The
+   * checks above are then the new head's.
+   */
+  readonly moved: {
+    readonly from: string;
+    readonly to: string;
+    readonly commits: readonly { readonly sha: string; readonly subject: string }[];
+    /** How many more it carries than the report listed. */
+    readonly more: number;
   } | null;
 }
 
@@ -76,30 +101,81 @@ interface Said {
   readonly atMs: number;
 }
 
-const ANSWERS = ["green", "red", "none"] as const;
-
-/** The result of one lap, or null where it has not been published. */
+/**
+ * The result of one lap, or null where it has not been published.
+ *
+ * ponytail: every message is walked once per lap for the lines named by a
+ * head (`report-checks-<lap>-<kind>-<head>`, `report-moved-`,
+ * `report-conflict-`); an index by lap is the upgrade if a store's thread
+ * grows long enough for the list to feel it.
+ */
 export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): LapResult | null {
   const published = byId.get(`report-published-${iterationId}`);
   if (published === undefined) {
     return null;
   }
   const url = /https?:\/\/[^\s]+/.exec(published.body)?.[0] ?? null;
-  // The newest answer wins: a pull request that went red and then green has
-  // both lines in the thread (`reportToRequest`), and the state is the last.
-  const latest = ANSWERS.flatMap((kind) => {
-    const said = byId.get(`report-checks-${iterationId}-${kind}`);
-    return said === undefined ? [] : [{ kind, said }];
-  }).toSorted((left, right) => right.said.atMs - left.said.atMs)[0];
+  const answers: { kind: "green" | "red" | "none"; commit: string | null; said: Said }[] = [];
+  let movedSaid: Said | undefined;
+  let conflictSaid: Said | undefined;
+  const newest = (left: Said | undefined, right: Said): Said =>
+    left === undefined || right.atMs >= left.atMs ? right : left;
+  for (const [id, said] of byId) {
+    const answer = /^(green|red|none)(?:-[0-9a-f]+)?(?:-t\d+)?$/.exec(
+      id.startsWith(`report-checks-${iterationId}-`)
+        ? id.slice(`report-checks-${iterationId}-`.length)
+        : "",
+    )?.[1] as "green" | "red" | "none" | undefined;
+    if (answer !== undefined) {
+      answers.push({
+        kind: answer,
+        commit: /on commit '([^']+)'/.exec(said.body)?.[1] ?? null,
+        said,
+      });
+    } else if (id.startsWith(`report-moved-${iterationId}-`)) {
+      movedSaid = newest(movedSaid, said);
+    } else if (id.startsWith(`report-conflict-${iterationId}-`)) {
+      conflictSaid = newest(conflictSaid, said);
+    }
+  }
+  const moved = movedOf(movedSaid);
+  // **The checks are about the head the pull request is at**: once it moved,
+  // an answer about the head the lap pushed says nothing about the new one
+  // (rondo#412). The newest answer wins: a pull request that went red and then
+  // green has both lines in the thread (`reportToRequest`), and the state is
+  // the last.
+  const latest = answers
+    .filter((one) => moved === null || one.commit === moved.to)
+    .toSorted((left, right) => right.said.atMs - left.said.atMs)[0];
+  // **A conflict stands on its head until a check answers there** (rondo#411):
+  // the forge runs none while it conflicts, so a green or a red on that head
+  // newer than the conflict means it was resolved without a push.
+  const conflictHead = /on commit '([^']+)'/.exec(conflictSaid?.body ?? "")?.[1] ?? null;
+  const conflicting =
+    conflictSaid !== undefined &&
+    conflictHead !== null &&
+    (moved === null || conflictHead === moved.to) &&
+    !answers.some(
+      (one) =>
+        one.kind !== "none" && one.commit === conflictHead && one.said.atMs > conflictSaid.atMs,
+    );
   return {
     url,
     number: url === null ? null : (/\/pull\/(\d+)/.exec(url)?.[1] ?? null),
     atMs: published.atMs,
-    checks: latest === undefined ? { kind: "running" } : checksOf(latest.kind, latest.said.body),
-    checksAtMs: latest?.said.atMs ?? null,
-    checksCommit:
-      latest === undefined ? null : (/on commit '([^']+)'/.exec(latest.said.body)?.[1] ?? null),
+    checks: conflicting
+      ? { kind: "conflict" }
+      : latest === undefined
+        ? { kind: "running" }
+        : checksOf(latest.kind, latest.said.body),
+    checksAtMs: conflicting ? (conflictSaid?.atMs ?? null) : (latest?.said.atMs ?? null),
+    checksCommit: conflicting ? null : (latest?.commit ?? null),
     merged: mergedOf(byId.get(`report-merged-${iterationId}`)),
+    closedAtMs: byId.get(`report-closed-${iterationId}`)?.atMs ?? null,
+    conflictsWith: conflicting
+      ? (/its base '([^']+)'/.exec(conflictSaid?.body ?? "")?.[1] ?? "")
+      : null,
+    moved,
   };
 }
 
@@ -107,8 +183,47 @@ function mergedOf(said: Said | undefined): LapResult["merged"] {
   if (said === undefined) {
     return null;
   }
+  // A merge outside rondo names who, where the forge said (rondo#413); a
+  // press's names how (rondo#380).
+  const outside = / is merged into '([^']+)'(?: by '([^']+)')?/.exec(said.body);
+  if (outside !== null) {
+    return {
+      into: outside[1] ?? "",
+      method: null,
+      outside: true,
+      by: outside[2] ?? null,
+      atMs: said.atMs,
+    };
+  }
   const read = / went into '([^']+)' by (\w+)/.exec(said.body);
-  return { into: read?.[1] ?? "", method: read?.[2] ?? "", atMs: said.atMs };
+  return {
+    into: read?.[1] ?? "",
+    method: read?.[2] ?? "",
+    outside: false,
+    by: null,
+    atMs: said.atMs,
+  };
+}
+
+/** Both heads and the listed commits off a moved report (`movedBody`, `conductor.ts`). */
+function movedOf(said: Said | undefined): LapResult["moved"] {
+  if (said === undefined) {
+    return null;
+  }
+  const to = /is at commit '([^']+)'/.exec(said.body)?.[1];
+  const from = /the head the lap pushed and rondo read is '([^']+)'/.exec(said.body)?.[1];
+  if (to === undefined || from === undefined) {
+    return null;
+  }
+  return {
+    from,
+    to,
+    commits: [...said.body.matchAll(/^- '([0-9a-f]+)' (.*)$/gm)].map((line) => ({
+      sha: line[1] ?? "",
+      subject: line[2] ?? "",
+    })),
+    more: Number(/^- and (\d+) more$/m.exec(said.body)?.[1] ?? 0),
+  };
 }
 
 /**
@@ -123,11 +238,12 @@ function mergedOf(said: Said | undefined): LapResult["merged"] {
  * - `notGreen`: rondo's own latest reading is not green, or names no commit.
  * - `asked`: a question in the request's thread still waits on the person --
  *   `D-0064`'s "no P2 to P4 item open".
- * - `merged`: this press already merged it.
+ * - `merged`: it is merged, by a press or outside rondo.
+ * - `closed`: it was closed on the forge without a merge (rondo#413).
  * - `landed`: the line was released, so its work is on the default branch by
  *   some other way (`D-0073` rule 7).
  */
-export type MergeBlock = "notPublished" | "notGreen" | "asked" | "merged" | "landed";
+export type MergeBlock = "notPublished" | "notGreen" | "asked" | "merged" | "closed" | "landed";
 
 export function mergeBlock(
   result: LapResult | null,
@@ -140,6 +256,9 @@ export function mergeBlock(
   if (result.merged !== null) {
     return "merged";
   }
+  if (result.closedAtMs !== null) {
+    return "closed";
+  }
   if (!holding) {
     return "landed";
   }
@@ -149,7 +268,7 @@ export function mergeBlock(
   return asksWaiting ? "asked" : null;
 }
 
-function checksOf(kind: (typeof ANSWERS)[number], body: string): ChecksState {
+function checksOf(kind: "green" | "red" | "none", body: string): ChecksState {
   if (kind === "none") {
     return { kind: "none" };
   }
