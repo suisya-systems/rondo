@@ -120,7 +120,12 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
   let conflictSaid: Said | undefined;
   const newest = (left: Said | undefined, right: Said): Said =>
     left === undefined || right.atMs >= left.atMs ? right : left;
+  // **Only this lap's lines**: its id may be the start of another lap's.
+  const own = `Lap '${iterationId}' `;
   for (const [id, said] of byId) {
+    if (!said.body.startsWith(own)) {
+      continue;
+    }
     const answer = /^(green|red|none)(?:-[0-9a-f]+)?(?:-t\d+)?$/.exec(
       id.startsWith(`report-checks-${iterationId}-`)
         ? id.slice(`report-checks-${iterationId}-`.length)
@@ -140,12 +145,13 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
   }
   const moved = movedOf(movedSaid);
   // **The checks are about the head the pull request is at**: once it moved,
-  // an answer about the head the lap pushed says nothing about the new one
-  // (rondo#412). The newest answer wins: a pull request that went red and then
-  // green has both lines in the thread (`reportToRequest`), and the state is
-  // the last.
+  // an answer about another head says nothing about this one (rondo#412) --
+  // the lap's own head included, once it was pushed back to it. The newest
+  // answer wins: a pull request that went red and then green has both lines
+  // in the thread (`reportToRequest`), and the state is the last.
+  const at = /is at commit '([^']+)'/.exec(movedSaid?.body ?? "")?.[1] ?? null;
   const latest = answers
-    .filter((one) => moved === null || one.commit === moved.to)
+    .filter((one) => at === null || one.commit === at)
     .toSorted((left, right) => right.said.atMs - left.said.atMs)[0];
   // **A conflict stands on its head until a check answers there** (rondo#411):
   // no answer is written while it stands (`checksHost`), so one on that head
@@ -154,7 +160,7 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
   const conflicting =
     conflictSaid !== undefined &&
     conflictHead !== null &&
-    (moved === null || conflictHead === moved.to) &&
+    (at === null || conflictHead === at) &&
     !answers.some((one) => one.commit === conflictHead && one.said.atMs > conflictSaid.atMs);
   return {
     url,

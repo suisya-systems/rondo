@@ -210,7 +210,7 @@ async function hostOver(options: {
     body: messageId.startsWith("report-published-lap-")
       ? `Opened https://github.com/owner/name/pull/${messageId.slice("report-published-lap-".length)}.`
       : messageId.startsWith("report-checks-lap-1-")
-        ? "on commit 'commit-of-lap-1'"
+        ? "Lap 'lap-1' is read on commit 'commit-of-lap-1'"
         : "",
     authorKind: "drafter" as const,
     authorId: "rondo/deterministic",

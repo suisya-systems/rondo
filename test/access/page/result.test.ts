@@ -498,6 +498,9 @@ test("closed unmerged on the forge ends the request, and no press is offered (ro
   const japanese = await merging(world);
   expect(head(japanese)).toContain("マージされないまま、GitHub 上で閉じられました。");
   expect(head(japanese)).not.toContain("マージはあなたが行います");
+  // Nothing remains, and the merge is not drawn as a step still ahead or done.
+  expect(head(japanese)).not.toContain("gov-step gov-yours");
+  expect(head(japanese)).toContain("で閉じられた");
   expect(japanese).not.toContain("/merge?");
   const requests = await operatorPage(
     portsOver(world, "ada", null, "ja"),
@@ -506,4 +509,47 @@ test("closed unmerged on the forge ends the request, and no press is offered (ro
     chromeFor("ja"),
   );
   expect(requests).toContain("プルリクエスト #372・マージされずに閉じられました");
+});
+
+test("a lap reads only its own lines, and a branch pushed back to its head reads that head's checks (Codex round 2)", () => {
+  const said = (entries: [string, string, number][]) =>
+    new Map(entries.map(([id, body, atMs]) => [id, { body, atMs }]));
+  const lines: [string, string, number][] = [
+    ["report-published-lap", `Lap 'lap' was published: pull request ${PR} was opened.`, 1],
+    [
+      "report-checks-lap-green",
+      "Lap 'lap' is green: 2 check(s) on commit 'aaa', and 2 passed and 0 were skipped, and none failed.",
+      2,
+    ],
+    // Another lap whose id starts with this one's.
+    [
+      "report-moved-lap-next-bbb",
+      "Lap 'lap-next' moved: pull request x is at commit 'bbb', and the head the lap pushed and rondo read is 'ccc'.",
+      3,
+    ],
+  ];
+  expect(resultOf(said(lines), "lap")).toMatchObject({ moved: null, checks: { kind: "green" } });
+  const back = resultOf(
+    said([
+      ...lines,
+      [
+        "report-moved-lap-bbb",
+        "Lap 'lap' moved: pull request x is at commit 'bbb', and the head the lap pushed and rondo read is 'aaa'.",
+        4,
+      ],
+      [
+        "report-checks-lap-red-bbb",
+        "Lap 'lap' is not green: on commit 'bbb' the forge reports 'build' as failed.",
+        5,
+      ],
+      [
+        "report-moved-lap-aaa",
+        "Lap 'lap' moved: pull request x is at commit 'aaa', and the head the lap pushed and rondo read is 'aaa'.",
+        6,
+      ],
+    ]),
+    "lap",
+  );
+  // Back on its own head: not moved, and the red on the other head is not its.
+  expect(back).toMatchObject({ moved: null, checks: { kind: "green" }, checksCommit: "aaa" });
 });

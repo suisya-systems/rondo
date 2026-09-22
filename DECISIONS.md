@@ -22413,8 +22413,9 @@ At rondo `77c41d7`, by reading `src/access/checks-host.ts`, `src/access/merge.ts
 2. **Merged or closed on the forge ends the request on the page.** A merge writes
    `report-merged-<lap>`, the same id a press's merge writes, naming the base, the merging user
    where the forge names one, and the merge commit. A close without a merge writes
-   `report-closed-<lap>`. Either one removes the merge press, marks the chain's last step, and
-   stops the governance line's clock at the time rondo saw it. rondo does not reopen anything.
+   `report-closed-<lap>`. Either one removes the merge press and stops the governance line's
+   clock at the time rondo saw it. A merge marks the chain's last step done. A close removes that
+   step, because nothing remains and nothing was merged. rondo does not reopen anything.
 3. **A conflict is said as the reason no check runs.** `mergeable: false` writes one
    `report-conflict-<lap>-<head>` line per head, and the result band says that the pull request
    conflicts with its base and that the person resolves it on the branch and pushes.
