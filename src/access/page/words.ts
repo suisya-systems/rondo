@@ -569,7 +569,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   resultConflictDo: (base) =>
     `Resolve it on the pull request's branch (merge ${base} in, or rebase) and push. rondo reads the checks again once they run.`,
   resultConflictDoOffered: (base) =>
-    `Press above and rondo resolves it here, or resolve it yourself on the pull request's branch (merge ${base} in, or rebase) and push. Either way rondo reads the checks again once they run.`,
+    `Press the button under Your next step, below, and rondo resolves it here, or resolve it yourself on the pull request's branch (merge ${base} in, or rebase) and push. Either way rondo reads the checks again once they run.`,
   resultConflictFixing: (base) =>
     `rondo is settling the conflict in a new attempt that brings ${base} in. Its result is yours to check here before anything is pushed.`,
   resultMoved: (from, to, count) =>
@@ -820,7 +820,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   resultConflictDo: (base) =>
     `プルリクエストのブランチ側で競合を解消し（${base} を取り込むか、リベースする）、push してください。チェックが動けば rondo が読み直します。`,
   resultConflictDoOffered: (base) =>
-    `上のボタンで rondo に解消させるか、プルリクエストのブランチ側で自分で解消して（${base} を取り込むか、リベースする）push してください。どちらでも、チェックが動けば rondo が読み直します。`,
+    `すぐ下の「次にやること」のボタンで rondo に解消させるか、プルリクエストのブランチ側で自分で解消して（${base} を取り込むか、リベースする）push してください。どちらでも、チェックが動けば rondo が読み直します。`,
   resultConflictFixing: (base) =>
     `rondo が ${base} を取り込む新しい回で、競合を解消しています。その結果は、push の前にここで確認してもらいます。`,
   resultMoved: (from, to, count) =>
