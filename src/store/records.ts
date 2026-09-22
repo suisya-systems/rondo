@@ -1075,6 +1075,13 @@ export const PROPOSAL_KINDS = Object.freeze([
   // approved**: the person's press is a gate answer and not a human_decision
   // (D-0032 rule 5), so it is absent from APPROVABLE_PROPOSAL_KINDS below.
   "revise_draft",
+  // D-0097. One row per reading of what rondo would ask for next in one
+  // repository: the recommendation, its runners-up and what was withheld, or
+  // why the reading came to nothing. **Never approved**: a proposal of the
+  // next request binds nothing (D-0097 section 1 rule 2), and the person's
+  // answer is a request they send or a *not now* (`triage_decline`), never a
+  // human_decision -- so it is absent from APPROVABLE_PROPOSAL_KINDS below.
+  "triage",
 ] as const);
 
 export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
@@ -1798,6 +1805,53 @@ export interface StoredSetupPlan {
   readonly planDigest: string;
   readonly recordedBy: string;
   readonly recordedAtMs: number;
+}
+
+/**
+ * One clause of a goal a person wrote down (D-0097 point 2.2 (a)): the clause
+ * in their words, and when it is unmet. Numbered by its place in the goal.
+ */
+export interface GoalClause {
+  readonly said: string;
+  readonly unmetIf: string;
+}
+
+/** One goal row as the page hands it over (D-0097 point 2.1 (a)). */
+export interface GoalDraft {
+  readonly goalId: string;
+  /** `OWNER/NAME`, the repository the goal is for (`D-0081`). */
+  readonly repository: string;
+  readonly clauses: readonly GoalClause[];
+  readonly writtenBy: string;
+  readonly writtenAtMs: number;
+}
+
+/** One goal row read back. The newest row of a repository is its goal. */
+export type StoredGoal = GoalDraft;
+
+/** A person's *not now* on one candidate of one triage proposal (D-0097 point 4.5 (a)). */
+export interface TriageDeclineDraft {
+  readonly declineId: string;
+  readonly proposalId: string;
+  /** The candidate's key in that proposal's payload. */
+  readonly candidate: string;
+  readonly declinedBy: string;
+  readonly declinedAtMs: number;
+}
+
+/** One *not now* read back, with the repository its proposal was read for. */
+export interface StoredTriageDecline extends TriageDeclineDraft {
+  readonly repository: string;
+}
+
+/** One triage proposal row read back: the latest of a repository is what the page draws. */
+export interface StoredTriage {
+  readonly proposalId: string;
+  readonly drafter: string;
+  readonly repository: string;
+  readonly payload: JsonRecord;
+  readonly snapshot: JsonRecord;
+  readonly createdAtMs: number;
 }
 
 /** One scope row read back, its digest re-derived (D-0022 rule 4). */

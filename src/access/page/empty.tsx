@@ -18,6 +18,11 @@
  * page that has not finished loading is the falsifier, and the reason the
  * heading is a question rather than a blank.
  *
+ * **What rondo would ask for next sits under the box** (D-0097 point 4.7 (a),
+ * annotating `D-0083` rule 4): nothing *waiting on the person* is drawn in the
+ * lower third, and the advisory's proposal, in ink, may be. On a day nothing
+ * goes against a goal it is one sentence and the third stays quiet.
+ *
  * What this slice draws is the ask and the box. *Since you last looked* and
  * the most recent reports are the same slice's next change; the right face of
  * this state is the third slice's (gate point 7).
@@ -29,14 +34,17 @@ export interface EmptyCentreProps {
   readonly wording: Chrome;
   /** The box a new request is written in, or null with no write port (D-0020 rule 2). */
   readonly composer: ReactNode;
+  /** What rondo would ask for next (`./triage.tsx`), or null. */
+  readonly triage?: ReactNode;
 }
 
-export function EmptyCentre({ wording, composer }: EmptyCentreProps) {
+export function EmptyCentre({ wording, composer, triage = null }: EmptyCentreProps) {
   return (
     <div className="empty-centre">
       <h1>{wording.emptyAsk}</h1>
       <p className="empty-lead">{wording.emptyLead}</p>
       {composer}
+      {triage}
     </div>
   );
 }

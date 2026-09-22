@@ -139,6 +139,19 @@ const restore = (afterSwap) => {
     }
   }
 };
+// **A request taken from what rondo would ask for next wins over a kept
+// draft, once** (D-0097 point 4.4): the address names the candidate, so the
+// person pressed *put it in the box* and asked for those words. The take is
+// remembered, so a redraw or a reload of the same address keeps what they
+// have since edited rather than putting the drafted request back.
+for (const box of document.querySelectorAll("textarea[data-draft-take]")) {
+  const took = `rondo:took:${box.dataset.draftTake}`;
+  if (store.get(took) === null) {
+    store.set(took, "1");
+    store.set(draftKey(box), null);
+    store.set(drewKey(box), null);
+  }
+}
 restore(false);
 
 document.addEventListener("input", (event) => {

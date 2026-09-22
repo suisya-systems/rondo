@@ -49,7 +49,17 @@ export type PageView =
    * default ({@link replyTarget}). Both are live: a drafter can write into a
    * thread while a person reads it.
    */
-  | { readonly kind: "requests" }
+  | {
+      readonly kind: "requests";
+      /**
+       * A candidate of a triage proposal the person took (D-0097 point 4.4):
+       * the box is drawn holding its drafted request. In the address, so the
+       * press works without script and the language switch keeps it.
+       */
+      readonly take?: { readonly proposalId: string; readonly candidate: string };
+    }
+  /** The goal a repository's triage is ranked against (D-0097 point 2.1 (a)). */
+  | { readonly kind: "goal"; readonly repository: string }
   | {
       readonly kind: "thread";
       readonly messageId: string;
@@ -159,7 +169,13 @@ export const REVIEW_ROUND_CHOICES: readonly number[] = [0, 1, 2, 3, 4, 5, 6];
  * again, and the page's foot already says the view holds still.
  */
 export function isLive(view: PageView): boolean {
-  return view.kind !== "scope" && view.kind !== "publish" && view.kind !== "release";
+  // **`goal` holds still** for `scope`'s reason: it is a form being filled in.
+  return (
+    view.kind !== "scope" &&
+    view.kind !== "publish" &&
+    view.kind !== "release" &&
+    view.kind !== "goal"
+  );
 }
 
 /**
@@ -186,7 +202,12 @@ export function viewHref(view: PageView, tag: string): string {
     case "release":
       return `/?release=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "requests":
-      return `/?requests=open&${lang}`;
+      return view.take === undefined
+        ? `/?requests=open&${lang}`
+        : `/?requests=open&take=${encodeURIComponent(view.take.proposalId)}` +
+            `&candidate=${encodeURIComponent(view.take.candidate)}&${lang}`;
+    case "goal":
+      return `/?goal=${encodeURIComponent(view.repository)}&${lang}`;
     case "thread":
       return `/?thread=${encodeURIComponent(view.messageId)}${
         view.to === null ? "" : `&to=${encodeURIComponent(view.to)}`

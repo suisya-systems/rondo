@@ -1792,6 +1792,9 @@ const FORECLOSES: Record<ProposalKind, readonly string[]> = {
   // D-0077 rule 5.1: a revise draft is never approved either; the person's
   // press is a gate answer. Empty, for the same reason.
   revise_draft: [],
+  // D-0097: a proposal of the next request binds nothing; its answer is a
+  // request the person sends or a *not now*. Empty, for the same reason.
+  triage: [],
 };
 
 /**
