@@ -1753,7 +1753,7 @@ export async function readRecordFloor(request: {
  * is not the lap's** (D-0098 rules 2 and 3.8): a tip that merged the default
  * branch's X adds, since its base, every entry X brought, and those are
  * another line's landed entries, not numbers to renumber. **Nor is one the
- * base's record already spells**: a changed index row (a status gone to
+ * record already spelled where the lap forked**: a changed index row (a status gone to
  * superseded) or an annotation that repeats a heading is an edit of an
  * existing entry, whose ID is permanent, not a new number.
  */
@@ -1784,7 +1784,15 @@ export async function readRecordAdditions(request: {
     return { kind: "undetermined", reason: taken.failure };
   }
   const theirs = recordNumbers(taken);
-  const atBase = await textAt(git, request.baseCommit, request.record);
+  // The fork point `base...tip` diffs from, not the base's own tip: a base
+  // that moved on holds other lines' entries, and a number this lap wrote
+  // without holding it must not hide behind one of them.
+  const forked = await git(["merge-base", request.baseCommit, request.tipCommit]);
+  const forkFailure = queryFailure(forked);
+  if (forkFailure !== null) {
+    return { kind: "undetermined", reason: forkFailure };
+  }
+  const atBase = await textAt(git, forked.stdout.trim(), request.record);
   if (typeof atBase !== "string") {
     return { kind: "undetermined", reason: atBase.failure };
   }

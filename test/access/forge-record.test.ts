@@ -189,6 +189,35 @@ test(
 );
 
 test(
+  "a base that moved on hides no number: existing numbers are read where the lap forked",
+  async () => {
+    const { work, baseCommit, tipCommit } = recordWorld();
+    // Another line landed its own D-0002 on main after this lap forked; the
+    // lap's D-0002 is still its addition, and the gate must see it.
+    git(work, "switch", "-q", "-c", "moved", baseCommit);
+    writeFileSync(
+      join(work, RECORD),
+      record(
+        row("0001", "first") + row("0002", "other"),
+        entry("0001", "first") + entry("0002", "other"),
+      ),
+    );
+    git(work, "commit", "-q", "-am", "another line");
+    const moved = git(work, "rev-parse", "HEAD");
+    expect(
+      await readRecordAdditions({
+        repository: work,
+        baseCommit: moved,
+        tipCommit,
+        record: RECORD,
+        takenIn: null,
+      }),
+    ).toMatchObject({ kind: "read", numbers: [2] });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
   "a landing on the record is read by numbers and added lines, not by its tree entry",
   async () => {
     const { landing, land } = recordWorld();
