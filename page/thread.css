@@ -781,6 +781,7 @@
 .goal-clauses {
   display: grid;
   gap: 14px;
+  margin-top: 22px;
   list-style: none;
 }
 
@@ -822,10 +823,15 @@
 }
 
 .goal-kept {
-  margin-top: 14px;
+  margin-top: 0;
   font-size: var(--text-id);
   line-height: 1.5;
   color: var(--color-muted-foreground);
+}
+
+/* The press again under the last row, for whoever has just filled it in. */
+.goal-acts-end {
+  margin-top: 18px;
 }
 
 .goal-back {

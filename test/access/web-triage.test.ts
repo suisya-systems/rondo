@@ -128,6 +128,9 @@ test("the goal page drafts rondo's own completion definition, and keeps a kept g
   expect(drafted).toContain(EN.goalDraft);
   expect(drafted).toContain(EN.goalDraftClauses[0] ?? "missing");
   expect(drafted).toContain('action="/goal?lang=en"');
+  // rondo#408: the press is above the clauses, under the heading and the lead.
+  expect(drafted.indexOf(EN.goalKeep)).toBeLessThan(drafted.indexOf('id="clause-1"'));
+  expect(drafted.indexOf(EN.goalKeep)).toBeGreaterThan(drafted.indexOf(EN.goalLead));
   const kept = await operatorPage(ports, "t", { kind: "goal", repository: "o/r" });
   expect(kept).toContain("they never open a terminal");
   expect(kept).not.toContain(EN.goalDraft);

@@ -422,6 +422,12 @@ export function GoalScreen({ wording, repository, goal, nowMs, token }: GoalScre
     ...kept,
     ...Array.from({ length: EMPTY_ROWS }, () => ({ said: "", unmetIf: "" })),
   ].slice(0, MAX_GOAL_CLAUSES);
+  const keep =
+    token === null ? null : (
+      <button type="submit" className={`${PRIMARY} ${PRESS}`}>
+        {wording.goalKeep}
+      </button>
+    );
   return (
     <div className="thread goal">
       <header className="thread-head">
@@ -435,6 +441,23 @@ export function GoalScreen({ wording, repository, goal, nowMs, token }: GoalScre
       >
         {token === null ? null : <input type="hidden" name="token" value={token} />}
         <input type="hidden" name="repository" value={repository} />
+        {/* **The press is above the clauses** (rondo#408: what a person has to
+            do sits at the top of the screen), with the line saying whether
+            this goal is kept; repeated under the last row for whoever has just
+            filled it in. */}
+        <p className="goal-kept">
+          {goal === null
+            ? kept.length === 0
+              ? wording.goalNotKept
+              : wording.goalDraft
+            : wording.goalKeptAt(wording.age(ago(goal.writtenAtMs, nowMs)))}
+        </p>
+        <div className="triage-acts">
+          {keep}
+          <a className="goal-back" href={viewHref({ kind: "requests" }, wording.lang)}>
+            {wording.goalBack}
+          </a>
+        </div>
         <ol className="goal-clauses">
           {rows.map((row, at) => (
             <li className="goal-clause" id={`clause-${String(at + 1)}`} key={String(at)}>
@@ -462,23 +485,7 @@ export function GoalScreen({ wording, repository, goal, nowMs, token }: GoalScre
             </li>
           ))}
         </ol>
-        <p className="goal-kept">
-          {goal === null
-            ? kept.length === 0
-              ? wording.goalNotKept
-              : wording.goalDraft
-            : wording.goalKeptAt(wording.age(ago(goal.writtenAtMs, nowMs)))}
-        </p>
-        <div className="triage-acts">
-          {token === null ? null : (
-            <button type="submit" className={`${PRIMARY} ${PRESS}`}>
-              {wording.goalKeep}
-            </button>
-          )}
-          <a className="goal-back" href={viewHref({ kind: "requests" }, wording.lang)}>
-            {wording.goalBack}
-          </a>
-        </div>
+        {keep === null ? null : <div className="triage-acts goal-acts-end">{keep}</div>}
       </form>
     </div>
   );
