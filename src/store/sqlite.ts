@@ -1993,8 +1993,8 @@ const SELECT_COLUMNS = [
  * A store backed by an open `node:sqlite` connection.
  *
  * The schema is created on construction and the connection is not otherwise
- * configured: journal mode, busy timeout and file location are the composition
- * root's, because they are deployment facts and this module is a schema.
+ * configured: journal mode, busy timeout and file location are the opener's,
+ * because they are facts about the file and not about the schema.
  */
 /**
  * Open the durable store at a path.
@@ -2012,7 +2012,33 @@ const SELECT_COLUMNS = [
  * not exist yet and simply work.
  */
 export function openIterationStore(databasePath: string, policy: HostPolicy): IterationStore {
-  return iterationStore(new DatabaseSync(databasePath), policy);
+  return iterationStore(openStoreFile(databasePath), policy);
+}
+
+/**
+ * How long a connection waits for another one's write lock before it fails
+ * (`D-0107`).
+ *
+ * **Every open writes**: {@link migrate} runs `BEGIN IMMEDIATE` on each one, so
+ * two processes opening the file at the same moment race for the write lock --
+ * and with SQLite's default of no wait the loser fails at once with "database
+ * is locked". That is what setup's last step met in lap 12 (rondo#406), opening
+ * the store while the host it had just restarted was opening it too; the host
+ * could as easily have been the one to lose. Five seconds is far above any
+ * write rondo holds, and only a lock that is really stuck reaches it.
+ */
+const BUSY_TIMEOUT_MS = 5_000;
+
+/**
+ * A connection to the store's file, waiting for a concurrent writer.
+ *
+ * A pragma and not `DatabaseSync`'s `timeout` option: the option arrived in
+ * Node 22.16, and `engines` still admits 22.14, where it would be ignored.
+ */
+function openStoreFile(databasePath: string): DatabaseSync {
+  const connection = new DatabaseSync(databasePath);
+  connection.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+  return connection;
 }
 
 export function iterationStore(connection: DatabaseSync, policy: HostPolicy): IterationStore {
@@ -3534,12 +3560,11 @@ function triageKeys(payload: string): readonly string[] {
  * ports answer different questions for different callers (see
  * {@link AdvisoryRecord}), and threading one connection out of
  * {@link openIterationStore} would change a signature five call sites use so
- * that one command could share it. SQLite serialises the writers itself; what
- * this gives up is the busy timeout nothing in this tree sets anyway, so a
- * concurrent writer is reported as a defect rather than waited on.
+ * that one command could share it. SQLite serialises the writers itself, and
+ * both connections wait the same busy timeout for each other (`D-0107`).
  */
 export function openAdvisoryRecord(databasePath: string): AdvisoryRecord {
-  return advisoryRecord(new DatabaseSync(databasePath));
+  return advisoryRecord(openStoreFile(databasePath));
 }
 
 export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {

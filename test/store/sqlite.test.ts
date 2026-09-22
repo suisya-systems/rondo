@@ -25,6 +25,7 @@
  * assertion that carries it is the reservation *after* the settle.
  */
 
+import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -567,6 +568,42 @@ test("reserving the same iteration id twice is a defect, not an occupied conduct
   expect(outcome.reason).toContain("already exists");
   expect(outcome.reason).not.toMatch(/UNIQUE constraint/);
   expect(outcome.reason).not.toMatch(/iteration\.id/);
+});
+
+/**
+ * An open waits for another process's write lock instead of failing (D-0107,
+ * rondo#406).
+ *
+ * Lap 12's setup opened the store while the host it had just restarted held
+ * the write lock every open takes, and failed at once with "database is
+ * locked". A second process holds that lock here for a moment and then lets
+ * go; the open has to outlast it. Without the busy timeout this throws.
+ */
+test("openIterationStore waits for a writer in another process", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "rondo-busy-")), "store.sqlite");
+  openIterationStore(path, CONSERVATIVE_HOST_POLICY);
+  const holder = spawn(
+    process.execPath,
+    [
+      "--no-warnings",
+      "-e",
+      `const { DatabaseSync } = require("node:sqlite");
+       const db = new DatabaseSync(process.argv[1]);
+       db.exec("BEGIN IMMEDIATE");
+       process.stdout.write("held\\n");
+       setTimeout(() => { db.exec("COMMIT"); db.close(); }, 500);`,
+      path,
+    ],
+    { stdio: ["ignore", "pipe", "inherit"] },
+  );
+  const exited = new Promise((resolve) => holder.on("exit", resolve));
+  await new Promise((resolve) => holder.stdout.once("data", resolve));
+
+  const started = Date.now();
+  expect(() => openIterationStore(path, CONSERVATIVE_HOST_POLICY)).not.toThrow();
+  // It waited for the holder rather than finding the lock already gone.
+  expect(Date.now() - started).toBeGreaterThan(100);
+  expect(await exited).toBe(0);
 });
 
 /**
