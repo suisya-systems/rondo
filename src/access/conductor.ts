@@ -279,6 +279,7 @@ export function conductorPorts(
           repository: plan.repository,
           remote: READING_REMOTE,
           baseBranch: plan.baseBranch,
+          runId: plan.runId,
         });
         if (base.kind === "refused") {
           return { kind: "refused", message: base.reason };

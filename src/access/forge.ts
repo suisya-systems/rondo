@@ -1416,24 +1416,32 @@ export interface LapBaseRequest {
   readonly remote: string;
   /** The plan's base branch, as the forge names it. */
   readonly baseBranch: string;
+  /** The lap's run id, which names the branch this lap alone is cut from. */
+  readonly runId: string;
 }
 
 /**
- * Fetch the forge's base branch into a local branch rondo owns, for continuo
- * to cut a first lap's workspace from (rondo#407, D-0100).
+ * Fetch the forge's base branch into a local branch of this lap's own, for
+ * continuo to cut a first lap's workspace from (rondo#407, D-0100).
  *
  * **The forge's branch as it is now, not the clone's.** A clone's `main` is
  * whatever it was when someone last pulled, and a lap cut from it works on a
  * stale base (lap 12 recorded a decision number `main` already had). continuo
  * accepts only a local branch (`refs/heads/<name>`), and the clone's own
  * `main` is usually checked out, which a fetch refuses to move -- so the
- * branch is rondo's: `rondo/base/<remote>/<branch>`, force-fetched every
- * time, because it mirrors the forge and holds nobody's commits. The
- * configured refmap is left on, so the remote-tracking ref the reading
- * compares against (`inspectLapWork`) moves with it, exactly as any fetch
- * would move it.
+ * branch is the lap's: `rondo/base/<runId>`, which no other lap writes.
  *
- * A fetch that fails is a lap that does not start, and the reason says why.
+ * **Nothing shared is written by the fetch that decides the lap.** `--refmap=`
+ * (empty) keeps it off `refs/remotes/<remote>/<branch>`, so two laps admitted
+ * at the same instant take no common ref lock and neither is refused for the
+ * other (the parallel lanes of D-0098); `--no-write-fetch-head` likewise, for
+ * the one file every fetch would otherwise rewrite. The remote-tracking ref is moved
+ * afterwards by a plain fetch whose failure is ignored: `inspectLapWork` reads
+ * the base there first, and a lock lost to a concurrent fetch is that fetch
+ * writing the same forge head.
+ *
+ * A fetch of the lap's branch that fails is a lap that does not start, and the
+ * reason says why.
  */
 export async function fetchLapBase(
   request: LapBaseRequest,
@@ -1441,25 +1449,34 @@ export async function fetchLapBase(
   | { readonly kind: "fetched"; readonly branch: string }
   | { readonly kind: "refused"; readonly reason: string }
 > {
-  const branch = `rondo/base/${request.remote}/${request.baseBranch}`;
-  const fetched = await runCommand("git", [
-    "-C",
-    request.repository,
-    "fetch",
-    "--no-tags",
-    request.remote,
-    `+refs/heads/${request.baseBranch}:refs/heads/${branch}`,
-  ]);
-  const failure = queryFailure(fetched);
-  return failure === null
-    ? { kind: "fetched", branch }
-    : {
-        kind: "refused",
-        reason:
-          `rondo cuts a lap from ${request.remote}/${request.baseBranch} as the forge has it now, ` +
-          `and could not fetch it: ${failure}. No run was admitted; fetch access to the forge ` +
-          "is what lets the lap start.",
-      };
+  const branch = `rondo/base/${request.runId}`;
+  const git = (argv: readonly string[]) =>
+    runCommand("git", [
+      "-C",
+      request.repository,
+      "fetch",
+      "--no-tags",
+      "--no-write-fetch-head",
+      ...argv,
+    ]);
+  const failure = queryFailure(
+    await git([
+      "--refmap=",
+      request.remote,
+      `+refs/heads/${request.baseBranch}:refs/heads/${branch}`,
+    ]),
+  );
+  if (failure !== null) {
+    return {
+      kind: "refused",
+      reason:
+        `rondo cuts a lap from ${request.remote}/${request.baseBranch} as the forge has it now, ` +
+        `and could not fetch it: ${failure}. No run was admitted; fetch access to the forge ` +
+        "is what lets the lap start.",
+    };
+  }
+  await git([request.remote, `refs/heads/${request.baseBranch}`]);
+  return { kind: "fetched", branch };
 }
 
 /**
