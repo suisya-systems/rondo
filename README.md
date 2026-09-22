@@ -28,8 +28,10 @@ against a cadenza contract, admit a run, walk one lap, and **suspend at the gate
 a human has yet to answer**, resuming through `resume(iterationId)` when the
 operating surface says they have. It never composes the answer (D-0009), never
 publishes (D-0010) and never closes a gate (D-0013). Single-flight was a lap-1
-reduction (D-0012); lines on disjoint paths now run together under a lane
-ledger (D-0073).
+reduction (D-0012). Parallel lines are decided (a lane ledger, D-0073, and
+D-0098), but only the ledger's store half is built: nothing drafts a claim
+narrower than `/`, so every line holds the whole repository, and
+`RONDO_MAX_OCCUPYING` (how many laps may execute at once) defaults to 1; raising it needs continuo to allow a second concurrent lap first.
 
 **As of D-0024 and D-0025 there is a way in**, and it has grown since. rondo
 ships a binary (`bin/rondo.mjs`) whose subcommands cover the lap itself
@@ -54,8 +56,7 @@ checked again on the port's side; the page's text follows the person's language
 
 Around the lap, rondo runs two models outside it: a drafter that turns a
 request into a scope and a revise instruction (D-0071, D-0077), and a reviewer
-of another model family that grades findings against the scope's thresholds
-(D-0065). When a request names an issue, rondo reads it outside the lap and carries it
+of another model family that grades findings by severity (D-0065). When a request names an issue, rondo reads it outside the lap and carries it
 into the prompt quoted (D-0078), and every lap's prompt carries a fixed definition of done (D-0089).
 
 **The boundary test also asks whose work a module is** (D-0093). Beside the
@@ -73,11 +74,14 @@ What does **not** exist yet:
 - **the localhost MCP surface.** `src/access/` is where it will live, and
   nothing of it exists; its shape is undecided, and the first design is to start
   read-only;
-- **parallel control beyond the lane ledger.** D-0098 decides an order across
+- **running lines in parallel.** D-0073 decides a lane ledger that gives each
+  line its paths and refuses an admission that would share one; the store half
+  is built, but nothing drafts a narrower claim, so every line claims `/` and a
+  repository runs one line at a time. D-0098 adds an order across
   repositories released only by a landing, taking in the default branch before
   taking over landed paths, reserved decision-record numbers so entries are
   written in parallel, carrying a worker's question at its lap's end, and
-  stopping a review by the scope's numbers. It decides and does not build; the
+  stopping a review by the scope's numbers. D-0098 decides and does not build; the
   same goes for D-0067's `sequence`;
 - **triage.** D-0097 decides that the advisory ranks candidate requests against
   a goal the person wrote down and brings one recommendation, never starting
@@ -202,7 +206,7 @@ written to be thrown away.
 | `src/advisory/` | The advisory (D-0022 rules 1 and 2): `propose(snapshot)` and the payload vocabulary -- claims, options and the closed union of bases D-0032 rule 2 fixes. The one layer whose allowance exists to *remove* reach: it reaches `src/store` for the types it cites and nothing else, it is absent from the external table, and so it cannot compose a contract, start a process or read a world it was not handed. |
 | `src/continuo/` | The seam to continuo (D-0017): a pure protocol decoder, the pin and its verification, and `invoker.ts` — the one module under `src/` allowed to start a process. `transcript.ts`, which reads a running lap's log, is the one module still listed as waiting to move to continuo (D-0093). Reaches only itself. |
 | `src/cadenza/` | The seam to cadenza (D-0018): `facade.ts` is the one module under `src/` allowed to import `@suisya-systems/cadenza`, binding by binding. Reaches only itself; the loop reaches *it*, which is the arrow D-0018 rule 5 left unbuilt and D-0019 took. |
-| `src/store/` | Durable state (D-0019 rule 10): the iteration schema, `reserve`/`transition` under `BEGIN IMMEDIATE`, the records rondo keeps (`records.ts`) and the lane ledger (`lanes.ts`, D-0073). `sqlite.ts` is the one module allowed to name a SQLite driver and `plan.ts` the one allowed to take a hash. |
+| `src/store/` | Durable state (D-0019 rule 10): the iteration schema, `reserve`/`transition` under `BEGIN IMMEDIATE`, the records rondo keeps (`records.ts`) and the lane ledger's store half (`lanes.ts`, D-0073). `sqlite.ts` is the one module allowed to name a SQLite driver and `plan.ts` the one allowed to take a hash. |
 | `test/architecture/` | The test that enforces the arrows above, the per-module capability grants (SQLite, the spawn, and the cadenza package) and each module's role against D-0064 section 5 (D-0093), plus checks that documented claims and CI triggers still hold. |
 | `continuo.pin.json` | Which continuo rondo drives: repository, full sha, and the exact `--version` line that build prints. CI provisions from it; `src/continuo/pin.ts` mirrors it; a test fails if they drift. |
 | `cadenza.pin.json` | Which cadenza rondo carries: repository and full sha — the *source* pin, and no version, because every cadenza build is `0.0.0`. |
