@@ -152,6 +152,17 @@ test("a box taken from an older proposal still fills after a newer reading is wr
   host.kick();
   await host.idle();
   expect((await world.record.latestTriage()).map((row) => row.proposalId)).toEqual(["triage-2"]);
+  // Before that reading, a changed goal draws "not read yet", never the old ranking.
+  await world.record.recordGoal({
+    goalId: "goal-3",
+    repository: "o/r",
+    clauses: [{ said: "something else entirely", unmetIf: "it is not so" }],
+    writtenBy: "ada",
+    writtenAtMs: 1_800,
+  });
+  const stale = await operatorPage(ports, "t", { kind: "requests" });
+  expect(stale).toContain(EN.triageNotReadYet);
+  expect(stale).not.toContain(EN.triagePutInBox);
   const html = await operatorPage(
     ports,
     "t",
