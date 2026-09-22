@@ -1177,4 +1177,8 @@ export const JA: Chrome = Object.freeze({
   publishUpdateAction: (pullRequest) => `プルリクエスト ${pullRequest} を更新する`,
   publishBusyUpdate: "プルリクエストを更新しています…",
   publishPlainUpdate: "このブランチを開いているプルリクエストへ push し、run を閉じます。",
+  publishNoteUpdate:
+    "ボタンを押すと、rondo があなたの名前で、開いているプルリクエストへ push し、run を閉じます。" +
+    "プルリクエストは作らず、マージもしません。画面を開いたあとに何か変わっていたり、" +
+    "プルリクエストが閉じていたりすれば、実行せず、理由を表示します。",
 } satisfies Chrome);

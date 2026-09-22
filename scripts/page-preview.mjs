@@ -722,122 +722,9 @@ const refusingLapId = await publishableLap("lap-preview-0006", true, false, 5 * 
 // describes it, so the only press offered is the one that overrules it.
 const staleLapId = await publishableLap("lap-preview-0007", false, true, 3 * HOUR);
 
-// Two requests the model drafter drafted (rondo#238 C2b), written the way a
-// run writes them -- a real host over this store, with a fixed answer standing
-// in for claude. The drafter's epoch is taken first, so everything seeded above
-// stays the store's past and these two are the drafter's to draft.
-await record.messagesBeforeDrafter(now);
-const pastedPlan = planDocument("lap-preview-0001");
-const agentTypeDigest = drafted.kind === "drafted" ? drafted.agentTypeDigest : "";
-async function draftedRequest(requestId, body, extra) {
-  await say({
-    messageId: requestId,
-    body,
-    authorKind: "operator",
-    authorId: "ada",
-    inReplyTo: null,
-    atMs: now - 20 * 60 * 1000,
-    bases: [],
-    asks: false,
-  });
-  await say({
-    messageId: `${requestId}-plan`,
-    body: JSON.stringify(pastedPlan),
-    authorKind: "operator",
-    authorId: "ada",
-    inReplyTo: requestId,
-    atMs: now - 19 * 60 * 1000,
-    bases: [],
-    asks: false,
-  });
-  if (extra !== null) {
-    await say({
-      messageId: `${requestId}-budget`,
-      body: extra,
-      authorKind: "operator",
-      authorId: "ada",
-      inReplyTo: requestId,
-      atMs: now - 18 * 60 * 1000,
-      bases: [],
-      asks: false,
-    });
-  }
-  let n = 0;
-  const host = modules.drafterHost.drafterHost({
-    store,
-    record,
-    now: () => now - 17 * 60 * 1000,
-    language: null,
-    log: () => undefined,
-    mintId: (kind) => {
-      n += 1;
-      return `${kind}-${requestId}-${String(n)}`;
-    },
-    runDrafter: async () => ({
-      kind: "answered",
-      costUsd: 0.06,
-      finalMessage: JSON.stringify({
-        act: "split",
-        summary: { text: "Two independent changes, drafted as two plans.", bases: [requestId] },
-        plans: [
-          {
-            template_plan_digest: modules.storePlan.planDigest(pastedPlan),
-            agent_type_digest: agentTypeDigest,
-            prompt:
-              "On the scope screen, let the cost box take a whole-dollar amount typed without " +
-              'cents ("3" as well as "3.00"). Change only that box\'s parsing and its tests.',
-            bases: [requestId],
-          },
-          {
-            template_plan_digest: modules.storePlan.planDigest(pastedPlan),
-            agent_type_digest: agentTypeDigest,
-            prompt:
-              'On the gate screen, make the approve button\'s label read "Approve" in title ' +
-              "case. Change only the label, not the value it records.",
-            bases: [requestId],
-          },
-        ],
-        narrowings:
-          extra === null ? [] : [{ field: "cost_usd", value: 4, basis: `${requestId}-budget` }],
-      }),
-    }),
-  });
-  host.kick();
-  await host.idle();
-}
-await draftedRequest(
-  "request-preview-0003",
-  "Two things, please: the scope screen's cost box should take whole dollars, and the gate's approve button should say Approve.",
-  "Keep the whole thing under $4.",
-);
-await draftedRequest(
-  "request-preview-0004",
-  "Two small fixes: whole dollars in the cost box, and a title-case Approve on the gate.",
-  null,
-);
-// The second one approved as drafted, so its screen shows each plan's start.
-const draftScope = (await record.scopesFor("request-preview-0004")).find(
-  (one) => one.authorKind === "drafter",
-);
-if (draftScope !== undefined) {
-  const approvedDraft = await modules.cli.recordDraftedScopeFromPage(
-    { RONDO_APPROVER: "ada" },
-    storePath,
-    "ada",
-    {
-      draftScopeId: draftScope.scopeId,
-      draftDigest: draftScope.scopeDigest,
-      scopeId: "scope-preview-0004-mine",
-      budgets: draftScope.payload.budgets,
-      severityThreshold: draftScope.payload.severity_threshold,
-      outwardActs: draftScope.payload.outward_acts,
-    },
-  );
-  if (!approvedDraft.ok) {
-    refuse(`the preview's drafted scope did not approve: ${approvedDraft.note}`);
-  }
-}
-
+// Seeded before the drafter's epoch below, so a preview run where a real
+// claude is installed does not draft replies to them (the three are about the
+// page's conflict fix, not about what a drafter would say).
 // --- rondo#417 (D-0105): a published pull request that conflicts ------------
 //
 // Three requests, one per state of the conflict fix, each with one approved
@@ -1057,6 +944,122 @@ for (const [requestId, lapId, fixId, state] of [
   }
 }
 const fixedLapId = "lap-preview-0014";
+
+// Two requests the model drafter drafted (rondo#238 C2b), written the way a
+// run writes them -- a real host over this store, with a fixed answer standing
+// in for claude. The drafter's epoch is taken first, so everything seeded above
+// stays the store's past and these two are the drafter's to draft.
+await record.messagesBeforeDrafter(now);
+const pastedPlan = planDocument("lap-preview-0001");
+const agentTypeDigest = drafted.kind === "drafted" ? drafted.agentTypeDigest : "";
+async function draftedRequest(requestId, body, extra) {
+  await say({
+    messageId: requestId,
+    body,
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: now - 20 * 60 * 1000,
+    bases: [],
+    asks: false,
+  });
+  await say({
+    messageId: `${requestId}-plan`,
+    body: JSON.stringify(pastedPlan),
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: requestId,
+    atMs: now - 19 * 60 * 1000,
+    bases: [],
+    asks: false,
+  });
+  if (extra !== null) {
+    await say({
+      messageId: `${requestId}-budget`,
+      body: extra,
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: requestId,
+      atMs: now - 18 * 60 * 1000,
+      bases: [],
+      asks: false,
+    });
+  }
+  let n = 0;
+  const host = modules.drafterHost.drafterHost({
+    store,
+    record,
+    now: () => now - 17 * 60 * 1000,
+    language: null,
+    log: () => undefined,
+    mintId: (kind) => {
+      n += 1;
+      return `${kind}-${requestId}-${String(n)}`;
+    },
+    runDrafter: async () => ({
+      kind: "answered",
+      costUsd: 0.06,
+      finalMessage: JSON.stringify({
+        act: "split",
+        summary: { text: "Two independent changes, drafted as two plans.", bases: [requestId] },
+        plans: [
+          {
+            template_plan_digest: modules.storePlan.planDigest(pastedPlan),
+            agent_type_digest: agentTypeDigest,
+            prompt:
+              "On the scope screen, let the cost box take a whole-dollar amount typed without " +
+              'cents ("3" as well as "3.00"). Change only that box\'s parsing and its tests.',
+            bases: [requestId],
+          },
+          {
+            template_plan_digest: modules.storePlan.planDigest(pastedPlan),
+            agent_type_digest: agentTypeDigest,
+            prompt:
+              'On the gate screen, make the approve button\'s label read "Approve" in title ' +
+              "case. Change only the label, not the value it records.",
+            bases: [requestId],
+          },
+        ],
+        narrowings:
+          extra === null ? [] : [{ field: "cost_usd", value: 4, basis: `${requestId}-budget` }],
+      }),
+    }),
+  });
+  host.kick();
+  await host.idle();
+}
+await draftedRequest(
+  "request-preview-0003",
+  "Two things, please: the scope screen's cost box should take whole dollars, and the gate's approve button should say Approve.",
+  "Keep the whole thing under $4.",
+);
+await draftedRequest(
+  "request-preview-0004",
+  "Two small fixes: whole dollars in the cost box, and a title-case Approve on the gate.",
+  null,
+);
+// The second one approved as drafted, so its screen shows each plan's start.
+const draftScope = (await record.scopesFor("request-preview-0004")).find(
+  (one) => one.authorKind === "drafter",
+);
+if (draftScope !== undefined) {
+  const approvedDraft = await modules.cli.recordDraftedScopeFromPage(
+    { RONDO_APPROVER: "ada" },
+    storePath,
+    "ada",
+    {
+      draftScopeId: draftScope.scopeId,
+      draftDigest: draftScope.scopeDigest,
+      scopeId: "scope-preview-0004-mine",
+      budgets: draftScope.payload.budgets,
+      severityThreshold: draftScope.payload.severity_threshold,
+      outwardActs: draftScope.payload.outward_acts,
+    },
+  );
+  if (!approvedDraft.ok) {
+    refuse(`the preview's drafted scope did not approve: ${approvedDraft.note}`);
+  }
+}
 
 const base = "http://127.0.0.1:7334";
 process.stdout.write(

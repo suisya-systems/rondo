@@ -1158,4 +1158,8 @@ explanation you pressed on and then answers the gate.`,
   publishUpdateAction: (pullRequest) => `Update pull request ${pullRequest}`,
   publishBusyUpdate: "Updating the pull request...",
   publishPlainUpdate: "Pushes this branch onto the open pull request and closes the run.",
+  publishNoteUpdate:
+    "rondo pushes onto the open pull request and closes the run, as you; it opens no pull " +
+    "request and merges nothing. If any of this has changed since the page was drawn, or the " +
+    "pull request is no longer open, the press stops and says so.",
 } satisfies Chrome);

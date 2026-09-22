@@ -289,9 +289,41 @@ export function mergeBlock(
  * - `landed`: the line was released, so its work is on the default branch.
  * - `fixing`: an attempt after this one already exists, running, at its gate,
  *   or approved and not yet on the pull request.
- * - `asked`: a question or a gate of the request waits on the person.
+ * - `asked`: a gate of the request, or a question about this line
+ *   ({@link asksOverLine}), waits on the person.
  */
 export type ConflictFixBlock = "notConflicting" | "landed" | "fixing" | "asked";
+
+/**
+ * Whether a question waiting in `requestMessageId`'s thread is about the line
+ * `lineIds` (rondo#417, D-0105): an ask whose bases name one of its laps. A
+ * question about the request as a whole -- the drafter's -- is answered in its
+ * own box and does not withhold the conflict fix, whose attempt stops at its
+ * own gate; the scope's verdict reads asks over a line the same way
+ * (`askStandsOver`), so the press it offers is not refused for it either.
+ */
+export function asksOverLine(
+  threads: {
+    readonly waiting: ReadonlySet<string>;
+    readonly byId: ReadonlyMap<string, { readonly bases: readonly unknown[] }>;
+    readonly rootOf: (messageId: string) => string | null;
+  },
+  requestMessageId: string,
+  lineIds: readonly string[],
+): boolean {
+  return [...threads.waiting].some(
+    (id) =>
+      threads.rootOf(id) === requestMessageId &&
+      (threads.byId.get(id)?.bases ?? []).some(
+        (basis) =>
+          typeof basis === "object" &&
+          basis !== null &&
+          "iterationId" in basis &&
+          typeof basis.iterationId === "string" &&
+          lineIds.includes(basis.iterationId),
+      ),
+  );
+}
 
 export function conflictFixBlock(
   result: LapResult | null,

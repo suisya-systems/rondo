@@ -193,7 +193,7 @@ import type {
   PublishShown,
   ReviewBlock,
 } from "./page/contract.js";
-import { conflictFixBlock, resultOf } from "./page-logic/result.js";
+import { asksOverLine, conflictFixBlock, resultOf } from "./page-logic/result.js";
 import { threadsOf } from "./page-logic/threads.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
 import { notifierAt, reachThePerson } from "./reach.js";
@@ -5235,9 +5235,15 @@ async function conflictFixPage(
   const block = !approvedForPublication(record)
     ? "notConflicting"
     : conflictFixBlock(resultOf(threads.byId, record.id), {
+        // A gate waiting, or a question about this line (D-0105); a question
+        // about the request as a whole does not withhold the fix.
         asksWaiting:
           gated ||
-          [...threads.waiting].some((id) => threads.rootOf(id) === record.requestMessageId),
+          asksOverLine(
+            threads,
+            record.requestMessageId,
+            line.kind === "read" ? line.line.laps.map((lap) => lap.id) : [record.id],
+          ),
         holding: (await store.laneLedger()).some(
           (one) => one.releasedBy === null && one.lapIds.includes(record.id),
         ),

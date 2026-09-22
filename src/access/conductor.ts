@@ -1283,8 +1283,10 @@ export async function reportToRequest(
       `base '${event.base}'` +
       (event.baseCommit === null ? "" : ` at commit '${event.baseCommit}'`) +
       ` on commit '${event.head}', so the forge will not merge it as it ` +
-      "stands and runs no checks on it until the conflict is resolved. rondo does not resolve " +
-      "a conflict.";
+      "stands and runs no checks on it until the conflict is resolved. rondo can resolve it in " +
+      "one more attempt, offered on the page, that merges the base in and stops for the " +
+      "person's approval before it is pushed onto this pull request (D-0105); the person may " +
+      "also resolve it on the branch and push.";
   } else if (event.kind === "moved") {
     messageId = `report-moved-${iterationId}-${event.to}`;
     body = movedBody(iterationId, event);

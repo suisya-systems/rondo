@@ -726,3 +726,39 @@ test("a fix's publish names the open pull request and its branch, up the line, a
   const byId = threadsOf(said.messages, new Set(), new Map()).byId;
   expect(resultOf(byId, "i-fix")?.url).toBe(PR);
 });
+
+test("D-0105: a question about the request leaves the fix offered; one about this line withholds it", async () => {
+  const world = await conflicting();
+  const ask = async (messageId: string, bases: { form: string; [key: string]: string }[]) =>
+    expect(
+      await world.record.recordThreadMessage({
+        messageId,
+        body: "Which one did you mean?",
+        authorKind: "drafter",
+        authorId: "the drafter",
+        inReplyTo: "req-r",
+        atMs: 8_000,
+        bases,
+        asks: true,
+      }),
+    ).toMatchObject({ kind: "recorded" });
+  // The drafter's question about the request: answered in its own box, and the
+  // fix is still the next step, above it (D-0106 rule 4 as D-0105 reads it).
+  await ask("ask-request", [{ form: "message", messageId: "req-r" }]);
+  const offered = await fixing(world);
+  expect(offered).toContain('action="/fix-conflict?lang=ja"');
+  // A question about this line's own lap withholds it, as the scope's verdict would.
+  await ask("ask-line", [{ form: "iteration", iterationId: "i-r" }]);
+  expect(await fixing(world)).not.toContain("/fix-conflict?");
+});
+
+test("D-0105: the thread's conflict line says rondo can resolve it, and the update's note opens nothing", async () => {
+  const world = await conflicting();
+  const said = await world.record.threadMessages();
+  if (said.kind !== "read") throw new Error(said.reason);
+  const conflict = said.messages.find((one) => one.messageId.startsWith("report-conflict-i-r-"));
+  expect(conflict?.body).toContain("rondo can resolve it in one more attempt");
+  expect(conflict?.body).not.toContain("does not resolve");
+  expect(EN.publishNoteUpdate).toContain("opens no pull request");
+  expect(chromeFor("ja").publishNoteUpdate).toContain("プルリクエストは作らず");
+});

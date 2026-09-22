@@ -1239,6 +1239,7 @@ export interface Chrome extends PageWords {
   readonly publishUpdateAction: (pullRequest: string) => string;
   readonly publishBusyUpdate: string;
   readonly publishPlainUpdate: string;
+  readonly publishNoteUpdate: string;
 }
 
 /**

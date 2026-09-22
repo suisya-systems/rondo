@@ -170,7 +170,7 @@ import {
   workerRuns,
 } from "./page-logic/laps.js";
 import { repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
-import { conflictFixBlock, mergeBlock, resultOf } from "./page-logic/result.js";
+import { asksOverLine, conflictFixBlock, mergeBlock, resultOf } from "./page-logic/result.js";
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
 import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
@@ -1987,11 +1987,26 @@ async function threadActs(
   // D-0105): offered on the one test the press asks again, under the approval
   // the lap ran under, and never beside a budget that would refuse it -- the
   // way to raise that budget is drawn in its place (D-0074 rule 4.1).
+  // The laps of one line, from a lap up to the first (`supersedesIterationId`).
+  const lineUp = (id: string): readonly string[] => {
+    const byId = new Map(laps.map((lap) => [lap.record.id, lap.record]));
+    const ids: string[] = [];
+    for (let at: string | null = id; at !== null && !ids.includes(at); ) {
+      ids.push(at);
+      at = byId.get(at)?.supersedesIterationId ?? null;
+    }
+    return ids;
+  };
   const fixTip =
     ports.fixesConflicts !== true || newIterationId === null || resultRecord === null
       ? null
       : conflictFixBlock(result, {
-            asksWaiting: waitedOn,
+            // A gate waiting, or a question about this line (D-0105): a question
+            // about the request as a whole is answered in its own box below.
+            asksWaiting:
+              laps.some((lap) => lap.record.status === "awaiting_human") ||
+              laps.some((lap) => lap.question === "waiting") ||
+              asksOverLine(threads, requestMessageId, lineUp(resultRecord.id)),
             holding: (await ports.store.laneLedger()).some(
               (line) => line.releasedBy === null && line.lapIds.includes(resultRecord.id),
             ),

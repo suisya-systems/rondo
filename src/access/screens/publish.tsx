@@ -286,7 +286,9 @@ export async function publishView(
         : review === null
           ? publishForm(wording, record, token, shown.shown, updating)
           : despiteForm(wording, record, token, shown.shown)}
-      <p class="note text-meta leading-5 text-muted-foreground">{wording.publishNote}</p>
+      <p class="note text-meta leading-5 text-muted-foreground">
+        {updating === null ? wording.publishNote : wording.publishNoteUpdate}
+      </p>
       {/* **The press above what it sends** (D-0106, rondo#408): the target,
           anything noticed and a standing refusal are short and come first,
           then the press, then the pull request's own title and body -- still

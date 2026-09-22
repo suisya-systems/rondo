@@ -22890,8 +22890,17 @@ At rondo `f726fed` and cadenza `2c56970`, by reading and by the tests this chang
 3. **A conflict fix is one more attempt of the approved lap** (rondo#417; `conflictFixFromPage`,
    `/fix-conflict`).
    1. **Offered where `conflictFixBlock` is null**: the result lap's pull request conflicts, its line
-      holds, no attempt follows it, and nothing waits on the person. The page and the press ask it
-      over the same rows. It is drawn as the thread's next step (`D-0106` rule 4), above the merge
+      holds, no attempt follows it, and no gate of the request and no question about this line waits
+      on the person. The page and the press ask it over the same rows.
+      **Which question withholds it** (the owner's screen review of 2026-09-22): a question whose
+      bases name a lap of this line (a worker's question, a stop) does, as it withholds the merge,
+      and the scope's verdict would refuse the attempt for it anyway (`askStandsOver`). A question
+      about the request as a whole -- the drafter's -- does not: it is answered in its own box, the
+      fix's attempt stops at its own gate, and the two do not decide each other. So the card is
+      drawn above that question, which is an exception to `D-0106` rule 4's "the next step is not
+      drawn while a question waits", taken for this card only; the merge keeps the rule.
+      The thread's own conflict line says that rondo can resolve it and how, so nothing that reads
+      the thread -- a person or the drafter -- is told the opposite. It is drawn as the thread's next step (`D-0106` rule 4), above the merge
       and publish steps, and the result band says both ways -- the press, or resolving it by hand --
       while it is offered, and that rondo is settling it while the attempt runs.
    2. **A redo under the approval the lap ran under** (`D-0070`, the scope's `redo` arm), counted
