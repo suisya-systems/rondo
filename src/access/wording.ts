@@ -1054,6 +1054,8 @@ export interface Chrome extends PageWords {
   readonly publishUncommitted: (paths: string) => string;
   readonly publishUncommittedElsewhere: (branch: string) => string;
   readonly publishUncommittedRemedies: string;
+  /** `git status` failed, so what the push would leave behind is unknown (D-0097). */
+  readonly publishStatusUnreadable: (reason: string) => string;
   /** Why the reading does not cover this work, one sentence each ({@link ReviewBlock}). */
   readonly publishReviewHeading: string;
   readonly publishReviewNoReading: string;
@@ -1128,6 +1130,7 @@ export interface Chrome extends PageWords {
   readonly publishRefusedNoRepo: string;
   readonly publishRefusedTarget: (detail: string) => string;
   readonly publishRefusedUncommitted: (detail: string) => string;
+  readonly publishRefusedStatusUnreadable: (detail: string) => string;
   readonly publishRefusedNotRead: string;
   readonly publishRefusedNothingOverruled: string;
   readonly publishRefusedChanged: string;

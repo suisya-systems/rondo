@@ -1468,7 +1468,7 @@ test("the title is the lap's own commit subject, never the request cut short", (
   for (const title of [
     text({ work: worked({ commits: [{ abbreviatedSha: "ccc3333", subject: long }] }) }).title,
     text({ work: worked({ commits: [] }) }).title,
-    text({ work: { kind: "unreadable", reason: "not a git repository" } }).title,
+    text({ work: { kind: "unreadable", part: "history", reason: "not a git repository" } }).title,
   ]) {
     expect(title).toBe("docs/rondo-first-real-lap (rondo run dogfood-001)");
     expect(title).not.toContain("...");
@@ -1710,7 +1710,9 @@ test("a very long request is quoted as far as it goes and says where the rest is
 });
 
 test("a history rondo could not read is said out loud, and loses no provenance", () => {
-  const body = text({ work: { kind: "unreadable", reason: "not a git repository" } }).body;
+  const body = text({
+    work: { kind: "unreadable", part: "history", reason: "not a git repository" },
+  }).body;
   expect(body).toContain("rondo could not read this branch's history");
   expect(body).toContain("not a git repository");
   expect(body).toContain("Gate `g-1` closed `answered_and_forwarded`");
@@ -1800,7 +1802,7 @@ test("a fork publish says which base its summary compared against", () => {
   // There is nothing to caveat when there was no comparison to begin with.
   const unreadable = text({
     headIsQualified: true,
-    work: { kind: "unreadable", reason: "not a git repository" },
+    work: { kind: "unreadable", part: "history", reason: "not a git repository" },
   }).body;
   expect(unreadable).not.toContain("pushed to a different repository");
 });
@@ -1812,7 +1814,7 @@ test("no value the row carries can make a body the forge refuses", () => {
     runId: "r".repeat(70_000),
     topicBranch: "b".repeat(70_000),
     record: published({ sessionId: "s".repeat(70_000), model: "m".repeat(70_000) }),
-    work: { kind: "unreadable", reason: "e".repeat(70_000) },
+    work: { kind: "unreadable", part: "history", reason: "e".repeat(70_000) },
   }).body;
   expect(body).toContain("(run id of 70000 characters, not printed here)");
   expect(body).toContain("(session name of 70000 characters, not printed here)");
@@ -1917,7 +1919,11 @@ test("publish refuses a clear reading when the content moved under the same tip"
 });
 
 test("publish refuses when the workspace cannot be read now, so nothing can be checked", () => {
-  const outcome = reviewGate(reviewed(), { kind: "unreadable", reason: "not a repository" }, false);
+  const outcome = reviewGate(
+    reviewed(),
+    { kind: "unreadable", part: "history", reason: "not a repository" },
+    false,
+  );
 
   expect(outcome.kind).toBe("refused");
   expect(outcome.kind === "refused" && outcome.reason).toContain("not a repository");
@@ -1940,7 +1946,7 @@ test("--despite-review overrules every one of those refusals, and only those", (
     [reviewed({ verdict: "concerns", findings: ["something"] }), worked()],
     [reviewed({ verdict: "unavailable", evidence: null }), worked()],
     [reviewed(), worked({ tipCommit: "f".repeat(40) })],
-    [reviewed(), { kind: "unreadable", reason: "not a repository" }],
+    [reviewed(), { kind: "unreadable", part: "history", reason: "not a repository" }],
     [reviewed({ evidence: null }), worked()],
   ];
 
@@ -2067,7 +2073,7 @@ test("the operator is shown the commits and the files, not a count of them", () 
 test("a workspace that cannot be read is said out loud and blocks nothing", () => {
   // This runs on the path to a person's gate answer, where nothing of rondo's
   // may stand between them and it (D-0029 rule 3).
-  const lines = workLines({ kind: "unreadable", reason: "no such directory" });
+  const lines = workLines({ kind: "unreadable", part: "history", reason: "no such directory" });
 
   expect(lines).toEqual(["        the workspace could not be read: no such directory"]);
 });
@@ -2545,7 +2551,23 @@ test("D-0060: a partly-committed workspace passes reviewGate, and publish refuse
 test("D-0060: a clean or unreadable workspace is not refused here", () => {
   expect(uncommittedRefusal(worked(), "/work/lap", "docs/rondo-first-real-lap")).toBeNull();
   // `reviewGate` refuses the unreadable one; this refusal is about paths git listed.
-  expect(uncommittedRefusal({ kind: "unreadable", reason: "x" }, "/work/lap", "topic")).toBeNull();
+  expect(
+    uncommittedRefusal({ kind: "unreadable", part: "history", reason: "x" }, "/work/lap", "topic"),
+  ).toBeNull();
+});
+
+test("rondo#179: a git status that fails is refused here, and says the uncommitted state is unknown", () => {
+  const refusal = uncommittedRefusal(
+    { kind: "unreadable", part: "status", reason: "fatal: index file smaller than expected" },
+    "/work/lap",
+    "topic",
+  );
+
+  expect(refusal).toContain("git status could not be read in the workspace /work/lap");
+  expect(refusal).toContain("index file smaller than expected");
+  expect(refusal).toContain("whether the push would leave uncommitted work behind is unknown");
+  expect(refusal).toContain("--despite-review does not change that");
+  expect(refusal).toMatch(/^[ -~]*$/);
 });
 
 test("D-0060: the refusal says which branch it read when it is not the topic branch", () => {

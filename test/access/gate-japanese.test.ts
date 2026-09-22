@@ -31,7 +31,9 @@ async function gatePage(lang = EN, unreadable = false): Promise<string> {
   await modelFindings(world);
   const material = async () => ({
     ...(await structured()),
-    ...(unreadable ? { work: { kind: "unreadable" as const, reason: GIT_SAID } } : {}),
+    ...(unreadable
+      ? { work: { kind: "unreadable" as const, part: "history" as const, reason: GIT_SAID } }
+      : {}),
   });
   const html = await operatorPage(
     { ...portsOver(world, "ada", []), material },

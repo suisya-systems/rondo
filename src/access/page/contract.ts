@@ -267,6 +267,12 @@ export type PublishBlock =
    */
   | { readonly why: "noRepo" }
   | { readonly why: "target"; readonly reason: string }
+  /**
+   * `git status` failed, so what the push would leave behind is unknown
+   * (D-0097). Its own arm because its answer is repairing the workspace,
+   * not the paths; and, like `uncommitted`, no press here overrules it.
+   */
+  | { readonly why: "statusUnreadable"; readonly reason: string }
   | {
       readonly why: "uncommitted";
       /** The paths git reported, which is what D-0060 rule 4 refuses over. */

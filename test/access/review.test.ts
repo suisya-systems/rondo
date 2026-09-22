@@ -38,7 +38,7 @@ test("a workspace that could not be read is 'unavailable' and never 'clear'", ()
   // a reader that answered `clear` here would leave a record saying a reading
   // happened where none did -- with `publish` then waving it through. Deleting
   // this branch is the mutation that must make this file red.
-  const reading = readingOf({ kind: "unreadable", reason: "no such directory" });
+  const reading = readingOf({ kind: "unreadable", part: "history", reason: "no such directory" });
 
   expect(reading.verdict).toBe("unavailable");
   expect(reading.evidence).toBeNull();

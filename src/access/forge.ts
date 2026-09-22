@@ -1004,7 +1004,20 @@ export type LapWorkInspection =
        */
       readonly checkedOut: string;
     }
-  | { readonly kind: "unreadable"; readonly reason: string };
+  | {
+      readonly kind: "unreadable";
+      /**
+       * Which half could not be read (D-0097). `history` is the base, the
+       * tip, the log or the diff; nothing after it was asked, so the
+       * uncommitted state is unknown too, and the rule above still stands: the
+       * publish degrades rather than stops. `status` is the history read and
+       * `git status` failing on top of it, which leaves D-0060's fact -- what
+       * the push would leave behind -- unknown, and `publish` refuses on that
+       * whatever overrides it.
+       */
+      readonly part: "history" | "status";
+      readonly reason: string;
+    };
 
 /** Where a branch points, or why git would not say. */
 export type BranchTip =
@@ -1085,7 +1098,11 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
       PREFLIGHT_TIMEOUT_MS,
     );
     if (resolved.spawnError !== null) {
-      return { kind: "unreadable", reason: `${resolved.commandLine}: ${resolved.spawnError}` };
+      return {
+        kind: "unreadable",
+        part: "history",
+        reason: `${resolved.commandLine}: ${resolved.spawnError}`,
+      };
     }
     // Exit 1 with no output is "no such ref", which is an answer here and not a
     // failure: the next candidate may resolve. Anything else is git unable to
@@ -1101,12 +1118,17 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
       break;
     }
     if (resolved.status !== 1) {
-      return { kind: "unreadable", reason: queryFailure(resolved) ?? resolved.commandLine };
+      return {
+        kind: "unreadable",
+        part: "history",
+        reason: queryFailure(resolved) ?? resolved.commandLine,
+      };
     }
   }
   if (baseRef === null) {
     return {
       kind: "unreadable",
+      part: "history",
       reason: `neither ${candidates[0] ?? ""} nor ${candidates[1] ?? ""} is a ref in ${request.workspace}`,
     };
   }
@@ -1116,6 +1138,7 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
     // string into a row that claims to identify a commit.
     return {
       kind: "unreadable",
+      part: "history",
       reason: `git rev-parse --verify ${baseRef} in ${request.workspace} printed no sha`,
     };
   }
@@ -1138,12 +1161,13 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
   );
   const tipFailure = queryFailure(tip);
   if (tipFailure !== null) {
-    return { kind: "unreadable", reason: tipFailure };
+    return { kind: "unreadable", part: "history", reason: tipFailure };
   }
   const tipCommit = tip.stdout.trim();
   if (tipCommit === "") {
     return {
       kind: "unreadable",
+      part: "history",
       reason: `git rev-parse --verify refs/heads/${request.topicBranch} in ${request.workspace} printed no sha`,
     };
   }
@@ -1165,7 +1189,7 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
   );
   const logFailure = queryFailure(logged);
   if (logFailure !== null) {
-    return { kind: "unreadable", reason: logFailure };
+    return { kind: "unreadable", part: "history", reason: logFailure };
   }
   const commits: LapCommit[] = [];
   for (const line of logged.stdout.split("\n")) {
@@ -1193,7 +1217,7 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
   );
   const diffFailure = queryFailure(diffed);
   if (diffFailure !== null) {
-    return { kind: "unreadable", reason: diffFailure };
+    return { kind: "unreadable", part: "history", reason: diffFailure };
   }
   const files: LapFile[] = [];
   for (const line of diffed.stdout.split("\n")) {
@@ -1235,7 +1259,7 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
   );
   const statusFailure = queryFailure(status);
   if (statusFailure !== null) {
-    return { kind: "unreadable", reason: statusFailure };
+    return { kind: "unreadable", part: "status", reason: statusFailure };
   }
   const uncommitted: string[] = [];
   let checkedOut = "";

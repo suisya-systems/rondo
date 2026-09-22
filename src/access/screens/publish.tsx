@@ -341,6 +341,8 @@ function publishBlockLines(wording: Chrome, block: PublishBlock): readonly strin
       return [wording.publishNoRepo];
     case "target":
       return [wording.publishTargetRefused(block.reason)];
+    case "statusUnreadable":
+      return [wording.publishStatusUnreadable(block.reason)];
     default:
       return [
         wording.publishUncommitted(block.paths.join(", ")),

@@ -132,6 +132,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0092 | Which answer a gate was given is recorded beside the gate answer, when rondo carries it: `approve` and `revise` stop being told apart by whether a next try exists, and a lap with no record is not called approved | accepted (point 3 pending the owner) |
 | D-0093 | The boundary test also asks which role a module plays: every module under `src/` names a row of `D-0064` section 5, a row given to cadenza or continuo is refused, and what already sits in rondo is a named, shrinking list of relocations | accepted |
 | D-0096 | The header's "Requests" link is closed, and a thread's `Esc` goes to the bare address: the link led to the new-request view the list already reaches, and the way back it carried on a thread moves to the logo | accepted |
+| D-0097 | A `git status` that fails is refused by `publish` whatever overrides it: the inspection says which half it could not read, and only unreadable history stays publishable past `--despite-review` | accepted |
 
 ---
 
@@ -11813,6 +11814,13 @@ and the registry.
 **Status:** accepted (2026-09-13, rondo's human gate). Refs `D-0029`, `D-0045`, `D-0043`, `D-0051`,
 `D-0050`, `D-0025`.
 
+> **Annotation (2026-09-22, from D-0097, on rondo#179).** Added after this entry was accepted, and
+> **additive**. Rule 1's *"a `git status` that fails makes the inspection `unreadable`"* still
+> holds, and the inspection now says which query failed. A failed `git status` is refused by
+> `publish` on rule 5's ground, and `--despite-review` does not reach it. Before this, it went
+> through `reviewGate`'s unreadable refusal, which the flag passes. Unreadable *history* is
+> unchanged.
+
 `D-0029` named this and left it: among its residuals, *"Uncommitted work reads as empty to every
 reader in the tree, and `publish` pushes a branch without it"*, owned by *"rondo's gate, or the issue
 it becomes"*. `docs/design/lap-review-stage.md` section 9.2 says the same thing from the reader's
@@ -21538,3 +21546,66 @@ At rondo `223654d`, by reading `src/access/web.tsx` and the page in a browser:
 - **A person looking for the requests in the header** after this, rather than in the left face.
 - **A person pressing `Esc` on a thread and expecting the list's writing view**, which is where it
   used to go.
+
+## D-0097 — A `git status` that fails is refused by `publish` whatever overrides it: the inspection says which half it could not read, and only unreadable history stays publishable past `--despite-review`
+
+**Status:** accepted (2026-09-22, rondo's owner, in the lap request that chose rondo#179's first
+option). Supersedes nothing. `D-0060` gains the annotation this entry adds (listed at the end). Refs
+`D-0060` rules 1 and 5, `D-0026` rule 6 (the pull request body's unreadable-history rule), rondo#179.
+
+**Why an entry is needed.** rondo#179 asked the gate to choose between two things. One was to refuse
+an unreadable `git status` whatever the flags, on `D-0060` rule 5's ground. The other was to keep the
+rule and only reword the refusal. The lap 12 runbook lists this issue with the second option as
+expected, and says that taking the first belongs in the record. This is that record.
+
+### What was measured
+
+At rondo `f2e8b8e`, by reading `src/access/forge.ts` and `src/access/cli.ts` and by the real
+repository test in `test/access/forge.test.ts`:
+- `inspectLapWork` runs its queries in a fixed order: base, tip, log, diff, then `git status`. Any
+  failure answers `unreadable` with a reason and nothing else. So a failed `git status` and a failed
+  history read looked the same to the caller.
+- A corrupt `.git/index` fails `git status` and nothing before it. Every earlier query reads refs
+  and objects only.
+- `uncommittedRefusal` returned null for every unreadable inspection. `reviewBlock` then refused it
+  as `unreadable`, which `--despite-review` and the page's second press both pass.
+
+### Decision
+
+1. **The unreadable inspection says which half failed**, as a field: `part: "history"` for the base,
+   the tip, the log or the diff, and `part: "status"` for `git status` after the history was read.
+   A history failure asks nothing after it, so its uncommitted state is unknown as well. It is still
+   `history`, because that is the rule below.
+2. **`publish` refuses `part: "status"` before it weighs the reading, and no override reaches it**,
+   at the same point as `D-0060` rule 4's refusal and on rule 5's ground. What the push would leave
+   behind is a fact, and not knowing it is not a judgement. The command line's sentence says that
+   `git status` could not be read, that whether uncommitted work would be left behind is unknown,
+   and that `--despite-review` does not change that. The page draws it as its own block,
+   `statusUnreadable`, and draws no press.
+3. **Unreadable history is unchanged.** `inspectLapWork`'s rule, that a publish whose history could
+   not be read stays publishable, stands. It is refused by `reviewGate` and passed by
+   `--despite-review`, as before.
+4. **No new check, flag or verb.** The remedy is the workspace's: repair it so `git status` answers,
+   then publish again.
+
+### What it costs
+
+- **A workspace whose history and status are both broken still publishes under the override.** Its
+  history fails first, so it reads as `history` and rule 3 applies. Running `git status` on a
+  workspace whose history already failed, to tell the two apart, would be a new check. rondo#179 did
+  not ask for one.
+
+### Annotations this entry adds
+
+| Entry | What the annotation says | Additive? |
+|---|---|---|
+| `D-0060` | A failed `git status` is refused by `publish` on rule 5's ground, and `--despite-review` does not reach it; unreadable history is unchanged | additive |
+
+### What would falsify it
+
+- **A `git status` that fails routinely on workspaces whose push is sound**, such as a fence mask or
+  a worktree layout that git cannot read the index of. The refusal would then be noise with no
+  override, and the owner would need to answer it.
+- **A history read that starts depending on the index**, so that a corrupt index reads as `history`
+  and passes under the override again. The real repository test in `test/access/forge.test.ts`
+  would fail on this.
