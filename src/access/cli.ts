@@ -5161,7 +5161,9 @@ export async function answerOnceReserved(
         // is the wait the person is called to, and a stop would say otherwise.
         const now = await store.read(input.iterationId).catch(() => null);
         if (now?.kind === "read" && now.record.status === "awaiting_human") {
-          console.error(`lap '${input.iterationId}' is at its gate; after it: ${late.note}`);
+          consoleSeams.writeError(
+            `${asciiEscape(`lap '${input.iterationId}' is at its gate; after it: ${late.note}`)}\n`,
+          );
           return;
         }
         await sayStartStopped(record, input, late.note);
@@ -5180,8 +5182,8 @@ async function sayStartStopped(
   note: string,
 ): Promise<void> {
   const unsaid = (reason: string) =>
-    console.error(
-      `rondo could not tell the person that lap '${input.iterationId}' stopped (${note}): ${reason}`,
+    consoleSeams.writeError(
+      `${asciiEscape(`rondo could not tell the person that lap '${input.iterationId}' stopped (${note}): ${reason}`)}\n`,
     );
   try {
     const outcome = await record.recordThreadMessage({
@@ -5189,12 +5191,15 @@ async function sayStartStopped(
       body: [
         `Stopped: lap '${input.iterationId}', which the start press began, did not reach its gate.`,
         `Reason: ${note}`,
-        "Nothing drives this lap now; its row stays as rondo last wrote it.",
+        "Nothing drives this lap now, but its row still holds its place on this host and the " +
+          "files it claims until it is settled.",
         "Options:",
-        "- Carry on. Gives up: this lap. Then press start again on the scope screen; the new lap " +
-          "runs under the same approval.",
-        "- Stop this line. Gives up: this request's work.",
-        "Recommended: carry on once the reason above no longer holds.",
+        "- Settle the lap, then Carry on. Gives up: this lap. In the terminal rondo runs in: " +
+          `rondo abandon --iteration-id ${input.iterationId} --reason "<why>". A plan you wrote ` +
+          "can then be started again from the scope screen; a drafted plan that has had a lap " +
+          "does not start again, and needs a new plan.",
+        "- Settle the lap, then Stop this line. Gives up: this request's work.",
+        "Recommended: settle the lap and carry on once the reason above no longer holds.",
         "This line stays stopped until this message is answered.",
       ].join("\n"),
       authorKind: "drafter",

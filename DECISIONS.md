@@ -23299,7 +23299,8 @@ are and which is recommended, as `D-0066` rule 4.4's stop does. An ask counts as
 tab's *your turn* (`D-0108`) and the host's notification both reach the person, and `D-0106` puts it
 at the top of the thread. It holds the request's line until it is answered, as every stop does
 (`D-0069` rule 5). The message's id is the lap's, so a second press joined to the first writes it
-once. If the message cannot be written, the host's console says so.
+once. If the message cannot be written, the host's console says so, escaped like every other line
+(`D-0004`).
 
 A lap whose row already reads `awaiting_human` when the throw arrives failed only in the model
 reading taken after the gate opened. The gate is then the wait the person is called to, so no stop
@@ -23310,7 +23311,10 @@ is written, and the error goes to the host's console.
 sometimes tens of minutes"), which is now false for them. They say `startBusyNote` instead: the page
 moves to the request's thread once the work is under way. The revise and conflict-fix presses keep
 `lapBusyNote`, which is still true for them. The stop's options name the answering box's own two
-presses, *Carry on* and *Stop this line*.
+presses, *Carry on* and *Stop this line*, and first the one act that frees the lap's place and files:
+`rondo abandon` in the terminal, since the page has no press that settles a lap. A plan the person
+wrote can then be started again from the scope screen. A drafted plan that has had a lap does not
+start again from the page, as before this entry.
 
 **5. What is not done.** The revise press and the conflict-fix press also run a lap to its gate
 inside the press. rondo#409 names the start press, so they are left as they are. The same wrapper
