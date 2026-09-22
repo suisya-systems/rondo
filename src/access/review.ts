@@ -159,14 +159,19 @@ export interface ReadingOptions {
     readonly ancestor: "yes" | "no" | { readonly undetermined: string };
   };
   /**
-   * The line's decision record (D-0098 rule 3.6): the numbers it holds, and
-   * the numbers this lap's `base...tip` added in headings and index rows, or
-   * why git could not say.
+   * The line's decision record (D-0098 rule 3.6): every number it was handed
+   * (a released one included, which nobody else can ever be handed, so a
+   * retry that writes it collides with nothing), the numbers this lap's
+   * `base...tip` added in headings and index rows, or why git could not say,
+   * and the numbers it still holds that the tip's record does not spell with
+   * a heading and an index row (rule 3.6 read the other way: a reservation
+   * left unwritten would keep the line from ever reading landed).
    */
   readonly record?: {
     readonly path: string;
     readonly reserved: readonly number[];
     readonly added: readonly number[] | { readonly undetermined: string };
+    readonly unwritten?: readonly number[];
   };
 }
 
@@ -266,6 +271,12 @@ export function readingOf(
             `numbers (${held}; D-0098 rule 3.6)`,
         );
       }
+    }
+    for (const number of record.unwritten ?? []) {
+      findings.push(
+        `${record.path} has no heading and index row for ${recordNumber(number)}, which this ` +
+          "line holds: the line does not read landed until both are there (D-0098 rule 3.6)",
+      );
     }
   }
 

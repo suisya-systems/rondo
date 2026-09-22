@@ -17,13 +17,13 @@ import {
   questionRevise,
   readWorkerQuestion,
   relayQuestion,
-  WORKER_QUESTION_AUTHOR,
 } from "../../src/access/question.js";
 import {
   askStandsOver,
   DETERMINISTIC_READING_DRAFTER,
   type IterationRecord,
   type LapReading,
+  WORKER_QUESTION_AUTHOR,
 } from "../../src/store/records.js";
 import { advisoryRecord } from "../../src/store/sqlite.js";
 
@@ -197,13 +197,61 @@ test("nothing committed, nothing asked, or nothing read: no ask is written", asy
   }
 });
 
-test("an unreadable block is reported in the thread, not dropped, and holds nothing", async () => {
+test("an unreadable block is put in the thread, not dropped, and holds its line until answered (rule 4.4)", async () => {
   const { record, ports } = world("```rondo-question\nnot json\n```");
   await request(record);
   expect(await relayQuestion(ports, "it-1", 10)).toContain("question-it-1");
   const read = await record.threadMessages();
   const note =
     read.kind === "read" ? read.messages.find((m) => m.messageId === "question-it-1") : null;
-  expect(note?.asks).toBe(false);
+  expect(note?.asks).toBe(true);
   expect(note?.body).toContain("could not read");
+  const open = await record.openAsksIn("m-request");
+  expect(open.kind === "read" && open.asks.map((ask) => ask.messageId)).toEqual(["question-it-1"]);
+});
+
+test("an earlier fence left open does not swallow the real block, and a mention in a sentence is no question", () => {
+  const read = readWorkerQuestion(
+    `\`\`\`rondo-question\nnote: I will ask below\n\n${report(QUESTION)}`,
+  );
+  expect(read.kind === "question" && read.question.question).toBe(QUESTION.question);
+  expect(readWorkerQuestion("I could have ended with a ```rondo-question block.")).toEqual({
+    kind: "none",
+  });
+});
+
+test("a rationale of many unclosed openers is read in linear time", () => {
+  const hostile = "```rondo-question\nx\n".repeat(200_000);
+  const started = performance.now();
+  expect(readWorkerQuestion(hostile).kind).toBe("unreadable");
+  expect(performance.now() - started).toBeLessThan(2_000);
+});
+
+test("a lap rondo could not read still has its question put, saying the commit was not read", async () => {
+  const { record, ports } = world(report(QUESTION));
+  await request(record);
+  const unread: QuestionPorts = {
+    ...ports,
+    store: { ...ports.store, readingsFor: async () => [] } as unknown as QuestionPorts["store"],
+  };
+  expect(await relayQuestion(unread, "it-1", 10)).toContain("question-it-1");
+  const read = await record.threadMessages();
+  const asked =
+    read.kind === "read" ? read.messages.find((m) => m.messageId === "question-it-1") : null;
+  expect(asked?.asks).toBe(true);
+  expect(asked?.body.endsWith("(rondo could not read what this lap committed)")).toBe(true);
+});
+
+test("a worker's question does not hold an unproposed start of its request; any other ask still does (D-0098 rule 4.4)", async () => {
+  const { record, ports } = world(report(QUESTION));
+  await request(record);
+  await relayQuestion(ports, "it-1", 10);
+  const open = await record.openAsksIn("m-request");
+  const ask = open.kind === "read" ? open.asks[0] : undefined;
+  expect(ask?.lineOnly).toBe(true);
+  expect(ask !== undefined && askStandsOver(ask, [], true)).toBe(false);
+  expect(ask !== undefined && askStandsOver(ask, ["it-1"], false)).toBe(true);
+  expect(
+    askStandsOver({ messageId: "m", iterationIds: ["it-1"], answeredStop: false }, [], true),
+  ).toBe(true);
 });

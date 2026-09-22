@@ -27,6 +27,7 @@ import {
   runPlan,
 } from "../../src/refrain/plan.js";
 import {
+  DETERMINISTIC_READING_DRAFTER,
   type JsonRecord,
   type LapReading,
   modelReadingDrafter,
@@ -390,12 +391,16 @@ test("redo readings: exit and revise are inside, stop is outside, none is undeci
 
 test("D-0098 rule 5.2: a closing redo is inside only under fix_unread, after an exit, with something below", () => {
   const CLOSING: ScopeAct = { ...REDO, closing: true };
-  const withReading = (latest: LapReading | null, payload: Partial<ScopePayload>) =>
+  const withReading = (
+    latest: LapReading | null,
+    payload: Partial<ScopePayload>,
+    latestTipCommit: string | null = "f".repeat(40),
+  ) =>
     snapshot(
       {
         predecessor: {
           ...PREDECESSOR,
-          readings: { kind: "read", latestModelReading: latest, roundsTaken: 1 },
+          readings: { kind: "read", latestModelReading: latest, roundsTaken: 1, latestTipCommit },
         },
       },
       payload,
@@ -420,6 +425,12 @@ test("D-0098 rule 5.2: a closing redo is inside only under fix_unread, after an 
   refused(read([]), fix, "nothing to fix");
   // No tip to name as last read.
   refused(reading(["minor"]), fix, "names no tip commit");
+  // The model read an older tip than the predecessor's last gate: T1..T2 unread.
+  expect(scopeVerdict(CLOSING, withReading(read(["minor"]), fix, "e".repeat(40)))).toMatchObject({
+    kind: "outside",
+    test: "readings",
+    reason: expect.stringContaining("never read"),
+  });
   // Control: the same exits as an ordinary redo are inside under leave.
   expect(scopeVerdict(REDO, withReading(read(["minor"]), {}))).toEqual(INSIDE);
   // A redo from the closing lap itself: it holds no model reading, so undecidable.
@@ -803,7 +814,14 @@ test("D-0098 rule 5.3: a closing redo carries what the reviewer last read into t
     readAtMs: 7,
   } as unknown as LapReading;
   const calls: unknown[][] = [];
-  const reads = gatherPorts({ "i-1": { supersedes: null, readings: [exit] } });
+  const gate = {
+    drafter: DETERMINISTIC_READING_DRAFTER,
+    verdict: "clear",
+    findings: [],
+    evidence: { tipCommit: "e".repeat(40) },
+    readAtMs: 6,
+  } as unknown as LapReading;
+  const reads = gatherPorts({ "i-1": { supersedes: null, readings: [gate, exit] } });
   const admitPorts: ScopeAdmitPorts = {
     ...ports(snap, []),
     store: reads.store,

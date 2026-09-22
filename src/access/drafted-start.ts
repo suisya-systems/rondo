@@ -21,7 +21,12 @@ import { type RunPlan, readRunPlan } from "../refrain/plan.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import { repositoryKey, sharedPaths, WHOLE_REPOSITORY } from "../store/lanes.js";
 import { canonicalJson } from "../store/plan.js";
-import type { AdvisoryRecord, IterationStore, LedgerLine } from "../store/sqlite.js";
+import {
+  type AdvisoryRecord,
+  type IterationStore,
+  LANE_LEDGER_AUTHOR,
+  type LedgerLine,
+} from "../store/sqlite.js";
 import { DONE_OPENING } from "./done.js";
 import { ISSUES_QUOTE_OPENING } from "./issue-read.js";
 import { type DraftedPlanRun, draftedPlanRun } from "./model-draft/host.js";
@@ -181,6 +186,11 @@ export type PlanOrder =
       readonly first: {
         readonly lineageId: string;
         readonly state: "running" | "awaitingLanding" | "endedUnlanded";
+        /**
+         * The line's latest lap: a retry of `first` keeps its lineage, so an
+         * ended retry is told apart from the ending before it by this.
+         */
+        readonly lastLapId: string;
       } | null;
     }
   | { readonly kind: "landed"; readonly landing: OrderLanding };
@@ -220,7 +230,11 @@ export async function planOrder(
       : (line?.releasedBy ?? null) === null
         ? "awaitingLanding"
         : "endedUnlanded";
-  return { kind: "waiting", after, first: { lineageId, state } };
+  return {
+    kind: "waiting",
+    after,
+    first: { lineageId, state, lastLapId: line?.lapIds.at(-1) ?? lineageId },
+  };
 }
 
 /** How {@link orderSection} opens: what {@link startedFrom} strips. */
@@ -246,9 +260,9 @@ export function orderSection(landing: OrderLanding): string {
  * `run`'s plan and claim as a `then` is admitted on `first`'s landing (D-0098
  * rule 1.6): the section after the prompt, and the landing as a basis of the
  * claim row `reserve()` writes in the admission's transaction. A split drafted
- * with no claim is admitted claiming the whole repository (D-0073 rule 2.5)
- * with no claim row of its own asking, so the basis is carried by the prompt
- * alone there.
+ * with no claim is admitted claiming the whole repository (D-0073 rule 2.5),
+ * asked here in the lane ledger's name so the landing is a basis of that row
+ * too: every admitted `then` records the commit it was admitted on.
  */
 export function onLanding(
   run: Extract<DraftedPlanRun, { kind: "runnable" }>,
@@ -258,7 +272,12 @@ export function onLanding(
     plan: { ...run.plan, prompt: run.plan.prompt + orderSection(landing) },
     claim:
       run.claim === null
-        ? null
+        ? {
+            paths: [WHOLE_REPOSITORY],
+            authorKind: "drafter",
+            authorId: LANE_LEDGER_AUTHOR,
+            bases: [{ form: "landing", ...landing }],
+          }
         : { ...run.claim, bases: [...run.claim.bases, { form: "landing", ...landing }] },
   };
 }

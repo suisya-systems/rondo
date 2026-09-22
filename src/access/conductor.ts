@@ -69,6 +69,7 @@ import {
   type IterationRecord,
   isDeterministicReadingDrafter,
   isModelReadingDrafter,
+  type JsonRecord,
   type LaneClaimAsk,
   type LaneHolder,
   type LapReadingDraft,
@@ -96,7 +97,7 @@ import {
 import { hostFailure } from "./host-failure.js";
 import { modelReadingLines } from "./model-review/judgement.js";
 import { relayQuestion } from "./question.js";
-import { LIST_LIMIT, READING_REMOTE, readingOf } from "./review.js";
+import { LIST_LIMIT, READING_REMOTE, type ReadingOptions, readingOf } from "./review.js";
 
 export type { ConductorReport };
 
@@ -437,25 +438,33 @@ export function conductorPorts(
               }),
             };
       // D-0098 rule 3.6: the numbers this lap added to its record, tested
-      // against its line's reservations over the range the inspection read.
+      // against every number its line was handed over the range the
+      // inspection read, and the numbers it still holds tested for being
+      // written.
       const recordPath = plan.decisionRecord;
-      const record =
-        recordPath === null || inspection.kind !== "read"
-          ? undefined
-          : {
-              path: recordPath,
-              reserved: (await store.numberReservations(iterationId)).flatMap((one) =>
-                one.released ? [] : [one.number],
-              ),
-              added: await readRecordAdditions({
-                repository: plan.workspace,
-                baseCommit: inspection.baseCommit,
-                tipCommit: inspection.tipCommit,
-                record: recordPath,
-              }).then((read) =>
-                read.kind === "read" ? read.numbers : { undetermined: read.reason },
-              ),
-            };
+      let record: ReadingOptions["record"];
+      if (recordPath !== null && inspection.kind === "read") {
+        const reservations = await store.numberReservations(iterationId);
+        const read = await readRecordAdditions({
+          repository: plan.workspace,
+          baseCommit: inspection.baseCommit,
+          tipCommit: inspection.tipCommit,
+          record: recordPath,
+          takenIn: plan.takeIn?.commit ?? null,
+        });
+        record = {
+          path: recordPath,
+          reserved: reservations.map((one) => one.number),
+          added: read.kind === "read" ? read.numbers : { undetermined: read.reason },
+          ...(read.kind === "read"
+            ? {
+                unwritten: reservations.flatMap((one) =>
+                  one.released || read.spelled.includes(one.number) ? [] : [one.number],
+                ),
+              }
+            : {}),
+        };
+      }
       return {
         kind: "answered",
         value: readingOf(inspection, {
@@ -688,7 +697,13 @@ export async function readHolder(
   // D-0098 rule 3.7: the record is read by the line's numbers and added
   // lines, never by its tree entry.
   const recordPath = root.plan["decision_record"];
+  // D-0098 rule 2: what the line's laps were told to take in is not its work.
+  const takenIn = line.laps.flatMap((lap) => {
+    const commit = takenInCommit(lap.plan);
+    return commit === null ? [] : [commit];
+  });
   const landing = await lanes.readLanding({
+    ...(takenIn.length === 0 ? {} : { takenIn }),
     repository,
     remote: lanes.remote,
     baseCommit,
@@ -808,9 +823,7 @@ export async function compareClaim(
   // a lap that merged the default branch's commit X would otherwise report
   // every path X brought as outside its claim. So a path counts only if it
   // also changed from X to the tip, as `readLanding` counts a landing.
-  const takeIn = lap.line.laps.find((each) => each.id === iterationId)?.plan["take_in"];
-  const takenIn =
-    typeof takeIn === "object" && takeIn !== null && "commit" in takeIn ? takeIn.commit : null;
+  const takenIn = takenInCommit(lap.line.laps.find((each) => each.id === iterationId)?.plan ?? {});
   const lapChanged = await lanes.readChangedPaths({
     repository,
     baseCommit: evidence.baseCommit,
@@ -856,6 +869,17 @@ export async function compareClaim(
         held: compared.held,
         unheld: compared.unheld,
       };
+}
+
+/** A stored lap plan's `take_in.commit` (D-0098 rule 2.1), or null when it takes nothing in. */
+export function takenInCommit(plan: JsonRecord): string | null {
+  const takeIn = plan["take_in"];
+  return typeof takeIn === "object" &&
+    takeIn !== null &&
+    "commit" in takeIn &&
+    typeof takeIn.commit === "string"
+    ? takeIn.commit
+    : null;
 }
 
 /** The report's lines, unchanged: what the terminal has printed since rondo#293. */
@@ -966,7 +990,9 @@ export interface LandingPorts {
 /** What a report into a request thread reads and writes. */
 export interface RequestThread {
   readonly record: Pick<AdvisoryRecord, "recordThreadMessage">;
-  readonly store: Pick<IterationStore, "read" | "readingsFor">;
+  readonly store: Pick<IterationStore, "read" | "readingsFor"> &
+    /** Whether a lap is a closing lap (D-0098 rule 5.3); absent in a thread that only reports. */
+    Partial<Pick<IterationStore, "closingLapOf">>;
   /**
    * The gate's rationale, where a worker's question arrives (D-0098 rule 4.2),
    * or null when there is no gate or it could not be read. Absent where no
@@ -1174,6 +1200,7 @@ export async function reportToRequest(
       (drafter) => !isModelReadingDrafter(drafter),
     );
     messageId = `report-gate-${iterationId}-${row.gateId ?? "none"}`;
+    const closing = (await thread.store.closingLapOf?.(iterationId)) ?? null;
     body =
       `Lap '${iterationId}' reached gate '${row.gateId ?? "(none recorded)"}' at stage ` +
       `'${row.gateStage ?? "(none recorded)"}'. ` +
@@ -1183,9 +1210,12 @@ export async function reportToRequest(
           `${String(reading.findings.length)} finding(s).`) +
       // rondo#218: the gate does not wait for the model reading (D-0065 2.6),
       // so a reader of the thread is told one may follow rather than shown a
-      // lone "clear" the model reading later contradicts.
-      " A model reading of this work may still be on its way; the gate does not wait for it, " +
-      "and when it lands it is reported in this thread. Read it before answering.";
+      // lone "clear" the model reading later contradicts. A closing lap gets
+      // none (D-0098 rule 5.3), and is told so instead.
+      (closing === null
+        ? " A model reading of this work may still be on its way; the gate does not wait for " +
+          "it, and when it lands it is reported in this thread. Read it before answering."
+        : ` ${notRereadSentence(closing)}`);
   } else if (event.kind === "modelReading") {
     const reading = latestReading(
       await thread.store.readingsFor(iterationId),

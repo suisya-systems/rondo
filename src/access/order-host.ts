@@ -24,7 +24,10 @@ import { DETERMINISTIC_DRAFTER } from "./advisory.js";
 import type { DraftedStartReadiness } from "./drafted-start.js";
 
 export interface OrderHostPorts {
-  readonly record: Pick<AdvisoryRecord, "admittedSplits" | "readProposal" | "recordThreadMessage">;
+  readonly record: Pick<
+    AdvisoryRecord,
+    "admittedSplits" | "readProposal" | "recordThreadMessage" | "openAsksIn"
+  >;
   /** `draftedStartReadiness` for one plan of an admitted split. */
   readonly readiness: (split: AdmittedSplit, planIndex: number) => Promise<DraftedStartReadiness>;
   /** `readHolder` over the lane ledger: reads `first`'s landing and releases it if it landed. */
@@ -123,7 +126,19 @@ async function readSplit(
       ready = await ports.readiness(split, index);
     }
     if (ready.kind === "ordered" && ready.first?.state === "endedUnlanded") {
-      await askUnlanded(ports, said, split, index, ready.after, ready.first.lineageId);
+      await askUnlanded(ports, said, split, index, ready.after, ready.first);
+      continue;
+    }
+    // D-0098 rule 1.3: a `then` the scope does not admit is not started, and
+    // it is said rather than skipped in silence; the page draws the same
+    // reason where the press is.
+    if (ready.kind === "outside" || ready.kind === "undecidable") {
+      sayOnce(
+        ports,
+        said,
+        `${split.proposalId}/${String(index)}`,
+        `${split.proposalId} plan ${String(index)} is not started by itself: ${ready.reason}`,
+      );
       continue;
     }
     // A held plan is attempted only where every holder has finished, as the
@@ -132,6 +147,17 @@ async function readSplit(
       ready.kind === "ready" ||
       (ready.kind === "held" && ready.holders.every(({ line }) => !line.inFlight));
     if (!startable) {
+      continue;
+    }
+    // Rule 1.5's "drop": the person answered `stop` to the unlanded ask, so a
+    // later landing of a retried `first` does not start this plan by itself.
+    if (await dropped(ports, split, index)) {
+      sayOnce(
+        ports,
+        said,
+        `${split.proposalId}/${String(index)}`,
+        `${split.proposalId} plan ${String(index)} was dropped by the person and is not started`,
+      );
       continue;
     }
     const started = await ports.start(split, index);
@@ -149,7 +175,9 @@ async function readSplit(
  *
  * Its bases are the request and `first`'s line, so it holds `first`'s retry
  * until the person answers (D-0066 rule 4.4), and holds no unrelated plan of
- * the request. The id names the plan and the line, so the tick writes it once.
+ * the request. The id names the plan and the line's latest lap, so the tick
+ * writes it once per ending: a retry keeps the lineage, and a retry that ends
+ * unlanded too is asked about again rather than found spoken for.
  */
 async function askUnlanded(
   ports: OrderHostPorts,
@@ -157,13 +185,13 @@ async function askUnlanded(
   split: AdmittedSplit,
   index: number,
   after: number,
-  firstLineageId: string,
+  first: { readonly lineageId: string; readonly lastLapId: string },
 ): Promise<void> {
-  const messageId = `order-unlanded-${split.proposalId}-${String(index)}-${firstLineageId}`;
+  const firstLineageId = first.lineageId;
+  const messageId = `${unlandedPrefix(split, index)}${first.lastLapId}`;
   if (said.has(messageId)) {
     return;
   }
-  said.add(messageId);
   const outcome = await ports.record.recordThreadMessage({
     messageId,
     body: unlandedBody(index, after, firstLineageId),
@@ -179,12 +207,29 @@ async function askUnlanded(
     asks: true,
   });
   // A second process, or this one after a restart, finds the id spoken for:
-  // the ask is already in the thread, and that is not a failure.
-  if (outcome.kind === "defect") {
-    ports.log(
-      `order    the question about plan ${String(index)} was not written: ${outcome.reason}`,
-    );
+  // the ask is already in the thread, and that is not a failure. Any other
+  // outcome is said, and asked again on the next pass.
+  if (outcome.kind === "recorded" || outcome.reason.includes("already in the conversation")) {
+    said.add(messageId);
+    return;
   }
+  ports.log(`order    the question about plan ${String(index)} was not written: ${outcome.reason}`);
+}
+
+function unlandedPrefix(split: AdmittedSplit, index: number): string {
+  return `order-unlanded-${split.proposalId}-${String(index)}-`;
+}
+
+/** Whether an unlanded ask about this plan stands answered `stop` (rule 1.5's drop). */
+async function dropped(ports: OrderHostPorts, split: AdmittedSplit, index: number) {
+  const open = await ports.record.openAsksIn(split.requestMessageId);
+  if (open.kind !== "read") {
+    // Unreadable is not a drop, and not a go: start nothing on it.
+    throw new Error(open.reason);
+  }
+  return open.asks.some(
+    (ask) => ask.answeredStop && ask.messageId.startsWith(unlandedPrefix(split, index)),
+  );
 }
 
 /** The ask's words: rondo's own, ASCII (D-0004), in `stopBody`'s layout (`./scope.ts`). */
@@ -195,9 +240,10 @@ export function unlandedBody(index: number, after: number, firstLineageId: strin
     `Waiting: ${then} of this request starts only once ${first} is merged, and ${first} ` +
       `(line '${firstLineageId}') ended without being merged, so ${then} will not start by itself.`,
     "Options:",
-    `- Try ${first} again. Gives up: nothing of the chain; ${then} still waits, and starts by ` +
-      `itself once ${first} is merged.`,
-    `- Drop ${then}. Gives up: ${then}'s work; the rest of the request carries on.`,
+    `- Try ${first} again (answer carry on, then retry it). Gives up: nothing of the chain; ` +
+      `${then} still waits, and starts by itself once ${first} is merged.`,
+    `- Drop ${then} (answer stop). Gives up: ${then}'s work, which then never starts by ` +
+      "itself; the rest of the request carries on.",
     `Recommended: try ${first} again, since ${then} was drafted to build on its merged change.`,
     `Part ${String(index + 1)} stays held until ${first} is merged.`,
   ].join("\n");

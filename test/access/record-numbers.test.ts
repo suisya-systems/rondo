@@ -5,6 +5,7 @@
  */
 import { expect, test } from "vitest";
 
+import { withReservedNumbers } from "../../src/access/cli.js";
 import { nextNumbers, numbersSection } from "../../src/access/record-numbers.js";
 import { readingOf } from "../../src/access/review.js";
 import { readSplitPayload } from "../../src/advisory/proposal.js";
@@ -40,7 +41,10 @@ test("the numbers start above both the default branch and every reservation", ()
   expect(numbersSection("DECISIONS.md", [112])).toBe(
     "\n\n---\nDecision record (rondo reserved these numbers for this work):\n" +
       "Your entry in DECISIONS.md is D-0112, with its index row. Write no other number; " +
-      "rondo checks the record's new headings and index rows against these at the gate.",
+      "rondo checks the record's new headings and index rows against these at the gate.\n" +
+      "Spell each heading '## D-0112', a space, an em dash (U+2014), a space and the title, " +
+      "and each index row '| D-0112 |' followed by the rest of the row; rondo reads no other " +
+      "spelling.",
   );
   expect(numbersSection("DECISIONS.md", [112, 113, 114])).toContain(
     "Your entries in DECISIONS.md are D-0112, D-0113 and D-0114, each with its index row.",
@@ -91,4 +95,23 @@ test("a stored split keeps a plan's entries, and refuses a count that is not 1 o
   for (const entries of [0, 1.5, "1"]) {
     expect(read(entries)).toMatchObject({ kind: "unreadable" });
   }
+});
+
+test("numbers taken twice in a row are composed again until reserve() takes them, never given up", async () => {
+  const tried: (readonly number[] | null)[] = [];
+  const moves = [5, 7];
+  const report = await withReservedNumbers(
+    { highestReserved: async () => 3 },
+    { record: "DECISIONS.md", floor: 1, count: 1, held: [] },
+    { repository: "/srv/repo", prompt: "p" } as never,
+    async (_plan, numbers) => {
+      tried.push(numbers);
+      const moved = moves.shift();
+      return moved === undefined
+        ? { iterationId: "lap-1", status: null, lines: [] }
+        : { iterationId: null, status: null, lines: [], numbersMoved: moved };
+    },
+  );
+  expect(tried).toEqual([[4], [6], [8]]);
+  expect(report.iterationId).toBe("lap-1");
 });

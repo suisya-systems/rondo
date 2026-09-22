@@ -128,11 +128,23 @@ test(
   async () => {
     const { work, baseCommit, tipCommit } = recordWorld();
     expect(
-      await readRecordAdditions({ repository: work, baseCommit, tipCommit, record: RECORD }),
-    ).toEqual({ kind: "read", numbers: [2] });
+      await readRecordAdditions({
+        repository: work,
+        baseCommit,
+        tipCommit,
+        record: RECORD,
+        takenIn: null,
+      }),
+    ).toMatchObject({ kind: "read", numbers: [2] });
     expect(
-      await readRecordAdditions({ repository: work, baseCommit, tipCommit, record: "a.txt" }),
-    ).toEqual({ kind: "read", numbers: [] });
+      await readRecordAdditions({
+        repository: work,
+        baseCommit,
+        tipCommit,
+        record: "a.txt",
+        takenIn: null,
+      }),
+    ).toMatchObject({ kind: "read", numbers: [] });
     expect(
       (
         await readRecordAdditions({
@@ -140,6 +152,7 @@ test(
           baseCommit,
           tipCommit: "f".repeat(40),
           record: RECORD,
+          takenIn: null,
         })
       ).kind,
     ).toBe("undetermined");
@@ -198,6 +211,41 @@ test(
       kind: "notLanded",
       differing: [`${RECORD} (D-0003 has no heading and index row there)`],
     });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "entries a take-in brought are not the lap's additions (D-0098 rules 2 and 3.6)",
+  async () => {
+    const { work, merger, baseCommit } = recordWorld();
+    // Another line lands D-0003 on main; this line's lap takes that commit in.
+    git(merger, "pull", "-q", "origin", "main");
+    writeFileSync(
+      join(merger, RECORD),
+      record(
+        row("0001", "first") + row("0003", "third"),
+        entry("0001", "first") + entry("0003", "third"),
+      ),
+    );
+    git(merger, "commit", "-q", "-am", "another line (#3)");
+    git(merger, "push", "-q", "origin", "main");
+    git(work, "fetch", "-q", "origin");
+    const taken = git(work, "rev-parse", "refs/remotes/origin/main");
+    git(work, "merge", "-q", "--no-edit", "-X", "ours", "refs/remotes/origin/main");
+    writeFileSync(
+      join(work, RECORD),
+      record(
+        row("0001", "first") + row("0002", "second") + row("0003", "third"),
+        entry("0001", "first") + entry("0002", "second") + entry("0003", "third"),
+      ),
+    );
+    git(work, "commit", "-q", "-am", "keep both");
+    const tipCommit = git(work, "rev-parse", "HEAD");
+    const read = (takenIn: string | null) =>
+      readRecordAdditions({ repository: work, baseCommit, tipCommit, record: RECORD, takenIn });
+    expect(await read(null)).toMatchObject({ kind: "read", numbers: [2, 3] });
+    expect(await read(taken)).toMatchObject({ kind: "read", numbers: [2] });
   },
   REAL_GIT_TIMEOUT_MS,
 );

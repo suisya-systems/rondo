@@ -61,6 +61,7 @@ import {
   type AgentTypeRecordDraft,
   APPROVED_OUTCOME,
   approvedForPublication,
+  findingBasisText,
   type GateAnswer,
   type IterationRecord,
   isDeterministicReadingDrafter,
@@ -119,10 +120,11 @@ import {
   readHolder,
   reportToRequest,
   resume,
+  takenInCommit,
 } from "./conductor.js";
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
 import { allowedBashIn } from "./delegation.js";
-import { closingLapSection, definitionOfDone } from "./done.js";
+import { type ClosingFinding, closingLapSection, definitionOfDone } from "./done.js";
 import {
   type DraftedStartReadiness,
   draftedStartReadiness,
@@ -5563,9 +5565,12 @@ async function numberingFor(
  * Admit `plan` with its new decision-record numbers named in its prompt and
  * handed to `reserve()` (D-0098 rule 3.3). The numbers are named before
  * `reserve()` tests them under its lock, so one taken since is composed again
- * above the highest now reserved and tried once more.
+ * above the highest now reserved and tried again, **until `reserve()` takes
+ * them**: a gate may already be answered by then (`beforeAdmit`), and giving
+ * up would leave it answered with no redo. Bounded, because the highest
+ * reserved number only grows.
  */
-async function withReservedNumbers(
+export async function withReservedNumbers(
   store: Pick<IterationStore, "highestReserved">,
   numbering: Numbering | null,
   plan: RunPlan,
@@ -5584,13 +5589,16 @@ async function withReservedNumbers(
       numbers,
     );
   };
-  const first = await once(
+  let report = await once(
     await store.highestReserved(
       repositoryKey(plan.repository) ?? plan.repository,
       numbering.record,
     ),
   );
-  return first.numbersMoved === undefined ? first : await once(first.numbersMoved);
+  while (report.numbersMoved !== undefined) {
+    report = await once(report.numbersMoved);
+  }
+  return report;
 }
 
 async function admitScopedPlan(
@@ -5986,20 +5994,31 @@ async function redoNumbering(
     baseCommit: evidence.baseCommit,
     tipCommit: evidence.tipCommit,
     record,
+    takenIn: takenInCommit(predecessor.plan),
   });
   if (added.kind === "undetermined") {
     return {
       refusal: `rondo could not read what lap '${predecessor.id}' added to ${record}: ${added.reason}.`,
     };
   }
-  const held = (await store.numberReservations(predecessor.id)).flatMap((one) =>
-    one.released ? [] : [one.number],
-  );
+  // Every number the line was handed, a released one included: nobody else can
+  // ever be handed it, so a retried lap that wrote it as its prompt said keeps
+  // it rather than burning a new one (D-0098 rule 3.4).
+  const held = (await store.numberReservations(predecessor.id)).map((one) => one.number);
   return await numberingFor(
     plan,
     added.numbers.filter((number) => !held.includes(number)).length,
     held,
   );
+}
+
+/** A reading's findings as a closing lap quotes them (D-0098 rule 5.2), numbered from 1. */
+function closingFindings(reading: LapReading | null): readonly ClosingFinding[] {
+  return (reading?.findings ?? []).map((text, i) => ({
+    number: i + 1,
+    text,
+    bases: (reading?.graded?.[i]?.bases ?? []).map(findingBasisText),
+  }));
 }
 
 /**
@@ -6100,10 +6119,21 @@ async function commandRevise(
     return refuse(ready.reason);
   }
   // D-0098 rule 5.2: a closing lap's prompt ends with rondo's own section,
-  // after the person's instruction and never inside it (D-0009).
+  // after the person's instruction and never inside it (D-0009), quoting the
+  // findings of the reading the scope's verdict tests: after an exit, every
+  // finding of it is below the threshold, which is the set its record names.
   const successor = {
     plan: parsed.closingFix
-      ? { ...ready.plan, prompt: ready.plan.prompt + closingLapSection() }
+      ? {
+          ...ready.plan,
+          prompt:
+            ready.plan.prompt +
+            closingLapSection(
+              closingFindings(
+                latestReading(await store.readingsFor(record.id), isModelReadingDrafter),
+              ),
+            ),
+        }
       : ready.plan,
   };
   const gate = ready.gate;

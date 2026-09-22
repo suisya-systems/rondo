@@ -51,21 +51,35 @@ export function definitionOfDone(ruleFiles: readonly string[]): string {
   ].join("\n");
 }
 
+/** One finding a closing lap is asked to fix: its number in the reading, the reviewer's words, its bases. */
+export interface ClosingFinding {
+  readonly number: number;
+  readonly text: string;
+  readonly bases: readonly string[];
+}
+
 /**
  * What rondo puts after a **closing lap's** prompt (D-0098 rule 5.2): the lap
  * pressed after the review exit to fix the findings left below the threshold,
  * which no reviewer reads again (rule 5.3).
  *
- * **Rondo's own words, and none of the person's.** The findings are quoted by
- * the person's instruction above it (the revise box, D-0009); this only asks
- * for a test per fix and says what happens when a fix does not hold (rule
- * 5.4). ASCII (D-0004).
+ * **It quotes the findings, with their bases**, from the same reading the
+ * closing lap's record names, so the findings the lap is recorded as
+ * answering are the findings it was given -- whatever the person's own words
+ * above say (D-0009 keeps those untouched). It asks for a test per fix. Rule
+ * 5.4's stop is observed on rondo's own reading of the branch only, so the
+ * worker is told its report goes to the person, not that the report stops
+ * the line. rondo's words are ASCII (D-0004); the findings are the reviewer's.
  */
-export function closingLapSection(): string {
+export function closingLapSection(findings: readonly ClosingFinding[]): string {
   return [
     "\n\n---\nClosing fix (rondo adds this because this lap was pressed as the closing lap):",
-    "- Fix the findings the instruction above quotes. Nothing else is asked of this lap.",
+    "- Fix these findings, which the last review left below the threshold. Nothing else is asked of this lap.",
+    ...findings.map(
+      (finding) =>
+        `  ${String(finding.number)}. ${finding.text} (bases: ${finding.bases.length === 0 ? "none" : finding.bases.join(", ")})`,
+    ),
     "- Write a test for each fix, one that fails without the fix and passes with it, and commit it with the fix.",
-    "- No reviewer reads this lap again. If a fix fails its own test, or you find a problem more serious than these findings, say so plainly in your report: the line then stops for a person.",
+    "- No reviewer reads this lap again. If a fix fails its own test, or you find a problem more serious than these findings, say so plainly in your report: a person reads it at the gate.",
   ].join("\n");
 }

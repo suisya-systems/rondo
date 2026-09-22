@@ -1420,6 +1420,12 @@ export interface LandingRequest {
    * numbers and added lines instead of by its tree entry.
    */
   readonly record: { readonly path: string; readonly reserved: readonly number[] } | null;
+  /**
+   * The commits the line's laps were told to take in (D-0098 rule 2, a plan's
+   * `take_in.commit`): what they brought is not the line's work. Absent or
+   * empty for a line that took nothing in, which is read as before.
+   */
+  readonly takenIn?: readonly string[];
 }
 
 /**
@@ -1482,15 +1488,19 @@ export async function readLanding(request: LandingRequest): Promise<LandingReadi
     // that merged the default branch's commit X changes, since the lineage's
     // base, every path X brought -- and a later landing on one of those would
     // leave the line `notLanded` for good. So a path counts only if the tip
-    // also changed it since its merge-base with the fetched head, which drops
-    // X's paths. Kept as an intersection, not a replacement, so a line cut
-    // from a branch other than the default one (whose merge-base with the
-    // head is older than its base) still reads exactly its own paths.
-    const own = await changedBetween(git, headCommit, tip);
-    if (typeof own === "string") {
-      return { kind: "undetermined", reason: own };
+    // also changed it since each commit the line was told to take in, which
+    // drops X's paths. **Only against a named take-in**, never against the
+    // fetched head: a tip merged into the head by a real merge commit has no
+    // changes of its own since that merge-base, and a resolution that edited
+    // its work would read landed (D-0073 rule 6.4).
+    const ownSets: Set<string>[] = [];
+    for (const taken of request.takenIn ?? []) {
+      const own = await changedBetween(git, taken, tip);
+      if (typeof own === "string") {
+        return { kind: "undetermined", reason: own };
+      }
+      ownSets.push(new Set(own));
     }
-    const ownPaths = new Set(own);
     const tipTree = await treeEntries(git, tip);
     if (typeof tipTree === "string") {
       return { kind: "undetermined", reason: tipTree };
@@ -1498,7 +1508,7 @@ export async function readLanding(request: LandingRequest): Promise<LandingReadi
     // The decision record is read by numbers and added lines below, never by
     // its tree entry: another line appends to it too (D-0098 rule 3.7).
     for (const path of changed.filter(
-      (each) => ownPaths.has(each) && each !== request.record?.path,
+      (each) => ownSets.every((own) => own.has(each)) && each !== request.record?.path,
     )) {
       paths.add(path);
       if (tipTree.get(path) !== headTree.get(path)) {
@@ -1668,6 +1678,15 @@ async function recordLanding(
     }
     added.push(...lines);
   }
+  // What a take-in brought to the record is not the line's (D-0098 rule 2).
+  for (const taken of request.takenIn ?? []) {
+    const text = await textAt(git, taken, record.path);
+    if (typeof text !== "string") {
+      return text.failure;
+    }
+    const theirs = new Set(text.split("\n"));
+    added.splice(0, added.length, ...added.filter((line) => !theirs.has(line)));
+  }
   if (record.reserved.length === 0 && added.length === 0) {
     return { part: false, missing: null };
   }
@@ -1730,30 +1749,50 @@ export async function readRecordFloor(request: {
 /**
  * The entry numbers a lap added to its decision record, in headings and index
  * rows, from `base...tip` (D-0098 rule 3.6): what the gate tests against the
- * line's reservations.
+ * line's reservations. **A number the take-in commit's record already spells
+ * is not the lap's** (D-0098 rules 2 and 3.8): a tip that merged the default
+ * branch's X adds, since its base, every entry X brought, and those are
+ * another line's landed entries, not numbers to renumber.
  */
 export async function readRecordAdditions(request: {
   readonly repository: string;
   readonly baseCommit: string;
   readonly tipCommit: string;
   readonly record: string;
+  /** The lap's `take_in.commit`, or null when it took nothing in. */
+  readonly takenIn: string | null;
 }): Promise<
-  | { readonly kind: "read"; readonly numbers: readonly number[] }
+  | {
+      readonly kind: "read";
+      readonly numbers: readonly number[];
+      /** The numbers the tip's record spells with both a heading and an index row. */
+      readonly spelled: readonly number[];
+    }
   | { readonly kind: "undetermined"; readonly reason: string }
 > {
-  const lines = await addedLines(
-    (argv) => runCommand("git", ["-C", request.repository, ...argv], PREFLIGHT_TIMEOUT_MS),
-    request.baseCommit,
-    request.tipCommit,
-    request.record,
-  );
+  const git = (argv: readonly string[]) =>
+    runCommand("git", ["-C", request.repository, ...argv], PREFLIGHT_TIMEOUT_MS);
+  const lines = await addedLines(git, request.baseCommit, request.tipCommit, request.record);
   if ("failure" in lines) {
     return { kind: "undetermined", reason: lines.failure };
   }
+  const taken = request.takenIn === null ? "" : await textAt(git, request.takenIn, request.record);
+  if (typeof taken !== "string") {
+    return { kind: "undetermined", reason: taken.failure };
+  }
+  const theirs = recordNumbers(taken);
+  const atTip = await textAt(git, request.tipCommit, request.record);
+  if (typeof atTip !== "string") {
+    return { kind: "undetermined", reason: atTip.failure };
+  }
+  const tipNumbers = recordNumbers(atTip);
   const numbers = recordNumbers(lines.join("\n"));
   return {
     kind: "read",
-    numbers: [...new Set([...numbers.headings, ...numbers.indexRows])].sort((a, b) => a - b),
+    spelled: tipNumbers.headings.filter((number) => tipNumbers.indexRows.includes(number)),
+    numbers: [...new Set([...numbers.headings, ...numbers.indexRows])]
+      .filter((number) => !theirs.headings.includes(number) && !theirs.indexRows.includes(number))
+      .sort((a, b) => a - b),
   };
 }
 

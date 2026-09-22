@@ -19,6 +19,7 @@ import {
   type DraftedStartReadiness,
   draftedStartReadiness,
   ORDER_OPENING,
+  onLanding,
   planOrder,
 } from "../../src/access/drafted-start.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
@@ -69,6 +70,7 @@ function tick(after: readonly (number | undefined)[], answers: DraftedStartReadi
   const started: number[] = [];
   const read: string[] = [];
   const asked: JsonRecord[] = [];
+  const stopped: string[] = [];
   let released = false;
   const template = `sha256:${"a".repeat(64)}`;
   const payload: SplitPayload = {
@@ -91,11 +93,22 @@ function tick(after: readonly (number | undefined)[], answers: DraftedStartReadi
         }) as never,
       recordThreadMessage: async (draft) => {
         if (asked.some((one) => one["messageId"] === draft.messageId)) {
-          return { kind: "refused", reason: "that id is spoken for" };
+          return {
+            kind: "refused",
+            reason: `the message '${draft.messageId}' is already in the conversation`,
+          };
         }
         asked.push(draft as unknown as JsonRecord);
         return { kind: "recorded" };
       },
+      openAsksIn: async () => ({
+        kind: "read",
+        asks: asked.map((one) => ({
+          messageId: String(one["messageId"]),
+          iterationIds: [],
+          answeredStop: stopped.includes(String(one["messageId"])),
+        })),
+      }),
     },
     readiness: async (_split, index) =>
       answers[index]?.shift() ?? { kind: "started", iterationId: "x" },
@@ -119,6 +132,7 @@ function tick(after: readonly (number | undefined)[], answers: DraftedStartReadi
     started,
     read,
     asked,
+    stopped,
     land: () => {
       released = true;
     },
@@ -127,10 +141,11 @@ function tick(after: readonly (number | undefined)[], answers: DraftedStartReadi
 
 const waiting = (
   state: "running" | "awaitingLanding" | "endedUnlanded" | null,
+  lastLapId = "lap-first",
 ): DraftedStartReadiness => ({
   kind: "ordered",
   after: 0,
-  first: state === null ? null : { lineageId: "lap-first", state },
+  first: state === null ? null : { lineageId: "lap-first", state, lastLapId },
 });
 
 test("the tick starts a waiting plan only once its first has landed, and never a plan with no order", async () => {
@@ -198,7 +213,7 @@ test("a first that ended without landing holds its then, and the person is asked
   });
   const body = String(ask?.["body"]);
   expect(body).toContain("Try part 1 again");
-  expect(body).toContain("Drop part 2");
+  expect(body).toContain("Drop part 2 (answer stop)");
   expect(body).toContain("Recommended: try part 1 again");
   expect(body).not.toMatch(/anyway/i);
   // D-0004: rondo's own words are ASCII.
@@ -209,6 +224,84 @@ test("a first that ended without landing holds its then, and the person is asked
   await again.settled();
   expect(t.asked).toHaveLength(1);
   expect(t.log).toEqual([]);
+});
+
+test("a retry of first that ends unlanded too is asked about again, not found spoken for (D-0098 rule 1.5)", async () => {
+  const t = tick(
+    [undefined, 0],
+    [
+      [],
+      [
+        waiting("endedUnlanded"),
+        waiting("running", "lap-first-r2"),
+        waiting("endedUnlanded", "lap-first-r2"),
+      ],
+    ],
+  );
+  const host = orderHost(t.ports);
+  for (let n = 0; n < 3; n += 1) {
+    host.kick();
+    await host.settled();
+  }
+  expect(t.asked.map((one) => one["messageId"])).toEqual([
+    "order-unlanded-p-1-1-lap-first",
+    "order-unlanded-p-1-1-lap-first-r2",
+  ]);
+});
+
+test("a refused ask is said and asked again on the next pass, never swallowed", async () => {
+  const t = tick([undefined, 0], [[], [waiting("endedUnlanded"), waiting("endedUnlanded")]]);
+  let refuse = true;
+  const record = t.ports.record;
+  const host = orderHost({
+    ...t.ports,
+    record: {
+      ...record,
+      recordThreadMessage: async (draft) =>
+        refuse
+          ? { kind: "refused", reason: "a basis is gone" }
+          : await record.recordThreadMessage(draft),
+    },
+  });
+  host.kick();
+  await host.settled();
+  expect(t.log).toEqual(["order    the question about plan 1 was not written: a basis is gone"]);
+  refuse = false;
+  host.kick();
+  await host.settled();
+  expect(t.asked).toHaveLength(1);
+});
+
+test("a then the person dropped (stop on the unlanded ask) is not started when a retried first lands", async () => {
+  const run = { kind: "runnable" } as never;
+  const t = tick([undefined, 0], [[], [waiting("endedUnlanded"), { kind: "ready", run }]]);
+  const host = orderHost(t.ports);
+  host.kick();
+  await host.settled();
+  expect(t.asked).toHaveLength(1);
+  t.stopped.push(String(t.asked[0]?.["messageId"]));
+  host.kick();
+  await host.settled();
+  expect(t.started).toEqual([]);
+  expect(t.log).toEqual(["order    p-1 plan 1 was dropped by the person and is not started"]);
+});
+
+test("a then the scope does not admit is said once, not skipped in silence (D-0098 rule 1.3)", async () => {
+  const outside: DraftedStartReadiness = {
+    kind: "outside",
+    test: "workspace",
+    reason: "no approved workspace covers rondo",
+  };
+  const t = tick([undefined, 0], [[], [outside, outside]]);
+  const host = orderHost(t.ports);
+  for (let n = 0; n < 2; n += 1) {
+    host.kick();
+    await host.settled();
+  }
+  expect(t.started).toEqual([]);
+  expect(t.log).toEqual([
+    "order    p-1 plan 1 is not started by itself: no approved workspace covers rondo",
+  ]);
 });
 
 test("a held plan is attempted only when every holder has finished", async () => {
@@ -547,3 +640,19 @@ test(
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
+
+test("a then drafted with no claim still carries its landing as a claim basis (D-0098 rule 1.6)", () => {
+  const landing = {
+    lineageId: "lap-first",
+    repository: "/srv/lib",
+    branch: "main",
+    commit: COMMIT,
+  };
+  const run = { kind: "runnable", plan: { prompt: "p" }, claim: null } as never;
+  expect(onLanding(run, landing).claim).toEqual({
+    paths: ["/"],
+    authorKind: "drafter",
+    authorId: LANE_LEDGER_AUTHOR,
+    bases: [{ form: "landing", ...landing }],
+  });
+});

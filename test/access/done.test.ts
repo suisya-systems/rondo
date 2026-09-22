@@ -59,11 +59,16 @@ test("the section is ASCII, so it reaches continuo's command line on a cp932 con
   }
 });
 
-test("D-0098 rule 5.2: a closing lap's section asks a test per fix, quotes no finding, and is ASCII", () => {
-  const section = closingLapSection();
+test("D-0098 rule 5.2: a closing lap's section quotes the findings with their bases and asks a test per fix", () => {
+  const section = closingLapSection([
+    { number: 1, text: "Rename the helper.", bases: ["src/a.ts:3"] },
+    { number: 3, text: "Drop the dead branch.", bases: [] },
+  ]);
   expect(section).toMatch(/^[\x20-\x7e\n]*$/);
+  expect(section).toContain("  1. Rename the helper. (bases: src/a.ts:3)");
+  expect(section).toContain("  3. Drop the dead branch. (bases: none)");
   expect(section).toContain("Write a test for each fix");
   expect(section).toContain("No reviewer reads this lap again");
-  // rondo's own words only: the findings are the person's instruction's (D-0009).
-  expect(section).not.toContain("[minor]");
+  // Rule 5.4 is observed on rondo's reading only: the report is not promised to stop the line.
+  expect(section).not.toContain("the line then stops");
 });

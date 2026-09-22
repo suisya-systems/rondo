@@ -269,12 +269,15 @@ async function take(ports: ModelReviewPorts, iterationId: string): Promise<reado
  * closed quietly. The stop is D-0064 rule 3.3's scope exit: one drafter
  * message with `asks` set over this lap, which holds the merge (`mergeBlock`'s
  * `asked`) and any further admission (the scope's asks test) until a person
- * answers it. Its id is the lap's, so a second reading writes nothing.
+ * answers it. Its id is the lap's and the tip its reading read, so a second
+ * reading of one tip writes nothing, and a lap that resumes into a new gate
+ * and fails again is stopped again rather than found spoken for.
  *
  * ponytail: "a finding at or above the threshold" is observed only through the
- * deterministic reading and the worker's own report; red checks on the pull
- * request already hold the merge as `notGreen`, and writing a stop on them
- * belongs to the checks host.
+ * deterministic reading; the worker's report reaches the person at the gate
+ * and is not read here (D-0103 rule 5.7). Red checks on the pull request
+ * already hold the merge as `notGreen`, and writing a stop on them belongs to
+ * the checks host.
  */
 async function closingLap(
   ports: ModelReviewPorts,
@@ -306,7 +309,7 @@ async function closingLap(
     lines.push("model review  no request thread is wired, so no stop was written.");
     return lines.filter((line) => line !== "");
   }
-  const messageId = `closing-stop-${record.id}`;
+  const messageId = `closing-stop-${record.id}-${deterministic?.evidence?.tipCommit ?? "unread"}`;
   const outcome = await thread.record.recordThreadMessage({
     messageId,
     body: [
@@ -314,12 +317,12 @@ async function closingLap(
         "is not closed quietly (D-0098 rule 5.4).",
       notRereadSentence(closing),
       "Options:",
-      "- A successor scope (D-0066 rule 1.4) with another review round, and a revise. Gives up: " +
-        "the closing lap's promise of no further round; the fix is read like any other lap.",
+      "- A revise from this lap pressed without a scope, which the reviewer reads like any " +
+        "other lap. Gives up: the closing lap's promise of no further round. (A revise under " +
+        "a scope cannot follow a closing lap: it has no reading to test.)",
       `- Stopping this line. Gives up: the closing fix; the work the reviewer last read ` +
         `(commit '${closing.readTipCommit}') is what this line has.`,
-      "Recommended: a successor scope with another review round: the fix is small, and a " +
-        "reading is what it lacks.",
+      "Recommended: a revise without a scope: the fix is small, and a reading is what it lacks.",
       "This line stays stopped until this message is answered.",
     ].join("\n"),
     authorKind: "drafter",

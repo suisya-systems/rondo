@@ -118,6 +118,7 @@ import {
   type TriageDeclineDraft,
   type UnconsumedDecision,
   type WithheldByRule,
+  WORKER_QUESTION_AUTHOR,
   WRITABLE_SCOPE_ACT_KINDS,
 } from "./records.js";
 
@@ -5991,6 +5992,21 @@ function scopeRefusal(
             "4.4, D-0072 rule 3)",
     );
   }
+  // D-0098 rule 5.5: **one closing lap per line**, tested where the marker is
+  // written. An unscoped redo or a retry from a closing lap is read again, and
+  // its reading could exit once more; the lineage's earlier marker is what
+  // keeps that exit from buying a second closing lap under the same scope.
+  if ((spend.closing ?? null) !== null) {
+    const marked = connection.prepare("SELECT 1 FROM closing_lap WHERE iteration_id = ?");
+    const earlier = lineage.find((id) => marked.get(id) !== undefined);
+    if (earlier !== undefined) {
+      return outside(
+        "readings",
+        `the lap '${earlier}' of this line was already its closing lap, and a scope's ` +
+          "fix_unread allows one closing lap per line (D-0098 rule 5.5)",
+      );
+    }
+  }
   // 6. The admitted plan's own pair, byte for byte.
   const repository = input.plan["repository"];
   const workspaceRoot = input.plan["workspace_root"];
@@ -6659,7 +6675,7 @@ function openAsksIn(connection: DatabaseSync, requestMessageId: string): OpenAsk
     .prepare(
       "WITH RECURSIVE thread(id) AS (SELECT ? " +
         "UNION SELECT m.message_id FROM conversation_message m JOIN thread t ON m.in_reply_to = t.id" +
-        ") SELECT m.message_id, m.bases, EXISTS (SELECT 1 FROM conversation_message s " +
+        ") SELECT m.message_id, m.bases, m.author_id, EXISTS (SELECT 1 FROM conversation_message s " +
         "WHERE s.in_reply_to = m.message_id AND s.author_kind = 'operator' " +
         "AND s.answer_outcome = 'stop') AS answered_stop " +
         "FROM conversation_message m " +
@@ -6711,6 +6727,7 @@ function openAsksIn(connection: DatabaseSync, requestMessageId: string): OpenAsk
         messageId,
         iterationIds: Object.freeze(iterationIds),
         answeredStop: Number(row["answered_stop"]) === 1,
+        ...(row["author_id"] === WORKER_QUESTION_AUTHOR ? { lineOnly: true as const } : {}),
       }),
     );
   }

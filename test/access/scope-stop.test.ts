@@ -1039,6 +1039,37 @@ test("an unwalkable lineage writes a stop, and the next attempt is held by it", 
   expect(h.stops()).toHaveLength(1);
 });
 
+test("D-0098 rule 4.2: the gate report is followed by the lap's question, read through the thread's rationale", async () => {
+  const h = await harness();
+  const block = JSON.stringify({
+    question: "Which store?",
+    options: [{ text: "Disk", gives_up: "Speed." }],
+    recommended: 0,
+    recommendation: "Disk lasts.",
+    waits: "The cache.",
+  });
+  const withRationale: ReportingPorts = {
+    ...h.reporting,
+    thread: {
+      record: h.record,
+      store: h.store,
+      rationale: async () => `Done.\n\n\`\`\`rondo-question\n${block}\n\`\`\`\n`,
+    },
+  };
+  const report = await admit(withRationale, h.advisory, PLAN, POLICY, "i-q", null, null, ROOT);
+  expect(report.status).toBe("awaiting_human");
+  const gate = report.lines.findIndex((line) =>
+    line.startsWith(`Reported to the request '${ROOT}'`),
+  );
+  const question = report.lines.findIndex((line) => line.startsWith("Put the lap's question"));
+  expect(gate).toBeGreaterThanOrEqual(0);
+  expect(question).toBeGreaterThan(gate);
+  expect(h.stops().map((row) => row["message_id"])).toContain("question-i-q");
+  // No rationale port: nothing is relayed.
+  const plain = await admit(h.reporting, h.advisory, PLAN, POLICY, "i-p", null, null, ROOT);
+  expect(plain.lines.some((line) => line.includes("question"))).toBe(false);
+});
+
 test("D-0061 5.3: a lap naming a request reports its gate and reading once, asking nothing", async () => {
   const h = await harness();
   const report = await admit(h.reporting, h.advisory, PLAN, POLICY, "i-r", null, null, ROOT);

@@ -22,19 +22,15 @@
  */
 
 import type { IterationRecord, JsonRecord, ThreadMessageDraft } from "../store/records.js";
-import { isDeterministicReadingDrafter, latestReading } from "../store/records.js";
+import {
+  isDeterministicReadingDrafter,
+  latestReading,
+  WORKER_QUESTION_AUTHOR,
+} from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 
 /** The fence's info string: what the worker is told to open its block with. */
 export const QUESTION_FENCE = "rondo-question";
-
-/**
- * Who wrote the ask. **This is the recommendation-author column** (`D-0064`
- * rule 4.4): the recommendation in the body is the worker's, and the id says
- * so without a label in the prose. The version is in the string for the reason
- * `DETERMINISTIC_READING_DRAFTER` carries one.
- */
-export const WORKER_QUESTION_AUTHOR = "rondo/worker-question/1";
 
 /** One option the worker offers: what it is, and what choosing it gives up. */
 export interface WorkerOption {
@@ -81,23 +77,34 @@ function words(value: unknown, what: string): string {
 }
 
 /**
- * The worker's question in a lap's rationale: the **last** complete
- * ```` ```rondo-question ```` block, since the instruction asks for it at the
- * end of the report. `none` when the worker wrote no such fence; `unreadable`
- * when it opened one that does not read, so a question that was asked is never
- * mistaken for one that was not.
+ * The worker's question in a lap's rationale: the block after the **last**
+ * ```` ```rondo-question ```` line, since the instruction asks for it at the
+ * end of the report, up to the first closing ```` ``` ```` line after it.
+ * `none` when no line opens such a fence (a mention inside a sentence is not
+ * one); `unreadable` when one opens and does not read, so a question that was
+ * asked is never mistaken for one that was not.
+ *
+ * **Line by line, from the last opener**, so an earlier fence left open cannot
+ * swallow the real block, and the scan is linear in the rationale's length:
+ * the worker's last words are not rondo's, and a rationale of repeated openers
+ * must not stall the host.
  */
 export function readWorkerQuestion(rationale: string): WorkerQuestionRead {
-  if (!rationale.includes(`\`\`\`${QUESTION_FENCE}`)) {
+  const lines = rationale.split(/\r?\n/);
+  const opener = new RegExp(`^[ \\t]*\`\`\`${QUESTION_FENCE}[ \\t]*$`);
+  let start = -1;
+  for (let i = lines.length - 1; i >= 0 && start === -1; i -= 1) {
+    if (opener.test(lines[i] ?? "")) start = i;
+  }
+  if (start === -1) {
     return { kind: "none" };
   }
-  const blocks = [...rationale.matchAll(/```rondo-question[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```/g)];
-  const last = blocks.at(-1);
-  if (last === undefined) {
+  const end = lines.findIndex((line, i) => i > start && /^[ \t]*```[ \t]*$/.test(line));
+  if (end === -1) {
     return { kind: "unreadable", reason: `the ${QUESTION_FENCE} block is not closed` };
   }
   try {
-    const q = only(JSON.parse(last[1] ?? ""), KEYS, "the question");
+    const q = only(JSON.parse(lines.slice(start + 1, end).join("\n")), KEYS, "the question");
     if (!Array.isArray(q["options"])) throw new Error("the question's options is not a list");
     const options = q["options"].map((one: unknown, i) => {
       const option = only(one, ["text", "gives_up"], `option ${String(i)}`);
@@ -173,11 +180,15 @@ export interface QuestionPorts {
  * nothing else waits.
  *
  * - **Nothing committed, nothing put** (rule 4.2: "a question about nothing the
- *   person can see is not put"). With no deterministic reading, or one whose
- *   tip is its base, no ask is written; the lap stays an ordinary gate, still
- *   the person's turn, with the worker's words in its rationale.
- * - **An unreadable block is said, not dropped**: a report that is not an ask,
- *   saying so, under the same id.
+ *   person can see is not put"). With a deterministic reading whose tip is its
+ *   base, no ask is written; the lap stays an ordinary gate, still the
+ *   person's turn, with the worker's words in its rationale.
+ * - **Not read is not nothing committed**: with no reading of the lap's
+ *   commits, or one rondo could not take, the question is still put, and the
+ *   line where the commit goes says rondo could not read it.
+ * - **An unreadable block is said, not dropped, and still holds its line**:
+ *   an ask under the same id, sending the person to the gate's rationale, so
+ *   silence does not settle a question rondo could not parse (rule 4.4).
  * - **Once per lap**: the id is the lap's, and the store refuses a second row
  *   under it.
  *
@@ -202,17 +213,17 @@ export async function relayQuestion(
   );
   const evidence = reading?.evidence ?? null;
   let body: string;
-  let asks: boolean;
   if (read.kind === "unreadable") {
     body =
       `Lap '${iterationId}' ended with a question rondo could not read (${read.reason}). ` +
       "Its words are in the gate's rationale; answer at the gate.";
-    asks = false;
-  } else if (evidence === null || evidence.tipCommit === evidence.baseCommit) {
+  } else if (evidence !== null && evidence.tipCommit === evidence.baseCommit) {
     return `Lap '${iterationId}' asked a question with nothing committed, so it was not put to the request '${row.requestMessageId}'.`;
   } else {
-    body = questionBody(read.question, evidence.tipCommit);
-    asks = true;
+    body = questionBody(
+      read.question,
+      evidence?.tipCommit ?? "(rondo could not read what this lap committed)",
+    );
   }
   const bases: JsonRecord[] = [
     { form: "iteration", iterationId },
@@ -226,7 +237,7 @@ export async function relayQuestion(
     inReplyTo: row.requestMessageId,
     atMs: nowMs,
     bases,
-    asks,
+    asks: true,
   };
   const outcome = await ports.record.recordThreadMessage(draft);
   return outcome.kind === "recorded"

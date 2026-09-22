@@ -695,6 +695,7 @@ test(
     git(merger, "commit", "-qam", "another line (#1)");
     git(merger, "push", "-q", "origin", "main");
     git(work, "fetch", "-q", "origin");
+    const taken = gitOut(work, "rev-parse", "refs/remotes/origin/main");
     git(work, "merge", "-q", "--no-edit", "refs/remotes/origin/main");
     const tip = gitOut(work, "rev-parse", "HEAD");
     // The line lands by squash, and a later change moves other.txt on again.
@@ -707,9 +708,45 @@ test(
     writeFileSync(join(merger, "other.txt"), "moved on again\n");
     git(merger, "commit", "-qam", "later (#3)");
     git(merger, "push", "-q", "origin", "main");
-    expect(await readLanding(landing([tip]))).toMatchObject({
+    expect(await readLanding({ ...landing([tip]), takenIn: [taken] })).toMatchObject({
       kind: "landed",
       paths: ["a.txt", "b.txt", "c.txt"],
+    });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "D-0073 rule 6.4: a line merged by a real merge commit whose resolution changed its work reads not landed",
+  async () => {
+    const { work, merger, landing, tipCommit } = landingWorld();
+    git(work, "push", "-q", "origin", "topic");
+    git(merger, "fetch", "-q", "origin");
+    git(merger, "merge", "-q", "--no-ff", "--no-commit", "refs/remotes/origin/topic");
+    writeFileSync(join(merger, "a.txt"), "resolved otherwise\n");
+    git(merger, "add", "a.txt");
+    git(merger, "commit", "-qm", "merge the line (#2)");
+    git(merger, "push", "-q", "origin", "main");
+    expect(await readLanding(landing([tipCommit]))).toMatchObject({
+      kind: "notLanded",
+      differing: ["a.txt"],
+    });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "a line merged by a real merge commit and then reverted reads not landed",
+  async () => {
+    const { work, merger, landing, tipCommit } = landingWorld();
+    git(work, "push", "-q", "origin", "topic");
+    git(merger, "fetch", "-q", "origin");
+    git(merger, "merge", "-q", "--no-ff", "--no-edit", "refs/remotes/origin/topic");
+    git(merger, "revert", "--no-edit", "-m", "1", "HEAD");
+    git(merger, "push", "-q", "origin", "main");
+    expect(await readLanding(landing([tipCommit]))).toMatchObject({
+      kind: "notLanded",
+      differing: ["a.txt", "b.txt", "c.txt"],
     });
   },
   REAL_GIT_TIMEOUT_MS,

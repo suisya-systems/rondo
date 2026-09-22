@@ -11,6 +11,7 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import { lapMaterialLines } from "../../../src/access/cli.js";
+import { reportToRequest } from "../../../src/access/conductor.js";
 import type { ReviewMaterialFacts } from "../../../src/access/forge.js";
 import { type ModelReviewPorts, takeModelReading } from "../../../src/access/model-review/host.js";
 import type { ReviewerRun } from "../../../src/access/model-review/judgement.js";
@@ -530,7 +531,7 @@ test("D-0098 rule 5.4: a closing lap whose own reading is not clear stops the li
   const stops = written.filter((message) => message.asks);
   expect(stops).toHaveLength(1);
   expect(stops[0]).toMatchObject({
-    messageId: `closing-stop-${id}`,
+    messageId: `closing-stop-${id}-${"a".repeat(40)}`,
     authorKind: "drafter",
     inReplyTo: "req-1",
     bases: [
@@ -538,6 +539,65 @@ test("D-0098 rule 5.4: a closing lap whose own reading is not clear stops the li
       { form: "iteration", iterationId: id },
     ],
   });
-  expect(String(stops[0]?.["body"])).toContain("Recommended:");
+  expect(String(stops[0]?.["body"])).toContain("Recommended: a revise without a scope");
+  expect(String(stops[0]?.["body"])).not.toContain("successor scope");
   expect(lines.join("\n")).toContain("so the line stops (D-0098 rule 5.4)");
+});
+
+test("D-0098 rule 5.4: a closing lap that fails again at a new tip after its stop was answered is stopped again", async () => {
+  const failing = {
+    ...DETERMINISTIC,
+    verdict: "concerns" as const,
+    findings: ["the verification did not pass"],
+  };
+  const { connection, store, id, ports, record, written } = await closingWorld(failing);
+  // The stop is answered, and the lap resumes into a new gate at a new tip.
+  await record.recordThreadMessage({
+    messageId: "m-answer",
+    body: "carry on",
+    authorKind: "operator",
+    authorId: "oidc|op",
+    inReplyTo: written.find((message) => message.asks)?.messageId ?? "",
+    atMs: 5,
+    bases: [],
+    asks: false,
+    answerOutcome: "carry_on",
+  });
+  connection
+    .prepare(
+      "INSERT INTO lap_reading (iteration_id, read_at_ms, drafter, verdict, findings, " +
+        "base_ref, base_commit, tip_commit, material_digest, commit_count, file_count) " +
+        "VALUES (?, 3000, 'rondo/deterministic/2', 'concerns', '[\"again\"]', ?, ?, ?, ?, 1, 1)",
+    )
+    .run(id, EVIDENCE.baseRef, EVIDENCE.baseCommit, "d".repeat(40), EVIDENCE.materialDigest);
+  const thread = {
+    store,
+    record: {
+      recordThreadMessage: async (message: ThreadMessageDraft) => {
+        written.push(message);
+        return await record.recordThreadMessage(message);
+      },
+    },
+  };
+  await takeModelReading({ ...ports, thread }, id);
+  expect(written.filter((message) => message.asks).map((message) => message.messageId)).toEqual([
+    `closing-stop-${id}-${"a".repeat(40)}`,
+    `closing-stop-${id}-${"d".repeat(40)}`,
+  ]);
+});
+
+test("D-0098 rule 5.3: a closing lap's gate report says it is not re-read, not that a model reading may follow", async () => {
+  const { store, record, id } = await closingWorld(DETERMINISTIC);
+  const gateBody = async (thread: Parameters<typeof reportToRequest>[0]) => {
+    await reportToRequest(thread, id, { kind: "gate" }, 9);
+    const read = await record.threadMessages();
+    const found =
+      read.kind === "read"
+        ? read.messages.find((message) => message.messageId === `report-gate-${id}-g-1`)
+        : undefined;
+    return String(found?.body);
+  };
+  const body = await gateBody({ store, record });
+  expect(body).not.toContain("may still be on its way");
+  expect(body).toContain("it was not re-read");
 });

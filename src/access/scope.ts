@@ -39,6 +39,7 @@ import {
   type AgentTypeRecordDraft,
   askStandsOver,
   IRREVERSIBLE_ACTS,
+  isDeterministicReadingDrafter,
   isModelReadingDrafter,
   type JsonRecord,
   type JsonValue,
@@ -134,6 +135,13 @@ export interface ScopeSnapshot {
     readonly readings: Read<{
       readonly latestModelReading: LapReading | null;
       readonly roundsTaken: number;
+      /**
+       * The tip of the predecessor's latest deterministic reading, null when it
+       * has none: the commit its last gate stood at. A closing lap needs the
+       * model reading to be of that very tip (D-0098 rule 5.3). Absent only
+       * where a caller did not gather it, which a closing act reads as unknown.
+       */
+      readonly latestTipCommit?: string | null;
     }>;
   } | null;
 }
@@ -358,7 +366,12 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
             : readings.latestModelReading.evidence === null
               ? `the predecessor's model reading names no tip commit, so what the reviewer last ` +
                 "read cannot be said (D-0098 rule 5.3)"
-              : null;
+              : readings.latestModelReading.evidence.tipCommit !== readings.latestTipCommit
+                ? `the predecessor's model reading is of commit ` +
+                  `'${readings.latestModelReading.evidence.tipCommit}', and its last gate stood ` +
+                  `at '${String(readings.latestTipCommit ?? "(unknown)")}': the commits between ` +
+                  "were never read, and a closing lap is not read again (D-0098 rule 5.3)"
+                : null;
     if (refusal !== null) {
       return outside("readings", refusal);
     }
@@ -557,6 +570,12 @@ export async function gatherScopeSnapshot(
                         lineage.links.find((link) => link.id === act.predecessorId)?.readings ?? [],
                         isModelReadingDrafter,
                       ),
+                      latestTipCommit:
+                        latestReading(
+                          lineage.links.find((link) => link.id === act.predecessorId)?.readings ??
+                            [],
+                          isDeterministicReadingDrafter,
+                        )?.evidence?.tipCommit ?? null,
                       // The whole lineage, a branch's sibling laps included (D-0065 4.1).
                       roundsTaken: reviewRoundsAlong(lineage.links),
                     }

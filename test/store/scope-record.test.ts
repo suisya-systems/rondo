@@ -1181,3 +1181,22 @@ test("D-0098 rule 5.3: a refused closing redo writes no marker (both or neither)
   );
   expect(count(connection, "SELECT COUNT(*) AS n FROM closing_lap")).toBe(0);
 });
+
+test("D-0098 rule 5.5: a line that already had a closing lap is refused a second one", async () => {
+  const { connection, store } = await approved(withBudgets({ laps: 50, cost_usd: 1_000 }));
+  await reserves(
+    store,
+    reserveInput("i-close", spendOf({ closing: CLOSING }), { supersedesIterationId: "i-held" }),
+  );
+  await store.settle("i-close", "test", 6_000);
+  // Read again after an unscoped redo from the closing lap, whose reading exits once more.
+  await reserves(store, reserveInput("i-read", spendOf(), { supersedesIterationId: "i-close" }));
+  await store.settle("i-read", "test", 7_000);
+  expect(
+    await refusalOf(
+      store,
+      reserveInput("i-close-2", spendOf({ closing: CLOSING }), { supersedesIterationId: "i-read" }),
+    ),
+  ).toContain("'i-close' of this line was already its closing lap");
+  expect(count(connection, "SELECT COUNT(*) AS n FROM closing_lap")).toBe(1);
+});

@@ -28,6 +28,11 @@ export function numbersSection(record: string, numbers: readonly number[]): stri
     `${entries} in ${record} ${named.length === 1 ? "is" : "are"} ${listed}, ` +
       `${named.length === 1 ? "with its" : "each with its"} index row. Write no other number; ` +
       "rondo checks the record's new headings and index rows against these at the gate.",
+    // The one spelling `recordNumbers` reads (D-0103 rule 3.2), said in words
+    // so the prompt stays ASCII: a heading in any other spelling is not seen.
+    `Spell each heading '## ${named[0]}', a space, an em dash (U+2014), a space and the title, ` +
+      `and each index row '| ${named[0]} |' followed by the rest of the row; rondo reads no ` +
+      "other spelling.",
   ].join("\n");
 }
 
