@@ -27,7 +27,8 @@ const listed = (issues: { number: number; title: string; labels: string[] }[]): 
   spawnError: null,
 });
 
-function world(issues: () => CommandOutcome) {
+function world(issues: () => CommandOutcome, answer: "answered" | "failed" = "answered") {
+  const clock = { ms: 10_000 };
   const record = advisoryRecord(new DatabaseSync(":memory:"));
   const handed: string[] = [];
   const logged: string[] = [];
@@ -39,6 +40,9 @@ function world(issues: () => CommandOutcome) {
     listIssues: async () => await Promise.resolve(issues()),
     runDrafter: async (_row, document) => {
       handed.push(document);
+      if (answer === "failed") {
+        return await Promise.resolve({ kind: "failed" as const, reason: "claude -p exited 1" });
+      }
       const keys = [...document.matchAll(/key: (\S+)/g)].map((match) => match[1]);
       return await Promise.resolve({
         kind: "answered" as const,
@@ -55,7 +59,7 @@ function world(issues: () => CommandOutcome) {
       });
     },
     forgeHost: null,
-    now: () => 10_000,
+    now: () => clock.ms,
     mintId: () => {
       n += 1;
       return `triage-${String(n)}`;
@@ -63,7 +67,7 @@ function world(issues: () => CommandOutcome) {
     language: null,
     log: (line) => logged.push(line),
   };
-  return { record, host: triageHost(ports), handed, logged };
+  return { record, host: triageHost(ports), handed, logged, clock };
 }
 
 const goal = {
@@ -154,4 +158,24 @@ test("a goal row is refused without a clause, and the newest row of a repository
   await w.record.recordGoal({ ...goal, goalId: "goal-2", writtenAtMs: 5_000 });
   expect((await w.record.recordGoal(goal)).kind).toBe("refused");
   expect((await w.record.goals()).map((one) => one.goalId)).toEqual(["goal-1", "goal-2"]);
+});
+
+test("a reading that came to nothing is read again after an hour, not on the next scan", async () => {
+  const w = world(
+    () => listed([{ number: 7, title: "setup asks for a shell", labels: [] }]),
+    "failed",
+  );
+  await w.record.recordGoal(goal);
+  w.host.kick();
+  await w.host.idle();
+  const [row] = await w.record.latestTriage();
+  expect(readTriagePayload(row?.payload ?? {})?.unavailable).toBe("claude -p exited 1");
+  w.clock.ms += 59 * 60 * 1000;
+  w.host.kick();
+  await w.host.idle();
+  expect(w.handed).toHaveLength(1);
+  w.clock.ms += 2 * 60 * 1000;
+  w.host.kick();
+  await w.host.idle();
+  expect(w.handed).toHaveLength(2);
 });

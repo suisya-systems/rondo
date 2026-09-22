@@ -2972,14 +2972,20 @@ export async function operatorPage(
   // 2 wants that where a person is looking rather than on one screen.
   // **A candidate the person took** (D-0097 point 4.4): the box is drawn
   // holding its drafted request, by the server, so it works without script.
-  const taken = (() => {
+  // **Read by the id the address names, not among the latest rows**: a
+  // reading written after the page was drawn must not empty a box a person
+  // pressed for, nor a reload of it.
+  const taken = await (async () => {
     if (view.kind !== "requests" || view.take === undefined) {
       return null;
     }
     const take = view.take;
-    const row = latestTriage.find((one) => one.proposalId === take.proposalId);
-    const payload = row === undefined ? undefined : triagePayloads.get(row.proposalId);
-    if (payload === undefined) {
+    const read = await ports.record.readProposal(take.proposalId);
+    const payload =
+      read.kind === "read" && read.proposal.kind === "triage"
+        ? readTriagePayload(read.proposal.payload)
+        : null;
+    if (payload === null) {
       return null;
     }
     const clauses = goals.find((goal) => goal.goalId === payload.goalId)?.clauses ?? [];

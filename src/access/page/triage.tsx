@@ -53,7 +53,6 @@ export type TriageBlock =
       readonly kind: "unavailable";
       readonly repository: string;
       readonly goalHref: string;
-      readonly reason: string;
       readonly readSaid: string;
     }
   | {
@@ -102,7 +101,9 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
     }
     const readSaid = readLine(wording, payload, row, nowMs);
     if (payload.unavailable !== null) {
-      return { kind: "unavailable", repository, goalHref, reason: payload.unavailable, readSaid };
+      // The reason stays on the row and in the host's log: it is rondo's
+      // words about a model's answer, not a page sentence (D-0076).
+      return { kind: "unavailable", repository, goalHref, readSaid };
     }
     const clauses = byId.get(payload.goalId)?.clauses ?? [];
     const [first, ...rest] = payload.ranked.map((ranked) =>
@@ -204,7 +205,7 @@ export function takenRequest(
     // The issue by its full name, so the issue reader reads it into the
     // thread (`D-0078`) and the drafter has what the proposal was made from.
     ...(ranked.source.form === "issue"
-      ? ["", `${ranked.source.repository}#${String(ranked.source.number)}`]
+      ? ["", wording.triageBoxFrom(`${ranked.source.repository}#${String(ranked.source.number)}`)]
       : []),
   ].join("\n");
 }
@@ -263,11 +264,9 @@ function Block({
     case "unavailable":
       return (
         <>
-          <p className="triage-note">{wording.triageUnavailable}</p>
-          <details className="ev-aside">
-            <summary>{wording.triageUnavailableWhy}</summary>
-            <p lang="">{block.reason}</p>
-          </details>
+          <p className="triage-note">
+            {wording.triageUnavailable} <a href={block.goalHref}>{wording.triageEditGoal}</a>
+          </p>
           <p className="triage-read">{block.readSaid}</p>
         </>
       );
@@ -459,7 +458,9 @@ export function GoalScreen({ wording, repository, goal, nowMs, token }: GoalScre
         </ol>
         <p className="goal-kept">
           {goal === null
-            ? wording.goalDraft
+            ? kept.length === 0
+              ? wording.goalNotKept
+              : wording.goalDraft
             : wording.goalKeptAt(wording.age(ago(goal.writtenAtMs, nowMs)))}
         </p>
         <div className="triage-acts">
