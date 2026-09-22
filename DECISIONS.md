@@ -137,7 +137,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0099 | A `git status` that fails is refused by `publish` whatever overrides it: the inspection says which half it could not read, and only unreadable history stays publishable past `--despite-review` | accepted |
 | D-0100 | A first lap is cut from the forge's base branch as it is at admission: rondo fetches it into a branch of the lap's own, `rondo/base/<runId>`, admits continuo against that, and refuses the lap when the fetch fails | accepted |
 | D-0102 | rondo reads what the forge did to a published pull request, and not only its checks: a conflict is said as why no check runs, a head somebody else pushed is shown with its commits and can be merged by a press that names it, and a merge or a close made on the forge ends the request | accepted |
-| D-0103 | How D-0098's five rules are built: a landing basis on the claim's release is `first_landed`, a split plan orders its parts by `after`, a take-in is a plan field with no trigger yet, decision numbers are rows beside the claim, a worker's question is a fenced block relayed as an ask, and a closing lap is a press the review host does not read | proposed |
+| D-0103 | How D-0098's five rules are built: a landing basis on the claim's release is `first_landed`, a split plan orders its parts by `after`, a take-in is a plan field with no trigger yet, decision numbers are rows beside the claim, a worker's question is a fenced block relayed as an ask, and a closing lap is a press the review host does not read | accepted |
 
 ---
 
@@ -22475,11 +22475,11 @@ At rondo `77c41d7`, by reading `src/access/checks-host.ts`, `src/access/merge.ts
 
 ## D-0103 — How D-0098's five rules are built: a landing basis on the claim's release is `first_landed`, a split plan orders its parts by `after`, a take-in is a plan field with no trigger yet, decision numbers are rows beside the claim, a worker's question is a fenced block relayed as an ask, and a closing lap is a press the review host does not read
 
-**Status:** proposed (2026-09-22, rondo#250's building change). It records what the build of `D-0098`
-decided where `D-0098` left the choice to the building change. Three points were put to the owner
-through the window while the build ran; they are listed in "Put to the gate" and stand as built
-until answered. Refs `D-0098`, `D-0100`, `D-0073`, `D-0067`, `D-0065`, `D-0066`, `D-0064`,
-`D-0015`, `D-0009`, `D-0089`, rondo#250, rondo#417.
+**Status:** accepted (2026-09-22, rondo's owner, through the window, rondo#250). It records what the
+build of `D-0098` decided where `D-0098` left the choice to the building change. Three points were
+put to the owner while the build ran; the answers are in "What was put to the gate, and its
+answer". Refs `D-0098`, `D-0100`, `D-0073`, `D-0067`, `D-0065`, `D-0066`, `D-0064`, `D-0015`,
+`D-0009`, `D-0089`, rondo#250, rondo#417, cadenza#TBD.
 
 **Why an entry is needed.** `D-0098` "decides and does not build". Building it took choices its
 text does not make: where a release fact is stored, how an order is written into a split, where a
@@ -22547,9 +22547,9 @@ At rondo `24294fa` and the pinned cadenza, by reading:
       `revisionPlan`; `takeInSection`, whose conflict wording is written; and the ancestry finding
       (`readLapWork` -> `isAncestor` -> `readingOf({takeIn})`). `D-0098` rule 3.8 (a merge conflict
       on the decision record) is the same path and is not built until #417 is.
-   7. **The trigger is not built**, and `revise` passes no take-in: under the measured fence no
-      worker can pass rule 2.3's test, so a trigger would only turn every handed-over line into a
-      failing lap. See "Put to the gate", point 1.
+   7. **The trigger stays off until cadenza's fence allows a merge** (cadenza#TBD), and `revise`
+      passes no take-in: under the measured fence no worker can pass rule 2.3's test, so a trigger
+      would only turn every handed-over line into a failing lap. The gate's answer to point 1.
 
 3. **Rule 3: numbers are rows beside the claim.**
    1. **The record is named at setup** by the plan field `decision_record` (payload version 6;
@@ -22629,15 +22629,24 @@ At rondo `24294fa` and the pinned cadenza, by reading:
    step, the question's event line, the pre-filled revise box and the closing-fix card are open. Each
    reaches the person today through the thread's asks, the gate's findings and the report's words.
 
-### Put to the gate (2026-09-22, through the window; unanswered when written)
+### What was put to the gate, and its answer
 
-1. **The worker's fence and rule 2** (blocks rule 2 end to end): (a) cadenza's `COMMON_BASH` gains
-   `git merge` (recommended; #417 needs it too), (b) rondo merges on a branch of the lap's own and
-   cannot settle a conflict, (c) build rondo's half with no trigger until (a) lands, as built here.
-2. **One press or two for an answered question**: two built (rule 4.5's words); rule 8.4's sentence
-   would go on the revise box.
-3. **The page half of `D-0098` rule 8** as a follow-up after the parallel lanes that edit the page
-   land.
+1. **The worker's fence and rule 2.** (a) cadenza's `COMMON_BASH` gains `git merge` (#417 needs it
+   too); (b) rondo merges on a branch of the lap's own, and cannot settle a conflict that way; (c)
+   build rondo's half now as the mechanism #417 reuses, with the trigger off.
+2. **One press or two for an answered question.** Two, as rule 4.5 words it; or one, as rule 8.4's
+   sentence reads.
+3. **The page half of `D-0098` rule 8** in this change, or as a follow-up after the parallel lanes
+   that edit the page land.
+
+**The gate's answer (2026-09-22, rondo's owner, through the window):**
+
+1. **(c) now, and (a) asked of cadenza** as its own issue (cadenza#TBD) by the organisation. The
+   trigger stays off until (a) lands.
+2. **Two presses**: the answer, then `revise`. Rule 8.4's sentence goes on the revise box.
+3. **A follow-up**: no page change in this one.
+
+The defaults of rules 1, 3, 4 and 5 above were accepted as built.
 
 ### What would falsify it
 
