@@ -23288,8 +23288,9 @@ unchanged: they still return at the gate.
 
 **2. Every refusal before the row is still the press's own answer.** Nothing writes a row before
 `reserve()`, so a refusal is a start that ended before a row appeared. The press waits for it and
-the refusal screen says it as before. A throw before the row is now said on that screen as
-`startRefusedNotAdmitted` with the error's words, where it used to be the server's error page.
+the refusal screen says it as before. A throw before the row is now that screen's
+`startRefusedNotAdmitted`, where it used to be the server's error page, and the error's words go to
+the host's console, escaped.
 
 **3. A start that ends badly after its press has answered is an ask in the request's thread.**
 After the row exists, `admitScopedPlan` has no refusal left to return. Only a throw, from continuo

@@ -5139,13 +5139,13 @@ export async function answerOnceReserved(
 ): Promise<Started> {
   let over = false;
   const ended = running
-    .catch(
-      (error: unknown): Started => ({
-        ok: false,
-        why: "startRefusedNotAdmitted",
-        note: `rondo stopped with an error: ${error instanceof Error ? error.message : String(error)}`,
-      }),
-    )
+    .catch((error: unknown): Started => {
+      const note = `lap '${input.iterationId}': rondo stopped with an error: ${error instanceof Error ? error.message : String(error)}`;
+      // The refusal screen says only that nothing started; the words go where
+      // the terminal `rondo web` runs in has always had them.
+      consoleSeams.writeError(`${asciiEscape(note)}\n`);
+      return { ok: false, why: "startRefusedNotAdmitted", note };
+    })
     .finally(() => {
       over = true;
     });
