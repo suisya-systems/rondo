@@ -98,6 +98,7 @@ import {
   approvedRetry,
   COMMAND_LINE_SURFACE,
   composeBetweenLaps,
+  DETERMINISTIC_DRAFTER,
   type ExplainOutcome,
   type ExplainPorts,
   elevateObservation,
@@ -1741,19 +1742,30 @@ export async function main(
             : new ScopePort(
                 async (draft) =>
                   await recordScopeFromPage(environment, store, opened.path, sender.actorId, draft),
+                // **Answered once the lap is there, not at its gate** (D-0109).
                 async (input) =>
-                  await startScopedFromPage(environment, store, opened.path, sender.actorId, input),
+                  await answerOnceReserved(
+                    store,
+                    record,
+                    input,
+                    startScopedFromPage(environment, store, opened.path, sender.actorId, input),
+                  ),
                 // The drafted scope's two presses (rondo#238 C2b, D-0071 rule 5.3).
                 async (form) =>
                   await recordDraftedScopeFromPage(environment, opened.path, sender.actorId, form),
                 async (input) =>
-                  await startSplitFromPage(
-                    environment,
+                  await answerOnceReserved(
                     store,
-                    opened.path,
-                    sender.actorId,
-                    bounds.policy,
+                    record,
                     input,
+                    startSplitFromPage(
+                      environment,
+                      store,
+                      opened.path,
+                      sender.actorId,
+                      bounds.policy,
+                      input,
+                    ),
                   ),
                 // The raise press (D-0074 section 4).
                 async (input) =>
@@ -5100,6 +5112,107 @@ export async function startScopedFromPage(
 
 /** Every scoped start this process has in flight, by iteration id. */
 const starting = new Map<string, Promise<Started>>();
+
+/**
+ * **A start press answers once its lap's row is there, not once the lap is at
+ * its gate** (rondo#409, D-0109). `running` is the whole start -- the lap runs
+ * inside it for as long as it takes to reach its gate -- and the page's press
+ * used to wait for all of it, which in lap 12 was a tab loading for tens of
+ * minutes. The row is what the list and the thread draw a running lap from, so
+ * from the moment it exists the page shows the work by its own means.
+ *
+ * **Everything that refuses before the row still answers the press**: no row
+ * is written until `reserve()`, so a refusal is the start ending before the
+ * row appears, and the press waits for it and says it as it always has.
+ *
+ * **What ends badly after the press has answered is written where a person
+ * looks** (rule 3): an asking message in the request's thread, which the tab's
+ * *your turn* and the host's notification both count as a wait. Its id is the
+ * lap's, so a second press joined to the first writes it once.
+ */
+export async function answerOnceReserved(
+  store: Pick<IterationStore, "read">,
+  record: Pick<AdvisoryRecord, "recordThreadMessage">,
+  input: { readonly iterationId: string; readonly requestMessageId: string },
+  running: Promise<Started>,
+  pollMs = 250,
+): Promise<Started> {
+  let over = false;
+  const ended = running
+    .catch(
+      (error: unknown): Started => ({
+        ok: false,
+        why: "startRefusedNotAdmitted",
+        note: `rondo stopped with an error: ${error instanceof Error ? error.message : String(error)}`,
+      }),
+    )
+    .finally(() => {
+      over = true;
+    });
+  // ponytail: polls the row every `pollMs`; a hook in `reserve()` if a quarter second matters.
+  while (!over) {
+    const row = await store.read(input.iterationId).catch(() => null);
+    if (row?.kind === "read" && !over) {
+      void ended.then(async (late) => {
+        if (late.ok) {
+          return;
+        }
+        // A lap already at its gate failed only in its model reading: the gate
+        // is the wait the person is called to, and a stop would say otherwise.
+        const now = await store.read(input.iterationId).catch(() => null);
+        if (now?.kind === "read" && now.record.status === "awaiting_human") {
+          console.error(`lap '${input.iterationId}' is at its gate; after it: ${late.note}`);
+          return;
+        }
+        await sayStartStopped(record, input, late.note);
+      });
+      return { ok: true, note: `iteration '${input.iterationId}' was admitted and is running` };
+    }
+    await Promise.race([ended, new Promise((resolve) => setTimeout(resolve, pollMs).unref())]);
+  }
+  return await ended;
+}
+
+/** D-0109 rule 3: a start that ended badly after its press answered, as an ask in its thread. */
+async function sayStartStopped(
+  record: Pick<AdvisoryRecord, "recordThreadMessage">,
+  input: { readonly iterationId: string; readonly requestMessageId: string },
+  note: string,
+): Promise<void> {
+  const unsaid = (reason: string) =>
+    console.error(
+      `rondo could not tell the person that lap '${input.iterationId}' stopped (${note}): ${reason}`,
+    );
+  try {
+    const outcome = await record.recordThreadMessage({
+      messageId: `start-stopped-${input.iterationId}`,
+      body: [
+        `Stopped: lap '${input.iterationId}', which the start press began, did not reach its gate.`,
+        `Reason: ${note}`,
+        "Nothing drives this lap now; its row stays as rondo last wrote it.",
+        "Options:",
+        "- Starting again. Gives up: this lap; a new press starts another under the same approval.",
+        "- Stopping. Gives up: this request's work.",
+        "Recommended: starting again once the reason above no longer holds.",
+        "This line stays stopped until this message is answered.",
+      ].join("\n"),
+      authorKind: "drafter",
+      authorId: DETERMINISTIC_DRAFTER,
+      inReplyTo: input.requestMessageId,
+      atMs: Date.now(),
+      bases: [
+        { form: "message", messageId: input.requestMessageId },
+        { form: "iteration", iterationId: input.iterationId },
+      ],
+      asks: true,
+    });
+    if (outcome.kind !== "recorded") {
+      unsaid(outcome.reason);
+    }
+  } catch (error: unknown) {
+    unsaid(error instanceof Error ? error.message : String(error));
+  }
+}
 
 /**
  * One press of the page's *ask for a change* button: the gate answered with the

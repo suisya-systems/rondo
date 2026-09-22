@@ -23261,3 +23261,51 @@ so a route added without a class still fails there.
   being trusted. Rule 3's placement is what moves.
 - **A tab that rings for a wait the person was already looking at** often enough to be ignored.
   Rule 1's cross-navigation memory is what to narrow.
+
+## D-0109 — A start press answers once its lap's row is there, not once the lap is at its gate: a refusal before the row is still the press's answer, and a start that ends badly after it is an ask in the request's thread
+
+**Status:** accepted (2026-09-23, rondo#409). Refs `D-0066`, `D-0069`, `D-0083`, `D-0106`,
+`D-0108`, rondo#409, rondo#414.
+
+**Numbering.** `D-0109` was assigned to this lane in advance.
+
+**Why an entry is needed.** In lap 12 the tab's loading indicator spun for the whole lap, tens of
+minutes. Both page start presses (`POST /start`, the scoped start, and `POST /start-plan`, one
+drafted plan's start) awaited `startScopedFromPage` / `startSplitFromPage`, which return when the
+lap stops at its gate (`admitScopedPlan` awaits `admit`, which drives continuo through the whole
+lap, then takes the model reading). No entry said when a press answers, or what becomes of a start
+that fails after its press has answered.
+
+### The decision
+
+**1. The press answers when the lap's row exists, or when the start has ended without one,
+whichever comes first.** The row is written by `reserve()`, and the list and the thread draw a
+running lap from it, so from that moment the page shows the work by its own means. The start goes on
+in the host process. The page's two presses are wrapped in `answerOnceReserved`
+(`src/access/cli.ts`), which reads the row every quarter second while the start runs. The command
+line, the resident host's order tick and `startScopedFromPage` / `startSplitFromPage` themselves are
+unchanged: they still return at the gate.
+
+**2. Every refusal before the row is still the press's own answer.** Nothing writes a row before
+`reserve()`, so a refusal is a start that ended before a row appeared. The press waits for it and
+the refusal screen says it as before. A throw before the row is now said on that screen as
+`startRefusedNotAdmitted` with the error's words, where it used to be the server's error page.
+
+**3. A start that ends badly after its press has answered is an ask in the request's thread.**
+After the row exists, `admitScopedPlan` has no refusal left to return. Only a throw, from continuo
+or from rondo, can end the start badly. rondo then writes one drafter message with `asks` set,
+`start-stopped-<lap>`, into the request's thread. It says which lap stopped, why, what the options
+are and which is recommended, as `D-0066` rule 4.4's stop does. An ask counts as a wait, so the
+tab's *your turn* (`D-0108`) and the host's notification both reach the person, and `D-0106` puts it
+at the top of the thread. It holds the request's line until it is answered, as every stop does
+(`D-0069` rule 5). The message's id is the lap's, so a second press joined to the first writes it
+once. If the message cannot be written, the host's console says so.
+
+A lap whose row already reads `awaiting_human` when the throw arrives failed only in the model
+reading taken after the gate opened. The gate is then the wait the person is called to, so no stop
+is written, and the error goes to the host's console.
+
+**4. What is not done.** The revise press and the conflict-fix press also run a lap to its gate
+inside the press. rondo#409 names the start press, so they are left as they are. The same wrapper
+applies to them if the owner wants it. The row is polled rather than signalled from `reserve()`,
+which would have to be threaded through four layers to save at most a quarter second.
