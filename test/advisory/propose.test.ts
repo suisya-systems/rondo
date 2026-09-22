@@ -613,3 +613,26 @@ test("a split reads back as plans against templates, or as holes, and nothing el
   // Not an arm of readPayload: a split there is visibly unreadable, never options or claims.
   expect(readPayload(planned).kind).toBe("unreadable");
 });
+
+test("a split plan may wait on an earlier plan of its split, and on no other (D-0098 rule 1.3)", () => {
+  const plan = {
+    template_plan_digest: `sha256:${"a".repeat(64)}`,
+    prompt: "p",
+    agent_type_digest: `sha256:${"b".repeat(64)}`,
+    bases: [{ form: "message", messageId: "m-1" }],
+  };
+  const chain = { plans: [plan, { ...plan, after: 0 }, { ...plan, after: 1 }], holes: [] };
+  expect(readSplitPayload(chain)).toEqual({ kind: "split", payload: chain });
+  for (const [why, after] of [
+    ["itself", 1],
+    ["a later plan", 2],
+    ["a negative index", -1],
+    ["a fraction", 0.5],
+    ["a string", "0"],
+  ] as const) {
+    const document = { plans: [plan, { ...plan, after }, plan], holes: [] };
+    const read = readSplitPayload(document as never);
+    expect(read.kind, why).toBe("unreadable");
+    expect(read.kind === "unreadable" && read.reason, why).toContain("after");
+  }
+});

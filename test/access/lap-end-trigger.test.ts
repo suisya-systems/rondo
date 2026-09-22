@@ -92,6 +92,8 @@ const PLAN: RunPlan = {
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
   forgeRepository: null,
+  takeIn: null,
+  decisionRecord: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [CATALOG_LAYER],
   projectName: "rondo",
@@ -387,6 +389,7 @@ test("a successor identity that is taken is skipped, and the next free one is mi
   const h = harness(NEEDS_APPROVAL);
   const store = storeWithRequest(h.connection, CONSERVATIVE_HOST_POLICY);
   await store.reserve({
+    numbers: null,
     id: `${SUBJECT}-r2`,
     request: "an earlier retry, already spent",
     plan: { run_id: "rondo-i-0001-r2", repository: "/srv/repo" },

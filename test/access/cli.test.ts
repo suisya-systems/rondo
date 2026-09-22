@@ -361,6 +361,18 @@ test("--prompt and --prompt-file together are refused rather than ranked", () =>
   }
 });
 
+test("D-0098 rule 5.2: --closing-fix reaches revise with a scope, and is refused without one", () => {
+  const base = ["revise", "--actor-id", "me", "--body=fix", "--iteration-id", "i-2"];
+  const scoped = parseCommand([...base, "--scope-decision-id", "sd-1", "--closing-fix"]);
+  expect(scoped.kind === "parsed" && scoped.parsed.closingFix).toBe(true);
+  const plain = parseCommand([...base, "--scope-decision-id", "sd-1"]);
+  expect(plain.kind === "parsed" && plain.parsed.closingFix).toBe(false);
+  const bare = parseCommand([...base, "--closing-fix"]);
+  expect(bare.kind === "refused" ? bare.reason : "").toContain("--scope-decision-id");
+  // Only revise takes it.
+  expect(parseCommand(["publish", "--actor-id", "me", "--closing-fix"]).kind).toBe("refused");
+});
+
 test("--dry-run is a boolean and reaches the record", () => {
   const outcome = parseCommand(["publish", "--repo", "o/n", "--actor-id", "me", "--dry-run"]);
   expect(outcome.kind).toBe("parsed");
@@ -2664,6 +2676,18 @@ test("publish prints the latest model reading as material, and nothing when ther
   expect(said).toContain("[major] the commit message and the diff disagree");
   expect(said).toContain("material for you, not a check");
   expect(publishModelReadingLines([reviewed()])).toEqual([]);
+});
+
+test("D-0098 rule 5.3: publish says a closing lap was not re-read, and names what was last read", () => {
+  const said = publishModelReadingLines([reviewed(), modelRead()], {
+    readTipCommit: "e".repeat(40),
+    findings: [1],
+  }).join("\n");
+  expect(said).toContain("not re-read");
+  expect(said).toContain(`reviewer last read commit '${"e".repeat(40)}', not this one`);
+  expect(said).toContain("numbered 2");
+  // The predecessor's reading is not shown as if it were this lap's.
+  expect(said).not.toContain("[major]");
 });
 
 test("a request that names one issue here closes it, and nothing else does (rondo#376)", () => {

@@ -28,6 +28,7 @@ import { REQUEST, storeWithRequest } from "../request-fixture.js";
 async function fenceBlock(permissionDenials: string | null): Promise<string> {
   const store = storeWithRequest(new DatabaseSync(":memory:"), CONSERVATIVE_HOST_POLICY);
   await store.reserve({
+    numbers: null,
     id: "i-0001",
     request: "do the thing",
     plan: { run_id: "rondo-i-0001", repository: "/srv/repo" },

@@ -39,6 +39,7 @@ import {
   type AgentTypeRecordDraft,
   askStandsOver,
   IRREVERSIBLE_ACTS,
+  isDeterministicReadingDrafter,
   isModelReadingDrafter,
   type JsonRecord,
   type JsonValue,
@@ -87,6 +88,14 @@ export type ScopeAct =
       readonly predecessorId: string;
       /** The predecessor row's own `requestMessageId`, inherited (D-0061 rule 4). */
       readonly requestMessageId: string;
+      /**
+       * The person pressed this redo as the **closing lap** (D-0098 rule 5.2):
+       * one lap after the review exit that fixes the findings left below the
+       * threshold and is not read again. Never derived from the state of the
+       * line: an answer or conflict-fix revise after the exit is an ordinary
+       * redo, and must not be left unread by inference.
+       */
+      readonly closing: boolean;
     };
 
 export type ScopeVerdict =
@@ -126,6 +135,20 @@ export interface ScopeSnapshot {
     readonly readings: Read<{
       readonly latestModelReading: LapReading | null;
       readonly roundsTaken: number;
+      /**
+       * The tip of the predecessor's latest deterministic reading, null when it
+       * has none: the commit its last gate stood at. A closing lap needs the
+       * model reading to be of that very tip (D-0098 rule 5.3). Absent only
+       * where a caller did not gather it, which a closing act reads as unknown.
+       */
+      readonly latestTipCommit?: string | null;
+      /**
+       * A lap of this line that was already its closing lap, or null (D-0098
+       * rule 5.5). Read here as well as in `reserve()`, so the verdict refuses
+       * a second closing lap **before** the predecessor's gate is answered.
+       * Absent where a caller did not gather it; the store still refuses.
+       */
+      readonly earlierClosingLap?: string | null;
     }>;
   } | null;
 }
@@ -135,6 +158,7 @@ export function reviewScopeOf(payload: ScopePayload): ReviewScope {
   return Object.freeze({
     budgets: Object.freeze({ reviewRounds: payload.budgets.review_rounds }),
     severityThreshold: payload.severity_threshold,
+    ...(payload.below_threshold === undefined ? {} : { belowThreshold: payload.below_threshold }),
   });
 }
 
@@ -325,12 +349,77 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
       `the predecessor '${act.predecessorId}' has no model reading, so there is no round to test`,
     );
   }
+  const policy = reviewPolicyOf(reviewScopeOf(payload));
   const round = reviewRoundDecision({
     latest: readings.latestModelReading,
     roundsTaken: readings.roundsTaken,
-    policy: reviewPolicyOf(reviewScopeOf(payload)),
+    policy,
   });
-  return round.kind === "stop" ? outside("readings", round.reason) : { kind: "inside" };
+  if (round.kind === "stop") {
+    return outside("readings", round.reason);
+  }
+  // D-0098 rule 5.2: a closing lap is the scope's option, after the exit, and
+  // only with something left below the threshold for it to fix.
+  if (act.closing) {
+    const earlier = readings.earlierClosingLap ?? null;
+    const refusal =
+      earlier !== null
+        ? `the lap '${earlier}' of this line was already its closing lap, and a scope's ` +
+          "fix_unread allows one closing lap per line (D-0098 rule 5.5)"
+        : policy.belowThreshold !== "fix_unread"
+          ? "the scope's below_threshold is 'leave', so no closing lap is allowed (D-0098 rule 5.2)"
+          : round.kind !== "exit"
+            ? `the predecessor '${act.predecessorId}' has findings at or above the threshold, and a ` +
+              "closing lap follows the review exit only (D-0098 rule 5.2)"
+            : round.leftBelowThreshold.length === 0
+              ? `the predecessor '${act.predecessorId}' left no finding below the threshold, so a ` +
+                "closing lap has nothing to fix (D-0098 rule 5.2)"
+              : readings.latestModelReading.evidence === null
+                ? `the predecessor's model reading names no tip commit, so what the reviewer last ` +
+                  "read cannot be said (D-0098 rule 5.3)"
+                : readings.latestModelReading.evidence.tipCommit !== readings.latestTipCommit
+                  ? `the predecessor's model reading is of commit ` +
+                    `'${readings.latestModelReading.evidence.tipCommit}', and its last gate stood ` +
+                    `at '${String(readings.latestTipCommit ?? "(unknown)")}': the commits between ` +
+                    "were never read, and a closing lap is not read again (D-0098 rule 5.3)"
+                  : null;
+    if (refusal !== null) {
+      return outside("readings", refusal);
+    }
+  }
+  return { kind: "inside" };
+}
+
+/**
+ * What a closing redo records (D-0098 rule 5.3), or null for any other act.
+ * Read from the snapshot {@link scopeVerdict} passed as `inside`, so it is the
+ * same reading and the same decision.
+ */
+function closingSpend(
+  act: ScopeAct,
+  snapshot: ScopeSnapshot,
+): NonNullable<ScopeSpend["closing"]> | null {
+  if (act.kind !== "redo" || !act.closing) {
+    return null;
+  }
+  const readings = snapshot.predecessor?.readings;
+  const latest = readings?.kind === "read" ? readings.latestModelReading : null;
+  if (readings?.kind !== "read" || latest === null || latest.evidence === null) {
+    throw new Error("an inside closing verdict without a predecessor's reading is a defect");
+  }
+  const round = reviewRoundDecision({
+    latest,
+    roundsTaken: readings.roundsTaken,
+    policy: reviewPolicyOf(reviewScopeOf(snapshot.scope.payload)),
+  });
+  if (round.kind !== "exit") {
+    throw new Error("an inside closing verdict after no exit is a defect");
+  }
+  return {
+    readTipCommit: latest.evidence.tipCommit,
+    readingReadAtMs: latest.readAtMs,
+    findings: round.leftBelowThreshold,
+  };
 }
 
 /**
@@ -406,7 +495,8 @@ function unproposedStart(act: ScopeAct): boolean {
 
 /** The store half the gatherer reads, and nothing it could write with. */
 export interface ScopeReadPorts {
-  readonly store: Pick<IterationStore, "read" | "readingsFor">;
+  readonly store: Pick<IterationStore, "read" | "readingsFor"> &
+    Partial<Pick<IterationStore, "closingLapOf">>;
   readonly record: Pick<
     AdvisoryRecord,
     | "readScope"
@@ -492,14 +582,43 @@ export async function gatherScopeSnapshot(
                         lineage.links.find((link) => link.id === act.predecessorId)?.readings ?? [],
                         isModelReadingDrafter,
                       ),
+                      latestTipCommit:
+                        latestReading(
+                          lineage.links.find((link) => link.id === act.predecessorId)?.readings ??
+                            [],
+                          isDeterministicReadingDrafter,
+                        )?.evidence?.tipCommit ?? null,
                       // The whole lineage, a branch's sibling laps included (D-0065 4.1).
                       roundsTaken: reviewRoundsAlong(lineage.links),
+                      earlierClosingLap: await earlierClosingLap(
+                        ports,
+                        act,
+                        lineage.links.map((link) => link.id),
+                      ),
                     }
                   : lineage,
             }
           : null,
     }),
   };
+}
+
+/** The first lap of the line that was a closing lap, read only for a closing act (D-0098 rule 5.5). */
+async function earlierClosingLap(
+  ports: ScopeReadPorts,
+  act: ScopeAct,
+  ids: readonly string[],
+): Promise<string | null> {
+  const closingLapOf = ports.store.closingLapOf;
+  if (act.kind !== "redo" || !act.closing || closingLapOf === undefined) {
+    return null;
+  }
+  for (const id of ids) {
+    if ((await closingLapOf(id)) !== null) {
+      return id;
+    }
+  }
+  return null;
 }
 
 /** cadenza's classification of a plan under one admission identity, with its agent type's grants. */
@@ -712,6 +831,7 @@ export async function admitUnderScope(
       // Drift between this classification and the store's write is D-0047
       // rule 6's bounded race, which D-0066 rule 4.3 accepts.
       agentTypeDigest: snapshot.classification.agentTypeDigest,
+      closing: closingSpend(act, snapshot),
     },
   );
   if (report.scopeRefusal !== undefined) {

@@ -50,6 +50,7 @@ const tripleFor = (id: string) => ({
 
 const reserveOne = async (store: ReturnType<typeof freshStore>, id: string, nowMs = 1_000) =>
   store.reserve({
+    numbers: null,
     id,
     request: "do the thing",
     plan: somePlan(),

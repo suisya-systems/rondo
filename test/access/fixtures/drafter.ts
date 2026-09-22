@@ -63,6 +63,8 @@ export const PLAN = {
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
   forgeRepository: null,
+  takeIn: null,
+  decisionRecord: null,
   invocationCeilingMs: 1_800_000,
   // A catalog cadenza classifies (as `test/access/scope-stop.test.ts` has it),
   // so a scope's verdict over this plan gets past its agent-type test.

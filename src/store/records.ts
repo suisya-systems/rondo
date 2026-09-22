@@ -1652,7 +1652,21 @@ export interface ScopePayload {
    * is not on the row, so a scope cannot shorten it by construction.
    */
   readonly irreversible_additions: readonly string[];
+  /**
+   * What happens to findings below `severity_threshold` once the review exits
+   * (D-0098 rule 5.2). **Absent means `leave`** (D-0065 rule 5.2 unchanged), and
+   * {@link scopePayloadWithDefaults} does not fill it: a default written into
+   * every new row would change the digest of a scope that says nothing new. Only
+   * the person sets it; the drafter never writes the key (D-0098 section 5's
+   * table). `fix_unread` allows one closing lap that is not read again (rule 5.3).
+   */
+  readonly below_threshold?: BelowThreshold;
 }
+
+/** D-0098 rule 5.2's two values. */
+export const BELOW_THRESHOLD = Object.freeze(["leave", "fix_unread"] as const);
+
+export type BelowThreshold = (typeof BELOW_THRESHOLD)[number];
 
 /** One (repository, workspace root) pair, compared byte for byte (rule 1.2.2). */
 export interface ScopeWorkspace {
@@ -1931,7 +1945,23 @@ export interface OpenAsk {
   readonly messageId: string;
   readonly iterationIds: readonly string[];
   readonly answeredStop: boolean;
+  /**
+   * A worker's question (D-0098 rule 4.4, author {@link WORKER_QUESTION_AUTHOR}):
+   * it costs its own line and nothing else, so D-0069 rule 5's hold on every
+   * unproposed start of the request does not apply to it. Absent otherwise.
+   */
+  readonly lineOnly?: true;
 }
+
+/**
+ * Who writes a worker's question (D-0098 rule 4): **the recommendation-author
+ * column** (`D-0064` rule 4.4) -- the recommendation in the body is the
+ * worker's, and the id says so without a label in the prose. The version is in
+ * the string for the reason `DETERMINISTIC_READING_DRAFTER` carries one. Here,
+ * beside {@link OpenAsk}, because the store reads it to know an ask that holds
+ * its own line only.
+ */
+export const WORKER_QUESTION_AUTHOR = "rondo/worker-question/1";
 
 /** Which of D-0066 rule 4.2's tests refused, as a closed name a test and a screen can both read. */
 export type ScopeTest =
@@ -1984,7 +2014,7 @@ export function askStandsOver(
   lineageIds: readonly string[],
   unproposedStart: boolean,
 ): boolean {
-  if (unproposedStart) {
+  if (unproposedStart && ask.lineOnly !== true) {
     return true;
   }
   return ask.iterationIds.length === 0
@@ -2004,6 +2034,7 @@ const SCOPE_KEYS = Object.freeze([
   "severity_threshold",
   "outward_acts",
   "irreversible_additions",
+  "below_threshold",
 ]);
 const WORKSPACE_KEYS = Object.freeze(["repository", "workspace_root"]);
 const BUDGET_KEYS = Object.freeze([
@@ -2024,6 +2055,9 @@ const AGENT_TYPE_DIGEST = /^sha256:[0-9a-f]{64}$/;
  * value is the reader's refusal, never a default's silent repair. Called by the
  * verb **before** the payload is digested, so the stored row is explicit and
  * what is approved is what is tested.
+ *
+ * `below_threshold` is the one key left absent (D-0098 rule 5.2): its absence
+ * is its default, `leave`, so every scope written before it digests unchanged.
  */
 export function scopePayloadWithDefaults(input: JsonRecord): JsonRecord {
   const budgets = input["budgets"];
@@ -2184,6 +2218,16 @@ export function readScopePayload(json: JsonValue): ScopePayloadReading {
     return refused("irreversible_additions holds an empty name");
   }
 
+  const belowThreshold = json["below_threshold"];
+  if (
+    belowThreshold !== undefined &&
+    !(BELOW_THRESHOLD as readonly unknown[]).includes(belowThreshold)
+  ) {
+    return refused(
+      `below_threshold must be one of ${BELOW_THRESHOLD.join(", ")} when present (D-0098 rule 5.2)`,
+    );
+  }
+
   return {
     kind: "read",
     payload: Object.freeze({
@@ -2200,6 +2244,11 @@ export function readScopePayload(json: JsonValue): ScopePayloadReading {
       severity_threshold: threshold as FindingSeverity,
       outward_acts: Object.freeze(outward as ScopeOutwardAct[]),
       irreversible_additions: Object.freeze(additions),
+      // Absent stays absent, so a payload read and spread again (a raise,
+      // D-0074) digests as the one it came from.
+      ...(belowThreshold === undefined
+        ? {}
+        : { below_threshold: belowThreshold as BelowThreshold }),
     }),
   };
 }

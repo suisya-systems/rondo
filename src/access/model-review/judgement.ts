@@ -22,6 +22,7 @@ import { type ReviewerRow, reviewerFamilyCheck } from "../../continuo/roles.js";
 import type { ReviewCriterion } from "../../refrain/plan.js";
 import { contentDigest } from "../../store/plan.js";
 import {
+  type BelowThreshold,
   FINDING_SEVERITIES,
   type FindingBasis,
   type FindingSeverity,
@@ -56,6 +57,11 @@ export const MODEL_REVIEW_INPUT_BOUND_BYTES = 400_000;
 export interface ReviewPolicy {
   readonly roundBudget: number;
   readonly threshold: FindingSeverity;
+  /**
+   * D-0098 rule 5.2: `fix_unread` allows one closing lap after the exit that
+   * fixes the findings left below the threshold and is not read again.
+   */
+  readonly belowThreshold: BelowThreshold;
 }
 
 /**
@@ -66,6 +72,8 @@ export interface ReviewPolicy {
 export interface ReviewScope {
   readonly budgets: { readonly reviewRounds: number };
   readonly severityThreshold: FindingSeverity;
+  /** `below_threshold` (D-0098 rule 5.2); absent is `leave`. */
+  readonly belowThreshold?: BelowThreshold;
 }
 
 /**
@@ -95,6 +103,7 @@ export function reviewPolicyOf(scope: ReviewScope | null): ReviewPolicy {
       threshold !== undefined && FINDING_SEVERITIES.includes(threshold)
         ? threshold
         : DEFAULT_REVIEW_THRESHOLD,
+    belowThreshold: scope?.belowThreshold === "fix_unread" ? "fix_unread" : "leave",
   });
 }
 

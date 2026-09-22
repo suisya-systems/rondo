@@ -31,7 +31,7 @@ usage() {
   cat <<'USAGE'
 usage: scripts/dogfood-env.sh [--root DIR] [--iteration-id ID]
                               [--target-repo DIR] [--target-base-branch NAME]
-                              [--forge-repo OWNER/NAME]
+                              [--forge-repo OWNER/NAME] [--decision-record PATH]
                               [--review-criterion FILE] [--port N]
                               [--remote NAME] [--language TAG|ask]
                               [--force-continuo-rebuild]
@@ -83,6 +83,13 @@ options:
       rondo never works this out from the target's remotes: a workspace is a
       worktree cut from a local path, and an inferred slug would be whatever
       that clone happened to point at (D-0075 rule 3.1).
+  --decision-record PATH
+      the target's decision record: one file of numbered entries with an index
+      table (D-NNNN headings, one index row each), relative to the repository
+      root, written into the plan as `decision_record` (D-0098 rule 3.1). rondo
+      reserves its entry numbers when a lap is admitted and names them in the
+      lap's request, and two lines may both append to it. Omit it for a target
+      with no such file: its files are then ordinary paths.
   --review-criterion FILE
       a JSON file written into the plan as `review_criterion`:
       {"severities": {"blocker", "major", "minor", "nit"}, "rule_files": [...]}.
@@ -151,6 +158,7 @@ language=
 target_repo=
 target_base_branch=
 forge_repo=
+decision_record=
 review_criterion=${RONDO_DOGFOOD_REVIEW_CRITERION:-"$repo_root/scripts/dogfood-review-criterion.json"}
 
 while [ $# -gt 0 ]; do
@@ -161,6 +169,8 @@ while [ $# -gt 0 ]; do
     --target-base-branch)
       [ $# -ge 2 ] || die "--target-base-branch needs a value"; target_base_branch=$2; shift 2 ;;
     --forge-repo) [ $# -ge 2 ] || die "--forge-repo needs a value"; forge_repo=$2; shift 2 ;;
+    --decision-record)
+      [ $# -ge 2 ] || die "--decision-record needs a value"; decision_record=$2; shift 2 ;;
     --review-criterion)
       [ $# -ge 2 ] || die "--review-criterion needs a value"; review_criterion=$2; shift 2 ;;
     --port) [ $# -ge 2 ] || die "--port needs a value"; port=$2; shift 2 ;;
@@ -628,7 +638,8 @@ fi
 node -e '
   const [out, envRoot, runId, controlPlane, target, catalogOrigin, interlockRoot,
          claudeOrgPath, claudeBin, nodeBin, prompt, baseBranch,
-         projectName, reviewCriterionFile, forgeRepository, allowedBashJson] =
+         projectName, reviewCriterionFile, forgeRepository, allowedBashJson,
+         decisionRecord] =
     process.argv.slice(1);
 
   // The three budgets are stated rather than inherited. `invocation_ceiling_ms`
@@ -719,6 +730,7 @@ node -e '
     // No apostrophes in this comment: the whole program is a single-quoted
     // shell argument, so one would end the string.
     forge_repository: forgeRepository === "" ? null : forgeRepository,
+    decision_record: decisionRecord === "" ? null : decisionRecord,
 
     catalog_layers: [
       {
@@ -766,7 +778,7 @@ node -e '
 ' "$plan" "$env_root" "$run_id" "$control_plane" "$target" "$catalog_origin" \
   "$interlock_root" "$claude_org_path" "$claude_bin" "$node_bin" "$prompt" \
   "$target_base_branch" "$project_name" "$review_criterion" "$forge_repo" \
-  "$allowed_bash_json"
+  "$allowed_bash_json" "$decision_record"
 note "$plan"
 if [ -n "$forge_repo" ]; then
   note "pull requests for this target are opened in $forge_repo"

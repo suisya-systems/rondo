@@ -50,6 +50,7 @@ const fresh = () => {
 
 const reserveOne = async (store: ReturnType<typeof fresh>["store"], id: string) =>
   store.reserve({
+    numbers: null,
     id,
     request: "teach revise to name the flags it takes",
     plan: somePlan(),
@@ -166,6 +167,7 @@ test("a multi-paragraph request is quoted over its own lines rather than escaped
       "paragraph this long is here to be wrapped.",
   ].join("\n");
   const reserved = await store.reserve({
+    numbers: null,
     id: "i-0001",
     request,
     plan: somePlan(),
@@ -560,6 +562,8 @@ const PLAN_INPUT: RunPlan = {
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
   forgeRepository: null,
+  takeIn: null,
+  decisionRecord: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [CATALOG_LAYER],
   projectName: "rondo",
@@ -598,6 +602,7 @@ const reserveWithPlan = async (
   plan: RunPlan = PLAN_INPUT,
 ) =>
   store.reserve({
+    numbers: null,
     id,
     request: "teach rondo to count",
     plan: realPlan(id, plan),
@@ -1125,6 +1130,7 @@ test("an agent type cadenza will not build is a refusal and not a crash", async 
     askable: null,
   };
   await store.reserve({
+    numbers: null,
     id: "iter-1",
     request: "teach rondo to count",
     plan: malformed as JsonRecord,

@@ -795,6 +795,7 @@ test("terminal iterations are enumerable, which nothing else in the store does",
     ["i-live", 5_000, null],
   ] as const) {
     await store.reserve({
+      numbers: null,
       id,
       request: "do the thing",
       plan: { run_id: `r-${id}`, repository: "/srv/repo" },
@@ -832,6 +833,7 @@ test("what changed since a mark spans the record kinds and includes the bound", 
   const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   const record = advisoryRecord(connection);
   await store.reserve({
+    numbers: null,
     id: "i-0001",
     request: "do the thing",
     plan: { run_id: "r-1", repository: "/srv/repo" },

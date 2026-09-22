@@ -17,6 +17,7 @@ import {
   fetchLapBase,
   gatherReviewMaterialFacts,
   inspectLapWork,
+  isAncestor,
   readChangedPaths,
   readLanding,
   runReviewer,
@@ -513,11 +514,16 @@ function landingWorld() {
   git(work, "commit", "-m", "the line's work");
   const tipCommit = gitOut(work, "rev-parse", "HEAD");
   git(root, "clone", "-q", remote, merger);
-  const landing = (tips: readonly string[] = [tipCommit], remoteName = "origin") => ({
+  const landing = (
+    tips: readonly string[] = [tipCommit],
+    remoteName = "origin",
+    record: { readonly path: string; readonly reserved: readonly number[] } | null = null,
+  ) => ({
     repository: work,
     remote: remoteName,
     baseCommit,
     tipCommits: tips,
+    record,
   });
   return { work, merger, landing, tipCommit };
 }
@@ -664,6 +670,88 @@ test(
   REAL_GIT_TIMEOUT_MS,
 );
 
+// --- D-0098 rule 2: taking the default branch in ------------------------------
+
+test(
+  "D-0098 rule 2.3: ancestry answers yes, no, and undetermined for a commit git cannot read",
+  async () => {
+    const { work, landing, tipCommit } = landingWorld();
+    const { baseCommit } = landing();
+    const ask = (ancestor: string, descendant: string) =>
+      isAncestor({ repository: work, ancestor, descendant });
+    expect(await ask(baseCommit, tipCommit)).toBe("yes");
+    expect(await ask(tipCommit, baseCommit)).toBe("no");
+    expect(await ask("f".repeat(40), tipCommit)).toHaveProperty("undetermined");
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "what a line took in is not its work: a later landing on those paths leaves it landed",
+  async () => {
+    const { work, merger, landing } = landingWorld();
+    // Another line lands on other.txt; this line takes that commit in by merge.
+    writeFileSync(join(merger, "other.txt"), "another line's\n");
+    git(merger, "commit", "-qam", "another line (#1)");
+    git(merger, "push", "-q", "origin", "main");
+    git(work, "fetch", "-q", "origin");
+    const taken = gitOut(work, "rev-parse", "refs/remotes/origin/main");
+    git(work, "merge", "-q", "--no-edit", "refs/remotes/origin/main");
+    const tip = gitOut(work, "rev-parse", "HEAD");
+    // The line lands by squash, and a later change moves other.txt on again.
+    git(merger, "pull", "-q", "--no-rebase", "origin", "main");
+    writeFileSync(join(merger, "a.txt"), "changed\n");
+    git(merger, "rm", "-q", "b.txt");
+    writeFileSync(join(merger, "c.txt"), "new\n");
+    git(merger, "add", ".");
+    git(merger, "commit", "-m", "squash (#2)");
+    writeFileSync(join(merger, "other.txt"), "moved on again\n");
+    git(merger, "commit", "-qam", "later (#3)");
+    git(merger, "push", "-q", "origin", "main");
+    expect(await readLanding({ ...landing([tip]), takenIn: [taken] })).toMatchObject({
+      kind: "landed",
+      paths: ["a.txt", "b.txt", "c.txt"],
+    });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "D-0073 rule 6.4: a line merged by a real merge commit whose resolution changed its work reads not landed",
+  async () => {
+    const { work, merger, landing, tipCommit } = landingWorld();
+    git(work, "push", "-q", "origin", "topic");
+    git(merger, "fetch", "-q", "origin");
+    git(merger, "merge", "-q", "--no-ff", "--no-commit", "refs/remotes/origin/topic");
+    writeFileSync(join(merger, "a.txt"), "resolved otherwise\n");
+    git(merger, "add", "a.txt");
+    git(merger, "commit", "-qm", "merge the line (#2)");
+    git(merger, "push", "-q", "origin", "main");
+    expect(await readLanding(landing([tipCommit]))).toMatchObject({
+      kind: "notLanded",
+      differing: ["a.txt"],
+    });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
+test(
+  "a line merged by a real merge commit and then reverted reads not landed",
+  async () => {
+    const { work, merger, landing, tipCommit } = landingWorld();
+    git(work, "push", "-q", "origin", "topic");
+    git(merger, "fetch", "-q", "origin");
+    git(merger, "merge", "-q", "--no-ff", "--no-edit", "refs/remotes/origin/topic");
+    git(merger, "revert", "--no-edit", "-m", "1", "HEAD");
+    git(merger, "push", "-q", "origin", "main");
+    expect(await readLanding(landing([tipCommit]))).toMatchObject({
+      kind: "notLanded",
+      differing: ["a.txt", "b.txt", "c.txt"],
+    });
+  },
+  REAL_GIT_TIMEOUT_MS,
+);
+
 // --- fetchLapBase (rondo#407, D-0100) ----------------------------------------
 
 const revParse = (cwd: string, ref: string): string =>
@@ -703,7 +791,7 @@ test("a first lap's base is the forge's main as it is now, not the clone's stale
 
   const base = await fetchLapBase(lapBase(clone, "run-a"));
 
-  expect(base).toEqual({ kind: "fetched", branch: "rondo/base/run-a" });
+  expect(base).toEqual({ kind: "fetched", branch: "rondo/base/run-a", commit: current });
   expect(revParse(clone, "refs/heads/rondo/base/run-a")).toBe(current);
   // Moved afterwards, so the reading's base is the one the lap was cut from.
   expect(revParse(clone, "refs/remotes/origin/main")).toBe(current);
@@ -724,8 +812,8 @@ test("two laps admitted at once each get their own base, and neither waits on a 
     fetchLapBase(lapBase(clone, "run-b")),
   ]);
 
-  expect(first).toEqual({ kind: "fetched", branch: "rondo/base/run-a" });
-  expect(second).toEqual({ kind: "fetched", branch: "rondo/base/run-b" });
+  expect(first).toEqual({ kind: "fetched", branch: "rondo/base/run-a", commit: current });
+  expect(second).toEqual({ kind: "fetched", branch: "rondo/base/run-b", commit: current });
   expect(revParse(clone, "refs/heads/rondo/base/run-a")).toBe(current);
   expect(revParse(clone, "refs/heads/rondo/base/run-b")).toBe(current);
 });

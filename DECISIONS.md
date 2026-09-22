@@ -137,6 +137,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0099 | A `git status` that fails is refused by `publish` whatever overrides it: the inspection says which half it could not read, and only unreadable history stays publishable past `--despite-review` | accepted |
 | D-0100 | A first lap is cut from the forge's base branch as it is at admission: rondo fetches it into a branch of the lap's own, `rondo/base/<runId>`, admits continuo against that, and refuses the lap when the fetch fails | accepted |
 | D-0102 | rondo reads what the forge did to a published pull request, and not only its checks: a conflict is said as why no check runs, a head somebody else pushed is shown with its commits and can be merged by a press that names it, and a merge or a close made on the forge ends the request | accepted |
+| D-0103 | How D-0098's five rules are built: a landing basis on the claim's release is `first_landed`, a split plan orders its parts by `after`, a take-in is a plan field with no trigger yet, decision numbers are rows beside the claim, a worker's question is a fenced block relayed as an ask, and a closing lap is a press the review host does not read | accepted |
 
 ---
 
@@ -22471,3 +22472,231 @@ At rondo `77c41d7`, by reading `src/access/checks-host.ts`, `src/access/merge.ts
   tests pin that the lap is held while the press runs.
 - **Rewritten history that the comparison lists as zero commits being common.** The band then says
   the history was rewritten, and the person has only the two heads to go on.
+
+## D-0103 — How D-0098's five rules are built: a landing basis on the claim's release is `first_landed`, a split plan orders its parts by `after`, a take-in is a plan field with no trigger yet, decision numbers are rows beside the claim, a worker's question is a fenced block relayed as an ask, and a closing lap is a press the review host does not read
+
+**Status:** accepted (2026-09-22, rondo's owner, through the window, rondo#250). It records what the
+build of `D-0098` decided where `D-0098` left the choice to the building change. Three points were
+put to the owner while the build ran; the answers are in "What was put to the gate, and its
+answer". Refs `D-0098`, `D-0100`, `D-0073`, `D-0067`, `D-0065`, `D-0066`, `D-0064`, `D-0015`,
+`D-0009`, `D-0089`, rondo#250, rondo#417, cadenza#74.
+
+**Why an entry is needed.** `D-0098` "decides and does not build". Building it took choices its
+text does not make: where a release fact is stored, how an order is written into a split, where a
+record is named, how a question is signalled, how a closing lap is chosen. Each is recorded once
+here, so a later reader does not re-derive it from the code.
+
+### What was measured
+
+At rondo `24294fa` and the pinned cadenza, by reading:
+- No `sequence` record, release fact, number reservation, question relay or `below_threshold`
+  existed in `src/`. The lane ledger's store half (`lane_claim`, `reserve()`, the three release
+  paths, `readLanding`) did.
+- **The worker's fence has no `git merge`, `git rebase` or `git cherry-pick`.** cadenza's
+  `COMMON_BASH` is `echo:*`, `git switch --detach HEAD~1` and `git switch -`, and no toolchain table
+  adds a merge. A worker can therefore not make a commit an ancestor of its tip, which `D-0098` rule
+  2.3 tests.
+
+### Decision
+
+1. **Rule 1: `first_landed` is a basis on the release row, and the order is the split's.**
+   1. **No table for the fact.** The landing reading (`readHolder` in `src/access/conductor.ts`)
+      writes its release row with one more basis, `{form: "landing", branch, commit}`, the forge
+      head it read. No other release path writes it: the person's press, an abandon, a failure, a
+      settle and "ended with nothing to land" never carry it, so rule 1.5 holds by construction.
+      `landingOf(lineage)` reads the latest such basis and stays true after a retry.
+   2. **The order is a split plan's `after`**: the index of an earlier plan of the same split, with
+      `0 <= after < index`, so a chain is acyclic by its shape. It sits beside the plan as `claim`
+      does (`D-0063` rule 4.2). There is no `sequence` row: `holds` is always admission and `until`
+      is always `first_landed`, **within one repository as well as across**, which is stricter than
+      `paths_free` and safe (`D-0067` rule 5.1).
+   3. **`first` is a plan, found when read**: the first lap whose plan is plan `after`
+      (`startedFrom`). This answers `D-0067` rule 3.1's "open lineage" for a chain drafted before
+      `first` is admitted.
+   4. **The tick is the `rondo web` rescan** (`src/access/order-host.ts`, the dispatcher's row). It
+      exists only when an allowlisted approver is configured, and admits a released `then` through
+      the press's own path, in the approver's name, deduplicated against a simultaneous press. Only
+      plans with `after` are ever ticked. The press re-reads the order beside the plan, so no
+      readiness that falls through admits `then` before its landing.
+   5. **What `then` builds on (rule 1.6)** is a basis on its root claim, `{form: "landing",
+      lineageId, repository, branch, commit}`, written in the admission's transaction, and a rondo
+      section of the prompt, "What this work builds on", naming the repository, the branch and the
+      commit. `startedFrom` strips it, as it strips the definition of done. A split drafted with no
+      claim is admitted claiming the whole repository in the lane ledger's name, so the basis is on
+      that row too.
+   6. **When `first` ends unlanded (rule 1.5)** one P3 ask is written per ending, its id naming the
+      plan and the line's latest lap (a retry keeps the lineage, so a retry that ends unlanded is
+      asked about again), based on `first`'s lap, offering to retry `first` (recommended; answer
+      `carry_on`) or drop `then` (answer `stop`). A `stop` answer is the drop: the tick never
+      starts that plan by itself, even once a retried `first` lands. **No "start anyway" press is
+      built**, because no entry decides one. A `then` the scope does not admit (`outside` or
+      `undecidable`) is logged once by the tick, and the page draws the reason at the press.
+   7. **Known limit**: a `first` landed by squash or rebase whose path another commit changed again
+      before the next reading never reads landed (`D-0073` rule 6's tree comparison), so `then`
+      waits with no ask; the person's release press is the way out, and it records no landing.
+
+2. **Rule 2: the take-in is a mechanism with no trigger yet.**
+   1. **The plan carries it**: `RunPlan.takeIn` (`take_in`, payload version 6) = `{commit, branch,
+      remoteBranch, paths, cause: "landed" | "conflict"}`. `revisionPlan` takes it as given and never
+      inherits it: a predecessor's take-in is work that lap already did.
+   2. **The instruction** is `takeInSection` (`src/refrain/revision.ts`), fixed ASCII appended after
+      the person's words: the default branch moved to X, a local branch holds it, why (the landed
+      paths, or that the pull request conflicts), bring X in first by merge or rebase, settle any
+      conflict inside the lap without asking, only then make the change, and rondo checks ancestry.
+   3. **The gate test** runs `git merge-base --is-ancestor X tip` when the lap's plan carries a
+      take-in. "No" is a finding; so is an answer git could not give. A take-in lap never reads
+      clear without a yes.
+   4. **What a line took in is not its work.** `readLanding` counts a path only if the tip changed it
+      both since the lineage's base and since each take-in commit its laps' plans name;
+      `compareClaim` applies the same intersection against the lap's take-in commit, and the record
+      reads (`readRecordAdditions`, the landing's added lines) drop what the take-in commit's record
+      already holds. A line that took nothing in reads exactly as before: never against the fetched
+      head, since a tip merged by a real merge commit has no changes of its own since that
+      merge-base and a resolution that edited its work would read landed (`D-0073` rule 6.4).
+   5. **`fetchLapBase` returns the commit it fetched.**
+   6. **What rondo#417 reuses** (a conflict-fix revision that brings the base in): `fetchLapBase`
+      and its `commit` to obtain X; a `TakeIn` with `cause: "conflict"` and `paths: []` passed to
+      `revisionPlan`; `takeInSection`, whose conflict wording is written; and the ancestry finding
+      (`readLapWork` -> `isAncestor` -> `readingOf({takeIn})`). `D-0098` rule 3.8 (a merge conflict
+      on the decision record) is the same path and is not built until #417 is. **What #417 must
+      add**: rule 2.3's drafted revise quoting the ancestry test (the revise drafter reads only the
+      model reading's concerns today); model-review material over `take_in.commit...tip` rather
+      than the predecessor's tip; and the ref a revision's take-in is fetched into -- `fetchLapBase`
+      names it `rondo/base/<runId>` and a successor's run id is minted at `admit()`, after
+      `revisionPlan`, so #417 names it by the successor's iteration id or passes the branch in.
+   7. **The trigger stays off until cadenza's fence allows a merge** (cadenza#74), and `revise`
+      passes no take-in: under the measured fence no worker can pass rule 2.3's test, so a trigger
+      would only turn every handed-over line into a failing lap. The gate's answer to point 1.
+
+3. **Rule 3: numbers are rows beside the claim.**
+   1. **The record is named at setup** by the plan field `decision_record` (payload version 6;
+      `scripts/dogfood-env.sh --decision-record`). A repository added from the page gets none:
+      rondo does not guess `DECISIONS.md` (rule 3.1 narrows reservation to a named record).
+   2. **The format is fixed**: `D-` and four or more digits, a heading `## D-NNNN — ` and an index
+      row `| D-NNNN |`. `recordNumbers` (`src/store/lanes.ts`) is the one parser; the floor, the gate
+      and the landing reading all use it.
+   3. **`number_reservation`** is append-only; a release is a successor row repeating the triple, and
+      a partial unique index over the non-release rows makes `(repository, record, number)` handed
+      out once, released or not. `reserve()` writes the rows right after the first claim row, both or
+      neither. The store refuses a first number not above the highest ever reserved with
+      `numbersMoved`, writing nothing; the caller composes again and retries once.
+   4. **The floor is the default branch's record**, fetched by the landing reading's own fetch
+      (`fetchDefaultBranch`, `--no-write-fetch-head`). A floor that cannot be read refuses the
+      admission, as `D-0100` rule 3 refuses a base that cannot be fetched.
+   5. **The drafter says how many** as the split plan's `entries`, refused when the template names
+      no record. The drafter's instructions became version 5 with rule 1's `after`.
+   6. **Released on every end but a landing**: abandon, failure, settle, "ended with nothing to land"
+      and the person's release press. `LaneReleaseInput.landed` is explicit because `takenOver`
+      could not tell a landing from the others. Released numbers stay gaps.
+   7. **The shared-append exemption is by exact path, on both sides.** The record is taken out of
+      the asked claim and the held one before they are compared, so a line asking for the record
+      alone runs beside a line holding `/` (rule 3.5: changing the record never serialises two
+      lines), and a claim on `/` or on a directory still overlaps every other path under it.
+   8. **Rule 3.6 is read both ways.** An added number is tested against every number the line was
+      handed, a released one included: nobody else can ever be handed it, so a retried lap whose
+      prompt names it keeps it. A number the line still holds that the tip's record does not spell
+      with a heading and an index row is a finding too, since it would keep the line from reading
+      landed. The prompt spells the one form `recordNumbers` reads.
+   9. **Rule 3.3's "one more at the gate"** is reserved at the redo's `reserve()` when the person
+      presses revise, counted from the unheld numbers the predecessor's reading found; the ledger
+      never writes one by itself (rondo#283's answer).
+   10. **"Highest plus one" ignores the preamble's belt ranges and a coordinator's hand-out.** Both
+      are outside rondo; a repository that keeps them should not name its record.
+   11. **Known limits**: the counter is keyed by the plan's local clone path, as the lane ledger is,
+      so two clones of one forge repository count apart; and only numbers are tested on the record
+      -- a lap that deletes or rewrites a landed line of it is seen in the diff at the gate, not
+      found; and the gate's number test reads one lap's own `base...tip`, so a revision does not
+      test again an unreserved number its predecessor wrote and left in place. The predecessor's
+      gate found it, and its revise was drafted to renumber it; a revise that did not is not caught
+      a second time (a lineage-wide reading is the fix, left for a later change).
+
+4. **Rule 4: the question is a fenced block, relayed as an ask.**
+   1. **The instruction** is two ASCII lines of the definition of done (`D-0089`): build, verify and
+      commit what does not depend on the answer, then end the lap with the question and do not
+      guess; end the report with a block fenced `rondo-question` holding `{question, options[{text,
+      gives_up}], recommended, recommendation, waits}`.
+   2. **Only that block is parsed**, the one stated exception to `D-0015` rule 7's "relayed without
+      interpreting". The rest of the rationale is relayed as before. The last block wins.
+   3. **The relay** (`src/access/question.ts`, "Secretary: relaying a worker's question") reads the
+      gate's rationale through `showGate` after the gate report and writes one thread message,
+      `question-<lap>`, `asks: true`, based on the lap and continuo's run. The body is the worker's
+      words and numbering, its `waits`, and the tip commit of the deterministic reading; rondo adds
+      no label. The iteration basis is what makes the existing hold stop that line's redo and no
+      other; the store marks the ask `lineOnly`, so `D-0069` rule 5's hold on every unproposed
+      start of the request does not apply to it (rule 4.4). The block is the one after the last
+      opener line, closed by a fence line of its own, read line by line.
+   4. **The recommendation's author is the worker**, recorded as the author id
+      `rondo/worker-question/1`. The organisation drafts none of its own.
+   5. **Nothing committed, nothing put**: a reading whose tip equals its base, or no rationale,
+      writes no ask, and the lap stays an ordinary gate, still the person's turn. A lap whose
+      commits rondo could not read still has its question put, saying so where the commit goes. An
+      unreadable block is put as an ask too, sending the person to the gate's rationale, so silence
+      does not settle it.
+   6. **Answering is two presses**: `carry_on`, then `revise` with the question and the answer
+      quoted byte for byte (`answeredQuestion`, `questionRevise`). Nothing writes an answer on
+      silence. Approve is not refused while a question is open; `D-0098` does not ask it.
+   7. **Caveat**: a first lap with a gate deadline has its gate closed `expired` by continuo. That
+      ends the question without taking the recommendation.
+
+5. **Rule 5: a closing lap is a press the review host does not read.**
+   1. **An absent `below_threshold` reads as `leave`** and is not filled by
+      `scopePayloadWithDefaults`, so every existing scope keeps its digest and a raise that spreads
+      its predecessor does not grow the key. This departs on purpose from "defaults are written".
+      The drafter never writes it.
+   2. **The closing lap is an explicit press**, `revise --closing-fix` under a scope. It is never
+      inferred, so an answer-revise (rule 4) or a conflict-fix revise (#417) after the exit is never
+      left unread by inference.
+   3. **The verdict** admits a closing redo only under `fix_unread`, after an exit, with at least one
+      finding below the threshold, and a model reading of the very tip the predecessor's latest
+      deterministic reading stood at: commits after the last model reading are never read, so they
+      are not closed unread. The closing section quotes that reading's findings with their bases,
+      numbered as the record numbers them.
+   4. **`closing_lap`** is append-only, one row per lap, written with the scope consumption inside
+      `reserve()`: the tip the reviewer last read, that reading's time, and the findings answered.
+      `gate_answer` gains no value, which would need a table rebuild.
+   5. **One closing lap per line**: the review host appends no reading for it, so it is not a
+      round and any scoped redo from it is undecidable; and the store refuses a closing redo in a
+      lineage that already has a `closing_lap` row, since an unscoped redo or a retry from it is
+      read again. A retry of a closing lap does not inherit the marker. It counts against `laps`; `budget.ts` is unchanged,
+      and a line that spent every round needs the person's raise.
+   6. **"Not re-read" is one sentence in three places**: the thread report at the gate, the lines
+      `publish` prints, and the merged report.
+   7. **Rule 5.4's observer is the lap's deterministic reading**, and only it: a failed test or a
+      serious finding stated in the worker's report is not read, and the prompt promises no more
+      than that a person reads the report. Not clear, or missing, writes one scope-exit stop per
+      tip read, recommending an unscoped revise (a scoped one cannot follow a closing lap). The gate
+      report says "not re-read" in place of "a model reading may follow". Red checks already hold the merge as `notGreen`; a stop on red checks would be
+      `checks-host.ts`'s.
+
+6. **The page is not built here** (`D-0098` rule 8). The `ordered` readiness draws nothing; the take-in
+   step, the question's event line, the pre-filled revise box and the closing-fix card are open. Each
+   reaches the person today through the thread's asks, the gate's findings and the report's words.
+
+### What was put to the gate, and its answer
+
+1. **The worker's fence and rule 2.** (a) cadenza's `COMMON_BASH` gains `git merge` (#417 needs it
+   too); (b) rondo merges on a branch of the lap's own, and cannot settle a conflict that way; (c)
+   build rondo's half now as the mechanism #417 reuses, with the trigger off.
+2. **One press or two for an answered question.** Two, as rule 4.5 words it; or one, as rule 8.4's
+   sentence reads.
+3. **The page half of `D-0098` rule 8** in this change, or as a follow-up after the parallel lanes
+   that edit the page land.
+
+**The gate's answer (2026-09-22, rondo's owner, through the window):**
+
+1. **(c) now, and (a) asked of cadenza** as its own issue (cadenza#74) by the organisation. The
+   trigger stays off until (a) lands.
+2. **Two presses**: the answer, then `revise`. Rule 8.4's sentence goes on the revise box.
+3. **A follow-up**: no page change in this one.
+
+The defaults of rules 1, 3, 4 and 5 above were accepted as built.
+
+### What would falsify it
+
+- **A `then` admitted while its `first`'s lineage carries no landing basis**, or a landing basis on a
+  release no landing reading wrote: rule 1's storage is not holding.
+- **A line read landed whose own work is not on the default branch**, because the intersection of
+  rule 2.4 dropped a path the line did change.
+- **Two reservation rows for one number**, or a reservation without its claim row: rule 3.3.
+- **A closing lap with a model reading**, or a second closing lap on one line: rule 5.5.
+- **A worker's question closed by anything but a person's press.**

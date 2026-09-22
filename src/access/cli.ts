@@ -55,13 +55,16 @@ import {
   type LoopPolicy,
 } from "../refrain/policy.js";
 import { revisionPlan } from "../refrain/revision.js";
+import { repositoryKey } from "../store/lanes.js";
 import { canonicalJson, contentDigest } from "../store/plan.js";
 import {
   type AgentTypeRecordDraft,
   APPROVED_OUTCOME,
   approvedForPublication,
+  findingBasisText,
   type GateAnswer,
   type IterationRecord,
+  isDeterministicReadingDrafter,
   isModelReadingDrafter,
   isTerminal,
   type JsonRecord,
@@ -107,17 +110,27 @@ import {
   abandon,
   admit,
   type ClaimComparison,
+  type ClosingNotReread,
+  type ConductorReport,
   compareClaim,
   conductorPorts,
+  notRereadSentence,
   type ReportingPorts,
   type RequestThread,
+  readHolder,
   reportToRequest,
   resume,
+  takenInCommit,
 } from "./conductor.js";
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
 import { allowedBashIn } from "./delegation.js";
-import { definitionOfDone } from "./done.js";
-import { draftedStartReadiness } from "./drafted-start.js";
+import { type ClosingFinding, closingLapSection, definitionOfDone } from "./done.js";
+import {
+  type DraftedStartReadiness,
+  draftedStartReadiness,
+  onLanding,
+  planOrder,
+} from "./drafted-start.js";
 import { drafterHost } from "./drafter-host.js";
 import {
   cloneRepository,
@@ -134,6 +147,9 @@ import {
   readChangedPaths,
   readCommitsBetween,
   readIssueFromForge,
+  readLanding,
+  readRecordAdditions,
+  readRecordFloor,
   runDrafter,
 } from "./forge.js";
 import { forgeHost, publishPreflight, redactRemoteUrl } from "./forge-preflight.js";
@@ -160,6 +176,7 @@ import {
 import { isModelDrafterName } from "./model-draft/judgement.js";
 import { modelReviewPorts, takeModelReading } from "./model-review/host.js";
 import { modelReadingLines } from "./model-review/judgement.js";
+import { orderHost } from "./order-host.js";
 import type {
   ClaimReach,
   LapMaterialRead,
@@ -169,6 +186,7 @@ import type {
 } from "./page/contract.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
 import { notifierAt, reachThePerson } from "./reach.js";
+import { nextNumbers, numbersSection } from "./record-numbers.js";
 import {
   cloneDirectory,
   planForRepository,
@@ -193,6 +211,7 @@ import {
   type ClaimRefusal,
   MergePort,
   newDraftId,
+  newIterationId,
   type Published,
   type PublishInput,
   PublishPort,
@@ -273,7 +292,7 @@ export const USAGE = `rondo - the operator surface for delegated work
                           into the pull request, as your claim: rondo did not
                           watch it run and does not say it did
   rondo revise --actor-id ID --body=TEXT [--iteration-id ID]
-               [--scope-decision-id ID]
+               [--scope-decision-id ID [--closing-fix]]
                           answer the gate with a change to make, and run a
                           second lap that continues from the first one's
                           branch. The second lap's run id, topic branch and
@@ -281,7 +300,12 @@ export const USAGE = `rondo - the operator surface for delegated work
                           way rondo start mints the first lap's.
                           --scope-decision-id spends an approved scope on the
                           second lap: the gate is still your answer, and it is
-                          not touched unless every test of the scope passes
+                          not touched unless every test of the scope passes.
+                          --closing-fix makes it the one closing lap a scope
+                          with below_threshold fix_unread allows after the
+                          review exit: it fixes the findings left below the
+                          threshold, with a test for each, and is not read
+                          again
   rondo publish --actor-id ID --iteration-id ID [--repo OWNER/NAME]
                 [--remote NAME] [--dry-run] [--allow-remote-mismatch]
                 [--despite-review]
@@ -347,7 +371,8 @@ export const USAGE = `rondo - the operator surface for delegated work
                           FILE is an absolute path to
                           the JSON payload; review_rounds, severity_threshold,
                           outward_acts and irreversible_additions take their
-                          defaults when absent. Records the row before it shows
+                          defaults when absent, and an absent below_threshold
+                          is leave. Records the row before it shows
                           it, digest included. A change to a scope is a
                           successor naming the row it replaces, and the screen
                           says what the predecessor's approval has spent
@@ -1487,6 +1512,47 @@ export async function main(
       language: selected.tag,
       log: say,
     });
+    // **And the order tick** (D-0098 rule 1.4): a drafted plan that waits on
+    // an earlier plan of its split starts on that plan's landing, through the
+    // press's own path and in the approver's name -- so only where there is an
+    // approver the allowlist accepts, the start press's own condition.
+    const order =
+      sender === null || "refusal" in sender
+        ? null
+        : orderHost({
+            record,
+            readiness: async (split, planIndex) =>
+              await draftedStartReadiness(
+                { store, record, policy: bounds.policy, nowMs: Date.now() },
+                split.requestMessageId,
+                split.scopeDecisionId,
+                split.proposalId,
+                planIndex,
+              ),
+            readHolder: async (lineageId) =>
+              await readHolder(
+                { store, readLanding, readChangedPaths, remote: READING_REMOTE },
+                lineageId,
+                Date.now(),
+              ),
+            start: async (split, planIndex) =>
+              await startSplitFromPage(
+                environment,
+                store,
+                opened.path,
+                sender.actorId,
+                bounds.policy,
+                {
+                  iterationId: newIterationId(),
+                  requestMessageId: split.requestMessageId,
+                  scopeDecisionId: split.scopeDecisionId,
+                  proposalId: split.proposalId,
+                  planIndex,
+                },
+              ),
+            now: Date.now,
+            log: say,
+          });
     /**
      * **Reaching a person who is not looking at the page** (rondo#311), on the
      * same minute the rescan already runs on.
@@ -1518,6 +1584,7 @@ export async function main(
         reviser.kick();
         checks.kick();
         triage.kick();
+        order?.kick();
         // **Reaching starts a minute in, and not in the burst above.** The
         // person who has just started rondo is looking at it this second, and
         // what was already waiting when the host was last stopped is on the
@@ -1529,6 +1596,7 @@ export async function main(
           reviser.kick();
           checks.kick();
           triage.kick();
+          order?.kick();
           // **Order on the tick buys nothing, and nothing here depends on
           // it**: every kick above returns before its own pass finishes, so
           // this reads what is committed when it runs and not what the same
@@ -2886,6 +2954,7 @@ async function commandScope(
       `unread lap, expires at ${String(budgets.expires_at_ms)} ms`,
   );
   say(`severity threshold: ${payload.severity_threshold}`);
+  say(`below the threshold: ${payload.below_threshold ?? "leave"}`);
   say(
     `outward acts: ${payload.outward_acts.length === 0 ? "none" : payload.outward_acts.join(", ")}`,
   );
@@ -3059,6 +3128,8 @@ export async function commandScopedRetry(
       plan: decoded.plan,
       predecessorId,
       requestMessageId: predecessor.record.requestMessageId,
+      // A retry reruns the stored plan; the closing lap is a revise press.
+      closing: false,
     },
   );
   return await finishScopedAdmission(
@@ -3278,7 +3349,16 @@ async function lapMaterial(
  * Material beside the deterministic reading `reviewGate` refuses on, never an
  * input to it: publish's refusal stays the deterministic reader's alone.
  */
-export function publishModelReadingLines(readings: readonly LapReading[]): readonly string[] {
+export function publishModelReadingLines(
+  readings: readonly LapReading[],
+  /** The lap is a closing lap (D-0098 rule 5.3), or null. */
+  closing: ClosingNotReread | null = null,
+): readonly string[] {
+  // A closing lap has no model reading of its own, and saying nothing would
+  // read as "no reviewer was asked" rather than "not re-read on purpose".
+  if (closing !== null) {
+    return [`model review  not re-read. ${notRereadSentence(closing)}`];
+  }
   const model = latestReading(readings, isModelReadingDrafter);
   return model === null ? [] : modelReadingLines(model);
 }
@@ -4780,6 +4860,18 @@ export async function startSplitFromPage(
   }
 }
 
+/** Why a plan waiting on an earlier plan of its split is not started (D-0098 rule 1). */
+function orderedNote(ready: Extract<DraftedStartReadiness, { kind: "ordered" }>): string {
+  const plan = `plan ${String(ready.after)} of this split`;
+  if (ready.first === null) {
+    return `this plan waits until ${plan} has started and landed`;
+  }
+  return ready.first.state === "endedUnlanded"
+    ? `this plan waits on ${plan} (line ${ready.first.lineageId}), which ended without landing; ` +
+        "it does not start until that work lands"
+    : `this plan waits until ${plan} (line ${ready.first.lineageId}) has landed; it then starts by itself`;
+}
+
 /** Every drafted plan this process is starting, by request, proposal and plan. */
 const startingPlan = new Map<string, Promise<Started>>();
 
@@ -4824,6 +4916,10 @@ async function startSplit(
         why: "startRefusedNotAdmitted",
         note: `iteration '${ready.iterationId}' already started from this plan`,
       };
+    // D-0098 rule 1: nothing admits `then` before `first` has landed, whether
+    // pressed or ticked. No press lifts an order (rule 1.5 is the person's P3).
+    case "ordered":
+      return { ok: false, why: "startRefusedNotAdmitted", note: orderedNote(ready) };
     case "busy":
     case "full":
       return {
@@ -4846,15 +4942,33 @@ async function startSplit(
       if (run.kind !== "runnable") {
         return { ok: false, why: "startRefusedNoPlan", note: run.reason };
       }
+      // Read again beside the plan it admits (the readiness above may be a
+      // `outside` that says nothing of the order): `first`'s landing is a basis
+      // of the admission and named in its prompt (D-0098 rule 1.6).
+      const order = await planOrder(
+        { store, record },
+        input.requestMessageId,
+        input.proposalId,
+        run,
+      );
+      if (order.kind === "waiting") {
+        return {
+          ok: false,
+          why: "startRefusedNotAdmitted",
+          note: orderedNote({ kind: "ordered", after: order.after, first: order.first }),
+        };
+      }
+      const admitted = order.kind === "landed" ? onLanding(run, order.landing) : run;
       return await admitScopedPlan(
         environment,
         store,
         storePath,
         record,
         input,
-        run.plan,
+        admitted.plan,
         input.proposalId,
-        run.claim,
+        admitted.claim,
+        run.split.entries ?? 0,
       );
     }
   }
@@ -5189,16 +5303,20 @@ async function revisePage(
       nowMs: Date.now,
       beforeAdmit: answerGate,
       admit: (plan, id, supersedes, requestMessageId, scopeSpend) =>
-        admit(
-          ports,
-          unpromptedPorts(store, storePath),
-          plan,
-          START_POLICY,
-          id,
-          supersedes,
-          null,
-          requestMessageId,
-          scopeSpend,
+        withReservedNumbers(store, ready.numbering, plan, (numbered, numbers) =>
+          admit(
+            ports,
+            unpromptedPorts(store, storePath),
+            numbered,
+            START_POLICY,
+            id,
+            supersedes,
+            null,
+            requestMessageId,
+            scopeSpend,
+            null,
+            numbers,
+          ),
         ),
     },
     input.scopeDecisionId,
@@ -5208,6 +5326,8 @@ async function revisePage(
       plan: ready.plan,
       predecessorId: record.id,
       requestMessageId: record.requestMessageId,
+      // The page's closing press is not built (D-0098 rule 8.6 is page work).
+      closing: false,
     },
   );
   if (outcome.kind === "refused") {
@@ -5398,6 +5518,89 @@ export async function withNamedIssues(
   return { ...plan, prompt };
 }
 
+/**
+ * What an admission reserves in its repository's decision record (D-0098
+ * rule 3.3): how many new numbers, above which floor, and the numbers its
+ * line already holds (named beside the new ones in the prompt).
+ */
+interface Numbering {
+  readonly record: string;
+  readonly floor: number;
+  readonly count: number;
+  readonly held: readonly number[];
+}
+
+/**
+ * The numbering `count` new entries of `plan` need, null when none (no
+ * count, or a plan that names no record), or why not. **The floor is read
+ * before anything is admitted, and a floor nobody could read admits nothing**
+ * (D-0098 rule 3.3, as D-0100 refuses a lap whose base will not fetch): a
+ * number handed out below the default branch's record would collide at merge.
+ */
+async function numberingFor(
+  plan: RunPlan,
+  count: number,
+  held: readonly number[],
+): Promise<Numbering | { readonly refusal: string } | null> {
+  const record = plan.decisionRecord;
+  if (count <= 0 || record === null) {
+    return null;
+  }
+  const read = await readRecordFloor({
+    repository: plan.repository,
+    remote: READING_REMOTE,
+    record,
+  });
+  return read.kind === "undetermined"
+    ? {
+        refusal:
+          `rondo reserves this work's decision-record numbers above what ${record} on the ` +
+          `forge's default branch holds, and could not read it: ${read.reason}. Nothing was ` +
+          "admitted.",
+      }
+    : { record, floor: read.floor, count, held };
+}
+
+/**
+ * Admit `plan` with its new decision-record numbers named in its prompt and
+ * handed to `reserve()` (D-0098 rule 3.3). The numbers are named before
+ * `reserve()` tests them under its lock, so one taken since is composed again
+ * above the highest now reserved and tried again, **until `reserve()` takes
+ * them**: a gate may already be answered by then (`beforeAdmit`), and giving
+ * up would leave it answered with no redo. Bounded, because the highest
+ * reserved number only grows.
+ */
+export async function withReservedNumbers(
+  store: Pick<IterationStore, "highestReserved">,
+  numbering: Numbering | null,
+  plan: RunPlan,
+  attempt: (plan: RunPlan, numbers: readonly number[] | null) => Promise<ConductorReport>,
+): Promise<ConductorReport> {
+  if (numbering === null) {
+    return await attempt(plan, null);
+  }
+  const once = (highest: number) => {
+    const numbers = nextNumbers(numbering.floor, highest, numbering.count);
+    return attempt(
+      {
+        ...plan,
+        prompt: plan.prompt + numbersSection(numbering.record, [...numbering.held, ...numbers]),
+      },
+      numbers,
+    );
+  };
+  let report = await once(
+    await store.highestReserved(
+      repositoryKey(plan.repository) ?? plan.repository,
+      numbering.record,
+    ),
+  );
+  while (report.numbersMoved !== undefined) {
+    report = await once(report.numbersMoved);
+  }
+  return report;
+}
+
 async function admitScopedPlan(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
@@ -5412,10 +5615,16 @@ async function admitScopedPlan(
   proposalId: string | null,
   /** The drafted split's claim (D-0073 rule 2.3), or null for the whole repository (rule 2.5). */
   claim: LaneClaimAsk | null,
+  /** How many new decision entries the drafted split says the plan writes (D-0098 rule 3.3). */
+  entries = 0,
 ): Promise<Started> {
   const plan = await withNamedIssues(record, input.requestMessageId, unquoted);
   if ("refusal" in plan) {
     return { ok: false, why: "startRefusedNotAdmitted", note: plan.refusal };
+  }
+  const numbering = await numberingFor(plan, entries, []);
+  if (numbering !== null && "refusal" in numbering) {
+    return { ok: false, why: "startRefusedNotAdmitted", note: numbering.refusal };
   }
   const startup = await startContinuo(environment);
   if (startup.kind === "refused") {
@@ -5433,17 +5642,20 @@ async function admitScopedPlan(
       record,
       nowMs: Date.now,
       admit: (scoped, id, supersedes, requestMessageId, scopeSpend) =>
-        admit(
-          ports,
-          unpromptedPorts(store, storePath),
-          scoped,
-          START_POLICY,
-          id,
-          supersedes,
-          null,
-          requestMessageId,
-          scopeSpend,
-          claim,
+        withReservedNumbers(store, numbering, scoped, (numbered, numbers) =>
+          admit(
+            ports,
+            unpromptedPorts(store, storePath),
+            numbered,
+            START_POLICY,
+            id,
+            supersedes,
+            null,
+            requestMessageId,
+            scopeSpend,
+            claim,
+            numbers,
+          ),
         ),
     },
     input.scopeDecisionId,
@@ -5619,7 +5831,13 @@ export function revisionBlocker(input: {
 export type RevisionReady =
   | { readonly kind: "refused"; readonly reason: string }
   | { readonly kind: "relayed"; readonly result: ContinuoResult<unknown> }
-  | { readonly kind: "ready"; readonly plan: RunPlan; readonly gate: GateDetail };
+  | {
+      readonly kind: "ready";
+      readonly plan: RunPlan;
+      readonly gate: GateDetail;
+      /** The one more number its gate found the line needs, or null (D-0098 rule 3.3). */
+      readonly numbering: Numbering | null;
+    };
 
 /**
  * Everything that happens before a `revise` answers a gate, as one function.
@@ -5639,13 +5857,16 @@ export async function revisionPreflight(
   record: IterationRecord,
   successorId: string,
   body: string,
-  store: Pick<IterationStore, "read">,
+  store: Pick<IterationStore, "read" | "readingsFor" | "numberReservations">,
   continuo: VerifiedContinuo,
 ): Promise<RevisionReady> {
   const successor = revisionPlan({
     predecessor: record,
     iterationId: successorId,
     instruction: body,
+    // D-0098 rule 2's trigger (a line taking over landed paths) is not built,
+    // so no revise decides a take-in yet; rondo#417 is the first to pass one.
+    takeIn: null,
   });
   if (successor.kind === "refused") {
     return {
@@ -5738,9 +5959,66 @@ export async function revisionPreflight(
     workspace: successorWorkspace,
     workspaceExists: existsSync(successorWorkspace),
   });
-  return blocker === null
-    ? { kind: "ready", plan: successor.plan, gate }
-    : { kind: "refused", reason: blocker };
+  if (blocker !== null) {
+    return { kind: "refused", reason: blocker };
+  }
+  const numbering = await redoNumbering(record, successor.plan, store);
+  return numbering !== null && "refusal" in numbering
+    ? { kind: "refused", reason: `${numbering.refusal} The gate was not touched.` }
+    : { kind: "ready", plan: successor.plan, gate, numbering };
+}
+
+/**
+ * The one more number a redo is reserved (D-0098 rules 3.3 and 3.6): one for
+ * each heading or index-row number the predecessor's `base...tip` added to
+ * the record that is not its line's, so the drafted revise renumbers them from
+ * a new reservation rather than being found at the gate again. Null for a
+ * plan naming no record, a predecessor with no reading, or nothing to
+ * renumber; a record git could not read is a refusal, before the gate.
+ */
+async function redoNumbering(
+  predecessor: IterationRecord,
+  plan: RunPlan,
+  store: Pick<IterationStore, "readingsFor" | "numberReservations">,
+): Promise<Numbering | { readonly refusal: string } | null> {
+  const record = plan.decisionRecord;
+  const evidence = latestReading(
+    await store.readingsFor(predecessor.id),
+    isDeterministicReadingDrafter,
+  )?.evidence;
+  if (record === null || evidence === undefined || evidence === null) {
+    return null;
+  }
+  const added = await readRecordAdditions({
+    repository: plan.repository,
+    baseCommit: evidence.baseCommit,
+    tipCommit: evidence.tipCommit,
+    record,
+    takenIn: takenInCommit(predecessor.plan),
+  });
+  if (added.kind === "undetermined") {
+    return {
+      refusal: `rondo could not read what lap '${predecessor.id}' added to ${record}: ${added.reason}.`,
+    };
+  }
+  // Every number the line was handed, a released one included: nobody else can
+  // ever be handed it, so a retried lap that wrote it as its prompt said keeps
+  // it rather than burning a new one (D-0098 rule 3.4).
+  const held = (await store.numberReservations(predecessor.id)).map((one) => one.number);
+  return await numberingFor(
+    plan,
+    added.numbers.filter((number) => !held.includes(number)).length,
+    held,
+  );
+}
+
+/** A reading's findings as a closing lap quotes them (D-0098 rule 5.2), numbered from 1. */
+function closingFindings(reading: LapReading | null): readonly ClosingFinding[] {
+  return (reading?.findings ?? []).map((text, i) => ({
+    number: i + 1,
+    text,
+    bases: (reading?.graded?.[i]?.bases ?? []).map(findingBasisText),
+  }));
 }
 
 /**
@@ -5840,7 +6118,24 @@ async function commandRevise(
   if (ready.kind === "refused") {
     return refuse(ready.reason);
   }
-  const successor = { plan: ready.plan };
+  // D-0098 rule 5.2: a closing lap's prompt ends with rondo's own section,
+  // after the person's instruction and never inside it (D-0009), quoting the
+  // findings of the reading the scope's verdict tests: after an exit, every
+  // finding of it is below the threshold, which is the set its record names.
+  const successor = {
+    plan: parsed.closingFix
+      ? {
+          ...ready.plan,
+          prompt:
+            ready.plan.prompt +
+            closingLapSection(
+              closingFindings(
+                latestReading(await store.readingsFor(record.id), isModelReadingDrafter),
+              ),
+            ),
+        }
+      : ready.plan,
+  };
   const gate = ready.gate;
 
   // **The gate walk and the first row's settlement, as one step** that returns
@@ -5915,16 +6210,20 @@ async function commandRevise(
         nowMs: Date.now,
         beforeAdmit: answerGate,
         admit: (plan, id, supersedes, requestMessageId, scopeSpend) =>
-          admit(
-            ports,
-            advisory,
-            plan,
-            START_POLICY,
-            id,
-            supersedes,
-            null,
-            requestMessageId,
-            scopeSpend,
+          withReservedNumbers(store, ready.numbering, plan, (numbered, numbers) =>
+            admit(
+              ports,
+              advisory,
+              numbered,
+              START_POLICY,
+              id,
+              supersedes,
+              null,
+              requestMessageId,
+              scopeSpend,
+              null,
+              numbers,
+            ),
           ),
       },
       parsed.scopeDecisionId,
@@ -5934,6 +6233,7 @@ async function commandRevise(
         plan: successor.plan,
         predecessorId: record.id,
         requestMessageId: record.requestMessageId,
+        closing: parsed.closingFix,
       },
     );
     if (outcome.kind === "refused") {
@@ -5964,17 +6264,26 @@ async function commandRevise(
   // the succession survived only as `base_branch` equalling the predecessor's
   // `topic_branch` -- a value a reader could guess a relationship from, which
   // is what `D-0027` rule 9 deferred and rondo#33 asked for.
-  const second = await admit(
-    ports,
-    advisory,
+  const second = await withReservedNumbers(
+    store,
+    ready.numbering,
     successor.plan,
-    START_POLICY,
-    successorId,
-    record.id,
-    null,
-    // Inherited by `reserve()` from the row above whatever is passed; this is
-    // the same value, read here so the type can say a lap always has one.
-    record.requestMessageId,
+    (plan, numbers) =>
+      admit(
+        ports,
+        advisory,
+        plan,
+        START_POLICY,
+        successorId,
+        record.id,
+        null,
+        // Inherited by `reserve()` from the row above whatever is passed; this is
+        // the same value, read here so the type can say a lap always has one.
+        record.requestMessageId,
+        null,
+        null,
+        numbers,
+      ),
   );
   sayReport(second);
   if (second.status === "awaiting_human") {
@@ -6131,7 +6440,7 @@ export async function publishPlanFor(
   record: IterationRecord,
   asked: PublishAsked,
   environment: Readonly<Record<string, string | undefined>>,
-  store: Pick<IterationStore, "read" | "readingsFor" | "verificationClaimsFor">,
+  store: Pick<IterationStore, "read" | "readingsFor" | "verificationClaimsFor" | "closingLapOf">,
   /**
    * Where the request's own words are read from, for the issue its pull
    * request closes (rondo#376). Null leaves the body naming no issue, which is
@@ -6391,7 +6700,7 @@ export async function publishPlanFor(
       pullRequest,
       // The model reading beside the deterministic one, as material only
       // (D-0065 5.5): shown, and read by nothing that decides.
-      modelReading: publishModelReadingLines(readings),
+      modelReading: publishModelReadingLines(readings, await store.closingLapOf(record.id)),
       // Every reading but a model's (D-0065 5.5): a model reading is material
       // beside it and is not part of this refusal, and the interpreter's
       // `rondo/none` unavailable row still refuses with its own reason.
@@ -6498,7 +6807,7 @@ async function plansDraftedFor(
  */
 export async function publishingForPage(
   environment: Readonly<Record<string, string | undefined>>,
-  store: Pick<IterationStore, "read" | "readingsFor" | "verificationClaimsFor">,
+  store: Pick<IterationStore, "read" | "readingsFor" | "verificationClaimsFor" | "closingLapOf">,
   asked: PublishAsked,
   record: IterationRecord,
   thread: Pick<AdvisoryRecord, "threadMessages" | "scopesFor" | "readProposal"> | null = null,
@@ -7045,6 +7354,9 @@ async function commandRelease(
   const outcome = await store.releaseLane({
     iterationId: parsed.iterationId,
     takenOver: null,
+    // The person's press is never a landing: the line's numbers go with its
+    // paths (D-0098 rule 3.4).
+    landed: false,
     authorKind: "operator",
     authorId: actor.actorId,
     bases: [{ form: "iteration", iterationId: parsed.iterationId }],
@@ -7085,6 +7397,7 @@ export async function releaseFromPage(
   const outcome = await store.releaseLane({
     iterationId: input.iterationId,
     takenOver: { claimId: input.claimId, lapIds: input.lapIds },
+    landed: false,
     authorKind: "operator",
     authorId: actor.actorId,
     bases: [{ form: "iteration", iterationId: input.iterationId }],

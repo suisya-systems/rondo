@@ -58,6 +58,8 @@ const PLAN: RunPlan = {
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
   forgeRepository: null,
+  takeIn: null,
+  decisionRecord: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [{ layer: "git_url", origin: "o", baseDir: "/srv/catalog", data: {} }],
   projectName: "rondo",
@@ -112,6 +114,7 @@ async function reserve(
   plan: string | JsonRecord = "main",
 ): Promise<void> {
   const outcome = await store.reserve({
+    numbers: null,
     id,
     request: `do ${id}`,
     plan: typeof plan === "string" ? planOn(id, plan) : plan,
@@ -301,6 +304,7 @@ test("the admission refusals the bound wrote are gathered and claimed", async ()
   // The second admission is refused by the bound, which writes the only row in
   // the store that records work deliberately not started.
   const refused = await world.store.reserve({
+    numbers: null,
     id: "i-0002",
     request: "a second thing nobody got to start",
     plan: planOn("i-0002", "main"),

@@ -117,6 +117,8 @@ function planWith(overrides: {
     gateDeadlineAtMs: null,
     pullRequestBaseBranch: overrides.pullRequestBaseBranch ?? null,
     forgeRepository: overrides.forgeRepository ?? null,
+    takeIn: null,
+    decisionRecord: null,
     invocationCeilingMs: 1_800_000,
     catalogLayers: [
       layerFor(

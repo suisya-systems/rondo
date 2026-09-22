@@ -79,7 +79,7 @@ test("a fresh store: the plan the person pasted is a template, and its agent typ
   const run = await draftRequest(ports, "r1", "ja");
 
   expect(ports.handed).toHaveLength(1);
-  expect(run.drafter).toBe("rondo/drafter/4/claude-opus-5");
+  expect(run.drafter).toBe("rondo/drafter/5/claude-opus-5");
   expect(run.costUsd).toBe(0.31);
   expect(run.document).toBe(ports.handed[0]);
   expect(run.material?.thread.map((m) => m.messageId)).toEqual(["r1", "r1-plan"]);
@@ -240,6 +240,7 @@ test("an earlier lap of the request is handed over with what it was asked, so a 
   const w = await world();
   await w.say("r1", "Fix it.", null, 1_000);
   const reserved = await w.store.reserve({
+    numbers: null,
     id: "i-1",
     request: "Fix it.",
     plan: planDocument(),
@@ -276,6 +277,7 @@ async function reserveLap(
   // carry, so one fixture request stands for all of them.
   await openRequest(w.connection);
   const reserved = await w.store.reserve({
+    numbers: null,
     id,
     request: "earlier work",
     plan,

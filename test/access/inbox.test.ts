@@ -44,6 +44,7 @@ const fresh = () => {
 
 const reserveOne = async (store: ReturnType<typeof fresh>["store"], id: string, nowMs = 1_000) =>
   store.reserve({
+    numbers: null,
     id,
     request: "teach revise to name the flags it takes",
     plan: somePlan(),

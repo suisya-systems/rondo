@@ -88,6 +88,8 @@ function plan(): RunPlan {
     gateDeadlineAtMs: null,
     pullRequestBaseBranch: null,
     forgeRepository: null,
+    takeIn: null,
+    decisionRecord: null,
     invocationCeilingMs: 1_800_000,
     catalogLayers: [
       {
@@ -400,6 +402,7 @@ test("a readings refusal recommends by its reason: spent rounds a successor, an 
       plan: PLAN,
       predecessorId: "i-a",
       requestMessageId: ROOT,
+      closing: false,
     });
     expect(refused).toMatchObject({ kind: "refused", verdict: "outside", test: "readings" });
     return (
@@ -432,6 +435,7 @@ test("a redo's stop names the lineage's latest lap as an iteration basis", async
     plan: PLAN,
     predecessorId: "i-a",
     requestMessageId: ROOT,
+    closing: false,
   };
   const refused = await admitUnderScope(h.ports, "sd-1", redo);
   expect(refused).toMatchObject({ kind: "refused", test: "expiry", stop: { kind: "written" } });
@@ -472,6 +476,7 @@ test("PLANTED (D-0069 rule 5): a stopped line is not re-run as a new lineage by 
     plan: PLAN,
     predecessorId: "i-a",
     requestMessageId: ROOT,
+    closing: false,
   };
   const refused = await admitUnderScope(h.ports, "sd-1", redo);
   if (refused.kind !== "refused" || refused.stop.kind !== "written") throw new Error("no stop");
@@ -667,6 +672,7 @@ const redoOf = (iterationId: string, predecessorId: string): ScopeAct => ({
   plan: PLAN,
   predecessorId,
   requestMessageId: ROOT,
+  closing: false,
 });
 
 /** A model reading with only a finding below the threshold, so the readings test passes. */
@@ -1019,6 +1025,7 @@ test("an unwalkable lineage writes a stop, and the next attempt is held by it", 
     plan: PLAN,
     predecessorId: "i-missing",
     requestMessageId: ROOT,
+    closing: false,
   };
   const first = await admitUnderScope(h.ports, "sd-1", redo);
   expect(first).toMatchObject({ verdict: "undecidable", test: "asks", stop: { kind: "written" } });
@@ -1030,6 +1037,37 @@ test("an unwalkable lineage writes a stop, and the next attempt is held by it", 
     stop: { kind: "held", messageId: first.stop.messageId },
   });
   expect(h.stops()).toHaveLength(1);
+});
+
+test("D-0098 rule 4.2: the gate report is followed by the lap's question, read through the thread's rationale", async () => {
+  const h = await harness();
+  const block = JSON.stringify({
+    question: "Which store?",
+    options: [{ text: "Disk", gives_up: "Speed." }],
+    recommended: 0,
+    recommendation: "Disk lasts.",
+    waits: "The cache.",
+  });
+  const withRationale: ReportingPorts = {
+    ...h.reporting,
+    thread: {
+      record: h.record,
+      store: h.store,
+      rationale: async () => `Done.\n\n\`\`\`rondo-question\n${block}\n\`\`\`\n`,
+    },
+  };
+  const report = await admit(withRationale, h.advisory, PLAN, POLICY, "i-q", null, null, ROOT);
+  expect(report.status).toBe("awaiting_human");
+  const gate = report.lines.findIndex((line) =>
+    line.startsWith(`Reported to the request '${ROOT}'`),
+  );
+  const question = report.lines.findIndex((line) => line.startsWith("Put the lap's question"));
+  expect(gate).toBeGreaterThanOrEqual(0);
+  expect(question).toBeGreaterThan(gate);
+  expect(h.stops().map((row) => row["message_id"])).toContain("question-i-q");
+  // No rationale port: nothing is relayed.
+  const plain = await admit(h.reporting, h.advisory, PLAN, POLICY, "i-p", null, null, ROOT);
+  expect(plain.lines.some((line) => line.includes("question"))).toBe(false);
 });
 
 test("D-0061 5.3: a lap naming a request reports its gate and reading once, asking nothing", async () => {
@@ -1365,6 +1403,8 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
       remote: "origin",
       baseCommit: "b".repeat(40),
       tipCommits: ["a".repeat(40)],
+      // The plan names no decision record (D-0098 rule 3.1).
+      record: null,
     },
   ]);
 
@@ -1384,6 +1424,9 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
     claimId: "i-land:2",
     paths: [],
   });
+  // D-0098 rule 1.1: only the landed release carries `first_landed`, with the
+  // default-branch commit the landing was read at.
+  expect(await h.store.landingOf("i-land")).toMatchObject({ branch: "main", commit: "h" });
 });
 
 test("D-0073 rule 2.3: a drafted claim reaches reserve(), so two lines on different paths of one repository run together", async () => {
@@ -1472,6 +1515,55 @@ test("D-0073 rule 5: the gate compares what a lap changed with its line's claim,
   expect(unread.lines.join("\n")).toContain(
     "What lap i-tests changed was not compared with its line's claim: git would not say.",
   );
+});
+
+test("D-0098 rule 2: what a lap took in is not compared with its claim, only what it changed since", async () => {
+  const h = await harness();
+  const X = "c".repeat(40);
+  const asked: ChangedPathsRequest[] = [];
+  const ports: ReportingPorts = {
+    ...h.reporting,
+    lanes: {
+      store: h.store,
+      remote: "origin",
+      readLanding: async () => ({ kind: "undetermined", reason: "not asked" }),
+      // From the lap's base the merge of X brings X's path; from X it does not.
+      readChangedPaths: async (request) => {
+        asked.push(request);
+        return {
+          kind: "read",
+          paths: request.baseCommit === X ? ["docs/a.md"] : ["docs/a.md", "src/landed.ts"],
+        };
+      },
+    },
+  };
+  const takeIn = {
+    commit: X,
+    branch: "rondo/base/run-x",
+    remoteBranch: "main",
+    paths: ["src/landed.ts"],
+    cause: "landed" as const,
+  };
+  const docs = await admit(
+    ports,
+    h.advisory,
+    { ...PLAN, takeIn },
+    POLICY,
+    "i-docs",
+    null,
+    null,
+    REQUEST,
+    null,
+    {
+      paths: ["docs/"],
+      authorKind: "drafter",
+      authorId: "rondo/drafter/3/claude-fixture",
+      bases: [{ form: "proposal", proposalId: "draft-1" }],
+    },
+  );
+  expect(docs.status).toBe("awaiting_human");
+  expect(asked.map((request) => request.baseCommit)).toEqual(["b".repeat(40), X]);
+  expect(docs.lines.join("\n")).not.toContain("outside line i-docs's claim");
 });
 
 test("D-0073 rule 4.3: a line that ended with its release missed is released at the next refusal, with nothing read", async () => {

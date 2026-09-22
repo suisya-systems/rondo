@@ -51,7 +51,7 @@
 import type { IterationRecord } from "../store/records.js";
 
 import { allocate } from "./allocator.js";
-import { type AdmittedPlan, type PlanOutcome, readPlan, runPlan } from "./plan.js";
+import { type AdmittedPlan, type PlanOutcome, readPlan, runPlan, type TakeIn } from "./plan.js";
 
 /**
  * Everything a second lap needs that the first lap's row does not already hold.
@@ -77,6 +77,17 @@ export interface RevisionRequest {
   readonly iterationId: string;
   /** What the person asked for, byte for byte as they wrote it. */
   readonly instruction: string;
+  /**
+   * What this lap must bring in first, or null (D-0098 rule 2).
+   *
+   * **The caller's, and required**, so every caller says whether it decided a
+   * take-in: the predecessor's is never carried (see `revisionPlan`), and a
+   * field that could be left out would read as "decided none" when nothing
+   * decided. rondo#417's conflict-fix revision passes one with cause
+   * `conflict`; the landed-paths trigger of rule 2.1 is not built yet, so the
+   * `revise` press passes null.
+   */
+  readonly takeIn: TakeIn | null;
 }
 
 /**
@@ -144,6 +155,10 @@ export function revisionPlan(input: RevisionRequest): PlanOutcome {
     // lap's base all the way along instead of walking back one link.
     pullRequestBaseBranch: plan.pullRequestBaseBranch ?? plan.baseBranch,
     prompt: revisionPrompt(plan, input),
+    // **Never the predecessor's** (D-0098 rule 2): a take-in names what *this*
+    // lap must bring in, and a spread would hand the next lap one its
+    // predecessor has already done. The caller's decision, carried as given.
+    takeIn: input.takeIn,
     // `parties.grantee` is not rewritten here any more, and that is `D-0023`
     // rule 9 rather than an omission: the successor's run id is minted by the
     // allocator at `admit()`, from an iteration id this module never turns into
@@ -182,6 +197,39 @@ function revisionPrompt(plan: AdmittedPlan, input: RevisionRequest): string {
     "",
     `That lap's commits are already on '${plan.topicBranch}', which is the branch this` +
       " workspace was cut from. Continue from them rather than starting the request over.",
+    ...(input.takeIn === null ? [] : ["", takeInSection(input.takeIn)]),
+  ].join("\n");
+}
+
+/**
+ * The prompt section that tells a lap to bring the default branch in first
+ * (D-0098 rule 2.2), or, for rondo#417, to settle a pull request's conflict.
+ *
+ * **rondo's own words, fixed, and after the person's instruction**: the
+ * model-drafted revise box is the person's to edit, so what must reach the
+ * worker for certain is here. It names the commit, the local branch holding it
+ * (the lap cannot fetch; rondo already did, D-0100), why, what to do in which
+ * order, and the test the gate will apply -- ancestry, so a change re-applied
+ * by hand fails it (D-0098 section 3). A conflict is the worker's to settle and
+ * never a question (rule 2.2). ASCII only (`D-0004`).
+ */
+export function takeInSection(takeIn: TakeIn): string {
+  const why =
+    takeIn.cause === "landed"
+      ? `It holds a change another line landed on paths this lap now takes: ${takeIn.paths.map((path) => `'${path}'`).join(", ")}.`
+      : "The pull request this line opened conflicts with it.";
+  return [
+    "--- Bring the default branch in first ---",
+    "",
+    `The default branch '${takeIn.remoteBranch}' has moved to commit ${takeIn.commit}. The local` +
+      ` branch '${takeIn.branch}' holds it. ${why}`,
+    "",
+    `Before anything else, bring ${takeIn.commit} into this branch, by merge or by rebase, as` +
+      " you choose. Settle any conflict inside this lap yourself; do not ask about it. Only then" +
+      " make the change asked above.",
+    "",
+    `rondo checks that ${takeIn.commit} is an ancestor of this lap's last commit. Re-applying the` +
+      " change by hand does not pass that check.",
   ].join("\n");
 }
 

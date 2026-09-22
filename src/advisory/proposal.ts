@@ -1259,6 +1259,21 @@ export interface SplitPlan {
   readonly agent_type_digest: string;
   readonly bases: readonly Basis[];
   readonly claim?: readonly string[];
+  /**
+   * The index of an earlier plan of the same split this one waits on
+   * (D-0067 rule 3, D-0098 rule 1.3): this plan is not admitted until that
+   * one's line has landed (`first_landed`, rule 1.1). **Beside the plan, like
+   * `claim`**, so rule 4.2's two fields stand. `0 <= after < own index`, so a
+   * chain is acyclic by construction; absent means no order.
+   */
+  readonly after?: number;
+  /**
+   * How many new entries the plan writes in its repository's decision record
+   * (D-0098 rule 3.3), a whole number of 1 or more: rondo reserves that many
+   * numbers at admission. **Beside the plan, like `claim`** (D-0063 rule 4,
+   * "not a plan field"); absent means none.
+   */
+  readonly entries?: number;
 }
 
 /**
@@ -1283,6 +1298,8 @@ const SPLIT_PLAN_KEYS: readonly string[] = [
   "agent_type_digest",
   "bases",
   "claim",
+  "after",
+  "entries",
 ];
 const SPLIT_DIGEST = /^sha256:[0-9a-f]{64}$/;
 
@@ -1314,6 +1331,23 @@ export function readSplitPayload(document: JsonRecord): SplitPayloadReading {
           throw new PayloadDefect(`${what} names '${digest}', which is not a sha256 digest`);
         }
       }
+      // D-0098 rule 1.3: an earlier plan of this split, never itself or a
+      // later one, so no chain can wait on itself.
+      const after = plan.after;
+      if (
+        after !== undefined &&
+        (typeof after !== "number" || !Number.isInteger(after) || after < 0 || after >= index)
+      ) {
+        throw new PayloadDefect(`${what}'s after is not the index of an earlier plan`);
+      }
+      // D-0098 rule 3.3: a count of new entries, never zero (absent is none).
+      const entries = plan.entries;
+      if (
+        entries !== undefined &&
+        (typeof entries !== "number" || !Number.isSafeInteger(entries) || entries < 1)
+      ) {
+        throw new PayloadDefect(`${what}'s entries is not a whole number of 1 or more`);
+      }
       const read: SplitPlan = {
         template_plan_digest: template,
         prompt: text(plan, "prompt", what),
@@ -1321,6 +1355,8 @@ export function readSplitPayload(document: JsonRecord): SplitPayloadReading {
         bases: readList(plan.bases, `${what}'s bases`).map((basis, b) =>
           readBasis(basis, `${what} basis ${String(b)}`),
         ),
+        ...(after === undefined ? {} : { after }),
+        ...(entries === undefined ? {} : { entries }),
       };
       if (plan.claim === undefined) {
         return read;

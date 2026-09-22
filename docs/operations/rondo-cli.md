@@ -326,7 +326,8 @@ things follow, and they are the whole of what an operator needs to know:
   `revise` ever sets (see 5.1), and `workspace_root`, which is derived from the stored workspace's
   parent. `forge_repository` is supplied the same way and reads as null, which is what every row
   written before `D-0081` means: the repository to publish to was the host's `--repo` and there was
-  no field to write one in (see section 8) -- and only for a document that carries a `workspace`, which a plan file may not (see
+  no field to write one in (see section 8). `take_in` and `decision_record` (`D-0098` rules 2 and 3)
+  are supplied as null the same way -- and only for a document that carries a `workspace`, which a plan file may not (see
   below), so **an operator who omits `workspace_root` is still refused by name** rather than handed
   a directory they did not name.
 - **A document that declares a version is held to it.** At version 1 every field is required,

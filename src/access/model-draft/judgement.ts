@@ -43,7 +43,7 @@ import { sectionFramer } from "../framing.js";
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
  * {@link INSTRUCTIONS} is a new version, a changed model a new table entry.
  */
-const DRAFTER_INSTRUCTIONS_VERSION = 4;
+const DRAFTER_INSTRUCTIONS_VERSION = 5;
 
 /** What every row a model drafter writes is named under (rule 1.4). */
 export const MODEL_DRAFTER_PREFIX = "rondo/drafter/";
@@ -251,6 +251,14 @@ const INSTRUCTIONS = [
   "  '/' alone is the whole repository. Claim from what the thread says the work touches; when it",
   "  does not say, or you are unsure, claim wider: a claim too wide only makes plans wait, a",
   "  claim too narrow lets two plans change one file at once. When nothing narrows it, claim '/'.",
+  "- A plan that can only start once an earlier plan of this split has been merged names it by",
+  '  "after": that plan\'s index in "plans", from 0 and earlier than its own. It then starts by',
+  "  itself once that plan is merged. Use it for a chain across repositories: a change in one",
+  "  repository, then moving another repository's pin onto it, then replacing that repository's",
+  "  copy. Omit it for plans that can run in any order.",
+  "- A template whose plan names a decision_record has a record of numbered decision entries.",
+  '  A plan that writes new entries in it says how many by "entries" (1 or more); rondo reserves',
+  "  their numbers and tells the worker which. Omit it for a plan that writes no new entry.",
   "- Every summary, question, plan and narrowing has bases: ids of messages in THREAD it rests on.",
   "- rondo computes the scope's budgets from recorded laps (MEASUREMENTS shows what it reads). You",
   '  may only narrow one, when an operator message says so in words ("keep it under $3"), with',
@@ -313,7 +321,10 @@ export function drafterDocument(material: DrafterMaterial): string {
     '               "bases": ["<message id>"]},                              ("ask" only)',
     '  "plans": [{"template_plan_digest": "sha256:...", "agent_type_digest": "sha256:...",',
     '             "prompt": "...", "claim": ["src/store/", "README.md"],',
-    '             "bases": ["<message id>"]}],                                ("split" only)',
+    '             "after": 0, "bases": ["<message id>"]}],                    ("split" only;',
+    '                                                   "after" only on a plan that waits;',
+    '                                                   "entries": 1 only on one that writes',
+    "                                                   new decision entries)",
     '  "holes": ["what has no template or agent type"],',
     '  "narrowings": [{"field": "cost_usd", "value": 3, "basis": "<message id>"}]',
     "}",
@@ -612,9 +623,7 @@ function checked(material: DrafterMaterial, answer: unknown): DraftOutcome {
     messages.push(question(row["question"], bases));
   }
 
-  const plans = list(row["plans"] ?? [], "'plans'").map((one, i) =>
-    plan(material, one, `plan ${String(i)}`, bases),
-  );
+  const plans = list(row["plans"] ?? [], "'plans'").map((one, i) => plan(material, one, i, bases));
   if (plans.length > 0 !== (act === "split")) {
     throw new DraftDefect(
       act === "split" ? "a 'split' draft proposes no plan" : `a '${act}' draft proposes plans`,
@@ -699,14 +708,25 @@ interface CheckedPlan {
 function plan(
   material: DrafterMaterial,
   value: unknown,
-  what: string,
+  index: number,
   bases: (value: unknown, what: string) => string[],
 ): CheckedPlan {
+  const what = `plan ${String(index)}`;
   const p = only(
     value,
-    ["template_plan_digest", "agent_type_digest", "prompt", "claim", "bases"],
+    ["template_plan_digest", "agent_type_digest", "prompt", "claim", "after", "entries", "bases"],
     what,
   );
+  // D-0098 rule 1.3: an earlier plan of this split, so a chain is acyclic.
+  const after = p["after"];
+  if (
+    after !== undefined &&
+    (typeof after !== "number" || !Number.isSafeInteger(after) || after < 0 || after >= index)
+  ) {
+    throw new DraftDefect(
+      `${what} is after ${JSON.stringify(after)}, which is no earlier plan in this split`,
+    );
+  }
   const templateDigest = words(p["template_plan_digest"], `${what}'s template_plan_digest`);
   const template = material.templates.find((t) => t.planDigest === templateDigest);
   if (template === undefined) {
@@ -727,6 +747,20 @@ function plan(
   if (!agentType.priced) {
     throw new DraftDefect(
       `${what} names an agent type of tier '${agentType.modelTier ?? "unknown"}', which rondo does not price`,
+    );
+  }
+  // D-0098 rule 3.3: a count of new decision entries, only where the
+  // template names a record to reserve its numbers in.
+  const entries = p["entries"];
+  if (
+    entries !== undefined &&
+    (typeof entries !== "number" || !Number.isSafeInteger(entries) || entries < 1)
+  ) {
+    throw new DraftDefect(`${what}'s entries is ${JSON.stringify(entries)}, not 1 or more`);
+  }
+  if (entries !== undefined && typeof template.plan["decision_record"] !== "string") {
+    throw new DraftDefect(
+      `${what} writes ${String(entries)} decision entries, and its template names no decision record`,
     );
   }
   const cited = bases(p["bases"], what);
@@ -750,6 +784,8 @@ function plan(
       agent_type_digest: typeDigest,
       bases: cited.map((messageId) => ({ form: "message", messageId })),
       claim: claim.paths,
+      ...(after === undefined ? {} : { after }),
+      ...(entries === undefined ? {} : { entries }),
     },
   };
 }

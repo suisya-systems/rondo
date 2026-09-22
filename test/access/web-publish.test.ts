@@ -376,6 +376,7 @@ test(
 
     const live = "lap-00000000-0000-4000-8000-0000000000b1";
     const reserved = await store.reserve({
+      numbers: null,
       id: live,
       request: "add a retry budget",
       plan: planFor(live),
@@ -520,6 +521,7 @@ async function publishableWorld(
   run("remote", "add", "origin", remoteUrl);
 
   const reserved = await store.reserve({
+    numbers: null,
     id: iterationId,
     request: "count the laps",
     plan: payload,
@@ -1022,6 +1024,7 @@ test("the release screen names the work by its request, says why rondo has not r
       await world.store.releaseLane({
         iterationId: "i-0001",
         takenOver: null,
+        landed: false,
         authorKind: "operator",
         authorId: "ada",
         bases: [],

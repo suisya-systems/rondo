@@ -29,6 +29,7 @@
  * why nothing downstream treats `clear` as permission.
  */
 
+import { recordNumber } from "../store/lanes.js";
 import { contentDigest } from "../store/plan.js";
 import type { LapReadingDraft, ReadingEvidence } from "../store/records.js";
 import { DETERMINISTIC_READING_DRAFTER } from "../store/records.js";
@@ -143,6 +144,38 @@ export function evidenceOf(
 }
 
 /**
+ * What {@link readingOf} is told beside the inspection: facts read off the
+ * lap's plan by the caller, each absent when the plan asks nothing of it.
+ * One field per rule, so each rule's check stands beside the others.
+ */
+export interface ReadingOptions {
+  /**
+   * The commit the lap was told to take in (D-0098 rule 2), the branch it came
+   * from, and whether git found it an ancestor of the lap's tip.
+   */
+  readonly takeIn?: {
+    readonly commit: string;
+    readonly remoteBranch: string;
+    readonly ancestor: "yes" | "no" | { readonly undetermined: string };
+  };
+  /**
+   * The line's decision record (D-0098 rule 3.6): every number it was handed
+   * (a released one included, which nobody else can ever be handed, so a
+   * retry that writes it collides with nothing), the numbers this lap's
+   * `base...tip` added in headings and index rows, or why git could not say,
+   * and the numbers it still holds that the tip's record does not spell with
+   * a heading and an index row (rule 3.6 read the other way: a reservation
+   * left unwritten would keep the line from ever reading landed).
+   */
+  readonly record?: {
+    readonly path: string;
+    readonly reserved: readonly number[];
+    readonly added: readonly number[] | { readonly undetermined: string };
+    readonly unwritten?: readonly number[];
+  };
+}
+
+/**
  * One reading of what a lap produced.
  *
  * **`unreadable` becomes `unavailable`, never `clear`.** This is the single
@@ -160,7 +193,10 @@ export function evidenceOf(
  * a reader looking for the missing branch should look at rule 13 and not at
  * this file.
  */
-export function readingOf(inspection: LapWorkInspection): LapReadingDraft {
+export function readingOf(
+  inspection: LapWorkInspection,
+  options: ReadingOptions = {},
+): LapReadingDraft {
   if (inspection.kind === "unreadable") {
     return {
       drafter: DETERMINISTIC_READING_DRAFTER,
@@ -199,6 +235,49 @@ export function readingOf(inspection: LapWorkInspection): LapReadingDraft {
     findings.push(
       `the workspace holds ${uncommittedPaths(inspection.uncommitted, "that are not on the topic branch")}`,
     );
+  }
+  // **D-0098 rule 2.3: the take-in's test is ancestry.** A lap told to bring
+  // the default branch's commit in first is not landed-ready until that commit
+  // is an ancestor of its tip; a change re-applied by hand fails this, and an
+  // ancestry git could not answer is said, never read as passing.
+  const takeIn = options.takeIn;
+  if (takeIn !== undefined && takeIn.ancestor !== "yes") {
+    findings.push(
+      takeIn.ancestor === "no"
+        ? `the topic branch does not hold ${takeIn.commit}, the commit of ${takeIn.remoteBranch} ` +
+            "this lap was told to bring in first (D-0098 rule 2.3)"
+        : `whether the topic branch holds ${takeIn.commit}, the commit of ${takeIn.remoteBranch} ` +
+            `this lap was told to bring in first, could not be read: ${takeIn.ancestor.undetermined}`,
+    );
+  }
+  // **D-0098 rule 3.6: the gate tests the numbers.** Every heading and index
+  // row the lap added to the record must be one of its line's reservations;
+  // an addition git could not read is said, never read as passing.
+  const record = options.record;
+  if (record !== undefined) {
+    const held =
+      record.reserved.length === 0
+        ? "this line holds no number there"
+        : `this line holds ${record.reserved.map(recordNumber).join(", ")}`;
+    if ("undetermined" in record.added) {
+      findings.push(
+        `what the topic branch added to ${record.path} could not be read, so its entry numbers ` +
+          `were not tested: ${record.added.undetermined}`,
+      );
+    } else {
+      for (const number of record.added.filter((each) => !record.reserved.includes(each))) {
+        findings.push(
+          `${record.path} adds ${recordNumber(number)}, which is not one of this line's reserved ` +
+            `numbers (${held}; D-0098 rule 3.6)`,
+        );
+      }
+    }
+    for (const number of record.unwritten ?? []) {
+      findings.push(
+        `${record.path} has no heading and index row for ${recordNumber(number)}, which this ` +
+          "line holds: the line does not read landed until both are there (D-0098 rule 3.6)",
+      );
+    }
   }
 
   return {

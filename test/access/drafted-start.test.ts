@@ -172,7 +172,7 @@ test(
     expect(run.claim).toEqual({
       paths: ["src/access/web.tsx", "test/access/"],
       authorKind: "drafter",
-      authorId: expect.stringMatching(/^rondo\/drafter\/4\//),
+      authorId: expect.stringMatching(/^rondo\/drafter\/5\//),
       bases: [
         { form: "proposal", proposalId: w.proposalId },
         { form: "message", messageId: "r1" },
@@ -310,6 +310,7 @@ test(
     const run = await draftedPlanRun(w, "r1", w.proposalId, 0);
     if (run.kind !== "runnable") throw new Error("plan 0 does not run");
     const reserved = await w.store.reserve({
+      numbers: null,
       id: "lap-plan-0",
       request: "Two things, please.",
       // The plan as admission stores it: allocated identifiers and all, the
@@ -333,6 +334,7 @@ test(
     // A lap with plan 1's words and another plan is not plan 1 started: the plan
     // is compared whole, identifiers aside.
     const decoy = await w.store.reserve({
+      numbers: null,
       id: "lap-decoy",
       request: "Two things, please.",
       plan: { ...w.document, prompt: PROMPTS[1] as string, turn_timeout_ms: 600_000 },
@@ -439,7 +441,7 @@ test(
       expect(claim).toEqual({
         paths: ["src/access/scope.ts"],
         authorKind: "drafter",
-        authorId: expect.stringMatching(/^rondo\/drafter\/4\//),
+        authorId: expect.stringMatching(/^rondo\/drafter\/5\//),
         bases: [
           { form: "proposal", proposalId: w.proposalId },
           { form: "message", messageId: "r1" },
@@ -488,6 +490,7 @@ test(
     if (run.kind !== "runnable") throw new Error("plan 1 does not run");
     const reserve = (id: string, prompt: string) =>
       w.store.reserve({
+        numbers: null,
         id,
         request: "Two things, please.",
         plan: admittedPayload({ ...run.plan, prompt }, id),

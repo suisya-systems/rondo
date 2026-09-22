@@ -321,19 +321,45 @@ test("the document carries all six things, numbered so bases can be checked, fen
 });
 
 test("the policy defaults to 3 rounds and 'major', and a scope overrides both", () => {
-  expect(reviewPolicyOf(null)).toEqual({ roundBudget: 3, threshold: "major" });
+  expect(reviewPolicyOf(null)).toEqual({
+    roundBudget: 3,
+    threshold: "major",
+    belowThreshold: "leave",
+  });
   expect(DEFAULT_REVIEW_ROUND_BUDGET).toBe(3);
   expect(DEFAULT_REVIEW_THRESHOLD).toBe("major");
-  expect(reviewPolicyOf(scope(5, "minor"))).toEqual({ roundBudget: 5, threshold: "minor" });
+  expect(reviewPolicyOf(scope(5, "minor"))).toEqual({
+    roundBudget: 5,
+    threshold: "minor",
+    belowThreshold: "leave",
+  });
+});
+
+test("the policy carries the scope's below_threshold, and anything but fix_unread is leave (D-0098 rule 5.2)", () => {
+  expect(
+    reviewPolicyOf({ ...scope(3, "major"), belowThreshold: "fix_unread" }).belowThreshold,
+  ).toBe("fix_unread");
+  expect(reviewPolicyOf({ ...scope(3, "major"), belowThreshold: "leave" }).belowThreshold).toBe(
+    "leave",
+  );
+  expect(reviewPolicyOf(scope(3, "major")).belowThreshold).toBe("leave");
 });
 
 test.each([
-  ["a negative budget", scope(-1, "minor"), { roundBudget: 3, threshold: "minor" }],
-  ["a non-integer budget", scope(2.5, "minor"), { roundBudget: 3, threshold: "minor" }],
+  [
+    "a negative budget",
+    scope(-1, "minor"),
+    { roundBudget: 3, threshold: "minor", belowThreshold: "leave" },
+  ],
+  [
+    "a non-integer budget",
+    scope(2.5, "minor"),
+    { roundBudget: 3, threshold: "minor", belowThreshold: "leave" },
+  ],
   [
     "an unknown threshold",
     scope(5, "critical" as FindingSeverity),
-    { roundBudget: 5, threshold: "major" },
+    { roundBudget: 5, threshold: "major", belowThreshold: "leave" },
   ],
 ])("a scope with %s falls back to that field's default", (_name, value, expected) => {
   expect(reviewPolicyOf(value)).toEqual(expected);
@@ -351,7 +377,7 @@ const GRADED = answered(
 
 test("a zero budget is kept, and stops on the first finding at or above the threshold", () => {
   const policy = reviewPolicyOf(scope(0, "major"));
-  expect(policy).toEqual({ roundBudget: 0, threshold: "major" });
+  expect(policy).toEqual({ roundBudget: 0, threshold: "major", belowThreshold: "leave" });
   expect(reviewRoundDecision({ latest: stored(GRADED), roundsTaken: 1, policy }).kind).toBe("stop");
   // Control: the same reading under a budget of 3 is a revise.
   expect(

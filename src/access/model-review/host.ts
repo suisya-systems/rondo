@@ -34,8 +34,9 @@ import {
   latestReading,
   modelReadingDrafter,
 } from "../../store/records.js";
-import type { IterationStore } from "../../store/sqlite.js";
-import { type RequestThread, reportToRequest } from "../conductor.js";
+import type { ClosingLap, IterationStore } from "../../store/sqlite.js";
+import { DETERMINISTIC_DRAFTER } from "../advisory.js";
+import { notRereadSentence, type RequestThread, reportToRequest } from "../conductor.js";
 import { gatherReviewMaterialFacts, runReviewer } from "../forge.js";
 import { hostFailure } from "../host-failure.js";
 import {
@@ -149,6 +150,13 @@ async function take(ports: ModelReviewPorts, iterationId: string): Promise<reado
     return [`model review  iteration '${iterationId}' could not be read (${read.kind}).`];
   }
   const record = read.record;
+  // **A closing lap is not read again** (D-0098 rule 5.3): no row is appended,
+  // so it is not a round (D-0065 4.1) and no further redo from it is decidable
+  // (the scope verdict's readings test) -- one closing lap by construction.
+  const closing = await store.closingLapOf(record.id);
+  if (closing !== null) {
+    return await closingLap(ports, record, closing);
+  }
   const reviewer = reviewerRow();
 
   const append = async (
@@ -252,4 +260,85 @@ async function take(ports: ModelReviewPorts, iterationId: string): Promise<reado
   }
   const run = await ports.runReviewer(reviewer, prepared.document);
   return await append(modelReadingOf({ reviewer, prepared, material, run }));
+}
+
+/**
+ * A closing lap at its gate (D-0098 rules 5.3 and 5.4): say it was not
+ * re-read, in the thread and on the screen, and **stop the line** when its
+ * deterministic reading is not `clear` -- a fix that fails its own test is not
+ * closed quietly. The stop is D-0064 rule 3.3's scope exit: one drafter
+ * message with `asks` set over this lap, which holds the merge (`mergeBlock`'s
+ * `asked`) and any further admission (the scope's asks test) until a person
+ * answers it. Its id is the lap's and the tip its reading read, so a second
+ * reading of one tip writes nothing, and a lap that resumes into a new gate
+ * and fails again is stopped again rather than found spoken for.
+ *
+ * ponytail: "a finding at or above the threshold" is observed only through the
+ * deterministic reading; the worker's report reaches the person at the gate
+ * and is not read here (D-0103 rule 5.7). Red checks on the pull request
+ * already hold the merge as `notGreen`, and writing a stop on them belongs to
+ * the checks host.
+ */
+async function closingLap(
+  ports: ModelReviewPorts,
+  record: IterationRecord,
+  closing: ClosingLap,
+): Promise<readonly string[]> {
+  const lines = [`model review  not re-read. ${notRereadSentence(closing)}`];
+  const thread = ports.thread ?? null;
+  if (thread !== null) {
+    lines.push(
+      (await reportToRequest(thread, record.id, { kind: "closingFix", ...closing }, ports.now())) ??
+        "",
+    );
+  }
+  const deterministic = latestReading(
+    await ports.store.readingsFor(record.id),
+    isDeterministicReadingDrafter,
+  );
+  if (deterministic?.verdict === "clear") {
+    return lines.filter((line) => line !== "");
+  }
+  const said =
+    deterministic === null
+      ? "has no deterministic reading"
+      : `has a deterministic reading of '${deterministic.verdict}' with ` +
+        `${String(deterministic.findings.length)} finding(s)`;
+  lines.push(`model review  the closing lap ${said}, so the line stops (D-0098 rule 5.4).`);
+  if (thread === null) {
+    lines.push("model review  no request thread is wired, so no stop was written.");
+    return lines.filter((line) => line !== "");
+  }
+  const messageId = `closing-stop-${record.id}-${deterministic?.evidence?.tipCommit ?? "unread"}`;
+  const outcome = await thread.record.recordThreadMessage({
+    messageId,
+    body: [
+      `Stopped: the closing lap '${record.id}' ${said}, and no reviewer reads it again, so it ` +
+        "is not closed quietly (D-0098 rule 5.4).",
+      notRereadSentence(closing),
+      "Options:",
+      "- A revise from this lap pressed without a scope, which the reviewer reads like any " +
+        "other lap. Gives up: the closing lap's promise of no further round. (A revise under " +
+        "a scope cannot follow a closing lap: it has no reading to test.)",
+      `- Stopping this line. Gives up: the closing fix; the work the reviewer last read ` +
+        `(commit '${closing.readTipCommit}') is what this line has.`,
+      "Recommended: a revise without a scope: the fix is small, and a reading is what it lacks.",
+      "This line stays stopped until this message is answered.",
+    ].join("\n"),
+    authorKind: "drafter",
+    authorId: DETERMINISTIC_DRAFTER,
+    inReplyTo: record.requestMessageId,
+    atMs: ports.now(),
+    bases: [
+      { form: "message", messageId: record.requestMessageId },
+      { form: "iteration", iterationId: record.id },
+    ],
+    asks: true,
+  });
+  lines.push(
+    outcome.kind === "recorded"
+      ? `model review  the stop was written to the request's thread as '${messageId}'.`
+      : `model review  the stop was not written: ${outcome.reason}`,
+  );
+  return lines.filter((line) => line !== "");
 }

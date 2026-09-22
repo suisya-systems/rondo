@@ -115,6 +115,8 @@ const VALID: RunPlan = {
   gateDeadlineAtMs: null,
   pullRequestBaseBranch: null,
   forgeRepository: null,
+  takeIn: null,
+  decisionRecord: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [CATALOG_LAYER],
   projectName: "rondo",
@@ -894,7 +896,7 @@ test("a v3 payload predates the criterion, and climbs to one that wrote none", (
     expect(back.plan.reviewCriterion).toBe(null);
   }
   expect(payload["review_criterion"]).toBeUndefined();
-  expect(PLAN_PAYLOAD_VERSION).toBe(5);
+  expect(PLAN_PAYLOAD_VERSION).toBe(6);
 
   // At the current version an absent key is strict, and a malformed one is
   // refused rather than read as no criterion.
@@ -947,6 +949,78 @@ test("a slug is carried on the plan, and only a value that is not one is refused
   // a value -- empty, or a word an argument parser would read as a flag.
   expect(refusalFor({ forgeRepository: "" })).toContain("forgeRepository");
   expect(refusalFor({ forgeRepository: "--repo" })).toContain("forgeRepository");
+});
+
+const TAKE_IN = {
+  commit: "a".repeat(40),
+  branch: "rondo/base/run-1",
+  remoteBranch: "main",
+  paths: ["src/a.ts", "docs/"],
+  cause: "landed",
+} as const;
+
+test("a v5 payload predates D-0098, and climbs to no take-in and no record", () => {
+  const payload = { ...payloadOf() } as Record<string, unknown>;
+  delete payload["take_in"];
+  delete payload["decision_record"];
+  payload["payload_version"] = 5;
+  const back = readPlan(payload as JsonRecord);
+  expect(back.kind === "planned" && back.plan.takeIn).toBe(null);
+  expect(back.kind === "planned" && back.plan.decisionRecord).toBe(null);
+  expect(payload["take_in"]).toBeUndefined();
+
+  // At the current version both keys are strict again.
+  for (const key of ["take_in", "decision_record"]) {
+    const current = { ...payloadOf() } as Record<string, unknown>;
+    delete current[key];
+    const strict = readPlan(current as JsonRecord);
+    expect(strict.kind === "refused" && strict.reason).toContain(key);
+  }
+  for (const bad of [7, [], { ...TAKE_IN }, { commit: TAKE_IN.commit }]) {
+    expect(readPlan({ ...payloadOf(), take_in: bad as never }).kind).toBe("refused");
+  }
+});
+
+test("a take-in and a record round-trip through the payload", () => {
+  const planned = runPlan(withField({ takeIn: TAKE_IN, decisionRecord: "DECISIONS.md" }));
+  if (planned.kind !== "planned") {
+    throw new Error(planned.reason);
+  }
+  const admitted = admittedPlan(planned.plan, ALLOCATION);
+  if (admitted.kind !== "planned") {
+    throw new Error(admitted.reason);
+  }
+  const payload = planPayload(admitted.plan);
+  expect(payload["take_in"]).toEqual({
+    commit: TAKE_IN.commit,
+    branch: TAKE_IN.branch,
+    remote_branch: "main",
+    paths: ["src/a.ts", "docs/"],
+    cause: "landed",
+  });
+  const back = readPlan(JSON.parse(JSON.stringify(payload)) as JsonRecord);
+  expect(back.kind === "planned" && back.plan.takeIn).toEqual(TAKE_IN);
+  expect(back.kind === "planned" && back.plan.decisionRecord).toBe("DECISIONS.md");
+});
+
+test("a malformed take-in or record is refused by the field's name", () => {
+  const takeIn = (patch: object): string =>
+    refusalFor({ takeIn: { ...TAKE_IN, ...patch } as never });
+  expect(takeIn({ commit: "abc" })).toContain("takeIn.commit");
+  expect(takeIn({ commit: "A".repeat(40) })).toContain("takeIn.commit");
+  expect(takeIn({ branch: "--x" })).toContain("takeIn.branch");
+  expect(takeIn({ remoteBranch: "ma in" })).toContain("takeIn.remoteBranch");
+  expect(takeIn({ paths: "src/" })).toContain("takeIn.paths");
+  expect(takeIn({ paths: ["../x"] })).toContain("takeIn.paths[0]");
+  expect(takeIn({ cause: "other" })).toContain("takeIn.cause");
+  expect(runPlan(withField({ takeIn: { ...TAKE_IN, cause: "conflict", paths: [] } })).kind).toBe(
+    "planned",
+  );
+
+  expect(runPlan(withField({ decisionRecord: "docs/DECISIONS.md" })).kind).toBe("planned");
+  for (const bad of ["", "/", "docs/", "/DECISIONS.md", "a\\b.md", "*.md", "a/../b.md"]) {
+    expect(refusalFor({ decisionRecord: bad })).toContain("decisionRecord");
+  }
 });
 
 test("setting a criterion changes the plan digest", () => {

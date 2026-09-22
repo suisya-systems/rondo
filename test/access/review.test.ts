@@ -170,3 +170,21 @@ test("the uncommitted finding names the first LIST_LIMIT paths and counts the re
   expect(finding).not.toContain("p20.txt");
   expect(finding).toContain("(and 5 more)");
 });
+
+test("D-0098 rule 2.3: a take-in the tip does not hold, or whose ancestry git could not read, is a finding", () => {
+  const X = "c".repeat(40);
+  const takeIn = (ancestor: "yes" | "no" | { readonly undetermined: string }) => ({
+    takeIn: { commit: X, remoteBranch: "main", ancestor },
+  });
+
+  expect(readingOf(read(), takeIn("yes")).verdict).toBe("clear");
+  const missing = readingOf(read(), takeIn("no"));
+  expect(missing.verdict).toBe("concerns");
+  expect(missing.findings).toEqual([
+    `the topic branch does not hold ${X}, the commit of main this lap was told to bring in first (D-0098 rule 2.3)`,
+  ]);
+  // Never a silent clear: an ancestry nobody could read is said.
+  const unread = readingOf(read(), takeIn({ undetermined: "git exited 128" }));
+  expect(unread.verdict).toBe("concerns");
+  expect(unread.findings[0]).toContain("could not be read: git exited 128");
+});

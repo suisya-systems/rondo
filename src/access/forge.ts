@@ -39,6 +39,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { DrafterRow, ReviewerRow } from "../continuo/roles.js";
+import { recordNumber, recordNumbers } from "../store/lanes.js";
 import { contentDigest } from "../store/plan.js";
 import type { ReadingEvidence } from "../store/records.js";
 import { hostFailure } from "./host-failure.js";
@@ -1413,6 +1414,18 @@ export interface LandingRequest {
   readonly baseCommit: string;
   /** Each closed tip's `tipCommit`: what must be on the default branch. */
   readonly tipCommits: readonly string[];
+  /**
+   * The repository's decision record and the numbers the line holds in it
+   * (D-0098 rule 3.7), or null when the plan names no record: read by
+   * numbers and added lines instead of by its tree entry.
+   */
+  readonly record: { readonly path: string; readonly reserved: readonly number[] } | null;
+  /**
+   * The commits the line's laps were told to take in (D-0098 rule 2, a plan's
+   * `take_in.commit`): what they brought is not the line's work. Absent or
+   * empty for a line that took nothing in, which is read as before.
+   */
+  readonly takenIn?: readonly string[];
 }
 
 /**
@@ -1455,11 +1468,95 @@ export type LandingReading =
 export async function readLanding(request: LandingRequest): Promise<LandingReading> {
   const git = (argv: readonly string[], timeoutMs = PREFLIGHT_TIMEOUT_MS) =>
     runCommand("git", ["-C", request.repository, ...argv], timeoutMs);
-  // **The forge's default branch, asked of the forge**, and not the plan's base
-  // branch: a line cut from `develop` has not landed on the default branch
-  // because it merged into `develop` (rule 6). A remote that will not name its
-  // HEAD leaves the reading undetermined.
-  const symref = await git(["ls-remote", "--symref", request.remote, "HEAD"], FORGE_TIMEOUT_MS);
+  const fetched = await fetchDefaultBranch(git, request.remote);
+  if (fetched.kind === "undetermined") {
+    return fetched;
+  }
+  const { branch, headCommit } = fetched;
+  const headTree = await treeEntries(git, headCommit);
+  if (typeof headTree === "string") {
+    return { kind: "undetermined", reason: headTree };
+  }
+  const paths = new Set<string>();
+  const differing = new Set<string>();
+  for (const tip of request.tipCommits) {
+    const changed = await changedBetween(git, request.baseCommit, tip);
+    if (typeof changed === "string") {
+      return { kind: "undetermined", reason: changed };
+    }
+    // **What the line took in is not its work** (D-0098 rule 2, D-0103): a tip
+    // that merged the default branch's commit X changes, since the lineage's
+    // base, every path X brought -- and a later landing on one of those would
+    // leave the line `notLanded` for good. So a path counts only if the tip
+    // also changed it since each commit the line was told to take in, which
+    // drops X's paths. **Only against a named take-in**, never against the
+    // fetched head: a tip merged into the head by a real merge commit has no
+    // changes of its own since that merge-base, and a resolution that edited
+    // its work would read landed (D-0073 rule 6.4).
+    const ownSets: Set<string>[] = [];
+    for (const taken of request.takenIn ?? []) {
+      const own = await changedBetween(git, taken, tip);
+      if (typeof own === "string") {
+        return { kind: "undetermined", reason: own };
+      }
+      ownSets.push(new Set(own));
+    }
+    const tipTree = await treeEntries(git, tip);
+    if (typeof tipTree === "string") {
+      return { kind: "undetermined", reason: tipTree };
+    }
+    // The decision record is read by numbers and added lines below, never by
+    // its tree entry: another line appends to it too (D-0098 rule 3.7).
+    for (const path of changed.filter(
+      (each) => ownSets.every((own) => own.has(each)) && each !== request.record?.path,
+    )) {
+      paths.add(path);
+      if (tipTree.get(path) !== headTree.get(path)) {
+        differing.add(path);
+      }
+    }
+  }
+  if (request.record !== null) {
+    const record = await recordLanding(git, request, headCommit);
+    if (typeof record === "string") {
+      return { kind: "undetermined", reason: record };
+    }
+    if (record.part) {
+      paths.add(request.record.path);
+    }
+    if (record.missing !== null) {
+      differing.add(`${request.record.path} (${record.missing})`);
+    }
+  }
+  return differing.size === 0
+    ? { kind: "landed", branch, headCommit, paths: [...paths].sort() }
+    : { kind: "notLanded", branch, headCommit, differing: [...differing].sort() };
+}
+
+/**
+ * The forge's default branch, fetched into a ref rondo owns (D-0073 rule 6):
+ * its name and the commit it points at, or why not. **One fetch for the
+ * landing reading and for the decision record's floor** (D-0098 rule 3.3), so
+ * the two cannot read the default branch two ways.
+ *
+ * **The forge's default branch, asked of the forge**, and not the plan's base
+ * branch: a line cut from `develop` has not landed on the default branch
+ * because it merged into `develop` (rule 6). A remote that will not name its
+ * HEAD leaves the reading undetermined. `--refmap=` (empty) is load-bearing:
+ * with an explicit refspec, a fetch from a configured remote also moves that
+ * remote's tracking ref, which is the person's and not rondo's to move;
+ * `--no-write-fetch-head` keeps two readings at once off the one file every
+ * fetch would otherwise rewrite. Two readings can still race for the landing
+ * ref's lock; the loser is undetermined and is read again.
+ */
+async function fetchDefaultBranch(
+  git: (argv: readonly string[], timeoutMs?: number) => Promise<CommandOutcome>,
+  remote: string,
+): Promise<
+  | { readonly kind: "fetched"; readonly branch: string; readonly headCommit: string }
+  | { readonly kind: "undetermined"; readonly reason: string }
+> {
+  const symref = await git(["ls-remote", "--symref", remote, "HEAD"], FORGE_TIMEOUT_MS);
   const symrefFailure = queryFailure(symref);
   const named = /^ref: refs\/heads\/(\S+)\tHEAD$/m.exec(symref.stdout)?.[1];
   if (symrefFailure !== null || named === undefined) {
@@ -1469,12 +1566,16 @@ export async function readLanding(request: LandingRequest): Promise<LandingReadi
     };
   }
   const branch = named;
-  const ref = `refs/rondo/landing/${request.remote}/${branch}`;
-  // `--refmap=` (empty) is load-bearing: with an explicit refspec, a fetch
-  // from a configured remote also moves that remote's tracking ref, which is
-  // the person's and not rondo's to move.
+  const ref = `refs/rondo/landing/${remote}/${branch}`;
   const fetched = await git(
-    ["fetch", "--no-tags", "--refmap=", request.remote, `+refs/heads/${branch}:${ref}`],
+    [
+      "fetch",
+      "--no-tags",
+      "--no-write-fetch-head",
+      "--refmap=",
+      remote,
+      `+refs/heads/${branch}:${ref}`,
+    ],
     FORGE_TIMEOUT_MS,
   );
   const fetchFailure = queryFailure(fetched);
@@ -1489,31 +1590,231 @@ export async function readLanding(request: LandingRequest): Promise<LandingReadi
   if (queryFailure(head) !== null || headCommit === "") {
     return { kind: "undetermined", reason: `git could not say what ${ref} points at` };
   }
-  const headTree = await treeEntries(git, headCommit);
-  if (typeof headTree === "string") {
-    return { kind: "undetermined", reason: headTree };
+  return { kind: "fetched", branch, headCommit };
+}
+
+/**
+ * A file's text at `commit`, "" when the commit has no such file, or why git
+ * would not say. `ls-tree` first, so a missing record reads as empty rather
+ * than as a failure.
+ */
+async function textAt(
+  git: (argv: readonly string[]) => Promise<CommandOutcome>,
+  commit: string,
+  path: string,
+): Promise<string | { readonly failure: string }> {
+  const listed = await git(["ls-tree", "-z", commit, "--", path]);
+  const listFailure = queryFailure(listed);
+  if (listFailure !== null) {
+    return { failure: listFailure };
   }
-  const paths = new Set<string>();
-  const differing = new Set<string>();
+  if (!listed.stdout.includes(" blob ")) {
+    return "";
+  }
+  const shown = await git(["cat-file", "blob", `${commit}:${path}`]);
+  const failure = queryFailure(shown);
+  return failure === null ? shown.stdout : { failure };
+}
+
+/**
+ * The non-blank lines `tip` added to `path` since it forked off `base`, or
+ * why git would not say: the `+` lines of `git diff base...tip -- path`, the
+ * range {@link changedBetween} reads (D-0098 rules 3.6 and 3.7).
+ */
+async function addedLines(
+  git: (argv: readonly string[]) => Promise<CommandOutcome>,
+  base: string,
+  tip: string,
+  path: string,
+): Promise<readonly string[] | { readonly failure: string }> {
+  const diff = await git([
+    "diff",
+    "--no-color",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--no-renames",
+    "-U0",
+    `${base}...${tip}`,
+    "--",
+    path,
+  ]);
+  const failure = queryFailure(diff);
+  if (failure !== null) {
+    return { failure };
+  }
+  // Only inside hunks, so the `+++ b/<path>` header is never read as a line.
+  const body = diff.stdout.split("\n");
+  const firstHunk = body.findIndex((line) => line.startsWith("@@"));
+  return body
+    .slice(firstHunk === -1 ? body.length : firstHunk)
+    .filter((line) => line.startsWith("+"))
+    .map((line) => line.slice(1))
+    .filter((line) => line.trim() !== "");
+}
+
+/**
+ * Whether the default branch holds a line's work on its decision record
+ * (D-0098 rule 3.7): a heading and an index row for each reservation, and
+ * every non-blank line its closed tips added, annotations included. `part` is
+ * whether the record is in this line's landing at all: a line with no
+ * reservation that added nothing to it is not read on it, and a line with
+ * none is read by its added lines alone -- an empty set is never "landed" on
+ * its own. `missing` says what is not there, or null.
+ */
+async function recordLanding(
+  git: (argv: readonly string[]) => Promise<CommandOutcome>,
+  request: LandingRequest,
+  headCommit: string,
+): Promise<{ readonly part: boolean; readonly missing: string | null } | string> {
+  const record = request.record;
+  if (record === null) {
+    return { part: false, missing: null };
+  }
+  const added: string[] = [];
   for (const tip of request.tipCommits) {
-    const changed = await changedBetween(git, request.baseCommit, tip);
-    if (typeof changed === "string") {
-      return { kind: "undetermined", reason: changed };
+    const lines = await addedLines(git, request.baseCommit, tip, record.path);
+    if ("failure" in lines) {
+      return lines.failure;
     }
-    const tipTree = await treeEntries(git, tip);
-    if (typeof tipTree === "string") {
-      return { kind: "undetermined", reason: tipTree };
-    }
-    for (const path of changed) {
-      paths.add(path);
-      if (tipTree.get(path) !== headTree.get(path)) {
-        differing.add(path);
-      }
-    }
+    added.push(...lines);
   }
-  return differing.size === 0
-    ? { kind: "landed", branch, headCommit, paths: [...paths].sort() }
-    : { kind: "notLanded", branch, headCommit, differing: [...differing].sort() };
+  // What a take-in brought to the record is not the line's (D-0098 rule 2).
+  for (const taken of request.takenIn ?? []) {
+    const text = await textAt(git, taken, record.path);
+    if (typeof text !== "string") {
+      return text.failure;
+    }
+    const theirs = new Set(text.split("\n"));
+    added.splice(0, added.length, ...added.filter((line) => !theirs.has(line)));
+  }
+  if (record.reserved.length === 0 && added.length === 0) {
+    return { part: false, missing: null };
+  }
+  const text = await textAt(git, headCommit, record.path);
+  if (typeof text !== "string") {
+    return text.failure;
+  }
+  const numbers = recordNumbers(text);
+  const absent = record.reserved.find(
+    (number) => !numbers.headings.includes(number) || !numbers.indexRows.includes(number),
+  );
+  if (absent !== undefined) {
+    return {
+      part: true,
+      missing: `${recordNumber(absent)} has no heading and index row there`,
+    };
+  }
+  const there = new Set(text.split("\n"));
+  return {
+    part: true,
+    missing: added.every((line) => there.has(line)) ? null : "a line it added is not there",
+  };
+}
+
+/** What {@link readRecordFloor} found on the forge's default branch (D-0098 rule 3.3). */
+export type RecordFloor =
+  | { readonly kind: "read"; readonly floor: number; readonly headCommit: string }
+  | { readonly kind: "undetermined"; readonly reason: string };
+
+/**
+ * The highest number the forge's default branch's decision record spells, in a
+ * heading or an index row, or 0 when it has no such file (D-0098 rule 3.3).
+ * Fetched as the landing reading fetches ({@link fetchDefaultBranch}), so the
+ * number an admission hands out is above what is merged now, not what the
+ * clone last pulled.
+ */
+export async function readRecordFloor(request: {
+  readonly repository: string;
+  readonly remote: string;
+  readonly record: string;
+}): Promise<RecordFloor> {
+  const git = (argv: readonly string[], timeoutMs = PREFLIGHT_TIMEOUT_MS) =>
+    runCommand("git", ["-C", request.repository, ...argv], timeoutMs);
+  const fetched = await fetchDefaultBranch(git, request.remote);
+  if (fetched.kind === "undetermined") {
+    return fetched;
+  }
+  const text = await textAt(git, fetched.headCommit, request.record);
+  if (typeof text !== "string") {
+    return { kind: "undetermined", reason: text.failure };
+  }
+  const numbers = recordNumbers(text);
+  return {
+    kind: "read",
+    floor: Math.max(0, ...numbers.headings, ...numbers.indexRows),
+    headCommit: fetched.headCommit,
+  };
+}
+
+/**
+ * The entry numbers a lap added to its decision record, in headings and index
+ * rows, from `base...tip` (D-0098 rule 3.6): what the gate tests against the
+ * line's reservations. **A number the take-in commit's record already spells
+ * is not the lap's** (D-0098 rules 2 and 3.8): a tip that merged the default
+ * branch's X adds, since its base, every entry X brought, and those are
+ * another line's landed entries, not numbers to renumber. **Nor is one the
+ * record already spelled where the lap forked**: a changed index row (a status gone to
+ * superseded) or an annotation that repeats a heading is an edit of an
+ * existing entry, whose ID is permanent, not a new number.
+ */
+export async function readRecordAdditions(request: {
+  readonly repository: string;
+  readonly baseCommit: string;
+  readonly tipCommit: string;
+  readonly record: string;
+  /** The lap's `take_in.commit`, or null when it took nothing in. */
+  readonly takenIn: string | null;
+}): Promise<
+  | {
+      readonly kind: "read";
+      readonly numbers: readonly number[];
+      /** The numbers the tip's record spells with both a heading and an index row. */
+      readonly spelled: readonly number[];
+    }
+  | { readonly kind: "undetermined"; readonly reason: string }
+> {
+  const git = (argv: readonly string[]) =>
+    runCommand("git", ["-C", request.repository, ...argv], PREFLIGHT_TIMEOUT_MS);
+  const lines = await addedLines(git, request.baseCommit, request.tipCommit, request.record);
+  if ("failure" in lines) {
+    return { kind: "undetermined", reason: lines.failure };
+  }
+  const taken = request.takenIn === null ? "" : await textAt(git, request.takenIn, request.record);
+  if (typeof taken !== "string") {
+    return { kind: "undetermined", reason: taken.failure };
+  }
+  const theirs = recordNumbers(taken);
+  // The fork point `base...tip` diffs from, not the base's own tip: a base
+  // that moved on holds other lines' entries, and a number this lap wrote
+  // without holding it must not hide behind one of them.
+  const forked = await git(["merge-base", request.baseCommit, request.tipCommit]);
+  const forkFailure = queryFailure(forked);
+  if (forkFailure !== null) {
+    return { kind: "undetermined", reason: forkFailure };
+  }
+  const atBase = await textAt(git, forked.stdout.trim(), request.record);
+  if (typeof atBase !== "string") {
+    return { kind: "undetermined", reason: atBase.failure };
+  }
+  const existing = recordNumbers(atBase);
+  const atTip = await textAt(git, request.tipCommit, request.record);
+  if (typeof atTip !== "string") {
+    return { kind: "undetermined", reason: atTip.failure };
+  }
+  const tipNumbers = recordNumbers(atTip);
+  const numbers = recordNumbers(lines.join("\n"));
+  return {
+    kind: "read",
+    spelled: tipNumbers.headings.filter((number) => tipNumbers.indexRows.includes(number)),
+    numbers: [...new Set([...numbers.headings, ...numbers.indexRows])]
+      .filter(
+        (number) =>
+          ![theirs, existing].some(
+            (record) => record.headings.includes(number) || record.indexRows.includes(number),
+          ),
+      )
+      .sort((a, b) => a - b),
+  };
 }
 
 /** Which branch a first lap is cut from, and where to fetch it (rondo#407). */
@@ -1554,7 +1855,7 @@ export interface LapBaseRequest {
 export async function fetchLapBase(
   request: LapBaseRequest,
 ): Promise<
-  | { readonly kind: "fetched"; readonly branch: string }
+  | { readonly kind: "fetched"; readonly branch: string; readonly commit: string }
   | { readonly kind: "refused"; readonly reason: string }
 > {
   const branch = `rondo/base/${request.runId}`;
@@ -1584,7 +1885,49 @@ export async function fetchLapBase(
     };
   }
   await git([request.remote, `refs/heads/${request.baseBranch}`]);
-  return { kind: "fetched", branch };
+  // **The commit, named** (D-0098 rule 2.2): a take-in tells the lap which
+  // commit to bring in and the gate tests that very commit, so it is read off
+  // the lap's own branch now rather than off a ref that may move later.
+  const resolved = await runCommand(
+    "git",
+    ["-C", request.repository, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  const commit = resolved.stdout.trim();
+  if (queryFailure(resolved) !== null || commit === "") {
+    return {
+      kind: "refused",
+      reason: `rondo fetched ${request.remote}/${request.baseBranch} into '${branch}' and git could not say what it points at.`,
+    };
+  }
+  return { kind: "fetched", branch, commit };
+}
+
+/**
+ * Whether `ancestor` is an ancestor of `descendant` in `repository`
+ * (D-0098 rule 2.3's test), by `git merge-base --is-ancestor`.
+ *
+ * Exit 0 is yes and exit 1 is no; **anything else is undetermined and its own
+ * answer** -- a commit git cannot read says nothing about ancestry, and the
+ * gate must not read it as either (never a silent clear).
+ */
+export async function isAncestor(request: {
+  readonly repository: string;
+  readonly ancestor: string;
+  readonly descendant: string;
+}): Promise<"yes" | "no" | { readonly undetermined: string }> {
+  const outcome = await runCommand(
+    "git",
+    ["-C", request.repository, "merge-base", "--is-ancestor", request.ancestor, request.descendant],
+    PREFLIGHT_TIMEOUT_MS,
+  );
+  if (outcome.spawnError === null && outcome.status === 0) {
+    return "yes";
+  }
+  if (outcome.spawnError === null && outcome.status === 1) {
+    return "no";
+  }
+  return { undetermined: queryFailure(outcome) ?? `${outcome.commandLine} did not answer` };
 }
 
 /**

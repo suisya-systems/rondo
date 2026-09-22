@@ -1437,6 +1437,10 @@ async function planStart(
           </a>
         </p>
       );
+    // D-0098 rule 1: no press while `first` has not landed; it starts by itself.
+    // ponytail: no sentence of its own yet (rule 8.2's step is page work).
+    case "ordered":
+      return null;
     case "busy":
       return line(wording.planBusy(ready.limit));
     case "full":
