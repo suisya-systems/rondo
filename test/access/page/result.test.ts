@@ -505,5 +505,5 @@ test("closed unmerged on the forge ends the request, and no press is offered (ro
     { kind: "requests" },
     chromeFor("ja"),
   );
-  expect(requests).toContain("プルリクエスト #372・マージせずに閉じられました");
+  expect(requests).toContain("プルリクエスト #372・マージされずに閉じられました");
 });

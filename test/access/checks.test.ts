@@ -176,6 +176,14 @@ async function hostOver(options: {
   readonly pullRequest?: PullRequestFacts;
   /** The laps a merge press holds. */
   readonly pressing?: ReadonlySet<string>;
+  /** What the forge says on each pass, in order; one pass each. */
+  readonly steps?: readonly {
+    readonly reading: ChecksReading;
+    readonly head?: string;
+    readonly pullRequest?: PullRequestFacts;
+  }[];
+  /** Run while the forge is being read, as a press starting then would. */
+  readonly duringRead?: () => void;
 }): Promise<{
   readonly written: readonly Recorded[];
   readonly asked: number;
@@ -184,7 +192,18 @@ async function hostOver(options: {
 }> {
   const written: Recorded[] = [];
   const askedIds: string[] = [];
-  const messages = options.messageIds.map((messageId, at) => ({
+  let tick = 0;
+  let clock = 100;
+  const messages: {
+    messageId: string;
+    body: string;
+    authorKind: "drafter";
+    authorId: string;
+    inReplyTo: string | null;
+    atMs: number;
+    bases: never[];
+    asks: boolean;
+  }[] = options.messageIds.map((messageId, at) => ({
     messageId,
     // A publish report prints its pull request's address; lap-N opened #N. An
     // answer names the lap's own head, as the real writer's does.
@@ -236,16 +255,29 @@ async function hostOver(options: {
       threadMessages: async () => ({ kind: "read", messages }) as never,
       recordThreadMessage: async (draft) => {
         written.push({ messageId: draft.messageId, body: draft.body });
+        // What is written is read back on the next pass, as the store does.
+        messages.push({
+          messageId: draft.messageId,
+          body: draft.body,
+          authorKind: "drafter",
+          authorId: "rondo/deterministic",
+          inReplyTo: "request-1",
+          atMs: clock,
+          bases: [],
+          asks: false,
+        });
         return { kind: "recorded" } as never;
       },
     },
     readChecks: async (request) => {
       const id = `lap-${String(request.number)}`;
       askedIds.push(id);
+      options.duringRead?.();
+      const step = options.steps?.[tick] ?? options;
       return {
-        reading: options.readings?.[id] ?? options.reading,
-        head: options.head ?? `commit-of-${id}`,
-        pullRequest: options.pullRequest ?? null,
+        reading: options.readings?.[id] ?? step.reading,
+        head: step.head ?? `commit-of-${id}`,
+        pullRequest: step.pullRequest ?? null,
       };
     },
     readCommits: async (request) => ({
@@ -254,10 +286,11 @@ async function hostOver(options: {
     }),
     ...(options.pressing === undefined ? {} : { pressing: options.pressing }),
     host: "github.com",
-    now: () => 2,
+    now: () => clock,
     log: () => {},
   });
-  for (let tick = 0; tick < (options.passes ?? 1); tick += 1) {
+  for (tick = 0; tick < (options.steps?.length ?? options.passes ?? 1); tick += 1) {
+    clock = 100 * (tick + 1);
     host.kick();
     await host.idle();
   }
@@ -420,22 +453,23 @@ test("a conflict is said once per head, with why no check runs", async () => {
     pullRequest: { ...OPEN, conflicting: true },
     messageIds: ["request-1", "report-published-lap-1"],
   });
+  // No answer is written beside it: the runs it would be about are from before.
   expect(over.written.map((one) => one.messageId)).toEqual([
     "report-conflict-lap-1-commit-of-lap-1",
-    "report-checks-lap-1-none",
   ]);
   expect(over.written[0]?.body).toContain("runs no checks");
   const again = await hostOver({
     reading: { kind: "none" },
     pullRequest: { ...OPEN, conflicting: true },
-    messageIds: [
-      "request-1",
-      "report-published-lap-1",
-      "report-conflict-lap-1-commit-of-lap-1",
-      "report-checks-lap-1-none",
+    messageIds: ["request-1", "report-published-lap-1"],
+    steps: [
+      { reading: { kind: "none" }, pullRequest: { ...OPEN, conflicting: true } },
+      { reading: { kind: "none" }, pullRequest: { ...OPEN, conflicting: true } },
     ],
   });
-  expect(again.written).toEqual([]);
+  expect(again.written.map((one) => one.messageId)).toEqual([
+    "report-conflict-lap-1-commit-of-lap-1",
+  ]);
 });
 
 test("a head the lap did not push is said with what it carries, and its checks are its own", async () => {
@@ -496,7 +530,7 @@ test("a rerun that flips a head back to an answer already said is said again, so
       "report-checks-lap-1-green",
     ],
   });
-  expect(over.written.map((one) => one.messageId)).toEqual(["report-checks-lap-1-red-t2"]);
+  expect(over.written.map((one) => one.messageId)).toEqual(["report-checks-lap-1-red-t100"]);
   // The same answer as the newest is not said again.
   const same = await hostOver({
     reading: { kind: "green", counted: 1, skipped: 0 },
@@ -508,4 +542,58 @@ test("a rerun that flips a head back to an answer already said is said again, so
     ],
   });
   expect(same.written).toEqual([]);
+});
+
+const GREEN: ChecksReading = { kind: "green", counted: 1, skipped: 0 };
+
+test("a conflict resolved on a head already green is green again, and a conflict that returns is said again", async () => {
+  const over = await hostOver({
+    reading: GREEN,
+    messageIds: ["request-1", "report-published-lap-1"],
+    steps: [
+      { reading: GREEN, pullRequest: OPEN },
+      { reading: GREEN, pullRequest: { ...OPEN, conflicting: true } },
+      { reading: GREEN, pullRequest: OPEN },
+      { reading: GREEN, pullRequest: { ...OPEN, conflicting: true } },
+    ],
+  });
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-1-green",
+    "report-conflict-lap-1-commit-of-lap-1",
+    "report-checks-lap-1-green-t300",
+    "report-conflict-lap-1-commit-of-lap-1-t400",
+  ]);
+});
+
+test("a branch pushed away and back is said both ways, and back reads as not moved", async () => {
+  const over = await hostOver({
+    reading: GREEN,
+    messageIds: ["request-1", "report-published-lap-1"],
+    steps: [
+      { reading: GREEN, head: "fff0000" },
+      { reading: GREEN },
+      { reading: GREEN, head: "fff0000" },
+      { reading: GREEN, head: "fff0000" },
+    ],
+  });
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-moved-lap-1-fff0000",
+    "report-checks-lap-1-green-fff0000",
+    "report-moved-lap-1-commit-of-lap-1",
+    "report-checks-lap-1-green",
+    "report-moved-lap-1-fff0000-t300",
+    "report-checks-lap-1-green-fff0000-t300",
+  ]);
+});
+
+test("a press that starts while the pull request is being read keeps its merge its own", async () => {
+  const pressing = new Set<string>();
+  const over = await hostOver({
+    reading: GREEN,
+    pullRequest: { ...OPEN, state: "merged" },
+    messageIds: ["request-1", "report-published-lap-1"],
+    pressing,
+    duringRead: () => pressing.add("lap-1"),
+  });
+  expect(over).toMatchObject({ written: [], asked: 1 });
 });

@@ -148,17 +148,14 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
     .filter((one) => moved === null || one.commit === moved.to)
     .toSorted((left, right) => right.said.atMs - left.said.atMs)[0];
   // **A conflict stands on its head until a check answers there** (rondo#411):
-  // the forge runs none while it conflicts, so a green or a red on that head
+  // no answer is written while it stands (`checksHost`), so one on that head
   // newer than the conflict means it was resolved without a push.
   const conflictHead = /on commit '([^']+)'/.exec(conflictSaid?.body ?? "")?.[1] ?? null;
   const conflicting =
     conflictSaid !== undefined &&
     conflictHead !== null &&
     (moved === null || conflictHead === moved.to) &&
-    !answers.some(
-      (one) =>
-        one.kind !== "none" && one.commit === conflictHead && one.said.atMs > conflictSaid.atMs,
-    );
+    !answers.some((one) => one.commit === conflictHead && one.said.atMs > conflictSaid.atMs);
   return {
     url,
     number: url === null ? null : (/\/pull\/(\d+)/.exec(url)?.[1] ?? null),
@@ -212,7 +209,8 @@ function movedOf(said: Said | undefined): LapResult["moved"] {
   }
   const to = /is at commit '([^']+)'/.exec(said.body)?.[1];
   const from = /the head the lap pushed and rondo read is '([^']+)'/.exec(said.body)?.[1];
-  if (to === undefined || from === undefined) {
+  // Pushed back to the head the lap pushed: not moved any more (Codex round 1).
+  if (to === undefined || from === undefined || to === from) {
     return null;
   }
   return {

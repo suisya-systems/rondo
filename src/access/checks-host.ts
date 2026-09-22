@@ -380,7 +380,12 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
   }
   // **Merged or closed is the end of the reading** (rondo#413), whatever the
   // checks say: one line, and the scan leaves the lap alone after it.
+  // A press that began while this read was in flight is asked again here: its
+  // own merge is its to write, and not one made outside rondo (Codex round 1).
   if (pullRequest !== null && pullRequest.state !== "open") {
+    if (ports.pressing?.has(iterationId) === true) {
+      return { line: null, halt: false };
+    }
     const ended: LapEvent =
       pullRequest.state === "merged"
         ? {
@@ -396,77 +401,77 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
   if (head === null) {
     return { ...once("continuo judged its checks on no head commit"), halt: false };
   }
+  const shown = due.shown;
   const lines: string[] = [];
-  const write = async (messageId: string, event: LapEvent): Promise<void> => {
-    if (!due.said.has(messageId)) {
-      const line = await reportToRequest(ports, iterationId, event, ports.now());
-      if (line !== null) {
-        lines.push(line);
-      }
+  // **Written where the page does not say it already**: a line never written
+  // is written, and one written before is said again, under its time, where a
+  // newer line has since said otherwise -- a head that went red, green and red
+  // again, a branch pushed back to a head it had, a conflict that came back
+  // (Codex round 1). Without it the page keeps the newer line for ever.
+  const say = async (messageId: string, shownNow: boolean, event: LapEvent): Promise<void> => {
+    if (due.said.has(messageId) && shownNow) {
+      return;
+    }
+    const retold = due.said.has(messageId) ? { retold: ports.now() } : {};
+    const line = await reportToRequest(ports, iterationId, { ...event, ...retold }, ports.now());
+    if (line !== null) {
+      lines.push(line);
     }
   };
   // **A head the lap did not push** (rondo#412): somebody pushed to the
   // branch outside rondo. Said once per head, with what it carries, before
   // anything about its checks -- the checks are about commits the person has
-  // not been shown.
+  // not been shown. A branch pushed back to the lap's own head is said too,
+  // with nothing carried, and the page then reads it as not moved.
   const tip = latestReading(
     await ports.store.readingsFor(iterationId),
     isDeterministicReadingDrafter,
   )?.evidence?.tipCommit;
-  const moved = tip !== undefined && tip !== null && tip !== "" && tip !== head;
-  if (moved && !due.said.has(`report-moved-${iterationId}-${head}`)) {
-    const between = await ports.readCommits({
-      host: ports.host,
-      repo: address.repo,
-      from: tip,
-      to: head,
-    });
-    if (between.kind !== "read") {
+  const known = tip !== undefined && tip !== null && tip !== "";
+  const moved = known && tip !== head;
+  if (known && head !== (shown?.moved?.to ?? tip)) {
+    let commits: CommitsBetween = { kind: "read", commits: [] };
+    if (moved) {
+      commits = await ports.readCommits({
+        host: ports.host,
+        repo: address.repo,
+        from: tip,
+        to: head,
+      });
+    }
+    if (commits.kind !== "read") {
       return {
-        ...once(`what its new head carries could not be read: ${between.reason}`),
+        ...once(`what its new head carries could not be read: ${commits.reason}`),
         halt: true,
       };
     }
-    await write(`report-moved-${iterationId}-${head}`, {
+    await say(`report-moved-${iterationId}-${head}`, false, {
       kind: "moved",
       pullRequestUrl: address.url,
       from: tip,
       to: head,
-      commits: between.commits,
+      commits: commits.commits,
     });
   }
   // **A conflict is why no check runs** (rondo#411): the forge starts no
-  // workflow on a pull request it cannot merge, so a `none` beside it is not
-  // a check that has yet to start.
+  // workflow on a pull request it cannot merge, and an answer beside it is
+  // about runs from before it -- so none is written while it stands, and the
+  // first one after it is what ends it on the page.
   if (pullRequest?.conflicting === true) {
-    await write(`report-conflict-${iterationId}-${head}`, {
+    await say(`report-conflict-${iterationId}-${head}`, shown?.checks.kind === "conflict", {
       kind: "conflict",
       pullRequestUrl: address.url,
       head,
       base: pullRequest.base,
       baseCommit: pullRequest.baseCommit,
     });
-  }
-  // **One line per answer and head, and again where a rerun flips it back**:
-  // a head that went red, green and red again must not keep reading green, or
-  // the page offers a merge over a red. The retold line carries its time.
-  if (reading.kind !== "pending") {
-    const id = checksAnswerId(iterationId, reading.kind, head, moved);
-    const shown = due.shown;
-    const flipped =
-      reading.kind !== "none" &&
-      shown !== null &&
-      shown.checksCommit === head &&
-      (shown.checks.kind === "green" || shown.checks.kind === "red") &&
-      shown.checks.kind !== reading.kind;
-    const retold = flipped && due.said.has(id) ? ports.now() : null;
-    await write(retold === null ? id : `${id}-t${String(retold)}`, {
-      kind: "checks",
-      commit: head,
-      reading,
-      moved,
-      ...(retold === null ? {} : { retold }),
-    });
+  } else if (reading.kind !== "pending") {
+    await say(
+      checksAnswerId(iterationId, reading.kind, head, moved),
+      shown?.checks.kind === reading.kind &&
+        (shown.checksCommit === null || shown.checksCommit === head),
+      { kind: "checks", commit: head, reading, moved },
+    );
   }
   return { line: lines.length === 0 ? null : lines.join(" "), halt: false };
 }

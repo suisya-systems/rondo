@@ -22350,9 +22350,10 @@ At rondo `77c41d7`, by reading `src/access/checks-host.ts`, `src/access/merge.ts
 1. **The reading ends with the pull request, and not with its checks.** The host keeps reading a
    published lap while its line holds, until the forge says the pull request is merged or closed.
    It reads the same pull request document it already fetches, so this adds no request. Because the
-   reading now outlives its first answer, a rerun that flips a head back to an answer it already
-   had (red, green, red) is written again under an id that carries its time. Otherwise the page
-   would keep showing the green and offer a merge on a red head.
+   reading now outlives its first answer, a state the pull request returns to after a newer line
+   said otherwise is written again, under an id that carries its time. That covers a rerun that
+   flips a head (red, green, red), a branch pushed back to a head it had, and a conflict that
+   returns. Otherwise the page would keep the newer line, and could offer a merge on a red head.
 2. **Merged or closed on the forge ends the request on the page.** A merge writes
    `report-merged-<lap>`, the same id a press's merge writes, naming the base, the merging user
    where the forge names one, and the merge commit. A close without a merge writes
@@ -22361,14 +22362,18 @@ At rondo `77c41d7`, by reading `src/access/checks-host.ts`, `src/access/merge.ts
 3. **A conflict is said as the reason no check runs.** `mergeable: false` writes one
    `report-conflict-<lap>-<head>` line per head, and the result band says that the pull request
    conflicts with its base and that the person resolves it on the branch and pushes.
-   `mergeable: null` (not worked out yet) is not a conflict. A green or a red on that head that is
-   newer than the conflict line ends it. rondo does not resolve conflicts here; that is rondo#417.
+   `mergeable: null` (not worked out yet) is not a conflict. While it stands, no checks answer is
+   written, because any run the forge reports is from before it. So the first answer on that head
+   after the conflict line is what ends it on the page. rondo does not resolve conflicts here;
+   that is rondo#417.
 4. **A head the lap did not push is shown before any check about it.** Where the pull request's
    head is not the tip the lap's deterministic reading recorded, the host reads the forge's
    comparison (`GET repos/O/N/compare/FROM...TO`, read-only) and writes
    `report-moved-<lap>-<head>` with both heads and the commits between them, at most `LIST_LIMIT`
    of them. Checks on that head are written under ids that name the head, and the band reads only
-   those, so a green on the lap's own head does not count for the new head.
+   those, so a green on the lap's own head does not count for the new head. A branch pushed back
+   to the lap's own head is written as a move with nothing carried, and the page then reads it as
+   not moved.
 5. **That head can be merged, by a press that names it.** `D-0091` rule 1 required the head the
    press names, the head read green and the head the lap pushed to be one commit. Now the third may
    instead be the head the thread said the pull request moved to. The card and the button say that
@@ -22378,7 +22383,9 @@ At rondo `77c41d7`, by reading `src/access/checks-host.ts`, `src/access/merge.ts
    gets its own refusal, `mergeRefusedRetargeted`, because nothing rondo reads again would redraw
    the page for it.
 6. **A press in flight is left alone by the host**, so a merge the press has just made is not
-   written as a merge outside rondo before the press records its own line.
+   written as a merge outside rondo before the press records its own line. The host checks this
+   when a pass starts on the lap, and again before it writes a merge or a close, because a
+   press can start while the forge is being read.
 
 ### What it costs
 

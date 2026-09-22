@@ -862,13 +862,16 @@ export type LapEvent =
    * `moved` is a reading of a head the lap did not push (rondo#412): its
    * answer is named by that head too, so the answers about the lap's own head
    * do not stand for it.
+   *
+   * `retold`, here and on `conflict` and `moved`, is the time a line already
+   * written is said again because the pull request came back to it after a
+   * newer line said otherwise; the id then carries that time.
    */
   | {
       readonly kind: "checks";
       readonly commit: string;
       readonly reading: Extract<ChecksReading, { kind: "green" | "red" | "none" }>;
       readonly moved?: boolean;
-      /** Said again at this time: a rerun flipped the head back to an answer already said. */
       readonly retold?: number;
     }
   /**
@@ -895,6 +898,7 @@ export type LapEvent =
       readonly base: string;
       /** The base commit it conflicts with, where the forge named one. */
       readonly baseCommit: string | null;
+      readonly retold?: number;
     }
   /**
    * The pull request's head is `to`, and not the `from` the lap pushed and
@@ -907,6 +911,7 @@ export type LapEvent =
       readonly from: string;
       readonly to: string;
       readonly commits: readonly CommitLine[];
+      readonly retold?: number;
     };
 
 /**
@@ -918,12 +923,8 @@ export function checksAnswerId(
   kind: "green" | "red" | "none",
   commit: string,
   moved: boolean,
-  retold?: number,
 ): string {
-  return (
-    `report-checks-${iterationId}-${kind}${moved ? `-${commit}` : ""}` +
-    (retold === undefined ? "" : `-t${String(retold)}`)
-  );
+  return `report-checks-${iterationId}-${kind}${moved ? `-${commit}` : ""}`;
 }
 
 async function gateIdOf(ports: ConductorPorts, iterationId: string): Promise<string | null> {
@@ -1057,14 +1058,13 @@ export async function reportToRequest(
     // taken again over the same commit writes nothing (the store's
     // `alreadyRecorded`) and a pull request that goes from red to green leaves
     // both lines in the thread rather than one overwriting the other.
-    messageId = checksAnswerId(
-      iterationId,
-      event.reading.kind,
-      event.commit,
-      event.moved === true,
-      event.retold,
-    );
+    messageId = checksAnswerId(iterationId, event.reading.kind, event.commit, event.moved === true);
     body = checksBody(iterationId, event.commit, event.reading);
+  }
+  // **Said again, under its time** (rondo#411, #412): the pull request came
+  // back to a state a line already says, and a newer line says otherwise.
+  if ("retold" in event && event.retold !== undefined) {
+    messageId = `${messageId}-t${String(event.retold)}`;
   }
   const outcome = await thread.record.recordThreadMessage({
     messageId,
