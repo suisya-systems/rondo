@@ -138,6 +138,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0100 | A first lap is cut from the forge's base branch as it is at admission: rondo fetches it into a branch of the lap's own, `rondo/base/<runId>`, admits continuo against that, and refuses the lap when the fetch fails | accepted |
 | D-0102 | rondo reads what the forge did to a published pull request, and not only its checks: a conflict is said as why no check runs, a head somebody else pushed is shown with its commits and can be merged by a press that names it, and a merge or a close made on the forge ends the request | accepted |
 | D-0103 | How D-0098's five rules are built: a landing basis on the claim's release is `first_landed`, a split plan orders its parts by `after`, a take-in is a plan field with no trigger yet, decision numbers are rows beside the claim, a worker's question is a fenced block relayed as an ask, and a closing lap is a press the review host does not read | accepted |
+| D-0105 | rondo resolves a conflicting pull request on the page: the pin moves to cadenza `2c56970` so a worker may run `git merge --no-edit`, `D-0098` rule 2's take-in is switched on, and a conflict fix is one more attempt that takes the base in, stops at its gate, and is pushed onto the pull request it fixes | accepted |
 | D-0106 | What a person acts on sits at the top of every screen, and the thread runs newest first: presses, boxes and decisions come before any history or long content, nothing is stuck to the window's foot, and the answering box keeps every element it inherited | accepted |
 
 ---
@@ -22380,6 +22381,11 @@ At rondo `77c41d7` and continuo `b7162ae`, by reading `src/access/conductor.ts` 
    no `origin`, or a forge without the branch, is a lap that does not start.
 4. **A revision fetches nothing.** Its base is its predecessor's topic branch (`pullRequestBaseBranch`
    is set), which is local and never pushed.
+
+   > **Annotation (2026-09-22, from D-0105).** Additive (rondo#417): a revision that takes the base
+   > in (`D-0098` rule 2) fetches it, into `rondo/base/<the successor's run id>`, and a fetch that
+   > fails refuses the revision before its gate (`D-0105` rule 2.3). Its worktree is still cut from
+   > the predecessor's topic branch.
 5. **The plan is unchanged.** `baseBranch` still names the forge's branch. The pull request, the
    reading and the delegation record use it, and only continuo is told the mirror's name.
 6. **No runbook step.** The lap does this itself, so a runbook needs no step to refresh the target.
@@ -22448,6 +22454,10 @@ At rondo `77c41d7`, by reading `src/access/checks-host.ts`, `src/access/merge.ts
    written, because any run the forge reports is from before it. So the first answer on that head
    after the conflict line is what ends it on the page. rondo does not resolve conflicts here;
    that is rondo#417.
+
+   > **Annotation (2026-09-22, from D-0105).** Additive (rondo#417): the page now offers one more
+   > attempt that takes the base in and settles the conflict, and its approved result is pushed
+   > onto this pull request (`D-0105` rule 3).
 4. **A head the lap did not push is shown before any check about it.** Where the pull request's
    head is not the tip the lap's deterministic reading recorded, the host reads the forge's
    comparison (`GET repos/O/N/compare/FROM...TO`, read-only) and writes
@@ -22591,6 +22601,13 @@ At rondo `24294fa` and the pinned cadenza, by reading:
    7. **The trigger stays off until cadenza's fence allows a merge** (cadenza#74), and `revise`
       passes no take-in: under the measured fence no worker can pass rule 2.3's test, so a trigger
       would only turn every handed-over line into a failing lap. The gate's answer to point 1.
+
+      > **Annotation (2026-09-22, from D-0105).** Not additive (rondo#417): cadenza `D-0042`
+      > (`2c56970`) admits `git merge --no-edit`, the pin has moved to it, and the trigger is on:
+      > `revisionPreflight` asks `revisionTakeIn`, which carries an unpassed take-in, takes in landed
+      > paths, and takes in the base for a conflict fix (`D-0105` rules 2 and 3). Rule 2.6's open
+      > parts -- the drafted revise quoting the ancestry test, the model reading over
+      > `take_in.commit...tip`, and the ref a revision's take-in is fetched into -- are built there.
 
 3. **Rule 3: numbers are rows beside the claim.**
    1. **The record is named at setup** by the plan field `decision_record` (payload version 6;
@@ -22801,6 +22818,147 @@ At rondo `7d4d8d9` and continuo `b7162ae`, by reading:
   work.
 
 ---
+
+## D-0105 — rondo resolves a conflicting pull request on the page: the pin moves to cadenza `2c56970` so a worker may run `git merge --no-edit`, `D-0098` rule 2's take-in is switched on, and a conflict fix is one more attempt that takes the base in, stops at its gate, and is pushed onto the pull request it fixes
+
+**Status:** accepted (2026-09-22, rondo's owner, through the window, rondo#417). **Numbering.**
+`D-0105` was assigned to this lane in advance. Four points were put to the owner while it was built;
+the answers are in "What was put to the owner, and the answer". Supersedes nothing. `D-0103`,
+`D-0100` and `D-0102` gain the annotations listed at the end. Refs `D-0018`, `D-0027`, `D-0070`,
+`D-0074`, `D-0091`, `D-0094`, `D-0098`, `D-0100`, `D-0102`, `D-0103`, `D-0106`, cadenza `D-0035`,
+`D-0041`, `D-0042`, rondo#411, rondo#412, rondo#417, cadenza#74.
+
+**Why an entry is needed.** `D-0102` rule 3 made the page say that a pull request conflicts, and left
+resolving it to rondo#417. `D-0103` built `D-0098` rule 2's take-in with its trigger off, because no
+worker could run a merge (cadenza#74). cadenza `D-0042` (`2c56970`) now admits `git merge --no-edit`.
+Three choices follow that no entry makes: how the pin reaches a project, what switches the take-in
+on, and how a fix of an approved and published lap reaches the pull request without a second one.
+
+### What was measured
+
+At rondo `f726fed` and cadenza `2c56970`, by reading and by the tests this change adds:
+- **The pin widens no stored grant.** A catalog project's `allowed_bash` is the list it stores
+  (cadenza `D-0041` rule 2). `test/cadenza/smoke.test.ts` now pins three facts at the new pin:
+  `allowedCommandsFor()` composes `git merge --no-edit:*` and no push, reset, rebase or cherry-pick; a
+  stored list keeps its list; and a list composed again moves `config_digest`, so a contract issued
+  against the old digest classifies `refused` / `stale_subject`.
+- **rondo issues a fresh contract at every classification** (`classifyPlan` calls
+  `issueInitialContract`), so a new digest is a new contract at the next lap with nothing to approve.
+  Only a contract an advisory decision approved is bound to an old digest.
+- **rondo composes the list in two places**, setup (`scripts/dogfood-env.sh`) and the page's "add
+  this repository" (`planForRepository`), both through `allowedCommandsFor`. Neither needs a change:
+  they compose the merge from this pin on.
+- **A conflicting pull request's lap is closed and approved**, so it has no gate; the revise press
+  needs one (`revisionPreflight`). And publishing always ran `gh pr create`, so a later lap would
+  have opened a second pull request.
+- **The fence admits no rebase and no `git merge --abort`** (cadenza `D-0042` rule 3), while
+  `takeInSection` said "by merge or by rebase".
+
+### Decision
+
+1. **The pin moves to cadenza `2c56970` by the delivery bridge** (`D-0018`, cadenza `D-0035`): a
+   scratch clone at the sha, `npm ci --ignore-scripts`, `npm run build`, `npm pack` into `vendor/`,
+   `node vendor/pin.mjs record`, and `npm install` of the tarball, so `cadenza.pin.json`, the
+   tarball, `vendor/cadenza.tgz.sha256` and `package-lock.json`'s integrity move together.
+   `package.json` is unchanged.
+   1. **What changes for a project:** nothing until its `allowed_bash` is composed again, which setup
+      and "add this repository" do. Composed again, its `config_digest` moves and its next lap runs
+      under a new contract, issued at classification as every lap's is.
+   2. **Before release, a setup made before the merge was admitted is not handled.** There is no
+      branch, sentence or check for it; such a setup is made again.
+2. **`D-0098` rule 2's take-in is switched on for every revision** (`revisionTakeIn`,
+   `src/access/cli.ts`, asked by `revisionPreflight` before any gate):
+   1. **A take-in the predecessor did not pass is carried**, commit and all, where its commit is not
+      an ancestor of the predecessor's tip. `revisionPlan` still never inherits one that passed.
+   2. **`landed`**: where the predecessor changed paths outside its line's claim (`compareClaim`) that
+      the default branch changed since the predecessor's tip (`readChangedPaths` from that tip to the
+      fetched head, three-dot), those paths are taken in. The decision record is never one of them: it
+      is shared-append (`D-0098` rule 3.5), and a collision on it is the conflict case (rule 3 here).
+      Nothing is fetched unless the predecessor changed something outside its claim, so an ordinary
+      revise reaches no forge.
+   3. **The one exception to `D-0100` rule 4.** A take-in fetches the forge's base branch, with
+      `fetchLapBase`, into `rondo/base/<the successor's run id>`, derived by `allocate()` as `admit()`
+      will derive it (the naming `D-0103` rule 2.6 left open). A fetch that fails refuses the
+      revision before the gate.
+   4. **The instruction is a merge and only a merge**: `git merge --no-edit <commit>`, no rebase,
+      reset, cherry-pick or abort; a worker that cannot settle the conflict leaves the merge
+      uncommitted, changes nothing else, and says which files conflict. The ancestry test then fails,
+      and the revise box is drafted by rondo with that finding quoted and its one fix (`D-0098` rule
+      2.3; `reviseDraftTakeIn`), before the model's draft where there is one.
+   5. **A take-in lap's model reading is handed `take_in.commit...tip`**: its own range starts at its
+      predecessor's tip and would hand over everything the merge brought as the worker's.
+3. **A conflict fix is one more attempt of the approved lap** (rondo#417; `conflictFixFromPage`,
+   `/fix-conflict`).
+   1. **Offered where `conflictFixBlock` is null**: the result lap's pull request conflicts, its line
+      holds, no attempt follows it, and nothing waits on the person. The page and the press ask it
+      over the same rows. It is drawn as the thread's next step (`D-0106` rule 4), above the merge
+      and publish steps, and the result band says both ways -- the press, or resolving it by hand --
+      while it is offered, and that rondo is settling it while the attempt runs.
+   2. **A redo under the approval the lap ran under** (`D-0070`, the scope's `redo` arm), counted
+      against its budgets as any revise is; a budget that would refuse it draws the way to raise it in
+      place of the press (`D-0074` rule 4.1). There is no gate to walk, and no words of the person's:
+      the prompt says in rondo's words that the approved and published work conflicts and nothing
+      else is to change (`D-0009`: nothing is written in the person's place).
+   3. **Its base is the default branch fetched at the press** (rule 2.3), taken in with cause
+      `conflict` and no paths, and the attempt goes through the ordinary gate: the ancestry test, the
+      model reading, the person's approve or revise.
+   4. **Publishing an approved fix pushes onto the pull request it fixes** and opens none
+      (`pullRequestUpdated`): the pull request and its branch are read up the line, from the nearest
+      published line above. The push is `topic:refs/heads/<branch>`, never forced; the fix descends
+      from that branch's head, so a push the forge refuses means somebody moved it. The published line
+      names the same pull request and the branch, and the thread says *pushed onto the open pull
+      request*. The publish screen and its card say *update pull request #N*.
+   5. **The checks host reads that pull request for the fix**, and stops reading it for the lap it
+      fixed once a later lap was pushed onto it; otherwise that lap would read its head as moved and,
+      at the merge, a merge made outside rondo (`D-0102` rules 2 and 4).
+   6. **What the worker cannot settle is not a question** (`D-0098` rule 2.2): rule 2.4's failed
+      ancestry test is what the person reads, and they revise again or resolve it by hand as before.
+
+### What was put to the owner, and the answer
+
+1. **How the fix reaches the pull request.** (a) push onto its branch, fast-forward, and keep the one
+   pull request (recommended); (b) open a new pull request and close the old one, losing its number
+   and its review history.
+2. **A project whose stored list has no merge.** (a) no automatic recomposition; say so where the
+   press would be (recommended); (b) recompose the list inside the press; (c) take the newest setup
+   plan's catalog for the attempt.
+3. **A worker that cannot settle the conflict.** Not a question; the ancestry finding, a drafted
+   revise that carries the same take-in, or resolving it by hand (recommended).
+4. **The scope's budget.** The fix is the scope's `redo`, counted as any revise (recommended).
+
+**The owner's answer (2026-09-22, through the window):** 1 (a); 3 and 4 as recommended; on 2, none of
+the options: rondo has no user yet, so nothing is built for a setup made before the merge was
+admitted, and this entry says so in one line (rule 1.2).
+
+### What it costs
+
+- **A take-in fetch per revision that takes something in**, and one more `rondo/base/*` branch in
+  the target clone for each, which nothing removes (as `D-0100`'s).
+- **The landed trigger reads only the latest lap's comparison**, so a path an earlier lap of the line
+  changed outside the claim is not taken in by a later revise.
+- **A fix of a fix is found by walking the line**, at most 64 laps up; the thread, not a column, is
+  where the pull request is recorded.
+- **An attempt that failed blocks the offer** (`fixing`), and the way on is the retry of that
+  attempt, not a second press.
+
+### Annotations this entry adds
+
+| Entry | What the annotation says | Additive? |
+|---|---|---|
+| `D-0103` rule 2.7 | The trigger is on (`D-0105` rule 2), since cadenza `D-0042` admits `git merge --no-edit`; rule 2.6's open parts are built there | **not additive** |
+| `D-0100` rule 4 | A revision that takes the base in fetches it, into `rondo/base/<successor run id>` (`D-0105` rule 2.3) | additive |
+| `D-0102` rule 3 | rondo now offers to resolve the conflict it reads (`D-0105` rule 3) | additive |
+
+### What would falsify it
+
+- **A fix pushed onto a pull request that was not the one it fixes**, or a second pull request
+  opened by a fix: rule 3.4 is not holding.
+- **A take-in lap read clear without its commit as an ancestor of its tip**, or a revision after a
+  failed take-in that carries none: rules 2.1 and 2.4 are not holding.
+- **Workers routinely failing a conflict fix they could have settled with a rebase**: cadenza
+  `D-0042` rule 3's refusal of rebase is reopened there.
+- **A landed trigger that fires on the decision record**, or never fires on a real hand-over:
+  rule 2.2's reading of "landed paths" is wrong.
 
 ## D-0106 — What a person acts on sits at the top of every screen, and the thread runs newest first: presses, boxes and decisions come before any history or long content, nothing is stuck to the window's foot, and the answering box keeps every element it inherited
 
