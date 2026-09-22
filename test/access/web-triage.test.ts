@@ -25,6 +25,7 @@ const listed: CommandOutcome = {
 };
 
 async function proposed() {
+  let minted = 0;
   const world = fresh();
   await world.record.recordGoal({
     goalId: "goal-1",
@@ -56,7 +57,7 @@ async function proposed() {
       }),
     forgeHost: null,
     now: () => 2_000,
-    mintId: () => "triage-1",
+    mintId: () => `triage-${String(++minted)}`,
     language: null,
     log: () => undefined,
   });
@@ -67,7 +68,7 @@ async function proposed() {
     triageRepositories: async () => ["o/r", "o/rondo"],
     triageWritable: true,
   };
-  return { world, ports };
+  return { world, ports, host };
 }
 
 test("under the request box: the candidate in full with both presses, and a block with no goal leads to one", async () => {
@@ -136,4 +137,27 @@ test("the goal page drafts rondo's own completion definition, and keeps a kept g
     repository: "o/r",
   });
   expect(readOnly).not.toContain(EN.goalKeep);
+});
+
+test("a box taken from an older proposal still fills after a newer reading is written", async () => {
+  const { world, ports, host } = await proposed();
+  // A new goal moves the material, so the host writes a second row.
+  await world.record.recordGoal({
+    goalId: "goal-2",
+    repository: "o/r",
+    clauses: [{ said: "they never open a terminal", unmetIf: "a terminal is ever required" }],
+    writtenBy: "ada",
+    writtenAtMs: 1_500,
+  });
+  host.kick();
+  await host.idle();
+  expect((await world.record.latestTriage()).map((row) => row.proposalId)).toEqual(["triage-2"]);
+  const html = await operatorPage(
+    ports,
+    "t",
+    { kind: "requests", take: { proposalId: "triage-1", candidate: "issue:o/r#7" } },
+    EN,
+    () => "msg-1",
+  );
+  expect(html).toContain('data-draft-take="triage-1:issue:o/r#7"');
 });

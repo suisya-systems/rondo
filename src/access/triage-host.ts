@@ -51,6 +51,13 @@ export const TRIAGE_DRAFTER_PREFIX = "rondo/triage/1/";
  */
 const ISSUES_FRESH_MS = 10 * 60 * 1000;
 
+/**
+ * How long a reading that came to nothing stands before the same material is
+ * read again: long enough that a drafter which keeps failing spends once an
+ * hour and not once a minute.
+ */
+const UNAVAILABLE_RETRY_MS = 60 * 60 * 1000;
+
 /** What the host reaches, as values a test can replace. */
 export interface TriageHostPorts {
   readonly store: Pick<IterationStore, "terminalIterations" | "readLive">;
@@ -163,7 +170,16 @@ async function pass(
       ],
     };
     const digest = materialDigest(material);
-    if (latest.get(repository)?.snapshot["material_digest"] === digest) {
+    const last = latest.get(repository);
+    // A reading that came to nothing is read again after a while, so a
+    // passing failure does not silence a quiet repository for good; one that
+    // ranked is kept until its material moves.
+    if (
+      last !== undefined &&
+      last.snapshot["material_digest"] === digest &&
+      ((last.payload["unavailable"] ?? null) === null ||
+        nowMs - last.createdAtMs < UNAVAILABLE_RETRY_MS)
+    ) {
       continue;
     }
     await read(ports, material, digest);
