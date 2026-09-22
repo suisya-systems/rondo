@@ -910,6 +910,10 @@ explanation you pressed on and then answers the gate.`,
     "Answer it about those paths rather than about the publish: run the lap again so it commits " +
     "its own work and is read again, commit them yourself in the workspace, or discard them if " +
     "they are not work.",
+  publishStatusUnreadable: (reason) =>
+    `git could not say what the workspace holds outside the branch (${reason}), so whether the ` +
+    "push would leave work behind is unknown. No button here changes that: repair the workspace " +
+    "so git status answers, then come back.",
   publishReviewHeading: "The reading does not cover this",
   publishReviewNoReading:
     "Nothing read this work independently. Unread and read-and-nothing-raised must not look " +
@@ -1011,6 +1015,9 @@ explanation you pressed on and then answers the gate.`,
     `Nothing was published: the push has nowhere to go that rondo can vouch for. ${detail}`,
   publishRefusedUncommitted: (detail) =>
     `Nothing was published: the workspace still holds work that is not on the branch (${detail}).`,
+  publishRefusedStatusUnreadable: (detail) =>
+    "Nothing was published: git could not say whether the workspace holds work that is not on " +
+    `the branch (${detail}).`,
   publishRefusedNotRead:
     "Nothing was published: the reading of this work does not cover what would be pushed. " +
     "Reload this screen; publishing past that is a press of its own.",

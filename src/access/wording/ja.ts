@@ -922,6 +922,10 @@ export const JA: Chrome = Object.freeze({
   publishUncommittedRemedies:
     "公開ではなくそのパスについて答えてください。周回をやり直して作業自体をコミットさせ" +
     "読み直させる、ワークスペースで自分でコミットする、作業でないなら捨てる、のいずれかです。",
+  publishStatusUnreadable: (reason) =>
+    `ワークスペースで git status が読めません (${reason})。push がコミットされていない作業を` +
+    "置き去りにするかどうか分かりませんし、ここのボタンでは変えられません。git status が" +
+    "答えるようにワークスペースを直してから、もう一度来てください。",
   publishReviewHeading: "読み取りがこの作業を説明していません",
   publishReviewNoReading:
     "この作業を独立に読んだものがありません。「読まれていない」と「読んで何も出なかった」が" +
@@ -1025,6 +1029,9 @@ export const JA: Chrome = Object.freeze({
     `何も公開していません。push の宛先を rondo が保証できません。${detail}`,
   publishRefusedUncommitted: (detail) =>
     `何も公開していません。ワークスペースにブランチへ載っていない作業が残っています (${detail})。`,
+  publishRefusedStatusUnreadable: (detail) =>
+    "何も公開していません。git status が読めず、ブランチへ載っていない作業が残っているか" +
+    `分かりません (${detail})。`,
   publishRefusedNotRead:
     "何も公開していません。この作業の読み取りが、push される内容を説明していません。" +
     "この画面を読み込み直してください。それを踏み越えて公開するには、別の押下が要ります。",

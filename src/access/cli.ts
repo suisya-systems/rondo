@@ -3450,11 +3450,14 @@ export function reviewLines(reading: LapReading): readonly string[] {
  * **Pure, and it takes no `despiteReview`.** That flag overrules a judgement;
  * this is git reporting that the push would leave named files behind, the
  * class of `publishPreflight`'s "has no branch", which no flag reaches either.
- * An unreadable workspace is not refused here, which is a known edge: it is
- * `reviewGate`'s refusal, and `--despite-review` passes it, as it did before
- * D-0060 -- `inspectLapWork` holds that a publish whose history could not be
- * read stays publishable. So a `git status` that fails does not stop a publish
- * the operator has already overridden.
+ *
+ * **A `git status` that fails is refused here too** (D-0099), on rule 5's
+ * own ground: what the push would leave behind is a fact, and not knowing it
+ * is not a judgement an override can answer. A workspace whose *history* could
+ * not be read is not refused here: it is `reviewGate`'s refusal, and
+ * `--despite-review` passes it, as it did before D-0060 -- `inspectLapWork`
+ * holds that such a publish stays publishable. The inspection's `part` is what
+ * tells the two apart.
  *
  * rondo commits nothing on the lap's behalf, so the refusal names the remedies
  * that already exist, in the decision's order, and says up front what the
@@ -3465,7 +3468,15 @@ export function uncommittedRefusal(
   workspace: string,
   topicBranch: string,
 ): string | null {
-  if (work.kind !== "read" || work.uncommitted.length === 0) {
+  if (work.kind === "unreadable") {
+    return work.part === "status"
+      ? `git status could not be read in the workspace ${workspace} (${work.reason}), so ` +
+          "whether the push would leave uncommitted work behind is unknown, and " +
+          "--despite-review does not change that. Repair the workspace so 'git status' " +
+          "answers, then publish again."
+      : null;
+  }
+  if (work.uncommitted.length === 0) {
     return null;
   }
   const branchNote =
@@ -6204,6 +6215,13 @@ export async function publishPlanFor(
   // staleness the material digest cannot see. First among the review refusals
   // so an operator is not sent to an override that cannot answer it.
   const left = uncommittedRefusal(work, workspace, topicBranch);
+  if (left !== null && work.kind === "unreadable") {
+    return {
+      kind: "refused",
+      block: { why: "statusUnreadable", reason: work.reason },
+      reason: left,
+    };
+  }
   if (left !== null) {
     return {
       kind: "refused",
@@ -6251,7 +6269,11 @@ export async function publishPlanFor(
   const range = readingRangeOf(record);
   const asRead: LapWorkInspection =
     range === null
-      ? { kind: "unreadable", reason: "the row does not name the range a reading was taken across" }
+      ? {
+          kind: "unreadable",
+          part: "history",
+          reason: "the row does not name the range a reading was taken across",
+        }
       : await inspectLapWork(range);
   return {
     kind: "ready",
@@ -6437,6 +6459,8 @@ function publishBlockRefusal(block: PublishBlock): PublishRefusal {
       return "publishRefusedNoRepo";
     case "target":
       return "publishRefusedTarget";
+    case "statusUnreadable":
+      return "publishRefusedStatusUnreadable";
     default:
       return "publishRefusedUncommitted";
   }
@@ -6550,7 +6574,7 @@ async function publishPage(
       ok: false,
       why: publishBlockRefusal(block),
       note: planned.reason,
-      ...(block.why === "target"
+      ...(block.why === "target" || block.why === "statusUnreadable"
         ? { detail: block.reason }
         : block.why === "uncommitted"
           ? { detail: block.paths.join(", ") }

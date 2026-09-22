@@ -851,6 +851,7 @@ test("a recorded 'clear' is not drawn as a pass over work that cannot be read (#
       why: null,
       work: {
         kind: "unreadable" as const,
+        part: "history" as const,
         reason: "neither refs/remotes/origin/main nor refs/heads/main is a ref in /srv/work",
       },
     });
@@ -895,7 +896,11 @@ test("a reading that raised something keeps its own word where the work is gone 
     await Promise.resolve({
       lines: ["work    rondo/i-0001"],
       why: null,
-      work: { kind: "unreadable" as const, reason: "the workspace is not a git repository" },
+      work: {
+        kind: "unreadable" as const,
+        part: "history" as const,
+        reason: "the workspace is not a git repository",
+      },
     });
   const html = await operatorPage({ ...portsOver(world, "ada", []), material: gone }, "t", {
     kind: "summary",

@@ -10,7 +10,12 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
-import { publishFromPage, publishingForPage, releaseFromPage } from "../../src/access/cli.js";
+import {
+  publishFromPage,
+  publishingForPage,
+  publishPlanFor,
+  releaseFromPage,
+} from "../../src/access/cli.js";
 import { inspectLapWork } from "../../src/access/forge.js";
 import type {} from "../../src/access/inbox.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
@@ -880,6 +885,88 @@ test(
     );
     expect(stale.ok).toBe(false);
     expect(stale.why).toBe("publishRefusedChanged");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a git status that fails refuses the publish, and the override does not reach it (rondo#179)",
+  async () => {
+    // **D-0060 rule 5's ground, reached by the other door.** A corrupt index
+    // leaves the history readable and `git status` not, so what the push would
+    // leave behind is unknown -- and an override answers a judgement, not that.
+    // Every press below refuses before the push, so nothing leaves this machine.
+    const world = await publishableWorld("stale");
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const before = await publishingForPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.asked,
+      record.record,
+    );
+    if (before.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(before)}`);
+    }
+    writeFileSync(join(world.workspace, ".git", "index"), "not an index", "utf8");
+
+    const planned = await publishPlanFor(record.record, world.asked, {}, world.store, null);
+    expect(planned.kind).toBe("refused");
+    if (planned.kind !== "refused") return;
+    expect(planned.block.why).toBe("statusUnreadable");
+    // What the command line prints: why, and that its flag does not help.
+    expect(planned.reason).toContain("git status could not be read");
+    expect(planned.reason).toContain("uncommitted work behind is unknown");
+    expect(planned.reason).toContain("--despite-review does not change that");
+
+    const screen = await publishingForPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.asked,
+      record.record,
+    );
+    expect(screen.kind === "refused" && screen.block.why).toBe("statusUnreadable");
+    const pressed = await publishFromPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.storePath,
+      "ada",
+      world.asked,
+      { iterationId: world.iterationId, shown: before.shown, despiteReview: true },
+    );
+    expect(pressed.ok).toBe(false);
+    expect(pressed.why).toBe("publishRefusedStatusUnreadable");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "history that will not read is still publishable past the override, and uncommitted paths are still refused (rondo#179, D-0060)",
+  async () => {
+    const world = await publishableWorld("clear");
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    // **`inspectLapWork`'s rule, unchanged**: no base ref, so the history is
+    // unreadable, and the plan is ready with a refusal the override passes.
+    execFileSync("git", ["-C", world.workspace, "branch", "--quiet", "-D", "main"]);
+    const unread = await publishPlanFor(record.record, world.asked, {}, world.store, null);
+    expect(unread.kind).toBe("ready");
+    if (unread.kind !== "ready") return;
+    expect(unread.plan.reviewRefusal?.why).toBe("unreadable");
+
+    // **D-0060's refusal, unchanged**, and still first.
+    execFileSync("git", ["-C", world.workspace, "branch", "--quiet", "main", "HEAD~1"]);
+    writeFileSync(join(world.workspace, "left-behind.txt"), "not committed\n", "utf8");
+    const left = await publishPlanFor(record.record, world.asked, {}, world.store, null);
+    expect(left.kind).toBe("refused");
+    if (left.kind !== "refused") return;
+    expect(left.block).toEqual({ why: "uncommitted", paths: ["left-behind.txt"], elsewhere: null });
+    expect(left.reason).toContain("left-behind.txt");
+    expect(left.reason).toContain("--despite-review does not change that");
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );

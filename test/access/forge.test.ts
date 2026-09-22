@@ -133,7 +133,18 @@ test("a git status that fails makes the inspection unreadable, never clean", asy
 
   expect(inspection.kind).toBe("unreadable");
   expect(inspection.kind === "unreadable" && inspection.reason).toContain("status");
+  // Told apart from unreadable history, which `publish` treats differently (rondo#179).
+  expect(inspection.kind === "unreadable" && inspection.part).toBe("status");
   expect(readingOf(inspection).verdict).toBe("unavailable");
+});
+
+test("a base that will not resolve is unreadable history, not an unreadable status", async () => {
+  const work = workspace();
+
+  const inspection = await inspectLapWork({ ...request(work), baseBranch: "no-such-base" });
+
+  expect(inspection.kind).toBe("unreadable");
+  expect(inspection.kind === "unreadable" && inspection.part).toBe("history");
 });
 
 // D-0065: the facts a model reading hands over, and the process it hands them to.
