@@ -5159,26 +5159,23 @@ export async function answerOnceReserved(
     const row = await store.read(input.iterationId).catch(() => null);
     if (row?.kind === "read" && !over) {
       void ended.then(async (late) => {
-        if (late.ok) {
-          return;
+        if (!late.ok) {
+          await stopTheLeftLap(store, record, words, input, late.note, true);
         }
-        // A lap past its pre-gate statuses failed only in the model reading
-        // taken once its gate opened -- a gate it may already have been
-        // answered at: the gate is the wait, and a stop would say otherwise.
-        const now = await store.read(input.iterationId).catch(() => null);
-        if (now?.kind === "read" && !BEFORE_THE_GATE.has(now.record.status)) {
-          consoleSeams.writeError(
-            `${asciiEscape(`lap '${input.iterationId}' reached its gate; after it: ${late.note}`)}\n`,
-          );
-          return;
-        }
-        await sayStartStopped(store, record, words, input, late.note);
       });
       return { ok: true, note: `iteration '${input.iterationId}' was admitted and is running` };
     }
     await Promise.race([ended, new Promise((resolve) => setTimeout(resolve, pollMs).unref())]);
   }
-  return await ended;
+  // **The start may have reserved its row and then thrown between two polls**
+  // (Codex): the press has not answered, so the refusal below says so and no
+  // ask is written -- but the row is there, and nothing is driving it, so it is
+  // ended here exactly as one the press had already answered for.
+  const late = await ended;
+  if (!late.ok) {
+    await stopTheLeftLap(store, record, words, input, late.note, false);
+  }
+  return late;
 }
 
 /** The statuses a lap passes through before its gate opens (`IterationStatus`). */
@@ -5191,33 +5188,57 @@ const BEFORE_THE_GATE: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * D-0109 rule 3: a start that ended badly after its press answered -- the lap
- * ended at `failed`, and one ask in the request's thread, in the person's own
- * words.
+ * D-0109 rule 3: a lap left behind by a start that threw -- ended at `failed`,
+ * and, when the press has already answered, one ask in the request's thread in
+ * the person's own words.
  *
  * **The row is ended before the person is told**, so that what the ask says is
  * true when they read it: nothing of the lap is running, and its place on the
- * host, its held money and its line's paths are back. rondo's own sentence for
- * what went wrong goes on that row and on this console, and never in front of
- * the person (D-0076 rule 4.2).
+ * host, its held money and its line's paths are back. **And it is told only
+ * when it is true**: `endFaulted` answers a report rather than throwing when
+ * the row will not decode, when this process is still driving it, or when the
+ * store refused the write, and inviting somebody to start again over a lap that
+ * is still holding everything would be the page lying about its own state. That
+ * case says so instead, in the person's words, and asks them to look.
+ *
+ * rondo's own sentence for what went wrong goes on that row and on this
+ * console, and never in front of the person (D-0076 rule 4.2).
  */
-async function sayStartStopped(
+async function stopTheLeftLap(
   store: Pick<IterationStore, "read" | "transition">,
   record: Pick<AdvisoryRecord, "recordThreadMessage">,
   words: Chrome,
   input: { readonly iterationId: string; readonly requestMessageId: string },
   note: string,
+  /** Whether the press has already answered, so the person needs the thread to tell them. */
+  answered: boolean,
 ): Promise<void> {
   const onConsole = (line: string) => consoleSeams.writeError(`${asciiEscape(line)}\n`);
   try {
+    // A lap past its pre-gate statuses failed only in the model reading taken
+    // once its gate opened -- a gate it may already have been answered at: the
+    // gate is the wait, and a stop would say otherwise.
+    const row = await store.read(input.iterationId).catch(() => null);
+    if (row === null || (row.kind === "read" && !BEFORE_THE_GATE.has(row.record.status))) {
+      onConsole(`lap '${input.iterationId}': after it reached its gate: ${note}`);
+      return;
+    }
+    if (row.kind === "absent") {
+      onConsole(`lap '${input.iterationId}' was never reserved: ${note}`);
+      return;
+    }
     const ended = await endFaulted({ store, now: Date.now }, input.iterationId, note);
-    onConsole(`lap '${input.iterationId}' was ended after its press had answered: ${note}`);
+    onConsole(`lap '${input.iterationId}' was left by its start: ${note}`);
     for (const line of ended.lines) {
       onConsole(line);
     }
+    if (!answered) {
+      // The press is still holding the refusal screen, which says it all.
+      return;
+    }
     const outcome = await record.recordThreadMessage({
       messageId: `start-stopped-${input.iterationId}`,
-      body: words.startStoppedSaid,
+      body: ended.status === "failed" ? words.startStoppedSaid : words.startStoppedHeldSaid,
       authorKind: "drafter",
       authorId: DETERMINISTIC_DRAFTER,
       inReplyTo: input.requestMessageId,

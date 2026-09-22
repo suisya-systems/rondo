@@ -1176,6 +1176,12 @@ export interface Chrome extends PageWords {
    * (D-0076 rule 4.2).
    */
   readonly startStoppedSaid: string;
+  /**
+   * The same stop, when rondo could not end the lap either (D-0109 rule 3):
+   * said as itself, because inviting somebody to start again over work that is
+   * still holding its place would be the page lying about its own state.
+   */
+  readonly startStoppedHeldSaid: string;
   readonly publishBusyNote: string;
   /** Why a publish press published nothing, one sentence each. */
   readonly publishRefusedNoApprover: string;

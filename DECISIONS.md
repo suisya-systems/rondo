@@ -23316,6 +23316,17 @@ is, and it offers the two presses the answering box draws: starting again, and s
 sentence for what went wrong -- `continuo went away: the sandbox helper exited 137` and its like --
 is not in it. That goes on the lap's own row, as its reason, and to the host's console, escaped.
 
+**A lap the start reserved and then lost before the press could answer is ended too**, without an
+ask: the press is still holding the refusal screen, which says it all. So a row is never left
+holding its place because a throw beat the quarter-second poll.
+
+**rondo says the lap ended only when the store says it did.** `endFaulted` answers a report rather
+than raising when the row will not decode, when this process is still driving it, or when the write
+was refused. The ask then carries `startStoppedHeldSaid` instead: that it could not be ended, that
+it may still hold its place, its money and its files, and that this is a fault to look at rondo's
+own log for. Inviting somebody to start again over a lap that still holds everything would be the
+page lying about its own state.
+
 The stop is written only while the row still reads a status before the gate (`planned` through
 `performing`), or will not read. A lap past them when the throw arrives failed in the model reading
 taken once its gate opened, a gate the person may already have answered, or it ended on its own with

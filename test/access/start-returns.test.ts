@@ -10,6 +10,7 @@ const input = { iterationId: "lap-1", requestMessageId: "msg-1" };
 function world() {
   let reserved = false;
   let status = "performing";
+  let refusing = false;
   const written: { messageId: string; asks: boolean; body: string }[] = [];
   const ended: { from: string; to: string; fields: { failureKind?: string | null } }[] = [];
   const store = {
@@ -23,6 +24,9 @@ function world() {
       to: string,
       fields: { failureKind?: string | null },
     ) => {
+      if (refusing) {
+        return { kind: "unexpectedStatus", found: "performing" } as never;
+      }
       ended.push({ from, to, fields });
       status = to;
       return { kind: "transitioned", record: { id, status: to } } as never;
@@ -41,6 +45,7 @@ function world() {
     ended,
     reserve: () => (reserved = true),
     gate: (to: string) => (status = to),
+    refuseTransition: () => (refusing = true),
   };
 }
 
@@ -106,6 +111,49 @@ describe("answerOnceReserved", () => {
       stderr.mockRestore();
     },
   );
+
+  it("ends a lap reserved and then lost between two polls, and answers the refusal", async () => {
+    // Codex: `over` can turn true with the row already there, so the loop must
+    // not leave it behind. The press has not answered, so no ask is written.
+    const w = world();
+    const stderr = quietConsole();
+    const answer = await answerOnceReserved(
+      w.store,
+      w.record as never,
+      EN,
+      input,
+      (async () => {
+        w.reserve();
+        throw new Error("continuo went away");
+      })(),
+      50,
+    );
+    expect(answer.ok).toBe(false);
+    expect(w.ended).toEqual([
+      {
+        from: "performing",
+        to: "failed",
+        fields: expect.objectContaining({ failureKind: "defect" }),
+      },
+    ]);
+    expect(w.written).toEqual([]);
+    stderr.mockRestore();
+  });
+
+  it("does not invite a restart when the lap could not be ended", async () => {
+    const w = world();
+    const stderr = quietConsole();
+    w.refuseTransition();
+    const lap = deferred();
+    const answer = answerOnceReserved(w.store, w.record as never, EN, input, lap.promise, 5);
+    w.reserve();
+    expect((await answer).ok).toBe(true);
+    lap.reject(new Error("continuo went away"));
+    await vi.waitFor(() => expect(w.written).toHaveLength(1));
+    expect(w.written[0]?.body).toBe(EN.startStoppedHeldSaid);
+    expect(w.written[0]?.asks).toBe(true);
+    stderr.mockRestore();
+  });
 
   it("says a refusal before any row as the press's own answer", async () => {
     const w = world();
