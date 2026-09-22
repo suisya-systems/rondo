@@ -18,6 +18,7 @@ import {
   gatherReviewMaterialFacts,
   inspectLapWork,
   isAncestor,
+  pushTopicBranch,
   readChangedPaths,
   readLanding,
   runReviewer,
@@ -830,4 +831,56 @@ test("a base the forge cannot hand over is a lap that does not start, and says w
     expect(refused.reason).toContain("could not fetch it");
     expect(refused.reason).toContain("No run was admitted");
   }
+});
+
+// --- pushing onto an open pull request's branch (rondo#417, D-0105) ----------
+
+test("a conflict fix is pushed onto the pull request's branch, and never over a branch it does not descend from", async () => {
+  const work = workspace();
+  writeFileSync(join(work, "a.txt"), "the lap\n");
+  git(work, "commit", "-am", "the lap");
+  git(work, "push", "origin", "topic");
+  // The fix is cut from the lap's tip and adds to it.
+  git(work, "switch", "-c", "fix");
+  writeFileSync(join(work, "b.txt"), "the fix\n");
+  git(work, "add", ".");
+  git(work, "commit", "-m", "the fix");
+  const fix = revParse(work, "HEAD");
+
+  const pushed = await pushTopicBranch({
+    workspace: work,
+    remote: "origin",
+    topicBranch: "fix",
+    onto: "topic",
+  });
+
+  expect(pushed.status).toBe(0);
+  expect(
+    execFileSync("git", ["ls-remote", "origin", "refs/heads/topic"], {
+      cwd: work,
+      encoding: "utf8",
+    }),
+  ).toContain(fix);
+  // No branch of the fix's own name was made on the forge.
+  expect(
+    execFileSync("git", ["ls-remote", "origin", "refs/heads/fix"], { cwd: work, encoding: "utf8" }),
+  ).toBe("");
+  // A branch that does not descend from the pull request's head is refused, not forced.
+  git(work, "switch", "-c", "elsewhere", "main");
+  writeFileSync(join(work, "c.txt"), "unrelated\n");
+  git(work, "add", ".");
+  git(work, "commit", "-m", "unrelated");
+  const refused = await pushTopicBranch({
+    workspace: work,
+    remote: "origin",
+    topicBranch: "elsewhere",
+    onto: "topic",
+  });
+  expect(refused.status).not.toBe(0);
+  expect(
+    execFileSync("git", ["ls-remote", "origin", "refs/heads/topic"], {
+      cwd: work,
+      encoding: "utf8",
+    }),
+  ).toContain(fix);
 });

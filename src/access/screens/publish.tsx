@@ -226,6 +226,10 @@ export async function publishView(
     );
   }
   const review = shown.review;
+  // rondo#417 (D-0105): a conflict fix moves an open pull request's head.
+  const updates = shown.updates ?? null;
+  const updating =
+    updates === null ? null : wording.pullRequest(/\/pull\/(\d+)/.exec(updates.url)?.[1] ?? null);
   return framed(
     <>
       {/* The lead says which screen this is, because the two differ in what a
@@ -236,10 +240,12 @@ export async function publishView(
       <section id="publish-target" class={`${CARD} space-y-1`}>
         <h3 class={CARD_HEADING}>{wording.publishTargetHeading}</h3>
         <p class="text-body leading-5">
-          {wording.publishPushes(shown.target.headRef, shown.target.remote)}
+          {wording.publishPushes(updates?.onto ?? shown.target.headRef, shown.target.remote)}
         </p>
         <p class="text-body leading-5">
-          {wording.publishOpens(shown.target.repo, shown.target.baseBranch)}
+          {updating === null
+            ? wording.publishOpens(shown.target.repo, shown.target.baseBranch)
+            : wording.publishUpdates(updating, shown.target.baseBranch)}
         </p>
         <p class="text-body leading-5">{wording.publishCloses(shown.target.runId)}</p>
         {/* Where the push actually goes, quietly, beside the name it goes by:
@@ -278,7 +284,7 @@ export async function publishView(
       {token === null
         ? null
         : review === null
-          ? publishForm(wording, record, token, shown.shown)
+          ? publishForm(wording, record, token, shown.shown, updating)
           : despiteForm(wording, record, token, shown.shown)}
       <p class="note text-meta leading-5 text-muted-foreground">{wording.publishNote}</p>
       {/* **The press above what it sends** (D-0106, rondo#408): the target,
@@ -296,23 +302,25 @@ export async function publishView(
           that only records what happened may fold, and this one does not,
           because it is the thing being decided. The words are the pull
           request's own, so the block states no language. */}
-      <section id="publish-request" class={`${CARD} space-y-2`}>
-        <h3 class={CARD_HEADING}>{wording.publishRequestHeading}</h3>
-        <p class="text-meta leading-5 font-medium text-muted-foreground">
-          {wording.publishTitleLabel}
-        </p>
-        <p id="publish-title" class="text-title leading-6 wrap-anywhere" lang="">
-          {shown.title}
-        </p>
-        {/* The label the fold's summary carried, now drawn as the title's is
-            above it: the two the press sends are one pair on the screen. */}
-        <div id="publish-body">
+      {updating !== null ? null : (
+        <section id="publish-request" class={`${CARD} space-y-2`}>
+          <h3 class={CARD_HEADING}>{wording.publishRequestHeading}</h3>
           <p class="text-meta leading-5 font-medium text-muted-foreground">
-            {wording.publishBodyLabel}
+            {wording.publishTitleLabel}
           </p>
-          {publishBody(wording, shown.body)}
-        </div>
-      </section>
+          <p id="publish-title" class="text-title leading-6 wrap-anywhere" lang="">
+            {shown.title}
+          </p>
+          {/* The label the fold's summary carried, now drawn as the title's is
+            above it: the two the press sends are one pair on the screen. */}
+          <div id="publish-body">
+            <p class="text-meta leading-5 font-medium text-muted-foreground">
+              {wording.publishBodyLabel}
+            </p>
+            {publishBody(wording, shown.body)}
+          </div>
+        </section>
+      )}
       {shown.modelReading.length === 0 ? null : (
         <section id="publish-model" class={`${CARD} space-y-1`}>
           <h3 class={CARD_HEADING}>{wording.publishModelHeading}</h3>
@@ -387,7 +395,14 @@ function reviewBlockLine(wording: Chrome, block: ReviewBlock): string {
  * this press safe to offer from a page that does not redraw itself: the port
  * re-reads everything and refuses when what it reads is not this.
  */
-function publishForm(wording: Chrome, record: IterationRecord, token: string, shown: string) {
+function publishForm(
+  wording: Chrome,
+  record: IterationRecord,
+  token: string,
+  shown: string,
+  /** The pull request this push updates, named, or null where it opens one (rondo#417). */
+  updating: string | null = null,
+) {
   return (
     <form
       id="publish-form"
@@ -403,10 +418,10 @@ function publishForm(wording: Chrome, record: IterationRecord, token: string, sh
         type="submit"
         data-row=""
         aria-describedby="publish-plain"
-        data-busy={wording.publishBusy}
+        data-busy={updating === null ? wording.publishBusy : wording.publishBusyUpdate}
         class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
       >
-        {wording.publishAction}
+        {updating === null ? wording.publishAction : wording.publishUpdateAction(updating)}
       </button>
       <p
         data-busy-note=""
@@ -417,7 +432,7 @@ function publishForm(wording: Chrome, record: IterationRecord, token: string, sh
         {wording.publishBusyNote}
       </p>
       <span id="publish-plain" class="note sr-only">
-        {wording.publishPlain}
+        {updating === null ? wording.publishPlain : wording.publishPlainUpdate}
       </span>
     </form>
   );

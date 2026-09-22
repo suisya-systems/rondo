@@ -1208,6 +1208,37 @@ export interface Chrome extends PageWords {
   readonly mergeRefusedFailed: (detail: string) => string;
   readonly mergeRefusedQueue: string;
   readonly mergeRefusedUnconfirmed: string;
+
+  /**
+   * rondo#417 (D-0105): the next-step card that offers to settle a published
+   * pull request's conflict, its press, and why a press started nothing. The
+   * attempt it starts stops at its gate like any other, so the card says the
+   * person checks it before anything is pushed.
+   */
+  readonly nextStepConflictFix: (pullRequest: string, base: string) => string;
+  readonly conflictFixAction: string;
+  readonly conflictFixBusy: string;
+  readonly conflictFixBack: string;
+  readonly conflictFixRefusedNoApprover: string;
+  readonly conflictFixRefusedPress: string;
+  readonly conflictFixRefusedForm: string;
+  readonly conflictFixRefusedGone: string;
+  readonly conflictFixRefusedNotItsScope: string;
+  readonly conflictFixRefusedForked: string;
+  readonly conflictFixRefusedNoContinuo: string;
+  readonly conflictFixRefusedNotSetUp: string;
+  readonly conflictFixRefusedOutside: (test: string) => string;
+  readonly conflictFixRefusedNotStarted: string;
+  /**
+   * The approved fix's publish (rondo#417, D-0105): it pushes onto the pull
+   * request that is already open and opens none, so every sentence that says
+   * *open* says *update* instead.
+   */
+  readonly nextStepPublishUpdate: (pullRequest: string) => string;
+  readonly publishUpdates: (pullRequest: string, base: string) => string;
+  readonly publishUpdateAction: (pullRequest: string) => string;
+  readonly publishBusyUpdate: string;
+  readonly publishPlainUpdate: string;
 }
 
 /**

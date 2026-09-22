@@ -1028,8 +1028,17 @@ export type LapEvent =
   | { readonly kind: "gate" }
   /** The model reading landed, after the gate opened (D-0065 2.6, rondo#218). */
   | { readonly kind: "modelReading" }
-  /** `pullRequestUrl`: what the forge printed for the opened pull request, or null. */
-  | { readonly kind: "published"; readonly pullRequestUrl: string | null }
+  /**
+   * `pullRequestUrl`: what the forge printed for the opened pull request, or
+   * null. `onto` names the branch of an already open pull request this lap's
+   * commits were pushed onto instead (rondo#417, D-0105): no pull request was
+   * opened, and the same address is written, so the page reads one pull request.
+   */
+  | {
+      readonly kind: "published";
+      readonly pullRequestUrl: string | null;
+      readonly onto?: string;
+    }
   /**
    * A person pressed merge on the page and the forge merged it (rondo#380,
    * `D-0091`): where it went, how, and the commit the merge made.
@@ -1233,9 +1242,14 @@ export async function reportToRequest(
   } else if (event.kind === "published") {
     messageId = `report-published-${iterationId}`;
     body =
-      `Lap '${iterationId}' was published: its branch was pushed, pull request ` +
-      `${event.pullRequestUrl ?? "(no URL printed)"} was opened, ` +
-      `and run '${row.runId ?? "(none recorded)"}' was closed completed.`;
+      event.onto === undefined
+        ? `Lap '${iterationId}' was published: its branch was pushed, pull request ` +
+          `${event.pullRequestUrl ?? "(no URL printed)"} was opened, ` +
+          `and run '${row.runId ?? "(none recorded)"}' was closed completed.`
+        : `Lap '${iterationId}' was published: its commits were pushed onto '${event.onto}', ` +
+          // The address is followed by a space: the page reads it up to one.
+          `the branch of pull request ${event.pullRequestUrl ?? "(no URL printed)"} which ` +
+          `stays open, and run '${row.runId ?? "(none recorded)"}' was closed completed.`;
   } else if (event.kind === "merged") {
     // One per lap: a pull request is merged once, and the store's
     // `alreadyRecorded` makes a second write of the same line nothing.

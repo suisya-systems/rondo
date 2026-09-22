@@ -138,6 +138,12 @@ export interface WebPorts extends InboxReadPorts {
    */
   readonly mergeable?: boolean;
   /**
+   * Whether the host holds a conflict-fix press (rondo#417, D-0105): true
+   * exactly where the revise port carries one, so the card is drawn only where
+   * a press could start the attempt. Absent is false.
+   */
+  readonly fixesConflicts?: boolean;
+  /**
    * The repositories rondo triages (D-0097, `D-0081`): the empty centre draws
    * one block for each. Absent is none, and then no triage section is drawn.
    */
@@ -364,6 +370,12 @@ export type PublishShown =
       /** The model's reading, as material beside the rest (D-0065 rule 5.5). */
       readonly modelReading: readonly string[];
       readonly review: ReviewBlock | null;
+      /**
+       * The open pull request this push moves, or null where it opens one
+       * (rondo#417, D-0105): a conflict fix's publish opens nothing, so the
+       * title and body above are not sent and the screen does not show them.
+       */
+      readonly updates?: { readonly url: string; readonly onto: string } | null;
     };
 
 /** A scope id minted for one form (`newScopeId` in `src/access/web-app.ts`). */

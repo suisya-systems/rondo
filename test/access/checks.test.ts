@@ -184,6 +184,8 @@ async function hostOver(options: {
   }[];
   /** Run while the forge is being read, as a press starting then would. */
   readonly duringRead?: () => void;
+  /** A message's body, where it is not the one the fixture composes. */
+  readonly bodies?: Readonly<Record<string, string>>;
 }): Promise<{
   readonly written: readonly Recorded[];
   readonly asked: number;
@@ -207,11 +209,13 @@ async function hostOver(options: {
     messageId,
     // A publish report prints its pull request's address; lap-N opened #N. An
     // answer names the lap's own head, as the real writer's does.
-    body: messageId.startsWith("report-published-lap-")
-      ? `Opened https://github.com/owner/name/pull/${messageId.slice("report-published-lap-".length)}.`
-      : messageId.startsWith("report-checks-lap-1-")
-        ? "Lap 'lap-1' is read on commit 'commit-of-lap-1'"
-        : "",
+    body:
+      options.bodies?.[messageId] ??
+      (messageId.startsWith("report-published-lap-")
+        ? `Opened https://github.com/owner/name/pull/${messageId.slice("report-published-lap-".length)}.`
+        : messageId.startsWith("report-checks-lap-1-")
+          ? "Lap 'lap-1' is read on commit 'commit-of-lap-1'"
+          : ""),
     authorKind: "drafter" as const,
     authorId: "rondo/deterministic",
     inReplyTo: "request-1",
@@ -620,4 +624,23 @@ test("a conflict on a head pushed away and back is said again, and the count is 
   // 300 carried, one listed: the rest are counted and not dropped.
   expect(over.written[1]?.body).toContain("300 commit(s) on it are not the lap's");
   expect(over.written[1]?.body).toContain("- and 299 more");
+});
+
+test("rondo#417: a pull request a conflict fix was pushed onto is read for the fix, not for the lap it fixed", async () => {
+  const over = await hostOver({
+    reading: { kind: "green", counted: 1, skipped: 0 },
+    messageIds: ["request-1", "report-published-lap-1", "report-published-lap-2"],
+    lapIds: ["lap-1", "lap-2"],
+    // The push moved the pull request's head to the fix's own tip.
+    head: "commit-of-lap-2",
+    bodies: {
+      "report-published-lap-2":
+        "Lap 'lap-2' was published: its commits were pushed onto 'rondo/lap-1', the branch of " +
+        "pull request https://github.com/owner/name/pull/1 which stays open, and run 'r' was closed completed.",
+    },
+  });
+  expect(over.asked).toBe(1);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    expect.stringMatching(/^report-checks-lap-2-green/),
+  ]);
 });

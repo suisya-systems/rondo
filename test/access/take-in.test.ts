@@ -10,11 +10,12 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import { revisionTakeIn } from "../../src/access/cli.js";
+import { allowedCommandsFor } from "../../src/cadenza/facade.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import {
   admittedPlan,
@@ -78,7 +79,32 @@ function repository() {
   return { repo, root, base, tip, land };
 }
 
-const PLAN = (repo: string, root: string, takeIn: TakeIn | null): RunPlan => ({
+/** A catalog whose one project lets the worker run `allowedBash` (D-0094). */
+const catalog = (allowedBash: readonly string[]): RunPlan["catalogLayers"] => [
+  {
+    layer: "tracked",
+    origin: resolve("/srv/catalog/projects.toml"),
+    baseDir: resolve("/srv/catalog"),
+    data: {
+      schema_version: 1,
+      project: {
+        rondo: {
+          source: { kind: "git_url", url: "https://example.invalid/org/rondo.git" },
+          base_branch: "main",
+          aliases: [],
+          allowed_bash: [...allowedBash],
+        },
+      },
+    },
+  },
+];
+
+const PLAN = (
+  repo: string,
+  root: string,
+  takeIn: TakeIn | null,
+  allowedBash: readonly string[],
+): RunPlan => ({
   db: join(root, "continuo.db"),
   workspaceRoot: join(root, "work"),
   baseBranch: "main",
@@ -109,7 +135,7 @@ const PLAN = (repo: string, root: string, takeIn: TakeIn | null): RunPlan => ({
   takeIn,
   decisionRecord: null,
   invocationCeilingMs: 1_800_000,
-  catalogLayers: [{ layer: "git_url", origin: "o", baseDir: "/srv/catalog", data: {} }],
+  catalogLayers: catalog(allowedBash),
   projectName: "rondo",
   agentTypeInput: {} as RunPlan["agentTypeInput"],
   parties: { grantor: "rondo", grantee: "unset" } as unknown as RunPlan["parties"],
@@ -120,10 +146,11 @@ const PLAN = (repo: string, root: string, takeIn: TakeIn | null): RunPlan => ({
 async function atGate(
   fixture: ReturnType<typeof repository>,
   takeIn: TakeIn | null = null,
+  allowedBash: readonly string[] = allowedCommandsFor([]),
 ): Promise<{ store: ReturnType<typeof storeWithRequest>; record: IterationRecord }> {
   const store = storeWithRequest(new DatabaseSync(":memory:"), { maxOccupying: 4, maxLive: 6 });
   const id = "i-0001";
-  const validated = runPlan(PLAN(fixture.repo, fixture.root, takeIn));
+  const validated = runPlan(PLAN(fixture.repo, fixture.root, takeIn, allowedBash));
   if (validated.kind !== "planned") throw new Error(validated.reason);
   const allocation = allocate(id, validated.plan.workspaceRoot);
   if (allocation.kind !== "allocated") throw new Error(allocation.reason);

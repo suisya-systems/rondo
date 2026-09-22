@@ -57,6 +57,11 @@ export interface LapResult {
   readonly number: string | null;
   /** When it was published. */
   readonly atMs: number;
+  /**
+   * The lap's commits were pushed onto a pull request already open, rather
+   * than one being opened for them (rondo#417, D-0105): a conflict fix's.
+   */
+  readonly pushedOnto: boolean;
   readonly checks: ChecksState;
   /** When the checks answer was written; null while they are running. */
   readonly checksAtMs: number | null;
@@ -166,6 +171,7 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
     url,
     number: url === null ? null : (/\/pull\/(\d+)/.exec(url)?.[1] ?? null),
     atMs: published.atMs,
+    pushedOnto: published.body.includes("were pushed onto"),
     checks: conflicting
       ? { kind: "conflict" }
       : latest === undefined
@@ -270,6 +276,46 @@ export function mergeBlock(
     return "notGreen";
   }
   return asksWaiting ? "asked" : null;
+}
+
+/**
+ * Why rondo does not offer to fix a pull request's conflict, or null where it
+ * does (rondo#417, D-0105). **One test for the page and for the press**, as
+ * {@link mergeBlock} is: the card is drawn where this is null, and the press
+ * asks it again over fresh rows.
+ *
+ * - `notConflicting`: nothing to fix -- unpublished, merged, closed, or the
+ *   forge no longer says it conflicts.
+ * - `landed`: the line was released, so its work is on the default branch.
+ * - `fixing`: an attempt after this one already exists, running, at its gate,
+ *   or approved and not yet on the pull request.
+ * - `asked`: a question or a gate of the request waits on the person.
+ */
+export type ConflictFixBlock = "notConflicting" | "landed" | "fixing" | "asked";
+
+export function conflictFixBlock(
+  result: LapResult | null,
+  facts: {
+    readonly asksWaiting: boolean;
+    readonly holding: boolean;
+    readonly succeeded: boolean;
+  },
+): ConflictFixBlock | null {
+  if (
+    result === null ||
+    result.merged !== null ||
+    result.closedAtMs !== null ||
+    result.checks.kind !== "conflict"
+  ) {
+    return "notConflicting";
+  }
+  if (!facts.holding) {
+    return "landed";
+  }
+  if (facts.succeeded) {
+    return "fixing";
+  }
+  return facts.asksWaiting ? "asked" : null;
 }
 
 function checksOf(kind: "green" | "red" | "none", body: string): ChecksState {

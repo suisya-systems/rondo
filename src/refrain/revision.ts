@@ -75,8 +75,14 @@ export interface RevisionRequest {
    * refusal that depends on it can be made before the gate is touched.
    */
   readonly iterationId: string;
-  /** What the person asked for, byte for byte as they wrote it. */
-  readonly instruction: string;
+  /**
+   * What the person asked for, byte for byte as they wrote it -- or null for
+   * rondo#417's conflict fix (D-0105), which is a press with no words: the
+   * person approved this work, it was published, and its pull request then
+   * conflicted. rondo writes no words into the person's place (D-0009); the
+   * prompt says what was pressed and the take-in section says what to do.
+   */
+  readonly instruction: string | null;
   /**
    * What this lap must bring in first, or null (D-0098 rule 2).
    *
@@ -185,15 +191,28 @@ export function revisionPlan(input: RevisionRequest): PlanOutcome {
  * reaches continuo's command line and a cp932 console on the Windows cell.
  */
 function revisionPrompt(plan: AdmittedPlan, input: RevisionRequest): string {
+  const asked =
+    input.instruction === null
+      ? [
+          "--- The pull request conflicts with its base ---",
+          "",
+          `A previous lap (run '${plan.runId}', iteration '${input.predecessor.id}') did this work.` +
+            " A person approved it and it was published as a pull request, which now conflicts" +
+            " with the branch it merges into. The person asked rondo to settle the conflict." +
+            " Change nothing else: the work itself was already approved.",
+        ]
+      : [
+          "--- Revision requested at the gate ---",
+          "",
+          `A previous lap (run '${plan.runId}', iteration '${input.predecessor.id}') did this work and` +
+            " stopped at a gate. A person read it and asked for a change:",
+          "",
+          input.instruction,
+        ];
   return [
     plan.prompt,
     "",
-    "--- Revision requested at the gate ---",
-    "",
-    `A previous lap (run '${plan.runId}', iteration '${input.predecessor.id}') did this work and` +
-      " stopped at a gate. A person read it and asked for a change:",
-    "",
-    input.instruction,
+    ...asked,
     "",
     `That lap's commits are already on '${plan.topicBranch}', which is the branch this` +
       " workspace was cut from. Continue from them rather than starting the request over.",

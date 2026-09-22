@@ -110,7 +110,7 @@ import {
   showProposal,
   type UnpromptedPorts,
 } from "./advisory.js";
-import { checksHost, continuoChecksReader } from "./checks-host.js";
+import { checksHost, continuoChecksReader, pullRequestIn } from "./checks-host.js";
 import { type ParsedCommand, parseCommand } from "./cli-parse.js";
 import {
   abandon,
@@ -192,6 +192,8 @@ import type {
   PublishShown,
   ReviewBlock,
 } from "./page/contract.js";
+import { conflictFixBlock, resultOf } from "./page-logic/result.js";
+import { threadsOf } from "./page-logic/threads.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
 import { notifierAt, reachThePerson } from "./reach.js";
 import { nextNumbers, numbersSection } from "./record-numbers.js";
@@ -217,6 +219,8 @@ import {
   AddRepositoryPort,
   AnswerPort,
   type ClaimRefusal,
+  type ConflictFixed,
+  type ConflictFixInput,
   MergePort,
   newDraftId,
   newIterationId,
@@ -1758,6 +1762,8 @@ export async function main(
             : new RevisePort(
                 async (input) =>
                   await reviseFromPage(environment, store, opened.path, sender.actorId, input),
+                async (input) =>
+                  await conflictFixFromPage(environment, store, opened.path, sender.actorId, input),
               ),
         // **The press is checked inside this port too** (rondo#233 S5), and it
         // is now null on exactly `revise`'s own condition: an approver the
@@ -1842,6 +1848,7 @@ export async function main(
                 },
               ),
         mergeable: sender !== null && !("refusal" in sender),
+        fixesConflicts: sender !== null && !("refusal" in sender),
         merge:
           sender === null || "refusal" in sender
             ? null
@@ -5132,6 +5139,236 @@ export async function reviseFromPage(
 }
 
 /**
+ * One press of the page's *resolve the conflict* button (rondo#417, D-0105):
+ * the lap whose approved and published pull request now conflicts with its
+ * base is followed by one more attempt that brings the base in and settles
+ * the conflict, and that attempt stops at its gate like any other.
+ *
+ * **A revise with no gate and no words.** The lap it follows is `closed` and
+ * approved, so there is no gate to walk and nothing is answered; the person's
+ * press is the whole of what asks, and the prompt says so in rondo's words
+ * (`revisionPlan` with a null instruction). Everything else is the revise
+ * press's: the approval tip the lap ran under is the one spent, the verdict is
+ * the scope's `redo` arm (D-0070), and the successor's refusals that cost
+ * nothing are `successorChecks`.
+ *
+ * **What is offered is asked again here** (`conflictFixBlock` over fresh
+ * rows), as the merge press asks `mergeBlock`: a card left on a screen that
+ * has since moved starts nothing. A double press of one card names one
+ * successor, so the second finds its row and is the first.
+ */
+export async function conflictFixFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  input: ConflictFixInput,
+): Promise<ConflictFixed> {
+  const already = fixing.get(input.successorId);
+  if (already !== undefined) {
+    return await already;
+  }
+  const running = conflictFixPage(environment, store, storePath, approver, input);
+  fixing.set(input.successorId, running);
+  try {
+    return await running;
+  } finally {
+    fixing.delete(input.successorId);
+  }
+}
+
+/** Every conflict-fix press this process has in flight, by the successor's id. */
+const fixing = new Map<string, Promise<ConflictFixed>>();
+
+async function conflictFixPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  input: ConflictFixInput,
+): Promise<ConflictFixed> {
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return { ok: false, why: "conflictFixRefusedNotStarted", note: actor.refusal };
+  }
+  const successorRow = await store.read(input.successorId);
+  if (successorRow.kind === "read") {
+    return { ok: true, note: `iteration '${input.successorId}' was already admitted` };
+  }
+  const found = await store.read(input.iterationId);
+  if (found.kind !== "read") {
+    return {
+      ok: false,
+      why: "conflictFixRefusedGone",
+      note:
+        found.kind === "absent"
+          ? `There is no iteration '${input.iterationId}'.`
+          : `That iteration row would not read: ${found.reason}`,
+    };
+  }
+  const record = found.record;
+  const advisory = openAdvisoryRecord(storePath);
+  const read = await advisory.threadMessages();
+  if (read.kind !== "read") {
+    return {
+      ok: false,
+      why: "conflictFixRefusedGone",
+      note: `the request thread did not read: ${read.reason}`,
+    };
+  }
+  const threads = threadsOf(read.messages, new Set(), new Map());
+  const line = await store.laneLine(record.id);
+  const gated = (await store.readLive()).some(
+    (live) =>
+      live.kind === "read" &&
+      live.record.status === "awaiting_human" &&
+      live.record.requestMessageId === record.requestMessageId,
+  );
+  const block = !approvedForPublication(record)
+    ? "notConflicting"
+    : conflictFixBlock(resultOf(threads.byId, record.id), {
+        asksWaiting:
+          gated ||
+          [...threads.waiting].some((id) => threads.rootOf(id) === record.requestMessageId),
+        holding: (await store.laneLedger()).some(
+          (one) => one.releasedBy === null && one.lapIds.includes(record.id),
+        ),
+        succeeded:
+          line.kind !== "read" ||
+          line.line.laps.some((lap) => lap.supersedesIterationId === record.id),
+      });
+  if (block !== null) {
+    return {
+      ok: false,
+      why: "conflictFixRefusedGone",
+      note: `resolving the conflict is not offered on '${record.id}': ${block}`,
+    };
+  }
+  // The approval the lap ran under, re-read and only compared with the form's,
+  // for `revisePage`'s reason (D-0070 section 1.2, D-0074 section 2).
+  const tip = await approvalTip(advisory, record.id);
+  if (tip.kind === "forked") {
+    return {
+      ok: false,
+      why: "conflictFixRefusedForked",
+      note: `iteration '${record.id}' was admitted under a line with two approved tips (D-0074 rule 2.1)`,
+    };
+  }
+  if (tip.kind === "none" || tip.scopeDecisionId !== input.scopeDecisionId) {
+    return {
+      ok: false,
+      why: "conflictFixRefusedNotItsScope",
+      note:
+        tip.kind === "none"
+          ? `iteration '${record.id}' was not admitted under any approval`
+          : `iteration '${record.id}' now spends '${tip.scopeDecisionId}', and the press named ` +
+            `'${input.scopeDecisionId}'`,
+    };
+  }
+  const startup = await startContinuo(environment);
+  if (startup.kind === "refused") {
+    return {
+      ok: false,
+      why: "conflictFixRefusedNoContinuo",
+      note: `continuo is not usable: ${startup.reason}`,
+    };
+  }
+  const continuo = startup.continuo;
+  // The forge's default branch as it is at this press (D-0105; the one
+  // exception to D-0100 rule 4), taken in with cause `conflict`.
+  const decided = await revisionTakeIn(record, input.successorId, store, "conflict");
+  const successor =
+    "refusal" in decided
+      ? { kind: "refused" as const, reason: decided.refusal }
+      : revisionPlan({
+          predecessor: record,
+          iterationId: input.successorId,
+          instruction: null,
+          takeIn: decided.takeIn,
+        });
+  if (successor.kind === "refused") {
+    refuse(successor.reason);
+    return { ok: false, why: "conflictFixRefusedNotSetUp", note: successor.reason };
+  }
+  const checked = await successorChecks(
+    record,
+    input.successorId,
+    successor.plan,
+    null,
+    store,
+    continuo,
+  );
+  if ("refusal" in checked) {
+    refuse(checked.refusal);
+    return { ok: false, why: "conflictFixRefusedNotSetUp", note: checked.refusal };
+  }
+  const ports = conductorPorts(continuo, store, advisory);
+  const outcome = await admitUnderScope(
+    {
+      store,
+      record: advisory,
+      nowMs: Date.now,
+      // No gate to walk: the lap it follows was approved and is closed.
+      beforeAdmit: async () => null,
+      admit: (plan, id, supersedes, requestMessageId, scopeSpend) =>
+        withReservedNumbers(store, checked.numbering, plan, (numbered, numbers) =>
+          admit(
+            ports,
+            unpromptedPorts(store, storePath),
+            numbered,
+            START_POLICY,
+            id,
+            supersedes,
+            null,
+            requestMessageId,
+            scopeSpend,
+            null,
+            numbers,
+          ),
+        ),
+    },
+    input.scopeDecisionId,
+    {
+      kind: "redo",
+      iterationId: input.successorId,
+      plan: successor.plan,
+      predecessorId: record.id,
+      requestMessageId: record.requestMessageId,
+      closing: false,
+    },
+  );
+  if (outcome.kind === "refused") {
+    return {
+      ok: false,
+      why: "conflictFixRefusedOutside",
+      test: outcome.test,
+      note: `the ${outcome.verdict} verdict at the ${outcome.test} test: ${outcome.reason}`,
+    };
+  }
+  if (outcome.kind === "halted") {
+    return {
+      ok: false,
+      why: "conflictFixRefusedNotStarted",
+      note: `nothing was admitted; the admission stopped with status ${String(outcome.status)}`,
+    };
+  }
+  const report = outcome.report;
+  sayReport(report);
+  if (report.iterationId === null) {
+    return { ok: false, why: "conflictFixRefusedNotStarted", note: report.lines.join("\n") };
+  }
+  if (report.status === "awaiting_human") {
+    await sayGateOpen(() =>
+      takeModelReading(
+        modelReviewPorts(continuo, store, ports.thread ?? null),
+        report.iterationId ?? input.successorId,
+      ),
+    );
+  }
+  return { ok: true, note: `iteration '${input.successorId}' was admitted` };
+}
+
+/**
  * Every revise press this process has in flight, by the successor's id, with
  * the words it is carrying: a second press of the same form joins the first
  * only when the two say the same thing.
@@ -5899,6 +6136,33 @@ export async function revisionPreflight(
   }
   const gate = observed.payload;
 
+  const checked = await successorChecks(
+    record,
+    successorId,
+    successor.plan,
+    gate.outcome,
+    store,
+    continuo,
+  );
+  return "refusal" in checked
+    ? { kind: "refused", reason: checked.refusal }
+    : { kind: "ready", plan: successor.plan, gate, numbering: checked.numbering };
+}
+
+/**
+ * The refusals that cost nothing and follow the successor's plan, and the one
+ * more number it is reserved: everything `revisionPreflight` asks after the
+ * gate, shared with rondo#417's conflict fix, which has no gate
+ * (`gateOutcome` null) and asks the same of the successor.
+ */
+async function successorChecks(
+  record: IterationRecord,
+  successorId: string,
+  plan: RunPlan,
+  gateOutcome: string | null,
+  store: Pick<IterationStore, "read" | "readingsFor" | "numberReservations">,
+  continuo: VerifiedContinuo,
+): Promise<{ readonly refusal: string } | { readonly numbering: Numbering | null }> {
   // The last two refusals, and the last things that cost nothing. See
   // `revisionBlocker`: the id the successor will be reserved under is not part
   // of the plan that was just validated, and a gate continuo has already closed
@@ -5910,11 +6174,10 @@ export async function revisionPreflight(
   // mint. Deriving it twice -- once here, once at admission -- is safe because
   // the derivation is a pure function of the id, which is the property that
   // makes the check meaningful at all.
-  const allocation = allocate(successorId, successor.plan.workspaceRoot);
+  const allocation = allocate(successorId, plan.workspaceRoot);
   if (allocation.kind === "refused") {
     return {
-      kind: "refused",
-      reason: `The second lap's iteration id was refused: ${allocation.reason}`,
+      refusal: `The second lap's iteration id was refused: ${allocation.reason}`,
     };
   }
   const successorTopicBranch = allocation.allocation.topicBranch;
@@ -5926,13 +6189,12 @@ export async function revisionPreflight(
   // promise). An unreadable answer is refused rather than read as room to
   // proceed: the next thing this command does cannot be undone.
   const branch = await inspectTopicBranch({
-    repository: successor.plan.repository,
+    repository: plan.repository,
     topicBranch: successorTopicBranch,
   });
   if (branch.kind === "malformed") {
     return {
-      kind: "refused",
-      reason:
+      refusal:
         `'${successorTopicBranch}' is not a name git will accept for a branch, so nothing ` +
         "could create it -- and a name that cannot exist reads as a name that is free. Nothing " +
         "was touched. Choose another --iteration-id.",
@@ -5940,10 +6202,9 @@ export async function revisionPreflight(
   }
   if (branch.kind !== "read") {
     return {
-      kind: "refused",
-      reason:
+      refusal:
         `git could not say whether '${successorTopicBranch}' already exists in ` +
-        `${successor.plan.repository}: ${branch.reason}. continuo requires a topic branch that ` +
+        `${plan.repository}: ${branch.reason}. continuo requires a topic branch that ` +
         "is not there, and rondo will not answer the gate without knowing. Nothing was touched.",
     };
   }
@@ -5962,7 +6223,7 @@ export async function revisionPreflight(
   });
   const blocker = revisionBlocker({
     predecessorId: record.id,
-    gateOutcome: gate.outcome,
+    gateOutcome,
     successorId,
     successorRow: existing.kind,
     successorRunId: allocation.allocation.runId,
@@ -5973,12 +6234,12 @@ export async function revisionPreflight(
     workspaceExists: existsSync(successorWorkspace),
   });
   if (blocker !== null) {
-    return { kind: "refused", reason: blocker };
+    return { refusal: blocker };
   }
-  const numbering = await redoNumbering(record, successor.plan, store);
+  const numbering = await redoNumbering(record, plan, store);
   return numbering !== null && "refusal" in numbering
-    ? { kind: "refused", reason: `${numbering.refusal} The gate was not touched.` }
-    : { kind: "ready", plan: successor.plan, gate, numbering };
+    ? { refusal: `${numbering.refusal} The gate was not touched.` }
+    : { numbering };
 }
 
 /**
@@ -6524,6 +6785,14 @@ export interface PublishPlan {
    * their hands to show it before they overrule it (D-0060 rules 4 and 5).
    */
   readonly reviewRefusal: ReviewBlock | null;
+  /**
+   * The open pull request this lap's commits are pushed onto, or null where
+   * publishing opens one (rondo#417, D-0105): a conflict fix brings the pull
+   * request it fixes forward, so the push names that pull request's branch
+   * and nothing is opened. Its address and branch are read off the thread's
+   * published line of the nearest lap above that has one.
+   */
+  readonly updates: { readonly url: string; readonly onto: string } | null;
 }
 
 export type PublishPlanned =
@@ -6758,6 +7027,14 @@ export async function publishPlanFor(
   // is as likely to be a retry's abandoned subject as a revision's answered
   // one. A row that will not read is left as null and said out loud, because a
   // missing predecessor is not evidence for either lineage.
+  const updates = await pullRequestUpdated(record, store, thread);
+  if (updates !== null && "refusal" in updates) {
+    return {
+      kind: "refused",
+      block: { why: "target", reason: updates.refusal },
+      reason: updates.refusal,
+    };
+  }
   const predecessorRead =
     record.supersedesIterationId === null ? null : await store.read(record.supersedesIterationId);
   const pullRequest = pullRequestText({
@@ -6824,9 +7101,63 @@ export async function publishPlanFor(
       // beside it and is not part of this refusal, and the interpreter's
       // `rondo/none` unavailable row still refuses with its own reason.
       reviewRefusal: reviewBlock(reviewedReading(readings), asRead),
+      updates,
     },
   };
 }
+
+/**
+ * The open pull request a conflict fix is pushed onto (rondo#417, D-0105), or
+ * null for any other lap, or why it cannot be named.
+ *
+ * **Read up the line, from the thread**: the nearest lap above this one whose
+ * published line is in the request's thread is the pull request's, and its
+ * branch is the one that line says it pushed onto, or that lap's own topic
+ * branch where it opened the pull request. rondo keeps no pull-request column
+ * (the thread is where publishing is recorded), so a fix whose thread will
+ * not read is refused rather than opening a second pull request.
+ */
+export async function pullRequestUpdated(
+  record: IterationRecord,
+  store: Pick<IterationStore, "read">,
+  thread: Pick<AdvisoryRecord, "threadMessages"> | null,
+): Promise<{ readonly url: string; readonly onto: string } | { readonly refusal: string } | null> {
+  const planned = readPlan(record.plan);
+  if (planned.kind !== "planned" || planned.plan.takeIn?.cause !== "conflict") {
+    return null;
+  }
+  const refusal = (why: string) => ({
+    refusal:
+      `lap '${record.id}' fixes a pull request's conflict and is pushed onto that pull ` +
+      `request, and ${why}, so nothing is published.`,
+  });
+  const read = thread === null ? null : await thread.threadMessages();
+  if (read === null || read.kind !== "read") {
+    return refusal("the request's thread, which names it, will not read");
+  }
+  let up = record.supersedesIterationId;
+  for (let hops = 0; up !== null && hops < LINEAGE_HOPS; hops += 1) {
+    const above = await store.read(up);
+    if (above.kind !== "read") {
+      return refusal(`lap '${up}' above it will not read`);
+    }
+    const said = read.messages.find((one) => one.messageId === `report-published-${up}`);
+    if (said !== undefined) {
+      const url = pullRequestIn(said.body)?.url;
+      const onto =
+        /were pushed onto '([^']+)'/.exec(said.body)?.[1] ??
+        planField(above.record, "topic_branch");
+      return url === undefined || onto === ""
+        ? refusal(`lap '${up}''s published line names no pull request and branch`)
+        : { url, onto };
+    }
+    up = above.record.supersedesIterationId;
+  }
+  return refusal("no lap above it was published");
+}
+
+/** How far up a line {@link pullRequestUpdated} walks: a lineage is never this long. */
+const LINEAGE_HOPS = 64;
 
 /**
  * The digest of one dry-run, over everything the screen draws from it.
@@ -6864,6 +7195,7 @@ function publishShownDigest(plan: PublishPlan): string {
     // The sentence rather than the shape, because the sentence carries every
     // fact the shape holds and nothing reads it back.
     review_refusal: plan.reviewRefusal === null ? null : reviewBlockSentence(plan.reviewRefusal),
+    updates: plan.updates,
   });
 }
 
@@ -6960,6 +7292,7 @@ export async function publishingForPage(
     warnings: plan.warnings,
     modelReading: plan.modelReading,
     review: plan.reviewRefusal,
+    updates: plan.updates,
   };
 }
 
@@ -7140,6 +7473,7 @@ async function publishPage(
     workspace: plan.workspace,
     remote: plan.remote,
     topicBranch: plan.topicBranch,
+    ...(plan.updates === null ? {} : { onto: plan.updates.onto }),
   });
   const pushFailed = commandFailure(pushed);
   if (pushFailed !== null) {
@@ -7150,13 +7484,18 @@ async function publishPage(
       detail: pushFailed,
     };
   }
-  const opened = await openPullRequest({
-    repo: plan.forgeRepo,
-    baseBranch: plan.baseBranch,
-    headRef: plan.headRef,
-    title: plan.pullRequest.title,
-    body: plan.pullRequest.body,
-  });
+  // A conflict fix opens nothing: the pull request it fixes is already open
+  // (rondo#417, D-0105), and the push above moved its head.
+  const opened =
+    plan.updates === null
+      ? await openPullRequest({
+          repo: plan.forgeRepo,
+          baseBranch: plan.baseBranch,
+          headRef: plan.headRef,
+          title: plan.pullRequest.title,
+          body: plan.pullRequest.body,
+        })
+      : { status: 0, stdout: plan.updates.url, stderr: "", spawnError: null };
   const openFailed = commandFailure(opened);
   if (openFailed !== null) {
     // **The push already happened, and it is the one leg that cannot be undone
@@ -7209,7 +7548,11 @@ async function publishPage(
     { record: openAdvisoryRecord(storePath), store },
     record.id,
     // gh prints the new pull request's URL as the last line of its stdout.
-    { kind: "published", pullRequestUrl: opened.stdout.trim().split("\n").at(-1) || null },
+    {
+      kind: "published",
+      pullRequestUrl: opened.stdout.trim().split("\n").at(-1) || null,
+      ...(plan.updates === null ? {} : { onto: plan.updates.onto }),
+    },
     Date.now(),
   );
   return { ok: true, note: "" };
@@ -7325,16 +7668,25 @@ async function commandPublish(
     }
   }
   say("");
-  say("publish runs these three, in order, as you:");
-  say(`  1. git -C ${workspace} push ${remote} ${topicBranch}`);
-  say(`  2. gh pr create --repo ${forgeRepo} --base ${baseBranch} --head ${headRef}`);
-  say(`  3. continuo run close --run-id ${runId} --outcome completed`);
-  say("");
-  say("the pull request it opens reads:");
-  say(`  title: ${pullRequest.title}`);
-  say("  body:");
-  for (const line of pullRequest.body.split("\n")) {
-    say(line === "" ? "" : `    ${line}`);
+  if (plan.updates === null) {
+    say("publish runs these three, in order, as you:");
+    say(`  1. git -C ${workspace} push ${remote} ${topicBranch}`);
+    say(`  2. gh pr create --repo ${forgeRepo} --base ${baseBranch} --head ${headRef}`);
+    say(`  3. continuo run close --run-id ${runId} --outcome completed`);
+    say("");
+    say("the pull request it opens reads:");
+    say(`  title: ${pullRequest.title}`);
+    say("  body:");
+    for (const line of pullRequest.body.split("\n")) {
+      say(line === "" ? "" : `    ${line}`);
+    }
+  } else {
+    // rondo#417 (D-0105): a conflict fix moves the open pull request's head.
+    say("publish runs these two, in order, as you, and opens no pull request:");
+    say(`  1. git -C ${workspace} push ${remote} ${topicBranch}:refs/heads/${plan.updates.onto}`);
+    say(`  2. continuo run close --run-id ${runId} --outcome completed`);
+    say("");
+    say(`the push moves the head of ${plan.updates.url}, which stays open.`);
   }
   say("");
   if (parsed.dryRun) {
@@ -7342,18 +7694,32 @@ async function commandPublish(
     return 0;
   }
 
-  const pushed = await pushTopicBranch({ workspace, remote, topicBranch });
+  const pushed = await pushTopicBranch({
+    workspace,
+    remote,
+    topicBranch,
+    ...(plan.updates === null ? {} : { onto: plan.updates.onto }),
+  });
   if (!reportCommand("push the branch", pushed)) {
     return 1;
   }
 
-  const opened = await openPullRequest({
-    repo: forgeRepo,
-    baseBranch,
-    headRef,
-    title: pullRequest.title,
-    body: pullRequest.body,
-  });
+  const opened =
+    plan.updates === null
+      ? await openPullRequest({
+          repo: forgeRepo,
+          baseBranch,
+          headRef,
+          title: pullRequest.title,
+          body: pullRequest.body,
+        })
+      : {
+          commandLine: "no pull request opened: the push moved the head of this one",
+          status: 0,
+          stdout: plan.updates.url,
+          stderr: "",
+          spawnError: null,
+        };
   if (!reportCommand("open the pull request", opened)) {
     // **The push already happened, and it is the one leg that cannot be
     // undone from here.** Re-running `publish` re-runs the push harmlessly
@@ -7391,7 +7757,11 @@ async function commandPublish(
       ports.thread,
       record.id,
       // gh prints the new pull request's URL as the last line of its stdout.
-      { kind: "published", pullRequestUrl: opened.stdout.trim().split("\n").at(-1) || null },
+      {
+        kind: "published",
+        pullRequestUrl: opened.stdout.trim().split("\n").at(-1) || null,
+        ...(plan.updates === null ? {} : { onto: plan.updates.onto }),
+      },
       Date.now(),
     );
     if (reported !== null) {

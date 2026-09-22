@@ -1134,4 +1134,47 @@ export const JA: Chrome = Object.freeze({
   publishRefusedNotStarted:
     "何も公開していません。ここで見た内容は失われていません。" +
     "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
+  nextStepConflictFix: (pullRequest, base) =>
+    `${pullRequest} は ${base} と競合していて、チェックが動きません。rondo が ${base} を` +
+    "取り込んで競合を解消できます（ほかは変えません）。push の前に、その結果をここで確認して" +
+    "もらいます。",
+  conflictFixAction: "rondo に競合を解消してもらう",
+  conflictFixBusy: "解消を始めています…",
+  conflictFixBack: "依頼に戻る",
+  conflictFixRefusedNoApprover:
+    "何も始めていません。この端末の rondo はまだあなたが誰かを知らないので、ここでは" +
+    "あなたとして何も決められません。",
+  conflictFixRefusedPress:
+    "何も始めていません。これは人がこのページのボタンを押して行うもので、スクリプトからは" +
+    "できません。",
+  conflictFixRefusedForm:
+    "何も始めていません。そのフォームはこのページのものではありません。読み込み直してから" +
+    "押してください。",
+  conflictFixRefusedGone:
+    "何も始めていません。プルリクエストにもう解消が要らないか、すでに解消が進んでいます。" +
+    "ページを読み込み直すと、いまの状態が分かります。",
+  conflictFixRefusedNotItsScope:
+    "何も始めていません。使おうとした承認が、この作業の動いた承認と違います。ページを" +
+    "読み込み直してから押してください。",
+  conflictFixRefusedForked:
+    "何も始めていません。この作業の承認が別々に 2 回引き上げられていて、rondo はどちらかを" +
+    "選びません。",
+  conflictFixRefusedNoContinuo: "何も始めていません。作業を動かす rondo の部分が起動しません。",
+  conflictFixRefusedNotSetUp:
+    "何も始めていません。解消の準備ができませんでした。何が起きたかは、このマシンで rondo を" +
+    "管理する人が確かめられます。",
+  conflictFixRefusedOutside: (test) =>
+    `何も始めておらず、何も使っていません。もう 1 回の作業は、この作業が動いた範囲の外です` +
+    `（${test} の確認）。選べることは、依頼のスレッドのメッセージに書いてあります。`,
+  conflictFixRefusedNotStarted:
+    "何も始めていません。ここで見た内容は失われていません。何が起きたかは、このマシンで" +
+    " rondo を管理する人が確かめられます。",
+  nextStepPublishUpdate: (pullRequest) =>
+    `競合の解消は承認済みです。公開すると ${pullRequest} に push し、チェックがもう一度` +
+    "動きます。マージはしません。",
+  publishUpdates: (pullRequest, base) =>
+    `${base} 向けに開いている ${pullRequest} へ push します。プルリクエストは新しく作りません。`,
+  publishUpdateAction: (pullRequest) => `プルリクエスト ${pullRequest} を更新する`,
+  publishBusyUpdate: "プルリクエストを更新しています…",
+  publishPlainUpdate: "このブランチを開いているプルリクエストへ push し、run を閉じます。",
 } satisfies Chrome);
