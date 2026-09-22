@@ -156,6 +156,7 @@ import {
   readCommitsBetween,
   readIssueFromForge,
   readLanding,
+  readPullRequest,
   readRecordAdditions,
   readRecordFloor,
   runDrafter,
@@ -7167,6 +7168,21 @@ export async function pullRequestUpdated(
   return null;
 }
 
+/**
+ * Why the pull request a publish would push onto is not open on the forge now,
+ * or null where it is (Codex round 2): the thread says a merge or a close only
+ * once the checks host has read it, and git pushes onto a closed pull
+ * request's branch -- or makes the branch again -- without a word.
+ */
+async function notOpenNow(url: string): Promise<string | null> {
+  const read = await readPullRequest({ url });
+  return read.kind !== "read"
+    ? `the forge did not say whether ${url} is still open: ${read.reason}`
+    : read.state !== "OPEN"
+      ? `${url} is ${read.state.toLowerCase()} on the forge, so nothing was pushed onto it`
+      : null;
+}
+
 /** How far up a line {@link pullRequestUpdated} walks: a lineage is never this long. */
 const LINEAGE_HOPS = 64;
 
@@ -7480,6 +7496,10 @@ async function publishPage(
     };
   }
   const continuo = startup.continuo;
+  const closedSince = plan.updates === null ? null : await notOpenNow(plan.updates.url);
+  if (closedSince !== null) {
+    return { ok: false, why: "publishRefusedTarget", note: closedSince, detail: closedSince };
+  }
   const pushed = await pushTopicBranch({
     workspace: plan.workspace,
     remote: plan.remote,
@@ -7705,6 +7725,10 @@ async function commandPublish(
     return 0;
   }
 
+  const closedSince = plan.updates === null ? null : await notOpenNow(plan.updates.url);
+  if (closedSince !== null) {
+    return refuse(closedSince);
+  }
   const pushed = await pushTopicBranch({
     workspace,
     remote,
