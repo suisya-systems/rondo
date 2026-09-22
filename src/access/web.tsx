@@ -177,7 +177,7 @@ import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
 import { waitsOnYou } from "./page-logic/waits.js";
 import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
-import { denialLine, LIST_LIMIT } from "./review.js";
+import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal } from "./scope.js";
 import { publishView } from "./screens/publish.js";
@@ -962,17 +962,29 @@ async function reviseBox(
   iterationId: string,
   readings: readonly LapReading[],
 ): Promise<ReviseBox> {
+  // **A take-in the lap did not pass is drafted by rondo itself** (D-0098
+  // rule 2.3, D-0105): the test and its one fix are fixed, so the box quotes
+  // the reading's own finding first, with or without the model's draft.
+  const takeIn = (reviewedReading(readings)?.findings ?? [])
+    .filter((finding) => finding.includes(TAKE_IN_FINDING))
+    .map(wording.reviseDraftTakeIn);
+  const drafted = (text: string): ReviseBox => ({
+    kind: "drafted",
+    text: [...takeIn, text].filter((part) => part !== "").join("\n\n"),
+  });
   const model = latestReading(readings, isModelReadingDrafter);
   if (model === null || model.verdict !== "concerns" || model.findings.length === 0) {
-    return { kind: "none" };
+    return takeIn.length === 0 ? { kind: "none" } : drafted("");
   }
   const row = await ports.record.reviseDraftFor(iterationId, model);
   if (row === null) {
-    return { kind: "pending" };
+    return takeIn.length === 0 ? { kind: "pending" } : drafted("");
   }
   if (row.payload["kind"] === "unavailable") {
     const reason = row.payload["reason"];
-    return { kind: "unavailable", reason: typeof reason === "string" ? reason : "" };
+    return takeIn.length === 0
+      ? { kind: "unavailable", reason: typeof reason === "string" ? reason : "" }
+      : drafted("");
   }
   const text = reviseText(model, row.payload, {
     finding: wording.reviseDraftFinding,
@@ -983,7 +995,7 @@ async function reviseBox(
   // none, never in part (D-0077 rule 4.1: not shown and not repaired).
   return text === null
     ? { kind: "unavailable", reason: "the stored draft does not read as a draft of this reading" }
-    : { kind: "drafted", text };
+    : drafted(text);
 }
 
 /** Whether a row carries a question this page can put a button under. */

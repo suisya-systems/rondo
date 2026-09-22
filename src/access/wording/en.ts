@@ -671,6 +671,9 @@ explanation you pressed on and then answers the gate.`,
   reviseDraftFinding: (severity, text) => `- [${severity}] ${text}`,
   reviseDraftBases: (bases) => `  where: ${bases}`,
   reviseDraftChange: (words) => `  to change: ${words}`,
+  reviseDraftTakeIn: (finding) =>
+    `- ${finding}\n  to change: bring that commit in with git merge --no-edit, settle any ` +
+    "conflict and commit the merge, before anything else.",
   reviseDrafted:
     "rondo drafted this from what the review found. Edit it as you like: what you send is yours.",
   reviseDrafting:

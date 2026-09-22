@@ -695,6 +695,9 @@ export const JA: Chrome = Object.freeze({
   reviseDraftFinding: (severity, text) => `- ${severityJa(severity)}: ${text}`,
   reviseDraftBases: (bases) => `  場所: ${bases}`,
   reviseDraftChange: (words) => `  直すこと: ${words}`,
+  reviseDraftTakeIn: (finding) =>
+    `- ${finding}\n  直すこと: まずそのコミットを git merge --no-edit で取り込み、競合があれば解消して ` +
+    "merge をコミットする。",
   reviseDrafted:
     "レビューで見つかった点から rondo が下書きしました。自由に編集できます。送る内容はあなたのものです。",
   reviseDrafting:

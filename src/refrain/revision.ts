@@ -211,7 +211,11 @@ function revisionPrompt(plan: AdmittedPlan, input: RevisionRequest): string {
  * (the lap cannot fetch; rondo already did, D-0100), why, what to do in which
  * order, and the test the gate will apply -- ancestry, so a change re-applied
  * by hand fails it (D-0098 section 3). A conflict is the worker's to settle and
- * never a question (rule 2.2). ASCII only (`D-0004`).
+ * never a question (rule 2.2). **A merge and only a merge** (D-0105): the fence
+ * admits `git merge --no-edit` and no rebase, reset or abort (cadenza D-0042),
+ * so the one way in is spelled out, and so is what a worker that cannot settle
+ * it does -- the gate's ancestry finding is then what the person reads. ASCII
+ * only (`D-0004`).
  */
 export function takeInSection(takeIn: TakeIn): string {
   const why =
@@ -224,9 +228,13 @@ export function takeInSection(takeIn: TakeIn): string {
     `The default branch '${takeIn.remoteBranch}' has moved to commit ${takeIn.commit}. The local` +
       ` branch '${takeIn.branch}' holds it. ${why}`,
     "",
-    `Before anything else, bring ${takeIn.commit} into this branch, by merge or by rebase, as` +
-      " you choose. Settle any conflict inside this lap yourself; do not ask about it. Only then" +
-      " make the change asked above.",
+    `Before anything else, bring it in with: git merge --no-edit ${takeIn.commit}` +
+      " -- a merge is the one way in: rebase, reset and cherry-pick are not open to this lap," +
+      " and neither is git merge --abort. Settle any conflict inside this lap yourself and" +
+      " commit the merge; do not ask about it. Only then make the change asked above.",
+    "",
+    "If you cannot settle it, leave the merge uncommitted, change nothing else, and say in" +
+      " your report which files conflict and why you could not settle them.",
     "",
     `rondo checks that ${takeIn.commit} is an ancestor of this lap's last commit. Re-applying the` +
       " change by hand does not pass that check.",

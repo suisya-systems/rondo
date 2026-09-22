@@ -223,16 +223,29 @@ async function take(ports: ModelReviewPorts, iterationId: string): Promise<reado
     // on the criterion before it looks at the material (D-0029 rule 13).
     material = { kind: "unreadable", reason: "the plan names no review criterion" };
   } else {
+    // **A lap that took the default branch in is read from what it took in**
+    // (D-0103 rule 2.6, D-0105): its own range starts at its predecessor's tip,
+    // so the merge would hand over every change the default branch brought as
+    // if the worker had written it. From the take-in commit to the same tip is
+    // the line's work against the base as it now is, the resolution included.
+    const evidence =
+      plan.takeIn === null
+        ? deterministic.evidence
+        : {
+            ...deterministic.evidence,
+            baseRef: plan.takeIn.branch,
+            baseCommit: plan.takeIn.commit,
+          };
     const facts = await ports.gather({
       workspace: plan.workspace,
-      evidence: deterministic.evidence,
+      evidence,
       ruleFiles: criterion.ruleFiles,
     });
     material =
       facts.kind === "unreadable"
         ? facts
         : {
-            evidence: deterministic.evidence,
+            evidence,
             diff: facts.diff,
             commits: facts.commits,
             // What continuo received: the prompt, plus the language sentence

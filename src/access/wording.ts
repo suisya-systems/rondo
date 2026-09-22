@@ -864,6 +864,11 @@ export interface Chrome extends PageWords {
   readonly reviseDraftBases: (bases: string) => string;
   readonly reviseDraftChange: (words: string) => string;
   /**
+   * D-0098 rule 2.3 as D-0105 builds it: the take-in test the lap failed,
+   * quoted as rondo's reading wrote it, with the one change that passes it.
+   */
+  readonly reviseDraftTakeIn: (finding: string) => string;
+  /**
    * What is said beside the box (D-0077 section 4, written under D-0076): a
    * draft is in it; one is being written (rule 4.3); none could be written
    * (rule 4.2), in rule 4.1's order; and a draft landed after the person began

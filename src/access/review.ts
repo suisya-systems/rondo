@@ -144,6 +144,12 @@ export function evidenceOf(
 }
 
 /**
+ * The words both take-in findings carry (D-0098 rule 2.3), so the revise box
+ * can quote the test a lap failed (D-0105) without parsing anything else.
+ */
+export const TAKE_IN_FINDING = "this lap was told to bring in first";
+
+/**
  * What {@link readingOf} is told beside the inspection: facts read off the
  * lap's plan by the caller, each absent when the plan asks nothing of it.
  * One field per rule, so each rule's check stands beside the others.
@@ -245,9 +251,9 @@ export function readingOf(
     findings.push(
       takeIn.ancestor === "no"
         ? `the topic branch does not hold ${takeIn.commit}, the commit of ${takeIn.remoteBranch} ` +
-            "this lap was told to bring in first (D-0098 rule 2.3)"
+            `${TAKE_IN_FINDING} (D-0098 rule 2.3)`
         : `whether the topic branch holds ${takeIn.commit}, the commit of ${takeIn.remoteBranch} ` +
-            `this lap was told to bring in first, could not be read: ${takeIn.ancestor.undetermined}`,
+            `${TAKE_IN_FINDING}, could not be read: ${takeIn.ancestor.undetermined}`,
     );
   }
   // **D-0098 rule 3.6: the gate tests the numbers.** Every heading and index

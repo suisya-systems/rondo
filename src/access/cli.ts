@@ -47,7 +47,13 @@ import {
 } from "../continuo/protocol.js";
 import { lapTranscriptDirectory, readLapLog } from "../continuo/transcript.js";
 import { allocate } from "../refrain/allocator.js";
-import { isLanguageTag, type RunPlan, readPlan, readRunPlan } from "../refrain/plan.js";
+import {
+  isLanguageTag,
+  type RunPlan,
+  readPlan,
+  readRunPlan,
+  type TakeIn,
+} from "../refrain/plan.js";
 import {
   CONSERVATIVE_HOST_POLICY,
   type HostPolicy,
@@ -55,7 +61,7 @@ import {
   type LoopPolicy,
 } from "../refrain/policy.js";
 import { revisionPlan } from "../refrain/revision.js";
-import { repositoryKey } from "../store/lanes.js";
+import { pathsOverlap, repositoryKey } from "../store/lanes.js";
 import { canonicalJson, contentDigest } from "../store/plan.js";
 import {
   type AgentTypeRecordDraft,
@@ -134,11 +140,13 @@ import {
 import { drafterHost } from "./drafter-host.js";
 import {
   cloneRepository,
+  fetchLapBase,
   fileCounts,
   inspectBranchTip,
   inspectLapWork,
   inspectPushTarget,
   inspectTopicBranch,
+  isAncestor,
   type LapWorkInspection,
   type LapWorkRequest,
   listOpenIssues,
@@ -5857,16 +5865,21 @@ export async function revisionPreflight(
   record: IterationRecord,
   successorId: string,
   body: string,
-  store: Pick<IterationStore, "read" | "readingsFor" | "numberReservations">,
+  store: Pick<
+    IterationStore,
+    "read" | "readingsFor" | "numberReservations" | "laneLine" | "compareLane"
+  >,
   continuo: VerifiedContinuo,
 ): Promise<RevisionReady> {
+  const decided = await revisionTakeIn(record, successorId, store, null);
+  if ("refusal" in decided) {
+    return { kind: "refused", reason: `${decided.refusal} The gate was not touched.` };
+  }
   const successor = revisionPlan({
     predecessor: record,
     iterationId: successorId,
     instruction: body,
-    // D-0098 rule 2's trigger (a line taking over landed paths) is not built,
-    // so no revise decides a take-in yet; rondo#417 is the first to pass one.
-    takeIn: null,
+    takeIn: decided.takeIn,
   });
   if (successor.kind === "refused") {
     return {
@@ -5966,6 +5979,112 @@ export async function revisionPreflight(
   return numbering !== null && "refusal" in numbering
     ? { kind: "refused", reason: `${numbering.refusal} The gate was not touched.` }
     : { kind: "ready", plan: successor.plan, gate, numbering };
+}
+
+/**
+ * What a revision of `predecessor` must take in first (D-0098 rule 2, built by
+ * D-0105), or null, or why that could not be decided -- before any gate.
+ *
+ * In this order:
+ *  1. **A take-in the predecessor did not pass is carried**, commit and all:
+ *     it is not work that lap already did (`revisionPlan` never inherits one
+ *     it did), and dropping it would let the next lap read clear without it.
+ *  2. **`conflict`** (rondo#417): the caller says so; the default branch is
+ *     fetched as the forge has it now.
+ *  3. **`landed`**: the predecessor changed paths outside its line's claim
+ *     (D-0073 rule 5, {@link compareClaim}) that the default branch has
+ *     changed since the predecessor's tip left it. Only then is anything
+ *     fetched, so an ordinary revise still reaches no forge. The decision
+ *     record is not a landed path: it is shared-append (D-0098 rule 3.5) and a
+ *     collision on it is the conflict case.
+ *
+ * **The one exception to D-0100 rule 4** ("a revision fetches nothing"): a
+ * take-in fetches the base into `rondo/base/<the successor's run id>`, the
+ * ref a first lap of that run id would own, derived as `admit()` will derive
+ * it (D-0103 rule 2.6's open naming). A fetch that fails refuses the revision.
+ */
+export async function revisionTakeIn(
+  predecessor: IterationRecord,
+  successorId: string,
+  store: Pick<IterationStore, "readingsFor" | "laneLine" | "compareLane">,
+  cause: "conflict" | null,
+): Promise<{ readonly takeIn: TakeIn | null } | { readonly refusal: string }> {
+  const planned = readPlan(predecessor.plan);
+  if (planned.kind !== "planned") {
+    // `revisionPlan` refuses it in its own words.
+    return { takeIn: null };
+  }
+  const plan = planned.plan;
+  const tip =
+    latestReading(await store.readingsFor(predecessor.id), isDeterministicReadingDrafter)?.evidence
+      ?.tipCommit ?? null;
+  if (plan.takeIn !== null) {
+    const passed =
+      tip !== null &&
+      (await isAncestor({
+        repository: plan.repository,
+        ancestor: plan.takeIn.commit,
+        descendant: tip,
+      })) === "yes";
+    if (!passed) {
+      return { takeIn: plan.takeIn };
+    }
+  }
+  let paths: readonly string[] = [];
+  if (cause === null) {
+    const compared = await compareClaim({ store, readChangedPaths }, predecessor.id);
+    if (compared.kind !== "outside" || tip === null) {
+      return { takeIn: null };
+    }
+    paths = [...compared.held.flatMap((holder) => holder.sharedPaths), ...compared.unheld].filter(
+      (path) => path !== plan.decisionRecord,
+    );
+    if (paths.length === 0) {
+      return { takeIn: null };
+    }
+  }
+  const allocation = allocate(successorId, plan.workspaceRoot);
+  if (allocation.kind === "refused") {
+    // `revisionPreflight` refuses the id in its own words.
+    return { takeIn: null };
+  }
+  const remoteBranch = plan.pullRequestBaseBranch ?? plan.baseBranch;
+  const base = await fetchLapBase({
+    repository: plan.repository,
+    remote: READING_REMOTE,
+    baseBranch: remoteBranch,
+    runId: allocation.allocation.runId,
+  });
+  if (base.kind === "refused") {
+    return { refusal: base.reason };
+  }
+  if (cause === null && tip !== null) {
+    const landed = await readChangedPaths({
+      repository: plan.repository,
+      baseCommit: tip,
+      tipCommit: base.commit,
+    });
+    if (landed.kind === "undetermined") {
+      return {
+        refusal:
+          `rondo could not read what ${READING_REMOTE}/${remoteBranch} changed since lap ` +
+          `'${predecessor.id}': ${landed.reason}.`,
+      };
+    }
+    paths = paths.filter((path) => landed.paths.some((changed) => pathsOverlap(path, changed)));
+    if (paths.length === 0) {
+      return { takeIn: null };
+    }
+  }
+  return {
+    takeIn: {
+      commit: base.commit,
+      branch: base.branch,
+      remoteBranch,
+      paths: cause === null ? paths : [],
+      cause: cause ?? "landed",
+    },
+  };
 }
 
 /**
