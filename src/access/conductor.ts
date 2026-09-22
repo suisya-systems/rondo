@@ -81,6 +81,7 @@ import { discard, writeDelegationRecord } from "./delegation.js";
 import {
   type ChangedPathsReading,
   type ChangedPathsRequest,
+  fetchLapBase,
   inspectLapWork,
   type LandingReading,
   type LandingRequest,
@@ -267,6 +268,23 @@ export function conductorPorts(
     classify: async (plan) => classifyPlan(plan),
     startContinuo: async () => ({ kind: "answered", value: { revision: continuo.revision } }),
     admitRun: async (plan, neutralRoleName): Promise<EffectOutcome<RunAdmission>> => {
+      // **A first lap starts from the forge's branch as it is now** (rondo#407,
+      // D-0100): fetched before anything is written, and a fetch that fails is
+      // a lap that does not start. A revision (`pullRequestBaseBranch` set) is
+      // cut from its predecessor's topic branch, which is local and never
+      // pushed, so there is nothing to fetch for it.
+      let baseBranch = plan.baseBranch;
+      if (plan.pullRequestBaseBranch === null) {
+        const base = await fetchLapBase({
+          repository: plan.repository,
+          remote: READING_REMOTE,
+          baseBranch: plan.baseBranch,
+        });
+        if (base.kind === "refused") {
+          return { kind: "refused", message: base.reason };
+        }
+        baseBranch = base.branch;
+      }
       // **Written before the verb and removed after it, whatever the verb
       // answered** (D-0040 rule 7). continuo requires the record and does not
       // default it, so a record rondo cannot compose or write is an admission
@@ -283,7 +301,7 @@ export function conductorPorts(
           leaseClaimantId: plan.leaseClaimantId,
           workspace: plan.workspace,
           neutralRoleName,
-          baseBranch: plan.baseBranch,
+          baseBranch,
           topicBranch: plan.topicBranch,
           prompt: plan.prompt,
           // The catalog project's `allowed_bash`, exactly the list the envelope

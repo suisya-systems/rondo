@@ -238,7 +238,11 @@ function planDocument(dir: string, repository: string): JsonRecord {
   return planPayload(admitted.plan);
 }
 
-/** A git repository with one commit on `main`, for the lap to be cut from. */
+/**
+ * A git repository with one commit on `main`, pushed to a bare `origin` beside
+ * it: a first lap is cut from the forge's branch, fetched at admission
+ * (rondo#407), so a repository with no forge is one no lap starts in.
+ */
 function seedRepository(repository: string): void {
   mkdirSync(repository, { recursive: true });
   const git = (...args: string[]) =>
@@ -256,6 +260,10 @@ function seedRepository(repository: string): void {
   writeFileSync(join(repository, "README.md"), "# base\n", "utf8");
   git("add", "README.md");
   git("commit", "--quiet", "-m", "chore: the base");
+  const forge = `${repository}.git`;
+  execFileSync("git", ["init", "--quiet", "--bare", "--initial-branch", "main", forge]);
+  git("remote", "add", "origin", forge);
+  git("push", "--quiet", "origin", "main");
 }
 
 /** What a press is handed: the approver, and the continuo the page would start. */
