@@ -886,7 +886,8 @@ export const JA: Chrome = Object.freeze({
   publishBodyRawNote: "この本文が、一字一句このまま送信されます。",
   publishNoticedHeading: "rondo が気づいたこと",
   publishModelHeading: "モデルが読んだこと",
-  publishModelNote: "判断の材料です。承認ではなく、上の内容がこれで決まったわけでもありません。",
+  publishModelNote:
+    "判断の材料です。承認ではなく、この画面の内容がこれで決まったわけでもありません。",
   publishNote:
     "ボタンを押すと、rondo があなたの名前で push し、プルリクエストを作り、run を閉じます。" +
     "マージはしません。画面を開いたあとに何か変わっていれば、実行せず、理由を表示します。",

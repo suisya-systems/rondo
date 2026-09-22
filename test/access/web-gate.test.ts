@@ -263,7 +263,7 @@ test("the gate offers a change beside approve, drafted from the findings and edi
     /<button type="submit"[^>]*class="[^"]*border-wait[^"]*">approve despite what was raised</,
   );
   expect(bar).not.toMatch(/<button type="submit"[^>]*class="[^"]*bg-wait /);
-  expect(bar.slice(0, bar.indexOf(">"))).toContain("border-t-2 border-wait");
+  expect(bar.slice(0, bar.indexOf(">"))).toContain("border-t-2 border-t-wait");
 });
 
 test("a lap admitted under no approval is told so where the change would be (#233 S4)", async () => {

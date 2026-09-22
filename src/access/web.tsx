@@ -1143,7 +1143,7 @@ function approveView(
         // the same edge as the evidence stacked above it. The colour is the
         // page's one claim that a person must act, spent on the one element
         // that makes it (rule 2).
-        class="flex flex-col gap-2 border-t-2 border-wait bg-card px-4 py-3"
+        class="flex flex-col gap-2 rounded-lg border border-border border-t-2 border-t-wait bg-card px-4 py-3"
       >
         {/*
          * **Both readings' verdicts pinned in the bar** (the S2 design pass on
@@ -2010,9 +2010,13 @@ async function threadActs(
   // A repository added from the page whose build rondo could not tell: said
   // where the work is, since it bounds what the worker can check (D-0090).
   const unbuilt = where?.work.kind === "held" ? where.unbuilt : [];
+  // Nothing to say and nowhere to go: no row at all, not an empty one that
+  // leaves a gap at the top of the thread (D-0106).
+  const empty =
+    unbuilt.length === 0 && others.length === 0 && (standing !== null || unheld !== null);
   return {
     next,
-    acts: (
+    acts: empty ? null : (
       <p class="thread-acts">
         {unbuilt.map((repo) => (
           <span class="block text-meta leading-5 text-muted-foreground">
@@ -2139,7 +2143,7 @@ function composerView(
       class={
         replying === null
           ? "rounded-xl border border-border bg-card shadow-xs focus-within:border-ring/60"
-          : "rounded-xl sm:ml-10 border border-border bg-card shadow-xs focus-within:border-ring/60"
+          : "mt-4 mb-3 rounded-xl border border-border bg-card shadow-xs focus-within:border-ring/60"
       }
     >
       {replying === null ? (
@@ -3033,7 +3037,7 @@ export async function operatorPage(
     selectedRoot === null
       ? null
       : await threadActs(wording, ports, token, selectedRoot, selectedLaps, threads);
-  const actsMarkup = acts === null ? null : ((await acts.acts.toString()) ?? null);
+  const actsMarkup = acts?.acts == null ? null : ((await acts.acts.toString()) ?? null);
   const nextMarkup = acts?.next == null ? null : ((await acts.next.toString()) ?? null);
   const centreContent = noSuchThread
     ? { rendered: await note(wording.noSuchThread).toString() }

@@ -19969,6 +19969,11 @@ is therefore on the time axis at the moment it was made, and the count on the ri
 things. **One line -- "you last looked down to here" (`D-0061` rule 2.5) -- is drawn once in the list
 and once in the thread**, and no row carries a *new* mark of its own.
 
+> **Annotation (2026-09-22, from D-0106).** Additive (rondo#408): with the thread newest first, the
+> last-looked line sits *under* what arrived after the mark, so it reads as "what is below here you
+> have seen", which is what its words already say. Still drawn once in the list and once in the
+> thread. Nothing above is edited.
+
 **8. The folds.**
 
 | Width | Faces | What folds |
@@ -22801,6 +22806,7 @@ above the release press for the same rule; the files held and why are under it.
 | `D-0083` rule 2, the axis is time | Kept; drawn newest first (rule 2 here) | **not additive** |
 | `D-0083` rule 5, the centre holds the thread and then the box to answer in, and *under it, always, a box to add* | The boxes and presses come first and the thread under them (rules 1 and 4 here) | **not additive** |
 | `D-0083` rule 8, *the page scrolls to the answering box on arrival* at 1600 | Withdrawn: the box is at the top at every width, so there is nothing to scroll to. Rule 8's folds of the faces are untouched | **not additive** |
+| `D-0083` rule 7, the last-looked line | Drawn under the new lines instead of over them; still once in the list and once in the thread | additive |
 | `D-0083` rule 9, the box inherits the gate whole | Every element kept; their order inside the box is rule 5 here | kept |
 | `D-0086` rule 3, *one line over the top* | The same fold of what was already read, now at the foot of the thread under the new lines, since the thread runs the other way | **not additive** |
 | `D-0082` rule 7 | Unchanged; rule 6 here says how it is read with the press above | kept |
