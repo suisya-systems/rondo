@@ -232,6 +232,39 @@ test(
 );
 
 test(
+  "rondo#417 (D-0105): an approved and closed lap's approval can be raised, for the attempt that fixes its conflict",
+  async () => {
+    const w = await world();
+    for (const [from, to] of [
+      ["planned", "admitting"],
+      ["admitting", "admitted"],
+      ["admitted", "performing"],
+      ["performing", "awaiting_human"],
+    ] as const) {
+      const moved = await w.store.transition(
+        "lap-ended",
+        from,
+        to,
+        to === "awaiting_human" ? { gateId: "gate-2" } : {},
+        4,
+      );
+      expect(moved.kind).toBe("transitioned");
+    }
+    await w.store.recordGateAnswer("lap-ended", "gate-2", "approve", "ada", 5);
+    const approved = await w.store.transition(
+      "lap-ended",
+      "awaiting_human",
+      "closed",
+      { gateOutcome: "answered_and_forwarded" },
+      6,
+    );
+    expect(approved.kind).toBe("transitioned");
+    expect(await w.raise({ iterationId: "lap-ended" })).toMatchObject({ ok: true });
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
   "a raise that cannot be taken says why and writes nothing (D-0074 rule 4.4)",
   async () => {
     const w = await world();

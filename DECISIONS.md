@@ -22896,7 +22896,8 @@ At rondo `f726fed` and cadenza `2c56970`, by reading and by the tests this chang
       while it is offered, and that rondo is settling it while the attempt runs.
    2. **A redo under the approval the lap ran under** (`D-0070`, the scope's `redo` arm), counted
       against its budgets as any revise is; a budget that would refuse it draws the way to raise it in
-      place of the press (`D-0074` rule 4.1). There is no gate to walk, and no words of the person's:
+      place of the press (`D-0074` rule 4.1), and a raise is taken over an approved, closed lap as
+      over one at its gate. There is no gate to walk, and no words of the person's:
       the prompt says in rondo's words that the approved and published work conflicts and nothing
       else is to change (`D-0009`: nothing is written in the person's place).
    3. **Its base is the default branch fetched at the press** (rule 2.3), taken in with cause
@@ -22904,7 +22905,10 @@ At rondo `f726fed` and cadenza `2c56970`, by reading and by the tests this chang
       model reading, the person's approve or revise.
    4. **Publishing an approved fix pushes onto the pull request it fixes** and opens none
       (`pullRequestUpdated`): the pull request and its branch are read up the line, from the nearest
-      published line above. The push is `topic:refs/heads/<branch>`, never forced; the fix descends
+      published line above. **Any lap below a published one does so**, whatever it takes in itself: a
+      lap is published only once approved and closed, so what follows it is a fix or a revise of one,
+      and a fix that took the base in and was then revised hands the pull request on. A pull request
+      merged or closed since is not pushed onto. The push is `topic:refs/heads/<branch>`, never forced; the fix descends
       from that branch's head, so a push the forge refuses means somebody moved it. The published line
       names the same pull request and the branch, and the thread says *pushed onto the open pull
       request*. The publish screen and its card say *update pull request #N*.

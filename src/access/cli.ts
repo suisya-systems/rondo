@@ -4735,11 +4735,18 @@ async function raiseScope(
     return notTaken(actor.refusal);
   }
   const found = await store.read(input.iterationId);
-  if (found.kind !== "read" || isTerminal(found.record.status) || found.record.gateId === null) {
+  // At its gate, or approved and closed: the conflict fix of rondo#417 starts
+  // one more attempt of an approved lap, and its card offers this raise where
+  // the budget would refuse that attempt (D-0105, Codex round 1).
+  if (
+    found.kind !== "read" ||
+    (!approvedForPublication(found.record) &&
+      (isTerminal(found.record.status) || found.record.gateId === null))
+  ) {
     return {
       ok: false,
       why: "raiseRefusedNotAtGate",
-      note: `iteration '${input.iterationId}' has no gate open`,
+      note: `iteration '${input.iterationId}' has no gate open and was not approved`,
     };
   }
   const record = openAdvisoryRecord(storePath);
@@ -7107,53 +7114,57 @@ export async function publishPlanFor(
 }
 
 /**
- * The open pull request a conflict fix is pushed onto (rondo#417, D-0105), or
- * null for any other lap, or why it cannot be named.
+ * The open pull request this lap's commits are pushed onto (rondo#417,
+ * D-0105), or null where publishing opens one, or why it cannot be named.
  *
- * **Read up the line, from the thread**: the nearest lap above this one whose
- * published line is in the request's thread is the pull request's, and its
- * branch is the one that line says it pushed onto, or that lap's own topic
- * branch where it opened the pull request. rondo keeps no pull-request column
- * (the thread is where publishing is recorded), so a fix whose thread will
- * not read is refused rather than opening a second pull request.
+ * **Any lap below a published one continues that pull request.** A lap is
+ * published only once approved and closed, so a lap after it in its line is a
+ * conflict fix or a revise of one, whatever that lap itself takes in: a fix
+ * that took the base in and was then revised hands its pull request on to the
+ * revision (Codex round 1). The nearest published lap above is read from the
+ * thread, rondo keeping no pull-request column: its address, and the branch
+ * its line says it pushed onto or its own topic branch where it opened the
+ * pull request. A pull request merged or closed since is not pushed onto, and
+ * a thread that will not read is refused rather than opening a second one.
  */
 export async function pullRequestUpdated(
   record: IterationRecord,
   store: Pick<IterationStore, "read">,
   thread: Pick<AdvisoryRecord, "threadMessages"> | null,
 ): Promise<{ readonly url: string; readonly onto: string } | { readonly refusal: string } | null> {
-  const planned = readPlan(record.plan);
-  if (planned.kind !== "planned" || planned.plan.takeIn?.cause !== "conflict") {
+  if (record.supersedesIterationId === null) {
     return null;
   }
   const refusal = (why: string) => ({
-    refusal:
-      `lap '${record.id}' fixes a pull request's conflict and is pushed onto that pull ` +
-      `request, and ${why}, so nothing is published.`,
+    refusal: `lap '${record.id}' continues a line whose pull request ${why}, so nothing is published.`,
   });
   const read = thread === null ? null : await thread.threadMessages();
   if (read === null || read.kind !== "read") {
-    return refusal("the request's thread, which names it, will not read");
+    return refusal("is named in the request's thread, which will not read");
   }
-  let up = record.supersedesIterationId;
+  const said = (id: string) => read.messages.find((one) => one.messageId === id);
+  let up: string | null = record.supersedesIterationId;
   for (let hops = 0; up !== null && hops < LINEAGE_HOPS; hops += 1) {
     const above = await store.read(up);
     if (above.kind !== "read") {
-      return refusal(`lap '${up}' above it will not read`);
+      return refusal(`cannot be found: lap '${up}' above it will not read`);
     }
-    const said = read.messages.find((one) => one.messageId === `report-published-${up}`);
-    if (said !== undefined) {
-      const url = pullRequestIn(said.body)?.url;
+    const published = said(`report-published-${up}`);
+    if (published !== undefined) {
+      if (said(`report-merged-${up}`) !== undefined || said(`report-closed-${up}`) !== undefined) {
+        return refusal("is merged or closed");
+      }
+      const url = pullRequestIn(published.body)?.url;
       const onto =
-        /were pushed onto '([^']+)'/.exec(said.body)?.[1] ??
+        /were pushed onto '([^']+)'/.exec(published.body)?.[1] ??
         planField(above.record, "topic_branch");
       return url === undefined || onto === ""
-        ? refusal(`lap '${up}''s published line names no pull request and branch`)
+        ? refusal(`is not named with its branch by lap '${up}''s published line`)
         : { url, onto };
     }
     up = above.record.supersedesIterationId;
   }
-  return refusal("no lap above it was published");
+  return null;
 }
 
 /** How far up a line {@link pullRequestUpdated} walks: a lineage is never this long. */

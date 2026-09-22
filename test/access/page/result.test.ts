@@ -689,8 +689,37 @@ test("a fix's publish names the open pull request and its branch, up the line, a
     9_000,
   );
   expect(await read("i-fix2")).toEqual({ url: PR, onto: "rondo/i-r" });
-  // A lap that is not a conflict fix opens its own, as before.
+  // A lap that is below no published one opens its own, as before.
   expect(await read("i-r")).toBeNull();
+  // A fix that took the base in and was then revised hands its pull request on:
+  // the revision takes nothing in, and still goes onto the same branch (Codex round 1).
+  const revisedFix = await world.store.reserve({
+    numbers: null,
+    id: "i-fix3",
+    request: "#291 の文言を分けて",
+    plan: planFor("i-fix3"),
+    spend: null,
+    scopeSpend: null,
+    claim: null,
+    nowMs: 9_500,
+    supersedesIterationId: "i-fix2",
+    requestMessageId: "req-r",
+    runId: "rondo-i-fix3",
+    topicBranch: "rondo/i-fix3",
+    workspace: "/srv/work/i-fix3",
+  });
+  expect(revisedFix.kind).toBe("reserved");
+  expect(await read("i-fix3")).toEqual({ url: PR, onto: "rondo/i-r" });
+  // A pull request merged since is not pushed onto.
+  await reportToRequest(
+    threadOf(world),
+    "i-fix",
+    { kind: "merged", pullRequestUrl: PR, into: "main", method: "squash", mergeCommit: "d1" },
+    9_800,
+  );
+  expect(await read("i-fix3")).toMatchObject({
+    refusal: expect.stringContaining("merged or closed"),
+  });
   // And the result is the fix's once it is published: the same pull request.
   const said = await world.record.threadMessages();
   if (said.kind !== "read") throw new Error(said.reason);

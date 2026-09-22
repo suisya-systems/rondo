@@ -2097,23 +2097,16 @@ async function threadActs(
       </form>
     </section>
   );
-  // **An approved conflict fix updates the pull request already open** (rondo#417,
+  // **A lap below a published one updates that pull request** (rondo#417,
   // D-0105): its publish pushes onto it and opens none, so the step says which.
-  const takeInCause = (plan: IterationRecord["plan"]) => {
-    const takeIn = plan["take_in"];
-    return typeof takeIn === "object" && takeIn !== null && "cause" in takeIn ? takeIn.cause : null;
-  };
-  const openedBefore = laps
-    .filter((lap) => lap !== nextPublish && publishedReport(threads, lap.record.id) !== null)
-    .at(-1);
-  const openedResult =
-    openedBefore === undefined ? null : resultOf(threads.byId, openedBefore.record.id);
-  const updating =
-    nextPublish === null ||
-    takeInCause(nextPublish.record.plan) !== "conflict" ||
-    openedResult === null
-      ? null
-      : wording.pullRequest(openedResult.number);
+  // Walked up its own line, as `pullRequestUpdated` walks it, never across lines.
+  const byLap = new Map(laps.map((lap) => [lap.record.id, lap.record]));
+  let above = nextPublish?.record.supersedesIterationId ?? null;
+  while (above !== null && publishedReport(threads, above) === null) {
+    above = byLap.get(above)?.supersedesIterationId ?? null;
+  }
+  const openedResult = above === null ? null : resultOf(threads.byId, above);
+  const updating = openedResult === null ? null : wording.pullRequest(openedResult.number);
   // The conflict fix (rondo#417, D-0105): a press, since the attempt it starts
   // is counted against the approval and nothing is between it and the act.
   const fixCard = (fix: NonNullable<typeof nextFix>) => (
