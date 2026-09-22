@@ -22371,7 +22371,7 @@ At rondo `77c41d7`, by reading `src/access/checks-host.ts`, `src/access/merge.ts
    head is not the tip the lap's deterministic reading recorded, the host reads the forge's
    comparison (`GET repos/O/N/compare/FROM...TO`, read-only) and writes
    `report-moved-<lap>-<head>` with both heads and the commits between them, at most `LIST_LIMIT`
-   of them. Checks on that head are written under ids that name the head, and the band reads only
+   of them, counted by the forge's `total_commits` because its list stops at 250. Checks on that head are written under ids that name the head, and the band reads only
    those, so a green on the lap's own head does not count for the new head. A branch pushed back
    to the lap's own head is written as a move with nothing carried, and the page then reads it as
    not moved.
