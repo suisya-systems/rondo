@@ -73,6 +73,7 @@ import {
   resolveLanguage,
 } from "./page-logic/language.js";
 import { MAX_REVIEW_ROUNDS, type PageView, viewHref } from "./page-logic/routes.js";
+import { TAB_OUTCOMES, type TabOutcome } from "./reach.js";
 import { APPROVE_BODY, operatorPage } from "./web.js";
 import type { Chrome } from "./wording.js";
 
@@ -1326,6 +1327,11 @@ export interface ServedPorts extends WebPorts {
   readonly merge?: MergePort | null;
   /** Null on {@link release}'s condition: a goal and a *not now* are the person's (D-0097). Absent is null. */
   readonly triage?: TriagePort | null;
+  /**
+   * Where an open tab's report of its notice is written (rondo#414). Null on
+   * {@link say}'s condition. Absent is null.
+   */
+  readonly notice?: ((waits: readonly string[], outcome: TabOutcome) => Promise<void>) | null;
 }
 
 /**
@@ -1456,6 +1462,17 @@ const NOT_NOW_ROUTE = "/not-now";
  * forge says the pull request conflicts and nothing waits on the person.
  */
 export const FIX_CONFLICT_ROUTE = "/fix-conflict";
+
+/**
+ * Where an open tab reports what its notice did (rondo#414). Not a press: the
+ * tab reports on its own, with no person's click behind it, so it is minted
+ * as a send is (a same-origin script with the token) and it writes only a
+ * record of the notice -- nothing is decided, answered or approved by it.
+ */
+const NOTICE_ROUTE = "/notice";
+
+/** A wait's episode as `src/access/page-logic/waits.ts` writes one. */
+const EPISODE = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,199}$/;
 
 /**
  * The routes whose body is numbers and minted ids and never prose, and so take
@@ -1657,6 +1674,9 @@ function typeOf(name: string): string {
   if (name.endsWith(".js")) {
     return "text/javascript; charset=utf-8";
   }
+  if (name.endsWith(".svg")) {
+    return "image/svg+xml";
+  }
   return name.endsWith(".woff2") ? "font/woff2" : "application/octet-stream";
 }
 
@@ -1766,6 +1786,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     addRepository,
     merge = null,
     triage = null,
+    notice = null,
     ...reading
   } = ports;
   const app = new Hono<PageEnv>();
@@ -1825,6 +1846,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   for (const path of PRESS_ROUTES) {
     app.use(path, csrf());
   }
+  app.use(NOTICE_ROUTE, csrf());
   // One limit middleware, sized by the address: a send carries a person's
   // words, every other request at most the press's short fields and its claim.
   const pressLimit = bodyLimit({
@@ -2539,6 +2561,28 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       return triageRefused(c, 409, "goalRefused", repository, kept.note);
     }
     return c.redirect(viewHref({ kind: "requests" }, tagOf(c)), 303);
+  });
+
+  // **A tab's report of its notice** (rondo#414). `204` either way: the tab
+  // does nothing with an answer, and a refusal is not the person's to read.
+  app.post(NOTICE_ROUTE, async (c) => {
+    const form = await c.req.parseBody({ all: true });
+    const posted = form["wait"];
+    const waits = (Array.isArray(posted) ? posted : [posted]).filter(
+      (wait): wait is string => typeof wait === "string" && EPISODE.test(wait),
+    );
+    const outcome = TAB_OUTCOMES.find((known) => known === form["outcome"]);
+    const minted = spendArrival(c, form["token"], (incoming) =>
+      header(incoming, "sec-fetch-mode") === "cors" ? null : "only this page's own script reports",
+    );
+    if (minted !== null) {
+      return c.body(null, minted.status);
+    }
+    if (notice === null || outcome === undefined || waits.length === 0 || waits.length > 32) {
+      return c.body(null, 400);
+    }
+    await notice(waits, outcome);
+    return c.body(null, 204);
   });
 
   // **The *not now* press** (D-0097 point 4.5 (a)): recorded beside the

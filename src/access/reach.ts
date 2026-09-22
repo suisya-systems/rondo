@@ -68,6 +68,42 @@ import type { Chrome } from "./wording.js";
  */
 export const REACH_SUBJECT = "reach";
 
+/**
+ * `operator_attention.subject_kind` for what an open tab reports its notice did
+ * (rondo#414): the tab's own ledger beside the host's, so a lap's record can
+ * say whether each fired rather than guess. Its `subject_id` is the wait's
+ * episode and the outcome, so the partial unique index keeps one row per wait
+ * and outcome however many tabs report it.
+ */
+export const TAB_SUBJECT = "tab";
+
+/**
+ * What a tab's notice did for a wait: the operating system showed it, or
+ * refused to; or no notification was asked for because the browser has none,
+ * was refused leave, or was never asked. The title and the icon change in
+ * every case, so none of these is "nothing happened".
+ */
+export const TAB_OUTCOMES = ["shown", "failed", "denied", "notAsked", "unsupported"] as const;
+export type TabOutcome = (typeof TAB_OUTCOMES)[number];
+
+/** Write what a tab reported, one row per wait; a repeat is a no-op. */
+export async function recordTabNotice(
+  record: Pick<AdvisoryRecord, "claimAttention">,
+  atMs: number,
+  waits: readonly string[],
+  outcome: TabOutcome,
+): Promise<void> {
+  for (const wait of waits) {
+    await record.claimAttention({
+      atMs,
+      subjectKind: TAB_SUBJECT,
+      subjectId: `${wait}:${outcome}`,
+      disposition: "presented",
+      ruleName: null,
+    });
+  }
+}
+
 /** Whether the program setup found actually ran, and what to say if it did not. */
 export type NotifyOutcome =
   | { readonly kind: "reached" }

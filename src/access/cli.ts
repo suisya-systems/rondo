@@ -196,7 +196,7 @@ import type {
 import { asksOverLine, conflictFixBlock, resultOf } from "./page-logic/result.js";
 import { threadsOf } from "./page-logic/threads.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
-import { notifierAt, reachThePerson } from "./reach.js";
+import { notifierAt, reachThePerson, recordTabNotice } from "./reach.js";
 import { nextNumbers, numbersSection } from "./record-numbers.js";
 import {
   cloneDirectory,
@@ -1686,6 +1686,14 @@ export async function main(
                     claim,
                   ),
               ),
+        // What an open tab's notice did (rondo#414), on `say`'s condition: the
+        // page carries the token only where it has a writer.
+        notice:
+          sender === null || "refusal" in sender
+            ? null
+            : async (waits, outcome) => {
+                await recordTabNotice(record, Date.now(), waits, outcome);
+              },
         say:
           sender === null || "refusal" in sender
             ? null

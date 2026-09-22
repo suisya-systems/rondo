@@ -23138,3 +23138,126 @@ page will not offer it, with the one command that records it alone.
 
 - **A "database is locked" reported by any rondo process** after this change: a writer holds the
   lock longer than five seconds, and the answer is that writer, not a longer wait.
+
+---
+
+## D-0108 — The tab's *your turn* is one a person looking elsewhere sees: the title and the icon change with no leave from anybody, the tab remembers what it rang for across a navigation, and what the notice did is a row a lap's record can read
+
+**Status:** accepted (2026-09-23, rondo#414). Three points were put to the owner, who chose the
+recommended option on all three; the answers are in section "What was put to the owner, and the
+answer". Additive to rondo#311's plan 2 (`page/chime.js`) and to `D-0068`'s annotation of
+2026-09-21, which named `operator_attention` rows under `reach` as the host's ledger. Refs
+`D-0036`, `D-0041`, `D-0059`, `D-0068`, `D-0076`, `D-0082`, `D-0106`, rondo#311, rondo#409,
+rondo#414.
+
+**Numbering.** `D-0108` was assigned to this lane in advance; `D-0107` is held by another lane.
+
+**Why an entry is needed.** Lap 12's measure 3 (`docs/operations/lap-12-dogfood.md`): at the gate
+the host's `wsl-notify-send` reached the owner and the tab's notice was not noticed at all, and the
+record could not say whether the tab had shown anything. Two questions no entry answered: what a
+tab does that a person in another window or another tab sees, and where a tab's notice is written
+down.
+
+### What was measured, and how
+
+On **2026-09-23**, at rondo `985d57b`, by reading `page/chime.js`, the start route in
+`src/access/web-app.ts`, and lap 12's record.
+
+- **The tab did not fire at all at lap 12's gate; it was not too faint.** The start press's route
+  awaits `scope.start`, which returns when the lap stops at its gate (the loading tab of rondo#409).
+  Its `303` therefore lands on a document that already holds the gate, and `chime.js` took *what the
+  document arrived holding* as already seen. The gate's key was never new to that document, so
+  nothing rang, whatever the browser's permission was.
+- **Without the browser's leave the tab did nothing a person could see from elsewhere.** The only
+  signal was `new Notification(...)`, the leave to show it was asked from a muted pill in the header,
+  and the notes do not say whether it was ever pressed. The title was a fixed `rondo`, and the page
+  had no icon.
+
+Screenshots at 2560x1600 and 1600x1500, light and dark, English and Japanese, before and after, are
+taken outside the worker's sandbox by the shoot script attached to the pull request. Nothing here
+claims a pixel.
+
+### The decision
+
+**1. The tab remembers the waits it has seen for as long as the tab lives, not the document.** The
+set is kept in `sessionStorage`, which belongs to the tab and outlives a navigation within it. A
+document that arrives holding a wait the tab has not seen rings for it, as a redraw does. A fresh
+tab, or a tab whose storage is refused, still starts from what is on its screen, because the person
+is looking at it. This fixes lap 12's case whether or not rondo#409 makes the start press answer at
+once.
+
+**2. The title and the icon change without anybody's leave.**
+- The title is the header's count (`(N) rondo`, or `rondo` with nothing waiting). The server draws
+  it, and the script keeps it current from `#ledger`. htmx's own title handling is off
+  (`ignoreTitle`): it writes the response's `<title>` straight after the swap the script reads, and
+  would take *your turn* back off the tab.
+- A new wait that rings while the tab is not visible and focused puts *Your turn - rondo* /
+  *あなたの番 — rondo* in the title until the tab is looked at. The words that catch the eye come
+  first, because a tab strip cuts a title after a couple of dozen characters.
+- The icon is a ring (`page/icon.svg`), with `D-0082`'s amber badge (`page/icon-wait.svg`) while
+  anything waits. Amber still means only "a person must act".
+- The icons are two served files under the manifest, not `data:` URIs, which `default-src 'self'`
+  refuses. They carry no `<style>` block, so no stylesheet can be refused inside them.
+
+**3. The operating system's notification is still asked for from a press, which is now drawn as
+something to touch.** A browser grants that leave only from a person's own press. The header
+button keeps its rule (drawn only while the browser has no answer, so nothing once it has been
+refused), says what it does (*Allow notifications in this tab* / *このタブに通知を許可*), and moves
+from the muted tone to `D-0082` rule 3's blue (`text-link`, a hollow pill). The filled amber count
+beside it stays louder. A notification is counted as shown on its `show` event, not when its
+constructor returns. Clicking it brings the tab forward.
+
+**4. What the notice did is written down, one row per wait and outcome.** Each time a tab rings,
+it reports to `POST /notice`. The report names the waits it rang for and one outcome:
+- `shown`: the operating system drew it.
+- `failed`: the operating system refused to draw it, or the constructor threw.
+- `denied`: the browser was asked and said no.
+- `notAsked`: nobody has pressed the button yet.
+- `unsupported`: the browser has no notification.
+
+The host writes `operator_attention` rows, `subject_kind = 'tab'`, `subject_id =
+'<episode>:<outcome>'`, `disposition = 'presented'`. That is the same table as the host's own
+`reach` rows, beside them and in a key space of their own. The partial unique index makes two tabs
+reporting one outcome a single row. A lap's record reads
+`SELECT * FROM operator_attention WHERE subject_kind IN ('reach', 'tab')` and can say, per wait,
+what the host sent and what the tab did. Every outcome means the title and icon changed.
+
+**5. The report is its own kind of write, neither a press nor a send.** It has no person's click
+behind it, so it cannot be a press. It carries no words and appends nothing to a thread, so it is
+not a send. It is minted as a send is: `POST`, same origin, `Sec-Fetch-Mode: cors`, this process's
+token. It takes the short form limit and Hono's cross-site refusal. It writes only this row, and
+only for keys shaped like an episode, at most 32 at a time. The token is on `#ledger` only where
+the page has a writer (`D-0041` rule 4), so a host with no approver draws no report and writes
+none. The route answers `204` or a bare status, because nothing on the page reads the answer.
+`test/access/web-app.test.ts` lists it as the third class beside `PRESS_ROUTES` and `SEND_ROUTES`,
+so a route added without a class still fails there.
+
+### What was put to the owner, and the answer
+
+| # | Point | Recommended | Answer (2026-09-23) |
+|---|---|---|---|
+| 1 | How the notification's leave is asked | keep the header press, drawn blue; do not ask from the start press, where the permission box would race the form's navigation and appear on a press that meant something else | **as recommended**, labelled *このタブに通知を許可* |
+| 2 | A sound | none: autoplay needs an earlier press on the page and is not reliable, and Windows' own notification already sounds, so it would sound twice beside the host's | **as recommended** |
+| 3 | Where "did it fire" is written | `operator_attention` rows under `tab`, as above; not a new table (`src/access/reach.ts` keeps the host's ledger in this table for the same reasons), and not only a console line, which a lap's record cannot query | **as recommended** |
+
+### What this gives up
+
+- **`D-0032` rule 10's attention breakdown counts these rows as presented.** It groups the whole
+  table and does not filter by kind, which is already true of `reach`. A breakdown that must read
+  only proposals has to filter by `subject_kind`. That change is the breakdown's, not this entry's.
+- **A tab can report a wait it did not ring for.** Only a same-origin script holding the token can,
+  and all it can write is a row saying a notice fired. It answers nothing and approves nothing.
+- **A tab only knows it drew a notice, not that a person saw it.** `shown` is the operating
+  system's `show` event. As with `reach`, no desktop notifier can say whether a person saw it, and
+  rondo does not claim that anybody did.
+- **Safari ignores SVG favicons.** The title still changes there.
+
+### What would falsify it
+
+- **A lap whose record shows `tab` rows at a wait, and whose notes say the owner still did not
+  notice the tab.** In that case, what the tab shows is the problem, not whether it fires, and
+  point 2 (sound) is what to reopen.
+- **A `notAsked` or `denied` row at every gate of a walk.** The press is not being found or not
+  being trusted. Rule 3's placement is what moves.
+- **A tab that rings for a wait the person was already looking at** often enough to be ignored.
+  Rule 1's cross-navigation memory is what to narrow.

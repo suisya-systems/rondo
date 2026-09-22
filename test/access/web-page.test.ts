@@ -532,6 +532,10 @@ test("liveness is per view: two views poll and swap, and the answer view updates
       '<script src="/chime.js" defer="">',
     ]);
     expect(html).not.toContain("//cdn");
+    // **The count and the badge in the tab strip** (rondo#414), before any
+    // script runs.
+    expect(html).toContain("<title>(1) rondo</title>");
+    expect(html).toContain('<link rel="icon" type="image/svg+xml" href="/icon-wait.svg"/>');
     expect(scriptTagsIn(html).filter((tag) => tag.includes("://"))).toEqual([]);
     // **The refresh is a `GET` of this view's own address**, and the one
     // element it swaps is the ledger (D-0054 rules 1 and 2, R3).
@@ -540,7 +544,11 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     // because `hx-get` and `hx-select` have to agree with each other.
     expect(html).toContain(
       '<div id="ledger" data-waits="[&quot;gate:i-0001:awaiting_human&quot;]" ' +
-        `data-chime="${EN.reachYourTurn}" ` +
+        `data-chime="${EN.reachYourTurn}" data-title="(1) rondo" ` +
+        `data-title-turn="${EN.tabTitleTurn}" data-icon="/icon-wait.svg" ` +
+        // Where the tab reports what its notice did, and only with a writer's
+        // token (rondo#414).
+        'data-notice-to="/notice" data-notice-token="t" ' +
         `hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-ext="morph" ` +
         'hx-swap="morph:outerHTML" ' +
         'hx-select-oob="#waiting-count">',
@@ -590,6 +598,9 @@ test("liveness is per view: two views poll and swap, and the answer view updates
       allowScriptTags: false,
       historyEnabled: false,
       includeIndicatorStyles: false,
+      // The tab's title is `chime.js`'s, and a redraw must not take *your
+      // turn* back off it (rondo#414, Codex round 1).
+      ignoreTitle: true,
       // A refused send lands under the draft rather than nowhere (#220 S1).
       responseHandling: [
         { code: "204", swap: false },

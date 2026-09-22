@@ -25,7 +25,7 @@ import { request as httpRequest } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { type Context, Hono } from "hono";
 import { expect, test } from "vitest";
-
+import { recordTabNotice } from "../../src/access/reach.js";
 import {
   type AddedRepository,
   type AddRepositoryInput,
@@ -1590,6 +1590,8 @@ const WRITE_TABLE = [
   "ALL /not-now",
   // The conflict fix of a published pull request (rondo#417, D-0105).
   "ALL /fix-conflict",
+  // An open tab's report of its notice (rondo#414, D-0108).
+  "ALL /notice",
   "ALL /*",
   "POST /",
   "POST /request",
@@ -1605,6 +1607,7 @@ const WRITE_TABLE = [
   "POST /release",
   "POST /add-repository",
   "POST /goal",
+  "POST /notice",
   "POST /not-now",
   "POST /fix-conflict",
   "POST /merge",
@@ -1663,10 +1666,17 @@ const PRESS_ROUTES = [
  */
 const SEND_ROUTES = ["/request", "/reply"];
 
-test("every POST route is either a press or a send, and none is unclassified", () => {
+/**
+ * The one write that is neither (rondo#414): an open tab's report of what its
+ * notice did. A same-origin script with the token, as a send is, and it writes
+ * only a record of the notice -- it carries no words and answers nothing.
+ */
+const REPORT_ROUTES = ["/notice"];
+
+test("every POST route is a press, a send or the tab's report, and none is unclassified", () => {
   const app = createApp(spyPorts([]), TOKEN);
   const posted = app.routes.filter((route) => route.method === "POST").map((route) => route.path);
-  expect([...posted].sort()).toEqual([...PRESS_ROUTES, ...SEND_ROUTES].sort());
+  expect([...posted].sort()).toEqual([...PRESS_ROUTES, ...SEND_ROUTES, ...REPORT_ROUTES].sort());
 });
 
 test("a press route writes nothing for a POST carrying no gesture (D-0059 section 5)", async () => {
@@ -3204,4 +3214,63 @@ test("(triage) no press, a half row or no approver writes nothing, and says why"
   expect(answered.body).toContain("not a candidate that proposal named");
   store.stop.abort();
   expect(await store.closed).toBe(0);
+});
+
+test("an open tab's report of its notice is written once per wait and outcome, and only from this page's script (rondo#414)", async () => {
+  const connection = new DatabaseSync(":memory:");
+  const record = advisoryRecord(connection);
+  const ports: ServedPorts = {
+    ...spyPorts([]),
+    notice: async (waits, outcome) => {
+      await recordTabNotice(record, 1_000, waits, outcome);
+    },
+  };
+  const { base, stop, closed } = await served(createApp(ports, TOKEN));
+  // What `fetch` from the page's own origin sends.
+  const script = { origin: base, "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors" };
+  const report = { token: TOKEN, outcome: "shown", wait: "gate:i-0001:awaiting_human" };
+
+  expect((await send(base, "/notice", "POST", script, report)).status).toBe(204);
+  // A second tab reporting the same thing is the same row.
+  expect((await send(base, "/notice", "POST", script, report)).status).toBe(204);
+  expect(
+    (await send(base, "/notice", "POST", script, { ...report, outcome: "denied" })).status,
+  ).toBe(204);
+
+  for (const [shape, headers, form] of [
+    ["a wrong token", script, { ...report, token: "not-the-token" }],
+    ["a foreign Origin", { ...script, origin: "https://evil.example" }, report],
+    ["a navigation", pressHeaders(base), report],
+  ] as const) {
+    expect((await send(base, "/notice", "POST", headers, form)).status, shape).toBe(403);
+  }
+  for (const [shape, form] of [
+    ["an outcome it does not know", { ...report, outcome: "maybe" }],
+    ["no wait", { token: TOKEN, outcome: "shown" }],
+    ["a wait that is not an episode", { ...report, wait: "../../x y" }],
+  ] as const) {
+    expect((await send(base, "/notice", "POST", script, form)).status, shape).toBe(400);
+  }
+
+  expect(
+    connection
+      .prepare(
+        "SELECT subject_kind, subject_id, disposition FROM operator_attention ORDER BY rowid",
+      )
+      .all()
+      .map((row) => ({ ...row })),
+  ).toEqual([
+    {
+      subject_kind: "tab",
+      subject_id: "gate:i-0001:awaiting_human:shown",
+      disposition: "presented",
+    },
+    {
+      subject_kind: "tab",
+      subject_id: "gate:i-0001:awaiting_human:denied",
+      disposition: "presented",
+    },
+  ]);
+  stop.abort();
+  expect(await closed).toBe(0);
 });

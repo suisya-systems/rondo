@@ -16,37 +16,127 @@ import { bytesOf } from "./page-world.js";
 
 type Listener = () => void;
 
-/** A tab running `page/chime.js`, whose ledger says the waits it is given. */
-function chimeTab(first: readonly string[] | null) {
+interface ChimeOptions {
+  /** What `Notification.permission` answers, or null for a browser without it. */
+  readonly permission?: "granted" | "denied" | "default" | null;
+  /** The tab's `sessionStorage`, shared across the documents one test loads into it. */
+  readonly storage?: Map<string, string>;
+  /** Whether the person is looking at the tab. */
+  readonly looking?: boolean;
+}
+
+/**
+ * A tab running `page/chime.js`, whose ledger says the waits it is given.
+ * `load` is a new document in the same tab: a fresh run of the script over the
+ * same `sessionStorage`, which is what a press that navigates does.
+ */
+function chimeTab(first: readonly string[] | null, options: ChimeOptions = {}) {
+  const storage = options.storage ?? new Map<string, string>();
   let waits = first;
+  let looking = options.looking ?? false;
   const rung: string[] = [];
-  const heard = new Map<string, Listener[]>();
+  const reports: { to: string; body: string }[] = [];
+  const titles: string[] = [];
+  const icon = { href: "/icon.svg" };
+  let heard = new Map<string, Listener[]>();
+  const permission = options.permission === undefined ? "granted" : options.permission;
   class Notification {
-    static permission = "granted";
+    static permission = permission;
+    onshow: Listener | null = null;
     constructor(line: string) {
       rung.push(line);
+      queueMicrotask(() => this.onshow?.());
     }
   }
   const ledger = {
     getAttribute: (name: string) =>
-      name === "data-waits" ? JSON.stringify(waits) : name === "data-chime" ? "Your turn" : null,
+      ({
+        "data-waits": JSON.stringify(waits),
+        "data-chime": "Your turn",
+        "data-title":
+          waits === null || waits.length === 0 ? "rondo" : `(${String(waits.length)}) rondo`,
+        "data-title-turn": "Your turn - rondo",
+        "data-icon": waits === null || waits.length === 0 ? "/icon.svg" : "/icon-wait.svg",
+        "data-notice-to": "/notice",
+        "data-notice-token": "t",
+      })[name] ?? null,
   };
-  runInNewContext(bytesOf("page/chime.js").toString("utf8"), {
-    window: { Notification },
-    Notification,
-    document: {
-      querySelector: (selector: string) =>
-        selector === "#ledger" && waits !== null ? ledger : null,
-      addEventListener: (type: string, listener: Listener) => {
-        heard.set(type, [...(heard.get(type) ?? []), listener]);
-      },
+  const document = {
+    title: "rondo",
+    get visibilityState() {
+      return looking ? "visible" : "hidden";
     },
-  });
+    hasFocus: () => looking,
+    querySelector: (selector: string) =>
+      selector === "#ledger" && waits !== null
+        ? ledger
+        : selector === 'link[rel="icon"]'
+          ? {
+              getAttribute: () => icon.href,
+              setAttribute: (_: string, value: string) => {
+                icon.href = value;
+              },
+            }
+          : null,
+    addEventListener: (type: string, listener: Listener) => {
+      heard.set(type, [...(heard.get(type) ?? []), listener]);
+    },
+  };
+  const load = () => {
+    heard = new Map();
+    runInNewContext(bytesOf("page/chime.js").toString("utf8"), {
+      window: {
+        ...(permission === null ? {} : { Notification }),
+        focus: () => {},
+        addEventListener: (type: string, listener: Listener) => {
+          heard.set(type, [...(heard.get(type) ?? []), listener]);
+        },
+      },
+      Notification,
+      URLSearchParams,
+      fetch: (to: string, init: { body: URLSearchParams }) => {
+        reports.push({ to, body: init.body.toString() });
+        return Promise.resolve();
+      },
+      sessionStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+      },
+      document: new Proxy(document, {
+        set(target, key, value) {
+          if (key === "title") {
+            titles.push(value as string);
+          }
+          return Reflect.set(target, key, value);
+        },
+      }),
+    });
+  };
+  const fire = (type: string) => {
+    for (const listener of heard.get(type) ?? []) listener();
+  };
+  load();
   return {
     rung,
+    reports,
+    titles,
+    icon,
+    storage,
+    get title() {
+      return document.title;
+    },
     redraw(next: readonly string[]) {
       waits = next;
-      for (const listener of heard.get("htmx:afterSwap") ?? []) listener();
+      fire("htmx:afterSwap");
+    },
+    /** A new document in this tab, arriving holding `next`. */
+    navigate(next: readonly string[]) {
+      waits = next;
+      load();
+    },
+    look() {
+      looking = true;
+      fire("visibilitychange");
     },
   };
 }
@@ -76,6 +166,82 @@ test("a tab that arrived on a view with no ledger starts from the first one it s
   expect(tab.rung).toEqual([]);
   tab.redraw(["gate:i-0001:awaiting_human", "gate:i-0002:awaiting_human"]);
   expect(tab.rung).toEqual(["Your turn"]);
+});
+
+test("a document that arrives in the tab already holding a new wait rings for it (lap 12)", () => {
+  // Lap 12: the start press answered only at the gate, so the document it
+  // landed on arrived holding the gate. A tab that started again from that
+  // document's own reading counted the gate as seen and never rang.
+  const tab = chimeTab([]);
+  tab.navigate(["gate:i-0001:awaiting_human"]);
+  expect(tab.rung).toEqual(["Your turn"]);
+  // And a reload of what it has already rung for does not ring again.
+  tab.navigate(["gate:i-0001:awaiting_human"]);
+  expect(tab.rung).toEqual(["Your turn"]);
+});
+
+test("a fresh tab does not ring for what is on its screen", () => {
+  const tab = chimeTab(["gate:i-0001:awaiting_human"], { storage: new Map() });
+  expect(tab.rung).toEqual([]);
+  expect(tab.title).toBe("(1) rondo");
+  expect(tab.icon.href).toBe("/icon-wait.svg");
+});
+
+test("the title says whose turn it is until the tab is looked at, and the icon carries the badge", () => {
+  const tab = chimeTab([]);
+  expect(tab.title).toBe("rondo");
+  expect(tab.icon.href).toBe("/icon.svg");
+  tab.redraw(["gate:i-0001:awaiting_human"]);
+  expect(tab.title).toBe("Your turn - rondo");
+  expect(tab.icon.href).toBe("/icon-wait.svg");
+  // A redraw that changes nothing keeps the turn up.
+  tab.redraw(["gate:i-0001:awaiting_human"]);
+  expect(tab.title).toBe("Your turn - rondo");
+  tab.look();
+  expect(tab.title).toBe("(1) rondo");
+  // Once answered, the badge goes.
+  tab.redraw([]);
+  expect(tab.title).toBe("rondo");
+  expect(tab.icon.href).toBe("/icon.svg");
+});
+
+test("a tab being looked at changes its count but does not take the title over", () => {
+  const tab = chimeTab([], { looking: true });
+  tab.redraw(["gate:i-0001:awaiting_human"]);
+  expect(tab.titles).not.toContain("Your turn - rondo");
+  expect(tab.title).toBe("(1) rondo");
+});
+
+test("the host is told what the notice did, for each wait it rang for", async () => {
+  const shown = chimeTab([]);
+  shown.redraw(["gate:i-0001:awaiting_human", "ask:m-0002"]);
+  await Promise.resolve();
+  expect(shown.reports).toEqual([
+    {
+      to: "/notice",
+      body: "token=t&outcome=shown&wait=gate%3Ai-0001%3Aawaiting_human&wait=ask%3Am-0002",
+    },
+  ]);
+  for (const [permission, outcome] of [
+    ["default", "notAsked"],
+    ["denied", "denied"],
+    [null, "unsupported"],
+  ] as const) {
+    const tab = chimeTab([], { permission });
+    tab.redraw(["gate:i-0001:awaiting_human"]);
+    expect(tab.rung).toEqual([]);
+    expect(tab.reports.map((sent) => sent.body)).toEqual([
+      `token=t&outcome=${outcome}&wait=gate%3Ai-0001%3Aawaiting_human`,
+    ]);
+    // The title and the icon need no leave from anybody.
+    expect(tab.title).toBe("Your turn - rondo");
+  }
+  // More new waits than one report may carry go in batches the route accepts.
+  const many = chimeTab([], { permission: "denied" });
+  many.redraw(Array.from({ length: 40 }, (_, at) => `ask:m-${String(at)}`));
+  expect(many.reports.map((sent) => new URLSearchParams(sent.body).getAll("wait").length)).toEqual([
+    32, 8,
+  ]);
 });
 
 class HTMLDetailsElement {}
