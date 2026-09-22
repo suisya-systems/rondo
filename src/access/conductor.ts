@@ -49,6 +49,7 @@ import {
   abandon as abandonIteration,
   admit as admitIteration,
   type ConductorReport,
+  faulted as faultedIteration,
   requestWithdrawal as requestIterationWithdrawal,
   resume as resumeIteration,
 } from "../refrain/interpreter.js";
@@ -1457,6 +1458,24 @@ export async function abandon(
   reason: string,
 ): Promise<ConductorReport> {
   return await abandonIteration(ports, iterationId, reason);
+}
+
+/**
+ * End a lap whose driver threw, at `failed` with `defect` (D-0109 rule 3).
+ *
+ * Re-exported beside {@link abandon} because it is the same kind of act -- a
+ * row ended by something other than its own arc -- and takes only the two
+ * ports a write needs, since it drives no continuo verb either.
+ */
+export async function endFaulted(
+  ports: {
+    readonly store: Pick<ConductorPorts["store"], "read" | "transition">;
+    readonly now: () => number;
+  },
+  iterationId: string,
+  reason: string,
+): Promise<ConductorReport> {
+  return await faultedIteration(ports, iterationId, reason);
 }
 
 /**

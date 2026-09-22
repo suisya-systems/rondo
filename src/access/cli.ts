@@ -121,6 +121,7 @@ import {
   type ConductorReport,
   compareClaim,
   conductorPorts,
+  endFaulted,
   notRereadSentence,
   type ReportingPorts,
   type RequestThread,
@@ -1747,6 +1748,7 @@ export async function main(
                   await answerOnceReserved(
                     store,
                     record,
+                    chromeFor(selected.tag),
                     input,
                     startScopedFromPage(environment, store, opened.path, sender.actorId, input),
                   ),
@@ -1757,6 +1759,7 @@ export async function main(
                   await answerOnceReserved(
                     store,
                     record,
+                    chromeFor(selected.tag),
                     input,
                     startSplitFromPage(
                       environment,
@@ -5131,8 +5134,10 @@ const starting = new Map<string, Promise<Started>>();
  * lap's, so a second press joined to the first writes it once.
  */
 export async function answerOnceReserved(
-  store: Pick<IterationStore, "read">,
+  store: Pick<IterationStore, "read" | "transition">,
   record: Pick<AdvisoryRecord, "recordThreadMessage">,
+  /** The person's own words, as this host resolved them (D-0079). */
+  words: Chrome,
   input: { readonly iterationId: string; readonly requestMessageId: string },
   running: Promise<Started>,
   pollMs = 250,
@@ -5167,7 +5172,7 @@ export async function answerOnceReserved(
           );
           return;
         }
-        await sayStartStopped(record, input, late.note);
+        await sayStartStopped(store, record, words, input, late.note);
       });
       return { ok: true, note: `iteration '${input.iterationId}' was admitted and is running` };
     }
@@ -5185,33 +5190,34 @@ const BEFORE_THE_GATE: ReadonlySet<string> = new Set([
   "performing",
 ]);
 
-/** D-0109 rule 3: a start that ended badly after its press answered, as an ask in its thread. */
+/**
+ * D-0109 rule 3: a start that ended badly after its press answered -- the lap
+ * ended at `failed`, and one ask in the request's thread, in the person's own
+ * words.
+ *
+ * **The row is ended before the person is told**, so that what the ask says is
+ * true when they read it: nothing of the lap is running, and its place on the
+ * host, its held money and its line's paths are back. rondo's own sentence for
+ * what went wrong goes on that row and on this console, and never in front of
+ * the person (D-0076 rule 4.2).
+ */
 async function sayStartStopped(
+  store: Pick<IterationStore, "read" | "transition">,
   record: Pick<AdvisoryRecord, "recordThreadMessage">,
+  words: Chrome,
   input: { readonly iterationId: string; readonly requestMessageId: string },
   note: string,
 ): Promise<void> {
-  const unsaid = (reason: string) =>
-    consoleSeams.writeError(
-      `${asciiEscape(`rondo could not tell the person that lap '${input.iterationId}' stopped (${note}): ${reason}`)}\n`,
-    );
+  const onConsole = (line: string) => consoleSeams.writeError(`${asciiEscape(line)}\n`);
   try {
+    const ended = await endFaulted({ store, now: Date.now }, input.iterationId, note);
+    onConsole(`lap '${input.iterationId}' was ended after its press had answered: ${note}`);
+    for (const line of ended.lines) {
+      onConsole(line);
+    }
     const outcome = await record.recordThreadMessage({
       messageId: `start-stopped-${input.iterationId}`,
-      body: [
-        `Stopped: lap '${input.iterationId}', which the start press began, did not reach its gate.`,
-        `Reason: ${note}`,
-        "Nothing drives this lap now, but its row still holds its place on this host and the " +
-          "files it claims until it is settled.",
-        "Options:",
-        "- Settle the lap, then Carry on. Gives up: this lap. In the terminal rondo runs in: " +
-          `rondo abandon --iteration-id ${input.iterationId} --reason "<why>". A plan you wrote ` +
-          "can then be started again from the scope screen; a drafted plan that has had a lap " +
-          "does not start again, and needs a new plan.",
-        "- Settle the lap, then Stop this line. Gives up: this request's work.",
-        "Recommended: settle the lap and carry on once the reason above no longer holds.",
-        "This line stays stopped until this message is answered.",
-      ].join("\n"),
+      body: words.startStoppedSaid,
       authorKind: "drafter",
       authorId: DETERMINISTIC_DRAFTER,
       inReplyTo: input.requestMessageId,
@@ -5223,10 +5229,14 @@ async function sayStartStopped(
       asks: true,
     });
     if (outcome.kind !== "recorded") {
-      unsaid(outcome.reason);
+      onConsole(
+        `rondo could not tell the person that lap '${input.iterationId}' stopped: ${outcome.reason}`,
+      );
     }
   } catch (error: unknown) {
-    unsaid(error instanceof Error ? error.message : String(error));
+    onConsole(
+      `rondo could not tell the person that lap '${input.iterationId}' stopped: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 

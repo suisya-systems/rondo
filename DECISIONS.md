@@ -23292,31 +23292,42 @@ the refusal screen says it as before. A throw before the row is now that screen'
 `startRefusedNotAdmitted`, where it used to be the server's error page, and the error's words go to
 the host's console, escaped.
 
-**3. A start that ends badly after its press has answered is an ask in the request's thread.**
-After the row exists, `admitScopedPlan` has no refusal left to return. Only a throw, from continuo
-or from rondo, can end the start badly. rondo then writes one drafter message with `asks` set,
-`start-stopped-<lap>`, into the request's thread. It says which lap stopped, why, what the options
-are and which is recommended, as `D-0066` rule 4.4's stop does. An ask counts as a wait, so the
-tab's *your turn* (`D-0108`) and the host's notification both reach the person, and `D-0106` puts it
-at the top of the thread. It holds the request's line until it is answered, as every stop does
-(`D-0069` rule 5). The message's id is the lap's, so a second press joined to the first writes it
-once. If the message cannot be written, the host's console says so, escaped like every other line
-(`D-0004`).
+**3. A start that ends badly after its press has answered ends its lap, and is an ask in the
+request's thread, in the person's own words.** After the row exists, `admitScopedPlan` has no
+refusal left to return; only a throw, from continuo or from rondo, can end the start badly. rondo
+then does two things, in this order.
+
+First it ends the lap itself, at `failed` with `defect` (`faulted` in `src/refrain/interpreter.ts`,
+re-exported as `endFaulted`). `abandoned` would file a raise inside rondo as a request that ended
+correctly, which it is not. The store releases the line's claim in the transaction that writes the
+status (`D-0073` rule 4.3), and a terminal row gives back its place on the host and the money held
+for it. So nobody has to open a terminal to clear it, which the definition of done asks (2026-09-23,
+the owner): before this, `rondo abandon` was the only way.
+
+Then it writes one drafter message with `asks` set, `start-stopped-<lap>`, into the request's
+thread. An ask counts as a wait, so the tab's *your turn* (`D-0108`) and the host's notification both
+reach the person, and `D-0106` puts it at the top of the thread. It holds the request's line until it
+is answered, as every stop does (`D-0069` rule 5). Its id is the lap's, so a second press joined to
+the first writes it once.
+
+**The message is the person's language and the person's words** (`D-0079`, `D-0076` rule 4.2). It is
+a `Chrome` entry, `startStoppedSaid`, resolved for this host exactly as the notification's sentence
+is, and it offers the two presses the answering box draws: starting again, and stopping. rondo's own
+sentence for what went wrong -- `continuo went away: the sandbox helper exited 137` and its like --
+is not in it. That goes on the lap's own row, as its reason, and to the host's console, escaped.
 
 The stop is written only while the row still reads a status before the gate (`planned` through
 `performing`), or will not read. A lap past them when the throw arrives failed in the model reading
 taken once its gate opened, a gate the person may already have answered, or it ended on its own with
-a status the page already shows. No stop is written then, and the error goes to the host's console.
+a status the page already shows. Nothing is ended and no stop is written then, and the error goes to
+the host's console.
 
 **4. The start presses no longer say the screen waits for the gate.** Their busy note was
 `lapBusyNote` ("this screen moves on when it stops for you to check it -- a few minutes, and
 sometimes tens of minutes"), which is now false for them. They say `startBusyNote` instead: the page
 moves to the request's thread once the work is under way. The revise and conflict-fix presses keep
 `lapBusyNote`, which is still true for them. The stop's options name the answering box's own two
-presses, *Carry on* and *Stop this line*, and first the one act that frees the lap's place and files:
-`rondo abandon` in the terminal, since the page has no press that settles a lap. A plan the person
-wrote can then be started again from the scope screen. A drafted plan that has had a lap does not
-start again from the page, as before this entry.
+presses: starting again, and stopping.
 
 **5. What is not done.** The revise press and the conflict-fix press also run a lap to its gate
 inside the press. rondo#409 names the start press, so they are left as they are. The same wrapper

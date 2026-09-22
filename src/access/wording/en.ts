@@ -1002,6 +1002,17 @@ explanation you pressed on and then answers the gate.`,
   startBusy: "Starting the work...",
   reviseBusy: "Asking for the change...",
   publishBusy: "Opening the pull request...",
+  startStoppedSaid: [
+    "Stopped: the work you started could not be kept running, so rondo has ended it.",
+    "Nothing of it is running now, and the room it took on this host, the money held for it and " +
+      "the files it had claimed have all been given back. What went wrong is on the work's own " +
+      "record.",
+    "Options:",
+    "- Starting again. Gives up: what this attempt did; the work starts again from your request.",
+    "- Stopping. Gives up: this request's work.",
+    "Recommended: starting again.",
+    "This line stays stopped until this message is answered.",
+  ].join("\n"),
   startBusyNote:
     "Received. rondo is setting the work up; this page moves to the request's thread as soon " +
     "as it is under way, and the thread shows it running from there. There is no need to press again.",

@@ -733,6 +733,66 @@ async function settleUnreadable(
  */
 const beingDriven = new Set<string>();
 
+/** What a write of a row needs, and nothing else: no continuo verb is driven by one. */
+interface WritingPorts {
+  readonly store: Pick<ConductorPorts["store"], "read" | "transition">;
+  readonly now: () => number;
+}
+
+/**
+ * End a row whose driver threw, at `failed` with `defect` (rondo#409, D-0109).
+ *
+ * **The arc could not end this row itself.** Every other terminal write here is
+ * taken by the machine as it walks; this one is for the case where the walk
+ * stopped mid-step because the call driving it raised. The row is then a
+ * `planned` through `performing` row nothing is driving, holding its place on
+ * the host, its budget and its line's paths until somebody settles it -- which
+ * before this was a person, in a terminal, with `abandon`.
+ *
+ * **`failed` with `defect` rather than `abandoned`**, which is the same
+ * distinction the classification's own two arms make above: `abandoned` is a
+ * request that ended correctly without a run, and a raise inside rondo is not
+ * that. The store releases the line's claim inside the transaction that writes
+ * either (D-0073 rule 4.3), so the paths come back here too.
+ *
+ * **It refuses a row this process is still driving**, for {@link abandon}'s
+ * reason and more narrowly: the raise this is called for is the driver's own,
+ * so by the time it runs the driver has already left `beingDriven`.
+ */
+export async function faulted(
+  ports: WritingPorts,
+  iterationId: string,
+  reason: string,
+): Promise<ConductorReport> {
+  const lines: string[] = [];
+  const found = await ports.store.read(iterationId);
+  if (found.kind !== "read") {
+    lines.push(
+      found.kind === "absent"
+        ? `No iteration ${iterationId} exists, so there is nothing to end.`
+        : `Iteration ${iterationId} will not decode, so it was not ended here: ${found.reason}`,
+    );
+    return { iterationId, status: null, lines: Object.freeze(lines) };
+  }
+  const record = found.record;
+  if (isTerminal(record.status) || beingDriven.has(record.id)) {
+    lines.push(
+      `Iteration ${record.id} is '${record.status}'${beingDriven.has(record.id) ? " and is being driven by this process" : ""}; nothing was written.`,
+    );
+    return finish(record, lines);
+  }
+  const step = await terminal(
+    ports,
+    record,
+    lines,
+    "failed",
+    { ...appendedReason(record, reason), failureKind: "defect" },
+    `Iteration ${record.id} was ended from '${record.status}': ${reason}`,
+  );
+  // `terminal` answers `finished` for every terminal status, which `failed` is.
+  return step.kind === "finished" ? step.report : finish(step.record, lines);
+}
+
 async function drive(
   ports: ConductorPorts,
   from: IterationRecord,
@@ -1674,7 +1734,7 @@ type CommitResult =
  * writers both believe they hold the conductor.
  */
 async function commit(
-  ports: ConductorPorts,
+  ports: WritingPorts,
   lines: string[],
   record: IterationRecord,
   to: IterationStatus,
@@ -1719,7 +1779,7 @@ async function commit(
 
 /** A terminal transition, its reason, and the lines that explain it. */
 async function terminal(
-  ports: ConductorPorts,
+  ports: WritingPorts,
   record: IterationRecord,
   lines: string[],
   to: IterationStatus,
