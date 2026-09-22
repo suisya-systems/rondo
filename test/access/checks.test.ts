@@ -283,6 +283,7 @@ async function hostOver(options: {
     readCommits: async (request) => ({
       kind: "read",
       commits: [{ sha: request.to, subject: "resolve the conflict" }],
+      total: request.to === "many" ? 300 : 1,
     }),
     ...(options.pressing === undefined ? {} : { pressing: options.pressing }),
     host: "github.com",
@@ -596,4 +597,27 @@ test("a press that starts while the pull request is being read keeps its merge i
     duringRead: () => pressing.add("lap-1"),
   });
   expect(over).toMatchObject({ written: [], asked: 1 });
+});
+
+test("a conflict on a head pushed away and back is said again, and the count is the forge's total (Codex round 3)", async () => {
+  const conflicting = { ...OPEN, conflicting: true };
+  const over = await hostOver({
+    reading: { kind: "none" },
+    messageIds: ["request-1", "report-published-lap-1"],
+    steps: [
+      { reading: { kind: "none" }, pullRequest: conflicting },
+      { reading: { kind: "none" }, head: "many", pullRequest: conflicting },
+      { reading: { kind: "none" }, pullRequest: conflicting },
+    ],
+  });
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-conflict-lap-1-commit-of-lap-1",
+    "report-moved-lap-1-many",
+    "report-conflict-lap-1-many",
+    "report-moved-lap-1-commit-of-lap-1",
+    "report-conflict-lap-1-commit-of-lap-1-t300",
+  ]);
+  // 300 carried, one listed: the rest are counted and not dropped.
+  expect(over.written[1]?.body).toContain("300 commit(s) on it are not the lap's");
+  expect(over.written[1]?.body).toContain("- and 299 more");
 });

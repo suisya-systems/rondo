@@ -728,7 +728,12 @@ export interface CommitLine {
 }
 
 export type CommitsBetween =
-  | { readonly kind: "read"; readonly commits: readonly CommitLine[] }
+  | {
+      readonly kind: "read";
+      readonly commits: readonly CommitLine[];
+      /** How many it carries: the forge lists at most 250 (`total_commits`). */
+      readonly total: number;
+    }
   | { readonly kind: "failed"; readonly reason: string };
 
 /**
@@ -748,7 +753,17 @@ export async function readCommitsBetween(request: CommitsBetweenRequest): Promis
     return { kind: "failed", reason: failure };
   }
   try {
-    return { kind: "read", commits: commitsOf(JSON.parse(read.stdout)) };
+    const json: unknown = JSON.parse(read.stdout);
+    const commits = commitsOf(json);
+    const total =
+      typeof json === "object" && json !== null
+        ? (json as Record<string, unknown>)["total_commits"]
+        : null;
+    return {
+      kind: "read",
+      commits,
+      total: typeof total === "number" && total > commits.length ? total : commits.length,
+    };
   } catch (error) {
     return {
       kind: "failed",

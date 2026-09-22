@@ -429,8 +429,10 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
   )?.evidence?.tipCommit;
   const known = tip !== undefined && tip !== null && tip !== "";
   const moved = known && tip !== head;
-  if (known && head !== (shown?.moved?.to ?? tip)) {
-    let commits: CommitsBetween = { kind: "read", commits: [] };
+  // The head the page reads the pull request at, which a move said here changes.
+  const headChanged = known && head !== (shown?.moved?.to ?? tip);
+  if (headChanged) {
+    let commits: CommitsBetween = { kind: "read", commits: [], total: 0 };
     if (moved) {
       commits = await ports.readCommits({
         host: ports.host,
@@ -451,6 +453,7 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
       from: tip,
       to: head,
       commits: commits.commits,
+      total: commits.total,
     });
   }
   // **A conflict is why no check runs** (rondo#411): the forge starts no
@@ -458,13 +461,17 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
   // about runs from before it -- so none is written while it stands, and the
   // first one after it is what ends it on the page.
   if (pullRequest?.conflicting === true) {
-    await say(`report-conflict-${iterationId}-${head}`, shown?.checks.kind === "conflict", {
-      kind: "conflict",
-      pullRequestUrl: address.url,
-      head,
-      base: pullRequest.base,
-      baseCommit: pullRequest.baseCommit,
-    });
+    await say(
+      `report-conflict-${iterationId}-${head}`,
+      !headChanged && shown?.checks.kind === "conflict",
+      {
+        kind: "conflict",
+        pullRequestUrl: address.url,
+        head,
+        base: pullRequest.base,
+        baseCommit: pullRequest.baseCommit,
+      },
+    );
   } else if (reading.kind !== "pending") {
     await say(
       checksAnswerId(iterationId, reading.kind, head, moved),

@@ -930,6 +930,8 @@ export type LapEvent =
       readonly from: string;
       readonly to: string;
       readonly commits: readonly CommitLine[];
+      /** How many it carries, where the forge listed fewer than that. */
+      readonly total?: number;
       readonly retold?: number;
     };
 
@@ -1177,11 +1179,12 @@ function checksBody(
  * by a test.
  */
 function movedBody(iterationId: string, event: Extract<LapEvent, { kind: "moved" }>): string {
-  const hidden = event.commits.length - LIST_LIMIT;
+  const total = Math.max(event.total ?? 0, event.commits.length);
+  const hidden = total - Math.min(event.commits.length, LIST_LIMIT);
   return [
     `Lap '${iterationId}' moved: pull request ${event.pullRequestUrl} is at commit ` +
       `'${event.to}', and the head the lap pushed and rondo read is '${event.from}'. ` +
-      `${String(event.commits.length)} commit(s) on it are not the lap's:`,
+      `${String(total)} commit(s) on it are not the lap's:`,
     ...event.commits.slice(0, LIST_LIMIT).map((one) => `- '${one.sha}' ${one.subject}`),
     ...(hidden > 0 ? [`- and ${String(hidden)} more`] : []),
     "rondo merges the new head only on a person's press that names it.",
