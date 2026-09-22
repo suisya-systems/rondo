@@ -96,6 +96,10 @@ const PLAN = {
   // nullable and the key is not, so a plan that leaves it out refuses with a
   // message about `trim` rather than about the field.
   forgeRepository: null,
+  // The two D-0098 fields (`D-0103`), nullable with required keys like the one
+  // above: a plan without them is refused before the page is served.
+  takeIn: null,
+  decisionRecord: null,
   invocationCeilingMs: 1_800_000,
   catalogLayers: [
     {
@@ -215,6 +219,8 @@ async function endedLap(id, costUsd, durationMs, supersedesIterationId, startedM
     nowMs: startedAt,
     supersedesIterationId,
     claim: laneFor(id, supersedesIterationId),
+    // No decision-record numbers: the preview plan names no record (D-0103).
+    numbers: null,
     // Every lap names the request it came from (`D-0085`), and the preview's
     // laps are all for the one request it seeds.
     requestMessageId,
@@ -431,6 +437,8 @@ const waitingReserved = await store.reserve({
   nowMs: now - 40 * MINUTE,
   supersedesIterationId: null,
   claim: laneFor(waitingLapId, null),
+  // No decision-record numbers: the preview plan names no record (D-0103).
+  numbers: null,
   requestMessageId,
   runId: `rondo-${waitingLapId}`,
   topicBranch: `rondo/${waitingLapId}`,
@@ -602,6 +610,8 @@ async function publishableLap(
     nowMs: now - startedMsAgo,
     supersedesIterationId: null,
     claim: laneFor(id, null),
+    // No decision-record numbers: the preview plan names no record (D-0103).
+    numbers: null,
     requestMessageId,
     runId: `rondo-${id}`,
     topicBranch,
