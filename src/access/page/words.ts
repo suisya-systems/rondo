@@ -372,7 +372,7 @@ export const PAGE_EN: PageWords = Object.freeze({
       green: "green",
       red: "red",
       none: "none reported",
-      conflict: "conflict",
+      conflict: "not run",
     })[checks.kind],
   checksDetail: (checks) => {
     switch (checks.kind) {
@@ -404,7 +404,7 @@ export const PAGE_EN: PageWords = Object.freeze({
       case "none":
         return "the forge has reported no check yet";
       case "conflict":
-        return "none ran";
+        return null;
       default:
         return "not finished yet";
     }
@@ -431,7 +431,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   resultMoved: (from, to, count) =>
     `The branch moved after rondo read it: ${from} is now ${to}, with ${String(count)} commit${count === 1 ? "" : "s"} this work did not make:`,
   resultMovedNone: (from, to) =>
-    `The branch moved after rondo read it: ${from} is now ${to}, and the forge lists no commits between them, so its history was rewritten.`,
+    `The branch changed after rondo read it: ${from} is now ${to}, and the forge lists no commit the new head carries beyond the old one -- the branch was reset to an earlier commit, or its history rewritten.`,
   resultMovedMore: (count) => `and ${String(count)} more`,
   resultMergedOutside: (into, by) =>
     by === null
@@ -551,7 +551,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   stepLanding: "取り込み（マージ）",
   pullRequest: (number) => (number === null ? "プルリクエスト" : `#${number}`),
   checksWord: (checks) =>
-    ({ running: "実行中", green: "緑", red: "赤", none: "報告なし", conflict: "競合" })[
+    ({ running: "実行中", green: "緑", red: "赤", none: "報告なし", conflict: "未実行" })[
       checks.kind
     ],
   checksDetail: (checks) => {
@@ -582,7 +582,7 @@ export const PAGE_JA: PageWords = Object.freeze({
       case "none":
         return "まだチェックが報告されていません";
       case "conflict":
-        return "実行されていません";
+        return null;
       default:
         return "終わるのを待っています";
     }
@@ -605,11 +605,11 @@ export const PAGE_JA: PageWords = Object.freeze({
   resultConflict: (pullRequest, base) =>
     `${pullRequest} は ${base} と競合しているため、チェックが動きません。`,
   resultConflictDo: (base) =>
-    `プルリクエストのブランチで解消して（${base} を取り込むか、リベースして）push してください。チェックが動けば rondo が読み直します。`,
+    `プルリクエストのブランチ側で競合を解消し（${base} を取り込むか、リベースする）、push してください。チェックが動けば rondo が読み直します。`,
   resultMoved: (from, to, count) =>
-    `rondo が読んだあとにブランチが進みました。${from} → ${to}、この作業のものではないコミットが ${String(count)} 件:`,
+    `rondo が読んだあとにブランチが進みました。${from} → ${to} で、この作業のものではないコミットが ${String(count)} 件:`,
   resultMovedNone: (from, to) =>
-    `rondo が読んだあとにブランチが進みました。${from} → ${to} ですが、あいだのコミットを GitHub は挙げていません。履歴が書き換えられています。`,
+    `rondo が読んだあとにブランチが変わりました。${from} → ${to} ですが、${to} が ${from} より先に持つコミットを GitHub は挙げていません。以前のコミットへ戻されたか、履歴が書き換えられています。`,
   resultMovedMore: (count) => `ほか ${String(count)} 件`,
   resultMergedOutside: (into, by) =>
     by === null
@@ -619,9 +619,10 @@ export const PAGE_JA: PageWords = Object.freeze({
   rowApproved: "承認済み・まだ公開していません",
   rowPublished: (pullRequest, checks) => `プルリクエスト ${pullRequest}・チェック ${checks}`,
   rowMerged: (pullRequest) => `プルリクエスト ${pullRequest}・マージ済み`,
-  rowClosed: (pullRequest) => `プルリクエスト ${pullRequest}・マージせずに閉じられました`,
+  rowClosed: (pullRequest) => `プルリクエスト ${pullRequest}・マージされずに閉じられました`,
   rowConflict: (pullRequest) => `プルリクエスト ${pullRequest}・取り込み先と競合`,
-  govEnded: (took, how) => (how === "merged" ? `依頼から${took}でマージ` : `依頼から${took}で終了`),
+  govEnded: (took, how) =>
+    how === "merged" ? `依頼から${took}でマージ` : `依頼から${took}で閉じられた`,
   basisKind: (form) =>
     ({
       iteration: "この依頼の作業",
