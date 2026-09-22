@@ -188,7 +188,7 @@ test("the presses that start a lap carry their busy label and what a lap waits o
   // scope press, each of the three drawn twice: at the form's top and again
   // under its last box (D-0106 rule 7).
   expect(scope.match(/data-busy=\{wording\.startBusy\}/g)).toHaveLength(2);
-  expect(scope.match(/\{wording\.lapBusyNote\}/g)).toHaveLength(2);
+  expect(scope.match(/\{wording\.startBusyNote\}/g)).toHaveLength(2);
   expect(scope.match(/data-busy=\{wording\.scopeBusy\}/g)).toHaveLength(6);
 });
 

@@ -5191,9 +5191,10 @@ async function sayStartStopped(
         `Reason: ${note}`,
         "Nothing drives this lap now; its row stays as rondo last wrote it.",
         "Options:",
-        "- Starting again. Gives up: this lap; a new press starts another under the same approval.",
-        "- Stopping. Gives up: this request's work.",
-        "Recommended: starting again once the reason above no longer holds.",
+        "- Carry on. Gives up: this lap. Then press start again on the scope screen; the new lap " +
+          "runs under the same approval.",
+        "- Stop this line. Gives up: this request's work.",
+        "Recommended: carry on once the reason above no longer holds.",
         "This line stays stopped until this message is answered.",
       ].join("\n"),
       authorKind: "drafter",

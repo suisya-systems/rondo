@@ -23305,7 +23305,14 @@ A lap whose row already reads `awaiting_human` when the throw arrives failed onl
 reading taken after the gate opened. The gate is then the wait the person is called to, so no stop
 is written, and the error goes to the host's console.
 
-**4. What is not done.** The revise press and the conflict-fix press also run a lap to its gate
+**4. The start presses no longer say the screen waits for the gate.** Their busy note was
+`lapBusyNote` ("this screen moves on when it stops for you to check it -- a few minutes, and
+sometimes tens of minutes"), which is now false for them. They say `startBusyNote` instead: the page
+moves to the request's thread once the work is under way. The revise and conflict-fix presses keep
+`lapBusyNote`, which is still true for them. The stop's options name the answering box's own two
+presses, *Carry on* and *Stop this line*.
+
+**5. What is not done.** The revise press and the conflict-fix press also run a lap to its gate
 inside the press. rondo#409 names the start press, so they are left as they are. The same wrapper
 applies to them if the owner wants it. The row is polled rather than signalled from `reserve()`,
 which would have to be threaded through four layers to save at most a quarter second.

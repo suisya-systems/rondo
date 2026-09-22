@@ -1002,6 +1002,9 @@ explanation you pressed on and then answers the gate.`,
   startBusy: "Starting the work...",
   reviseBusy: "Asking for the change...",
   publishBusy: "Opening the pull request...",
+  startBusyNote:
+    "Received. rondo is setting the work up; this page moves to the request's thread as soon " +
+    "as it is under way, and the thread shows it running from there. There is no need to press again.",
   lapBusyNote:
     "Received. The work is running now, and this screen moves on when it stops for you to " +
     "check it -- a few minutes, and sometimes tens of minutes. There is no need to press again, " +

@@ -1161,8 +1161,10 @@ export interface Chrome extends PageWords {
   readonly startBusy: string;
   readonly reviseBusy: string;
   readonly publishBusy: string;
-  /** What a start or a change asked for is waiting on, and for how long. */
+  /** What a change asked for is waiting on, and for how long. */
   readonly lapBusyNote: string;
+  /** What a start press is waiting on: the lap's row, after which the thread shows it (D-0109). */
+  readonly startBusyNote: string;
   readonly publishBusyNote: string;
   /** Why a publish press published nothing, one sentence each. */
   readonly publishRefusedNoApprover: string;
