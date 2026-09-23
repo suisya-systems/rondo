@@ -593,7 +593,9 @@ test("a conflicting pull request is offered rondo's fix at the top, as a press u
   expect(japanese).toContain("#372 は main と競合していて、チェックが動きません。");
   // The band names both ways while the press is there (D-0106: the press is above it).
   expect(head(japanese)).toContain("すぐ下の「次にやること」のボタンで rondo に解消させるか");
-  expect(japanese.indexOf("/fix-conflict?")).toBeLessThan(japanese.indexOf('class="thread-acts'));
+  // The pull request is still open, so no other scope is offered beside the
+  // press (rondo#437), and the row that would carry one is not drawn.
+  expect(japanese).not.toContain('class="thread-acts');
   const english = await fixing(world, "en");
   expect(english).toContain("Have rondo resolve the conflict");
   // No port, no approval, or no conflict: no press, and the band says the old way.

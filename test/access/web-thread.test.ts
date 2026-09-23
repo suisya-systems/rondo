@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 
+import { reportToRequest } from "../../src/access/conductor.js";
 import type {} from "../../src/access/inbox.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import type { ThreadMessageDraft } from "../../src/store/records.js";
@@ -7,11 +8,13 @@ import {
   bytesOf,
   digestOf,
   fresh,
+  gateWithChecks,
   keysCode,
   MINTED,
   mint,
   operatorPage,
   portsOver,
+  readableWithoutOpening,
   reserve,
   serving,
 } from "./page-world.js";
@@ -542,4 +545,22 @@ test("the composer script keeps a draft and the open folds, and makes no request
   );
   stop.abort();
   expect(await served).toBe(0);
+});
+
+test("rondo's report on a lap is kept shut under its line, so no id of rondo's is read in the thread (rondo#437)", async () => {
+  // Lap 14: `Lap 'lap-…' reached gate 'gate/worker_escalation/…'` was the first
+  // thing a Japanese page said at the gate, above the line in the person's words.
+  const world = fresh();
+  await gateWithChecks(world);
+  const line = await reportToRequest(world, "i-0001", { kind: "gate" }, 4_500);
+  expect(line).toMatch(/^Reported to the request/);
+  const thread = { kind: "thread" as const, messageId: "req-1", to: null };
+  for (const wording of [chromeFor("ja"), EN]) {
+    const html = await operatorPage(portsOver(world), "t", thread, wording);
+    expect(html).toContain("Lap 'i-0001' reached gate");
+    expect(readableWithoutOpening(html, "Lap 'i-0001' reached gate")).toBe(false);
+    // The fold says whose it is; its summary is what is read shut.
+    expect(html).toContain(`${wording.evBrokeReason}</summary>`);
+    expect(readableWithoutOpening(html, wording.evChecksFailed)).toBe(true);
+  }
 });

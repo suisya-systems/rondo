@@ -109,7 +109,7 @@ import {
   type ThreadMessageDraft,
   WAIT_SIDE,
 } from "../store/records.js";
-import { basisLine, gather } from "./advisory.js";
+import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
 import { draftedStanding } from "./drafted-view.js";
 import type { LapWorkInspection } from "./forge.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
@@ -1869,6 +1869,38 @@ function noDraftView(wording: Chrome, message: ThreadMessageDraft) {
   );
 }
 
+/**
+ * Whether a message is one of rondo's own reports on a lap (`writeReport` in
+ * `conductor.ts`): the deterministic drafter's voice and a `report-` id.
+ */
+function lapReport(message: ThreadMessageDraft): boolean {
+  return message.authorId === DETERMINISTIC_DRAFTER && message.messageId.startsWith("report-");
+}
+
+/**
+ * **A lap report, shut** (rondo#437, D-0112): the report is rondo's record in
+ * English with its ids, and each one already has its line in the person's
+ * words beside it (the event lines and the result strip). So nothing of it is
+ * drawn open, in any language -- no id reaches the screen (D-0076) -- and it is
+ * kept, byte for byte, under the fold `evBrokeReason` labels.
+ */
+function lapReportView(wording: Chrome, message: ThreadMessageDraft) {
+  return (
+    <details class="group">
+      <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+        {chevron()}
+        {wording.evBrokeReason}
+      </summary>
+      <p
+        class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+        lang="en"
+      >
+        {message.body}
+      </p>
+    </details>
+  );
+}
+
 /** The newest approval in force over a scope the person wrote, if any. */
 async function ownApproval(
   ports: WebPorts,
@@ -2224,6 +2256,13 @@ async function threadActs(
                       wording.scopeAction,
                     );
   const others = publishable.filter((lap) => lap !== nextPublish);
+  // **The request's work is still under way** (rondo#437): a lap running or at
+  // its gate, or an approved try whose pull request is not yet merged or
+  // closed. Another scope is no step of the person's then, so the outlined
+  // way to one is not drawn; it comes back once the work has ended.
+  const underWay =
+    laps.some((lap) => !isTerminal(lap.record.status)) ||
+    (resultRecord !== null && result?.merged == null && result?.closedAtMs == null);
   // A repository added from the page whose build rondo could not tell: said
   // where the work is, since it bounds what the worker can check (D-0090).
   const unbuilt = where?.work.kind === "held" ? where.unbuilt : [];
@@ -2232,7 +2271,7 @@ async function threadActs(
   const empty =
     unbuilt.length === 0 &&
     others.length === 0 &&
-    (standing !== null || unheld !== null || asked !== null);
+    (standing !== null || unheld !== null || asked !== null || underWay);
   return {
     next,
     fixOffered: nextFix !== null && nextFix.closed === null,
@@ -2246,7 +2285,7 @@ async function threadActs(
         {/* Outlined: another scope for a request that already has work is a
             way to another screen, and drawn filled it outweighed the box a
             person is actually being waited on by. */}
-        {standing !== null || unheld !== null || asked !== null ? null : (
+        {standing !== null || unheld !== null || asked !== null || underWay ? null : (
           <a
             id={`scope-${requestMessageId}`}
             href={scopeHref(null)}
@@ -2988,23 +3027,28 @@ export async function operatorPage(
           ),
         };
   /*
-   * **The two messages whose body is not prose**, rendered here because this
+   * **The messages whose body is not prose**, rendered here because this
    * renderer still owns them: what rondo read of a named issue (D-0078 section
-   * 4) and a drafter run that drafted nothing (rondo#238). They cross the seam
+   * 4), a drafter run that drafted nothing (rondo#238) and rondo's own report
+   * on a lap (rondo#437). They cross the seam
    * as markup, like the boxes, and are awaited once rather than inside the
    * synchronous map below.
    */
   const drawnBodies = new Map(
     await Promise.all(
       selectedMessages
-        .filter((message) => message.authorKind === "forge" || noDraft(message))
+        .filter(
+          (message) => message.authorKind === "forge" || noDraft(message) || lapReport(message),
+        )
         .map(
           async (message) =>
             [
               message.messageId,
               await (message.authorKind === "forge"
                 ? forgeView(wording, message)
-                : noDraftView(wording, message)
+                : lapReport(message)
+                  ? lapReportView(wording, message)
+                  : noDraftView(wording, message)
               ).toString(),
             ] as const,
         ),

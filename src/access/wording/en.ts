@@ -888,6 +888,9 @@ explanation you pressed on and then answers the gate.`,
   publishRequestHeading: "The pull request it would open",
   publishTitleLabel: "Title",
   publishBodyLabel: "Body",
+  publishBodyLead:
+    "rondo writes the body for whoever reviews the pull request: the commits and files the work " +
+    "changed, how it got here, and your request as you wrote it. It is sent exactly as shown.",
   publishBodyViewLegend: "Show the body as",
   publishBodyPreview: "Preview",
   publishBodyRaw: "Raw",

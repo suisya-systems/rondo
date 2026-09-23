@@ -139,6 +139,42 @@ export function readWorkerQuestion(rationale: string): WorkerQuestionRead {
 }
 
 /**
+ * The options, numbered once, and the recommendation pointing at one of them
+ * (rondo#437): the layout a drafter's question and a worker's share.
+ *
+ * **One numbering, rondo's.** A writer that numbered its own options drew
+ * *1. 1.* on lap 14, so a leading number that is the option's own is taken
+ * off; any other text is kept as written. The recommendation is marked with an
+ * arrow rather than a label, so the body stays in the writer's one language
+ * (D-0071 rule 5.2), and it no longer starts with a bare *1.* that reads as a
+ * fourth option.
+ */
+export function optionLines(
+  options: readonly WorkerOption[],
+  recommended: number,
+  recommendation: string,
+): string[] {
+  return [
+    ...options.flatMap((option, i) => [
+      `${String(i + 1)}. ${unnumbered(option.text, i + 1)}`,
+      `   ${option.givesUp}`,
+    ]),
+    "",
+    `→ ${String(recommended + 1)}: ${unnumbered(recommendation, recommended + 1)}`,
+  ];
+}
+
+/** `text` without a leading *n.*, *n)* or *(n)* of its own, in either width. */
+function unnumbered(text: string, n: number): string {
+  // NFKC maps the full-width digits and marks onto ASCII one for one, so the
+  // match's length is also the length to cut from the text as written.
+  const own = new RegExp(`^\\s*(?:\\(${String(n)}\\)|${String(n)}[.):、](?!\\d))\\s*`).exec(
+    text.normalize("NFKC"),
+  );
+  return own === null || own[0].length === text.length ? text : text.slice(own[0].length);
+}
+
+/**
  * The ask's body: **the worker's words, rondo's numbering, and the commit**
  * (rule 4.2). The commit is the one rondo measured -- the deterministic
  * reading's `tipCommit` -- and not one the worker named, so "what was built and
@@ -149,12 +185,7 @@ export function questionBody(question: WorkerQuestion, tipCommit: string): strin
   return [
     question.question,
     "",
-    ...question.options.flatMap((option, i) => [
-      `${String(i + 1)}. ${option.text}`,
-      `   ${option.givesUp}`,
-    ]),
-    "",
-    `${String(question.recommended + 1)}. ${question.recommendation}`,
+    ...optionLines(question.options, question.recommended, question.recommendation),
     "",
     question.waits,
     "",

@@ -820,9 +820,9 @@ export const JA: Chrome = Object.freeze({
     "ありません。戻って結果を確認してください。",
 
   publishAction: "プルリクエストを作る",
-  published: (branch, runId) =>
+  published: (branch) =>
     `公開済み: ${branch === null ? "ブランチ" : `ブランチ ${branch}`} を push し、` +
-    `${runId === null ? "run" : `run ${runId}`} を閉じました。`,
+    "この作業の記録を閉じました。",
   publishedPullRequest: "プルリクエスト",
   holds: (paths) => `この作業が押さえているファイル: ${filesJa(paths)}`,
   notLanded:
@@ -901,12 +901,15 @@ export const JA: Chrome = Object.freeze({
   publishTargetHeading: "何が起きるか",
   publishPushes: (branch, remote) => `ブランチ ${branch} を ${remote} へ push します。`,
   publishOpens: (repo, base) => `${repo} に、${base} 向けのプルリクエストを作ります。`,
-  publishCloses: (runId) => `実行 ${runId} を完了として閉じます。`,
+  publishCloses: () => "rondo の中の、この作業の記録を完了として閉じます。",
   publishPushUrl: (url) => `その push が届くのは ${url} です。`,
   publishWorkspace: (workspace) => `作業は ${workspace} にあります。`,
   publishRequestHeading: "作られるプルリクエスト",
   publishTitleLabel: "タイトル",
   publishBodyLabel: "本文",
+  publishBodyLead:
+    "本文は、プルリクエストをレビューする人に向けて rondo が英語で書きます。載せるのは、この作業の" +
+    "コミットと変えたファイルの一覧、作業がどう進んだかの記録、あなたの依頼の文面で、下に示すとおりに送ります。",
   publishBodyViewLegend: "本文の表示",
   publishBodyPreview: "プレビュー",
   publishBodyRaw: "原文",
@@ -916,9 +919,9 @@ export const JA: Chrome = Object.freeze({
   publishModelNote:
     "判断の材料です。承認ではなく、この画面の内容がこれで決まったわけでもありません。",
   publishNote:
-    "ボタンを押すと、rondo があなたの名前で push し、プルリクエストを作り、run を閉じます。" +
+    "ボタンを押すと、rondo があなたの名前で push し、プルリクエストを作り、作業の記録を閉じます。" +
     "マージはしません。画面を開いたあとに何か変わっていれば、実行せず、理由を表示します。",
-  publishPlain: "このブランチを push し、プルリクエストを作り、run を閉じます。",
+  publishPlain: "このブランチを push し、プルリクエストを作り、作業の記録を閉じます。",
   publishBack: "公開の画面に戻る",
   publishNotOffered:
     "ここからは公開できません。公開には、このホストが受け付ける公開者が要りますが、" +
@@ -933,7 +936,7 @@ export const JA: Chrome = Object.freeze({
       ? "この周回のゲートには、承認ではなく変更の依頼で答えています。公開してよいという承認がありません。"
       : "この周回のゲートには、rondo がどちらの答えかを記録するようになる前に答えています。" +
         "承認か変更依頼かが分からないため、推測で公開はしません。",
-  publishNoRun: "run の記録がないため、閉じる run がありません。",
+  publishNoRun: "この作業の記録がないため、閉じるものがありません。",
   publishPlanField: (field) =>
     `公開は周回の plan から組み立てますが、その plan に ${field} がありません。このままでは` +
     "公開できません。",
@@ -1082,7 +1085,7 @@ export const JA: Chrome = Object.freeze({
   publishRefusedNotApproved:
     "何も公開していません。ゲートが人の回答なしに終わっていて、公開してよいという承認が" +
     "ありません。",
-  publishRefusedNoRun: "何も公開していません。閉じる run がありません。",
+  publishRefusedNoRun: "何も公開していません。閉じる作業の記録がありません。",
   publishRefusedPlanField:
     "何も公開していません。この周回の plan に、公開の組み立てに要るものが欠けています。",
   publishRefusedNoRepo:
@@ -1108,7 +1111,7 @@ export const JA: Chrome = Object.freeze({
     "二重には公開していません。別の内容を読んだ画面から、すでに公開の処理が進んでいます。" +
     "終わるのを待ってから読み込み直してください。",
   publishRefusedNoContinuo:
-    "何も公開していません。run を閉じる部分が起動しないため、rondo は最後まで終えられない" +
+    "何も公開していません。作業の記録を閉じる部分が起動しないため、rondo は最後まで終えられない" +
     "push を行いません。",
   publishRefusedPushFailed: (detail) =>
     `何も公開していません。ブランチを push できませんでした。${detail}`,
@@ -1116,9 +1119,9 @@ export const JA: Chrome = Object.freeze({
     `ブランチは push 済みで、プルリクエストは作れませんでした。${detail} その前に作られていたか` +
     "どうかは rondo が持っている情報ではありません。もう一度押す前にフォージ側を見てください。" +
     "すでにあるプルリクエストを 2 回目の押下で作ることはできません。ある場合、残っているのは " +
-    "run を閉じることだけで、そのための 1 行は、このマシンで rondo を管理する人が確かめられます。",
+    "作業の記録を閉じることだけで、そのための 1 行は、このマシンで rondo を管理する人が確かめられます。",
   publishRefusedRunNotClosed:
-    "ブランチは push 済みで、プルリクエストも作られています。run が閉じていません。残っているのは" +
+    "ブランチは push 済みで、プルリクエストも作られています。作業の記録が閉じていません。残っているのは" +
     "その 1 つです。" +
     "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
   nextStepMerge:
@@ -1221,9 +1224,9 @@ export const JA: Chrome = Object.freeze({
     `${base} 向けに開いている ${pullRequest} へ push します。プルリクエストは新しく作りません。`,
   publishUpdateAction: (pullRequest) => `プルリクエスト ${pullRequest} を更新する`,
   publishBusyUpdate: "プルリクエストを更新しています…",
-  publishPlainUpdate: "このブランチを開いているプルリクエストへ push し、run を閉じます。",
+  publishPlainUpdate: "このブランチを開いているプルリクエストへ push し、作業の記録を閉じます。",
   publishNoteUpdate:
-    "ボタンを押すと、rondo があなたの名前で、開いているプルリクエストへ push し、run を閉じます。" +
+    "ボタンを押すと、rondo があなたの名前で、開いているプルリクエストへ push し、作業の記録を閉じます。" +
     "プルリクエストは作らず、マージもしません。画面を開いたあとに何か変わっていたり、" +
     "プルリクエストが閉じていたりすれば、実行せず、理由を表示します。",
 } satisfies Chrome);

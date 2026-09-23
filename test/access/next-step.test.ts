@@ -88,12 +88,25 @@ test("a request with no work yet draws *set the scope* filled: it is the only wa
   expect(html.split(`>${EN.scopeAction}</a>`)).toHaveLength(2);
 });
 
-test("a thread with a gate waiting leaves the gate as the press, and the scope outlined", async () => {
+test("a thread with a gate waiting leaves the gate as the press, and no scope until the work ends", async () => {
   const world = fresh();
   await gateWithChecks(world);
   const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
-  expect(classOf(html, "scope-req-1")).toBe(`${SECONDARY} h-7 px-3 text-meta`);
+  // rondo#437: another scope is no step of the person's while the work is
+  // under way, so no way to one is drawn -- lap 14 showed it at the top of the
+  // thread through the run, the gate and the open pull request.
+  expect(html).not.toContain('id="scope-req-1"');
   expect(html).not.toContain(EN.nextStepHeading);
+  // Once the lap has ended with nothing to publish, it is back, outlined.
+  await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "withdrawn" },
+    5_000,
+  );
+  const ended = await operatorPage(portsOver(world), "t", threadOf("req-1"));
+  expect(classOf(ended, "scope-req-1")).toBe(`${SECONDARY} h-7 px-3 text-meta`);
 });
 
 test("an approved lap's next step is drawn filled and named for what it does: a pull request", async () => {
@@ -116,8 +129,9 @@ test("an approved lap's next step is drawn filled and named for what it does: a 
   drawnOnceOnTop(html, "publish-i-0001");
   expect(html).toContain(EN.nextStepPublish);
   expect(html).toContain(">Open a pull request</a>");
-  // The scope is another scope now, and a second filled way would be a choice.
-  expect(classOf(html, "scope-req-1")).toBe(`${SECONDARY} h-7 px-3 text-meta`);
+  // No other scope beside it: the approved work is not yet a pull request
+  // (rondo#437), and a second way would be a choice.
+  expect(html).not.toContain('id="scope-req-1"');
   // And in Japanese, from what it does rather than from the English line.
   expect(chromeFor("ja").publishAction).toBe("プルリクエストを作る");
 });

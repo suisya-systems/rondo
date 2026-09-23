@@ -1087,6 +1087,12 @@ export interface Chrome extends PageWords {
   readonly publishRequestHeading: string;
   readonly publishTitleLabel: string;
   readonly publishBodyLabel: string;
+  /**
+   * What the body says, in the person's language, above the body itself
+   * (rondo#437): the body is written for the pull request's reviewers and is
+   * sent as it is, so the screen says what is in it rather than translating it.
+   */
+  readonly publishBodyLead: string;
   /** The body drawn or byte for byte (rondo#248): the pair's name, its two sides, the exact side's line. */
   readonly publishBodyViewLegend: string;
   readonly publishBodyPreview: string;

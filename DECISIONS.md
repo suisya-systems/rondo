@@ -23515,3 +23515,73 @@ all of them sign as rondo; only an operator is named by id.
   itself is a new refusal arm, left for the owner.
 - **The rule-file line** (*手順はリポジトリの AGENTS.md に従うよう伝えます*) stays. The walk noted the
   brief repeated it; that is the brief's repetition, and rule 4 does not name it.
+
+## D-0112 — rondo's lap reports are shut under the lines that say them in the person's words; a question is numbered once and points at its recommendation; the publish screen says what the body holds; the outlined scope waits for the work to end
+
+**Status:** accepted (2026-09-23, rondo#437). Refs `D-0055`, `D-0071`, `D-0076`, `D-0082`, `D-0111`,
+rondo#437.
+
+**Why an entry is needed.** Lap 14 (2026-09-23, the request *do rondo#200*, a Japanese page) met K1
+to K3 and missed K4, *no word the person has to ask about*. The first thing the thread said at the
+gate was `Lap 'lap-…' reached gate 'gate/worker_escalation/…' at stage 'received'. Its independent
+reading says 'clear' with 0 finding(s).`, then the model reading's own lines with
+`rondo/model/1/gpt-6-astra` in them, each followed by the Japanese line that said the same thing. The
+drafter's question drew *1. 1.*, *2. 2.*, *3. 3.* and a recommendation line starting with a bare
+*1.*, and its options spoke of *refused の文面*, *resume*, *保存側*, *遷移処理* and *レイヤ*; the proposal
+after the answer called the person *操作者*. The publish screen showed the English body with no word
+about it, said *run* three times and printed the run's id. An outlined *範囲を決める* stood at the
+top of the thread through the run, the gate and the open pull request.
+
+### The decision
+
+**1. rondo's reports on a lap are drawn shut, in every language.** A thread message with a `report-`
+id by the deterministic drafter (`writeReport` in `src/access/conductor.ts`: the gate, the model
+reading, published, merged, closed, conflict, moved, checks) is drawn as one closed fold labelled
+`evBrokeReason` (*rondo が記録した内容（rondo を保守する人向け）*), the body inside it byte for byte
+with `lang="en"`. Each report already has its line in the person's words: an event line
+(`lapEvents`) or the result strip (`resultOf`). So nothing is lost, and no id reaches the screen
+(`D-0076`). The rows are unchanged: `resultOf` and every other reader still read the same bodies.
+Shut in English too, because the ids are the same in both languages.
+
+**2. The publish screen's model card says what the reading came to**, with the words the thread's
+event line uses (`evReadingClear`, `evReadingRaised`, `evReadingUnavailable`) over the lap's latest
+model reading, and the lines `publishModelReadingLines` prints are in the same kind of fold. A
+closing lap has no model reading, so its card has only the fold.
+
+**3. The pull request body gets a lead in the page's language** (`publishBodyLead`): who the body
+is for, what it holds (the commits and files, how the work got here, the request as written) and
+that it is sent as shown. The body itself stays English and exact (`D-0055`): it is written for
+the forge's reviewers, and the screen says what is in it rather than translating it. The Japanese
+words for the publish's third leg no longer say *run* or print its id: *この作業の記録を閉じます*
+(`publishCloses`, `publishNote`, `publishPlain`, `published` and the refusals that named it).
+
+**4. A question's options are numbered once, by rondo.** `optionLines` (`src/access/question.ts`)
+lays out a drafter's question and a worker's alike. A leading number that is the option's own
+(*1.*, *1)*, *(1)*, full-width too) is taken off before rondo numbers it; a number that is not the
+option's own, or a decimal such as *3.5*, is kept. The recommendation reads *→ 1: …*: an arrow and
+the number, not a label, so the body stays in the writer's one language (`D-0071` rule 5.2), and it
+no longer reads as another option.
+
+**5. The drafter's instructions gain two rules** (version 7, `D-0071` rule 1.4): rondo numbers and
+marks the options, so the drafter does not; and the summary and the question are for a person who
+has not read the issues or the code: each option is what they would see differ, they are *you*
+(never *the operator* or *the requester*), and neither rondo's words for its own workings nor a word
+of the target's code is used, even where an issue uses it. Like `D-0111` rule 4 these are
+instructions, not checks.
+
+**6. The outlined *範囲を決める* is not drawn while the request's work is under way**: a lap of it
+not ended, or an approved try whose pull request is not merged or closed (`threadActs`'s
+`underWay`). It comes back once the work has ended. The filled next step (`D-0082`, rondo#375) is
+unchanged.
+
+### What is not done
+
+- **Publish takes two presses and merge one** (rondo#437 item 6). The thread's *プルリクエストを作る*
+  opens a confirm screen and the real press is there; *マージする* runs at once, though the page says
+  merge cannot be taken back from it. Which of them changes is the owner's decision and is not
+  made here.
+- **Other English rows rondo writes into a thread are not folded**: a scope stop, a closing lap's
+  stop and a held order ask the person something (`asks`), and folding a question would hide it.
+  They are rondo#437's kind of problem and a separate change.
+- **The brief's *依頼者は* and the gate's side face** (*変わったもの*, *作業者が実行したもの*) are not
+  touched.
