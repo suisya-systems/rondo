@@ -1344,6 +1344,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/revise-draft/host.ts": [SPLITTING],
   "src/access/revise-draft/judgement.ts": [SPLITTING],
   "src/access/scope.ts": [SPLITTING],
+  "src/access/screens/merge.tsx": [HUMAN],
   "src/access/screens/publish.tsx": [HUMAN],
   "src/access/screens/release.tsx": [HUMAN],
   "src/access/screens/scope.tsx": [HUMAN],

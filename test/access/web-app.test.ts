@@ -2860,6 +2860,39 @@ test("(merge) a person's press merges the lap it was drawn for, once, and lands 
   expect(await closed).toBe(0);
 });
 
+test("(merge) the confirm screen's press merges; a head that moved since it was drawn merges nothing (rondo#437)", async () => {
+  // The first press -- the thread's link to the screen -- is a GET and reaches
+  // no port (`page/result.test.ts` holds that the thread carries no merge form).
+  const merged: MergeInput[] = [];
+  const { base, stop, closed } = await served(createApp(mergePorts(merged), TOKEN));
+  // The screen's press is the merge.
+  expect((await send(base, "/merge", "POST", pressHeaders(base), mergeForm())).status).toBe(303);
+  expect(merged).toEqual([{ iterationId: "i-0002", head: "abc1234" }]);
+  stop.abort();
+  expect(await closed).toBe(0);
+  // A pull request whose head moved after the screen was drawn: the port
+  // refuses (`merge.test.ts` holds that test), and the press lands on the
+  // thread, which says what moved, rather than merging.
+  const moved: MergeInput[] = [];
+  const refusing = await served(
+    createApp(
+      mergePorts(moved, { ok: false, why: "mergeRefusedMoved", note: "the head moved" }),
+      TOKEN,
+    ),
+  );
+  const pressed = await send(
+    refusing.base,
+    "/merge",
+    "POST",
+    pressHeaders(refusing.base),
+    mergeForm({ head: "old0000" }),
+  );
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
+  refusing.stop.abort();
+  expect(await refusing.closed).toBe(0);
+});
+
 test("(merge) no press, no head or no approver merges nothing; the forge's refusal is said in words", async () => {
   const merged: MergeInput[] = [];
   const { base, stop, closed } = await served(createApp(mergePorts(merged), TOKEN));

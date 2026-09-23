@@ -547,6 +547,15 @@ const appended = await store.appendReading(waitingLapId, modelReading, now - 11 
 if (appended.kind !== "appended") {
   refuse(`the preview model reading did not append: ${JSON.stringify(appended)}`);
 }
+// rondo's own reports on that gate, as a run writes them (rondo#437): lap 14's
+// Japanese thread read these first, in English with their ids. The page keeps
+// them shut under the line that says the same thing in the person's words.
+for (const [event, at] of [
+  [{ kind: "gate" }, now - 18 * MINUTE],
+  [{ kind: "modelReading" }, now - 11 * MINUTE],
+]) {
+  await modules.conductor.reportToRequest({ store, record }, waitingLapId, event, at);
+}
 
 /**
  * The forge repository the preview's page may publish to (rondo#233 S5).
@@ -697,6 +706,11 @@ async function publishableLap(
       startedAt + lapMs,
     ],
   ]) {
+    // The approve press's own record beside the gate's answer (D-0092): without
+    // it the publish screen refuses, not knowing which answer was given.
+    if (to === "closed") {
+      await store.recordGateAnswer(id, `gate-${id}`, "approve", "ada", at - 1);
+    }
     const moved = await store.transition(id, from, to, fields, at, taken);
     if (moved.kind !== "transitioned") {
       refuse(`the preview publishable lap did not reach '${to}': ${JSON.stringify(moved)}`);
@@ -717,6 +731,26 @@ if (viewed.kind !== "recorded") {
 }
 
 const publishableLapId = await publishableLap("lap-preview-0005", false, false, 24 * HOUR);
+// A model reading of it that raised nothing, so the publish screen draws the
+// model's card: what it came to in the person's words, its lines shut (rondo#437).
+{
+  const [checks] = await store.readingsFor(publishableLapId);
+  const read = await store.appendReading(
+    publishableLapId,
+    {
+      drafter: modules.records.modelReadingDrafter("gpt-6-astra"),
+      verdict: "clear",
+      findings: [],
+      graded: [],
+      evidence: checks.evidence,
+      unavailableReason: null,
+    },
+    now - 23 * HOUR,
+  );
+  if (read.kind !== "appended") {
+    refuse(`the preview publish lap's model reading did not append: ${JSON.stringify(read)}`);
+  }
+}
 const refusingLapId = await publishableLap("lap-preview-0006", true, false, 5 * HOUR);
 // The third publish screen: the work is publishable, and the reading no longer
 // describes it, so the only press offered is the one that overrules it.
@@ -737,7 +771,12 @@ const staleLapId = await publishableLap("lap-preview-0007", false, true, 3 * HOU
 //    a git workspace, as the ones above do).
 const CONFLICT_PR = `https://github.com/${PREVIEW_REPO}/pull/417`;
 // The requests first: a scope over a request nobody made is refused (D-0066 rule 1.2.1).
-for (const requestId of ["request-preview-0005", "request-preview-0006", "request-preview-0007"]) {
+for (const requestId of [
+  "request-preview-0005",
+  "request-preview-0006",
+  "request-preview-0007",
+  "request-preview-0009",
+]) {
   await say({
     messageId: requestId,
     body:
@@ -755,7 +794,12 @@ const conflictScopeId = "scope-preview-0005";
 const conflictScope = await record.recordScope({
   scopeId: conflictScopeId,
   payload: modules.records.scopePayloadWithDefaults({
-    requests: ["request-preview-0005", "request-preview-0006", "request-preview-0007"],
+    requests: [
+      "request-preview-0005",
+      "request-preview-0006",
+      "request-preview-0007",
+      "request-preview-0009",
+    ],
     workspaces: [{ repository, workspace_root: workspaceRoot }],
     agent_types: [drafted.kind === "drafted" ? drafted.agentTypeDigest : ""],
     budgets: {
@@ -945,6 +989,29 @@ for (const [requestId, lapId, fixId, state] of [
 }
 const fixedLapId = "lap-preview-0014";
 
+// rondo#437 item 6: a published pull request whose checks are green on its
+// head, so the thread's next step is the merge and it leads to the merge's
+// confirm screen. Pressing it under this preview refuses at the forge: the
+// repository does not exist.
+const mergeLapId = "lap-preview-0015";
+await conflictLap(mergeLapId, "request-preview-0009", null, {}, "closed", 3 * HOUR, false);
+await modules.conductor.reportToRequest(
+  reportPorts,
+  mergeLapId,
+  { kind: "published", pullRequestUrl: `https://github.com/${PREVIEW_REPO}/pull/436` },
+  now - 2 * HOUR,
+);
+await modules.conductor.reportToRequest(
+  reportPorts,
+  mergeLapId,
+  {
+    kind: "checks",
+    commit: "a".repeat(40),
+    reading: { kind: "green", counted: 6, skipped: 1 },
+  },
+  now - 100 * MINUTE,
+);
+
 // Two requests the model drafter drafted (rondo#238 C2b), written the way a
 // run writes them -- a real host over this store, with a fixed answer standing
 // in for claude. The drafter's epoch is taken first, so everything seeded above
@@ -952,7 +1019,7 @@ const fixedLapId = "lap-preview-0014";
 await record.messagesBeforeDrafter(now);
 const pastedPlan = planDocument("lap-preview-0001");
 const agentTypeDigest = drafted.kind === "drafted" ? drafted.agentTypeDigest : "";
-async function draftedRequest(requestId, body, extra) {
+async function draftedRequest(requestId, body, extra, answer = null) {
   await say({
     messageId: requestId,
     body,
@@ -963,16 +1030,20 @@ async function draftedRequest(requestId, body, extra) {
     bases: [],
     asks: false,
   });
-  await say({
-    messageId: `${requestId}-plan`,
-    body: JSON.stringify(pastedPlan),
-    authorKind: "operator",
-    authorId: "ada",
-    inReplyTo: requestId,
-    atMs: now - 19 * 60 * 1000,
-    bases: [],
-    asks: false,
-  });
+  // A question needs no plan to draft over, and one pasted would be quoted
+  // above it as the message it answers.
+  if (answer === null) {
+    await say({
+      messageId: `${requestId}-plan`,
+      body: JSON.stringify(pastedPlan),
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: requestId,
+      atMs: now - 19 * 60 * 1000,
+      bases: [],
+      asks: false,
+    });
+  }
   if (extra !== null) {
     await say({
       messageId: `${requestId}-budget`,
@@ -999,30 +1070,32 @@ async function draftedRequest(requestId, body, extra) {
     runDrafter: async () => ({
       kind: "answered",
       costUsd: 0.06,
-      finalMessage: JSON.stringify({
-        act: "split",
-        summary: { text: "Two independent changes, drafted as two plans.", bases: [requestId] },
-        plans: [
-          {
-            template_plan_digest: modules.storePlan.planDigest(pastedPlan),
-            agent_type_digest: agentTypeDigest,
-            prompt:
-              "On the scope screen, let the cost box take a whole-dollar amount typed without " +
-              'cents ("3" as well as "3.00"). Change only that box\'s parsing and its tests.',
-            bases: [requestId],
-          },
-          {
-            template_plan_digest: modules.storePlan.planDigest(pastedPlan),
-            agent_type_digest: agentTypeDigest,
-            prompt:
-              'On the gate screen, make the approve button\'s label read "Approve" in title ' +
-              "case. Change only the label, not the value it records.",
-            bases: [requestId],
-          },
-        ],
-        narrowings:
-          extra === null ? [] : [{ field: "cost_usd", value: 4, basis: `${requestId}-budget` }],
-      }),
+      finalMessage: JSON.stringify(
+        answer ?? {
+          act: "split",
+          summary: { text: "Two independent changes, drafted as two plans.", bases: [requestId] },
+          plans: [
+            {
+              template_plan_digest: modules.storePlan.planDigest(pastedPlan),
+              agent_type_digest: agentTypeDigest,
+              prompt:
+                "On the scope screen, let the cost box take a whole-dollar amount typed without " +
+                'cents ("3" as well as "3.00"). Change only that box\'s parsing and its tests.',
+              bases: [requestId],
+            },
+            {
+              template_plan_digest: modules.storePlan.planDigest(pastedPlan),
+              agent_type_digest: agentTypeDigest,
+              prompt:
+                'On the gate screen, make the approve button\'s label read "Approve" in title ' +
+                "case. Change only the label, not the value it records.",
+              bases: [requestId],
+            },
+          ],
+          narrowings:
+            extra === null ? [] : [{ field: "cost_usd", value: 4, basis: `${requestId}-budget` }],
+        },
+      ),
     }),
   });
   host.kick();
@@ -1038,6 +1111,34 @@ await draftedRequest(
   "Two small fixes: whole dollars in the cost box, and a title-case Approve on the gate.",
   null,
 );
+// A question from the drafter (rondo#437): lap 14 drew *1. 1.* because the
+// drafter numbered its own options. These are numbered the same way, so the
+// page shows rondo's one numbering and the arrow at the recommended option.
+await draftedRequest("request-preview-0008", "#200 をやってほしい", null, {
+  act: "ask",
+  summary: {
+    text: "中断した作業をどう再開するかで、結果が二通りに分かれます。",
+    bases: ["request-preview-0008"],
+  },
+  question: {
+    text: "作業が途中で止まったとき、次に開いたページで何が見えればよいですか。",
+    options: [
+      {
+        text: "1. 止まった理由と、続きから再開するボタンが見える",
+        gives_up: "最初からやり直す道はこの画面からは選べません。",
+      },
+      {
+        text: "2. 止まったことだけが見え、やり直すかどうかはあなたが決める",
+        gives_up: "続きから再開はできず、毎回最初からになります。",
+      },
+    ],
+    recommended: 0,
+    recommendation: "1. 依頼の文面が「続きから」と書いているためです。",
+    bases: ["request-preview-0008"],
+  },
+  holes: [],
+  narrowings: [],
+});
 // The second one approved as drafted, so its screen shows each plan's start.
 const draftScope = (await record.scopesFor("request-preview-0004")).find(
   (one) => one.authorKind === "drafter",
@@ -1113,6 +1214,15 @@ process.stdout.write(
     "The drafter runs in this process too: a message sent from the page is drafted",
     "by a real claude, if one is installed here. The seeded rows predate it and are",
     "left alone.",
+    "",
+    "rondo#437: the gate's reports shut under their lines, a drafter's question with",
+    "one numbering, the publish screen's words, and a running try with no scope link:",
+    `437:     ${base}/?thread=${requestMessageId}&lang=ja`,
+    `437:     ${base}/?thread=request-preview-0008&lang=ja`,
+    `437:     ${base}/?publish=${publishableLapId}&lang=ja`,
+    `437:     ${base}/?thread=request-preview-0006&lang=ja`,
+    `437:     ${base}/?thread=request-preview-0009&lang=ja`,
+    `437:     ${base}/?merge=${mergeLapId}&lang=ja`,
     "",
     "A published pull request that conflicts (rondo#417, D-0105): the offer, the fix",
     "running, and the approved fix whose publish updates the same pull request:",

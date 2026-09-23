@@ -38,12 +38,13 @@ import {
   type ThreadAuthorKind,
 } from "../../store/records.js";
 import { sectionFramer } from "../framing.js";
+import { optionLines } from "../question.js";
 
 /**
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
  * {@link INSTRUCTIONS} is a new version, a changed model a new table entry.
  */
-const DRAFTER_INSTRUCTIONS_VERSION = 6;
+const DRAFTER_INSTRUCTIONS_VERSION = 7;
 
 /** What every row a model drafter writes is named under (rule 1.4). */
 export const MODEL_DRAFTER_PREFIX = "rondo/drafter/";
@@ -251,7 +252,14 @@ const INSTRUCTIONS = [
   "- Work no template or no agent type fits is a hole: name it in holes, plan nothing, and ask.",
   '  Holes go only with "ask", and the recommended option is that the person paste a plan for',
   "  that kind of work into the thread.",
-  "- A question has options, what each gives up, and exactly one recommended option.",
+  "- A question has options, what each gives up, and exactly one recommended option. rondo",
+  "  numbers the options and marks the recommended one: do not number or label them yourself.",
+  "- The summary and the question are read by the person who wrote the request, who has not",
+  "  read the issues or the code. Put each option as what they would see differ, in their own",
+  "  words. Call them 'you', never 'the operator' or 'the requester'. Never use rondo's words for",
+  "  its own workings (lap, gate, worker, scope, run, refused, resume) or a word of the target's",
+  "  code (a layer, a state transition, a storage side, a function or field name), even where an",
+  "  issue uses it.",
   "- Each plan claims the repository paths its work will change, so plans that touch different",
   "  paths can run at the same time and plans that share one run one after the other. A path is",
   "  relative to the repository root and spelled with '/': a file ('README.md'), or a directory",
@@ -700,9 +708,11 @@ function question(
   const body = [
     words(q["text"], "the question's text"),
     "",
-    ...options.flatMap((option, i) => [`${String(i + 1)}. ${option.text}`, `   ${option.givesUp}`]),
-    "",
-    `${String(recommended + 1)}. ${words(q["recommendation"], "the question's recommendation")}`,
+    ...optionLines(
+      options,
+      recommended,
+      words(q["recommendation"], "the question's recommendation"),
+    ),
   ].join("\n");
   return { body, bases: bases(q["bases"], "the question"), asks: true };
 }

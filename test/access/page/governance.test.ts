@@ -142,13 +142,23 @@ test("the thread leads to the screens the request can be taken to next", async (
   // without a decision saying it did.
   const world = fresh();
   await gateWithChecks(world);
-  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
+  // The scope's entrance is drawn once the lap has ended (rondo#437): while
+  // it is at its gate another scope is no step of the person's.
+  await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "withdrawn" },
+    5_000,
+  );
+  const thread = { kind: "thread" as const, messageId: "req-1", to: null };
+  const html = await operatorPage(portsOver(world, "ada", []), "t", thread);
   expect(html).toContain('href="/?scope=req-1&amp;lang=en"');
   // No forge is configured in this world, so the publish entrance is not drawn
   // -- the same condition the publish screen itself draws a button under.
   expect(html).not.toContain('href="/?publish=');
 
   // With no write port there is nothing to press and no entrance either.
-  const read = await operatorPage(portsOver(world, null), null, { kind: "summary" });
+  const read = await operatorPage(portsOver(world, null), null, thread);
   expect(read).not.toContain('href="/?scope=');
 });

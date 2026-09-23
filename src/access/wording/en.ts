@@ -888,6 +888,9 @@ explanation you pressed on and then answers the gate.`,
   publishRequestHeading: "The pull request it would open",
   publishTitleLabel: "Title",
   publishBodyLabel: "Body",
+  publishBodyLead:
+    "rondo writes the body for whoever reviews the pull request: the commits and files the work " +
+    "changed, how it got here, and your request as you wrote it. It is sent exactly as shown.",
   publishBodyViewLegend: "Show the body as",
   publishBodyPreview: "Preview",
   publishBodyRaw: "Raw",
@@ -1114,6 +1117,17 @@ explanation you pressed on and then answers the gate.`,
     "you. Merging puts it into the branch it was opened against, the way the repository allows, " +
     "and cannot be taken back from this page.",
   mergeAction: "Merge the pull request",
+  mergeConfirmHeading: "Merge this work's pull request",
+  mergeConfirmInto: (pullRequest, base) =>
+    `Merges ${pullRequest} into ${base}, in the way the repository allows.`,
+  mergeConfirmCommit: (commit) =>
+    `What is merged is commit ${commit}, the pull request's latest, and the checks passed on it.`,
+  mergeConfirmNoUndo:
+    "This page cannot undo a merge. If the pull request has moved since this screen was drawn, " +
+    "nothing is merged and the thread says what moved.",
+  mergeConfirmMore: (count) => `and ${String(count)} more`,
+  mergeConfirmNotNow:
+    "Nothing can be merged from here now. Go back to the request: its next step says what waits.",
   nextStepMergeMoved: (count) =>
     `The checks are green on the pull request's latest commit. That commit carries ${String(count)} commit${count === 1 ? "" : "s"} this work did not make (listed above), and merging merges ${count === 1 ? "it" : "them"} too, into the branch it was opened against, the way the repository allows. It cannot be taken back from this page. If you do not want ${count === 1 ? "it" : "them"} merged, do not press.`,
   mergeMovedAction: "Merge the pull request, those commits included",

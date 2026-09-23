@@ -109,7 +109,7 @@ import {
   type ThreadMessageDraft,
   WAIT_SIDE,
 } from "../store/records.js";
-import { basisLine, gather } from "./advisory.js";
+import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
 import { draftedStanding } from "./drafted-view.js";
 import type { LapWorkInspection } from "./forge.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
@@ -187,6 +187,7 @@ import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./pag
 import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal } from "./scope.js";
+import { mergeView } from "./screens/merge.js";
 import { publishView } from "./screens/publish.js";
 import { releaseView } from "./screens/release.js";
 import { scopeView } from "./screens/scope.js";
@@ -1869,6 +1870,38 @@ function noDraftView(wording: Chrome, message: ThreadMessageDraft) {
   );
 }
 
+/**
+ * Whether a message is one of rondo's own reports on a lap (`writeReport` in
+ * `conductor.ts`): the deterministic drafter's voice and a `report-` id.
+ */
+function lapReport(message: ThreadMessageDraft): boolean {
+  return message.authorId === DETERMINISTIC_DRAFTER && message.messageId.startsWith("report-");
+}
+
+/**
+ * **A lap report, shut** (rondo#437, D-0112): the report is rondo's record in
+ * English with its ids, and each one already has its line in the person's
+ * words beside it (the event lines and the result strip). So nothing of it is
+ * drawn open, in any language -- no id reaches the screen (D-0076) -- and it is
+ * kept, byte for byte, under the fold `evBrokeReason` labels.
+ */
+function lapReportView(wording: Chrome, message: ThreadMessageDraft) {
+  return (
+    <details class="group">
+      <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+        {chevron()}
+        {wording.evBrokeReason}
+      </summary>
+      <p
+        class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+        lang="en"
+      >
+        {message.body}
+      </p>
+    </details>
+  );
+}
+
 /** The newest approval in force over a scope the person wrote, if any. */
 async function ownApproval(
   ports: WebPorts,
@@ -1989,7 +2022,6 @@ async function threadActs(
           ) === null
         ? {
             record: resultRecord,
-            head: result.checksCommit ?? "",
             // **A head the lap did not push** (rondo#412, `D-0102`): the card
             // says what merging it takes in, which the strip lists above.
             carried:
@@ -2082,46 +2114,19 @@ async function threadActs(
       </a>
     </section>
   );
-  // The merge press (D-0091 rule 1): a press and not a link, since the
-  // approval is this button, per act, with no screen between it and the act.
+  // The way to the merge (D-0091 rule 1, rondo#437 item 6): a link to the
+  // screen that says what merging does and holds the press, as publish's is
+  // (D-0112 rule 7). The merge could not be taken back and was one press.
   const mergeCard = (lap: {
     readonly record: { readonly id: string };
-    readonly head: string;
     readonly carried: number | null;
-  }) => (
-    <section class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3">
-      <h2 class="text-meta leading-5 font-semibold text-wait-ink">{wording.nextStepHeading}</h2>
-      <p class="mt-1 text-body leading-6">
-        {lap.carried === null ? wording.nextStepMerge : wording.nextStepMergeMoved(lap.carried)}
-      </p>
-      <form
-        id={`merge-${lap.record.id}`}
-        method="post"
-        action={`/merge?lang=${encodeURIComponent(wording.lang)}`}
-        class="mt-3 flex flex-col gap-2"
-      >
-        <input type="hidden" name="token" value={token} />
-        <input type="hidden" name="iteration" value={lap.record.id} />
-        <input type="hidden" name="request" value={requestMessageId} />
-        <input type="hidden" name="head" value={lap.head} />
-        <button
-          type="submit"
-          data-busy={wording.mergeBusy}
-          class={`${PRIMARY} h-10 justify-center self-start px-6 text-sm`}
-        >
-          {lap.carried === null ? wording.mergeAction : wording.mergeMovedAction}
-        </button>
-        <p
-          data-busy-note=""
-          hidden
-          role="status"
-          class="note text-meta leading-5 text-muted-foreground"
-        >
-          {wording.mergeBusyNote}
-        </p>
-      </form>
-    </section>
-  );
+  }) =>
+    card(
+      `merge-${lap.record.id}`,
+      viewHref({ kind: "merge", iterationId: lap.record.id }, wording.lang),
+      lap.carried === null ? wording.nextStepMerge : wording.nextStepMergeMoved(lap.carried),
+      lap.carried === null ? wording.mergeAction : wording.mergeMovedAction,
+    );
   // **A lap below a published one updates that pull request** (rondo#417,
   // D-0105): its publish pushes onto it and opens none, so the step says which.
   // Walked up its own line, as `pullRequestUpdated` walks it, never across lines.
@@ -2224,6 +2229,25 @@ async function threadActs(
                       wording.scopeAction,
                     );
   const others = publishable.filter((lap) => lap !== nextPublish);
+  // **The request's work is still under way** (rondo#437): a lap running or at
+  // its gate, or any approved try whose pull request is not yet merged
+  // or closed. Another scope is no step of the person's then, so the outlined
+  // way to one is not drawn; it comes back once the work has ended.
+  const underWay = laps.some((lap) => {
+    if (!isTerminal(lap.record.status)) {
+      return true;
+    }
+    // A try a later one supersedes (a conflict fix, a redo) is carried by it:
+    // the pull request's end is reported on the later try only.
+    if (
+      !approvedForPublication(lap.record) ||
+      laps.some((later) => later.record.supersedesIterationId === lap.record.id)
+    ) {
+      return false;
+    }
+    const ended = resultOf(threads.byId, lap.record.id);
+    return ended?.merged == null && ended?.closedAtMs == null;
+  });
   // A repository added from the page whose build rondo could not tell: said
   // where the work is, since it bounds what the worker can check (D-0090).
   const unbuilt = where?.work.kind === "held" ? where.unbuilt : [];
@@ -2232,7 +2256,7 @@ async function threadActs(
   const empty =
     unbuilt.length === 0 &&
     others.length === 0 &&
-    (standing !== null || unheld !== null || asked !== null);
+    (standing !== null || unheld !== null || asked !== null || underWay);
   return {
     next,
     fixOffered: nextFix !== null && nextFix.closed === null,
@@ -2246,7 +2270,7 @@ async function threadActs(
         {/* Outlined: another scope for a request that already has work is a
             way to another screen, and drawn filled it outweighed the box a
             person is actually being waited on by. */}
-        {standing !== null || unheld !== null || asked !== null ? null : (
+        {standing !== null || unheld !== null || asked !== null || underWay ? null : (
           <a
             id={`scope-${requestMessageId}`}
             href={scopeHref(null)}
@@ -2865,7 +2889,11 @@ export async function operatorPage(
    * composed by the parts that own them and placed here.
    */
   /** The screens the page's rebuild does not touch, which keep their own centre. */
-  const onOwnScreen = view.kind === "scope" || view.kind === "publish" || view.kind === "release";
+  const onOwnScreen =
+    view.kind === "scope" ||
+    view.kind === "publish" ||
+    view.kind === "merge" ||
+    view.kind === "release";
   const selectedMessages =
     selectedRoot === null
       ? []
@@ -2988,23 +3016,28 @@ export async function operatorPage(
           ),
         };
   /*
-   * **The two messages whose body is not prose**, rendered here because this
+   * **The messages whose body is not prose**, rendered here because this
    * renderer still owns them: what rondo read of a named issue (D-0078 section
-   * 4) and a drafter run that drafted nothing (rondo#238). They cross the seam
+   * 4), a drafter run that drafted nothing (rondo#238) and rondo's own report
+   * on a lap (rondo#437). They cross the seam
    * as markup, like the boxes, and are awaited once rather than inside the
    * synchronous map below.
    */
   const drawnBodies = new Map(
     await Promise.all(
       selectedMessages
-        .filter((message) => message.authorKind === "forge" || noDraft(message))
+        .filter(
+          (message) => message.authorKind === "forge" || noDraft(message) || lapReport(message),
+        )
         .map(
           async (message) =>
             [
               message.messageId,
               await (message.authorKind === "forge"
                 ? forgeView(wording, message)
-                : noDraftView(wording, message)
+                : lapReport(message)
+                  ? lapReportView(wording, message)
+                  : noDraftView(wording, message)
               ).toString(),
             ] as const,
         ),
@@ -3588,6 +3621,8 @@ export async function operatorPage(
   // the forge's own configuration, and the tree is composed from what it read.
   const publishing =
     view.kind === "publish" ? await publishView(ports, wording, view, token, threads) : null;
+  const merging =
+    view.kind === "merge" ? await mergeView(ports, wording, view, token, threads) : null;
   const releasing =
     view.kind === "release"
       ? await releaseView(ports, wording, view, releaseToken, ledger, threads, nowMs)
@@ -4012,7 +4047,9 @@ export async function operatorPage(
                             ? scoping
                             : view.kind === "publish"
                               ? publishing
-                              : releasing}
+                              : view.kind === "merge"
+                                ? merging
+                                : releasing}
                         </div>
                       ).toString(),
                     }

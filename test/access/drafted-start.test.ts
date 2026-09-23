@@ -172,7 +172,7 @@ test(
     expect(run.claim).toEqual({
       paths: ["src/access/web.tsx", "test/access/"],
       authorKind: "drafter",
-      authorId: expect.stringMatching(/^rondo\/drafter\/6\//),
+      authorId: expect.stringMatching(/^rondo\/drafter\/7\//),
       bases: [
         { form: "proposal", proposalId: w.proposalId },
         { form: "message", messageId: "r1" },
@@ -441,7 +441,7 @@ test(
       expect(claim).toEqual({
         paths: ["src/access/scope.ts"],
         authorKind: "drafter",
-        authorId: expect.stringMatching(/^rondo\/drafter\/6\//),
+        authorId: expect.stringMatching(/^rondo\/drafter\/7\//),
         bases: [
           { form: "proposal", proposalId: w.proposalId },
           { form: "message", messageId: "r1" },

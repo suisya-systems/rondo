@@ -104,6 +104,12 @@ export type PageView =
    */
   | { readonly kind: "publish"; readonly iterationId: string }
   /**
+   * One published lap's merge (rondo#437 item 6, D-0112 rule 7): what merging
+   * does, and the press. A view of its own for `publish`'s reason: the press
+   * that cannot be taken back is made from a screen that says what it does.
+   */
+  | { readonly kind: "merge"; readonly iterationId: string }
+  /**
    * One running lap's log (rondo#248 item 3): the commands it has run and what
    * they returned, read through the same port the row's *log found* came from.
    * Named by the row and never by a path, so the address carries nothing the
@@ -173,6 +179,7 @@ export function isLive(view: PageView): boolean {
   return (
     view.kind !== "scope" &&
     view.kind !== "publish" &&
+    view.kind !== "merge" &&
     view.kind !== "release" &&
     view.kind !== "goal"
   );
@@ -199,6 +206,8 @@ export function viewHref(view: PageView, tag: string): string {
   switch (view.kind) {
     case "publish":
       return `/?publish=${encodeURIComponent(view.iterationId)}&${lang}`;
+    case "merge":
+      return `/?merge=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "release":
       return `/?release=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "requests":

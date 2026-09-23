@@ -15,16 +15,20 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
 import { DETERMINISTIC_DRAFTER } from "../../src/access/advisory.js";
+import { reportToRequest } from "../../src/access/conductor.js";
 import { PRIMARY, SECONDARY } from "../../src/access/page/vocabulary.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import {
   fresh,
   gateWithChecks,
   mint,
+  openGate,
   openRequest,
   operatorPage,
+  planFor,
   portsOver,
   recordAnswer,
+  reserve,
 } from "./page-world.js";
 
 const DRY_RUN = {
@@ -88,12 +92,25 @@ test("a request with no work yet draws *set the scope* filled: it is the only wa
   expect(html.split(`>${EN.scopeAction}</a>`)).toHaveLength(2);
 });
 
-test("a thread with a gate waiting leaves the gate as the press, and the scope outlined", async () => {
+test("a thread with a gate waiting leaves the gate as the press, and no scope until the work ends", async () => {
   const world = fresh();
   await gateWithChecks(world);
   const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
-  expect(classOf(html, "scope-req-1")).toBe(`${SECONDARY} h-7 px-3 text-meta`);
+  // rondo#437: another scope is no step of the person's while the work is
+  // under way, so no way to one is drawn -- lap 14 showed it at the top of the
+  // thread through the run, the gate and the open pull request.
+  expect(html).not.toContain('id="scope-req-1"');
   expect(html).not.toContain(EN.nextStepHeading);
+  // Once the lap has ended with nothing to publish, it is back, outlined.
+  await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "withdrawn" },
+    5_000,
+  );
+  const ended = await operatorPage(portsOver(world), "t", threadOf("req-1"));
+  expect(classOf(ended, "scope-req-1")).toBe(`${SECONDARY} h-7 px-3 text-meta`);
 });
 
 test("an approved lap's next step is drawn filled and named for what it does: a pull request", async () => {
@@ -116,8 +133,9 @@ test("an approved lap's next step is drawn filled and named for what it does: a 
   drawnOnceOnTop(html, "publish-i-0001");
   expect(html).toContain(EN.nextStepPublish);
   expect(html).toContain(">Open a pull request</a>");
-  // The scope is another scope now, and a second filled way would be a choice.
-  expect(classOf(html, "scope-req-1")).toBe(`${SECONDARY} h-7 px-3 text-meta`);
+  // No other scope beside it: the approved work is not yet a pull request
+  // (rondo#437), and a second way would be a choice.
+  expect(html).not.toContain('id="scope-req-1"');
   // And in Japanese, from what it does rather than from the English line.
   expect(chromeFor("ja").publishAction).toBe("プルリクエストを作る");
 });
@@ -466,4 +484,87 @@ test("a start refused at a scope test says the test in words, never its name (ro
     expect(said).not.toMatch(/\basks\b/);
     expect(said).toContain(wording.lang === "ja" ? "問い" : "question");
   }
+});
+
+test("an older approved try still unpublished keeps the scope away after a newer one is merged (rondo#437)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await reserve(world, "i-0002", "add a retry budget", null, "req-1");
+  await openGate(world, "i-0002");
+  for (const id of ["i-0001", "i-0002"]) {
+    await recordAnswer(world, id);
+    const closed = await world.store.transition(
+      id,
+      "awaiting_human",
+      "closed",
+      { gateOutcome: "answered_and_forwarded" },
+      5_000,
+    );
+    expect(closed.kind).toBe("transitioned");
+  }
+  const url = "https://github.com/suisya-systems/rondo/pull/9";
+  await reportToRequest(world, "i-0002", { kind: "published", pullRequestUrl: url }, 6_000);
+  await reportToRequest(
+    world,
+    "i-0002",
+    { kind: "merged", pullRequestUrl: url, into: "main", method: "squash", mergeCommit: null },
+    7_000,
+  );
+  const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
+  expect(html).not.toContain('id="scope-req-1"');
+});
+
+test("a try whose pull request a later try carried to its merge brings the scope back (rondo#437)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await recordAnswer(world, "i-0001");
+  await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "answered_and_forwarded" },
+    5_000,
+  );
+  const url = "https://github.com/suisya-systems/rondo/pull/9";
+  await reportToRequest(world, "i-0001", { kind: "published", pullRequestUrl: url }, 5_500);
+  // The conflict fix: a later try that supersedes it and pushes onto its pull request.
+  const reserved = await world.store.reserve({
+    numbers: null,
+    id: "i-0002",
+    request: "add a retry budget",
+    plan: planFor("i-0002"),
+    spend: null,
+    scopeSpend: null,
+    claim: null,
+    nowMs: 6_000,
+    supersedesIterationId: "i-0001",
+    requestMessageId: "req-1",
+    runId: "rondo-i-0002",
+    topicBranch: "rondo/i-0001",
+    workspace: "/srv/work/i-0002",
+  });
+  expect(reserved.kind).toBe("reserved");
+  await openGate(world, "i-0002");
+  await recordAnswer(world, "i-0002");
+  await world.store.transition(
+    "i-0002",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "answered_and_forwarded" },
+    7_000,
+  );
+  await reportToRequest(
+    world,
+    "i-0002",
+    { kind: "published", pullRequestUrl: url, onto: "rondo/i-0001" },
+    7_500,
+  );
+  await reportToRequest(
+    world,
+    "i-0002",
+    { kind: "merged", pullRequestUrl: url, into: "main", method: "squash", mergeCommit: null },
+    8_000,
+  );
+  const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
+  expect(classOf(html, "scope-req-1")).toBe(`${SECONDARY} h-7 px-3 text-meta`);
 });

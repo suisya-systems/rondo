@@ -1087,6 +1087,12 @@ export interface Chrome extends PageWords {
   readonly publishRequestHeading: string;
   readonly publishTitleLabel: string;
   readonly publishBodyLabel: string;
+  /**
+   * What the body says, in the person's language, above the body itself
+   * (rondo#437): the body is written for the pull request's reviewers and is
+   * sent as it is, so the screen says what is in it rather than translating it.
+   */
+  readonly publishBodyLead: string;
   /** The body drawn or byte for byte (rondo#248): the pair's name, its two sides, the exact side's line. */
   readonly publishBodyViewLegend: string;
   readonly publishBodyPreview: string;
@@ -1237,6 +1243,17 @@ export interface Chrome extends PageWords {
    */
   readonly nextStepMerge: string;
   readonly mergeAction: string;
+  /** The merge's confirm screen (rondo#437 item 6, D-0112 rule 7): its heading. */
+  readonly mergeConfirmHeading: string;
+  /** Which pull request goes where, in the way the repository allows. */
+  readonly mergeConfirmInto: (pullRequest: string, base: string) => string;
+  /** The commit the press merges, with the checks green on it. */
+  readonly mergeConfirmCommit: (commit: string) => string;
+  readonly mergeConfirmNoUndo: string;
+  /** The commits not the lap's that the list does not name. */
+  readonly mergeConfirmMore: (count: number) => string;
+  /** Where nothing can be merged from this screen now. */
+  readonly mergeConfirmNotNow: string;
   /**
    * The same press over a head the lap did not push (rondo#412): what the
    * head carries is said above it, and the card and the button say that

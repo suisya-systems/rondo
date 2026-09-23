@@ -13,6 +13,7 @@ import { expect, test } from "vitest";
 import { definitionOfDone } from "../../src/access/done.js";
 import {
   answeredQuestion,
+  optionLines,
   type QuestionPorts,
   questionRevise,
   readWorkerQuestion,
@@ -144,7 +145,7 @@ test("a question is put as an ask on its lap, holds that line only, and is relea
       "2. Disk",
       "   Slower.",
       "",
-      "2. Disk keeps it across restarts.",
+      "→ 2: Disk keeps it across restarts.",
       "",
       "The eviction code.",
       "",
@@ -254,4 +255,35 @@ test("a worker's question does not hold an unproposed start of its request; any 
   expect(
     askStandsOver({ messageId: "m", iterationIds: ["it-1"], answeredStop: false }, [], true),
   ).toBe(true);
+});
+
+test("options are numbered once, whatever the writer numbered them with (rondo#437)", () => {
+  // Lap 14 drew *1. 1.*: the drafter numbered its own options and rondo
+  // numbered them again. A number that is not the option's own is kept.
+  expect(
+    optionLines(
+      [
+        { text: "1. Keep it", givesUp: "a" },
+        { text: "（２）Drop it", givesUp: "b" },
+        { text: "3.5 GB is the cap", givesUp: "c" },
+        { text: "1. Not its own number", givesUp: "d" },
+        { text: "⑸ A circled number is not stripped", givesUp: "e" },
+      ],
+      0,
+      "1. Keeping it is smaller.",
+    ),
+  ).toEqual([
+    "1. Keep it",
+    "   a",
+    "2. Drop it",
+    "   b",
+    "3. 3.5 GB is the cap",
+    "   c",
+    "4. 1. Not its own number",
+    "   d",
+    "5. ⑸ A circled number is not stripped",
+    "   e",
+    "",
+    "→ 1: Keeping it is smaller.",
+  ]);
 });

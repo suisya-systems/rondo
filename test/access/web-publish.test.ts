@@ -30,11 +30,13 @@ import { openRequest, REQUEST } from "../request-fixture.js";
 import {
   fresh,
   gateWithChecks,
+  modelFindings,
   openGate,
   operatorPage,
   PLAN,
   planFor,
   portsOver,
+  readableWithoutOpening,
   recordAnswer,
   reserve,
   WINDOWS_HEAVY_TIMEOUT_MS,
@@ -348,6 +350,31 @@ test("the publish screen is in the page's language, and the model's reading is m
   expect(screen).toContain("review  2 point(s) raised");
   expect(screen).toContain("rondo が気づいたこと");
   expect(screen).toContain('action="/publish?lang=ja"');
+});
+
+test("the publish screen says in the person's words what the body and the model's reading hold, and keeps rondo's lines shut (rondo#437)", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  await modelFindings(world);
+  const ja = chromeFor("ja");
+  const html = await operatorPage(
+    portsOver(world, "ada", [], null, null, async () => ({
+      ...DRY_RUN,
+      modelReading: ["model review  2 point(s) raised (rondo/model/1/gpt-6-astra):"],
+    })),
+    "t",
+    { kind: "publish", iterationId: "i-0001" },
+    ja,
+  );
+  const screen = html.slice(html.indexOf('id="publish"'));
+  // What the reading came to, open; rondo's own lines with the reviewer's id, shut.
+  expect(readableWithoutOpening(screen, ja.evReadingRaised(2))).toBe(true);
+  expect(screen).toContain("rondo/model/1/gpt-6-astra");
+  expect(readableWithoutOpening(screen, "rondo/model/1/gpt-6-astra")).toBe(false);
+  // The English body is introduced in Japanese, and no run id or *run* is said.
+  expect(readableWithoutOpening(screen, ja.publishBodyLead)).toBe(true);
+  expect(screen).not.toContain(DRY_RUN.target.runId);
+  expect(screen).not.toMatch(/run を/);
 });
 
 test(

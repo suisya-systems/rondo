@@ -127,7 +127,7 @@ function refusal(answer: unknown, material: DrafterMaterial = MATERIAL): string 
 }
 
 test("the row name counts the drafter's instructions and names the table's model (D-0071 rule 1.4)", () => {
-  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/6/claude-opus-5");
+  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/7/claude-opus-5");
 });
 
 test("the document carries the thread, the templates, the agent types and the measurements, and never a ceiling", () => {
@@ -387,7 +387,7 @@ test("an ask: the question in the drafter's words, numbered, with its recommenda
       "2. The gate test.",
       "   The scope test stays flaky.",
       "",
-      "1. The request names the scope screen.",
+      "→ 1: The request names the scope screen.",
     ].join("\n"),
     bases: ["r1"],
     asks: true,

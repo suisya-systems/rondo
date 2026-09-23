@@ -1,4 +1,4 @@
-import type { IterationRecord } from "../../store/records.js";
+import { type IterationRecord, isModelReadingDrafter, latestReading } from "../../store/records.js";
 import { markdownHtml } from "../markdown.js";
 import type { PublishBlock, ReviewBlock, WebPorts } from "../page/contract.js";
 import {
@@ -226,6 +226,15 @@ export async function publishView(
     );
   }
   const review = shown.review;
+  const model = latestReading(await ports.store.readingsFor(record.id), isModelReadingDrafter);
+  const modelSaid =
+    model === null
+      ? null
+      : model.verdict === "unavailable"
+        ? wording.evReadingUnavailable
+        : model.findings.length === 0
+          ? wording.evReadingClear
+          : wording.evReadingRaised(model.findings.length);
   // rondo#417 (D-0105): a conflict fix moves an open pull request's head.
   const updates = shown.updates ?? null;
   const updating =
@@ -319,6 +328,7 @@ export async function publishView(
             <p class="text-meta leading-5 font-medium text-muted-foreground">
               {wording.publishBodyLabel}
             </p>
+            <p class="mt-1 text-body leading-6">{wording.publishBodyLead}</p>
             {publishBody(wording, shown.body)}
           </div>
         </section>
@@ -326,12 +336,22 @@ export async function publishView(
       {shown.modelReading.length === 0 ? null : (
         <section id="publish-model" class={`${CARD} space-y-1`}>
           <h3 class={CARD_HEADING}>{wording.publishModelHeading}</h3>
-          <pre
-            class={`${PRE.replace(/whitespace-pre$/, "whitespace-pre-wrap")} wrap-anywhere`}
-            lang=""
-          >
-            {shown.modelReading.join("\n")}
-          </pre>
+          {/* **What it came to in the person's words, and rondo's lines shut**
+              (rondo#437): the lines are rondo's record in English, with the
+              reviewer's id in them, as the thread's report is (D-0112). */}
+          {modelSaid === null ? null : <p class="text-body leading-5">{modelSaid}</p>}
+          <details class="group">
+            <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+              {chevron()}
+              {wording.evBrokeReason}
+            </summary>
+            <pre
+              class={`${PRE.replace(/whitespace-pre$/, "whitespace-pre-wrap")} mt-1 wrap-anywhere`}
+              lang="en"
+            >
+              {shown.modelReading.join("\n")}
+            </pre>
+          </details>
           <p class="note text-meta leading-5 text-muted-foreground">{wording.publishModelNote}</p>
         </section>
       )}
