@@ -1127,6 +1127,51 @@ test("D-0061 5.3: a lap naming a request reports its gate and reading once, aski
   expect(String(h.stops()[1]?.["body"])).toContain("pull request https://github.com/o/r/pull/7");
 });
 
+test("rondo#200: a gate left with no report is reported on the next look, and only once", async () => {
+  // **The window the issue names**: the interpreter commits `awaiting_human`
+  // and the D-0029 reading in its own transaction, and the report is written
+  // after it. A host that dies between the two used to leave the row at its
+  // gate with nothing in the request's thread for ever, because a look at an
+  // unchanged open gate deliberately wrote nothing.
+  const h = await harness();
+  expect((await admit(h.reporting, h.advisory, PLAN, POLICY, "i-r", null, null, ROOT)).status).toBe(
+    "awaiting_human",
+  );
+  const found = await h.store.read("i-r");
+  if (found.kind !== "read") throw new Error("no row");
+  const gateId = String(found.record.gateId);
+  const reportId = `report-gate-i-r-${gateId}`;
+  // The death, as the next process finds it: the gate is committed and the
+  // report is not. Deleting the row is how a test reaches that state; nothing
+  // in rondo deletes a message (D-0036 rule 3).
+  h.connection.prepare("DELETE FROM conversation_message WHERE message_id = ?").run(reportId);
+  expect(h.stops()).toHaveLength(0);
+  const looking: ReportingPorts = {
+    ...h.reporting,
+    showGate: async () => ({
+      kind: "answered",
+      value: { gateId, stage: "received", outcome: null },
+    }),
+  };
+
+  const filled = await resume(looking, "i-r");
+
+  expect(filled.status).toBe("awaiting_human");
+  expect(filled.lines.at(-1)).toContain(`Reported to the request '${ROOT}'`);
+  expect(h.stops().map((row) => row["message_id"])).toEqual([reportId]);
+  expect(String(h.stops()[0]?.["body"])).toContain(`gate '${gateId}'`);
+
+  // **And the look after that says nothing.** The id names the gate it
+  // describes, so the store answers `duplicate` and the thread keeps one
+  // report: the gap is filled without a second report, and without a refusal
+  // reaching the person as a line of their own.
+  const again = await resume(looking, "i-r");
+
+  expect(again.status).toBe("awaiting_human");
+  expect(again.lines.filter((line) => line.includes("report"))).toEqual([]);
+  expect(h.stops()).toHaveLength(1);
+});
+
 // --- D-0110 rule 2: a lap that stops is the person's turn until they answer --
 
 /** continuo's turn-timeout refusal, as lap 13 received it. */

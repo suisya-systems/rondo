@@ -36,8 +36,9 @@ export async function openRequest(
   // **Opening the same request twice is a no-op here**, so a `reserve` helper
   // can call this on every row without the suite having to thread a setup
   // step through. Every other refusal is a fixture that is wrong about the
-  // store and is raised.
-  if (outcome.kind !== "recorded" && !outcome.reason.includes("already in the conversation")) {
+  // store and is raised. The store's own arm since rondo#200; this read the
+  // refusal's prose for it before there was one.
+  if (outcome.kind !== "recorded" && outcome.kind !== "duplicate") {
     throw new Error(`the fixture did not open a request: ${JSON.stringify(outcome)}`);
   }
   return messageId;

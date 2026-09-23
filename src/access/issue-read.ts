@@ -31,7 +31,7 @@
  */
 
 import type { ThreadMessageDraft } from "../store/records.js";
-import type { AdvisoryRecord } from "../store/sqlite.js";
+import { type AdvisoryRecord, asRefusal } from "../store/sqlite.js";
 import type { CommandOutcome, IssueReadRequest } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
 import type { HeldPlan } from "./model-draft/host.js";
@@ -1000,16 +1000,20 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
             ...request.values(),
           ]);
         }
-        const outcome = await ports.record.recordThreadMessage({
-          messageId: ports.mintId(),
-          body: forgeBody(read),
-          authorKind: "forge",
-          authorId: ISSUE_READER,
-          inReplyTo: messageId,
-          atMs,
-          bases: [],
-          asks: false,
-        });
+        // `asRefusal`: a minted id that is somehow spoken for is this reader's
+        // failure to write, as it was before the store told the two apart.
+        const outcome = asRefusal(
+          await ports.record.recordThreadMessage({
+            messageId: ports.mintId(),
+            body: forgeBody(read),
+            authorKind: "forge",
+            authorId: ISSUE_READER,
+            inReplyTo: messageId,
+            atMs,
+            bases: [],
+            asks: false,
+          }),
+        );
         if (outcome.kind === "recorded") {
           wrote = true;
           request.set(read.named, read);

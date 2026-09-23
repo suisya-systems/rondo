@@ -53,7 +53,12 @@ import {
   type StoredScope,
   type StoredScopeDecision,
 } from "../store/records.js";
-import type { AdvisoryRecord, IterationStore, ScopeTip } from "../store/sqlite.js";
+import {
+  type AdvisoryRecord,
+  asRefusal,
+  type IterationStore,
+  type ScopeTip,
+} from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
 import { hostFailure } from "./host-failure.js";
 import {
@@ -907,9 +912,12 @@ async function stopTheLine(
     ],
     asks: true,
   });
-  return outcome.kind === "recorded"
+  // `asRefusal`: this writer has one answer for an id already spoken for, the
+  // one it has always given.
+  const said = asRefusal(outcome);
+  return said.kind === "recorded"
     ? { kind: "written", messageId }
-    : { kind: "failed", messageId, reason: outcome.reason };
+    : { kind: "failed", messageId, reason: said.reason };
 }
 
 /**

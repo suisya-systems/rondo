@@ -27,7 +27,7 @@ import {
   latestReading,
   WORKER_QUESTION_AUTHOR,
 } from "../store/records.js";
-import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+import { type AdvisoryRecord, asRefusal, type IterationStore } from "../store/sqlite.js";
 
 /** The fence's info string: what the worker is told to open its block with. */
 export const QUESTION_FENCE = "rondo-question";
@@ -239,7 +239,9 @@ export async function relayQuestion(
     bases,
     asks: true,
   };
-  const outcome = await ports.record.recordThreadMessage(draft);
+  // `asRefusal`: this writer says the same thing about an id already spoken
+  // for as it did before the store told the two apart.
+  const outcome = asRefusal(await ports.record.recordThreadMessage(draft));
   return outcome.kind === "recorded"
     ? `Put the lap's question to the request '${row.requestMessageId}' as message '${messageId}'.`
     : `The lap's question was not put to the request '${row.requestMessageId}': ${outcome.reason}`;

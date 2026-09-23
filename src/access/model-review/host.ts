@@ -34,7 +34,7 @@ import {
   latestReading,
   modelReadingDrafter,
 } from "../../store/records.js";
-import type { ClosingLap, IterationStore } from "../../store/sqlite.js";
+import { asRefusal, type ClosingLap, type IterationStore } from "../../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "../advisory.js";
 import { notRereadSentence, type RequestThread, reportToRequest } from "../conductor.js";
 import { gatherReviewMaterialFacts, runReviewer } from "../forge.js";
@@ -348,10 +348,12 @@ async function closingLap(
     ],
     asks: true,
   });
+  // `asRefusal`: an id already spoken for reads here as it always has.
+  const written = asRefusal(outcome);
   lines.push(
-    outcome.kind === "recorded"
+    written.kind === "recorded"
       ? `model review  the stop was written to the request's thread as '${messageId}'.`
-      : `model review  the stop was not written: ${outcome.reason}`,
+      : `model review  the stop was not written: ${written.reason}`,
   );
   return lines.filter((line) => line !== "");
 }

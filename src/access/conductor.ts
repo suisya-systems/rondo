@@ -76,7 +76,13 @@ import {
   type LapReadingDraft,
   latestReading,
 } from "../store/records.js";
-import { type AdvisoryRecord, type IterationStore, LANE_LEDGER_AUTHOR } from "../store/sqlite.js";
+import {
+  type AdvisoryRecord,
+  asRefusal,
+  duplicateReason,
+  type IterationStore,
+  LANE_LEDGER_AUTHOR,
+} from "../store/sqlite.js";
 
 import { DETERMINISTIC_DRAFTER, proposeAfterAbandon, type UnpromptedPorts } from "./advisory.js";
 import type { ChecksReading } from "./checks-host.js";
@@ -962,17 +968,64 @@ export async function resume(ports: ReportingPorts, iterationId: string): Promis
   ) {
     return await withStopAsk(ports, report);
   }
-  // An open gate left as it was is no gate reached: a `revise` that walked a
-  // second lap names a new gate, and only that one is reported.
-  if (
-    report.status !== "awaiting_human" ||
-    (before.kind === "read" &&
-      before.record.status === "awaiting_human" &&
-      before.record.gateId === (await gateIdOf(ports, iterationId)))
-  ) {
+  if (report.status !== "awaiting_human") {
     return report;
   }
+  // An open gate left as it was is no gate reached: a `revise` that walked a
+  // second lap names a new gate, and only that one is reported. The report is
+  // still *attempted*, which is rondo#200's option (b): see `withGateReportGap`.
+  if (
+    before.kind === "read" &&
+    before.record.status === "awaiting_human" &&
+    before.record.gateId === (await gateIdOf(ports, iterationId))
+  ) {
+    return await withGateReportGap(ports, report);
+  }
   return await withGateReport(ports, await withClaimComparison(ports, report));
+}
+
+/**
+ * **Fill the window between the gate's commit and its report** (rondo#200).
+ *
+ * The interpreter commits `awaiting_human` and the D-0029 reading in its own
+ * transaction, and the D-0061 5.3 report is written after it. A host that dies
+ * between the two leaves a row at its gate with nothing in the request's
+ * thread, and nothing used to fill that gap: an unchanged open gate wrote
+ * nothing at all, so that a re-look would not report twice.
+ *
+ * So the write is attempted on every look and the *id* is what keeps it to one
+ * report: `report-gate-<iteration>-<gate>` names the gate it describes, so the
+ * store answers `duplicate` for a report already there and this says nothing.
+ * A gate whose report never landed gets it now, in the words it would have had.
+ *
+ * **Only the report.** The claim comparison and the worker's question are the
+ * rest of a gate that was *reached*; an unchanged gate reached nothing, and
+ * relaying the question again would put a line in every look's report.
+ *
+ * **Publish has the same window and no such door** (the issue names it): its
+ * report follows `run close`, and a second `publish` stops at that close, which
+ * continuo refuses on purpose. There is no re-entry that reaches the write, so
+ * there is nothing here to attempt again.
+ */
+async function withGateReportGap(
+  ports: ReportingPorts,
+  report: ConductorReport,
+): Promise<ConductorReport> {
+  if (ports.thread === undefined || ports.thread === null || report.iterationId === null) {
+    return report;
+  }
+  const written = await writeReport(
+    ports.thread,
+    report.iterationId,
+    { kind: "gate" },
+    ports.now(),
+  );
+  // Already reported is this look's success, and it is silent: the line it
+  // carries describes a write that did not happen, and the report it names is
+  // in the thread.
+  return written.kind === "alreadyReported"
+    ? report
+    : { ...report, lines: [...report.lines, written.line] };
 }
 
 /**
@@ -1209,14 +1262,17 @@ async function withStopAsk(
     ],
     asks: true,
   });
-  return outcome.kind === "recorded"
+  // `asRefusal`: this writer says the same thing about an id already spoken
+  // for as it did before the store told the two apart.
+  const said = asRefusal(outcome);
+  return said.kind === "recorded"
     ? report
     : {
         ...report,
         lines: [
           ...report.lines,
           `The person was NOT told in the request's thread that lap '${row.id}' stopped: ` +
-            outcome.reason,
+            said.reason,
         ],
       };
 }
@@ -1267,6 +1323,10 @@ async function withGateReport(
  * Returns a line for the report, or null when the lap names no request. A
  * report that could not be written never fails the step: the lap's own outcome
  * is committed before this runs.
+ *
+ * A caller that needs to know *which* of those a line says -- `resume`, filling
+ * the window rondo#200 names -- calls {@link writeReport} instead and reads the
+ * arm. This one folds the arms back into the sentence each of them said before.
  */
 export async function reportToRequest(
   thread: RequestThread,
@@ -1274,9 +1334,35 @@ export async function reportToRequest(
   event: LapEvent,
   nowMs: number,
 ): Promise<string | null> {
+  return (await writeReport(thread, iterationId, event, nowMs)).line;
+}
+
+/**
+ * What a report write came to: the line {@link reportToRequest} returns, beside
+ * the arm a caller filling a gap branches on (rondo#200).
+ *
+ * `alreadyReported` is the deterministic id already in the thread. Its line is
+ * the sentence the refusal used to carry, so a caller that only prints is
+ * unchanged; a caller that writes precisely because it cannot see whether the
+ * first write landed says nothing at all.
+ */
+export type ReportWrite =
+  | { readonly kind: "reported"; readonly line: string }
+  | { readonly kind: "alreadyReported"; readonly line: string; readonly messageId: string }
+  | { readonly kind: "notWritten"; readonly line: string };
+
+export async function writeReport(
+  thread: RequestThread,
+  iterationId: string,
+  event: LapEvent,
+  nowMs: number,
+): Promise<ReportWrite> {
   const found = await thread.store.read(iterationId);
   if (found.kind !== "read") {
-    return `No report was written to the request thread: iteration '${iterationId}' did not read.`;
+    return {
+      kind: "notWritten",
+      line: `No report was written to the request thread: iteration '${iterationId}' did not read.`,
+    };
   }
   const row = found.record;
   const request = row.requestMessageId;
@@ -1310,7 +1396,10 @@ export async function reportToRequest(
       isModelReadingDrafter,
     );
     if (reading === null) {
-      return `No model reading was reported to the request '${request}': none is recorded.`;
+      return {
+        kind: "notWritten",
+        line: `No model reading was reported to the request '${request}': none is recorded.`,
+      };
     }
     messageId = `report-model-${iterationId}-${String(reading.readAtMs)}`;
     // The screen's own lines, so the thread carries the same severities,
@@ -1401,9 +1490,21 @@ export async function reportToRequest(
     ],
     asks: false,
   });
-  return outcome.kind === "recorded"
-    ? `Reported to the request '${request}' as message '${messageId}'.`
-    : `No report was written to the request '${request}': ${outcome.reason}`;
+  if (outcome.kind === "recorded") {
+    return {
+      kind: "reported",
+      line: `Reported to the request '${request}' as message '${messageId}'.`,
+    };
+  }
+  // The line an already-reported write carries is the one the store's refusal
+  // used to say, so a caller that only prints its answer prints what it printed
+  // before the arm existed.
+  const line =
+    `No report was written to the request '${request}': ` +
+    (outcome.kind === "duplicate" ? duplicateReason(outcome.messageId) : outcome.reason);
+  return outcome.kind === "duplicate"
+    ? { kind: "alreadyReported", line, messageId }
+    : { kind: "notWritten", line };
 }
 
 /**
