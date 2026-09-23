@@ -634,6 +634,11 @@ export interface Chrome extends PageWords {
   readonly scopeNarrowedAdded: string;
   /** A draft written after an approval that stands: shown beside it, and what approving it means. */
   readonly scopeRedrafted: string;
+  /**
+   * The scope screen while a question in the request's thread waits (rondo#431):
+   * no scope is offered to approve, and the way is to the question.
+   */
+  readonly scopeAnswerFirst: string;
   readonly scopeDraftedAction: string;
   readonly scopeDraftedPlain: string;
   readonly scopeDraftedPressNote: string;
@@ -656,8 +661,6 @@ export interface Chrome extends PageWords {
   /** What the plan says, quiet, above the numbers it drafted them from. */
   readonly scopeWorkspace: (repository: string, root: string) => string;
   readonly scopePlanDigest: (digest: string) => string;
-  readonly scopeAgentType: (digest: string) => string;
-  readonly scopeAgentTypeBounds: string;
   /**
    * The card's own heading, and the fold the two digests sit in.
    *
@@ -666,10 +669,12 @@ export interface Chrome extends PageWords {
    * on the screen said plainly *this is the plan rondo will run and where*
    * (rondo#233 S3 screen review). The digests are folded for the same review's
    * other half: three 71-character hashes were a third of the first screenful
-   * at 420px, and there is nothing a person does with one.
+   * at 420px, and there is nothing a person does with one. The workspace root
+   * and the agent type's tier and grants joined them there on rondo#431: the
+   * person reads which repository, and nothing on those lines is theirs to act on.
    */
   readonly scopePlanHeading: string;
-  readonly scopeDigestsFold: string;
+  readonly scopeRecordedFold: string;
   /**
    * What this screen cannot tell the person: whether they already approved a
    * scope for this request.
@@ -1140,6 +1145,8 @@ export interface Chrome extends PageWords {
   readonly nextStepHeading: string;
   readonly nextStepScope: string;
   readonly nextStepDrafted: string;
+  /** A question in the thread waits on the person: answering is the next step (rondo#431). */
+  readonly nextStepAnswer: string;
   readonly nextStepStart: string;
   readonly nextStepStartAction: string;
   readonly nextStepPublish: string;

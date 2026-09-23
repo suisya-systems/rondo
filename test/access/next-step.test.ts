@@ -301,3 +301,69 @@ test("a request naming a repository rondo does not work in says so, and its one 
   expect(after).toContain(EN.repositoryUnbuilt("owner/other"));
   expect(classOf(after, "scope-req-1")).toBe(NEXT);
 });
+
+test("a question waiting in the thread is the next step, and no scope is offered beside it (rondo#431)", async () => {
+  // Lap 13: the drafter asked which of three options, and the band still said
+  // *set the scope*; the approval that followed was refused at start on the
+  // question it had not waited for.
+  const world = fresh();
+  await openRequest(world, "req-1", "Do #200, please.");
+  const asked = await world.record.recordThreadMessage({
+    messageId: "ask-1",
+    body: "Which of the three options?",
+    authorKind: "drafter",
+    authorId: "rondo/drafter/5/claude-opus-5",
+    inReplyTo: "req-1",
+    atMs: 600,
+    bases: [{ form: "message", messageId: "req-1" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  const ports = portsOver(world);
+  const html = await operatorPage(ports, "t", threadOf("req-1"));
+  drawnOnceOnTop(html, "answer-req-1");
+  expect(classOf(html, "answer-req-1")).toBe(NEXT);
+  expect(html).toContain(EN.nextStepAnswer);
+  expect(html).toContain('href="/?thread=req-1&amp;to=ask-1&amp;lang=en"');
+  // Neither filled nor outlined: a scope is not a way forward while it waits.
+  expect(html).not.toContain('id="scope-req-1"');
+  expect(html).not.toContain(EN.nextStepScope);
+
+  // The scope screen, reached by its address, offers nothing to approve either.
+  const screen = await operatorPage(ports, "t", {
+    kind: "scope",
+    messageId: "req-1",
+    rounds: null,
+    decisionId: null,
+    plan: null,
+  });
+  expect(screen).toContain(EN.scopeAnswerFirst.slice(0, EN.scopeAnswerFirst.indexOf("'")));
+  expect(screen).toContain('href="/?thread=req-1&amp;to=ask-1&amp;lang=en"');
+  expect(screen).not.toContain('id="scope-form"');
+  expect(screen).not.toContain('id="scope-draft-form"');
+
+  // Answered, the scope is the next step again.
+  await world.record.recordThreadMessage({
+    messageId: "reply-1",
+    body: "Option 1.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "ask-1",
+    atMs: 700,
+    bases: [],
+    asks: false,
+    answerOutcome: "carry_on",
+  });
+  const after = await operatorPage(ports, "t", threadOf("req-1"));
+  expect(after).not.toContain('id="answer-req-1"');
+  expect(classOf(after, "scope-req-1")).toBe(NEXT);
+});
+
+test("a start refused at a scope test says the test in words, never its name (rondo#431)", () => {
+  // Lap 13 printed `asks` to the person: a word they had to ask about.
+  for (const wording of [EN, chromeFor("ja")]) {
+    const said = wording.startRefusedOutside("asks");
+    expect(said).not.toMatch(/\basks\b/);
+    expect(said).toContain(wording.lang === "ja" ? "問い" : "question");
+  }
+});

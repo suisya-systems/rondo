@@ -38,7 +38,7 @@ import {
   TONE,
 } from "../page/vocabulary.js";
 import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "../page-logic/routes.js";
-import { firstLine, type Threads } from "../page-logic/threads.js";
+import { firstLine, type Threads, waitingAsk } from "../page-logic/threads.js";
 import { approvalTip, heldAgentTypeLines, scopeBudgetsFromStore } from "../scope.js";
 import type { Chrome } from "../wording.js";
 
@@ -358,21 +358,43 @@ export async function scopeView(
       : ({ kind: "none" } as const);
   const decisionId =
     view.decisionId ?? (standing.kind === "decided" ? standing.scopeDecisionId : null);
+  // **No scope is offered while a question waits** (rondo#431): on lap 13 this
+  // screen, opened before the drafter asked, took an approval two seconds after
+  // the question landed, and the start then failed on that question. The way
+  // is to the question; an approval already given keeps its screen.
+  const asked = waitingAsk(threads, view.messageId);
+  const answerFirst =
+    asked === null ? null : (
+      <section class="flex flex-col gap-2 rounded-lg border border-wait bg-wait-wash px-4 py-3">
+        <p class="text-body leading-6">{wording.scopeAnswerFirst}</p>
+        <a
+          id={`answer-${view.messageId}`}
+          href={viewHref({ kind: "thread", messageId: view.messageId, to: asked }, wording.lang)}
+          class={`${PRIMARY} h-10 justify-center self-start px-6 text-sm`}
+        >
+          {wording.answerAskAction}
+        </a>
+      </section>
+    );
   // A draft written after an approval that stands is shown beside it, never in
   // its place: the approval's starts and "started" links stay where they were.
   const newer =
-    view.decisionId === null && standing.kind === "decided" && standing.newer !== null ? (
-      <section class="space-y-4 border-t border-border pt-4">
-        {note(wording.scopeRedrafted)}
-        {await draftedForm(ports, wording, view, standing.newer, threads, token, newScopeId)}
-      </section>
-    ) : null;
+    view.decisionId === null && standing.kind === "decided" && standing.newer !== null
+      ? (answerFirst ?? (
+          <section class="space-y-4 border-t border-border pt-4">
+            {note(wording.scopeRedrafted)}
+            {await draftedForm(ports, wording, view, standing.newer, threads, token, newScopeId)}
+          </section>
+        ))
+      : null;
   const body =
     decisionId !== null ? (
       <>
         {await scopeApproved(ports, wording, view, decisionId, token, newIterationId, nowMs)}
         {newer}
       </>
+    ) : answerFirst !== null ? (
+      answerFirst
     ) : standing.kind === "drafted" ? (
       await draftedForm(ports, wording, view, standing.drafted, threads, token, newScopeId)
     ) : (
@@ -532,6 +554,29 @@ async function chosenPlan(
   } catch {
     return null;
   }
+}
+
+/**
+ * **What rondo records, folded** (rondo#233 S3, rondo#431): the workspace root,
+ * the agent type's tier and grants, the digests. Still on the screen, because
+ * what rondo records is what rondo shows; folded, because on lap 13 they were
+ * the paths twice, a hash, `standard` and `command.run` in the person's way,
+ * and nothing on them is theirs to act on.
+ */
+function recordedFold(wording: Chrome, lines: readonly string[]) {
+  return (
+    <details class="group rounded-md border border-border">
+      <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+        {chevron()}
+        {wording.scopeRecordedFold}
+      </summary>
+      <div class="space-y-1 border-t border-border px-3 py-2">
+        {lines.map((line) => (
+          <p class="font-mono text-id leading-5 wrap-anywhere text-faint">{line}</p>
+        ))}
+      </div>
+    </details>
+  );
 }
 
 /** One held plan as a person reads it: where it runs, with which agent type, and where it came from. */
@@ -803,36 +848,18 @@ async function scopeForm(
             the one thing the card never said out loud. */}
         <h3 class={CARD_HEADING}>{wording.scopePlanHeading}</h3>
         {drafted.workspaces.map((workspace) => (
-          <p class="text-body leading-5 text-muted-foreground">
-            {wording.scopeWorkspace(workspace.repository, workspace.workspace_root)}
+          <p class="text-body leading-5 text-muted-foreground wrap-anywhere">
+            {workspace.repository}
           </p>
         ))}
         {planDone(wording, chosen.document)}
-        <p class="text-meta leading-5 font-medium text-muted-foreground">
-          {wording.scopeAgentTypeBounds}
-        </p>
-        {drafted.heldLines.map((line) => (
-          <p class="text-meta leading-5 wrap-anywhere text-muted-foreground">{line}</p>
-        ))}
-        {/* **Folded, because there is nothing to do with a hash.** Three
-            71-character digests as plain text were a third of the first
-            screenful at 420px and not one of them was actionable; they are
-            still on the screen, because what rondo records is what rondo
-            shows. */}
-        <details class="group rounded-md border border-border">
-          <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
-            {chevron()}
-            {wording.scopeDigestsFold}
-          </summary>
-          <div class="space-y-1 border-t border-border px-3 py-2">
-            <p class="font-mono text-id leading-5 wrap-anywhere text-faint">
-              {wording.scopePlanDigest(drafted.planDigest)}
-            </p>
-            <p class="font-mono text-id leading-5 wrap-anywhere text-faint">
-              {wording.scopeAgentType(drafted.agentTypeDigest)}
-            </p>
-          </div>
-        </details>
+        {recordedFold(wording, [
+          ...drafted.workspaces.map((workspace) =>
+            wording.scopeWorkspace(workspace.repository, workspace.workspace_root),
+          ),
+          ...drafted.heldLines,
+          wording.scopePlanDigest(drafted.planDigest),
+        ])}
       </section>
     </>
   );
@@ -1347,13 +1374,8 @@ async function draftedPlansList(
         <p class="text-body leading-5 text-muted-foreground wrap-anywhere">
           {plan.repository === null || plan.workspaceRoot === null
             ? wording.scopeDraftedTemplateGone
-            : wording.scopeWorkspace(plan.repository, plan.workspaceRoot)}
+            : plan.repository}
         </p>
-        {(await heldAgentTypeLines(wording, ports.record, [plan.split.agent_type_digest])).map(
-          (line) => (
-            <p class="text-meta leading-5 wrap-anywhere text-muted-foreground">{line}</p>
-          ),
-        )}
         {/* The drafter's words for the worker, as it wrote them: their
             language is the template's, not the page's (D-0055 rule 8). */}
         <p
@@ -1363,6 +1385,12 @@ async function draftedPlansList(
           {plan.split.prompt}
         </p>
         {plan.templatePlan === null ? null : planDone(wording, plan.templatePlan)}
+        {recordedFold(wording, [
+          ...(plan.repository === null || plan.workspaceRoot === null
+            ? []
+            : [wording.scopeWorkspace(plan.repository, plan.workspaceRoot)]),
+          ...(await heldAgentTypeLines(wording, ports.record, [plan.split.agent_type_digest])),
+        ])}
         {startOf === undefined ? null : await startOf(plan)}
       </li>,
     );
@@ -1679,13 +1707,16 @@ async function scopeApproved(
       </section>
       <section class={`${CARD} space-y-2`}>
         {payload.workspaces.map((workspace) => (
-          <p class="text-body leading-5 text-muted-foreground">
-            {wording.scopeWorkspace(workspace.repository, workspace.workspace_root)}
+          <p class="text-body leading-5 text-muted-foreground wrap-anywhere">
+            {workspace.repository}
           </p>
         ))}
-        {held.map((line) => (
-          <p class="text-meta leading-5 wrap-anywhere text-muted-foreground">{line}</p>
-        ))}
+        {recordedFold(wording, [
+          ...payload.workspaces.map((workspace) =>
+            wording.scopeWorkspace(workspace.repository, workspace.workspace_root),
+          ),
+          ...held,
+        ])}
         <dl class="grid gap-x-4 gap-y-1 text-body leading-6 sm:grid-cols-2">
           {(
             [

@@ -232,10 +232,14 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   // 71-character hashes as plain text were a third of the first screenful at
   // 420px, and there is nothing a person does with one.
   expect(html).toContain("The plan rondo will run, and where it will run it");
-  expect(html).toContain("The digests rondo will record");
-  expect(html.indexOf("The digests rondo will record")).toBeLessThan(
-    html.indexOf(`plan ${planDigest}`),
-  );
+  const fold = "Where it runs and what its agent type is allowed, as rondo records them";
+  expect(html).toContain(fold);
+  expect(html.indexOf(fold)).toBeLessThan(html.indexOf(`plan ${planDigest}`));
+  // **And so are the workspace root, the tier and the grants** (rondo#431): the
+  // card says the repository; the rest is behind the fold, not in the way.
+  const card = html.slice(html.indexOf("The plan rondo will run, and where it will run it"));
+  expect(card.slice(0, card.indexOf(fold))).not.toMatch(/sha256:|\/srv\/work|command\.run/);
+  expect(card.indexOf("/srv/repo at /srv/work")).toBeGreaterThan(card.indexOf(fold));
   // The two digests it was drawn from ride along, for the write to compare its
   // own re-read against -- never as a second authority for what is recorded.
   expect(html).toContain(`<input type="hidden" name="plan_digest" value="${planDigest}"/>`);

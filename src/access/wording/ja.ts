@@ -495,6 +495,9 @@ export const JA: Chrome = Object.freeze({
   scopeNarrowed: (computed) => `ここに書かれた内容に合わせて、rondo が ${computed} から下げました:`,
   scopeNarrowedStricter: "ここに書かれた内容に合わせて、rondo が「重大」より厳しくしました:",
   scopeNarrowedAdded: "ここに書かれた内容に合わせて、rondo が加えました:",
+  scopeAnswerFirst:
+    "この依頼のスレッドで、rondo の質問があなたの回答を待っているので、まだ承認する範囲はありません。" +
+    "先に回答してください。範囲は、その回答を受けて決まります。",
   scopeRedrafted:
     "上の範囲が承認されたあとで、rondo が下書きし直しました。新しい下書きは下にあります。" +
     "承認すると、この依頼の範囲がもう 1 つ加わり、上の範囲はそのまま残ります。",
@@ -528,10 +531,8 @@ export const JA: Chrome = Object.freeze({
     "RONDO_APPROVER が設定されていないので、このページが誰として範囲を承認することもできません。",
   scopeWorkspace: (repository, root) => `${repository}（${root}）`,
   scopePlanDigest: (digest) => `プラン ${digest}`,
-  scopeAgentType: (digest) => `エージェント種別 ${digest}`,
-  scopeAgentTypeBounds: "そのエージェント種別に許されていることと、それをどこから読んだか",
   scopePlanHeading: "rondo が動かすプランと、動かす場所",
-  scopeDigestsFold: "rondo が記録するダイジェスト",
+  scopeRecordedFold: "作業場所とエージェント種別の許可（rondo の記録）",
   scopeMaybeApproved:
     "この依頼の範囲をすでに承認済みかどうかは、ここからは分かりません。どちらであってもこれは" +
     "新しい下書きで、押せば 2 つめが記録されます。",
@@ -683,8 +684,9 @@ export const JA: Chrome = Object.freeze({
     "何も開始していません。依頼を読み戻せなかったので、作業に頼むことがありません。",
   startRefusedNoContinuo: "何も開始していません。作業を動かす部分が起動しません。",
   startRefusedOutside: (test) =>
-    `何も開始せず、何も消費していません。承認した範囲の外にある作業で、${test} の判定で` +
-    `外れました。選択肢は依頼のスレッドに書かれたメッセージにあります。`,
+    // Said in words, never the test's name (rondo#431): `asks` is a word to ask about.
+    `何も開始せず、何も消費していません。承認した範囲の外にある作業です。${scopeTestJa(test)}。` +
+    `選択肢は依頼のスレッドに書かれたメッセージにあります。`,
   startRefusedNotAdmitted:
     "何も開始せず、何も消費していません。承認はそのまま有効なので、もう一度押しても安全です。",
   scopeBack: "範囲に戻る",
@@ -980,6 +982,7 @@ export const JA: Chrome = Object.freeze({
     "この依頼の範囲（使ってよい費用と触ってよい場所）がまだ決まっていません。範囲を決めると、" +
     "作業を始められます。",
   nextStepDrafted: "rondo が作業の範囲を提案しました。確認して承認すると、作業を始められます。",
+  nextStepAnswer: "rondo の質問があなたの回答を待っています。回答すると、作業を先へ進められます。",
   nextStepStart: "範囲は承認済みです。範囲の画面から作業を始めてください。",
   nextStepStartAction: "作業を始める画面へ",
   nextStepPublish:
