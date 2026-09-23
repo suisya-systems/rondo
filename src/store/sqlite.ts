@@ -729,9 +729,10 @@ export interface LedgerLine {
   /** The closed laps no other lap continues (rule 6): what a landing is owed by. */
   readonly closedTips: readonly string[];
   /**
-   * Who released it, or null while it holds: `person` is the release press
-   * (rule 4.3); `rondo` is a landing read or a line that ended with nothing to
-   * land, which `closedTips` tells apart.
+   * Who released it, or null while its work is still owed: while it holds,
+   * and after it gave its paths up when its pull request opened (D-0114).
+   * `person` is the release press (rule 4.3); `rondo` is a landing read or a
+   * line that ended with nothing to land, which `closedTips` tells apart.
    */
   readonly releasedBy: "person" | "rondo" | null;
 }
@@ -2584,8 +2585,16 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           }
           // A line from before the ledger holds `/` only while a lap is in
           // flight (`openLines`), which this press refuses above: past that it
-          // holds nothing, like a line already released.
-          if (head === null || head.paths.length === 0) {
+          // holds nothing, like a line already released. **A line released
+          // when its pull request opened is the one exception** (D-0114): its
+          // work is still owed a landing, so the landing, the merge or the
+          // person's press writes the row that ends it, over the publish's.
+          const overPublish =
+            head !== null &&
+            head.paths.length === 0 &&
+            isPublishRelease(claimBases(connection, head.claimId)) &&
+            !isPublishRelease(input.bases);
+          if (head === null || (head.paths.length === 0 && !overPublish)) {
             return {
               kind: "refused",
               reason: "this line holds no paths, so there is nothing to release",
@@ -2605,8 +2614,9 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
             input.nowMs,
           );
           // A landed line's numbers are in the record and stay its (D-0098
-          // rule 3.7); any other release gives them up here (rule 3.4).
-          if (!input.landed) {
+          // rule 3.7); so are a published line's, which its pull request
+          // carries (D-0114). Any other release gives them up here (rule 3.4).
+          if (!input.landed && !isPublishRelease(input.bases)) {
             releaseReservations(connection, root.id, input.bases, input.nowMs);
           }
           return { kind: "released", lineageId: root.id };
@@ -6206,6 +6216,30 @@ function claimHead(connection: DatabaseSync, lineageId: string): ClaimRow | null
   return row === undefined ? null : toClaimRow(row);
 }
 
+/**
+ * Whether a release row's bases say it was written when the line's pull
+ * request opened (D-0114): a `published` basis and no `landing` one. Such a
+ * line holds no paths and is still owed its landing.
+ */
+function isPublishRelease(bases: unknown): boolean {
+  const forms = Array.isArray(bases)
+    ? bases.map((basis: unknown) =>
+        typeof basis === "object" && basis !== null
+          ? (basis as Record<string, unknown>)["form"]
+          : undefined,
+      )
+    : [];
+  return forms.includes("published") && !forms.includes("landing");
+}
+
+/** One claim row's bases, parsed. */
+function claimBases(connection: DatabaseSync, claimId: string): unknown {
+  const row = connection.prepare("SELECT bases FROM lane_claim WHERE claim_id = ?").get(claimId) as
+    | SqlRow
+    | undefined;
+  return row === undefined ? [] : JSON.parse(String(row["bases"]));
+}
+
 /** Write one claim row, its id the lineage's next ordinal. Inside the caller's transaction. */
 function insertClaim(connection: DatabaseSync, write: ClaimWrite, nowMs: number): void {
   const count = Number(
@@ -6518,7 +6552,7 @@ function ledgerLines(connection: DatabaseSync): readonly LedgerLine[] {
   const lines: LedgerLine[] = [];
   const heads = connection
     .prepare(
-      `SELECT ${CLAIM_COLUMNS}, author_kind FROM lane_claim c WHERE NOT EXISTS ` +
+      `SELECT ${CLAIM_COLUMNS}, author_kind, bases FROM lane_claim c WHERE NOT EXISTS ` +
         "(SELECT 1 FROM lane_claim s WHERE s.supersedes_claim_id = c.claim_id) " +
         "ORDER BY created_at_ms, claim_id",
     )
@@ -6535,8 +6569,14 @@ function ledgerLines(connection: DatabaseSync): readonly LedgerLine[] {
       lapIds: laps.map((lap) => lap.id),
       inFlight: shape.inFlight,
       closedTips: shape.closedTips,
+      // A line released when its pull request opened holds no paths and is
+      // still owed its landing (D-0114), so it is not said to be released.
       releasedBy:
-        head.paths.length > 0 ? null : row["author_kind"] === "operator" ? "person" : "rondo",
+        head.paths.length > 0 || isPublishRelease(JSON.parse(String(row["bases"])))
+          ? null
+          : row["author_kind"] === "operator"
+            ? "person"
+            : "rondo",
     });
   }
   for (const [root, tree] of unclaimedTrees(connection, null)) {
@@ -6627,18 +6667,22 @@ function laneAdmission(connection: DatabaseSync, input: ReserveInput): LaneAdmis
     }
     // A released line retried takes back what the release gave up (rule 2.6),
     // and a line from before the ledger, or released without ever holding a
-    // claim, asks for the whole repository (rule 2.5).
-    const releasedFrom = head === null ? null : head.supersedesClaimId;
-    const given =
-      releasedFrom === null
-        ? undefined
-        : (connection
-            .prepare(`SELECT ${CLAIM_COLUMNS} FROM lane_claim WHERE claim_id = ?`)
-            .get(releasedFrom) as SqlRow | undefined);
+    // claim, asks for the whole repository (rule 2.5). The paths given up are
+    // the last row that held any: a published line's landing is a second
+    // empty row over its publish's (D-0114).
+    let given: ClaimRow | undefined;
+    let from = head?.supersedesClaimId ?? null;
+    while (from !== null) {
+      const row = connection
+        .prepare(`SELECT ${CLAIM_COLUMNS} FROM lane_claim WHERE claim_id = ?`)
+        .get(from) as SqlRow | undefined;
+      given = row === undefined ? undefined : toClaimRow(row);
+      from = given === undefined || given.paths.length > 0 ? null : given.supersedesClaimId;
+    }
     write = {
       lineageId,
       repository,
-      paths: given === undefined ? [WHOLE_REPOSITORY] : toClaimRow(given).paths,
+      paths: given === undefined || given.paths.length === 0 ? [WHOLE_REPOSITORY] : given.paths,
       supersedesClaimId: head === null ? null : head.claimId,
       ...byRule,
       bases,

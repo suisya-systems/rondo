@@ -143,6 +143,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0107 | Every connection to the store waits five seconds for another one's write lock instead of failing at once, and setup says so when its last step did not happen | accepted |
 | D-0110 | A lap that stops short is the person's turn: setup gives a lap thirty minutes and tells it to commit as it goes, the host and the tab reach them, continuo's turn-timeout refusal is said in the person's words with what was left and what to do, and a try with no reported cost says so instead of *not yet* | accepted |
 | D-0113 | A lap merged from the page releases its files at once, the merge being its landing; a start refused by held files names the holding request and links its release | accepted |
+| D-0114 | A line gives its files up when its pull request opens, not when its work lands: the landing is still read and written after it, so an order still waits for a landing, and the numbers stay the line's | accepted |
 
 ---
 
@@ -17030,6 +17031,15 @@ number.
 >
 > The text above is not edited.
 
+> **Annotation (2026-09-23, from D-0114), and not additive.** Added after this entry was accepted,
+> by the owner's decision on rondo#441. **Rule 2's "until its work lands" is superseded by "until
+> its pull request opens"**, and with it rule 3.3's "or any closed tip's work has not landed": a
+> closed tip stops holding its line open once it is published. Rule 4.3 gains a fourth release,
+> written when `publish` opens the pull request, after which the line is still owed its landing
+> and rule 6's reading, `D-0113`'s merge release or the person's press writes the row that ends it.
+> Rule 6.1's soundness no longer covers the time between publish and landing (`D-0114` rule 5.4).
+> Rules 6, 7 and 10 are otherwise unedited.
+
 ### 2. The six capabilities of 2026-09-17, under this entry
 
 | Case | What rondo does | Handled? |
@@ -22017,6 +22027,13 @@ number.
       landing was read at is a basis of the admission, and the drafted instruction names it (the pin
       target). No version is guessed before the landing.
 
+   > **Annotation (2026-09-23, from D-0114).** Added after this entry was accepted, and additive.
+   > `first`'s claim is now released when its pull request opens (`D-0073` rule 2 as annotated),
+   > and the landing is written by a second release over that one, so rule 1.1's "released by the
+   > landing reading" reads "released, or released again, by a landing". A `then` still waits on
+   > `first_landed` alone; it no longer also waits on `first`'s paths. Rule 3.4's release of numbers
+   > keeps them on a publish, as on a landing (`D-0114` rule 5).
+
 2. **A line that takes over paths another line landed first takes in the default branch.**
    1. **The case**: a line at its gate widens onto paths another line held (`D-0073` rule 4.1), the
       other line lands, `paths_free` fires, and the line continues by `revise` (`D-0073` rule 7.1). The
@@ -23686,3 +23703,114 @@ failed and abandoned get words, and any other status is shown as it is stored.
   of its own for the summary is not designed here.
 - **Lap 14's claim in `~/rondo-lap-14` is not released by this change.** That store's line was
   merged before this change, so the owner releases it once with the release press.
+
+## D-0114 — A line gives its files up when its pull request opens, not when its work lands: the landing is still read and written after it, so an order still waits for a landing, and the numbers stay the line's
+
+**Status:** accepted (2026-09-23, rondo's owner, rondo#441). The owner chose the direction; this
+entry records it and what it changes. Refs `D-0073`, `D-0098`, `D-0103`, `D-0105`, `D-0113`,
+rondo#250, rondo#439, rondo#441.
+
+**Why an entry is needed.** `D-0073` rule 2 has a line hold its claim "from its admission until its
+work lands or it ends". Lap 15 was blocked by lap 14's claim after lap 14 had merged (rondo#439).
+`D-0113` fixed that for a merge made from the page, but a claim held from the pull request to its
+landing now costs more than it protects:
+
+- Since `D-0073`, rondo finds and fixes a conflict after the fact (`D-0102`, `D-0105`: lap 12's pull
+  request conflicted with `main` and was fixed on the page). A textual clash is found when the pull
+  request is read, and the checks find a build or test that breaks.
+- What a claim still protects is **two lines working at the same time**: two laps spent on the same
+  work, and a clash in meaning that neither git nor the checks see. That is only needed while the
+  work runs, and while a person is still deciding on it at its gate.
+
+### What was measured
+
+At rondo `36b2377`, by reading:
+
+- **Five places read "the line still holds its files" as "its work is not over"**, through
+  `LedgerLine.releasedBy === null`: the merge press and screen (`mergeBlock`'s `landed`), the conflict
+  fix (`conflictFixBlock`'s `landed`), the checks window (`src/access/checks-host.ts`), and an order's
+  `first` (`awaitingLanding` or `endedUnlanded`, `src/access/drafted-start.ts`). Releasing the claim
+  the old way at publish would have withdrawn the merge press, the conflict fix and the checks
+  reading from every published pull request, and read every `first` as ended without landing.
+- **`first_landed` is a basis on the release row** (`D-0103` rule 1.1), and `releaseLane` refused a
+  line that holds no paths ("nothing to release"), so a line released at publish could never be
+  written landed afterwards.
+- **A redo of a released line re-requests the claim the release superseded** (`D-0073` rule 2.6,
+  `laneAdmission`); it read only the row directly before the head.
+- **Numbers are released on every release but a landing** (`D-0103` rule 3.6), though a published
+  pull request already carries them.
+
+### The decision
+
+1. **A line's claim is released when its pull request opens.** When `publish` (the command or the
+   page's press) has pushed the branch and the forge has opened the pull request, the lap's line is
+   released in the same act (`releasePublished` in `src/access/merge.ts`), before the run close. A
+   conflict fix (`D-0105`) opens nothing and moves the head of the pull request it fixes; that push
+   releases the line again, since its lap took the claim back (rule 4). The release row has no paths
+   and carries `{ form: "published", pullRequestUrl }`. Its conditions are `D-0113` rule 2's: nothing
+   of the line is in flight and the published lap is its one closed tip. Otherwise the claim stays,
+   and the terminal says why. A release the store refuses does not undo the pull request.
+
+2. **Until then the line keeps its claim, as before**: while any lap runs, while a gate is open, and
+   after the gate approves until the person publishes (`D-0073` rules 3.3 and 10). **`D-0073` rule 2's
+   "until its work lands" becomes "until its pull request opens", and rule 3.3's "open" loses its
+   closed tips once they are published.** Rule 3's one property now reads: no path is held by two
+   open lines of one repository, where a published line is not open. Rule 6's landing reading, rule
+   4.3's release press and `D-0113`'s merge release are kept, for a line published before this change
+   and for a line whose publish could not release it.
+
+3. **A published line is still owed its landing, and the landing is written after the publish's
+   release.** The store reads a head with a `published` basis and no `landing` one as still owed:
+   `LedgerLine.releasedBy` stays null, so the merge press, the conflict fix, the checks window and an
+   order's `awaitingLanding` read it as they did while it held its files. **Exactly one more release
+   may be written over it**: the merge press's landing (`D-0113` rule 1), the landing reading's
+   (`D-0073` rule 6, `readHolder`), or the person's press (rule 4.3). Its row ends the line;
+   another publish release over it is refused as "nothing to release".
+
+4. **A redo of a published line takes back the paths its publish gave up** (`D-0073` rule 2.6),
+   read from the last claim row that held any, so a landing written over a publish does not turn
+   a later redo's claim into the whole repository. It is tested as a first admission is: **a conflict
+   fix whose paths another line took after the publish waits for that line** to publish or be
+   released, and the refusal names it and links its release (`D-0113` rule 3). A lap holds its
+   paths, and a conflict fix is a lap.
+
+5. **What `D-0098` and `D-0103` rely on, and what changes.**
+   1. **`first_landed` (`D-0098` rule 1.1, `D-0103` rule 1.1) is unchanged in meaning**: a landing
+      basis on a release row, written only by a landing. It is now usually on the second release
+      row, over the publish's, and `landingOf` already reads every row of no paths. An order's
+      `then` is still admitted only on `first`'s landing, within one repository as across; a
+      `first` whose pull request is open is `awaitingLanding`, not `endedUnlanded`, and the tick
+      reads its landing as before (`D-0103` rule 1.4). **A `first` published before it landed no
+      longer holds its paths while `then` waits**, which is what the owner chose: `then` waits on
+      `first_landed`, not on the paths.
+   2. **Numbers (`D-0098` rule 3)**: a publish release keeps the line's reservations, since its
+      pull request carries them. They are kept by a landing and given up by the person's press, as
+      before. `D-0103` rule 3.6 gains "and a publish" beside "a landing" among the releases that keep
+      them.
+   3. **The take-in (`D-0098` rule 2, `D-0103` rule 2, `D-0105`) is unchanged in mechanism**: a
+      revise still takes in what the default branch changed on the paths it continues onto. **What
+      it can no longer assume is that paths it is given were landed**: a line may now start on paths
+      a published and not yet merged pull request changed. Its branch does not hold that change, and
+      whichever pull request merges second conflicts. That is the case `D-0105`'s conflict fix is
+      for, and the owner's reason for this entry; it is not asked of the person beforehand.
+   4. **`D-0073` rule 6.1's soundness** ("while the line was open no other line held its paths") no
+      longer covers the time between publish and landing. A published line whose paths another line
+      changed and landed first reads `notLanded` for ever under the tree reading, as `D-0103` rule 1.7
+      already says of a change made elsewhere. The merge press releases it at once (`D-0113`), and
+      the release press is the way out for a merge made on the forge.
+
+6. **The page says the files come free when the pull request opens.** A held start, a plan held by
+   a finished line, the release screen's lead and its *why rondo has not released them* now say
+   that a finished line keeps its files until its pull request is opened, in English and Japanese.
+
+### What is not done
+
+- **A pull request closed on the forge without a merge does not end the line's claim rows.** Its
+  claim was released at publish, so nothing waits on its paths; an order's `then` behind it stays
+  `awaitingLanding`, as a closed and unreleased line did before, until the person's press (the
+  terminal's `rondo release`: the page's release screen is drawn only for a line that holds paths).
+  The numbers stay reserved and are never handed out again either way.
+- **No line published before this change is released by it.** Such a line still holds its claim and
+  is released by its landing, the merge press or the release press.
+- **The success path of the press is not exercised in the test suite**: it needs a forge. The
+  store's half (`test/store/publish-release.test.ts`) is.
