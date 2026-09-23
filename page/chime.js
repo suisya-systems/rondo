@@ -176,7 +176,13 @@ const ring = (fresh) => {
     turn = true;
   }
   show();
-  const line = ledger()?.getAttribute("data-chime") ?? null;
+  // **A stop says it stopped** (rondo#432): only where every new key is a
+  // stop, so a turn arriving with it still carries the turn's line, as the
+  // host's tick chooses.
+  const line =
+    ledger()?.getAttribute(
+      fresh.every((key) => key.startsWith("stopped:")) ? "data-chime-stopped" : "data-chime",
+    ) ?? null;
   if (!supported) {
     report(fresh, "unsupported");
     return;

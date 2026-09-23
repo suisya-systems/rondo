@@ -3957,6 +3957,7 @@ export async function operatorPage(
               ...lapsStopped(ended, 0),
             ])}
             data-chime={wording.reachYourTurn}
+            data-chime-stopped={wording.reachStopped}
             data-title={wording.tabTitle(waitingCount)}
             data-title-turn={wording.tabTitleTurn}
             data-icon={tabIcon(waitingCount)}

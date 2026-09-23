@@ -53,6 +53,7 @@ function chimeTab(first: readonly string[] | null, options: ChimeOptions = {}) {
       ({
         "data-waits": JSON.stringify(waits),
         "data-chime": "Your turn",
+        "data-chime-stopped": "It stopped",
         "data-title":
           waits === null || waits.length === 0 ? "rondo" : `(${String(waits.length)}) rondo`,
         "data-title-turn": "Your turn - rondo",
@@ -158,6 +159,14 @@ test("a tab rings once for a wait, and never again for one it has seen, even aft
   tab.redraw(["ask:m-0002"]);
   tab.redraw(["gate:i-0001:awaiting_human", "ask:m-0002"]);
   expect(tab.rung).toEqual(["Your turn"]);
+});
+
+test("a stop rings with the stop's line, and a turn arriving with it keeps the turn's (rondo#432)", () => {
+  const tab = chimeTab([]);
+  tab.redraw(["stopped:i-0001"]);
+  expect(tab.rung).toEqual(["It stopped"]);
+  tab.redraw(["stopped:i-0001", "stopped:i-0002", "gate:i-0003:awaiting_human"]);
+  expect(tab.rung).toEqual(["It stopped", "Your turn"]);
 });
 
 test("a tab that arrived on a view with no ledger starts from the first one it sees", () => {

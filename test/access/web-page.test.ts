@@ -544,7 +544,8 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     // because `hx-get` and `hx-select` have to agree with each other.
     expect(html).toContain(
       '<div id="ledger" data-waits="[&quot;gate:i-0001:awaiting_human&quot;]" ' +
-        `data-chime="${EN.reachYourTurn}" data-title="(1) rondo" ` +
+        `data-chime="${EN.reachYourTurn}" data-chime-stopped="${EN.reachStopped}" ` +
+        'data-title="(1) rondo" ' +
         `data-title-turn="${EN.tabTitleTurn}" data-icon="/icon-wait.svg" ` +
         // Where the tab reports what its notice did, and only with a writer's
         // token (rondo#414).

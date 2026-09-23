@@ -23387,7 +23387,8 @@ and Y). Measured the same day: tries reported by continuo took 32 s to about 13 
 (`src/access/page-logic/waits.ts`) keys it `stopped:<lap>`. The host's minute tick claims it under
 `reach` like a turn, and says `reachStopped`. When a turn and a stop are claimed in one minute, the
 line is the turn's. The tab's `data-waits` carries the same key for the recently ended laps, so a
-new stop rings. A refusal and a defect both count, because in both the work did not happen and the
+new stop rings, with `data-chime-stopped` (`reachStopped`) as its line where every new key is a stop;
+a turn arriving with a stop keeps the turn's line, as on the host. A refusal and a defect both count, because in both the work did not happen and the
 next move is the person's.
 
 **A stop is not added to *your turn*.** A failed row stays failed, and there is no event that would
