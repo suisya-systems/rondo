@@ -312,7 +312,7 @@ test("a question waiting in the thread is the next step, and no scope is offered
     messageId: "ask-1",
     body: "Which of the three options?",
     authorKind: "drafter",
-    authorId: "rondo/drafter/5/claude-opus-5",
+    authorId: "rondo/drafter/6/claude-opus-5",
     inReplyTo: "req-1",
     atMs: 600,
     bases: [{ form: "message", messageId: "req-1" }],

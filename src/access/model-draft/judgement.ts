@@ -43,7 +43,7 @@ import { sectionFramer } from "../framing.js";
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
  * {@link INSTRUCTIONS} is a new version, a changed model a new table entry.
  */
-const DRAFTER_INSTRUCTIONS_VERSION = 5;
+const DRAFTER_INSTRUCTIONS_VERSION = 6;
 
 /** What every row a model drafter writes is named under (rule 1.4). */
 export const MODEL_DRAFTER_PREFIX = "rondo/drafter/";
@@ -228,6 +228,14 @@ const INSTRUCTIONS = [
   "  new draft (for example it only acknowledges).",
   "- Never settle an ambiguity by choosing a reading inside a prompt. If two readings would give",
   "  the person different results they could see, ask which one they mean.",
+  "- A summary or prompt says the person chose something only when an operator message in THREAD",
+  "  says so, and that message is among its bases. Until the person answers, nothing is theirs.",
+  "- Name a choice as the person saw it: as your question numbered it, with its words, or in the",
+  "  person's own words. Never by a label from an issue's body, such as '(b)': the person is not",
+  "  shown the issue beside your question and cannot tell one label from the other.",
+  "- The person reads every prompt before approving it. Never write rondo's own words into one: a",
+  "  digest, a template, an agent type, its tier or its grants. Name the target's code (a module,",
+  "  a layer, a function) only where the person or an issue read in THREAD already names it.",
   "- A plan is a template from TEMPLATES, by its plan_digest, an agent type from AGENT TYPES, by",
   "  its digest, and the prompt the worker will run on, which you write. Nothing else of the",
   "  template changes. Name only an agent type whose tier is priced.",
