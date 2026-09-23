@@ -1961,8 +1961,12 @@ async function threadActs(
   // but the person can set a scope or open the pull request. Never while
   // something else in the thread waits on them -- a question, or a gate, whose
   // own box is then what they answer.
-  const asked = waitingAsk(threads, requestMessageId);
-  const waitedOn = asked !== null || laps.some((lap) => lap.question === "waiting");
+  const gated = laps.some((lap) => lap.question === "waiting");
+  const waitedOn =
+    [...threads.waiting].some((id) => threads.rootOf(id) === requestMessageId) || gated;
+  // The question the band points to, where no gate is waiting: a gate is still
+  // answered in its own box (Codex).
+  const asked = gated ? null : waitingAsk(threads, requestMessageId);
   // The newest try that can be published, and only that one: two next steps
   // read as a choice with no answer.
   const nextPublish = waitedOn ? null : (publishable.at(-1) ?? null);

@@ -359,6 +359,58 @@ test("a question waiting in the thread is the next step, and no scope is offered
   expect(classOf(after, "scope-req-1")).toBe(NEXT);
 });
 
+test("a gate waiting keeps its own box as the press, even beside a question in the thread (Codex)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const asked = await world.record.recordThreadMessage({
+    messageId: "ask-1",
+    body: "Which of the three options?",
+    authorKind: "drafter",
+    authorId: "rondo/drafter/6/claude-opus-5",
+    inReplyTo: "req-1",
+    atMs: 600,
+    bases: [{ form: "message", messageId: "req-1" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
+  expect(html).not.toContain(EN.nextStepHeading);
+  expect(html).not.toContain('id="answer-req-1"');
+});
+
+test("a question the person answered by stopping is not drawn as one waiting for an answer (Codex)", async () => {
+  const world = fresh();
+  await openRequest(world, "req-1", "Do #200, please.");
+  for (const draft of [
+    {
+      messageId: "ask-1",
+      body: "Which of the three options?",
+      authorKind: "drafter" as const,
+      authorId: "rondo/drafter/6/claude-opus-5",
+      inReplyTo: "req-1",
+      atMs: 600,
+      bases: [{ form: "message", messageId: "req-1" }],
+      asks: true,
+    },
+    {
+      messageId: "reply-1",
+      body: "Stop here.",
+      authorKind: "operator" as const,
+      authorId: "ada",
+      inReplyTo: "ask-1",
+      atMs: 700,
+      bases: [],
+      asks: false,
+      answerOutcome: "stop" as const,
+    },
+  ]) {
+    expect((await world.record.recordThreadMessage(draft)).kind).toBe("recorded");
+  }
+  const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
+  expect(html).not.toContain('id="answer-req-1"');
+  expect(html).not.toContain(EN.nextStepAnswer);
+});
+
 test("a start refused at a scope test says the test in words, never its name (rondo#431)", () => {
   // Lap 13 printed `asks` to the person: a word they had to ask about.
   for (const wording of [EN, chromeFor("ja")]) {

@@ -23464,9 +23464,11 @@ was drafted while the question was open is not what the rows say.
 **1. A question waiting in the request's thread is the next step.** The band (`D-0082`, rondo#375)
 now draws *回答する* / *Answer* into the thread's answer box aimed at that question
 (`nextStepAnswer`), where it used to draw nothing, and the outlined *範囲を決める* beside the thread
-is withheld while it waits. The rule that the band steps aside for a gate is unchanged: a gate is
-answered in its own box. `waitingAsk` (`src/access/page-logic/threads.ts`) is the one reading of
-*which question*, the latest one still waiting.
+is withheld while it waits. The rule that the band steps aside for a gate is unchanged: while a
+gate waits, the band draws nothing, question or not, since a gate is answered in its own box.
+`waitingAsk` (`src/access/page-logic/threads.ts`) is the one reading of *which question*: the latest
+one still waiting for an answer. A question the person answered by stopping is not one; it still
+holds the line (`D-0072` rule 3), and the page draws it as before.
 
 **2. The scope screen offers no scope to approve while that question waits**, the person's own
 form and a drafted one alike, and says to answer first, with the same link (`scopeAnswerFirst`). An
