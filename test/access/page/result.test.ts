@@ -393,6 +393,18 @@ test("a question still waiting on the person keeps the merge press off the page"
   });
   expect(asked).toMatchObject({ kind: "recorded" });
   expect(await merging(world)).not.toMatch(MERGE_WAY);
+  expect(await mergeScreen(world)).not.toContain('action="/merge?');
+});
+
+test("another lap of the request at its gate keeps the merge screen's press away, as the port refuses it (rondo#437)", async () => {
+  const world = await approved();
+  await published(world);
+  await checked(world, { kind: "green", counted: 2, skipped: 0 });
+  await reserve(world, "i-g", "#291 の文言を分けて", null, "req-r");
+  await openGate(world, "i-g");
+  const screen = await mergeScreen(world);
+  expect(screen).not.toContain('action="/merge?');
+  expect(screen).toContain(chromeFor("ja").mergeConfirmNotNow);
 });
 
 test("once merged, the strip says where it went and how, and the press is gone", async () => {
@@ -503,6 +515,8 @@ test("a head moved outside rondo is shown with its commits, and the press names 
   expect(screen).toContain('name="head" value="fff0000aa"');
   expect(screen).toContain("そのコミットも含めてマージする");
   expect(screen).toContain("この作業のものではないコミットが 1 件");
+  // Listed on the screen itself, since the strip that lists them is not here.
+  expect(screen).toContain("resolve the conflict with main");
 });
 
 test("merged outside rondo ends the request: who merged it, no press, and the clock stops (rondo#413)", async () => {

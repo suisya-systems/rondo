@@ -1250,6 +1250,8 @@ export interface Chrome extends PageWords {
   /** The commit the press merges, with the checks green on it. */
   readonly mergeConfirmCommit: (commit: string) => string;
   readonly mergeConfirmNoUndo: string;
+  /** The commits not the lap's that the list does not name. */
+  readonly mergeConfirmMore: (count: number) => string;
   /** Where nothing can be merged from this screen now. */
   readonly mergeConfirmNotNow: string;
   /**

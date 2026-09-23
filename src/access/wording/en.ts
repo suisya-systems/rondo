@@ -1125,6 +1125,7 @@ explanation you pressed on and then answers the gate.`,
   mergeConfirmNoUndo:
     "This page cannot undo a merge. If the pull request has moved since this screen was drawn, " +
     "nothing is merged and the thread says what moved.",
+  mergeConfirmMore: (count) => `and ${String(count)} more`,
   mergeConfirmNotNow:
     "Nothing can be merged from here now. Go back to the request: its next step says what waits.",
   nextStepMergeMoved: (count) =>

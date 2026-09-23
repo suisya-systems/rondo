@@ -44,7 +44,15 @@ export async function mergeView(
   const holding = (await ports.store.laneLedger()).some(
     (line) => line.releasedBy === null && line.lapIds.includes(record.id),
   );
-  const asksWaiting = [...threads.waiting].some((id) => threads.rootOf(id) === request);
+  // A question, or another lap of the request at its gate, as the port asks it
+  // (`mergeOnce` in `src/access/merge.ts`), so no press is drawn it would refuse.
+  const gated = (await ports.store.readLive()).some(
+    (live) =>
+      live.kind === "read" &&
+      live.record.status === "awaiting_human" &&
+      live.record.requestMessageId === request,
+  );
+  const asksWaiting = gated || [...threads.waiting].some((id) => threads.rootOf(id) === request);
   if (result === null || mergeBlock(result, asksWaiting, holding) !== null) {
     return framed(note(wording.mergeConfirmNotNow));
   }
@@ -64,8 +72,23 @@ export async function mergeView(
           {wording.mergeConfirmInto(wording.pullRequest(result.number), base)}
         </p>
         <p class="text-body leading-5">{wording.mergeConfirmCommit(head.slice(0, 7))}</p>
-        {carried === null ? null : (
-          <p class="text-body leading-5">{wording.nextStepMergeMoved(carried)}</p>
+        {/* The commits that are not the lap's, listed here: the thread's
+            strip that lists them is not on this screen (rondo#412). */}
+        {result.moved === null || carried === null ? null : (
+          <>
+            <ul id="merge-carried" class="pl-5 text-body leading-5">
+              {result.moved.commits.map((commit) => (
+                <li>
+                  <code class="font-mono text-id">{commit.sha.slice(0, 7)}</code>{" "}
+                  <span lang="">{commit.subject}</span>
+                </li>
+              ))}
+              {result.moved.more === 0 ? null : (
+                <li>{wording.mergeConfirmMore(result.moved.more)}</li>
+              )}
+            </ul>
+            <p class="text-body leading-5">{wording.nextStepMergeMoved(carried)}</p>
+          </>
         )}
         <p class="text-body leading-5 font-medium">{wording.mergeConfirmNoUndo}</p>
       </section>

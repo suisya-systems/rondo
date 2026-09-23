@@ -1137,6 +1137,7 @@ export const JA: Chrome = Object.freeze({
   mergeConfirmNoUndo:
     "このページからは取り消せません。この画面を開いたあとにプルリクエストが動いていれば、" +
     "マージせず、何が動いたかを依頼のスレッドに示します。",
+  mergeConfirmMore: (count) => `ほか ${String(count)} 件`,
   mergeConfirmNotNow:
     "いまはここからマージできません。依頼に戻ると、次にやることが示されています。",
   nextStepMergeMoved: (count) =>
