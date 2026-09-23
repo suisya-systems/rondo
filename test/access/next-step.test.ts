@@ -14,6 +14,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
+import { DETERMINISTIC_DRAFTER } from "../../src/access/advisory.js";
 import { PRIMARY, SECONDARY } from "../../src/access/page/vocabulary.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import {
@@ -423,6 +424,28 @@ test("a drafter that drafted nothing asks nothing: the person's own scope stays 
   expect(classOf(html, "scope-req-1")).toBe(NEXT);
   expect(html).not.toContain('id="answer-req-1"');
   // The scope screen's side is held in web-scope.test.ts, over a held plan.
+});
+
+test("a stopped lap's ask is answered first too: the band points to it, not back to the scope (D-0110, rondo#431)", async () => {
+  // D-0110 rule 2 writes `lap-stopped-<lap>` into the thread with `asks` set;
+  // until it is answered the line is held, so a scope is no way forward.
+  const world = fresh();
+  await openRequest(world, "req-1", "Do #200, please.");
+  const asked = await world.record.recordThreadMessage({
+    messageId: "lap-stopped-i-0001",
+    body: chromeFor("ja").lapStoppedSaid(null),
+    authorKind: "drafter",
+    authorId: DETERMINISTIC_DRAFTER,
+    inReplyTo: "req-1",
+    atMs: 600,
+    bases: [{ form: "message", messageId: "req-1" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
+  drawnOnceOnTop(html, "answer-req-1");
+  expect(html).toContain("to=lap-stopped-i-0001");
+  expect(html).not.toContain('id="scope-req-1"');
 });
 
 test("a start refused at a scope test says the test in words, never its name (rondo#431)", () => {

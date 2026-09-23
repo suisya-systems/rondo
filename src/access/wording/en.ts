@@ -475,8 +475,8 @@ explanation you pressed on and then answers the gate.`,
   scopeNarrowedStricter: "rondo made this stricter than major because of what you wrote here:",
   scopeNarrowedAdded: "rondo added this because of what you wrote here:",
   scopeAnswerFirst:
-    "A question from rondo in this request's thread is waiting for your answer, so there is no " +
-    "scope to approve yet. Answer it first: the scope follows from your answer.",
+    "rondo is waiting for your answer in this request's thread. Until you answer, the scope cannot " +
+    "be set here. Answer it first.",
   scopeRedrafted:
     "rondo drafted again after the scope above was approved. The new draft is below; approving " +
     "it adds a second scope for this request, and the one above stays as it is.",
@@ -971,7 +971,7 @@ explanation you pressed on and then answers the gate.`,
   nextStepDrafted:
     "rondo has drafted a scope for this request. Check it and approve it, and the work can start.",
   nextStepAnswer:
-    "A question from rondo is waiting for your answer. Answer it, and the work can go on.",
+    "rondo is waiting for your answer. Until you answer, the work on this request does not go on.",
   nextStepStart: "The scope is approved. Start the work from its screen.",
   nextStepStartAction: "Go to start the work",
   nextStepPublish:

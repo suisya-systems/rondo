@@ -496,8 +496,8 @@ export const JA: Chrome = Object.freeze({
   scopeNarrowedStricter: "ここに書かれた内容に合わせて、rondo が「重大」より厳しくしました:",
   scopeNarrowedAdded: "ここに書かれた内容に合わせて、rondo が加えました:",
   scopeAnswerFirst:
-    "この依頼のスレッドで、rondo の質問があなたの回答を待っているので、まだ承認する範囲はありません。" +
-    "先に回答してください。範囲は、その回答を受けて決まります。",
+    "この依頼のスレッドで、rondo があなたの回答を待っています。回答するまで、範囲はここでは" +
+    "決められません。先に回答してください。",
   scopeRedrafted:
     "上の範囲が承認されたあとで、rondo が下書きし直しました。新しい下書きは下にあります。" +
     "承認すると、この依頼の範囲がもう 1 つ加わり、上の範囲はそのまま残ります。",
@@ -982,7 +982,8 @@ export const JA: Chrome = Object.freeze({
     "この依頼の範囲（使ってよい費用と触ってよい場所）がまだ決まっていません。範囲を決めると、" +
     "作業を始められます。",
   nextStepDrafted: "rondo が作業の範囲を提案しました。確認して承認すると、作業を始められます。",
-  nextStepAnswer: "rondo の質問があなたの回答を待っています。回答すると、作業を先へ進められます。",
+  nextStepAnswer:
+    "rondo があなたの回答を待っています。回答するまで、この依頼の作業は先へ進みません。",
   nextStepStart: "範囲は承認済みです。範囲の画面から作業を始めてください。",
   nextStepStartAction: "作業を始める画面へ",
   nextStepPublish:

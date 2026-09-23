@@ -23468,7 +23468,10 @@ is withheld while it waits. The rule that the band steps aside for a gate is unc
 gate waits, the band draws nothing, question or not, since a gate is answered in its own box.
 `waitingAsk` (`src/access/page-logic/threads.ts`) is the one reading of *which question*: the latest
 one still waiting for an answer. A question the person answered by stopping is not one; it still
-holds the line (`D-0072` rule 3), and the page draws it as before.
+holds the line (`D-0072` rule 3), and the page draws it as before. The ask a stopped lap writes
+(`D-0110` rule 2, `lap-stopped-<lap>`) is such a question, so after a stop the band points to it
+rather than back to the scope, and the two sentences are worded for any question rondo asks, not
+only the drafter's.
 
 **2. The scope screen offers no scope to approve while that question waits**, the person's own
 form and a drafted one alike, and says to answer first, with the same link (`scopeAnswerFirst`). An
