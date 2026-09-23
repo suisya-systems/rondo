@@ -1234,38 +1234,80 @@ test("with two plans held, the screen offers the choice, the first marked, and t
   );
 });
 
-test("two plans of one repository are not told which repository they are in (rondo#305)", async () => {
-  const world = fresh();
-  const requestId = "request-scope-one-place";
-  await seedScopeRequest(world, requestId, "Fix it, please.");
-  // Two plans rondo holds, in the one repository and differing in their
-  // workspace root: the place separates nothing, so by D-0081 rule 4.2 and
-  // D-0076 rule 5.1 the lines do not carry it.
-  await seedScopePlan(world.record, requestId);
-  const sameRepository = {
-    ...scopePlanDocument(),
-    workspace_root: "/srv/work-2",
-    workspace: "/srv/work-2/w",
+/**
+ * **A plan's line says its place only where another plan's line would read the
+ * same without it** (rondo#305, `D-0081` rule 4.2, `D-0076` rules 3.3 and
+ * 5.1), drawn in **every wording set** (D-0079): `scopeWorkspace` is the one
+ * sentence the rule changed, and a set that dropped the place or kept it where
+ * the other set does not would be a page that answers the rule by language.
+ *
+ * The two plans of the first case differ in nothing the line shows but their
+ * repository, so the place is what tells them apart and is said. Those of the
+ * second are in one repository and differ in their workspace root, which the
+ * line shows anyway -- so the place separates nothing and stays unsaid.
+ */
+for (const wording of [EN, chromeFor("ja")]) {
+  /** The plans' section alone: below it the recorded fold holds rondo's own paths. */
+  const plansPart = (drawn: string): string => {
+    const from = drawn.indexOf('id="plans"');
+    const to = drawn.indexOf('id="rounds"');
+    expect(from).toBeGreaterThan(-1);
+    expect(to).toBeGreaterThan(from);
+    return drawn.slice(from, to);
   };
-  await seedScopePlan(world.record, requestId, sameRepository, `${requestId}-plan-2`);
-  const drawn = await operatorPage(
-    portsOver(world, "ada", []),
-    "t",
-    { kind: "scope", messageId: requestId, rounds: null, decisionId: null, plan: null },
-    EN,
-    mint,
-    () => "x",
-    () => "y",
-  );
+  const scopeView = (messageId: string) =>
+    ({ kind: "scope", messageId, rounds: null, decisionId: null, plan: null }) as const;
+  const drawScope = async (world: ReturnType<typeof fresh>, requestId: string): Promise<string> =>
+    plansPart(
+      await operatorPage(
+        portsOver(world, "ada", []),
+        "t",
+        scopeView(requestId),
+        wording,
+        mint,
+        () => "x",
+        () => "y",
+      ),
+    );
 
-  const choice = drawn.slice(drawn.indexOf('id="plans"'), drawn.indexOf('id="rounds"'));
-  // Both plans are offered, each said by the root that does tell them apart.
-  expect(choice).toContain("/srv/work-2");
-  expect(choice).toContain(SCOPE_PLAN.workspaceRoot);
-  // And neither says the repository, by its path or by the person's name for it.
-  expect(choice).not.toContain(SCOPE_PLAN.repository);
-  expect(choice).not.toContain("repo at ");
-});
+  test(`two plans alike but for their repository are each told their place (${wording.lang}, rondo#305)`, async () => {
+    const world = fresh();
+    const requestId = "request-scope-two-places";
+    await seedScopeRequest(world, requestId, "Fix it, please.");
+    await seedScopePlan(world.record, requestId);
+    const elsewhere = { ...scopePlanDocument(), repository: "/srv/billing" };
+    await seedScopePlan(world.record, requestId, elsewhere, `${requestId}-plan-2`);
+
+    const choice = await drawScope(world, requestId);
+    // Each line names its place, in the person's own name for it -- and the
+    // path rondo holds the place by is on neither.
+    expect(choice).toContain(wording.scopeWorkspace("repo", SCOPE_PLAN.workspaceRoot));
+    expect(choice).toContain(wording.scopeWorkspace("billing", SCOPE_PLAN.workspaceRoot));
+    expect(choice).not.toContain(SCOPE_PLAN.repository);
+    expect(choice).not.toContain("/srv/billing");
+  });
+
+  test(`two plans of one repository are not told which repository they are in (${wording.lang}, rondo#305)`, async () => {
+    const world = fresh();
+    const requestId = "request-scope-one-place";
+    await seedScopeRequest(world, requestId, "Fix it, please.");
+    await seedScopePlan(world.record, requestId);
+    const sameRepository = {
+      ...scopePlanDocument(),
+      workspace_root: "/srv/work-2",
+      workspace: "/srv/work-2/w",
+    };
+    await seedScopePlan(world.record, requestId, sameRepository, `${requestId}-plan-2`);
+
+    const choice = await drawScope(world, requestId);
+    // Both plans are offered, each said by the root that does tell them apart.
+    expect(choice).toContain(wording.scopeWorkspace(null, "/srv/work-2"));
+    // And neither says the repository, by its path or by the person's name for it.
+    expect(choice).not.toContain(SCOPE_PLAN.repository);
+    expect(choice).not.toContain(wording.scopeWorkspace("repo", SCOPE_PLAN.workspaceRoot));
+    expect(choice).not.toContain(wording.scopeWorkspace("repo", "/srv/work-2"));
+  });
+}
 
 test("a plan the address names and rondo no longer offers is said, with the list again and no form -- never another plan under its name (rondo#238)", async () => {
   const world = fresh();

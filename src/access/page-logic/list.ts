@@ -81,12 +81,28 @@ export function repositoryOf(record: IterationRecord | null): string | null {
  * name they say out loud -- so that is what the screen draws, never the whole
  * path and never the `OWNER/NAME` the forge knows it by.
  *
- * A value with no segment left after the separators (`/`, `\`) is given back
- * as it came: rondo does not invent a name for a place it cannot read one off.
+ * A value with no segment left after the separators (`/`, `\`) has no name to
+ * read off, and the answer is then null: rondo says nothing rather than
+ * falling back to the path, which is the one thing rule 4.2 forbids.
  */
-function placeName(repository: string): string {
+function placeName(repository: string): string | null {
   const segments = repository.split(/[/\\]/).filter((segment) => segment !== "");
-  return segments[segments.length - 1] ?? repository;
+  return segments[segments.length - 1] ?? null;
+}
+
+/**
+ * One thing the page draws, as far as telling it from another goes.
+ */
+export interface ThingDrawn {
+  /**
+   * Everything else the page says about this thing, as one key: the title of
+   * a request, or a plan's line with its place left out. Two things whose
+   * keys are equal are two things a person reading the page cannot tell apart
+   * without being told something more.
+   */
+  readonly otherwise: string;
+  /** The repository its work is in (D-0081), or null where none is named. */
+  readonly repository: string | null;
 }
 
 /**
@@ -94,25 +110,28 @@ function placeName(repository: string): string {
  * things apart** (`D-0081` rule 4.2 and its gate's answer 4, `D-0076` rules
  * 3.3 and 5.1).
  *
- * `among` is every repository the set being drawn is in. Where that set holds
- * one repository -- which is the person who works in one repository most days
- * -- naming it separates nothing, and by rule 5.1 a thing that separates
- * nothing is not on the page. Where it holds two or more, the repository is
- * the thing that tells them apart, and it is said as {@link placeName} says
- * it.
+ * The question is not how many repositories the store serves. It is whether
+ * *this* thing and some other thing on the page read the same with the place
+ * left out: two requests whose first lines differ are already told apart by
+ * what the person wrote, and by rule 5.1 a place added beside them separates
+ * nothing and is not on the page -- however many repositories the work spans.
+ * Where two keys do collide, the repository is what is left to tell them
+ * apart, and it is said as {@link placeName} says it.
  *
- * This is the same shape as the try number on a thread's lines: one try has
- * nothing to tell apart and the number would be noise.
+ * A collision with something in the *same* repository is not answered either:
+ * naming a place both things are in tells them apart no better than silence.
+ *
+ * This is the same shape as the try number on a thread's lines: with nothing
+ * to tell apart, the number would be noise.
  */
-export function placeSaid(
-  repository: string | null,
-  among: readonly (string | null)[],
-): string | null {
-  if (repository === null) {
+export function placeSaid(thing: ThingDrawn, among: readonly ThingDrawn[]): string | null {
+  if (thing.repository === null) {
     return null;
   }
-  const places = new Set(among.filter((one): one is string => one !== null));
-  return places.size > 1 ? placeName(repository) : null;
+  const indistinguishable = among.some(
+    (other) => other.otherwise === thing.otherwise && other.repository !== thing.repository,
+  );
+  return indistinguishable ? placeName(thing.repository) : null;
 }
 
 /**

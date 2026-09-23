@@ -169,7 +169,13 @@ import {
   saysMore,
   workerRuns,
 } from "./page-logic/laps.js";
-import { placeSaid, repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
+import {
+  placeSaid,
+  repositoryOf,
+  requestList,
+  rowStateOf,
+  type ThingDrawn,
+} from "./page-logic/list.js";
 import { asksOverLine, conflictFixBlock, mergeBlock, resultOf } from "./page-logic/result.js";
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
@@ -2812,15 +2818,34 @@ export async function operatorPage(
    * **Where the page names a repository, and where it stays unsaid**
    * (D-0081 rule 4.2 and its gate's answer 4, rondo#305). One store serves
    * several repositories, and the work of all of them is one list -- so the
-   * repository is drawn where it is what tells two things apart, and nowhere
-   * else. The set it is judged against is the whole of the work this page
-   * read, so one answer holds across the faces: a row, the running work
-   * beside an empty centre and the line under a request's title never
-   * disagree about whether the place is worth saying.
+   * repository is drawn where the person could not otherwise tell two things
+   * apart, and nowhere else. What tells two of these apart otherwise is the
+   * person's own words: every face draws a request by the first line of the
+   * message that opened it, so that line is the key, and the place is said
+   * only where two requests read the same without it.
+   *
+   * The set it is judged against is the whole of the work this page read, so
+   * one answer holds across the faces: a row, the running work beside an
+   * empty centre and the line under a request's title never disagree about
+   * whether the place is worth saying. A request nothing has run for is in
+   * that set too -- it is drawn, and its title can be the one another
+   * request's title collides with.
    */
-  const pagePlaces = [...allLapsByRequest.values()].flat().map((lap) => repositoryOf(lap.record));
+  const titleUnder = (record: IterationRecord): string =>
+    firstLine(threads.byId.get(record.requestMessageId)?.body ?? record.request);
+  const pageThings: ThingDrawn[] = threads.messages
+    .filter((message) => message.inReplyTo === null)
+    .flatMap((root) => {
+      const laps = lapsUnder(root.messageId);
+      const otherwise = firstLine(root.body);
+      return laps.length === 0
+        ? [{ otherwise, repository: null }]
+        : laps.map((lap) => ({ otherwise, repository: repositoryOf(lap.record) }));
+    });
   const placeOf = (record: IterationRecord | null): string | null =>
-    placeSaid(repositoryOf(record), pagePlaces);
+    record === null
+      ? null
+      : placeSaid({ otherwise: titleUnder(record), repository: repositoryOf(record) }, pageThings);
 
   /*
    * **The left face's rows** (D-0083 rules 2, 5 and 7). Every request the

@@ -7,7 +7,7 @@
  * thing that breaks the axis.
  */
 import { expect, test } from "vitest";
-import type { RequestRow } from "../../../src/access/page-logic/list.js";
+import type { RequestRow, ThingDrawn } from "../../../src/access/page-logic/list.js";
 import {
   placeSaid,
   repositoryOf,
@@ -119,38 +119,75 @@ test("the repository is the one the lap's plan names, or nothing", () => {
 });
 
 /*
- * **Naming the place only where it tells two things apart** (rondo#305,
- * `D-0081` rule 4.2, `D-0076` rules 3.3 and 5.1).
+ * **Naming the place only where the person could not otherwise tell two
+ * things apart** (rondo#305, `D-0081` rule 4.2, `D-0076` rules 3.3 and 5.1).
+ *
+ * `otherwise` is everything else the page says about a thing -- a request's
+ * title, a plan's line with its place left out -- so the question the rule
+ * asks is whether two of those keys collide, and never how many repositories
+ * the store happens to serve.
  */
 
 const SHOP = "/home/ada/work/shop-app";
 const BILLING = "/home/ada/work/billing";
 
-test("a set all in one repository is not told which one it is", () => {
-  expect(placeSaid(SHOP, [SHOP, SHOP])).toBeNull();
-  // A set with one repository named and the rest naming none has still only
-  // one place in it, so there is nothing the name would separate.
-  expect(placeSaid(SHOP, [SHOP, null])).toBeNull();
-  // One thing alone, and nothing at all, are both nothing to tell apart.
-  expect(placeSaid(SHOP, [SHOP])).toBeNull();
-  expect(placeSaid(SHOP, [])).toBeNull();
+/** One thing on the page, as far as telling it from another goes. */
+const thing = (otherwise: string, repository: string | null): ThingDrawn => ({
+  otherwise,
+  repository,
 });
 
-test("a set spanning two repositories says each as the person names it", () => {
-  expect(placeSaid(SHOP, [SHOP, BILLING])).toBe("shop-app");
-  expect(placeSaid(BILLING, [SHOP, BILLING])).toBe("billing");
+test("things the page already tells apart are not told which repository they are in", () => {
+  const invoice = thing("the invoice needs the tax broken out", SHOP);
+  const receipt = thing("the receipt prints the wrong date", BILLING);
+  // Two repositories, and the person reads two different sentences: the place
+  // separates nothing they could not already separate (rule 5.1).
+  expect(placeSaid(invoice, [invoice, receipt])).toBeNull();
+  expect(placeSaid(receipt, [invoice, receipt])).toBeNull();
+  // One thing alone, and nothing at all, are both nothing to tell apart.
+  expect(placeSaid(invoice, [invoice])).toBeNull();
+  expect(placeSaid(invoice, [])).toBeNull();
+});
+
+test("two things that read the same are each told which repository it is in", () => {
+  const here = thing("the build is broken", SHOP);
+  const there = thing("the build is broken", BILLING);
+  // Nothing else on the page separates them, so the place is what is left --
+  // said as the person names it, which is the last segment and not the path.
+  expect(placeSaid(here, [here, there])).toBe("shop-app");
+  expect(placeSaid(there, [here, there])).toBe("billing");
   // A trailing separator, and the shape a Windows clone is held in: the name
   // is the last segment either way, and never the path it was read off.
-  expect(placeSaid(`${SHOP}/`, [SHOP, BILLING])).toBe("shop-app");
-  expect(placeSaid("C:\\Users\\ada\\work\\shop-app", [SHOP, BILLING])).toBe("shop-app");
+  expect(placeSaid(thing("the build is broken", `${SHOP}/`), [here, there])).toBe("shop-app");
+  expect(
+    placeSaid(thing("the build is broken", "C:\\Users\\ada\\work\\shop-app"), [here, there]),
+  ).toBe("shop-app");
 });
 
-test("a lap that names no repository says no place, however many the set holds", () => {
-  expect(placeSaid(null, [SHOP, BILLING])).toBeNull();
+test("two things alike inside one repository are not told that repository", () => {
+  // Naming a place both of them are in tells them apart no better than
+  // silence does, so nothing is said.
+  const one = thing("the build is broken", SHOP);
+  const other = thing("the build is broken", SHOP);
+  expect(placeSaid(one, [one, other])).toBeNull();
 });
 
-test("a repository with no segment to read is given back as it came", () => {
+test("a thing alike to one that names no repository is told its own", () => {
+  // A request nothing has run for names no place, so saying the other's is
+  // what tells the two apart.
+  const ran = thing("the build is broken", SHOP);
+  const not = thing("the build is broken", null);
+  expect(placeSaid(ran, [ran, not])).toBe("shop-app");
+  // The one with no place of its own still says none: rondo has nothing to say.
+  expect(placeSaid(not, [ran, not])).toBeNull();
+});
+
+test("a repository with no name to read off is not said at all", () => {
   // rondo does not invent a name for a place it cannot read one off, and a
-  // path made only of separators is one of those.
-  expect(placeSaid("/", ["/", BILLING])).toBe("/");
+  // value made only of separators is one of those. The path itself is what
+  // rule 4.2 forbids, so what is left to say is nothing.
+  const nameless = thing("the build is broken", "/");
+  const named = thing("the build is broken", BILLING);
+  expect(placeSaid(nameless, [nameless, named])).toBeNull();
+  expect(placeSaid(named, [nameless, named])).toBe("billing");
 });
