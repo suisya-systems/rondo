@@ -176,7 +176,7 @@ import {
   requestOf,
   unreadIssues,
 } from "./issue-read.js";
-import { mergePress } from "./merge.js";
+import { mergePress, releasePublished } from "./merge.js";
 import {
   type DrafterPorts,
   draftedPlanRun,
@@ -7778,6 +7778,11 @@ async function publishPage(
       detail: openFailed,
     };
   }
+  // gh prints the new pull request's URL as the last line of its stdout.
+  const pullRequestUrl = opened.stdout.trim().split("\n").at(-1) || null;
+  // D-0114: the pull request is open, so the line's files are free for other
+  // work, whatever the run close below answers.
+  say(await releasePublished(store, record.id, pullRequestUrl, Date.now()));
   // The close records the operator's observation that the work landed. It is
   // last because it is a claim about the other two having happened, and it is
   // not idempotent: continuo refuses a second close, on purpose.
@@ -7805,10 +7810,9 @@ async function publishPage(
   await reportToRequest(
     { record: openAdvisoryRecord(storePath), store },
     record.id,
-    // gh prints the new pull request's URL as the last line of its stdout.
     {
       kind: "published",
-      pullRequestUrl: opened.stdout.trim().split("\n").at(-1) || null,
+      pullRequestUrl,
       ...(plan.updates === null ? {} : { onto: plan.updates.onto }),
     },
     Date.now(),
@@ -8000,6 +8004,11 @@ async function commandPublish(
     );
     return 1;
   }
+  // gh prints the new pull request's URL as the last line of its stdout.
+  const pullRequestUrl = opened.stdout.trim().split("\n").at(-1) || null;
+  // D-0114: the pull request is open, so the line's files are free for other
+  // work, whatever the run close below answers.
+  say(await releasePublished(store, record.id, pullRequestUrl, Date.now()));
 
   // The close records the operator's observation that the work landed. It is
   // last because it is a claim about the other two having happened, and it is
@@ -8018,10 +8027,9 @@ async function commandPublish(
     const reported = await reportToRequest(
       ports.thread,
       record.id,
-      // gh prints the new pull request's URL as the last line of its stdout.
       {
         kind: "published",
-        pullRequestUrl: opened.stdout.trim().split("\n").at(-1) || null,
+        pullRequestUrl,
         ...(plan.updates === null ? {} : { onto: plan.updates.onto }),
       },
       Date.now(),

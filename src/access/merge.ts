@@ -17,7 +17,12 @@
  */
 
 import { lineShape } from "../store/lanes.js";
-import { isDeterministicReadingDrafter, latestReading, planField } from "../store/records.js";
+import {
+  isDeterministicReadingDrafter,
+  type JsonValue,
+  latestReading,
+  planField,
+} from "../store/records.js";
 import { type AdvisoryRecord, type IterationStore, LANE_LEDGER_AUTHOR } from "../store/sqlite.js";
 import { reportToRequest } from "./conductor.js";
 import {
@@ -245,7 +250,9 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
  * the default branch touched the same files. Only into the default branch, and
  * only where the merged lap is the line's one closed tip with nothing in
  * flight: any other line is still owed the tree reading, or the person's
- * release press. Said for the terminal; the merge stands either way.
+ * release press. A line that gave its paths up when its pull request opened
+ * (D-0114) gets its landing row here, over the publish's. Said for the
+ * terminal; the merge stands either way.
  */
 async function releaseMerged(
   ports: MergePorts,
@@ -260,9 +267,57 @@ async function releaseMerged(
   if (after.defaultBranch !== into) {
     return kept(`it went into '${into}', and the default branch is '${after.defaultBranch}'`);
   }
-  const read = await ports.store.laneLine(iterationId);
+  const outcome = await releaseOnlyTip(ports.store, iterationId, ports.now(), {
+    landed: true,
+    bases: [
+      { form: "iteration", iterationId },
+      { form: "landing", branch: into, commit: after.mergeCommit },
+    ],
+  });
+  return outcome === null
+    ? `Its files were released: the merge is its landing on '${into}'.`
+    : kept(outcome);
+}
+
+/**
+ * **Opening the pull request gives the line's files up** (D-0114, rondo#441):
+ * the claim protects two lines working at once, and from here the forge's
+ * conflict reading and the checks cover what is left. The row carries a
+ * `published` basis, so the line keeps its decision-record numbers and is
+ * still owed its landing: the merge press, the landing reading or the
+ * person's press writes the row that ends it (`first_landed`, D-0098 rule
+ * 1.1, unchanged). Only where the published lap is the line's one closed tip
+ * with nothing in flight, as {@link releaseMerged}. Said for the terminal;
+ * the pull request stands either way.
+ */
+export async function releasePublished(
+  store: Pick<IterationStore, "laneLine" | "releaseLane">,
+  iterationId: string,
+  pullRequestUrl: string | null,
+  nowMs: number,
+): Promise<string> {
+  const outcome = await releaseOnlyTip(store, iterationId, nowMs, {
+    landed: false,
+    bases: [
+      { form: "iteration", iterationId },
+      { form: "published", ...(pullRequestUrl === null ? {} : { pullRequestUrl }) },
+    ],
+  });
+  return outcome === null
+    ? "Its files were released: its pull request is open."
+    : `Its files were not released on the publish: ${outcome}.`;
+}
+
+/** Release a line whose one closed tip is `iterationId`; null when released, else why not. */
+async function releaseOnlyTip(
+  store: Pick<IterationStore, "laneLine" | "releaseLane">,
+  iterationId: string,
+  nowMs: number,
+  release: { readonly landed: boolean; readonly bases: readonly JsonValue[] },
+): Promise<string | null> {
+  const read = await store.laneLine(iterationId);
   if (read.kind !== "read") {
-    return kept(read.kind === "defect" ? read.reason : "its line is not in this store");
+    return read.kind === "defect" ? read.reason : "its line is not in this store";
   }
   const { line } = read;
   const shape = lineShape(
@@ -273,23 +328,17 @@ async function releaseMerged(
     })),
   );
   if (shape.inFlight || shape.closedTips.join() !== iterationId) {
-    return kept("its line has another lap, which the landing reading still reads");
+    return "its line has another lap, which the landing reading still reads";
   }
-  const outcome = await ports.store.releaseLane({
+  const outcome = await store.releaseLane({
     iterationId,
     takenOver: { claimId: line.claim?.claimId ?? null, lapIds: line.laps.map((lap) => lap.id) },
-    landed: true,
+    ...release,
     authorKind: "drafter",
     authorId: LANE_LEDGER_AUTHOR,
-    bases: [
-      { form: "iteration", iterationId },
-      { form: "landing", branch: into, commit: after.mergeCommit },
-    ],
-    nowMs: ports.now(),
+    nowMs,
   });
-  return outcome.kind === "released"
-    ? `Its files were released: the merge is its landing on '${into}'.`
-    : kept(outcome.reason);
+  return outcome.kind === "released" ? null : outcome.reason;
 }
 
 function refused(why: MergeRefusal, note: string): Merged {

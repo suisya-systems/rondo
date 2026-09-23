@@ -808,26 +808,28 @@ explanation you pressed on and then answers the gate.`,
   publishedPullRequest: "The pull request",
   holds: (paths) => `Files it keeps to itself: ${filesEn(paths)}`,
   notLanded:
-    "rondo has not found this change on the default branch yet, so these files stay with it " +
-    "and other work that needs them waits.",
+    "Its pull request is not open yet, and rondo has not found this change on the default " +
+    "branch, so these files stay with it and other work that needs them waits.",
   landed: "Its change is on the default branch, and its files are free for other work.",
   releasedByPerson: "A person released its files, so other work may use them.",
   releaseLink: "Release its files",
   releaseHeading: "Release the files this work keeps",
   releaseLead:
     "This work has finished, and it still keeps its files to itself. Nothing else that needs " +
-    "them can start until you release them or its change is found on the default branch.",
+    "them can start until you release them, its pull request is opened, or its change is found " +
+    "on the default branch.",
   releaseWorkHeading: "The work",
   releaseBrief: "What rondo asked the work to do, in full",
   releaseHoldsHeading: "The files it keeps",
   releaseWhyHeading: "Why rondo has not released them itself",
   releaseWhy: [
-    "rondo lets go of these files once it finds this change on the default branch: every file " +
-      "the work changed has to be there exactly as the work left it. It looks when other work " +
-      "asks for the same files.",
-    "It has not found it. That happens when the change is not merged yet, when it was edited or " +
-      "had a conflict resolved on its way in, when it went to another remote, or when the default " +
-      "branch could not be read.",
+    "rondo lets go of these files when it opens this work's pull request. Until then it lets go " +
+      "of them only once it finds this change on the default branch: every file the work changed " +
+      "has to be there exactly as the work left it. It looks when other work asks for the same " +
+      "files.",
+    "Neither has happened. That is so when the work is not published yet, or when it was merged " +
+      "some other way and edited or had a conflict resolved on its way in, went to another " +
+      "remote, or the default branch could not be read.",
     "Whether the work is done is your call. If it is merged in a form rondo cannot recognise, or " +
       "you will not merge it, release the files.",
   ],
@@ -860,18 +862,18 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was released: rondo could not record your decision. The files stay with this work; " +
     "pressing again is safe.",
   planHeld: (paths) =>
-    `Not yet: other work is changing ${filesEn(paths)}. This can start once that work's change ` +
-    "is on the default branch, or once its files are released.",
+    `Not yet: other work is changing ${filesEn(paths)}. This can start once that work's pull ` +
+    "request is opened, or once its files are released.",
   planHeldFinished: (paths) =>
-    `Not yet: work that has finished still keeps ${filesEn(paths)}, because its change has not ` +
-    "been found on the default branch. This can start once it is, or once its files are released.",
+    `Not yet: work that has finished still keeps ${filesEn(paths)}, because its pull request ` +
+    "is not open yet. This can start once it is, or once its files are released.",
   planHeldBy: "Held by",
   planHeldTry:
     "That work has finished. Starting checks first whether its change is on the default branch.",
   startRefusedHeld:
     "Nothing was started and nothing was spent: other work still keeps files this needs. The " +
-    "approval stands; start again once that work's change is on the default branch or its files " +
-    "are released.",
+    "approval stands; start again once that work's pull request is opened or its files are " +
+    "released.",
   publishHeading: "Open a pull request for this work",
   publishLead:
     "Nothing has left this machine yet. This is what publishing would do, read just now; the " +
