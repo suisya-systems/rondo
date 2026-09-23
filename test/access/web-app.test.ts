@@ -2198,7 +2198,7 @@ test("(send) the same form sent twice records its message once", async () => {
   const native = await send(base, "/request?lang=ja", "POST", submitHeaders(base), other);
   expect(native.status).toBe(409);
   expect(native.body).toContain('<html lang="ja">');
-  expect(native.body).toContain('<a href="/?requests=open&amp;lang=ja">スレッドに戻る</a>');
+  expect(native.body).toMatch(/<a href="\/\?requests=open&amp;lang=ja"[^>]*>スレッドに戻る<\/a>/);
   expect(native.body).not.toContain(form.message_id);
   expect(native.body).not.toMatch(/D-00/);
   expect(connection.prepare("SELECT COUNT(*) AS n FROM conversation_message").get()).toEqual({

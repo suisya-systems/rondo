@@ -23657,7 +23657,7 @@ the message cannot be read.
 
 **5. A refused press answers in the page's own frame** (`src/access/screens/refused.tsx`, the
 secretary's screen review). All press refusals (start, scope, revise, publish, release, merge,
-conflict fix, raise, claim) used to answer with bare HTML: no stylesheet, no header, and the action
+conflict fix, raise, add repository, a claim, and a send made without script) used to answer with bare HTML: no stylesheet, no header, and the action
 as a plain link. They now use the page's stylesheet and header, the reason as a notice, and the
 maintainer's fold. For a held start there is also a card per holder, with *Release its files* drawn
 as the page's primary press-shaped link. It is still a link to the release screen, which says what

@@ -2763,24 +2763,26 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     back: string | null,
   ) {
     const wording = wordingOf(c);
-    const line = escapeHtml(wording.notSent(wording[why]));
+    const line = wording.notSent(wording[why]);
     if (c.req.header("hx-request") === "true") {
-      return c.html(`<p id="send-refused">${line}</p>`, status);
+      return c.html(`<p id="send-refused">${escapeHtml(line)}</p>`, status);
     }
-    const href = escapeHtml(
-      viewHref(
-        back === null || back === ""
-          ? { kind: "requests" }
-          : { kind: "thread", messageId: back, to: null },
-        wording.lang,
-      ),
-    );
     return c.html(
-      `<!doctype html><html lang="${escapeHtml(wording.lang)}"><head><meta charset="utf-8">` +
-        `<meta name="viewport" content="width=device-width, initial-scale=1">` +
-        `<title>${escapeHtml(wording.sendAction)}</title></head><body>` +
-        `<p id="send-refused">${line}</p><p>${escapeHtml(wording.sendBackNote)}</p>` +
-        `<p><a href="${href}">${escapeHtml(wording.sendBack)}</a></p></body></html>`,
+      refusedPage(wording, {
+        title: wording.sendAction,
+        id: "send-refused",
+        line,
+        href: viewHref(
+          back === null || back === ""
+            ? { kind: "requests" }
+            : { kind: "thread", messageId: back, to: null },
+          wording.lang,
+        ),
+        back: wording.sendBack,
+        note: null,
+        holders: [],
+        releasable: false,
+      }),
       status,
     );
   }
