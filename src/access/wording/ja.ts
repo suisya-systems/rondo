@@ -265,8 +265,9 @@ export const JA: Chrome = Object.freeze({
   blockedNothing: "止めたコマンドなし",
   blockedUnknown: "止めたコマンドは不明",
   fenceHeading: "実行の制限:",
-  whyStopped: "止まった理由",
-  whyNotRead: "作業者自身の説明は読み取れませんでした。読めていれば下のテキストにあります。",
+  reportHeading: "作業者の報告",
+  reportFold: "作業者が書いたとおりの全文",
+  reportNotRead: "作業者の報告は読み取れませんでした。読めていれば下のテキストにあります。",
   workHeading: "変わったもの",
   changedAgainst: (baseRef) => `${baseRef} との比較`,
   changedUnreadable:

@@ -16,6 +16,7 @@ import {
   operatorPage,
   portsOver,
   REVISE_ANSWER,
+  readableWithoutOpening,
   reserve,
   reviseRows,
   seedScopeRequest,
@@ -96,6 +97,12 @@ test("both readings are drawn from the rows on the right face, with the warning 
   expect(html).toContain("feat: retry budget");
   expect(html).toContain(">+64</span>");
   expect(html).toContain("I could not run the suite.");
+  // **Named for what it is, and shut** (rondo#444): every gate is the worker's
+  // turn ending, so the card is its report, not why it stopped, and the report
+  // is kept under a fold labelled in the page's words rather than drawn open.
+  expect(html).toContain("The worker's report");
+  expect(html).not.toContain("Why it stopped");
+  expect(readableWithoutOpening(html, "I could not run the suite.")).toBe(false);
   // No recommendation anywhere on the gate.
   expect(html.toLowerCase()).not.toContain("recommend");
 
