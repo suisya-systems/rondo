@@ -2257,12 +2257,19 @@ async function threadActs(
                     );
   const others = publishable.filter((lap) => lap !== nextPublish);
   // **The request's work is still under way** (rondo#437): a lap running or at
-  // its gate, or an approved try whose pull request is not yet merged or
-  // closed. Another scope is no step of the person's then, so the outlined
+  // its gate, or any approved try whose pull request is not yet merged
+  // or closed. Another scope is no step of the person's then, so the outlined
   // way to one is not drawn; it comes back once the work has ended.
-  const underWay =
-    laps.some((lap) => !isTerminal(lap.record.status)) ||
-    (resultRecord !== null && result?.merged == null && result?.closedAtMs == null);
+  const underWay = laps.some((lap) => {
+    if (!isTerminal(lap.record.status)) {
+      return true;
+    }
+    if (!approvedForPublication(lap.record)) {
+      return false;
+    }
+    const ended = resultOf(threads.byId, lap.record.id);
+    return ended?.merged == null && ended?.closedAtMs == null;
+  });
   // A repository added from the page whose build rondo could not tell: said
   // where the work is, since it bounds what the worker can check (D-0090).
   const unbuilt = where?.work.kind === "held" ? where.unbuilt : [];

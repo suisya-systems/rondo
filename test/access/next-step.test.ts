@@ -15,16 +15,19 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
 import { DETERMINISTIC_DRAFTER } from "../../src/access/advisory.js";
+import { reportToRequest } from "../../src/access/conductor.js";
 import { PRIMARY, SECONDARY } from "../../src/access/page/vocabulary.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import {
   fresh,
   gateWithChecks,
   mint,
+  openGate,
   openRequest,
   operatorPage,
   portsOver,
   recordAnswer,
+  reserve,
 } from "./page-world.js";
 
 const DRY_RUN = {
@@ -480,4 +483,32 @@ test("a start refused at a scope test says the test in words, never its name (ro
     expect(said).not.toMatch(/\basks\b/);
     expect(said).toContain(wording.lang === "ja" ? "問い" : "question");
   }
+});
+
+test("an older approved try still unpublished keeps the scope away after a newer one is merged (rondo#437)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await reserve(world, "i-0002", "add a retry budget", null, "req-1");
+  await openGate(world, "i-0002");
+  for (const id of ["i-0001", "i-0002"]) {
+    await recordAnswer(world, id);
+    const closed = await world.store.transition(
+      id,
+      "awaiting_human",
+      "closed",
+      { gateOutcome: "answered_and_forwarded" },
+      5_000,
+    );
+    expect(closed.kind).toBe("transitioned");
+  }
+  const url = "https://github.com/suisya-systems/rondo/pull/9";
+  await reportToRequest(world, "i-0002", { kind: "published", pullRequestUrl: url }, 6_000);
+  await reportToRequest(
+    world,
+    "i-0002",
+    { kind: "merged", pullRequestUrl: url, into: "main", method: "squash", mergeCommit: null },
+    7_000,
+  );
+  const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
+  expect(html).not.toContain('id="scope-req-1"');
 });

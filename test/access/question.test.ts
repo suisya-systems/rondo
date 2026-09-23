@@ -267,6 +267,7 @@ test("options are numbered once, whatever the writer numbered them with (rondo#4
         { text: "（２）Drop it", givesUp: "b" },
         { text: "3.5 GB is the cap", givesUp: "c" },
         { text: "1. Not its own number", givesUp: "d" },
+        { text: "⑸ A circled number is not stripped", givesUp: "e" },
       ],
       0,
       "1. Keeping it is smaller.",
@@ -280,6 +281,8 @@ test("options are numbered once, whatever the writer numbered them with (rondo#4
     "   c",
     "4. 1. Not its own number",
     "   d",
+    "5. ⑸ A circled number is not stripped",
+    "   e",
     "",
     "→ 1: Keeping it is smaller.",
   ]);

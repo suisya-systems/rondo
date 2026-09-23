@@ -166,11 +166,12 @@ export function optionLines(
 
 /** `text` without a leading *n.*, *n)* or *(n)* of its own, in either width. */
 function unnumbered(text: string, n: number): string {
-  // NFKC maps the full-width digits and marks onto ASCII one for one, so the
-  // match's length is also the length to cut from the text as written.
-  const own = new RegExp(`^\\s*(?:\\(${String(n)}\\)|${String(n)}[.):、](?!\\d))\\s*`).exec(
-    text.normalize("NFKC"),
-  );
+  // Matched on the text as written, so the match's length is what to cut.
+  const ascii = String(n);
+  const wide = ascii.replace(/\d/g, (d) => String.fromCharCode(0xff10 + Number(d)));
+  const own = new RegExp(
+    `^\\s*(?:[(（](?:${ascii}|${wide})[)）]|(?:${ascii}|${wide})[.．)）:：、](?![0-9０-９]))\\s*`,
+  ).exec(text);
   return own === null || own[0].length === text.length ? text : text.slice(own[0].length);
 }
 
