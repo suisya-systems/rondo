@@ -23570,8 +23570,9 @@ of the target's code is used, even where an issue uses it. Like `D-0111` rule 4 
 instructions, not checks.
 
 **6. The outlined *範囲を決める* is not drawn while the request's work is under way**: a lap of it
-not ended, or an approved try whose pull request is not merged or closed (`threadActs`'s
-`underWay`). It comes back once the work has ended. The filled next step (`D-0082`, rondo#375) is
+not ended, or any approved try whose pull request is not merged or closed (`threadActs`'s
+`underWay`). A try a later one supersedes (a conflict fix, a redo) is carried by that later try,
+whose reports say the pull request's end. It comes back once the work has ended. The filled next step (`D-0082`, rondo#375) is
 unchanged.
 
 ### What is not done

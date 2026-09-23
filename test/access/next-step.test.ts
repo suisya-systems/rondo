@@ -25,6 +25,7 @@ import {
   openGate,
   openRequest,
   operatorPage,
+  planFor,
   portsOver,
   recordAnswer,
   reserve,
@@ -511,4 +512,59 @@ test("an older approved try still unpublished keeps the scope away after a newer
   );
   const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
   expect(html).not.toContain('id="scope-req-1"');
+});
+
+test("a try whose pull request a later try carried to its merge brings the scope back (rondo#437)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await recordAnswer(world, "i-0001");
+  await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "answered_and_forwarded" },
+    5_000,
+  );
+  const url = "https://github.com/suisya-systems/rondo/pull/9";
+  await reportToRequest(world, "i-0001", { kind: "published", pullRequestUrl: url }, 5_500);
+  // The conflict fix: a later try that supersedes it and pushes onto its pull request.
+  const reserved = await world.store.reserve({
+    numbers: null,
+    id: "i-0002",
+    request: "add a retry budget",
+    plan: planFor("i-0002"),
+    spend: null,
+    scopeSpend: null,
+    claim: null,
+    nowMs: 6_000,
+    supersedesIterationId: "i-0001",
+    requestMessageId: "req-1",
+    runId: "rondo-i-0002",
+    topicBranch: "rondo/i-0001",
+    workspace: "/srv/work/i-0002",
+  });
+  expect(reserved.kind).toBe("reserved");
+  await openGate(world, "i-0002");
+  await recordAnswer(world, "i-0002");
+  await world.store.transition(
+    "i-0002",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "answered_and_forwarded" },
+    7_000,
+  );
+  await reportToRequest(
+    world,
+    "i-0002",
+    { kind: "published", pullRequestUrl: url, onto: "rondo/i-0001" },
+    7_500,
+  );
+  await reportToRequest(
+    world,
+    "i-0002",
+    { kind: "merged", pullRequestUrl: url, into: "main", method: "squash", mergeCommit: null },
+    8_000,
+  );
+  const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
+  expect(classOf(html, "scope-req-1")).toBe(`${SECONDARY} h-7 px-3 text-meta`);
 });

@@ -2264,7 +2264,12 @@ async function threadActs(
     if (!isTerminal(lap.record.status)) {
       return true;
     }
-    if (!approvedForPublication(lap.record)) {
+    // A try a later one supersedes (a conflict fix, a redo) is carried by it:
+    // the pull request's end is reported on the later try only.
+    if (
+      !approvedForPublication(lap.record) ||
+      laps.some((later) => later.record.supersedesIterationId === lap.record.id)
+    ) {
       return false;
     }
     const ended = resultOf(threads.byId, lap.record.id);
