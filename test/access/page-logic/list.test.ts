@@ -8,7 +8,12 @@
  */
 import { expect, test } from "vitest";
 import type { RequestRow } from "../../../src/access/page-logic/list.js";
-import { repositoryOf, requestList, rowStateOf } from "../../../src/access/page-logic/list.js";
+import {
+  placeSaid,
+  repositoryOf,
+  requestList,
+  rowStateOf,
+} from "../../../src/access/page-logic/list.js";
 import type { IterationRecord } from "../../../src/store/records.js";
 
 const at = (y: number, m: number, d: number, h = 12): number => new Date(y, m - 1, d, h).getTime();
@@ -111,4 +116,41 @@ test("the repository is the one the lap's plan names, or nothing", () => {
   // printing whatever was in the plan.
   expect(repositoryOf(lap({ plan: { repository: 7 } }))).toBeNull();
   expect(repositoryOf(null)).toBeNull();
+});
+
+/*
+ * **Naming the place only where it tells two things apart** (rondo#305,
+ * `D-0081` rule 4.2, `D-0076` rules 3.3 and 5.1).
+ */
+
+const SHOP = "/home/ada/work/shop-app";
+const BILLING = "/home/ada/work/billing";
+
+test("a set all in one repository is not told which one it is", () => {
+  expect(placeSaid(SHOP, [SHOP, SHOP])).toBeNull();
+  // A set with one repository named and the rest naming none has still only
+  // one place in it, so there is nothing the name would separate.
+  expect(placeSaid(SHOP, [SHOP, null])).toBeNull();
+  // One thing alone, and nothing at all, are both nothing to tell apart.
+  expect(placeSaid(SHOP, [SHOP])).toBeNull();
+  expect(placeSaid(SHOP, [])).toBeNull();
+});
+
+test("a set spanning two repositories says each as the person names it", () => {
+  expect(placeSaid(SHOP, [SHOP, BILLING])).toBe("shop-app");
+  expect(placeSaid(BILLING, [SHOP, BILLING])).toBe("billing");
+  // A trailing separator, and the shape a Windows clone is held in: the name
+  // is the last segment either way, and never the path it was read off.
+  expect(placeSaid(`${SHOP}/`, [SHOP, BILLING])).toBe("shop-app");
+  expect(placeSaid("C:\\Users\\ada\\work\\shop-app", [SHOP, BILLING])).toBe("shop-app");
+});
+
+test("a lap that names no repository says no place, however many the set holds", () => {
+  expect(placeSaid(null, [SHOP, BILLING])).toBeNull();
+});
+
+test("a repository with no segment to read is given back as it came", () => {
+  // rondo does not invent a name for a place it cannot read one off, and a
+  // path made only of separators is one of those.
+  expect(placeSaid("/", ["/", BILLING])).toBe("/");
 });

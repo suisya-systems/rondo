@@ -2818,9 +2818,7 @@ export async function operatorPage(
    * beside an empty centre and the line under a request's title never
    * disagree about whether the place is worth saying.
    */
-  const pagePlaces = [...allLapsByRequest.values()]
-    .flat()
-    .map((lap) => repositoryOf(lap.record));
+  const pagePlaces = [...allLapsByRequest.values()].flat().map((lap) => repositoryOf(lap.record));
   const placeOf = (record: IterationRecord | null): string | null =>
     placeSaid(repositoryOf(record), pagePlaces);
 

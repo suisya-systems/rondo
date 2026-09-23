@@ -626,7 +626,8 @@ function planChoice(
           // replaced differ in a path this line does not show, and the time
           // is what a person can tell them apart by.
           const line = planLine(wording, plan, among);
-          const alike = plans.filter((other) => planLine(wording, other, among) === line).length > 1;
+          const alike =
+            plans.filter((other) => planLine(wording, other, among) === line).length > 1;
           const said = alike
             ? wording.scopePlanHeldAt(line, localTime(plan.heldAtMs).replace("T", " "))
             : line;
