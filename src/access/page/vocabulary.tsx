@@ -30,7 +30,6 @@ import { BASIS_FORMS, type Basis } from "../../advisory/proposal.js";
 import type { IterationRecord, ThreadMessageDraft } from "../../store/records.js";
 import { basisLine } from "../advisory.js";
 import { type ForgeRead, issueName } from "../issue-read.js";
-import { isModelDrafterName } from "../model-draft/judgement.js";
 import { viewHref } from "../page-logic/routes.js";
 import { lineOf, type Threads } from "../page-logic/threads.js";
 import type { Chrome } from "../wording.js";
@@ -329,8 +328,11 @@ export function whoWrote(
   // is the drafter.
   // **A read of an issue signs as rondo too** (D-0078 section 3.1): rondo read
   // it; the badge beside this says it is an issue.
-  return (message.authorKind === "drafter" && isModelDrafterName(message.authorId)) ||
-    message.authorKind === "forge"
+  // **So does every other drafter row** (rondo#431): a stopped lap's ask
+  // (D-0110), a relayed worker question, a refused start's stop -- each signs
+  // with an id like `rondo/advisory/deterministic`, which is rondo's name for
+  // its own code, not a name a person reads. Only an operator is named by id.
+  return message.authorKind === "drafter" || message.authorKind === "forge"
     ? "rondo"
     : message.authorId;
 }

@@ -23435,3 +23435,83 @@ still going and of one that never will report. The reserve is still held and sti
   held line with nothing on the list is forgotten.
 - Having to press *carry on* before starting again is felt as a wasted step (see rondo#431, which
   works on the band and the scope screen while a question waits).
+
+## D-0111 — While a question in the thread waits, the answer is the next step and no scope is offered; a brief says the person chose only on their words and names the choice as they saw it; the scope screen folds what rondo records
+
+**Status:** accepted (2026-09-23, rondo#431; the drafter's rules are the owner's answer through the
+secretary, option 1 of three). Refs `D-0066`, `D-0071`, `D-0076`, `D-0082`, rondo#375, rondo#431.
+
+**Numbering.** `D-0110` went to rondo#432's lane; this lane was given `D-0111`.
+
+**Why an entry is needed.** Lap 13 (2026-09-23, the request *do rondo#200*) stopped four times on
+one thread. The drafter asked which of #200's three options to take, and the person still reached a
+scope, approved it and pressed start, which was refused at the `asks` test, printed as `asks`. After
+the answer *案1で*, the drafter's summary spoke of *案(b)* and the brief said the requester had decided
+*(b)*: #200's own labels, which the page never showed beside a question that numbered them 1/2/3.
+The scope screen printed the workspace paths twice, the agent type's digest, `standard` and
+`command.run`.
+
+**What the store says happened** (the lap 13 store, read afterwards). The drafter's first run was an
+`ask` with no plan (an ask cannot carry one, `checked` in `src/access/model-draft/judgement.ts`), so
+no drafted scope stood while the question waited. The approval was of the person's own scope, two
+seconds after the question landed, from a scope screen drawn before it; that screen does not redraw
+itself. The brief that said *(b)* was drafted after the answer, with the answer among its bases:
+true when written, but in words the person could not map to theirs. The walk's note that the brief
+was drafted while the question was open is not what the rows say.
+
+### The decision
+
+**1. A question waiting in the request's thread is the next step.** The band (`D-0082`, rondo#375)
+now draws *回答する* / *Answer* into the thread's answer box aimed at that question
+(`nextStepAnswer`), where it used to draw nothing, and the outlined *範囲を決める* beside the thread
+is withheld while it waits. The rule that the band steps aside for a gate is unchanged: while a
+gate waits, the band draws nothing, question or not, since a gate is answered in its own box.
+`waitingAsk` (`src/access/page-logic/threads.ts`) is the one reading of *which question*: the latest
+one still waiting for an answer. A question the person answered by stopping is not one; it still
+holds the line (`D-0072` rule 3), and the page draws it as before. The ask a stopped lap writes
+(`D-0110` rule 2, `lap-stopped-<lap>`) is such a question, so after a stop the band points to it
+rather than back to the scope, and the two sentences are worded for any question rondo asks, not
+only the drafter's.
+
+**2. The scope screen offers no scope to approve while that question waits**, the person's own
+form and a drafted one alike, and says to answer first, with the same link (`scopeAnswerFirst`). An
+approval already given keeps its screen: its starts are tested at the press, where the `asks` test
+already refuses.
+
+**3. A start refused at a scope test says the test in words** (`scopeTestJa` / `scopeTestEn`, the
+sentences `planOutside` already used), never the test's name.
+
+**4. The drafter's instructions gain three rules** (version 6, `D-0071` rule 1.4):
+
+- a summary or prompt says the person chose something only when an operator message in the thread
+  says so, and that message is among its bases;
+- a choice is named as the person saw it -- as the drafter's question numbered it, with its words,
+  or in the person's own -- never by a label from an issue's body;
+- rondo's own words (a digest, a template, an agent type, its tier or its grants) are never written
+  into a prompt, and the target's code (a module, a layer, a function) is named only where the
+  person or an issue read already names it.
+
+They are instructions, not checks. No mechanical test can tell a model's sentence that states a
+decision from one that reports it, and a refusal of a `split` while a question waits was offered
+and not taken: the redraft follows the answer, so it would refuse nothing today.
+
+**5. The scope screen says the repository, and folds the rest of what rondo records.** The
+workspace root, the agent type's digest, tier and grants, and the plan's digest are in the one
+fold that held the digests (`scopeRecordedFold`), on the person's own form, the drafted plans and
+the approved scope alike. They stay on the screen, because what rondo records is what rondo shows
+(rondo#233 S3); they are folded because nothing on them is the person's to act on.
+
+**6. Every message rondo writes signs as *rondo*.** `whoWrote` named only a model drafter's rows
+and an issue's read as rondo, and printed any other drafter row's id: the stopped lap's ask
+(`D-0110`) read *rondo/advisory/deterministic* on its sender line and on the answer box. Every
+`drafter` row is rondo's (the drafter, the relayed worker question, a stop, a refused start), so
+all of them sign as rondo; only an operator is named by id.
+
+### What is not done
+
+- **The approve presses are not refused while a question waits.** A screen drawn before the question
+  can still post an approval, as on lap 13. An approval spends nothing, and the start under it is
+  refused at the `asks` test, now in words, with the band pointing to the answer. Refusing the press
+  itself is a new refusal arm, left for the owner.
+- **The rule-file line** (*手順はリポジトリの AGENTS.md に従うよう伝えます*) stays. The walk noted the
+  brief repeated it; that is the brief's repetition, and rule 4 does not name it.

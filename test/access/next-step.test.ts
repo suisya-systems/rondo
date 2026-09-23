@@ -14,11 +14,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
+import { DETERMINISTIC_DRAFTER } from "../../src/access/advisory.js";
 import { PRIMARY, SECONDARY } from "../../src/access/page/vocabulary.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import {
   fresh,
   gateWithChecks,
+  mint,
   openRequest,
   operatorPage,
   portsOver,
@@ -300,4 +302,168 @@ test("a request naming a repository rondo does not work in says so, and its one 
   expect(after).not.toContain('id="add-repository-req-1"');
   expect(after).toContain(EN.repositoryUnbuilt("owner/other"));
   expect(classOf(after, "scope-req-1")).toBe(NEXT);
+});
+
+test("a question waiting in the thread is the next step, and no scope is offered beside it (rondo#431)", async () => {
+  // Lap 13: the drafter asked which of three options, and the band still said
+  // *set the scope*; the approval that followed was refused at start on the
+  // question it had not waited for.
+  const world = fresh();
+  await openRequest(world, "req-1", "Do #200, please.");
+  const asked = await world.record.recordThreadMessage({
+    messageId: "ask-1",
+    body: "Which of the three options?",
+    authorKind: "drafter",
+    authorId: "rondo/drafter/6/claude-opus-5",
+    inReplyTo: "req-1",
+    atMs: 600,
+    bases: [{ form: "message", messageId: "req-1" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  const ports = portsOver(world);
+  const html = await operatorPage(ports, "t", threadOf("req-1"));
+  drawnOnceOnTop(html, "answer-req-1");
+  expect(classOf(html, "answer-req-1")).toBe(NEXT);
+  expect(html).toContain(EN.nextStepAnswer);
+  expect(html).toContain('href="/?thread=req-1&amp;to=ask-1&amp;lang=en"');
+  // Neither filled nor outlined: a scope is not a way forward while it waits.
+  expect(html).not.toContain('id="scope-req-1"');
+  expect(html).not.toContain(EN.nextStepScope);
+
+  // Answered, the scope is the next step again.
+  await world.record.recordThreadMessage({
+    messageId: "reply-1",
+    body: "Option 1.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "ask-1",
+    atMs: 700,
+    bases: [],
+    asks: false,
+    answerOutcome: "carry_on",
+  });
+  const after = await operatorPage(ports, "t", threadOf("req-1"));
+  expect(after).not.toContain('id="answer-req-1"');
+  expect(classOf(after, "scope-req-1")).toBe(NEXT);
+});
+
+test("a gate waiting keeps its own box as the press, even beside a question in the thread (Codex)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const asked = await world.record.recordThreadMessage({
+    messageId: "ask-1",
+    body: "Which of the three options?",
+    authorKind: "drafter",
+    authorId: "rondo/drafter/6/claude-opus-5",
+    inReplyTo: "req-1",
+    atMs: 600,
+    bases: [{ form: "message", messageId: "req-1" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
+  expect(html).not.toContain(EN.nextStepHeading);
+  expect(html).not.toContain('id="answer-req-1"');
+  // And the question still withholds the scope.
+  expect(html).not.toContain('id="scope-req-1"');
+});
+
+test("a question the person answered by stopping is not drawn as one waiting for an answer (Codex)", async () => {
+  const world = fresh();
+  await openRequest(world, "req-1", "Do #200, please.");
+  for (const draft of [
+    {
+      messageId: "ask-1",
+      body: "Which of the three options?",
+      authorKind: "drafter" as const,
+      authorId: "rondo/drafter/6/claude-opus-5",
+      inReplyTo: "req-1",
+      atMs: 600,
+      bases: [{ form: "message", messageId: "req-1" }],
+      asks: true,
+    },
+    {
+      messageId: "reply-1",
+      body: "Stop here.",
+      authorKind: "operator" as const,
+      authorId: "ada",
+      inReplyTo: "ask-1",
+      atMs: 700,
+      bases: [],
+      asks: false,
+      answerOutcome: "stop" as const,
+    },
+  ]) {
+    expect((await world.record.recordThreadMessage(draft)).kind).toBe("recorded");
+  }
+  const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
+  expect(html).not.toContain('id="answer-req-1"');
+  expect(html).not.toContain(EN.nextStepAnswer);
+});
+
+test("a drafter that drafted nothing asks nothing: the person's own scope stays the way forward (rondo#431)", async () => {
+  // The drafter host writes a run that drafted nothing with `asks: false`
+  // (`src/access/drafter-host.ts`), and the message tells the person they can
+  // set the scope themselves; withholding the form there would leave no way on.
+  const world = fresh();
+  await openRequest(world, "req-1", "Do #200, please.");
+  const said = await world.record.recordThreadMessage({
+    messageId: "drafter-1",
+    body: "rondo's drafter wrote no draft for this: claude -p exited 1",
+    authorKind: "drafter",
+    authorId: "rondo/drafter/6/claude-opus-5",
+    inReplyTo: "req-1",
+    atMs: 600,
+    bases: [{ form: "message", messageId: "req-1" }],
+    asks: false,
+  });
+  expect(said.kind).toBe("recorded");
+  const ports = portsOver(world);
+  const html = await operatorPage(ports, "t", threadOf("req-1"));
+  expect(html).toContain(EN.drafterNoDraft);
+  expect(classOf(html, "scope-req-1")).toBe(NEXT);
+  expect(html).not.toContain('id="answer-req-1"');
+  // The scope screen's side is held in web-scope.test.ts, over a held plan.
+});
+
+test("a stopped lap's ask is answered first too: the band points to it, not back to the scope (D-0110, rondo#431)", async () => {
+  // D-0110 rule 2 writes `lap-stopped-<lap>` into the thread with `asks` set;
+  // until it is answered the line is held, so a scope is no way forward.
+  const world = fresh();
+  await openRequest(world, "req-1", "Do #200, please.");
+  const asked = await world.record.recordThreadMessage({
+    messageId: "lap-stopped-i-0001",
+    body: chromeFor("ja").lapStoppedSaid(null),
+    authorKind: "drafter",
+    authorId: DETERMINISTIC_DRAFTER,
+    inReplyTo: "req-1",
+    atMs: 600,
+    bases: [{ form: "message", messageId: "req-1" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
+  drawnOnceOnTop(html, "answer-req-1");
+  expect(html).toContain("to=lap-stopped-i-0001");
+  expect(html).not.toContain('id="scope-req-1"');
+  // **It signs as rondo** (rondo#431): the sender line and the answer box say
+  // who asked, and `rondo/advisory/deterministic` is rondo's name for its code.
+  expect(html).not.toContain(DETERMINISTIC_DRAFTER);
+  expect(html).toContain('<span class="msg-who">rondo</span>');
+  const box = await operatorPage(portsOver(world), "t", threadOf("req-1"), EN, mint);
+  expect(box).toMatch(/Answering rondo's question, /);
+  const ja = await operatorPage(portsOver(world), "t", threadOf("req-1"), chromeFor("ja"), mint);
+  expect(ja).not.toContain(DETERMINISTIC_DRAFTER);
+  expect(ja).toContain('<span class="msg-who">rondo</span>');
+  expect(ja).toContain("rondo の質問に回答 · ");
+});
+
+test("a start refused at a scope test says the test in words, never its name (rondo#431)", () => {
+  // Lap 13 printed `asks` to the person: a word they had to ask about.
+  for (const wording of [EN, chromeFor("ja")]) {
+    const said = wording.startRefusedOutside("asks");
+    expect(said).not.toMatch(/\basks\b/);
+    expect(said).toContain(wording.lang === "ja" ? "問い" : "question");
+  }
 });

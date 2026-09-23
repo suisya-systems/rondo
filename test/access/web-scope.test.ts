@@ -232,10 +232,14 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   // 71-character hashes as plain text were a third of the first screenful at
   // 420px, and there is nothing a person does with one.
   expect(html).toContain("The plan rondo will run, and where it will run it");
-  expect(html).toContain("The digests rondo will record");
-  expect(html.indexOf("The digests rondo will record")).toBeLessThan(
-    html.indexOf(`plan ${planDigest}`),
-  );
+  const fold = "Where it runs and what its agent type is allowed, as rondo records them";
+  expect(html).toContain(fold);
+  expect(html.indexOf(fold)).toBeLessThan(html.indexOf(`plan ${planDigest}`));
+  // **And so are the workspace root, the tier and the grants** (rondo#431): the
+  // card says the repository; the rest is behind the fold, not in the way.
+  const card = html.slice(html.indexOf("The plan rondo will run, and where it will run it"));
+  expect(card.slice(0, card.indexOf(fold))).not.toMatch(/sha256:|\/srv\/work|command\.run/);
+  expect(card.indexOf("/srv/repo at /srv/work")).toBeGreaterThan(card.indexOf(fold));
   // The two digests it was drawn from ride along, for the write to compare its
   // own re-read against -- never as a second authority for what is recorded.
   expect(html).toContain(`<input type="hidden" name="plan_digest" value="${planDigest}"/>`);
@@ -1408,4 +1412,71 @@ test("a drafter run that drafted nothing is said as what happened, with the way 
   const summary = drafted.slice(drafted.indexOf('id="drafter-summary"'));
   expect(summary.slice(0, summary.indexOf("</article>"))).not.toContain(EN.drafterNoDraft);
   expect(summary).toContain("One plan: fix the flaky test.");
+});
+
+test("while a question of the drafter's waits, the scope screen offers no form, and after the answer it does (rondo#431)", async () => {
+  const world = fresh();
+  await seedScopeRequest(world, "request-scope-431", "Do #200, please.");
+  await seedScopePlan(world.record, "request-scope-431");
+  const screen = async () =>
+    await operatorPage(
+      portsOver(world, "ada", []),
+      "t",
+      { kind: "scope", messageId: "request-scope-431", rounds: null, decisionId: null, plan: null },
+      EN,
+      mint,
+      () => "MINT-SCOPE-1",
+      () => "MINT-LAP-1",
+    );
+  // With nothing waiting the form is there: what follows is not a fixture
+  // that never draws one.
+  expect(await screen()).toContain('id="scope-form"');
+
+  // A run that drafted nothing asks nothing (`drafter-host.ts` writes it with
+  // `asks: false`), so the person's own form stays their way forward.
+  const say = async (draft: Parameters<typeof world.record.recordThreadMessage>[0]) =>
+    expect((await world.record.recordThreadMessage(draft)).kind).toBe("recorded");
+  await say({
+    messageId: "drafter-none",
+    body: "rondo's drafter wrote no draft for this: claude -p exited 1",
+    authorKind: "drafter",
+    authorId: "rondo/drafter/6/claude-opus-5",
+    inReplyTo: "request-scope-431",
+    atMs: 1_100,
+    bases: [{ form: "message", messageId: "request-scope-431" }],
+    asks: false,
+  });
+  expect(await screen()).toContain('id="scope-form"');
+
+  // A question waiting: no form, and the way is to the question.
+  await say({
+    messageId: "ask-431",
+    body: "Which of the three options?",
+    authorKind: "drafter",
+    authorId: "rondo/drafter/6/claude-opus-5",
+    inReplyTo: "request-scope-431",
+    atMs: 1_200,
+    bases: [{ form: "message", messageId: "request-scope-431" }],
+    asks: true,
+  });
+  const waiting = await screen();
+  expect(waiting).not.toContain('id="scope-form"');
+  expect(waiting).toContain(EN.scopeAnswerFirst.slice(0, EN.scopeAnswerFirst.indexOf("'")));
+  expect(waiting).toContain('href="/?thread=request-scope-431&amp;to=ask-431&amp;lang=en"');
+
+  // Answered: the form is back.
+  await say({
+    messageId: "reply-431",
+    body: "Option 1.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "ask-431",
+    atMs: 1_300,
+    bases: [],
+    asks: false,
+    answerOutcome: "carry_on",
+  });
+  const answered = await screen();
+  expect(answered).toContain('id="scope-form"');
+  expect(answered).not.toContain("to=ask-431");
 });

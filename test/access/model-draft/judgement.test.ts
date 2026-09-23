@@ -127,7 +127,7 @@ function refusal(answer: unknown, material: DrafterMaterial = MATERIAL): string 
 }
 
 test("the row name counts the drafter's instructions and names the table's model (D-0071 rule 1.4)", () => {
-  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/5/claude-opus-5");
+  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/6/claude-opus-5");
 });
 
 test("the document carries the thread, the templates, the agent types and the measurements, and never a ceiling", () => {
@@ -168,6 +168,17 @@ test("the language the host's operator reads is asked for by its tag, prompts in
   expect(asked).toContain("do not\ncompose in English and translate");
   expect(asked).not.toContain("its template's prompt is written in");
   expect(drafterDocument(MATERIAL)).toContain("its template's prompt is written in");
+});
+
+test("a brief says the person chose only on their words, and names the choice as they saw it (rondo#431)", () => {
+  // Lap 13: the brief said the requester had decided "(b)", a label of the
+  // issue's body the person never saw beside the question they answered as 1.
+  const document = drafterDocument(MATERIAL);
+  expect(document).toContain("says the person chose something only when an operator message");
+  expect(document).toContain("Until the person answers, nothing is theirs.");
+  expect(document).toContain("as your question numbered it");
+  expect(document).toContain("Never by a label from an issue's body");
+  expect(document).toContain("Never write rondo's own words into one");
 });
 
 test("a request that names no repository is asked back about, as a question about the work (D-0081 rule 2.4)", () => {

@@ -174,7 +174,14 @@ import { asksOverLine, conflictFixBlock, mergeBlock, resultOf } from "./page-log
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
 import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
-import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
+import {
+  firstLine,
+  lineOf,
+  replyTarget,
+  type Threads,
+  threadsOf,
+  waitingAsk,
+} from "./page-logic/threads.js";
 import { waitsOnYou } from "./page-logic/waits.js";
 import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
 import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
@@ -1954,9 +1961,13 @@ async function threadActs(
   // but the person can set a scope or open the pull request. Never while
   // something else in the thread waits on them -- a question, or a gate, whose
   // own box is then what they answer.
+  const gated = laps.some((lap) => lap.question === "waiting");
   const waitedOn =
-    [...threads.waiting].some((id) => threads.rootOf(id) === requestMessageId) ||
-    laps.some((lap) => lap.question === "waiting");
+    [...threads.waiting].some((id) => threads.rootOf(id) === requestMessageId) || gated;
+  // The question waiting for an answer, which withholds the scope; the band
+  // points to it only where no gate is waiting, a gate being answered in its
+  // own box (Codex).
+  const asked = waitingAsk(threads, requestMessageId);
   // The newest try that can be published, and only that one: two next steps
   // read as a choice with no answer.
   const nextPublish = waitedOn ? null : (publishable.at(-1) ?? null);
@@ -2180,25 +2191,38 @@ async function threadActs(
                   : wording.nextStepPublishUpdate(updating),
                 updating === null ? tryName(nextPublish) : wording.publishUpdateAction(updating),
               )
-            : standing === null
-              ? null
-              : standing.kind === "decided" || standing.kind === "own"
-                ? card(
-                    `scope-${requestMessageId}`,
-                    // A drafted approval's screen is reached without its decision,
-                    // which is how that screen also offers a newer draft beside it
-                    // (Codex); the person's own approval is named, since that
-                    // screen finds only rondo's drafts by itself.
-                    scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
-                    wording.nextStepStart,
-                    wording.nextStepStartAction,
-                  )
-                : card(
-                    `scope-${requestMessageId}`,
-                    scopeHref(null),
-                    standing.kind === "drafted" ? wording.nextStepDrafted : wording.nextStepScope,
-                    wording.scopeAction,
-                  );
+            : asked !== null && !gated
+              ? // **A question waiting in the thread is the next step** (rondo#431):
+                // on lap 13 the band sent the person to a scope while the
+                // drafter's question stood, and the start then failed on it.
+                card(
+                  `answer-${requestMessageId}`,
+                  viewHref(
+                    { kind: "thread", messageId: requestMessageId, to: asked },
+                    wording.lang,
+                  ),
+                  wording.nextStepAnswer,
+                  wording.answerAskAction,
+                )
+              : standing === null
+                ? null
+                : standing.kind === "decided" || standing.kind === "own"
+                  ? card(
+                      `scope-${requestMessageId}`,
+                      // A drafted approval's screen is reached without its decision,
+                      // which is how that screen also offers a newer draft beside it
+                      // (Codex); the person's own approval is named, since that
+                      // screen finds only rondo's drafts by itself.
+                      scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
+                      wording.nextStepStart,
+                      wording.nextStepStartAction,
+                    )
+                  : card(
+                      `scope-${requestMessageId}`,
+                      scopeHref(null),
+                      standing.kind === "drafted" ? wording.nextStepDrafted : wording.nextStepScope,
+                      wording.scopeAction,
+                    );
   const others = publishable.filter((lap) => lap !== nextPublish);
   // A repository added from the page whose build rondo could not tell: said
   // where the work is, since it bounds what the worker can check (D-0090).
@@ -2206,7 +2230,9 @@ async function threadActs(
   // Nothing to say and nowhere to go: no row at all, not an empty one that
   // leaves a gap at the top of the thread (D-0106).
   const empty =
-    unbuilt.length === 0 && others.length === 0 && (standing !== null || unheld !== null);
+    unbuilt.length === 0 &&
+    others.length === 0 &&
+    (standing !== null || unheld !== null || asked !== null);
   return {
     next,
     fixOffered: nextFix !== null && nextFix.closed === null,
@@ -2220,7 +2246,7 @@ async function threadActs(
         {/* Outlined: another scope for a request that already has work is a
             way to another screen, and drawn filled it outweighed the box a
             person is actually being waited on by. */}
-        {standing !== null || unheld !== null ? null : (
+        {standing !== null || unheld !== null || asked !== null ? null : (
           <a
             id={`scope-${requestMessageId}`}
             href={scopeHref(null)}

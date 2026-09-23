@@ -108,6 +108,23 @@ export function threadsOf(
   };
 }
 
+/**
+ * The latest question in `root`'s thread still waiting for the person's
+ * answer, or null (rondo#431): while it waits, the answer is the way forward,
+ * not a scope. One the person answered by stopping is not waiting for an
+ * answer, though it still holds the line (D-0072 rule 3).
+ */
+export function waitingAsk(threads: Threads, root: string): string | null {
+  return (
+    threads.messages.findLast(
+      (message) =>
+        threads.waiting.has(message.messageId) &&
+        !threads.stopped.has(message.messageId) &&
+        threads.rootOf(message.messageId) === root,
+    )?.messageId ?? null
+  );
+}
+
 /** The first line of a message that says anything, for a chip or a list row. */
 export function firstLine(body: string): string {
   return body.split("\n").find((line) => line.trim() !== "") ?? body;

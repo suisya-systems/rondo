@@ -474,6 +474,9 @@ explanation you pressed on and then answers the gate.`,
     `rondo lowered this from ${computed} because of what you wrote here:`,
   scopeNarrowedStricter: "rondo made this stricter than major because of what you wrote here:",
   scopeNarrowedAdded: "rondo added this because of what you wrote here:",
+  scopeAnswerFirst:
+    "rondo is waiting for your answer in this request's thread. Until you answer, the scope cannot " +
+    "be set here. Answer it first.",
   scopeRedrafted:
     "rondo drafted again after the scope above was approved. The new draft is below; approving " +
     "it adds a second scope for this request, and the one above stays as it is.",
@@ -508,10 +511,8 @@ explanation you pressed on and then answers the gate.`,
     "RONDO_APPROVER is not set, so there is nobody this page could approve a scope as.",
   scopeWorkspace: (repository, root) => `${repository} at ${root}`,
   scopePlanDigest: (digest) => `plan ${digest}`,
-  scopeAgentType: (digest) => `agent type ${digest}`,
-  scopeAgentTypeBounds: "What that agent type is allowed, and where that was read from",
   scopePlanHeading: "The plan rondo will run, and where it will run it",
-  scopeDigestsFold: "The digests rondo will record",
+  scopeRecordedFold: "Where it runs and what its agent type is allowed, as rondo records them",
   scopeMaybeApproved:
     "rondo cannot tell from here whether you have already approved a scope for this request, so " +
     "this is a fresh draft either way. Pressing records a second one.",
@@ -659,8 +660,9 @@ explanation you pressed on and then answers the gate.`,
   startRefusedNoContinuo:
     "Nothing was started: the part of rondo that runs the work will not start.",
   startRefusedOutside: (test) =>
-    `Nothing was started and nothing was spent: this work is outside the scope you approved, at ` +
-    `the ${test} test. A message in the request's thread says what the choices are.`,
+    // Said in words, never the test's name (rondo#431): `asks` is a word to ask about.
+    `Nothing was started and nothing was spent: this work is outside the scope you approved: ` +
+    `${scopeTestEn(test)}. A message in the request's thread says what the choices are.`,
   startRefusedNotAdmitted:
     "Nothing was started, and nothing was spent. The approval stands; pressing again is safe.",
   scopeBack: "Back to the scope",
@@ -968,6 +970,8 @@ explanation you pressed on and then answers the gate.`,
     "and the work can start.",
   nextStepDrafted:
     "rondo has drafted a scope for this request. Check it and approve it, and the work can start.",
+  nextStepAnswer:
+    "rondo is waiting for your answer. Until you answer, the work on this request does not go on.",
   nextStepStart: "The scope is approved. Start the work from its screen.",
   nextStepStartAction: "Go to start the work",
   nextStepPublish:
