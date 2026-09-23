@@ -1964,9 +1964,10 @@ async function threadActs(
   const gated = laps.some((lap) => lap.question === "waiting");
   const waitedOn =
     [...threads.waiting].some((id) => threads.rootOf(id) === requestMessageId) || gated;
-  // The question the band points to, where no gate is waiting: a gate is still
-  // answered in its own box (Codex).
-  const asked = gated ? null : waitingAsk(threads, requestMessageId);
+  // The question waiting for an answer, which withholds the scope; the band
+  // points to it only where no gate is waiting, a gate being answered in its
+  // own box (Codex).
+  const asked = waitingAsk(threads, requestMessageId);
   // The newest try that can be published, and only that one: two next steps
   // read as a choice with no answer.
   const nextPublish = waitedOn ? null : (publishable.at(-1) ?? null);
@@ -2190,7 +2191,7 @@ async function threadActs(
                   : wording.nextStepPublishUpdate(updating),
                 updating === null ? tryName(nextPublish) : wording.publishUpdateAction(updating),
               )
-            : asked !== null
+            : asked !== null && !gated
               ? // **A question waiting in the thread is the next step** (rondo#431):
                 // on lap 13 the band sent the person to a scope while the
                 // drafter's question stood, and the start then failed on it.

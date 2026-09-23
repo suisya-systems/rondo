@@ -376,6 +376,8 @@ test("a gate waiting keeps its own box as the press, even beside a question in t
   const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
   expect(html).not.toContain(EN.nextStepHeading);
   expect(html).not.toContain('id="answer-req-1"');
+  // And the question still withholds the scope.
+  expect(html).not.toContain('id="scope-req-1"');
 });
 
 test("a question the person answered by stopping is not drawn as one waiting for an answer (Codex)", async () => {
