@@ -329,26 +329,52 @@ const merging = async (world: ReturnType<typeof fresh>, lang: "en" | "ja" = "ja"
     chromeFor(lang),
   );
 
+/** A way to merge on a page: the thread's link to the screen, or the screen's press. */
+const MERGE_WAY = /\?merge=|\/merge\?/;
+
+/** The merge's confirm screen (rondo#437 item 6). */
+const mergeScreen = async (world: ReturnType<typeof fresh>, lang: "en" | "ja" = "ja") =>
+  await operatorPage(
+    { ...portsOver(world, "ada", null, lang), mergeable: true },
+    "t",
+    { kind: "merge", iterationId: "i-r" },
+    chromeFor(lang),
+  );
+
 test("green on the head with nothing waiting, the next step is a merge press for that head", async () => {
   // Lap 11: green at 22:26:48, merged on GitHub at 22:29:50 -- 「rondoからマージボタン押せたらいいなぁ」.
   const world = await approved();
   await published(world);
   await checked(world, { kind: "green", counted: 7, skipped: 1 });
-  const page = await merging(world);
+  // rondo#437 item 6: the thread leads to the screen; it does not merge.
+  const thread = await merging(world);
+  expect(thread).toContain('href="/?merge=i-r&amp;lang=ja"');
+  expect(thread).not.toContain('action="/merge?');
+  const page = await mergeScreen(world);
+  // What happens, before the press: where it goes, which commit, and no undo.
+  const words = chromeFor("ja");
+  expect(page).toContain(words.mergeConfirmInto("#372", "main"));
+  expect(page).toContain(words.mergeConfirmCommit("abc1234"));
+  expect(page).toContain(words.mergeConfirmNoUndo);
+  expect(page.indexOf(words.mergeConfirmNoUndo)).toBeLessThan(page.indexOf('action="/merge?'));
   expect(page).toContain('action="/merge?lang=ja"');
   expect(page).toContain('name="head" value="abc1234"');
   expect(page).toContain('name="iteration" value="i-r"');
   expect(page).toContain("プルリクエストをマージする");
   expect(page).toContain('data-busy="マージしています…"');
   // With no merge port there is no press, and red or running is no press either.
-  expect(await ja(world)).not.toContain("/merge?");
+  expect(await ja(world)).not.toMatch(MERGE_WAY);
   const red = await approved();
   await published(red);
   await checked(red, { kind: "red", failed: ["build"], cancelled: [], timedOut: [] });
-  expect(await merging(red)).not.toContain("/merge?");
+  expect(await merging(red)).not.toMatch(MERGE_WAY);
+  // A screen reached by its address offers no press where the thread offers none.
+  const redScreen = await mergeScreen(red);
+  expect(redScreen).not.toContain('action="/merge?');
+  expect(redScreen).toContain(chromeFor("ja").mergeConfirmNotNow);
   const running = await approved();
   await published(running);
-  expect(await merging(running)).not.toContain("/merge?");
+  expect(await merging(running)).not.toMatch(MERGE_WAY);
 });
 
 test("a question still waiting on the person keeps the merge press off the page", async () => {
@@ -366,7 +392,7 @@ test("a question still waiting on the person keeps the merge press off the page"
     asks: true,
   });
   expect(asked).toMatchObject({ kind: "recorded" });
-  expect(await merging(world)).not.toContain("/merge?");
+  expect(await merging(world)).not.toMatch(MERGE_WAY);
 });
 
 test("once merged, the strip says where it went and how, and the press is gone", async () => {
@@ -382,7 +408,7 @@ test("once merged, the strip says where it went and how, and the press is gone",
   const japanese = await merging(world);
   expect(head(japanese)).toContain("main にマージしました（1 つのコミットにまとめて）");
   expect(head(japanese)).not.toContain("マージはあなたが行います");
-  expect(japanese).not.toContain("/merge?");
+  expect(japanese).not.toMatch(MERGE_WAY);
   expect(head(await merging(world, "en"))).toContain("Merged into main (squashed into one commit)");
 });
 
@@ -421,7 +447,7 @@ test("a conflict is said as why no check runs, with what to do, and no press (ro
   expect(head(japanese)).toContain('class="result-checks result-checks-conflict"');
   expect(head(japanese)).toContain("#372 は main と競合しているため、チェックが動きません。");
   expect(head(japanese)).toContain("push してください");
-  expect(japanese).not.toContain("/merge?");
+  expect(japanese).not.toMatch(MERGE_WAY);
   const english = await en(world);
   expect(head(english)).toContain("#372 conflicts with main, so the forge runs no checks on it.");
   const requests = await operatorPage(
@@ -457,7 +483,7 @@ test("a head moved outside rondo is shown with its commits, and the press names 
   expect(head(waiting)).toContain("abc1234 → fff0000");
   expect(head(waiting)).toContain("resolve the conflict with main");
   expect(head(waiting)).toContain("実行中");
-  expect(waiting).not.toContain("/merge?");
+  expect(waiting).not.toMatch(MERGE_WAY);
   await reportToRequest(
     threadOf(world),
     "i-r",
@@ -470,9 +496,13 @@ test("a head moved outside rondo is shown with its commits, and the press names 
     9_000,
   );
   const green = await merging(world);
-  expect(green).toContain('name="head" value="fff0000aa"');
   expect(green).toContain("そのコミットも含めてマージする");
   expect(green).toContain("この作業のものではないコミットが 1 件");
+  // The screen the link leads to presses the new head, and says what it takes in.
+  const screen = await mergeScreen(world);
+  expect(screen).toContain('name="head" value="fff0000aa"');
+  expect(screen).toContain("そのコミットも含めてマージする");
+  expect(screen).toContain("この作業のものではないコミットが 1 件");
 });
 
 test("merged outside rondo ends the request: who merged it, no press, and the clock stops (rondo#413)", async () => {
@@ -488,7 +518,7 @@ test("merged outside rondo ends the request: who merged it, no press, and the cl
   const japanese = await merging(world);
   expect(head(japanese)).toContain("GitHub 上で someone が main にマージしました");
   expect(head(japanese)).toContain("でマージ");
-  expect(japanese).not.toContain("/merge?");
+  expect(japanese).not.toMatch(MERGE_WAY);
   expect(head(await merging(world, "en"))).toContain("Merged into main by someone on the forge");
 });
 
@@ -503,7 +533,7 @@ test("closed unmerged on the forge ends the request, and no press is offered (ro
   // Nothing remains, and the merge is not drawn as a step still ahead or done.
   expect(head(japanese)).not.toContain("gov-step gov-yours");
   expect(head(japanese)).toContain("で閉じられた");
-  expect(japanese).not.toContain("/merge?");
+  expect(japanese).not.toMatch(MERGE_WAY);
   const requests = await operatorPage(
     portsOver(world, "ada", null, "ja"),
     "t",

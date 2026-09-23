@@ -1243,6 +1243,15 @@ export interface Chrome extends PageWords {
    */
   readonly nextStepMerge: string;
   readonly mergeAction: string;
+  /** The merge's confirm screen (rondo#437 item 6, D-0112 rule 7): its heading. */
+  readonly mergeConfirmHeading: string;
+  /** Which pull request goes where, in the way the repository allows. */
+  readonly mergeConfirmInto: (pullRequest: string, base: string) => string;
+  /** The commit the press merges, with the checks green on it. */
+  readonly mergeConfirmCommit: (commit: string) => string;
+  readonly mergeConfirmNoUndo: string;
+  /** Where nothing can be merged from this screen now. */
+  readonly mergeConfirmNotNow: string;
   /**
    * The same press over a head the lap did not push (rondo#412): what the
    * head carries is said above it, and the card and the button say that

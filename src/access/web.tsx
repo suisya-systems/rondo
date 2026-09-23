@@ -187,6 +187,7 @@ import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./pag
 import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal } from "./scope.js";
+import { mergeView } from "./screens/merge.js";
 import { publishView } from "./screens/publish.js";
 import { releaseView } from "./screens/release.js";
 import { scopeView } from "./screens/scope.js";
@@ -2021,7 +2022,6 @@ async function threadActs(
           ) === null
         ? {
             record: resultRecord,
-            head: result.checksCommit ?? "",
             // **A head the lap did not push** (rondo#412, `D-0102`): the card
             // says what merging it takes in, which the strip lists above.
             carried:
@@ -2114,46 +2114,19 @@ async function threadActs(
       </a>
     </section>
   );
-  // The merge press (D-0091 rule 1): a press and not a link, since the
-  // approval is this button, per act, with no screen between it and the act.
+  // The way to the merge (D-0091 rule 1, rondo#437 item 6): a link to the
+  // screen that says what merging does and holds the press, as publish's is
+  // (D-0112 rule 7). The merge could not be taken back and was one press.
   const mergeCard = (lap: {
     readonly record: { readonly id: string };
-    readonly head: string;
     readonly carried: number | null;
-  }) => (
-    <section class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3">
-      <h2 class="text-meta leading-5 font-semibold text-wait-ink">{wording.nextStepHeading}</h2>
-      <p class="mt-1 text-body leading-6">
-        {lap.carried === null ? wording.nextStepMerge : wording.nextStepMergeMoved(lap.carried)}
-      </p>
-      <form
-        id={`merge-${lap.record.id}`}
-        method="post"
-        action={`/merge?lang=${encodeURIComponent(wording.lang)}`}
-        class="mt-3 flex flex-col gap-2"
-      >
-        <input type="hidden" name="token" value={token} />
-        <input type="hidden" name="iteration" value={lap.record.id} />
-        <input type="hidden" name="request" value={requestMessageId} />
-        <input type="hidden" name="head" value={lap.head} />
-        <button
-          type="submit"
-          data-busy={wording.mergeBusy}
-          class={`${PRIMARY} h-10 justify-center self-start px-6 text-sm`}
-        >
-          {lap.carried === null ? wording.mergeAction : wording.mergeMovedAction}
-        </button>
-        <p
-          data-busy-note=""
-          hidden
-          role="status"
-          class="note text-meta leading-5 text-muted-foreground"
-        >
-          {wording.mergeBusyNote}
-        </p>
-      </form>
-    </section>
-  );
+  }) =>
+    card(
+      `merge-${lap.record.id}`,
+      viewHref({ kind: "merge", iterationId: lap.record.id }, wording.lang),
+      lap.carried === null ? wording.nextStepMerge : wording.nextStepMergeMoved(lap.carried),
+      lap.carried === null ? wording.mergeAction : wording.mergeMovedAction,
+    );
   // **A lap below a published one updates that pull request** (rondo#417,
   // D-0105): its publish pushes onto it and opens none, so the step says which.
   // Walked up its own line, as `pullRequestUpdated` walks it, never across lines.
@@ -2916,7 +2889,11 @@ export async function operatorPage(
    * composed by the parts that own them and placed here.
    */
   /** The screens the page's rebuild does not touch, which keep their own centre. */
-  const onOwnScreen = view.kind === "scope" || view.kind === "publish" || view.kind === "release";
+  const onOwnScreen =
+    view.kind === "scope" ||
+    view.kind === "publish" ||
+    view.kind === "merge" ||
+    view.kind === "release";
   const selectedMessages =
     selectedRoot === null
       ? []
@@ -3644,6 +3621,8 @@ export async function operatorPage(
   // the forge's own configuration, and the tree is composed from what it read.
   const publishing =
     view.kind === "publish" ? await publishView(ports, wording, view, token, threads) : null;
+  const merging =
+    view.kind === "merge" ? await mergeView(ports, wording, view, token, threads) : null;
   const releasing =
     view.kind === "release"
       ? await releaseView(ports, wording, view, releaseToken, ledger, threads, nowMs)
@@ -4068,7 +4047,9 @@ export async function operatorPage(
                             ? scoping
                             : view.kind === "publish"
                               ? publishing
-                              : releasing}
+                              : view.kind === "merge"
+                                ? merging
+                                : releasing}
                         </div>
                       ).toString(),
                     }

@@ -23516,10 +23516,10 @@ all of them sign as rondo; only an operator is named by id.
 - **The rule-file line** (*手順はリポジトリの AGENTS.md に従うよう伝えます*) stays. The walk noted the
   brief repeated it; that is the brief's repetition, and rule 4 does not name it.
 
-## D-0112 — rondo's lap reports are shut under the lines that say them in the person's words; a question is numbered once and points at its recommendation; the publish screen says what the body holds; the outlined scope waits for the work to end
+## D-0112 — rondo's lap reports are shut under the lines that say them in the person's words; a question is numbered once and points at its recommendation; the publish screen says what the body holds; the outlined scope waits for the work to end; merge gets a confirm screen
 
-**Status:** accepted (2026-09-23, rondo#437). Refs `D-0055`, `D-0071`, `D-0076`, `D-0082`, `D-0111`,
-rondo#437.
+**Status:** accepted (2026-09-23, rondo#437). Refs `D-0055`, `D-0059`, `D-0071`, `D-0076`, `D-0082`,
+`D-0091`, `D-0111`, rondo#437.
 
 **Why an entry is needed.** Lap 14 (2026-09-23, the request *do rondo#200*, a Japanese page) met K1
 to K3 and missed K4, *no word the person has to ask about*. The first thing the thread said at the
@@ -23575,12 +23575,25 @@ not ended, or any approved try whose pull request is not merged or closed (`thre
 whose reports say the pull request's end. It comes back once the work has ended. The filled next step (`D-0082`, rondo#375) is
 unchanged.
 
+**7. Merge gets a confirm screen, as publish has** (rondo#437 item 6; the owner's answer through
+the secretary, option A of three). Publish took two presses and merge one, though merge is the one
+act on the page that cannot be taken back from it. The thread's *プルリクエストをマージする* is now a
+link to `?merge=<lap>` (`src/access/screens/merge.tsx`), which says under *何が起きるか* which pull
+request goes into which branch, the commit merged -- the pull request's latest, with the checks green
+on it -- any commits on it that are not the lap's (rondo#412), and that the page cannot undo it; the
+press is on that screen. It carries the commit drawn as `head`, and the merge port already refuses a
+head that is not the pull request's now (`mergeRefusedMoved`), so a screen left open while the pull
+request moved merges nothing and the thread says what moved. The screen asks `mergeBlock` as the card
+does and offers no press where it says no. `D-0091` section 1's press is unchanged -- once per merge,
+about the head read green, tested again at the press -- and only where it is drawn moves, from the
+thread's card to this screen. Publish is unchanged (`D-0059` section 5a, `D-0082` rule 7).
+
+The screen says *in the way the repository allows*, not *squash*: the method is read from the
+repository's settings at the press (`MergeMethodReading` in `src/access/merge.ts`), so a screen
+naming one before then could name the wrong one.
+
 ### What is not done
 
-- **Publish takes two presses and merge one** (rondo#437 item 6). The thread's *プルリクエストを作る*
-  opens a confirm screen and the real press is there; *マージする* runs at once, though the page says
-  merge cannot be taken back from it. Which of them changes is the owner's decision and is not
-  made here.
 - **Other English rows rondo writes into a thread are not folded**: a scope stop, a closing lap's
   stop and a held order ask the person something (`asks`), and folding a question would hide it.
   They are rondo#437's kind of problem and a separate change.

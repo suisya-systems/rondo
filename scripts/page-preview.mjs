@@ -771,7 +771,12 @@ const staleLapId = await publishableLap("lap-preview-0007", false, true, 3 * HOU
 //    a git workspace, as the ones above do).
 const CONFLICT_PR = `https://github.com/${PREVIEW_REPO}/pull/417`;
 // The requests first: a scope over a request nobody made is refused (D-0066 rule 1.2.1).
-for (const requestId of ["request-preview-0005", "request-preview-0006", "request-preview-0007"]) {
+for (const requestId of [
+  "request-preview-0005",
+  "request-preview-0006",
+  "request-preview-0007",
+  "request-preview-0009",
+]) {
   await say({
     messageId: requestId,
     body:
@@ -789,7 +794,12 @@ const conflictScopeId = "scope-preview-0005";
 const conflictScope = await record.recordScope({
   scopeId: conflictScopeId,
   payload: modules.records.scopePayloadWithDefaults({
-    requests: ["request-preview-0005", "request-preview-0006", "request-preview-0007"],
+    requests: [
+      "request-preview-0005",
+      "request-preview-0006",
+      "request-preview-0007",
+      "request-preview-0009",
+    ],
     workspaces: [{ repository, workspace_root: workspaceRoot }],
     agent_types: [drafted.kind === "drafted" ? drafted.agentTypeDigest : ""],
     budgets: {
@@ -978,6 +988,29 @@ for (const [requestId, lapId, fixId, state] of [
   }
 }
 const fixedLapId = "lap-preview-0014";
+
+// rondo#437 item 6: a published pull request whose checks are green on its
+// head, so the thread's next step is the merge and it leads to the merge's
+// confirm screen. Pressing it under this preview refuses at the forge: the
+// repository does not exist.
+const mergeLapId = "lap-preview-0015";
+await conflictLap(mergeLapId, "request-preview-0009", null, {}, "closed", 3 * HOUR, false);
+await modules.conductor.reportToRequest(
+  reportPorts,
+  mergeLapId,
+  { kind: "published", pullRequestUrl: `https://github.com/${PREVIEW_REPO}/pull/436` },
+  now - 2 * HOUR,
+);
+await modules.conductor.reportToRequest(
+  reportPorts,
+  mergeLapId,
+  {
+    kind: "checks",
+    commit: "a".repeat(40),
+    reading: { kind: "green", counted: 6, skipped: 1 },
+  },
+  now - 100 * MINUTE,
+);
 
 // Two requests the model drafter drafted (rondo#238 C2b), written the way a
 // run writes them -- a real host over this store, with a fixed answer standing
@@ -1188,6 +1221,8 @@ process.stdout.write(
     `437:     ${base}/?thread=request-preview-0008&lang=ja`,
     `437:     ${base}/?publish=${publishableLapId}&lang=ja`,
     `437:     ${base}/?thread=request-preview-0006&lang=ja`,
+    `437:     ${base}/?thread=request-preview-0009&lang=ja`,
+    `437:     ${base}/?merge=${mergeLapId}&lang=ja`,
     "",
     "A published pull request that conflicts (rondo#417, D-0105): the offer, the fix",
     "running, and the approved fix whose publish updates the same pull request:",

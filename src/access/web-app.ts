@@ -1733,6 +1733,10 @@ function viewOf(query: URLSearchParams): PageView {
   if (publishing !== null && publishing !== "") {
     return { kind: "publish", iterationId: publishing };
   }
+  const merging = query.get("merge");
+  if (merging !== null && merging !== "") {
+    return { kind: "merge", iterationId: merging };
+  }
   const releasing = query.get("release");
   if (releasing !== null && releasing !== "") {
     return { kind: "release", iterationId: releasing };
