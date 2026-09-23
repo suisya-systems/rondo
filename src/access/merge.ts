@@ -231,7 +231,9 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
     },
     ports.now(),
   );
-  const released = await releaseMerged(ports, record.id, before.baseBranch, after);
+  // Where the forge says it went after the merge, not before: a retarget in
+  // between is not something `--match-head-commit` refuses (Codex round 1).
+  const released = await releaseMerged(ports, record.id, after.baseBranch, after);
   return { ok: true, note: [line ?? "merged", released].join("\n") };
 }
 

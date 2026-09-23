@@ -434,6 +434,8 @@ test("rondo#439: a merge that is not the line's whole landing leaves its files t
       before: { ...open, defaultBranch: "trunk" },
       after: { ...open, state: "MERGED", defaultBranch: "trunk", mergeCommit: "def5678" },
     },
+    // Retargeted off the default branch during the merge: where it went is the after's.
+    { after: { ...open, state: "MERGED", baseBranch: "release", mergeCommit: "def5678" } },
     // Another lap of the line is still running.
     {
       laps: [
