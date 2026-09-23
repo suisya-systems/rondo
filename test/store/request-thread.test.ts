@@ -18,7 +18,12 @@ import { parseCommand } from "../../src/access/cli-parse.js";
 import { consoleSeams } from "../../src/access/console.js";
 import { CONSERVATIVE_HOST_POLICY } from "../../src/refrain/policy.js";
 import type { AnswerOutcome, ThreadMessageDraft } from "../../src/store/records.js";
-import { advisoryRecord, iterationStore, openAdvisoryRecord } from "../../src/store/sqlite.js";
+import {
+  advisoryRecord,
+  asRefusal,
+  iterationStore,
+  openAdvisoryRecord,
+} from "../../src/store/sqlite.js";
 import { laneFor } from "../lane-claims.js";
 
 /**
@@ -306,7 +311,7 @@ test("a reply to nothing, or to an elevation's bare id, is refused", async () =>
   expect(count(connection)).toBe(1);
 });
 
-test("an unknown voice, a blank author, an empty body and a reused id are refused", async () => {
+test("an unknown voice, a blank author and an empty body are refused; a reused id is a duplicate", async () => {
   const record = advisoryRecord(new DatabaseSync(":memory:"));
   await record.recordThreadMessage(operator());
 
@@ -318,7 +323,15 @@ test("an unknown voice, a blank author, an empty body and a reused id are refuse
     record.recordThreadMessage(operator({ messageId: "c", body: "" })),
     record.recordThreadMessage(operator()),
   ]);
+  // The fourth is its own arm since rondo#200: an id already in the thread is
+  // still no second row, and what it means is the caller's to say.
   expect(kinds.map((outcome) => outcome.kind)).toEqual([
+    "refused",
+    "refused",
+    "refused",
+    "duplicate",
+  ]);
+  expect(kinds.map((outcome) => asRefusal(outcome).kind)).toEqual([
     "refused",
     "refused",
     "refused",

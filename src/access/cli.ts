@@ -89,6 +89,7 @@ import {
 } from "../store/records.js";
 import {
   type AdvisoryRecord,
+  asRefusal,
   type IterationStore,
   openAdvisoryRecord,
   openIterationStore,
@@ -1715,19 +1716,23 @@ export async function main(
               // minted from a same-origin `POST` carrying the token.
               new SayPort(
                 async (message, answerOutcome) => {
-                  const outcome = await record.recordThreadMessage({
-                    messageId: message.messageId,
-                    body: message.body,
-                    authorKind: "operator",
-                    authorId: sender.actorId,
-                    inReplyTo: message.inReplyTo,
-                    atMs: Date.now(),
-                    bases: [],
-                    asks: false,
-                    // Absent and not null, for `exactOptionalPropertyTypes`:
-                    // a send answers nothing (D-0072 rule 2).
-                    ...(answerOutcome === null ? {} : { answerOutcome }),
-                  });
+                  // `asRefusal`: the person composed this id, so an id already
+                  // spoken for is the refusal it has always been.
+                  const outcome = asRefusal(
+                    await record.recordThreadMessage({
+                      messageId: message.messageId,
+                      body: message.body,
+                      authorKind: "operator",
+                      authorId: sender.actorId,
+                      inReplyTo: message.inReplyTo,
+                      atMs: Date.now(),
+                      bases: [],
+                      asks: false,
+                      // Absent and not null, for `exactOptionalPropertyTypes`:
+                      // a send answers nothing (D-0072 rule 2).
+                      ...(answerOutcome === null ? {} : { answerOutcome }),
+                    }),
+                  );
                   if (outcome.kind === "recorded") {
                     issues.kick();
                     drafter.kick();
@@ -2448,16 +2453,21 @@ async function commandThreadMessage(
   if ("refusal" in actor) {
     return refuse(actor.refusal);
   }
-  const outcome = await openAdvisoryRecord(storePath).recordThreadMessage({
-    messageId: parsed.messageId,
-    body: parsed.body,
-    authorKind: "operator",
-    authorId: actor.actorId,
-    inReplyTo: replying ? parsed.inReplyTo : null,
-    atMs: Date.now(),
-    bases: [],
-    asks: false,
-  });
+  // `asRefusal`: the operator typed this id, and D-0036 rule 3 refuses a
+  // second row under one -- the store cannot tell a repeat from a different
+  // message reusing the name.
+  const outcome = asRefusal(
+    await openAdvisoryRecord(storePath).recordThreadMessage({
+      messageId: parsed.messageId,
+      body: parsed.body,
+      authorKind: "operator",
+      authorId: actor.actorId,
+      inReplyTo: replying ? parsed.inReplyTo : null,
+      atMs: Date.now(),
+      bases: [],
+      asks: false,
+    }),
+  );
   if (outcome.kind === "refused") {
     return refuse(outcome.reason);
   }
@@ -5259,19 +5269,21 @@ async function stopTheLeftLap(
       // The press is still holding the refusal screen, which says it all.
       return;
     }
-    const outcome = await record.recordThreadMessage({
-      messageId: `start-stopped-${input.iterationId}`,
-      body: ended.status === "failed" ? words.startStoppedSaid : words.startStoppedHeldSaid,
-      authorKind: "drafter",
-      authorId: DETERMINISTIC_DRAFTER,
-      inReplyTo: input.requestMessageId,
-      atMs: Date.now(),
-      bases: [
-        { form: "message", messageId: input.requestMessageId },
-        { form: "iteration", iterationId: input.iterationId },
-      ],
-      asks: true,
-    });
+    const outcome = asRefusal(
+      await record.recordThreadMessage({
+        messageId: `start-stopped-${input.iterationId}`,
+        body: ended.status === "failed" ? words.startStoppedSaid : words.startStoppedHeldSaid,
+        authorKind: "drafter",
+        authorId: DETERMINISTIC_DRAFTER,
+        inReplyTo: input.requestMessageId,
+        atMs: Date.now(),
+        bases: [
+          { form: "message", messageId: input.requestMessageId },
+          { form: "iteration", iterationId: input.iterationId },
+        ],
+        asks: true,
+      }),
+    );
     if (outcome.kind !== "recorded") {
       onConsole(
         `rondo could not tell the person that lap '${input.iterationId}' stopped: ${outcome.reason}`,

@@ -209,7 +209,10 @@ async function askUnlanded(
   // A second process, or this one after a restart, finds the id spoken for:
   // the ask is already in the thread, and that is not a failure. Any other
   // outcome is said, and asked again on the next pass.
-  if (outcome.kind === "recorded" || outcome.reason.includes("already in the conversation")) {
+  //
+  // The store's own arm since rondo#200; this read the refusal's prose for it
+  // before there was one, which is the reading the issue set out to remove.
+  if (outcome.kind === "recorded" || outcome.kind === "duplicate") {
     said.add(messageId);
     return;
   }

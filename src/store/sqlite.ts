@@ -2947,6 +2947,47 @@ export type RecordOutcome =
   | { readonly kind: "refused"; readonly reason: string }
   | { readonly kind: "defect"; readonly reason: string };
 
+/**
+ * What a message write came to, with **the id already spoken for as its own
+ * arm** (rondo#200).
+ *
+ * A duplicate id is not one refusal among many: a caller whose id is
+ * deterministic -- a report named after the gate it describes -- writes it
+ * again precisely to fill a gap it cannot see, and "already there" is that
+ * caller's success. It used to arrive as prose inside `refused`, which left
+ * `includes("already in the conversation")` as the only way to branch on it
+ * (AGENTS.md section 1: a refusal whose next move differs gets its own arm).
+ *
+ * The id it carries is the one the caller handed in; the arm says nothing
+ * about what the other row's body is, because the store does not compare one.
+ * A caller that cannot tell a repeat from a different message reusing an id --
+ * every operator-composed id -- still refuses, through {@link asRefusal}.
+ */
+export type MessageRecordOutcome =
+  | RecordOutcome
+  | { readonly kind: "duplicate"; readonly messageId: string };
+
+/**
+ * D-0036 rule 3's refusal, for a caller that has no use for the distinction.
+ *
+ * The prose is the one the store said before `duplicate` was an arm, so a
+ * surface that printed it prints the same sentence.
+ */
+export function asRefusal(outcome: MessageRecordOutcome): RecordOutcome {
+  return outcome.kind === "duplicate"
+    ? { kind: "refused", reason: duplicateReason(outcome.messageId) }
+    : outcome;
+}
+
+/** The sentence {@link asRefusal} refuses with, for a caller composing its own. */
+export function duplicateReason(messageId: string): string {
+  return (
+    `the message '${messageId}' is already in the conversation, and a message id is ` +
+    "durable and immutable (D-0036 rule 3): a second row under one id would let a " +
+    "reference that has already been elevated come to mean something else"
+  );
+}
+
 /** What one drafter run hands the store to write (D-0071 rule 7.3). */
 export interface DraftRunWrite {
   readonly requestMessageId: string;
@@ -3023,8 +3064,14 @@ export interface AdvisoryRecord {
    * `drafter` message with no bases (rule 2.6); and a `message:` basis naming
    * no message in the conversation, for D-0036 rule 4's reason. Nothing
    * updates or deletes a message: a correction is a reply.
+   *
+   * **An id already in the conversation leaves as `duplicate`** and not as one
+   * refusal among many (rondo#200), because the callers differ on what it
+   * means: a report named after the gate it describes is *already reported*,
+   * and an operator's own id is D-0036 rule 3's refusal. `asRefusal` turns the
+   * arm back into the second.
    */
-  recordThreadMessage(draft: ThreadMessageDraft): Promise<RecordOutcome>;
+  recordThreadMessage(draft: ThreadMessageDraft): Promise<MessageRecordOutcome>;
   /**
    * Append one immutable proposal (D-0022 rule 4) -- **or refuse it**
    * (D-0036 rule 4).
@@ -3601,7 +3648,7 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
    * refusal, whether the operator's observation arrives on its own or as half
    * of an elevation.
    */
-  const insertMessage = (messageId: string, thread?: ThreadMessageDraft): RecordOutcome => {
+  const insertMessage = (messageId: string, thread?: ThreadMessageDraft): MessageRecordOutcome => {
     try {
       if (thread === undefined) {
         connection
@@ -3629,18 +3676,16 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return { kind: "recorded" };
     } catch (error) {
       if (isUniqueViolation(error)) {
-        // The database's refusal, said in rondo's words rather than the
+        // The database's answer, said in rondo's words rather than the
         // driver's -- `consumeDecision`'s precedent. This is D-0036 rule 3's
         // first property observed firing: an id already spoken for cannot be
         // spoken for again, so nothing a proposal already elevated from can
         // come to mean something else.
-        return {
-          kind: "refused",
-          reason:
-            `the message '${messageId}' is already in the conversation, and a message id is ` +
-            "durable and immutable (D-0036 rule 3): a second row under one id would let a " +
-            "reference that has already been elevated come to mean something else",
-        };
+        //
+        // It leaves as its own arm and not as prose inside `refused`
+        // (rondo#200): whether it is a refusal is the caller's to say, and
+        // `asRefusal` says it for every caller whose id an operator composed.
+        return { kind: "duplicate", messageId };
       }
       return { kind: "defect", reason: describe(error) };
     }
@@ -3883,12 +3928,15 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
 
   return {
     async recordMessage(messageId: string): Promise<RecordOutcome> {
-      return insertMessage(messageId);
+      // An operator composed this id, so a second row under it stays the
+      // refusal D-0036 rule 3 asks for: nothing here can tell a repeat of one
+      // observation from a different one reusing the name.
+      return asRefusal(insertMessage(messageId));
     },
 
-    async recordThreadMessage(draft: ThreadMessageDraft): Promise<RecordOutcome> {
+    async recordThreadMessage(draft: ThreadMessageDraft): Promise<MessageRecordOutcome> {
       try {
-        return immediateTransaction<RecordOutcome>(connection, () => {
+        return immediateTransaction<MessageRecordOutcome>(connection, () => {
           const refusal = threadMessageRefusal(connection, draft);
           if (refusal !== null) {
             return { kind: "refused", reason: refusal };
@@ -3915,7 +3963,10 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
     async recordElevation(messageId: string, draft: ProposalDraft): Promise<RecordOutcome> {
       try {
         return immediateTransaction<RecordOutcome>(connection, () => {
-          const appended = insertMessage(messageId);
+          // The same refusal as `recordMessage`'s, for the same reason: the
+          // elevation's message id is the operator's word, not a name rondo
+          // derived.
+          const appended = asRefusal(insertMessage(messageId));
           if (appended.kind !== "recorded") {
             return appended;
           }
@@ -4499,7 +4550,10 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
             if (refusal !== null) {
               throw new DraftRefusal(`a drafter message was refused: ${refusal}`);
             }
-            must(insertMessage(message.messageId, message), "a drafter message was refused");
+            must(
+              asRefusal(insertMessage(message.messageId, message)),
+              "a drafter message was refused",
+            );
           }
           return { kind: "recorded" };
         });

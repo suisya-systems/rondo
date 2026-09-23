@@ -68,7 +68,7 @@ import {
   type TriageWritten,
 } from "../../src/access/web-app.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
-import { advisoryRecord } from "../../src/store/sqlite.js";
+import { advisoryRecord, asRefusal } from "../../src/store/sqlite.js";
 
 const TOKEN = "the-process-token";
 
@@ -2157,14 +2157,16 @@ test("(send) the same form sent twice records its message once", async () => {
     record,
     say: new SayPort(
       async (message) => {
-        const outcome = await record.recordThreadMessage({
-          ...message,
-          authorKind: "operator",
-          authorId: "ada",
-          atMs: 1,
-          bases: [],
-          asks: false,
-        });
+        const outcome = asRefusal(
+          await record.recordThreadMessage({
+            ...message,
+            authorKind: "operator",
+            authorId: "ada",
+            atMs: 1,
+            bases: [],
+            asks: false,
+          }),
+        );
         return outcome.kind === "recorded"
           ? { ok: true, note: "" }
           : { ok: false, note: outcome.reason };
@@ -2349,15 +2351,17 @@ async function askWaiting() {
     record,
     say: new SayPort(
       async (message, answerOutcome) => {
-        const outcome = await record.recordThreadMessage({
-          ...message,
-          authorKind: "operator",
-          authorId: "ada",
-          atMs: 2,
-          bases: [],
-          asks: false,
-          ...(answerOutcome === null ? {} : { answerOutcome }),
-        });
+        const outcome = asRefusal(
+          await record.recordThreadMessage({
+            ...message,
+            authorKind: "operator",
+            authorId: "ada",
+            atMs: 2,
+            bases: [],
+            asks: false,
+            ...(answerOutcome === null ? {} : { answerOutcome }),
+          }),
+        );
         return outcome.kind === "recorded"
           ? { ok: true, note: "" }
           : { ok: false, note: outcome.reason };

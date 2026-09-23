@@ -93,10 +93,9 @@ function tick(after: readonly (number | undefined)[], answers: DraftedStartReadi
         }) as never,
       recordThreadMessage: async (draft) => {
         if (asked.some((one) => one["messageId"] === draft.messageId)) {
-          return {
-            kind: "refused",
-            reason: `the message '${draft.messageId}' is already in the conversation`,
-          };
+          // The store's own arm for an id already spoken for (rondo#200), which
+          // is what the host reads to know the ask is already in the thread.
+          return { kind: "duplicate", messageId: draft.messageId };
         }
         asked.push(draft as unknown as JsonRecord);
         return { kind: "recorded" };
