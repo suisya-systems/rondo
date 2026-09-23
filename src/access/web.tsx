@@ -169,7 +169,7 @@ import {
   saysMore,
   workerRuns,
 } from "./page-logic/laps.js";
-import { repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
+import { placeSaid, repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
 import { asksOverLine, conflictFixBlock, mergeBlock, resultOf } from "./page-logic/result.js";
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
@@ -2809,6 +2809,22 @@ export async function operatorPage(
   const lapsUnder = (messageId: string) => allLapsByRequest.get(messageId) ?? [];
 
   /*
+   * **Where the page names a repository, and where it stays unsaid**
+   * (D-0081 rule 4.2 and its gate's answer 4, rondo#305). One store serves
+   * several repositories, and the work of all of them is one list -- so the
+   * repository is drawn where it is what tells two things apart, and nowhere
+   * else. The set it is judged against is the whole of the work this page
+   * read, so one answer holds across the faces: a row, the running work
+   * beside an empty centre and the line under a request's title never
+   * disagree about whether the place is worth saying.
+   */
+  const pagePlaces = [...allLapsByRequest.values()]
+    .flat()
+    .map((lap) => repositoryOf(lap.record));
+  const placeOf = (record: IterationRecord | null): string | null =>
+    placeSaid(repositoryOf(record), pagePlaces);
+
+  /*
    * **The left face's rows** (D-0083 rules 2, 5 and 7). Every request the
    * store holds, named by the person's own words, with the repository its
    * work is in and one sentence of state. What waits on the person is lifted
@@ -2824,7 +2840,7 @@ export async function operatorPage(
       return {
         messageId: root.messageId,
         title: firstLine(root.body),
-        repository: repositoryOf(lap?.record ?? null),
+        repository: placeOf(lap?.record ?? null),
         state: rowStateOf(lap?.record ?? null, turnsHere.has(root.messageId), (record) =>
           isTerminal(record.status),
         ),
@@ -2990,7 +3006,7 @@ export async function operatorPage(
       ? null
       : governanceOf(
           governedLap,
-          repositoryOf(governedLap),
+          placeOf(governedLap),
           threads.byId.get(selectedRoot)?.atMs ?? nowMs,
           await approvalOf(governedLap),
           // A proposal is done when rondo recorded one: the published report
@@ -3491,7 +3507,7 @@ export async function operatorPage(
               // lap's own `request` stands in only where the message it was
               // started from has gone.
               title: firstLine(threads.byId.get(record.requestMessageId)?.body ?? record.request),
-              repository: repositoryOf(record),
+              repository: placeOf(record),
               goingSaid: wording.age(ago(record.createdAtMs, nowMs)),
               allowance: approval === null ? null : allowanceOf(approval),
               tries:

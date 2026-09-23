@@ -73,6 +73,49 @@ export function repositoryOf(record: IterationRecord | null): string | null {
 }
 
 /**
+ * The person's own name for a place (`D-0081` rule 4.2, `D-0076` rule 3.3).
+ *
+ * A plan's `repository` is an absolute path, and a path is rondo's way of
+ * holding a place rather than the person's way of saying it. What the person
+ * calls the place is its last segment -- the name they cloned it under and the
+ * name they say out loud -- so that is what the screen draws, never the whole
+ * path and never the `OWNER/NAME` the forge knows it by.
+ *
+ * A value with no segment left after the separators (`/`, `\`) is given back
+ * as it came: rondo does not invent a name for a place it cannot read one off.
+ */
+function placeName(repository: string): string {
+  const segments = repository.split(/[/\\]/).filter((segment) => segment !== "");
+  return segments[segments.length - 1] ?? repository;
+}
+
+/**
+ * **The repository is said only where the person could not otherwise tell two
+ * things apart** (`D-0081` rule 4.2 and its gate's answer 4, `D-0076` rules
+ * 3.3 and 5.1).
+ *
+ * `among` is every repository the set being drawn is in. Where that set holds
+ * one repository -- which is the person who works in one repository most days
+ * -- naming it separates nothing, and by rule 5.1 a thing that separates
+ * nothing is not on the page. Where it holds two or more, the repository is
+ * the thing that tells them apart, and it is said as {@link placeName} says
+ * it.
+ *
+ * This is the same shape as the try number on a thread's lines: one try has
+ * nothing to tell apart and the number would be noise.
+ */
+export function placeSaid(
+  repository: string | null,
+  among: readonly (string | null)[],
+): string | null {
+  if (repository === null) {
+    return null;
+  }
+  const places = new Set(among.filter((one): one is string => one !== null));
+  return places.size > 1 ? placeName(repository) : null;
+}
+
+/**
  * What a request's row says, given the lap under it.
  *
  * **A request with no lap has not started**, which is a true thing to say and

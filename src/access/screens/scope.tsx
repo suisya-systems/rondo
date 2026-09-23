@@ -37,6 +37,7 @@ import {
   PRIMARY,
   TONE,
 } from "../page/vocabulary.js";
+import { placeSaid } from "../page-logic/list.js";
 import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "../page-logic/routes.js";
 import { firstLine, requestWords, type Threads, waitingAsk } from "../page-logic/threads.js";
 import { approvalTip, heldAgentTypeLines, scopeBudgetsFromStore } from "../scope.js";
@@ -579,10 +580,19 @@ function recordedFold(wording: Chrome, lines: readonly string[]) {
   );
 }
 
-/** One held plan as a person reads it: where it runs, with which agent type, and where it came from. */
-function planLine(wording: Chrome, plan: HeldPlan): string {
+/**
+ * One held plan as a person reads it: where it runs, with which agent type,
+ * and where it came from.
+ *
+ * **`among` is the repositories of the plans this one is offered beside**
+ * (`D-0081` rule 4.2, rondo#305). The place is named where it is what tells
+ * two of the offered plans apart, and in the person's own name for it; where
+ * every plan on offer is in one repository, the line says the workspace root
+ * alone, as it has to anyway to tell two plans of one repository apart.
+ */
+function planLine(wording: Chrome, plan: HeldPlan, among: readonly (string | null)[]): string {
   return wording.scopePlanLine(
-    wording.scopeWorkspace(plan.repository, plan.workspaceRoot),
+    wording.scopeWorkspace(placeSaid(plan.repository, among), plan.workspaceRoot),
     plan.agentTypeDigest.slice("sha256:".length, "sha256:".length + 12),
     wording.scopePlanFrom(plan.from.kind),
   );
@@ -605,6 +615,7 @@ function planChoice(
   if (plans.length < 2 && chosen !== null) {
     return null;
   }
+  const among = plans.map((plan) => plan.repository);
   return (
     <section id="plans" class="space-y-1">
       <p class="text-body leading-6 font-medium">{wording.scopePlanAsk}</p>
@@ -614,8 +625,8 @@ function planChoice(
           // (D-0075 rule 2.3): a repaired setup and the stale plan it
           // replaced differ in a path this line does not show, and the time
           // is what a person can tell them apart by.
-          const line = planLine(wording, plan);
-          const alike = plans.filter((other) => planLine(wording, other) === line).length > 1;
+          const line = planLine(wording, plan, among);
+          const alike = plans.filter((other) => planLine(wording, other, among) === line).length > 1;
           const said = alike
             ? wording.scopePlanHeldAt(line, localTime(plan.heldAtMs).replace("T", " "))
             : line;
@@ -1670,7 +1681,11 @@ async function scopeApproved(
           <input type="hidden" name="scope_decision" value={decisionId} />
           <input type="hidden" name="plan" value={runsOn.planDigest} />
           <p class="text-body leading-5 wrap-anywhere text-muted-foreground">
-            {`${wording.scopePlanAsk}: ${planLine(wording, runsOn)}`}
+            {`${wording.scopePlanAsk}: ${planLine(
+              wording,
+              runsOn,
+              allowed.map((plan) => plan.repository),
+            )}`}
           </p>
           {planDone(wording, runsOn.document)}
           {/* Minted at render, as the scope id is, and for its reason: rondo

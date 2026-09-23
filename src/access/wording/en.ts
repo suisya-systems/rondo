@@ -512,7 +512,9 @@ explanation you pressed on and then answers the gate.`,
     "nothing to start under it yet. Reply in the request's thread with a plan for them.",
   scopeNoApprover:
     "RONDO_APPROVER is not set, so there is nobody this page could approve a scope as.",
-  scopeWorkspace: (repository, root) => `${repository} at ${root}`,
+  // The place is said only where it is what tells two of these apart (D-0081
+  // rule 4.2): with nothing to tell apart, the root answers "where" by itself.
+  scopeWorkspace: (place, root) => (place === null ? root : `${place} at ${root}`),
   scopePlanDigest: (digest) => `plan ${digest}`,
   scopePlanHeading: "The plan rondo will run, and where it will run it",
   scopeRecordedFold: "Where it runs and what its agent type is allowed, as rondo records them",
