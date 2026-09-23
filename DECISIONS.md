@@ -22807,6 +22807,16 @@ At rondo `7d4d8d9` and continuo `b7162ae`, by reading:
 5. **The terminal is unchanged.** `rondo answer`'s gate report still prints the reading's lines
    alone; a follow-up issue carries it there.
 
+   **Annotated 2026-09-23 by the implementation of rondo#424**, the follow-up this rule names.
+   Added under the annotation rule in "How to use this file": the rule's claim about rondo at
+   `7d4d8d9` is not edited, and nothing this entry decided changes. `rondo answer` now prints the
+   block in its own gutter, above the reading's lines for rule 4's reason, from the same
+   `workerRuns` reading of `lap_commands` the card draws — so rules 1 to 3 are the terminal's too,
+   word for word in the source line and in the three answers that are never a zero. The page is
+   untouched: it draws the block as a card, and the lines it also folds under *all as text* leave
+   it out, which is the one thing the two surfaces say differently and is said because saying it
+   twice on one screen is not saying it twice as well.
+
 ### What this entry does not do
 
 - **It does not check that the lap ran the verification it was asked for.** It shows the last test

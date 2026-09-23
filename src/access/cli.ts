@@ -196,6 +196,7 @@ import type {
   PublishShown,
   ReviewBlock,
 } from "./page/contract.js";
+import { workerRuns } from "./page-logic/laps.js";
 import { asksOverLine, conflictFixBlock, resultOf } from "./page-logic/result.js";
 import { requestWords, threadsOf } from "./page-logic/threads.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
@@ -3326,7 +3327,7 @@ async function sayLapMaterial(
   // D-0004's escape has no CJK substitutes: a Japanese fence block would print
   // here as `\uXXXX`. The page's copy of the same lines is handed the
   // operator's set in `pageMaterial`.
-  for (const line of await lapMaterialLines(EN, store, record, continuo)) {
+  for (const line of await lapMaterialLines(EN, store, record, continuo, true)) {
     say(line);
   }
 }
@@ -3347,8 +3348,19 @@ export async function lapMaterialLines(
   store: IterationStore,
   record: IterationRecord,
   continuo: VerifiedContinuo | null,
+  /**
+   * Draw {@link workerRanLines} in with the rest (rondo#424).
+   *
+   * **On for the terminal and off for the page, and that is not the two
+   * screens disagreeing.** The page draws the same block from the same
+   * `workerRuns` reading, as rows of its own on the checks card, and these
+   * lines also reach it as the fold under *all as text*: on there they would
+   * be the same fact twice on one screen. The terminal has no card, so the
+   * fold is the only place the block can be.
+   */
+  workerRan = false,
 ): Promise<readonly string[]> {
-  return (await lapMaterial(wording, store, record, continuo)).lines;
+  return (await lapMaterial(wording, store, record, continuo, workerRan)).lines;
 }
 
 /**
@@ -3364,6 +3376,7 @@ async function lapMaterial(
   store: IterationStore,
   record: IterationRecord,
   continuo: VerifiedContinuo | null,
+  workerRan = false,
 ): Promise<{ readonly lines: readonly string[]; readonly work: LapWorkInspection | null }> {
   const workspace = planField(record, "workspace");
   const topicBranch = planField(record, "topic_branch");
@@ -3385,6 +3398,13 @@ async function lapMaterial(
     lines.push(...workLines(work));
   }
   lines.push(...(await fenceLines(wording, continuo, record)));
+  // **Above the readings, for the reason the page puts it above them**
+  // (rondo#424, D-0104): the block below is a reader's account of its own
+  // reach, and *it ran nothing* is read as being about the lap while the
+  // worker's own run is not on the screen.
+  if (workerRan) {
+    lines.push(...workerRanLines(wording, record));
+  }
   const readings = await store.readingsFor(record.id);
   // **The deterministic reading, and the model reading beside it as material**
   // (D-0065 5.5). They are picked by drafter rather than by position: a model
@@ -3632,6 +3652,49 @@ export function readingRangeOf(record: IterationRecord): LapWorkRequest | null {
     return null;
   }
   return { workspace, remote: READING_REMOTE, baseBranch, topicBranch };
+}
+
+/**
+ * What the worker itself ran, as the terminal says it (rondo#424, D-0104).
+ *
+ * **The page's block, in the terminal's gutter.** The card on the gate page
+ * has said this since rondo#410 and `rondo answer` did not, so a person
+ * answering from a terminal read the reading below -- rondo's own checks
+ * saying *it built nothing, ran nothing* -- as *no tests were run*, which is
+ * the misread #410 was opened over. The reading is `workerRuns`, the page's
+ * own, over the same `lap_commands` column: nothing here decides anything the
+ * card does not, and the two screens cannot drift into two answers.
+ *
+ * **None of the three answers is a zero**, which is the property that survives
+ * the change of shape: no readable record of the commands and a record with no
+ * runner summary rondo can read are separate sentences, and neither is
+ * `0 passed`. They are `Chrome`'s, so they are the page's words too -- and so
+ * is the source line, which says the figure was read off continuo's record at
+ * a named transcript line and that rondo ran nothing (D-0029 rule 9).
+ *
+ * The command is the worker's own bytes on a line rondo composed, so `say`'s
+ * escape is what keeps an embedded newline from reading as the next line
+ * (rondo#68); it is printed whole, as the card draws it.
+ */
+export function workerRanLines(wording: Chrome, record: IterationRecord): readonly string[] {
+  const runs = workerRuns(record.lapCommands);
+  const said =
+    runs.kind === "unrecorded"
+      ? [wording.workerRanUnrecorded]
+      : runs.kind === "none"
+        ? [wording.workerRanNone(runs.commandCount)]
+        : [
+            runs.last.command,
+            [
+              wording.workerCount("passed", runs.last.passed),
+              wording.workerCount("failed", runs.last.failed),
+              wording.workerCount("skipped", runs.last.skipped),
+              ...(runs.earlier > 0 ? [wording.workerRanEarlier(runs.earlier)] : []),
+            ].join("  "),
+            ...(runs.last.isError ? [wording.workerRanErrored] : []),
+            wording.workerRanSource(runs.last.index),
+          ];
+  return said.map((line, index) => (index === 0 ? `worker  ${line}` : `        ${line}`));
 }
 
 /**
