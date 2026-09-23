@@ -111,7 +111,9 @@ explanation you pressed on and then answers the gate.`,
     "RONDO_APPROVER is not set, so there is nobody this page could answer as, and no inbox of " +
     "theirs to draw.",
 
-  endedHead: (status, since, why) => `${status} ${since} ago -- ${why}`,
+  // rondo#439: the status in the person's words, not the enum.
+  endedHead: (status, since, why) =>
+    `${({ closed: "Ended", failed: "Failed", abandoned: "Abandoned" } as Record<string, string | undefined>)[status] ?? status} ${since} ago, ${why}`,
   gateAnswered: (outcome) =>
     outcome === APPROVED_OUTCOME ? "approved at the gate" : `gate answered '${outcome}'`,
   statePill: (status, gateOutcome) =>

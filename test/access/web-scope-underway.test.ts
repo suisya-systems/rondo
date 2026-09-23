@@ -419,6 +419,16 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   expect(work.slice(0, work.indexOf('<details id="release-brief"'))).not.toContain(
     "Definition of done",
   );
+  // How the attempt ended, in the person's words and not the status enum.
+  expect(work).toMatch(/Ended \S+ ago, /);
+  const ja = await operatorPage(
+    ports,
+    "t",
+    { kind: "release", iterationId: "lap-plan-0" },
+    chromeFor("ja"),
+  );
+  expect(ja).toMatch(/\S+前に終了・/);
+  expect(ja).not.toMatch(/closed \S+前/);
 });
 
 test("what rondo read of a named issue is said under the message, and the scope screen says which the worker is given (D-0078 section 4)", async () => {

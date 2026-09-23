@@ -109,7 +109,9 @@ export const JA: Chrome = Object.freeze({
     "RONDO_APPROVER が設定されていないので、このページが誰として答えることもできず、" +
     "その人の inbox も描けません。",
 
-  endedHead: (status, since, why) => `${status} ${since}前 -- ${why}`,
+  // rondo#439: the status in the person's words, one line and no ` -- `.
+  endedHead: (status, since, why) =>
+    `${since}前に${({ closed: "終了", failed: "失敗", abandoned: "放棄" } as Record<string, string | undefined>)[status] ?? status}・${why}`,
   gateAnswered: (outcome) =>
     outcome === APPROVED_OUTCOME ? "ゲートで承認された" : `ゲートに '${outcome}' と答えた`,
   statePill: (status, gateOutcome) =>

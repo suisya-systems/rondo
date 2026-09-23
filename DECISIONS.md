@@ -23672,6 +23672,11 @@ full*. `page/faces.css` gains a phone fold (`max-width: 640px`). At that width t
 across: the thread, then the right face, then the list. Before this, every screen kept the 1280
 fold's 300px list beside the centre, and the centre set one character per line.
 
+**7. How an attempt ended is said in the person's words.** `endedHead`, the line the release screen
+draws under the work, printed the stored status (*closed 3時間前 -- …*). It now says *3時間前に終了・
+ゲートで承認された* in Japanese and *Ended 3 hours ago, approved at the gate* in English: closed,
+failed and abandoned get words, and any other status is shown as it is stored.
+
 ### What is not done
 
 - **Rule 6's tree reading is unchanged.** A merge made on the forge, not from the page, and then
@@ -23679,7 +23684,5 @@ fold's 300px list beside the centre, and the centre set one character per line.
   that line with rule 4.3's press, which rule 3 now makes reachable from the refusal.
 - **On a phone the summary's list is below the centre**, as it is on every screen; a phone layout
   of its own for the summary is not designed here.
-- **The attempt's end line says the lap's status word as stored** (*closed*, in both languages);
-  `endedHow` is not changed here.
 - **Lap 14's claim in `~/rondo-lap-14` is not released by this change.** That store's line was
   merged before this change, so the owner releases it once with the release press.
