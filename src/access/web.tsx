@@ -1034,7 +1034,7 @@ function standingFindings(checks: LapReading | null, model: LapReading | null): 
 }
 
 /**
- * **The material for this confirmation** (D-0083 rule 5): why it stopped, what
+ * **The material for this confirmation** (D-0083 rule 5): the worker's report, what
  * changed, the fence, and the two readings.
  *
  * **It is the right face's, and that is the whole of this function.** These
@@ -1077,16 +1077,27 @@ function materialView(
       {material === null ? null : (
         <>
           <section id="why" class={CARD}>
-            <h3 class={CARD_HEADING}>{wording.whyStopped}</h3>
+            <h3 class={CARD_HEADING}>{wording.reportHeading}</h3>
             {material.why === null ? (
-              <p class="text-body leading-5 text-muted-foreground">{wording.whyNotRead}</p>
+              <p class="text-body leading-5 text-muted-foreground">{wording.reportNotRead}</p>
             ) : (
-              <p
-                class="mt-1 text-body leading-6 wrap-anywhere whitespace-pre-wrap"
-                lang={materialLanguage(record)}
-              >
-                {material.why}
-              </p>
+              // **Shut, as the thread's reports are** (rondo#444, D-0115): the
+              // worker writes it for the gate, often not in the page's
+              // language, with its branch and markdown, so it is kept byte for
+              // byte under a fold labelled in the person's words and not
+              // summarised: a summary would be a model's words, not the worker's.
+              <details class="group mt-1">
+                <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+                  {chevron()}
+                  {wording.reportFold}
+                </summary>
+                <p
+                  class="mt-1 text-body leading-6 wrap-anywhere whitespace-pre-wrap"
+                  lang={materialLanguage(record)}
+                >
+                  {material.why}
+                </p>
+              </details>
             )}
           </section>
           {changedView(wording, record, material.work)}

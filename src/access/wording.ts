@@ -274,8 +274,14 @@ export interface Chrome extends PageWords {
   /** A running row whose transcript rondo could not name; the reason is the `title`. */
   /** rondo#248 item 3: the way from a running row into its log, and the log's screen. */
   readonly fenceHeading: string;
-  readonly whyStopped: string;
-  readonly whyNotRead: string;
+  /**
+   * The gate's card of the worker's own report (rondo#444): every gate is the
+   * worker's turn ending, finished or stopped to ask, so the card is named for
+   * what it holds and the report is shut under `reportFold`.
+   */
+  readonly reportHeading: string;
+  readonly reportFold: string;
+  readonly reportNotRead: string;
   readonly workHeading: string;
   readonly changedAgainst: (baseRef: string) => string;
   /** The work could not be read; git's own reason goes in the maintainer fold beside it (D-0076 rule 4.5). */

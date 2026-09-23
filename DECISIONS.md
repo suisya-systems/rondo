@@ -23824,3 +23824,46 @@ At rondo `36b2377`, by reading:
   is released by its landing, the merge press or the release press.
 - **The success path of the press is not exercised in the test suite**: it needs a forge. The
   store's half (`test/store/publish-release.test.ts`) is.
+
+## D-0115 — The gate's card of the worker's words is *the worker's report*, on every gate, and the report is shut under a line in the person's language
+
+**Status:** accepted (2026-09-23, rondo#444; the owner's answer through the secretary, option A of
+three). Refs `D-0076`, `D-0083`, `D-0112`, rondo#444.
+
+**Numbering.** `D-0115` is taken by this lane; a parallel lane may renumber at merge.
+
+**Why an entry is needed.** Lap 16 (2026-09-23) reached its gate with the work done, and the right
+face's *この確認の材料* opened with a card headed *止まった理由*. Its body was the worker's report in
+English markdown with the branch id (*Done and committed on `rondo/lap-…`. **What changed** …*). The
+heading was wrong for a finished lap, and the body was the kind of text `D-0112` had just shut in
+the thread.
+
+### The decision
+
+**1. The card is named for what it holds, on every gate.** Its body is continuo's gate rationale
+(`pageMaterial` in `src/access/cli.ts`). Every gate rondo reaches is `worker_escalation`: the
+worker's turn ending, whether the work is done or it stopped to ask (`D-0098` rule 4.1). A lap cut
+short ends `failed` and reaches no gate (`D-0110`). So the rationale is always the worker's report,
+and the card is *作業者の報告* / *The worker's report* (`reportHeading`), whatever the lap did.
+
+**2. The report is shut under a line in the person's language** (option A). Under the heading is
+one closed fold labelled `reportFold` (*作業者が書いたとおりの全文* / *In full, as the worker wrote
+it*), holding the report byte for byte, as `D-0112` rule 1 shuts rondo's own reports. The label says
+what the text is and nothing about what it says. It makes no claim about the report's language
+either: the worker is asked to write in the page's language (`materialLanguageSentence`), lap 16's
+did not, and rondo cannot tell reliably which it did. A lead sentence above the fold was drafted
+and dropped at the secretary's look at the screenshots: the heading and the label already say it.
+A worker's question is not lost behind the fold: it is already relayed into the thread as its
+own message (`relayQuestion`).
+
+**Options not taken.** B: the heading *作業者の報告（英語）*. That is false for a worker that did write
+Japanese, unless a script heuristic decides the language, and that heuristic can guess wrong. C: a
+model-written summary in the person's language. It adds a model call and its cost to every gate,
+and needs a check that the summary is faithful; a summary would be a model's words standing in for
+the worker's.
+
+### What is not done
+
+- **The fold's body keeps `lang` from the plan's material language**, which is wrong for a report
+  written in another language, as lap 16's was. It is unchanged here, as rule 2 does not decide the
+  language.
