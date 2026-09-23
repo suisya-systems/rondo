@@ -356,6 +356,7 @@ explanation you pressed on and then answers the gate.`,
   modelMayArrive: "The model review may still arrive.",
   reachYourTurn: "rondo is waiting for your answer.",
   reachLate: "Something in rondo has been going longer than it was meant to.",
+  reachStopped: "A piece of rondo's work stopped partway. What happens next is up to you.",
   chimeAsk: "Allow notifications in this tab",
   tabTitle: (count) => (count === 0 ? "rondo" : `(${String(count)}) rondo`),
   tabTitleTurn: "Your turn - rondo",
@@ -432,6 +433,13 @@ explanation you pressed on and then answers the gate.`,
     "Claude Code session's, most likely), and from there the worker's own sandbox cannot " +
     "start, so its commands would run unprotected. Start rondo from an ordinary terminal " +
     "and try again.",
+  lapTurnTimedOut: (minutes) =>
+    "Stopped because the time ran out: the worker did not finish within " +
+    `${minutes === null ? "the time it was given" : `${String(minutes)} minutes`}, so it was ` +
+    "stopped partway. What it changed is still in its workspace, but anything it had not " +
+    "committed is not delivered and will not carry over to the next try. What this try " +
+    "cost is not known, because no cost was reported for it. To go on, start again, or " +
+    "set a smaller scope first.",
 
   scopeAction: "Set the scope",
   scopeHeading: "The scope for this request",
@@ -760,7 +768,7 @@ explanation you pressed on and then answers the gate.`,
     `Up to ${String(laps)} attempt${laps === 1 ? "" : "s"} and $${cost}, until ${until} UTC.`,
   raiseUsed: (attempts, usd, unread) =>
     `Used so far: ${String(attempts)} attempt${attempts === 1 ? "" : "s"} and $${usd}` +
-    (unread === 0 ? "." : `, with ${String(unread)} whose cost is not known yet.`),
+    (unread === 0 ? "." : `, with ${String(unread)} whose cost was not reported.`),
   raiseFromHere:
     "The new budget counts from now on. What was already spent stays counted against what you " +
     "approved before and is not taken out of the new one: raising the cost to $15 lets another " +

@@ -127,3 +127,26 @@ export function lapsPastTheirCeiling(
       : [];
   });
 }
+
+/**
+ * The laps that stopped short -- ended `failed` -- at or after `sinceMs`, keyed
+ * `stopped:<lap>` (rondo#432).
+ *
+ * **A stop is the person's turn, and it was the one turn nothing said.** A lap
+ * that ends `failed` is terminal, so it is on neither side of `D-0036` rule 5
+ * and {@link waitsOnYou} never saw it: in lap 13 a try cut by its turn budget
+ * reached neither the host's program nor the tab, and the owner found it by
+ * looking. A refusal and a defect both qualify, because in both the work did
+ * not happen and what comes next is the person's to decide.
+ *
+ * **`sinceMs` bounds it to stops this reader was up for.** A failed row stays
+ * failed for ever, so without a bound the first tick after an upgrade would
+ * notify about every failure in the store's history. The host passes the time
+ * it started; the tab passes nothing past what is on its screen, because a
+ * fresh tab counts what it arrives holding as seen.
+ */
+export function lapsStopped(laps: readonly IterationRecord[], sinceMs: number): readonly string[] {
+  return laps.flatMap((lap) =>
+    lap.status === "failed" && lap.updatedAtMs >= sinceMs ? [`stopped:${lap.id}`] : [],
+  );
+}

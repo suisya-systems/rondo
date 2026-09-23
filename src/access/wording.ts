@@ -436,6 +436,12 @@ export interface Chrome extends PageWords {
    */
   readonly reachLate: string;
   /**
+   * The same, for a lap that stopped short of its work (rondo#432): the thread
+   * says why, so this says only that it stopped and that the next move is
+   * theirs.
+   */
+  readonly reachStopped: string;
+  /**
    * The button that asks the browser for leave to ring (rondo#311, plan 2).
    *
    * Drawn only while the browser has not been asked: once it has an answer it
@@ -585,6 +591,15 @@ export interface Chrome extends PageWords {
    * own verb and a kernel error code (D-0076).
    */
   readonly lapNestedSandbox: string;
+  /**
+   * A lap continuo cut because the worker's turn outlived the plan's turn
+   * budget (rondo#432). Said instead of continuo's sentence, which names a
+   * session id, milliseconds, a generation and the fence: what ran out, what
+   * was left, and what the person can do next. `minutes` is the plan's turn
+   * budget, or null where the plan does not carry one. The try's cost is said
+   * to be unknown because continuo reports no spend with a refusal.
+   */
+  readonly lapTurnTimedOut: (minutes: number | null) => string;
 
   // -- The scope screen (rondo#233 S3, D-0066 rule 1) --
   /**

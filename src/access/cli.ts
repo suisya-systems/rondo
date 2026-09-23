@@ -1582,6 +1582,7 @@ export async function main(
       store,
       record,
       now: Date.now,
+      since: Date.now(),
       words: chromeFor(selected.tag),
       notify: notifierAt(environment[NOTIFIER_ENV] ?? null),
       say,

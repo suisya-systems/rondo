@@ -84,7 +84,7 @@ test("a running request carries its allowance and the five steps to its end", ()
   ]);
   expect(html).toContain("the invoice needs the tax broken out");
   expect(html).toContain("shop/app");
-  expect(html).toContain("$0.62 of $5.00, with $2.50 held for a try whose cost is not known yet");
+  expect(html).toContain("$0.62 of $5.00, with $2.50 held for a try whose cost was not reported");
   expect(html).toContain(EN.govTries(1, 3));
   for (const step of [EN.stepWork, EN.stepChecks, EN.stepReading, EN.stepApproval, EN.stepLanding])
     expect(html).toContain(step);

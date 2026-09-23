@@ -141,6 +141,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0105 | rondo resolves a conflicting pull request on the page: the pin moves to cadenza `2c56970` so a worker may run `git merge --no-edit`, `D-0098` rule 2's take-in is switched on, and a conflict fix is one more attempt that takes the base in, stops at its gate, and is pushed onto the pull request it fixes | accepted |
 | D-0106 | What a person acts on sits at the top of every screen, and the thread runs newest first: presses, boxes and decisions come before any history or long content, nothing is stuck to the window's foot, and the answering box keeps every element it inherited | accepted |
 | D-0107 | Every connection to the store waits five seconds for another one's write lock instead of failing at once, and setup says so when its last step did not happen | accepted |
+| D-0110 | A lap that stops short is the person's turn: the host and the tab reach them, continuo's turn-timeout refusal is said in the person's words with what was left and what to do, and a try with no reported cost says so instead of *not yet* | accepted (point 1 pending the owner) |
 
 ---
 
@@ -23344,3 +23345,66 @@ presses: starting again, and stopping.
 inside the press. rondo#409 names the start press, so they are left as they are. The same wrapper
 applies to them if the owner wants it. The row is polled rather than signalled from `reserve()`,
 which would have to be threaded through four layers to save at most a quarter second.
+
+## D-0110 — A lap that stops short is the person's turn: the host and the tab reach them, continuo's turn-timeout refusal is said in the person's words with what was left and what to do, and a try with no reported cost says so instead of *not yet*
+
+**Status:** accepted (2026-09-23, rondo#432), point 1 pending the owner. Refs `D-0015`, `D-0068`,
+`D-0076`, `D-0079`, `D-0108`, `D-0109`, rondo#311, rondo#378, rondo#432.
+
+**Numbering.** `D-0110` is taken by this lane; a parallel lane may renumber at merge.
+
+**Why an entry is needed.** In lap 13 (2026-09-23) the first try was cut by the worker's turn budget
+(`turn_timeout_ms` 900000, written by setup). Three things went wrong on the page. Nothing reached the
+person: not the host's program, not the tab. The thread line relayed continuo's English sentence,
+with a session id, milliseconds, a generation and the fence, on a Japanese page. And the cost face
+said the try's cost was *not known yet*, when nothing would ever report it. No entry said whether a
+stop is a thing rondo tells the person about, and `src/access/reach.ts` said an ending is not.
+
+### The decision
+
+**1. The ceiling, and whether a cut try keeps its work.** Pending the owner. Measured on 2026-09-23:
+tries reported by continuo took 32 s to about 13 min across laps 5 to 12 (lap 10: 98 turns in about
+13 min; lap 12: 405.5 s). Lap 13's try was cut at 900 s with 15 files (+335 -78) uncommitted. A
+retry or revision is cut from the previous lap's commits (`src/refrain/revision.ts`), so uncommitted
+work does not carry over.
+
+**2. A lap that ends `failed` is told once, on the host and on the tab.** `lapsStopped`
+(`src/access/page-logic/waits.ts`) keys it `stopped:<lap>`. The host's minute tick claims it under
+`reach` like a turn, and says `reachStopped`. When a turn and a stop are claimed in one minute, the
+line is the turn's. The tab's `data-waits` carries the same key for the recently ended laps, so a
+new stop rings. A refusal and a defect both count, because in both the work did not happen and the
+next move is the person's.
+
+**A stop is not added to *your turn*.** A failed row stays failed, and there is no event that would
+take it out of the list again. So the list, the header count and the tab's title are unchanged. Only
+the notification is new.
+
+**The host tells only stops since it started** (`ReachPorts.since`). Without that bound, the first
+tick after an upgrade would notify about every failure in the store's history. The tab needs no
+bound, because a fresh tab counts what it arrives holding as seen (`D-0108`).
+
+**3. continuo's turn-timeout refusal is said in rondo's words** (`D-0076`, `D-0079`). continuo gives
+it no code: the class is the general `LapRefused`. So it is recognised by its pinned sentence's two
+fixed parts (`isTurnTimeoutRefusal`, `src/continuo/protocol.ts`), exactly as the nested-sandbox
+refusal is. `lapTurnTimedOut` says that the time ran out, with the plan's `turn_timeout_ms` in
+minutes, and that the changes are still in the workspace. It says that uncommitted work is not
+delivered and does not carry over to the next try, that the try's cost is not known, and what to do:
+start again, or set a smaller scope first. continuo's sentence stays on the row as the reason. A
+reworded sentence at a later pin falls back to relaying continuo's words, and the upgrade is a
+refusal code upstream. `D-0015` rule 7 is kept in the sense `lapNestedSandbox` keeps it: nothing is
+parsed out of the sentence, and the budget is read off the plan.
+
+**4. A try with no reported cost is said to have none reported, not *not yet*.** continuo reports
+no spend with a refusal, so a cut try's cost cannot be shown. `govHeld`'s plain sentence and
+`raiseUsed` now say that the cost was not reported (`費用の報告がない`), which is true of a try
+still going and of one that never will report. The reserve is still held and still counted.
+
+### What would falsify it
+
+- continuo gives the turn-timeout refusal a code, or rewords it: `isTurnTimeoutRefusal` should read
+  the code instead.
+- continuo reports spend with a refusal: rule 4 should show the figure.
+- Stops notify often enough that people learn to ignore them, or a stop turns out to need the list's
+  *your turn* (for example, because it is missed after the notification).
+- A stop that `D-0109` also writes an ask for, where the two claims land in different minutes. The
+  person would then get two lines for one stop. Not seen yet.

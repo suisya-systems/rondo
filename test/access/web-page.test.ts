@@ -847,6 +847,29 @@ test("the page carries the waits and the sentence a tab rings with", async () =>
   expect(japanese).not.toContain(EN.reachYourTurn);
 });
 
+test("a lap that stopped short is a key the tab rings on (rondo#432)", async () => {
+  // Lap 13: the cut try reached nobody. A stop waits at no gate, so it is not
+  // in *your turn*; it is still a new key on the element the tab compares.
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  for (const [from, to] of [
+    ["planned", "admitting"],
+    ["admitting", "admitted"],
+    ["admitted", "performing"],
+  ] as const) {
+    await world.store.transition("i-0001", from, to, {}, 2_000);
+  }
+  await world.store.transition(
+    "i-0001",
+    "performing",
+    "failed",
+    { reason: "the turn ran out", failureKind: "refusal" },
+    3_000,
+  );
+  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" }, EN, mint);
+  expect(html).toContain('data-waits="[&quot;stopped:i-0001&quot;]"');
+});
+
 test("a second wait in an already-waiting request changes what the tab compares", async () => {
   // Codex, round 3, and the case a count cannot see: the request was already
   // waiting and is still one row, so a number would sit still while something

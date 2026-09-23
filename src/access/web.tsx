@@ -175,7 +175,7 @@ import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
 import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
-import { waitsOnYou } from "./page-logic/waits.js";
+import { lapsStopped, waitsOnYou } from "./page-logic/waits.js";
 import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
 import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
@@ -3944,10 +3944,18 @@ export async function operatorPage(
            *
            * The sentence rides along because it is the person's language,
            * which this request resolved and the browser did not.
+           *
+           * **A lap that stopped short rings too** (rondo#432): it is the
+           * person's turn though nothing waits at a gate. Only the recently
+           * ended ones are on the screen, and a fresh tab counts what it
+           * arrives holding as seen, so an old failure does not ring.
            */}
           <div
             id="ledger"
-            data-waits={JSON.stringify(waits.map((wait) => wait.episode))}
+            data-waits={JSON.stringify([
+              ...waits.map((wait) => wait.episode),
+              ...lapsStopped(ended, 0),
+            ])}
             data-chime={wording.reachYourTurn}
             data-title={wording.tabTitle(waitingCount)}
             data-title-turn={wording.tabTitleTurn}

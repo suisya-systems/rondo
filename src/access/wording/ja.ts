@@ -381,6 +381,7 @@ export const JA: Chrome = Object.freeze({
   modelMayArrive: "モデルレビューはこれから届くかもしれません。",
   reachYourTurn: "rondo があなたの答えを待っています。",
   reachLate: "rondo に、かかると決めていた時間を過ぎても終わらないものがあります。",
+  reachStopped: "rondo の作業が途中で止まりました。この先どうするかを決めてください。",
   chimeAsk: "このタブに通知を許可",
   tabTitle: (count) => (count === 0 ? "rondo" : `(${String(count)}) rondo`),
   tabTitleTurn: "あなたの番 — rondo",
@@ -455,6 +456,12 @@ export const JA: Chrome = Object.freeze({
     "の中）で動いているため、作業する側が自分のサンドボックスを立ち上げられず、このまま" +
     "ではコマンドが守られずに実行されてしまいます。rondo を普段の端末から起動し直してから、" +
     "もう一度試してください。",
+  lapTurnTimedOut: (minutes) =>
+    `時間切れで止まりました。作業する側が${minutes === null ? "決められた時間" : ` ${String(minutes)} 分`}` +
+    "のうちに作業を終えられなかったため、途中で止めています。それまでの変更は作業場所に残っていますが、" +
+    "コミットされていない変更は届けられず、次の試行にも引き継がれません。この回にかかった費用は報告" +
+    "されなかったため分かりません。続けるには、もう一度始めるか、作業を小さく分けて範囲を決め直して" +
+    "ください。",
 
   scopeAction: "範囲を決める",
   scopeHeading: "この依頼の範囲",
@@ -781,7 +788,7 @@ export const JA: Chrome = Object.freeze({
   raiseWas: (laps, cost, until) => `${String(laps)} 回まで、$${cost} まで、${until} (UTC) まで。`,
   raiseUsed: (attempts, usd, unread) =>
     `これまでに ${String(attempts)} 回、$${usd} を使いました` +
-    (unread === 0 ? "。" : `（うち ${String(unread)} 回はまだ費用が分かっていません）。`),
+    (unread === 0 ? "。" : `（うち ${String(unread)} 回は費用が報告されていません）。`),
   raiseFromHere:
     "新しい予算はこれから先の分です。これまでに使った分は前の承認に数えられたままで、新しい" +
     "予算からは引かれません。費用を $15 に引き上げると、合計 $15 ではなく、ここからさらに " +

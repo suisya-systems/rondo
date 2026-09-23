@@ -432,7 +432,7 @@ test("the raise screen shows what was approved and used, redraws the budgets, an
   );
   expect(html).toContain("Only the budget changes");
   expect(html).toContain("Up to 1 attempt and $7.50");
-  expect(html).toContain("Used so far: 1 attempt and $0.00, with 1 whose cost is not known yet.");
+  expect(html).toContain("Used so far: 1 attempt and $0.00, with 1 whose cost was not reported.");
   expect(html).toContain("The new budget counts from now on.");
   expect(html).toContain("the earlier approval starts nothing new");
   expect(html).toContain('<form id="raise-form" method="post" action="/raise?lang=en"');
