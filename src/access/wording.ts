@@ -436,12 +436,6 @@ export interface Chrome extends PageWords {
    */
   readonly reachLate: string;
   /**
-   * The same, for a lap that stopped short of its work (rondo#432): the thread
-   * says why, so this says only that it stopped and that the next move is
-   * theirs.
-   */
-  readonly reachStopped: string;
-  /**
    * The button that asks the browser for leave to ring (rondo#311, plan 2).
    *
    * Drawn only while the browser has not been asked: once it has an answer it
@@ -1191,6 +1185,15 @@ export interface Chrome extends PageWords {
    * (D-0076 rule 4.2).
    */
   readonly startStoppedSaid: string;
+  /**
+   * What rondo writes into the request's thread when a lap it ran ended
+   * `failed` (D-0110 rule 2): an ask, so the stop is the person's turn until
+   * they answer it. `said` is rondo's own sentence for a stop it knows by name
+   * (`refusalSaid`, such as the turn running out), or null, when the thread's
+   * own line for the lap says what happened. The options are the answering
+   * box's two presses.
+   */
+  readonly lapStoppedSaid: (said: string | null) => string;
   /**
    * The same stop, when rondo could not end the lap either (D-0109 rule 3):
    * said as itself, because inviting somebody to start again over work that is

@@ -175,7 +175,7 @@ import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
 import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget, type Threads, threadsOf } from "./page-logic/threads.js";
-import { lapsStopped, waitsOnYou } from "./page-logic/waits.js";
+import { waitsOnYou } from "./page-logic/waits.js";
 import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
 import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
@@ -2698,7 +2698,9 @@ export async function operatorPage(
   // summary's *waiting for your answer* heading both say this number -- gates,
   // questions in threads, and proposals an answer can settle -- so they cannot
   // disagree.
-  const waitingCount = waiting.length + threads.waiting.size + open.length;
+  // A question answered *stop this line* is held but no longer waits on the
+  // person (D-0110 rule 2), as in `waitsOnYou`.
+  const waitingCount = waiting.length + threads.waiting.size - threads.stopped.size + open.length;
 
   const keepsCurrent = isLive(view);
   // **The token arrives null exactly when there is no writer** (D-0041 rule 4,
@@ -3944,20 +3946,11 @@ export async function operatorPage(
            *
            * The sentence rides along because it is the person's language,
            * which this request resolved and the browser did not.
-           *
-           * **A lap that stopped short rings too** (rondo#432): it is the
-           * person's turn though nothing waits at a gate. Only the recently
-           * ended ones are on the screen, and a fresh tab counts what it
-           * arrives holding as seen, so an old failure does not ring.
            */}
           <div
             id="ledger"
-            data-waits={JSON.stringify([
-              ...waits.map((wait) => wait.episode),
-              ...lapsStopped(ended, 0),
-            ])}
+            data-waits={JSON.stringify(waits.map((wait) => wait.episode))}
             data-chime={wording.reachYourTurn}
-            data-chime-stopped={wording.reachStopped}
             data-title={wording.tabTitle(waitingCount)}
             data-title-turn={wording.tabTitleTurn}
             data-icon={tabIcon(waitingCount)}

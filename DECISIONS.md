@@ -23349,7 +23349,7 @@ inside the press. rondo#409 names the start press, so they are left as they are.
 applies to them if the owner wants it. The row is polled rather than signalled from `reserve()`,
 which would have to be threaded through four layers to save at most a quarter second.
 
-## D-0110 — A lap that stops short is the person's turn: setup gives a lap thirty minutes and tells it to commit as it goes, the host and the tab reach the person on a stop, continuo's turn-timeout refusal is said in the person's words, and a try with no reported cost says so instead of *not yet*
+## D-0110 — A lap that stops short is the person's turn: setup gives a lap thirty minutes and tells it to commit as it goes, a stop is an ask in the request's thread until the person answers it, continuo's turn-timeout refusal is said in the person's words, and a try with no reported cost says so instead of *not yet*
 
 **Status:** accepted (2026-09-23, rondo#432). Point 1 was taken by the owner, as options A and Y. Refs `D-0015`, `D-0068`,
 `D-0076`, `D-0079`, `D-0108`, `D-0109`, rondo#311, rondo#378, rondo#432.
@@ -23383,21 +23383,32 @@ and Y). Measured the same day: tries reported by continuo took 32 s to about 13 
   work under the worker's name. The page says the work was left and not delivered (rule 3).
 - Options not taken: keeping fifteen minutes (B), and sixty (C).
 
-**2. A lap that ends `failed` is told once, on the host and on the tab.** `lapsStopped`
-(`src/access/page-logic/waits.ts`) keys it `stopped:<lap>`. The host's minute tick claims it under
-`reach` like a turn, and says `reachStopped`. When a turn and a stop are claimed in one minute, the
-line is the turn's. The tab's `data-waits` carries the same key for the recently ended laps, so a
-new stop rings, with `data-chime-stopped` (`reachStopped`) as its line where every new key is a stop;
-a turn arriving with a stop keeps the turn's line, as on the host. A refusal and a defect both count, because in both the work did not happen and the
-next move is the person's.
+**2. A lap that ends `failed` writes one ask into its request's thread, and it is the person's turn
+until they answer it** (the owner, 2026-09-23, option 1 of three, on PR #433's review).
+`withStopAsk` (`src/access/conductor.ts`) runs where `admit` and `resume` return a `failed` report.
+It writes one drafter message with `asks` set, `lap-stopped-<lap>`, replying to the request, with the
+request and the lap as bases. Its words are `lapStoppedSaid`, in the host's language
+(`RONDO_OPERATOR_LANGUAGE`, `D-0079`): that the work stopped, rondo's own sentence for a stop it knows
+by name (rule 3), and the answering box's two presses as the options. A refusal and a defect both
+count, because in both the work did not happen and the next move is the person's. `D-0109` already
+does this for a start that throws after its press has answered, so a stop is now an ask whichever way
+the lap ended.
 
-**A stop is not added to *your turn*.** A failed row stays failed, and there is no event that would
-take it out of the list again. So the list, the header count and the tab's title are unchanged. Only
-the notification is new.
-
-**The host tells only stops since it started** (`ReachPorts.since`). Without that bound, the first
-tick after an upgrade would notify about every failure in the store's history. The tab needs no
-bound, because a fresh tab counts what it arrives holding as seen (`D-0108`).
+- **Being an ask is the whole of being *your turn*.** The list's *your turn*, the header's count, the
+  tab's title and chime and the host's notification all read asks already (`waitsOnYou`, `D-0108`,
+  rondo#311), so none of them needed a second reading. An earlier version of this entry notified on
+  a computed `stopped:<lap>` key and kept the stop out of the list; the owner asked for the list, and
+  that path was removed.
+- **The exits are the two answers.** *Carry on* (`carry_on`) releases the line (`D-0072`), after which
+  the person starts again as usual. *Stop this line* (`stop`) keeps the line held, and **a question
+  answered `stop` is no longer the person's turn**, for any ask and not only a stop's: `waitsOnYou`
+  skips `threads.stopped`, and the header's count leaves them out. `threads.waiting` still holds
+  them, so the line's hold and `D-0072`'s reading are unchanged. Before this, a question answered
+  `stop` stayed in *your turn* for good.
+- **Starting again takes *carry on* first.** An open ask holds back a start on the request
+  (`D-0069` rule 5), as `D-0109`'s stop already does.
+- **Nothing replays.** A failure from before this change has no ask, and nothing writes one later.
+  The ask's id is the lap's, so a second write is refused by the store.
 
 **3. continuo's turn-timeout refusal is said in rondo's words** (`D-0076`, `D-0079`). continuo gives
 it no code: the class is the general `LapRefused`. So it is recognised by its pinned sentence's two
@@ -23420,7 +23431,7 @@ still going and of one that never will report. The reserve is still held and sti
 - continuo gives the turn-timeout refusal a code, or rewords it: `isTurnTimeoutRefusal` should read
   the code instead.
 - continuo reports spend with a refusal: rule 4 should show the figure.
-- Stops notify often enough that people learn to ignore them, or a stop turns out to need the list's
-  *your turn* (for example, because it is missed after the notification).
-- A stop that `D-0109` also writes an ask for, where the two claims land in different minutes. The
-  person would then get two lines for one stop. Not seen yet.
+- A person answers *stop this line* and still expects to find the request under *your turn*, or a
+  held line with nothing on the list is forgotten.
+- Having to press *carry on* before starting again is felt as a wasted step (see rondo#431, which
+  works on the band and the scope screen while a question waits).

@@ -25,10 +25,10 @@
  * line between them rather than one each. A reminder is an attention policy the
  * operator writes (`D-0033` rule 7), and rondo does not write one for them.
  *
- * **What is worth a person's attention, and what is not.** Three things: a
- * request whose next move is theirs, a lap that stopped short (rondo#432), and
- * a lap that has been in flight longer than its own plan said to wait
- * (`D-0068`'s F1). An ordinary ending is not among them -- work finishing is what is supposed to happen, and a program
+ * **What is worth a person's attention, and what is not.** Two things: a
+ * request whose next move is theirs, and a lap that has been in flight longer
+ * than its own plan said to wait (`D-0068`'s F1). An ordinary ending is not
+ * among them -- work finishing is what is supposed to happen, and a program
  * that says so out loud every time teaches the person to ignore it, which
  * costs them the two that matter.
  *
@@ -52,7 +52,7 @@ import { spawn } from "node:child_process";
 import type { IterationRecord } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { threadsOf } from "./page-logic/threads.js";
-import { lapsPastTheirCeiling, lapsStopped, waitsOnYou } from "./page-logic/waits.js";
+import { lapsPastTheirCeiling, waitsOnYou } from "./page-logic/waits.js";
 import type { Chrome } from "./wording.js";
 
 /**
@@ -111,13 +111,7 @@ export type NotifyOutcome =
 
 /** Everything the tick reads, and the one thing it does. */
 export interface ReachPorts {
-  readonly store: Pick<IterationStore, "readLive" | "terminalIterations">;
-  /**
-   * When this host started reaching: a stop before it is not told
-   * ({@link lapsStopped}), since the person who has just started rondo is
-   * looking at the screen that says it.
-   */
-  readonly since: number;
+  readonly store: Pick<IterationStore, "readLive">;
   readonly record: Pick<AdvisoryRecord, "threadMessages" | "claimAttention">;
   readonly now: () => number;
   /**
@@ -193,12 +187,6 @@ export async function reachThePerson(ports: ReachPorts): Promise<void> {
   // settled, which is a person never told about the rest of their own request.
   const turns = waitsOnYou(threads, laps).map((wait) => wait.episode);
   const late = lapsPastTheirCeiling(laps, atMs).map((episode) => `late:${episode}`);
-  const stopped = lapsStopped(
-    (await ports.store.terminalIterations()).flatMap((outcome): IterationRecord[] =>
-      outcome.kind === "read" ? [outcome.record] : [],
-    ),
-    ports.since,
-  );
 
   // **The claim is the test, and there is no reading before it** (Codex,
   // round 2). Asking whether an episode has been sent and then writing that it
@@ -209,9 +197,8 @@ export async function reachThePerson(ports: ReachPorts): Promise<void> {
   // deduplicates rows, and being the one whose insert landed is what
   // deduplicates deliveries.
   let claimedTurn = false;
-  let claimedStop = false;
   let claimedLate = false;
-  for (const subject of [...turns, ...stopped, ...late]) {
+  for (const subject of [...turns, ...late]) {
     const claim = await ports.record.claimAttention({
       atMs,
       subjectKind: REACH_SUBJECT,
@@ -233,25 +220,19 @@ export async function reachThePerson(ports: ReachPorts): Promise<void> {
     if (claim.kind === "claimed") {
       if (turns.includes(subject)) {
         claimedTurn = true;
-      } else if (stopped.includes(subject)) {
-        claimedStop = true;
       } else {
         claimedLate = true;
       }
     }
   }
-  if (!claimedTurn && !claimedStop && !claimedLate) {
+  if (!claimedTurn && !claimedLate) {
     return;
   }
-  // **Whichever is more the person's to act on.** A turn is theirs to take;
-  // a stop is theirs to decide what comes next of; a lap past its ceiling is
-  // rondo saying it does not know. Several in one minute is still one line,
-  // and the one that can be acted on is the one worth carrying.
-  const sentence = claimedTurn
-    ? ports.words.reachYourTurn
-    : claimedStop
-      ? ports.words.reachStopped
-      : ports.words.reachLate;
+  // **Whichever of the two is more the person's to act on.** A turn is
+  // theirs to take; a lap past its ceiling is rondo saying it does not know.
+  // Both in one minute is still one line, and the one that can be acted on is
+  // the one worth carrying.
+  const sentence = claimedTurn ? ports.words.reachYourTurn : ports.words.reachLate;
   const outcome = await ports.notify(sentence);
   if (outcome.kind === "failed") {
     ports.say(

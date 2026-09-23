@@ -544,8 +544,7 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     // because `hx-get` and `hx-select` have to agree with each other.
     expect(html).toContain(
       '<div id="ledger" data-waits="[&quot;gate:i-0001:awaiting_human&quot;]" ' +
-        `data-chime="${EN.reachYourTurn}" data-chime-stopped="${EN.reachStopped}" ` +
-        'data-title="(1) rondo" ' +
+        `data-chime="${EN.reachYourTurn}" data-title="(1) rondo" ` +
         `data-title-turn="${EN.tabTitleTurn}" data-icon="/icon-wait.svg" ` +
         // Where the tab reports what its notice did, and only with a writer's
         // token (rondo#414).
@@ -848,29 +847,6 @@ test("the page carries the waits and the sentence a tab rings with", async () =>
   expect(japanese).not.toContain(EN.reachYourTurn);
 });
 
-test("a lap that stopped short is a key the tab rings on (rondo#432)", async () => {
-  // Lap 13: the cut try reached nobody. A stop waits at no gate, so it is not
-  // in *your turn*; it is still a new key on the element the tab compares.
-  const world = fresh();
-  await reserve(world, "i-0001", "do the thing");
-  for (const [from, to] of [
-    ["planned", "admitting"],
-    ["admitting", "admitted"],
-    ["admitted", "performing"],
-  ] as const) {
-    await world.store.transition("i-0001", from, to, {}, 2_000);
-  }
-  await world.store.transition(
-    "i-0001",
-    "performing",
-    "failed",
-    { reason: "the turn ran out", failureKind: "refusal" },
-    3_000,
-  );
-  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" }, EN, mint);
-  expect(html).toContain('data-waits="[&quot;stopped:i-0001&quot;]"');
-});
-
 test("a second wait in an already-waiting request changes what the tab compares", async () => {
   // Codex, round 3, and the case a count cannot see: the request was already
   // waiting and is still one row, so a number would sit still while something
@@ -902,6 +878,45 @@ test("a second wait in an already-waiting request changes what the tab compares"
   expect(second).toContain(
     'data-waits="[&quot;ask:ask&quot;,&quot;gate:i-0001:awaiting_human&quot;]"',
   );
+});
+
+test("a question answered *stop this line* leaves your turn, the count and the tab (D-0110)", async () => {
+  // A stopped lap's ask is the person's turn until they answer it; *stop this
+  // line* is one of the two answers, so it has to take the request off the
+  // list as well, though the line stays held.
+  const world = fresh();
+  await openRequest(world, "req-a", "have a look at this");
+  const asked = await world.record.recordThreadMessage({
+    messageId: "lap-stopped-i-0001",
+    body: "the work stopped partway",
+    authorKind: "drafter",
+    authorId: "rondo/advisory/deterministic",
+    inReplyTo: "req-a",
+    atMs: 600,
+    bases: [{ form: "message", messageId: "req-a" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  const ports = portsOver(world, "ada", []);
+  const before = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(before).toContain('data-waits="[&quot;ask:lap-stopped-i-0001&quot;]"');
+  expect(before).toContain("<title>(1) rondo</title>");
+
+  const stopped = await world.record.recordThreadMessage({
+    messageId: "m-stop",
+    body: "stop",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "lap-stopped-i-0001",
+    atMs: 700,
+    bases: [],
+    asks: false,
+    answerOutcome: "stop",
+  });
+  expect(stopped.kind).toBe("recorded");
+  const after = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(after).toContain('data-waits="[]"');
+  expect(after).toContain("<title>rondo</title>");
 });
 
 test("the header offers three text sizes, script only, outside what the redraw swaps, in the page's language", async () => {

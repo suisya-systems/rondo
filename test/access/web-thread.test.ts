@@ -324,12 +324,12 @@ test("D-0072: the page keeps a question waiting until an answer carries it on, a
   expect(await openInStore()).toEqual(["ask-b"]);
   expect(await page()).toContain(">1 waiting</a>");
 
-  // An answer that stops: still held, still drawn as waiting.
+  // An answer that stops: still held -- the store and the thread both say so
+  // -- but no longer the person's turn, so the count drops (D-0110 rule 2).
   await answered("m-stop", { answerOutcome: "stop", atMs: 5_000 });
   expect(await openInStore()).toEqual(["ask-b"]);
   const stopped = await page();
-  expect(stopped).toContain(">1 waiting</a>");
-  expect(messageIn(stopped, "ask-b")).toContain("data-waiting");
+  expect(stopped).not.toContain(">1 waiting</a>");
 
   // **The page says which of the two reasons a question is still held for, and
   // what the answer was** (D-0072 rules 1 and 3, Codex): the words are kept
@@ -348,8 +348,10 @@ test("D-0072: the page keeps a question waiting until an answer carries it on, a
   // A reply that answered nothing is marked as neither.
   expect(messageIn(thread, "m-chat")).not.toContain(">Stopped this line</span>");
   expect(messageIn(thread, "m-chat")).not.toContain(">Carried on</span>");
-  // The page a person arrives on says it too, because it is the same thread.
-  expect(stopped).toContain(">You stopped this line</span>");
+  // The thread still marks it held, and the summary no longer selects it,
+  // because nothing in it waits on the person.
+  expect(messageIn(thread, "ask-b")).toContain("data-waiting");
+  expect(stopped).not.toContain(">You stopped this line</span>");
 
   // The answer that carries on is the one that ends it, in both readings.
   await answered("m-go", { answerOutcome: "carry_on", body: "go on", atMs: 6_000 });

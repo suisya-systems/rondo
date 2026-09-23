@@ -381,7 +381,6 @@ export const JA: Chrome = Object.freeze({
   modelMayArrive: "モデルレビューはこれから届くかもしれません。",
   reachYourTurn: "rondo があなたの答えを待っています。",
   reachLate: "rondo に、かかると決めていた時間を過ぎても終わらないものがあります。",
-  reachStopped: "rondo の作業が途中で止まりました。この先どうするかを決めてください。",
   chimeAsk: "このタブに通知を許可",
   tabTitle: (count) => (count === 0 ? "rondo" : `(${String(count)}) rondo`),
   tabTitleTurn: "あなたの番 — rondo",
@@ -1035,6 +1034,15 @@ export const JA: Chrome = Object.freeze({
     "おすすめ: rondo 自体の不具合なので、まずログを見る。",
     "この流れは、このメッセージに答えるまで止まったままです。",
   ].join("\n"),
+  lapStoppedSaid: (said) =>
+    [
+      `作業が途中で止まりました。${said ?? "何が起きたかは、このスレッドの作業の行に出ています。"}`,
+      "選べること:",
+      "- 続ける。そのあと、もう一度始めます。あきらめるもの: 今回の試行でコミットされなかった変更。",
+      "- この線を止める。あきらめるもの: この依頼の作業。",
+      "おすすめ: 続ける。",
+      "この流れは、このメッセージに答えるまで止まったままです。",
+    ].join("\n"),
   startStoppedSaid: [
     "中断しました。始めた作業を続けられなくなったので、rondo が終了させました。",
     "動いているものはもうありません。このホストの枠も、取り置いていた金額も、押さえていた" +

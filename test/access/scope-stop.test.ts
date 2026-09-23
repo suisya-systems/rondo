@@ -24,7 +24,10 @@ import type {
   LandingReading,
   LandingRequest,
 } from "../../src/access/forge.js";
+import { threadsOf } from "../../src/access/page-logic/threads.js";
+import { waitsOnYou } from "../../src/access/page-logic/waits.js";
 import { admitUnderScope, type ScopeAct, type ScopeAdmitPorts } from "../../src/access/scope.js";
+import { chromeFor, EN } from "../../src/access/wording.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { classifyPlan } from "../../src/refrain/classification.js";
 import {
@@ -1122,6 +1125,89 @@ test("D-0061 5.3: a lap naming a request reports its gate and reading once, aski
   expect(String(h.stops()[1]?.["body"])).toContain(`run '${String(runId)}' was closed completed`);
   // A reader of the thread can get from the report to the pull request (rondo#210).
   expect(String(h.stops()[1]?.["body"])).toContain("pull request https://github.com/o/r/pull/7");
+});
+
+// --- D-0110 rule 2: a lap that stops is the person's turn until they answer --
+
+/** continuo's turn-timeout refusal, as lap 13 received it. */
+const TURN_TIMEOUT =
+  "session s-1 did not finish its turn within 900000ms; the last answer was session 's-1' " +
+  "has written no result event on generation 0, so the turn has not ended. The workspace and " +
+  "the fence are left exactly as they are -- the refusal is about the turn, and deleting a " +
+  "checkout the worker may have written into is not a rollback -- and the session is stopped " +
+  "on the way out";
+
+test("D-0110: a lap that stops writes one ask in the person's words, and each answer takes it out of your turn", async () => {
+  const h = await harness();
+  const ja = chromeFor("ja");
+  const cut: ReportingPorts = {
+    ...h.reporting,
+    thread: { record: h.record, store: h.store, words: ja },
+    performLap: async () => ({ kind: "refused", message: TURN_TIMEOUT }),
+  };
+  const report = await admit(cut, h.advisory, PLAN, POLICY, "i-cut", null, null, ROOT);
+  expect(report.status).toBe("failed");
+  const asks = h.stops().filter((row) => row["message_id"] === "lap-stopped-i-cut");
+  expect(asks).toHaveLength(1);
+  expect(asks[0]).toMatchObject({ in_reply_to: ROOT, asks: 1 });
+  expect(JSON.parse(String(asks[0]?.["bases"]))).toEqual([
+    { form: "message", messageId: ROOT },
+    { form: "iteration", iterationId: "i-cut" },
+  ]);
+  // In the person's language, with rondo's sentence for the turn running out
+  // and none of continuo's.
+  expect(String(asks[0]?.["body"])).toContain(ja.lapTurnTimedOut(15));
+  expect(String(asks[0]?.["body"])).toContain(ja.answerStopAction);
+  expect(String(asks[0]?.["body"])).not.toMatch(/900000|generation|fence/);
+
+  const turns = async () => {
+    const read = await h.record.threadMessages();
+    if (read.kind !== "read") throw new Error("the thread did not read");
+    return waitsOnYou(threadsOf(read.messages, new Set(), new Map()), []).map((w) => w.episode);
+  };
+  expect(await turns()).toEqual(["ask:lap-stopped-i-cut"]);
+
+  const answer = async (messageId: string, answerOutcome: "carry_on" | "stop", atMs: number) =>
+    expect(
+      await h.record.recordThreadMessage({
+        messageId,
+        body: answerOutcome,
+        authorKind: "operator",
+        authorId: "oidc|operator-1",
+        inReplyTo: "lap-stopped-i-cut",
+        atMs,
+        bases: [],
+        asks: false,
+        answerOutcome,
+      }),
+    ).toEqual({ kind: "recorded" });
+  // *Stop this line*: held, and no longer the person's turn.
+  await answer("m-stop", "stop", 5_000);
+  expect(await turns()).toEqual([]);
+  // *Carry on*: released, and not their turn either.
+  await answer("m-carry", "carry_on", 6_000);
+  expect(await turns()).toEqual([]);
+});
+
+test("D-0110: a thread with no words writes no ask, and a lap that reaches its gate writes none", async () => {
+  const h = await harness();
+  const cut: ReportingPorts = {
+    ...h.reporting,
+    performLap: async () => ({ kind: "refused", message: TURN_TIMEOUT }),
+  };
+  expect((await admit(cut, h.advisory, PLAN, POLICY, "i-cut", null, null, ROOT)).status).toBe(
+    "failed",
+  );
+  const worded: ReportingPorts = {
+    ...h.reporting,
+    thread: { record: h.record, store: h.store, words: EN },
+  };
+  expect((await admit(worded, h.advisory, PLAN, POLICY, "i-r", null, null, ROOT)).status).toBe(
+    "awaiting_human",
+  );
+  expect(h.stops().filter((row) => String(row["message_id"]).startsWith("lap-stopped-"))).toEqual(
+    [],
+  );
 });
 
 test("D-0061 5.3: a report never answers a stop, and a lap naming no request reports nothing", async () => {

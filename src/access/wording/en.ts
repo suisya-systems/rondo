@@ -356,7 +356,6 @@ explanation you pressed on and then answers the gate.`,
   modelMayArrive: "The model review may still arrive.",
   reachYourTurn: "rondo is waiting for your answer.",
   reachLate: "Something in rondo has been going longer than it was meant to.",
-  reachStopped: "A piece of rondo's work stopped partway. What happens next is up to you.",
   chimeAsk: "Allow notifications in this tab",
   tabTitle: (count) => (count === 0 ? "rondo" : `(${String(count)}) rondo`),
   tabTitleTurn: "Your turn - rondo",
@@ -1021,6 +1020,15 @@ explanation you pressed on and then answers the gate.`,
     "Recommended: looking at the log, since this is a fault in rondo itself.",
     "This line stays stopped until this message is answered.",
   ].join("\n"),
+  lapStoppedSaid: (said) =>
+    [
+      `The work stopped partway. ${said ?? "What happened is on the work's line in this thread."}`,
+      "Options:",
+      "- Carrying on, then starting again. Gives up: what this try changed and did not commit.",
+      "- Stopping this line. Gives up: this request's work.",
+      "Recommended: carrying on.",
+      "This line stays stopped until this message is answered.",
+    ].join("\n"),
   startStoppedSaid: [
     "Stopped: the work you started could not be kept running, so rondo has ended it.",
     "Nothing of it is running now, and the room it took on this host, the money held for it and " +

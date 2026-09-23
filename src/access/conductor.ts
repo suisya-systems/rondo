@@ -97,8 +97,10 @@ import {
 } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
 import { modelReadingLines } from "./model-review/judgement.js";
+import { refusalSaid } from "./page-logic/laps.js";
 import { relayQuestion } from "./question.js";
 import { LIST_LIMIT, READING_REMOTE, type ReadingOptions, readingOf } from "./review.js";
+import type { Chrome } from "./wording.js";
 
 export type { ConductorReport };
 
@@ -265,6 +267,8 @@ export function conductorPorts(
   store: IterationStore,
   record: Pick<AdvisoryRecord, "recordThreadMessage"> | null,
   now: () => number = Date.now,
+  /** The person's words for a stopped lap's ask (D-0110 rule 2); null writes none. */
+  words: Chrome | null = null,
 ): ReportingPorts {
   const port: StorePort = store;
   return {
@@ -275,6 +279,7 @@ export function conductorPorts(
         : {
             record,
             store,
+            ...(words === null ? {} : { words }),
             // The same read `model-review/host.ts` makes; continuo's words are
             // passed on unread except for the worker's block (D-0098 rule 4.2).
             rationale: async (row) => {
@@ -576,6 +581,9 @@ export async function admit(
   }
   if (report.status === "awaiting_human") {
     return await withGateReport(ports, await withClaimComparison(ports, report));
+  }
+  if (report.status === "failed") {
+    return await withStopAsk(ports, report);
   }
   if (report.status !== "abandoned" || report.iterationId === null) {
     return report;
@@ -947,6 +955,13 @@ async function proposeLine(advisory: UnpromptedPorts, iterationId: string): Prom
 export async function resume(ports: ReportingPorts, iterationId: string): Promise<ConductorReport> {
   const before = await ports.store.read(iterationId);
   const report = await resumeIteration(ports, iterationId);
+  // Only a lap that ended in this look: one already failed was told when it did.
+  if (
+    report.status === "failed" &&
+    !(before.kind === "read" && before.record.status === "failed")
+  ) {
+    return await withStopAsk(ports, report);
+  }
   // An open gate left as it was is no gate reached: a `revise` that walked a
   // second lap names a new gate, and only that one is reported.
   if (
@@ -1001,6 +1016,12 @@ export interface RequestThread {
    * thread that only reports.
    */
   readonly rationale?: ((record: IterationRecord) => Promise<string | null>) | undefined;
+  /**
+   * The person's own words, as the host resolved them (`D-0079`), for the ask
+   * a stopped lap writes (D-0110 rule 2). Absent in a thread that only
+   * reports, which writes none.
+   */
+  readonly words?: Chrome | undefined;
 }
 
 /** What a closing lap's reports say was not read (D-0098 rule 5.3). */
@@ -1141,6 +1162,63 @@ export function checksAnswerId(
 async function gateIdOf(ports: ConductorPorts, iterationId: string): Promise<string | null> {
   const after = await ports.store.read(iterationId);
   return after.kind === "read" ? after.record.gateId : null;
+}
+
+/**
+ * **D-0110 rule 2: a lap that ended `failed` is the person's turn**, so one
+ * drafter message with `asks` set goes into its request's thread, in the
+ * person's words. Every reader of *whose turn* already reads asks -- the list,
+ * the header count, the tab and the host's notification -- and the answering
+ * box's two presses are the exits: `carry_on` releases the line to start
+ * again, and `stop` ends it and takes it out of *your turn* (`waitsOnYou`).
+ *
+ * Its id is the lap's, so the store refuses a second one. A thread with no words
+ * writes none, and a write that fails is a line of the report: the lap's own
+ * ending is committed before this runs.
+ */
+async function withStopAsk(
+  ports: ReportingPorts,
+  report: ConductorReport,
+): Promise<ConductorReport> {
+  const thread = ports.thread;
+  if (
+    thread === undefined ||
+    thread === null ||
+    thread.words === undefined ||
+    report.iterationId === null
+  ) {
+    return report;
+  }
+  const found = await thread.store.read(report.iterationId);
+  if (found.kind !== "read" || found.record.status !== "failed") {
+    return report;
+  }
+  const row = found.record;
+  const outcome = await thread.record.recordThreadMessage({
+    messageId: `lap-stopped-${row.id}`,
+    body: thread.words.lapStoppedSaid(
+      row.reason === null ? null : refusalSaid(thread.words, row, row.reason),
+    ),
+    authorKind: "drafter",
+    authorId: DETERMINISTIC_DRAFTER,
+    inReplyTo: row.requestMessageId,
+    atMs: ports.now(),
+    bases: [
+      { form: "message", messageId: row.requestMessageId },
+      { form: "iteration", iterationId: row.id },
+    ],
+    asks: true,
+  });
+  return outcome.kind === "recorded"
+    ? report
+    : {
+        ...report,
+        lines: [
+          ...report.lines,
+          `The person was NOT told in the request's thread that lap '${row.id}' stopped: ` +
+            outcome.reason,
+        ],
+      };
 }
 
 async function withGateReport(

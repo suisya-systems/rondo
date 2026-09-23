@@ -29,31 +29,10 @@ import {
 import { chromeFor, EN } from "../../src/access/wording.js";
 import { fresh, openGate, openRequest, reserve } from "./page-world.js";
 
-/** Walk one reserved row to terminal `failed` at `atMs`, the way a cut try ends. */
-async function stop(world: ReturnType<typeof fresh>, id: string, atMs: number): Promise<void> {
-  for (const [from, to] of [
-    ["planned", "admitting"],
-    ["admitting", "admitted"],
-    ["admitted", "performing"],
-  ] as const) {
-    await world.store.transition(id, from, to, {}, 2_000);
-  }
-  const ended = await world.store.transition(
-    id,
-    "performing",
-    "failed",
-    { reason: "the turn ran out", failureKind: "refusal" },
-    atMs,
-  );
-  if (ended.kind !== "transitioned") {
-    throw new Error(`the fixture did not stop: ${JSON.stringify(ended)}`);
-  }
-}
-
 /** The tick, with the program and the console recorded rather than run. */
 function tickOver(
   world: ReturnType<typeof fresh>,
-  over: { readonly fails?: string; readonly nowMs?: number; readonly since?: number } = {},
+  over: { readonly fails?: string; readonly nowMs?: number } = {},
 ) {
   const sent: string[] = [];
   const said: string[] = [];
@@ -61,7 +40,6 @@ function tickOver(
     store: world.store,
     record: world.record,
     now: () => over.nowMs ?? 50_000,
-    since: over.since ?? 0,
     words: EN,
     notify: async (sentence: string): Promise<NotifyOutcome> => {
       sent.push(sentence);
@@ -388,43 +366,4 @@ test("a store that will not take the claim is said, and nothing is sent on it", 
   });
   expect(sent).toEqual([]);
   expect(said.join("\n")).toContain("the database is locked");
-});
-
-test("a lap that stopped short reaches the person once, in their words (rondo#432)", async () => {
-  // Lap 13: a try cut by its turn budget reached neither the host's program
-  // nor the tab. A stop is terminal, so it was on neither side of *whose turn*.
-  const world = fresh();
-  await reserve(world, "a", "do the thing");
-  await stop(world, "a", 3_000);
-  const tick = tickOver(world, { since: 2_500 });
-  await tick.run();
-  expect(tick.sent).toEqual([EN.reachStopped]);
-  expect(claimed(world)).toEqual(["stopped:a"]);
-
-  const again = tickOver(world, { since: 2_500 });
-  await again.run();
-  expect(again.sent).toEqual([]);
-  expect(chromeFor("ja").reachStopped).not.toBe(EN.reachStopped);
-});
-
-test("a stop from before the host started is not told, so an upgrade does not replay history", async () => {
-  const world = fresh();
-  await reserve(world, "a", "do the thing");
-  await stop(world, "a", 3_000);
-  const tick = tickOver(world, { since: 3_001 });
-  await tick.run();
-  expect(tick.sent).toEqual([]);
-  expect(claimed(world)).toEqual([]);
-});
-
-test("a turn and a stop in one minute is one line, and it is the turn", async () => {
-  const world = fresh();
-  await reserve(world, "a", "do the thing");
-  await openGate(world, "a");
-  await reserve(world, "b", "do the other thing");
-  await stop(world, "b", 3_000);
-  const tick = tickOver(world);
-  await tick.run();
-  expect(tick.sent).toEqual([EN.reachYourTurn]);
-  expect(claimed(world).toSorted()).toEqual(["gate:a:awaiting_human", "stopped:b"]);
 });
