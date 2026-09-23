@@ -585,12 +585,12 @@ function recordedFold(wording: Chrome, lines: readonly string[]) {
  * and where it came from.
  *
  * **`among` is the plans this one is offered beside** (`D-0081` rule 4.2,
- * rondo#305). The place is named only where the person could not otherwise
- * tell this plan from another on the list -- so the key each plan is compared
- * by is its own line with the place left out, and a plan whose root, agent
- * type or origin already reads differently from every other says no place at
- * all. Where two lines would read the same, the repository is what is left to
- * tell them apart, and it is said in the person's own name for it.
+ * rondo#305). The place is named only where two of the lines offered would
+ * read the same without it -- so the key each plan is compared by is its own
+ * line with the place left out, and a plan whose root, agent type or origin
+ * already reads differently from every other says no place at all. Where two
+ * lines would read the same, the repository is what is left to tell them
+ * apart, and it is said in the person's own name for it.
  */
 function planLine(wording: Chrome, plan: HeldPlan, among: readonly HeldPlan[]): string {
   const lineOf = (one: HeldPlan, place: string | null) =>
@@ -601,7 +601,7 @@ function planLine(wording: Chrome, plan: HeldPlan, among: readonly HeldPlan[]): 
     );
   const said = placeSaid(
     { otherwise: lineOf(plan, null), repository: plan.repository },
-    among.map((one) => ({ otherwise: lineOf(one, null), repository: one.repository })),
+    among.map((one) => lineOf(one, null)),
   );
   return lineOf(plan, said);
 }

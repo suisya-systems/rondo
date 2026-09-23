@@ -4,13 +4,16 @@
  * `D-0076` rules 3.3 and 5.1).
  *
  * One store serves several repositories and their work is one list, and the
- * question the rule asks is not how many of them there are. It is whether the
- * person, reading what the page already says, could tell two things apart: two
- * requests whose first lines differ are told apart by the person's own words,
- * and a place beside them separates nothing. Two requests that read the same
- * are told apart by nothing else, and there the place is said -- in the
- * person's own name for it, never the path rondo holds it by and never an
- * `OWNER/NAME`.
+ * question the rule asks is not how many of them there are. It is whether two
+ * of the things drawn read the same: two requests whose first lines differ are
+ * told apart by the person's own words, and a place beside them separates
+ * nothing. Two requests whose first lines read the same are told apart by
+ * nothing else, and there the place is said -- in the person's own name for
+ * it, never the path rondo holds it by and never an `OWNER/NAME`.
+ *
+ * **A request counts once, whatever has run under it.** A request retried in
+ * another repository is one request on the list and nothing to mistake for
+ * another, so it says no place either.
  *
  * Both cases are drawn in both wording sets (D-0079): what the set decides is
  * the prose around a name, and the rule itself must not move with the
@@ -19,7 +22,7 @@
 import { expect, test } from "vitest";
 
 import { type Chrome, chromeFor } from "../../src/access/wording.js";
-import { fresh, operatorPage, portsOver, reserve } from "./page-world.js";
+import { fresh, openRequest, operatorPage, portsOver, reserve } from "./page-world.js";
 
 /** The two places a person in these cases works in, as rondo holds them. */
 const ONE = "/home/ada/work/shop-app";
@@ -73,6 +76,23 @@ for (const wording of [EN, JA]) {
     expect(html).toContain("billing");
     expect(html).not.toContain(ONE);
     expect(html).not.toContain(OTHER);
+  });
+
+  test(`one request whose laps ran in two places names neither (${wording.lang})`, async () => {
+    const world = fresh();
+    await openRequest(world, "req-1", "the build is broken");
+    // The same request, tried twice, the retry in another repository. It is
+    // one request on the list, so there is nothing on the page it could be
+    // mistaken for -- the laps under it are not two things to tell apart.
+    await reserve(world, "i-0001", "the build is broken", null, "req-1", ONE);
+    await reserve(world, "i-0002", "the build is broken", null, "req-1", OTHER);
+
+    const html = await operatorPage(portsOver(world), null, { kind: "summary" }, wording);
+
+    expect(html).toContain("the build is broken");
+    expect(html).not.toContain("list-repo");
+    expect(html).not.toContain("shop-app");
+    expect(html).not.toContain("billing");
   });
 }
 

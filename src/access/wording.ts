@@ -667,11 +667,13 @@ export interface Chrome extends PageWords {
   /**
    * What the plan says, quiet, above the numbers it drafted them from.
    *
-   * **`place` is null where the repository is not what tells two things
+   * **`place` is null where the repository is not what tells two plans
    * apart** (`D-0081` rule 4.2, rondo#305), and the sentence is then the
-   * workspace root alone. Where it is said it arrives as the person's own
-   * name for the place -- never a path and never an `OWNER/NAME` -- so a set
-   * writes it as a name and not as a location.
+   * workspace root alone. Where a plan's line does say it, it arrives as the
+   * person's own name for the place -- never a path and never an
+   * `OWNER/NAME` -- so a set writes it as a name and not as a location. The
+   * recorded fold hands this the path rondo holds instead, unchanged: that
+   * fold is rondo's own record of where it runs, not a label on a choice.
    */
   readonly scopeWorkspace: (place: string | null, root: string) => string;
   readonly scopePlanDigest: (digest: string) => string;

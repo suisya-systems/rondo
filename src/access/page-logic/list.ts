@@ -106,32 +106,32 @@ export interface ThingDrawn {
 }
 
 /**
- * **The repository is said only where the person could not otherwise tell two
- * things apart** (`D-0081` rule 4.2 and its gate's answer 4, `D-0076` rules
+ * **The repository is said only where two of the things drawn would otherwise
+ * read the same** (`D-0081` rule 4.2 and its gate's answer 4, `D-0076` rules
  * 3.3 and 5.1).
  *
- * The question is not how many repositories the store serves. It is whether
- * *this* thing and some other thing on the page read the same with the place
- * left out: two requests whose first lines differ are already told apart by
- * what the person wrote, and by rule 5.1 a place added beside them separates
- * nothing and is not on the page -- however many repositories the work spans.
- * Where two keys do collide, the repository is what is left to tell them
- * apart, and it is said as {@link placeName} says it.
+ * `among` is the key of every thing drawn beside this one, this one's own key
+ * included, and the question is whether that key is there twice. Two requests
+ * whose first lines differ are already told apart by what the person wrote,
+ * and by rule 5.1 a place added beside them separates nothing -- however many
+ * repositories the store serves. Where two keys do read the same, the
+ * repository is what is left to tell them apart, and it is said as
+ * {@link placeName} says it.
  *
- * A collision with something in the *same* repository is not answered either:
- * naming a place both things are in tells them apart no better than silence.
+ * **What is counted is a thing the page draws, once.** A request is one entry
+ * however many laps have run under it, so a retry in another repository is
+ * still one request and says no place; and what a row's state is, or which
+ * day it is cut under, is not part of the question at all.
  *
  * This is the same shape as the try number on a thread's lines: with nothing
  * to tell apart, the number would be noise.
  */
-export function placeSaid(thing: ThingDrawn, among: readonly ThingDrawn[]): string | null {
+export function placeSaid(thing: ThingDrawn, among: readonly string[]): string | null {
   if (thing.repository === null) {
     return null;
   }
-  const indistinguishable = among.some(
-    (other) => other.otherwise === thing.otherwise && other.repository !== thing.repository,
-  );
-  return indistinguishable ? placeName(thing.repository) : null;
+  const alike = among.filter((other) => other === thing.otherwise).length;
+  return alike > 1 ? placeName(thing.repository) : null;
 }
 
 /**
