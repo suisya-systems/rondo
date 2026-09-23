@@ -4,13 +4,14 @@ import {
   backHead,
   CARD,
   CARD_HEADING,
+  chevron,
   note,
   PRIMARY,
   publishedReport,
 } from "../page/vocabulary.js";
 import { endedHow, materialLanguage } from "../page-logic/laps.js";
 import type { PageView } from "../page-logic/routes.js";
-import type { Threads } from "../page-logic/threads.js";
+import { firstLine, requestWords, type Threads } from "../page-logic/threads.js";
 import type { Chrome } from "../wording.js";
 
 /**
@@ -54,36 +55,15 @@ export async function releaseView(
   );
   const root = records[0];
   const tips = records.filter((record) => line.closedTips.includes(record.id));
+  // **Named by the words the person wrote for it** (rondo#439), as the list
+  // and the thread name it, in one line; the brief rondo composed from them is
+  // folded under it, so the press is not below a page of rondo's own text.
+  const named = root === undefined ? "" : firstLine(requestWords([...threads.byId.values()], root));
   return framed(
     <>
       <p class="text-body leading-6">{wording.releaseLead}</p>
-      <section id="release-work" class={`${CARD} space-y-2`}>
-        <h3 class={CARD_HEADING}>{wording.releaseWorkHeading}</h3>
-        {root === undefined ? null : (
-          <p
-            class="text-title leading-6 wrap-anywhere whitespace-pre-wrap"
-            lang={materialLanguage(root)}
-          >
-            {root.request}
-          </p>
-        )}
-        {(tips.length === 0 ? records.slice(-1) : tips).map((record) => {
-          const published = publishedReport(threads, record.id);
-          return (
-            <p class="text-body leading-5 text-muted-foreground">
-              {endedHow(wording, record, nowMs)}
-              {published === null || published.url === null ? null : (
-                <>
-                  {" "}
-                  <a href={published.url} class="font-medium text-link hover:underline">
-                    {wording.publishedPullRequest}
-                  </a>
-                </>
-              )}
-            </p>
-          );
-        })}
-      </section>
+      {/* What releasing does and the press first (rondo#439): they are what
+          this screen is for (D-0082 rule 7), and the work is who it is for. */}
       <section id="release-effect" class={`${CARD} space-y-1`}>
         <h3 class={CARD_HEADING}>{wording.releaseEffectHeading}</h3>
         {wording.releaseEffect.map((said) => (
@@ -115,6 +95,44 @@ export async function releaseView(
           </span>
         </form>
       )}
+      <section id="release-work" class={`${CARD} space-y-2`}>
+        <h3 class={CARD_HEADING}>{wording.releaseWorkHeading}</h3>
+        {root === undefined ? null : (
+          <p class="text-title leading-6 wrap-anywhere" lang="">
+            {named}
+          </p>
+        )}
+        {(tips.length === 0 ? records.slice(-1) : tips).map((record) => {
+          const published = publishedReport(threads, record.id);
+          return (
+            <p class="text-body leading-5 text-muted-foreground">
+              {endedHow(wording, record, nowMs)}
+              {published === null || published.url === null ? null : (
+                <>
+                  {" "}
+                  <a href={published.url} class="font-medium text-link hover:underline">
+                    {wording.publishedPullRequest}
+                  </a>
+                </>
+              )}
+            </p>
+          );
+        })}
+        {root === undefined ? null : (
+          <details id="release-brief" class="group">
+            <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md py-1 text-meta leading-5 text-muted-foreground outline-none select-none hover:text-link focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+              {chevron()}
+              {wording.releaseBrief}
+            </summary>
+            <p
+              class="mt-2 text-body leading-6 wrap-anywhere whitespace-pre-wrap"
+              lang={materialLanguage(root)}
+            >
+              {root.request}
+            </p>
+          </details>
+        )}
+      </section>
       {/* What the line holds and why it is held, under the press (D-0106,
           rondo#408): what releasing does stays above it, since that is what
           the press needs (D-0082 rule 7). */}

@@ -38,7 +38,7 @@ import {
   TONE,
 } from "../page/vocabulary.js";
 import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "../page-logic/routes.js";
-import { firstLine, type Threads, waitingAsk } from "../page-logic/threads.js";
+import { firstLine, requestWords, type Threads, waitingAsk } from "../page-logic/threads.js";
 import { approvalTip, heldAgentTypeLines, scopeBudgetsFromStore } from "../scope.js";
 import type { Chrome } from "../wording.js";
 
@@ -1472,10 +1472,16 @@ async function planStart(
       // **Who holds the files, by their request** (D-0076 rule 3.3), and the
       // press only where every holder has finished: the attempt is where its
       // landing is read (D-0073 rule 7), and a running holder cannot have landed.
+      // By the words the person wrote for the holding request (rondo#439).
+      const read = await ports.record.threadMessages();
+      const messages = read.kind === "read" ? read.messages : [];
       const holders = await Promise.all(
         ready.holders.map(async ({ line }) => {
           const root = await ports.store.read(line.lineageId);
-          return { line, request: root.kind === "read" ? root.record.request : null };
+          return {
+            line,
+            request: root.kind === "read" ? requestWords(messages, root.record) : null,
+          };
         }),
       );
       const finished = ready.holders.every(({ line }) => !line.inFlight);

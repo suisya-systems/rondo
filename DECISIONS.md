@@ -23640,18 +23640,46 @@ released, and why.
 
 **3. A start refused by held files names the holding request, and links to its release.** The
 refusal page after the press now has, under its sentence, the lines the scope screen already draws
-(`D-0076` rule 3.3): *Held by* and the first line of the holding request's words, then *Release its
-files*. That link goes to the release screen of rule 4.3 (rondo#288). The link is drawn only where
+(`D-0076` rule 3.3): *Held by* and the first line of the words the person wrote for the holding
+request, then *Release its files*. That link goes to the release screen of rule 4.3 (rondo#288). The link is drawn only where
 the host has the release press. The release screen decides whether the line can be released yet,
 and it has the press. No new press, name, permission or record is added: this reuses the existing
 release, for a person the allowlist accepts, recorded as `releasedBy: person`. The holders come from
 the refusal's own `laneRefusal`, after `D-0073` rule 7's landing reading has run once, so a holder
 that the reading released is not named.
 
+**4. A holding request is named by the person's words, everywhere it is named.** The refusal, the
+scope screen's *Held by* line and the release screen all name it the way the list and the thread
+do: the first line of the request message (`requestWords` in `src/access/page-logic/threads.ts`).
+Before this change they used the brief rondo composed for the worker (*このあとに引用されている
+issue 200 の内容に対応してください…*), which the person never wrote. The brief is used only when
+the message cannot be read.
+
+**5. A refused press answers in the page's own frame** (`src/access/screens/refused.tsx`, the
+secretary's screen review). All press refusals (start, scope, revise, publish, release, merge,
+conflict fix, raise, claim) used to answer with bare HTML: no stylesheet, no header, and the action
+as a plain link. They now use the page's stylesheet and header, the reason as a notice, and the
+maintainer's fold. For a held start there is also a card per holder, with *Release its files* drawn
+as the page's primary press-shaped link. It is still a link to the release screen, which says what
+releasing does and has the press. The ids a script or test reads (`scope-refused`,
+`answer-refused`, `refused-reason`) and the way back are unchanged.
+
+**6. The release screen puts what releasing does and the press first, and at 390px it is one
+column.** The order is now: *what happens*, the press, the work in one line (the person's words and
+how each attempt ended), the files, why rondo has not released them. The full brief, with the
+definition of done and the quoted issues, is closed under *What rondo asked the work to do, in
+full*. `page/faces.css` gains a phone fold (`max-width: 640px`). At that width there is one face
+across: the thread, then the right face, then the list. Before this, every screen kept the 1280
+fold's 300px list beside the centre, and the centre set one character per line.
+
 ### What is not done
 
 - **Rule 6's tree reading is unchanged.** A merge made on the forge, not from the page, and then
   followed by a change elsewhere on the same files, still reads `notLanded`. The person releases
   that line with rule 4.3's press, which rule 3 now makes reachable from the refusal.
+- **On a phone the summary's list is below the centre**, as it is on every screen; a phone layout
+  of its own for the summary is not designed here.
+- **The attempt's end line says the lap's status word as stored** (*closed*, in both languages);
+  `endedHow` is not changed here.
 - **Lap 14's claim in `~/rondo-lap-14` is not released by this change.** That store's line was
   merged before this change, so the owner releases it once with the release press.

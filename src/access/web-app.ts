@@ -73,8 +73,8 @@ import {
   resolveLanguage,
 } from "./page-logic/language.js";
 import { MAX_REVIEW_ROUNDS, type PageView, viewHref } from "./page-logic/routes.js";
-import { firstLine } from "./page-logic/threads.js";
 import { TAB_OUTCOMES, type TabOutcome } from "./reach.js";
+import { refusedPage } from "./screens/refused.js";
 import { APPROVE_BODY, operatorPage } from "./web.js";
 import type { Chrome } from "./wording.js";
 
@@ -2849,21 +2849,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       undefined,
       null,
       // **Which work holds the files, and its release, where the press was
-      // refused** (rondo#439, K3): the scope screen's own holder line
-      // (D-0076 rule 3.3), so a person never needs a terminal to go on. The
-      // release screen says whether the line can be released yet.
-      holders
-        .map(
-          ({ lineageId, request: words }) =>
-            `<p class="held-by">${escapeHtml(wording.planHeldBy)} ` +
-            `<span lang="">${escapeHtml(words === null ? "" : firstLine(words))}</span>` +
-            (release === null
-              ? ""
-              : ` <a href="${escapeHtml(viewHref({ kind: "release", iterationId: lineageId }, wording.lang))}">` +
-                `${escapeHtml(wording.releaseLink)}</a>`) +
-            "</p>",
-        )
-        .join(""),
+      // refused** (rondo#439, K3), so a person never needs a terminal to go on.
+      holders,
     );
   }
 
@@ -3158,25 +3145,22 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
      * (D-0076 rule 4.2), closed, with where the rest of the host's output is.
      */
     note: string | null = null,
-    /** More of the refusal, as HTML already escaped, under its sentence. */
-    more = "",
+    /** On a start held by files (rondo#439): the lines holding them. */
+    holders: Started["holders"] = [],
   ) {
-    const wording = wordingOf(c);
+    // **The page's own frame** (rondo#439): the one screen a refused press
+    // leaves a person on is where they find their way on.
     return c.html(
-      `<!doctype html><html lang="${escapeHtml(wording.lang)}"><head><meta charset="utf-8">` +
-        `<meta name="viewport" content="width=device-width, initial-scale=1">` +
-        `<title>${escapeHtml(title)}</title></head><body>` +
-        `<p id="scope-refused">${escapeHtml(line)}</p>` +
-        more +
-        (note === null || note === ""
-          ? ""
-          : `<details id="refused-reason"><summary>${escapeHtml(wording.forMaintainer)}</summary>` +
-            `<p lang="en">${escapeHtml(note)}</p><p>${escapeHtml(wording.hostLog)}</p></details>`) +
-        // The way back to what was typed, as a refused send and a refused
-        // claim both already say: with script off this page *is* the response,
-        // and the draft only exists in the browser's own history.
-        `<p>${escapeHtml(wording.sendBackNote)}</p>` +
-        `<p><a href="${escapeHtml(href)}">${escapeHtml(back)}</a></p></body></html>`,
+      refusedPage(wordingOf(c), {
+        title,
+        id: "scope-refused",
+        line,
+        href,
+        back,
+        note,
+        holders,
+        releasable: release !== null,
+      }),
       status,
     );
   }
@@ -3189,20 +3173,23 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   function claimRefused(c: Context<PageEnv>, why: ClaimRefusal, requestMessageId: string) {
     const wording = wordingOf(c);
     const line = why === "claimTooLong" ? wording.claimTooLong(MAX_CLAIM_CHARS) : wording[why];
-    const href = escapeHtml(
-      viewHref(
-        requestMessageId === ""
-          ? { kind: "summary" }
-          : { kind: "thread", messageId: requestMessageId, to: null },
-        wording.lang,
-      ),
+    const href = viewHref(
+      requestMessageId === ""
+        ? { kind: "summary" }
+        : { kind: "thread", messageId: requestMessageId, to: null },
+      wording.lang,
     );
     return c.html(
-      `<!doctype html><html lang="${escapeHtml(wording.lang)}"><head><meta charset="utf-8">` +
-        `<meta name="viewport" content="width=device-width, initial-scale=1">` +
-        `<title>${escapeHtml(wording.answerNotDone)}</title></head><body>` +
-        `<p id="answer-refused">${escapeHtml(line)}</p><p>${escapeHtml(wording.sendBackNote)}</p>` +
-        `<p><a href="${href}">${escapeHtml(wording.gateBack)}</a></p></body></html>`,
+      refusedPage(wording, {
+        title: wording.answerNotDone,
+        id: "answer-refused",
+        line,
+        href,
+        back: wording.gateBack,
+        note: null,
+        holders: [],
+        releasable: false,
+      }),
       409,
     );
   }

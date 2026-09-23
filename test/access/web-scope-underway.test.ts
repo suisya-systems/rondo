@@ -325,7 +325,9 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   const reserved = await w.store.reserve({
     numbers: null,
     id: "lap-plan-0",
-    request: "Two things, please.",
+    // The brief rondo composed, which is not the person's words (rondo#439).
+    request:
+      "Do the first of two things.\n\n---\nDefinition of done (rondo adds this to every lap)",
     plan: planPayload(admitted.plan),
     spend: null,
     scopeSpend: null,
@@ -393,6 +395,30 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   expect(finished).toContain(EN.planHeldTry);
   expect(starts(finished)).toBe(1);
   expect(finished).toContain("/?release=lap-plan-0&amp;lang=en");
+  // Named by the words the person wrote for the request, not by the brief (rondo#439).
+  expect(finished).toContain("Two things, please.");
+  expect(finished).not.toContain("Do the first of two things.");
+
+  // rondo#439: the release screen puts what releasing does and the press
+  // first, names the work in the person's one line, and folds the brief.
+  const release = await operatorPage(
+    ports,
+    "t",
+    { kind: "release", iterationId: "lap-plan-0" },
+    EN,
+  );
+  const at = (id: string) => release.indexOf(`id="${id}"`);
+  expect(at("release-effect")).toBeGreaterThan(-1);
+  expect(at("release-effect")).toBeLessThan(at("release-form"));
+  expect(at("release-form")).toBeLessThan(at("release-work"));
+  const work = release.slice(at("release-work"), at("release-files"));
+  expect(work).toContain('lang="">Two things, please.</p>');
+  const brief = work.slice(work.indexOf('<details id="release-brief"'));
+  expect(brief).toContain(EN.releaseBrief);
+  expect(brief).toContain("Definition of done");
+  expect(work.slice(0, work.indexOf('<details id="release-brief"'))).not.toContain(
+    "Definition of done",
+  );
 });
 
 test("what rondo read of a named issue is said under the message, and the scope screen says which the worker is given (D-0078 section 4)", async () => {

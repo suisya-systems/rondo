@@ -836,6 +836,7 @@ export const JA: Chrome = Object.freeze({
     "この作業は終わっていますが、ファイルを押さえたままです。あなたが手放すか、変更が既定" +
     "ブランチで見つかるまで、同じファイルを使う作業は始められません。",
   releaseWorkHeading: "作業",
+  releaseBrief: "rondo が作業に伝えた内容（全文）",
   releaseHoldsHeading: "押さえているファイル",
   releaseWhyHeading: "rondo が自分で手放していない理由",
   releaseWhy: [
