@@ -109,6 +109,12 @@ export async function reserve(
    * message and this helper leaves the conversation alone.
    */
   requestMessageId?: string,
+  /**
+   * The repository this lap's plan names (`D-0081`). One store serves several,
+   * so a fixture has to be able to put two laps in two places -- which is what
+   * the page's rule about naming one is judged against (rondo#305).
+   */
+  repository: string = PLAN.repository,
 ): Promise<void> {
   if (requestMessageId === undefined) {
     requestMessageId = `req-${id}`;
@@ -118,7 +124,7 @@ export async function reserve(
     numbers: null,
     id,
     request,
-    plan: planFor(id, materialLanguage),
+    plan: planFor(id, materialLanguage, repository),
     spend: null,
     scopeSpend: null,
     claim: ownLane(id),
@@ -175,8 +181,12 @@ export const PLAN: RunPlan = {
   intendedAction: {} as RunPlan["intendedAction"],
 };
 
-export function planFor(id: string, materialLanguage: string | null = null): JsonRecord {
-  const validated = runPlan({ ...PLAN, materialLanguage });
+export function planFor(
+  id: string,
+  materialLanguage: string | null = null,
+  repository: string = PLAN.repository,
+): JsonRecord {
+  const validated = runPlan({ ...PLAN, materialLanguage, repository });
   if (validated.kind !== "planned") {
     throw new Error(`the fixture plan is not valid: ${validated.reason}`);
   }

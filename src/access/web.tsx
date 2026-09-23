@@ -169,7 +169,7 @@ import {
   saysMore,
   workerRuns,
 } from "./page-logic/laps.js";
-import { repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
+import { placeSaid, repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
 import { asksOverLine, conflictFixBlock, mergeBlock, resultOf } from "./page-logic/result.js";
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
@@ -2809,6 +2809,40 @@ export async function operatorPage(
   const lapsUnder = (messageId: string) => allLapsByRequest.get(messageId) ?? [];
 
   /*
+   * **Where the page names a repository, and where it stays unsaid**
+   * (D-0081 rule 4.2 and its gate's answer 4, rondo#305). One store serves
+   * several repositories, and the work of all of them is one list -- so the
+   * repository is drawn where the person could not otherwise tell two things
+   * apart, and nowhere else. What tells two of these apart otherwise is the
+   * person's own words: every face draws a request by the first line of the
+   * message that opened it, so that line is the key, and the place is said
+   * only where two requests on the list read the same without it.
+   *
+   * **A request is one entry, whatever has run under it.** The key is the
+   * request's own title, so a request whose laps ran in two repositories is
+   * counted once and names neither: there is one request on the list, and
+   * nothing to mistake it for. A request nothing has run for is in the set
+   * too -- it is drawn, and its title is one another's can read the same as.
+   *
+   * The set is the whole of the list this page read, so one answer holds
+   * across the faces: a row, the running work beside an empty centre and the
+   * line under a request's title never disagree about whether the place is
+   * worth saying.
+   */
+  const titleUnder = (record: IterationRecord): string =>
+    firstLine(threads.byId.get(record.requestMessageId)?.body ?? record.request);
+  const listedTitles: string[] = threads.messages
+    .filter((message) => message.inReplyTo === null)
+    .map((root) => firstLine(root.body));
+  const placeOf = (record: IterationRecord | null): string | null =>
+    record === null
+      ? null
+      : placeSaid(
+          { otherwise: titleUnder(record), repository: repositoryOf(record) },
+          listedTitles,
+        );
+
+  /*
    * **The left face's rows** (D-0083 rules 2, 5 and 7). Every request the
    * store holds, named by the person's own words, with the repository its
    * work is in and one sentence of state. What waits on the person is lifted
@@ -2824,7 +2858,7 @@ export async function operatorPage(
       return {
         messageId: root.messageId,
         title: firstLine(root.body),
-        repository: repositoryOf(lap?.record ?? null),
+        repository: placeOf(lap?.record ?? null),
         state: rowStateOf(lap?.record ?? null, turnsHere.has(root.messageId), (record) =>
           isTerminal(record.status),
         ),
@@ -2990,7 +3024,7 @@ export async function operatorPage(
       ? null
       : governanceOf(
           governedLap,
-          repositoryOf(governedLap),
+          placeOf(governedLap),
           threads.byId.get(selectedRoot)?.atMs ?? nowMs,
           await approvalOf(governedLap),
           // A proposal is done when rondo recorded one: the published report
@@ -3491,7 +3525,7 @@ export async function operatorPage(
               // lap's own `request` stands in only where the message it was
               // started from has gone.
               title: firstLine(threads.byId.get(record.requestMessageId)?.body ?? record.request),
-              repository: repositoryOf(record),
+              repository: placeOf(record),
               goingSaid: wording.age(ago(record.createdAtMs, nowMs)),
               allowance: approval === null ? null : allowanceOf(approval),
               tries:

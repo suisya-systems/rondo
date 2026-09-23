@@ -73,6 +73,68 @@ export function repositoryOf(record: IterationRecord | null): string | null {
 }
 
 /**
+ * The person's own name for a place (`D-0081` rule 4.2, `D-0076` rule 3.3).
+ *
+ * A plan's `repository` is an absolute path, and a path is rondo's way of
+ * holding a place rather than the person's way of saying it. What the person
+ * calls the place is its last segment -- the name they cloned it under and the
+ * name they say out loud -- so that is what the screen draws, never the whole
+ * path and never the `OWNER/NAME` the forge knows it by.
+ *
+ * A value with no segment left after the separators (`/`, `\`) has no name to
+ * read off, and the answer is then null: rondo says nothing rather than
+ * falling back to the path, which is the one thing rule 4.2 forbids.
+ */
+function placeName(repository: string): string | null {
+  const segments = repository.split(/[/\\]/).filter((segment) => segment !== "");
+  return segments[segments.length - 1] ?? null;
+}
+
+/**
+ * One thing the page draws, as far as telling it from another goes.
+ */
+export interface ThingDrawn {
+  /**
+   * Everything else the page says about this thing, as one key: the title of
+   * a request, or a plan's line with its place left out. Two things whose
+   * keys are equal are two things a person reading the page cannot tell apart
+   * without being told something more.
+   */
+  readonly otherwise: string;
+  /** The repository its work is in (D-0081), or null where none is named. */
+  readonly repository: string | null;
+}
+
+/**
+ * **The repository is said only where two of the things drawn would otherwise
+ * read the same** (`D-0081` rule 4.2 and its gate's answer 4, `D-0076` rules
+ * 3.3 and 5.1).
+ *
+ * `among` is the key of every thing drawn beside this one, this one's own key
+ * included, and the question is whether that key is there twice. Two requests
+ * whose first lines differ are already told apart by what the person wrote,
+ * and by rule 5.1 a place added beside them separates nothing -- however many
+ * repositories the store serves. Where two keys do read the same, the
+ * repository is what is left to tell them apart, and it is said as
+ * {@link placeName} says it.
+ *
+ * **What is counted is a thing the page draws, once.** A request is one entry
+ * however many laps have run under it, so a retry in another repository is
+ * still one request and says no place; and what a row's state is, or which
+ * day it is cut under, is not part of the question at all.
+ *
+ * This is the same shape as the try number on a thread's lines: with nothing
+ * to tell apart, the number would be noise.
+ */
+export function placeSaid(thing: ThingDrawn, among: readonly string[]): string | null {
+  if (thing.repository === null) {
+    return null;
+  }
+  const alike = among.filter((other) => other === thing.otherwise).length;
+  return alike > 1 ? placeName(thing.repository) : null;
+}
+
+/**
  * What a request's row says, given the lap under it.
  *
  * **A request with no lap has not started**, which is a true thing to say and

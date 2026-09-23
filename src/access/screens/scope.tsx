@@ -37,6 +37,7 @@ import {
   PRIMARY,
   TONE,
 } from "../page/vocabulary.js";
+import { placeSaid } from "../page-logic/list.js";
 import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "../page-logic/routes.js";
 import { firstLine, requestWords, type Threads, waitingAsk } from "../page-logic/threads.js";
 import { approvalTip, heldAgentTypeLines, scopeBudgetsFromStore } from "../scope.js";
@@ -579,13 +580,30 @@ function recordedFold(wording: Chrome, lines: readonly string[]) {
   );
 }
 
-/** One held plan as a person reads it: where it runs, with which agent type, and where it came from. */
-function planLine(wording: Chrome, plan: HeldPlan): string {
-  return wording.scopePlanLine(
-    wording.scopeWorkspace(plan.repository, plan.workspaceRoot),
-    plan.agentTypeDigest.slice("sha256:".length, "sha256:".length + 12),
-    wording.scopePlanFrom(plan.from.kind),
+/**
+ * One held plan as a person reads it: where it runs, with which agent type,
+ * and where it came from.
+ *
+ * **`among` is the plans this one is offered beside** (`D-0081` rule 4.2,
+ * rondo#305). The place is named only where two of the lines offered would
+ * read the same without it -- so the key each plan is compared by is its own
+ * line with the place left out, and a plan whose root, agent type or origin
+ * already reads differently from every other says no place at all. Where two
+ * lines would read the same, the repository is what is left to tell them
+ * apart, and it is said in the person's own name for it.
+ */
+function planLine(wording: Chrome, plan: HeldPlan, among: readonly HeldPlan[]): string {
+  const lineOf = (one: HeldPlan, place: string | null) =>
+    wording.scopePlanLine(
+      wording.scopeWorkspace(place, one.workspaceRoot),
+      one.agentTypeDigest.slice("sha256:".length, "sha256:".length + 12),
+      wording.scopePlanFrom(one.from.kind),
+    );
+  const said = placeSaid(
+    { otherwise: lineOf(plan, null), repository: plan.repository },
+    among.map((one) => lineOf(one, null)),
   );
+  return lineOf(plan, said);
 }
 
 /**
@@ -614,8 +632,9 @@ function planChoice(
           // (D-0075 rule 2.3): a repaired setup and the stale plan it
           // replaced differ in a path this line does not show, and the time
           // is what a person can tell them apart by.
-          const line = planLine(wording, plan);
-          const alike = plans.filter((other) => planLine(wording, other) === line).length > 1;
+          const line = planLine(wording, plan, plans);
+          const alike =
+            plans.filter((other) => planLine(wording, other, plans) === line).length > 1;
           const said = alike
             ? wording.scopePlanHeldAt(line, localTime(plan.heldAtMs).replace("T", " "))
             : line;
@@ -1670,7 +1689,7 @@ async function scopeApproved(
           <input type="hidden" name="scope_decision" value={decisionId} />
           <input type="hidden" name="plan" value={runsOn.planDigest} />
           <p class="text-body leading-5 wrap-anywhere text-muted-foreground">
-            {`${wording.scopePlanAsk}: ${planLine(wording, runsOn)}`}
+            {`${wording.scopePlanAsk}: ${planLine(wording, runsOn, allowed)}`}
           </p>
           {planDone(wording, runsOn.document)}
           {/* Minted at render, as the scope id is, and for its reason: rondo

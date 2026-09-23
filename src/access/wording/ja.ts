@@ -532,7 +532,11 @@ export const JA: Chrome = Object.freeze({
     "開始できるものがありません。それに合うプランを依頼のスレッドに返信として貼ってください。",
   scopeNoApprover:
     "RONDO_APPROVER が設定されていないので、このページが誰として範囲を承認することもできません。",
-  scopeWorkspace: (repository, root) => `${repository}（${root}）`,
+  // The place is said only where it is what tells two of these apart (D-0081
+  // rule 4.2); with nothing to tell apart, the root answers "where" alone.
+  // Japanese names the place first and keeps the root beside it in brackets,
+  // which is how a Japanese reader carries a qualifier.
+  scopeWorkspace: (place, root) => (place === null ? root : `${place}（${root}）`),
   scopePlanDigest: (digest) => `プラン ${digest}`,
   scopePlanHeading: "rondo が動かすプランと、動かす場所",
   scopeRecordedFold: "作業場所とエージェント種別の許可（rondo の記録）",

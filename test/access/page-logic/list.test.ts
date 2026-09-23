@@ -7,8 +7,13 @@
  * thing that breaks the axis.
  */
 import { expect, test } from "vitest";
-import type { RequestRow } from "../../../src/access/page-logic/list.js";
-import { repositoryOf, requestList, rowStateOf } from "../../../src/access/page-logic/list.js";
+import type { RequestRow, ThingDrawn } from "../../../src/access/page-logic/list.js";
+import {
+  placeSaid,
+  repositoryOf,
+  requestList,
+  rowStateOf,
+} from "../../../src/access/page-logic/list.js";
 import type { IterationRecord } from "../../../src/store/records.js";
 
 const at = (y: number, m: number, d: number, h = 12): number => new Date(y, m - 1, d, h).getTime();
@@ -111,4 +116,74 @@ test("the repository is the one the lap's plan names, or nothing", () => {
   // printing whatever was in the plan.
   expect(repositoryOf(lap({ plan: { repository: 7 } }))).toBeNull();
   expect(repositoryOf(null)).toBeNull();
+});
+
+/*
+ * **Naming the place only where two of the things drawn would otherwise read
+ * the same** (rondo#305, `D-0081` rule 4.2, `D-0076` rules 3.3 and 5.1).
+ *
+ * `otherwise` is everything else the page says about a thing -- a request's
+ * title, a plan's line with its place left out -- and `among` is that key for
+ * every thing drawn beside it, its own included. So the question the rule asks
+ * is whether the key is there twice, and never how many repositories the store
+ * happens to serve or how many laps have run.
+ */
+
+const SHOP = "/home/ada/work/shop-app";
+const BILLING = "/home/ada/work/billing";
+
+/** One thing on the page, as far as telling it from another goes. */
+const thing = (otherwise: string, repository: string | null): ThingDrawn => ({
+  otherwise,
+  repository,
+});
+
+/** The keys of the things drawn, which is what a thing is judged against. */
+const keys = (...drawn: readonly ThingDrawn[]): string[] => drawn.map((one) => one.otherwise);
+
+test("things the page already tells apart are not told which repository they are in", () => {
+  const invoice = thing("the invoice needs the tax broken out", SHOP);
+  const receipt = thing("the receipt prints the wrong date", BILLING);
+  // Two repositories, and the person reads two different sentences: the place
+  // separates nothing they could not already separate (rule 5.1).
+  expect(placeSaid(invoice, keys(invoice, receipt))).toBeNull();
+  expect(placeSaid(receipt, keys(invoice, receipt))).toBeNull();
+  // One thing alone, and nothing at all, are both nothing to tell apart.
+  expect(placeSaid(invoice, keys(invoice))).toBeNull();
+  expect(placeSaid(invoice, [])).toBeNull();
+});
+
+test("two things that read the same are each told which repository it is in", () => {
+  const here = thing("the build is broken", SHOP);
+  const there = thing("the build is broken", BILLING);
+  // Nothing else on the page separates them, so the place is what is left --
+  // said as the person names it, which is the last segment and not the path.
+  expect(placeSaid(here, keys(here, there))).toBe("shop-app");
+  expect(placeSaid(there, keys(here, there))).toBe("billing");
+  // A trailing separator, and the shape a Windows clone is held in: the name
+  // is the last segment either way, and never the path it was read off.
+  expect(placeSaid(thing("the build is broken", `${SHOP}/`), keys(here, there))).toBe("shop-app");
+  expect(
+    placeSaid(thing("the build is broken", "C:\\Users\\ada\\work\\shop-app"), keys(here, there)),
+  ).toBe("shop-app");
+});
+
+test("a thing alike to one that names no repository is told its own", () => {
+  // A request nothing has run for is still drawn, and its title is one the
+  // other's can read the same as -- so the one that has a place says it.
+  const ran = thing("the build is broken", SHOP);
+  const not = thing("the build is broken", null);
+  expect(placeSaid(ran, keys(ran, not))).toBe("shop-app");
+  // The one with no place of its own still says none: rondo has nothing to say.
+  expect(placeSaid(not, keys(ran, not))).toBeNull();
+});
+
+test("a repository with no name to read off is not said at all", () => {
+  // rondo does not invent a name for a place it cannot read one off, and a
+  // value made only of separators is one of those. The path itself is what
+  // rule 4.2 forbids, so what is left to say is nothing.
+  const nameless = thing("the build is broken", "/");
+  const named = thing("the build is broken", BILLING);
+  expect(placeSaid(nameless, keys(nameless, named))).toBeNull();
+  expect(placeSaid(named, keys(nameless, named))).toBe("billing");
 });
