@@ -23501,6 +23501,12 @@ fold that held the digests (`scopeRecordedFold`), on the person's own form, the 
 the approved scope alike. They stay on the screen, because what rondo records is what rondo shows
 (rondo#233 S3); they are folded because nothing on them is the person's to act on.
 
+**6. Every message rondo writes signs as *rondo*.** `whoWrote` named only a model drafter's rows
+and an issue's read as rondo, and printed any other drafter row's id: the stopped lap's ask
+(`D-0110`) read *rondo/advisory/deterministic* on its sender line and on the answer box. Every
+`drafter` row is rondo's (the drafter, the relayed worker question, a stop, a refused start), so
+all of them sign as rondo; only an operator is named by id.
+
 ### What is not done
 
 - **The approve presses are not refused while a question waits.** A screen drawn before the question

@@ -20,6 +20,7 @@ import { chromeFor, EN } from "../../src/access/wording.js";
 import {
   fresh,
   gateWithChecks,
+  mint,
   openRequest,
   operatorPage,
   portsOver,
@@ -446,6 +447,16 @@ test("a stopped lap's ask is answered first too: the band points to it, not back
   drawnOnceOnTop(html, "answer-req-1");
   expect(html).toContain("to=lap-stopped-i-0001");
   expect(html).not.toContain('id="scope-req-1"');
+  // **It signs as rondo** (rondo#431): the sender line and the answer box say
+  // who asked, and `rondo/advisory/deterministic` is rondo's name for its code.
+  expect(html).not.toContain(DETERMINISTIC_DRAFTER);
+  expect(html).toContain('<span class="msg-who">rondo</span>');
+  const box = await operatorPage(portsOver(world), "t", threadOf("req-1"), EN, mint);
+  expect(box).toMatch(/Answering rondo's question, /);
+  const ja = await operatorPage(portsOver(world), "t", threadOf("req-1"), chromeFor("ja"), mint);
+  expect(ja).not.toContain(DETERMINISTIC_DRAFTER);
+  expect(ja).toContain('<span class="msg-who">rondo</span>');
+  expect(ja).toContain("rondo の質問に回答 · ");
 });
 
 test("a start refused at a scope test says the test in words, never its name (rondo#431)", () => {

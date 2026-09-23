@@ -159,7 +159,10 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   expect(root).toContain(">you</span>");
   expect(ask).toContain('data-voice="drafter"');
   expect(ask).toContain('class="msg msg-rondo"');
-  expect(ask).toContain(">rondo-drafter</span>");
+  // Every drafter row signs as rondo, whatever id it was written under
+  // (rondo#431): the row's id is rondo's name for its own code.
+  expect(ask).toContain(">rondo</span>");
+  expect(html).not.toContain("rondo-drafter");
 
   // **The ask that waits is marked, and only it** (rule 2.7): nothing replies to it.
   expect(ask).toContain("data-waiting");
@@ -202,7 +205,7 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   expect(html).toContain('<input type="hidden" name="in_reply_to" value="ask-b"/>');
   expect(html.split(MINTED.reply)).toHaveLength(2);
   expect(html).toContain(`<input type="hidden" name="message_id" value="${MINTED.reply}"/>`);
-  expect(html).toMatch(/Answering rondo-drafter's question, \d+s ago/);
+  expect(html).toMatch(/Answering rondo's question, \d+s ago/);
   // **Two presses, each naming the answer it is** (D-0072 rule 4): the route
   // refuses a press naming neither, so a form with one unnamed button would
   // answer nothing. `name`/`value` on the button is what a native submit sends,
@@ -254,7 +257,7 @@ test("the reply box points at the message a person chose, and a thread nobody wr
   expect(chosen).toContain("autofocus");
   // Pointed elsewhere, it is a send, and it says it does not answer the question.
   expect(chosen).toContain('action="/reply?lang=en" hx-post="/reply?lang=en"');
-  expect(chosen).toContain("Replying to rondo-drafter, ");
+  expect(chosen).toContain("Replying to rondo, ");
   expect(chosen).toContain('class="not-answer');
   expect(chosen).toContain("does not answer the question waiting in this thread");
   const nowhere = await operatorPage(
@@ -451,7 +454,8 @@ test("the threads speak Japanese where the page does, tokens and words untouched
   // the old thread drew (D-0083 rule 5).
   expect(html).toContain(">あなた</span>");
   expect(html).toContain("あなたの回答待ち");
-  expect(html).toContain("rondo-drafter の質問に回答 · ");
+  expect(html).toContain("rondo の質問に回答 · ");
+  expect(html).not.toContain("rondo-drafter");
   expect(html).toContain(">続ける</button>");
   expect(html).toContain(">この線を止める</button>");
   expect(html).toContain('action="/answer-ask?lang=ja"');
