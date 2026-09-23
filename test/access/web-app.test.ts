@@ -2579,6 +2579,42 @@ function draftedPorts(
   } as unknown as ServedPorts;
 }
 
+test("(start-plan) rondo#439: a start refused by held files names the holding request and offers its release, with no terminal", async () => {
+  const notThis = async () => await Promise.resolve({ ok: false, note: "not this route" });
+  const held = (release: boolean): ServedPorts =>
+    ({
+      ...draftedPorts([], []),
+      scope: new ScopePort(notThis, notThis, notThis, async () => ({
+        ok: false,
+        note: "Refused: held by line lap-14.",
+        why: "startRefusedHeld" as const,
+        holders: [{ lineageId: "lap-14", request: "Fix issue 200\nso the gate's report is kept" }],
+      })),
+      release: release ? new ReleasePort(async () => ({ ok: true, note: "" })) : null,
+    }) as unknown as ServedPorts;
+  for (const release of [true, false]) {
+    const { base, stop, closed } = await served(createApp(held(release), TOKEN));
+    const refused = await send(
+      base,
+      "/start-plan?lang=ja",
+      "POST",
+      pressHeaders(base),
+      planStartForm(),
+    );
+    expect(refused.status).toBe(409);
+    const body = refused.body.replaceAll("&#39;", "'");
+    expect(body).toContain(chromeFor("ja").startRefusedHeld);
+    // The holder by its request's first line, as the scope screen names it.
+    expect(body).toContain(
+      `<p class="held-by">${chromeFor("ja").planHeldBy} <span lang="">Fix issue 200</span>`,
+    );
+    // Its release, only where the host holds the release press.
+    expect(body.includes('href="/?release=lap-14&amp;lang=ja"')).toBe(release);
+    stop.abort();
+    expect(await closed).toBe(0);
+  }
+});
+
 /** The drafted scope's form, as the page draws it (rondo#238 C2b). */
 function draftedScopeForm(overrides: Record<string, string> = {}): Record<string, string> {
   return {

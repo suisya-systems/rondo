@@ -6151,12 +6151,24 @@ async function admitScopedPlan(
   }
   sayReport(outcome.report);
   if (outcome.report.iterationId === null) {
+    const held = outcome.report.laneRefusal;
+    if (held === undefined) {
+      return { ok: false, why: "startRefusedNotAdmitted", note: outcome.report.lines.join("\n") };
+    }
+    // Refused by files another line holds (D-0073 rule 3.1), said as that, and
+    // **by the holding request's words** (rondo#439), so the refusal can name
+    // it and offer its release where the press was made.
+    const holders = await Promise.all(
+      held.holders.map(async ({ lineageId }) => {
+        const root = await store.read(lineageId);
+        return { lineageId, request: root.kind === "read" ? root.record.request : null };
+      }),
+    );
     return {
       ok: false,
-      // Refused by files another line holds (D-0073 rule 3.1), said as that.
-      why:
-        outcome.report.laneRefusal === undefined ? "startRefusedNotAdmitted" : "startRefusedHeld",
+      why: "startRefusedHeld",
       note: outcome.report.lines.join("\n"),
+      holders,
     };
   }
   // **A lap this button started gets the reading the same lap started from a

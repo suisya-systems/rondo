@@ -16,8 +16,9 @@
  * moved in between (`--match-head-commit`).
  */
 
+import { lineShape } from "../store/lanes.js";
 import { isDeterministicReadingDrafter, latestReading, planField } from "../store/records.js";
-import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+import { type AdvisoryRecord, type IterationStore, LANE_LEDGER_AUTHOR } from "../store/sqlite.js";
 import { reportToRequest } from "./conductor.js";
 import {
   type CommandOutcome,
@@ -35,7 +36,7 @@ import type { Merged, MergeInput, MergeRefusal } from "./web-app.js";
 export interface MergePorts {
   readonly store: Pick<
     IterationStore,
-    "read" | "readingsFor" | "laneLedger" | "readLive" | "closingLapOf"
+    "read" | "readingsFor" | "laneLedger" | "readLive" | "closingLapOf" | "laneLine" | "releaseLane"
   >;
   readonly record: Pick<AdvisoryRecord, "threadMessages" | "recordThreadMessage">;
   readonly now: () => number;
@@ -230,7 +231,63 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
     },
     ports.now(),
   );
-  return { ok: true, note: line ?? "merged" };
+  const released = await releaseMerged(ports, record.id, before.baseBranch, after);
+  return { ok: true, note: [line ?? "merged", released].join("\n") };
+}
+
+/**
+ * **A merge rondo made and the forge confirmed is the landing** (rondo#439):
+ * the line's files are released at once, with the merge commit as its landing
+ * basis (`first_landed`, D-0098 rule 1.1), and not left to the tree reading of
+ * D-0073 rule 7 -- which never reads a squash as landed once a later change on
+ * the default branch touched the same files. Only into the default branch, and
+ * only where the merged lap is the line's one closed tip with nothing in
+ * flight: any other line is still owed the tree reading, or the person's
+ * release press. Said for the terminal; the merge stands either way.
+ */
+async function releaseMerged(
+  ports: MergePorts,
+  iterationId: string,
+  into: string,
+  after: Extract<PullRequestState, { kind: "read" }>,
+): Promise<string> {
+  const kept = (why: string) => `Its files were not released on the merge: ${why}.`;
+  if (after.mergeCommit === null) {
+    return kept("the forge named no merge commit");
+  }
+  if (after.defaultBranch !== into) {
+    return kept(`it went into '${into}', and the default branch is '${after.defaultBranch}'`);
+  }
+  const read = await ports.store.laneLine(iterationId);
+  if (read.kind !== "read") {
+    return kept(read.kind === "defect" ? read.reason : "its line is not in this store");
+  }
+  const { line } = read;
+  const shape = lineShape(
+    line.laps.map((lap) => ({
+      id: lap.id,
+      status: lap.status,
+      supersedesIterationId: lap.supersedesIterationId,
+    })),
+  );
+  if (shape.inFlight || shape.closedTips.join() !== iterationId) {
+    return kept("its line has another lap, which the landing reading still reads");
+  }
+  const outcome = await ports.store.releaseLane({
+    iterationId,
+    takenOver: { claimId: line.claim?.claimId ?? null, lapIds: line.laps.map((lap) => lap.id) },
+    landed: true,
+    authorKind: "drafter",
+    authorId: LANE_LEDGER_AUTHOR,
+    bases: [
+      { form: "iteration", iterationId },
+      { form: "landing", branch: into, commit: after.mergeCommit },
+    ],
+    nowMs: ports.now(),
+  });
+  return outcome.kind === "released"
+    ? `Its files were released: the merge is its landing on '${into}'.`
+    : kept(outcome.reason);
 }
 
 function refused(why: MergeRefusal, note: string): Merged {

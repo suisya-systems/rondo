@@ -73,6 +73,7 @@ import {
   resolveLanguage,
 } from "./page-logic/language.js";
 import { MAX_REVIEW_ROUNDS, type PageView, viewHref } from "./page-logic/routes.js";
+import { firstLine } from "./page-logic/threads.js";
 import { TAB_OUTCOMES, type TabOutcome } from "./reach.js";
 import { APPROVE_BODY, operatorPage } from "./web.js";
 import type { Chrome } from "./wording.js";
@@ -716,6 +717,8 @@ export interface Started {
   readonly note: string;
   readonly why?: StartRefusal;
   readonly test?: string;
+  /** On `startRefusedHeld`: each line holding the files, by its first lap and its request's words. */
+  readonly holders?: readonly { readonly lineageId: string; readonly request: string | null }[];
 }
 
 export type ScopedStartFromWeb = (input: ScopedStartInput) => Promise<Started>;
@@ -2288,6 +2291,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         request,
         decision,
         started.test ?? null,
+        null,
+        started.holders,
       );
     }
     // The request's thread, where the lap just started draws its event lines
@@ -2340,6 +2345,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         decision,
         started.test ?? null,
         runsOn,
+        started.holders,
       );
     }
     // Into the request's thread, where the lap just started draws its event
@@ -2829,6 +2835,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     decision: string | null,
     test: string | null = null,
     plan: string | null = null,
+    holders: Started["holders"] = [],
   ) {
     const wording = wordingOf(c);
     const line =
@@ -2839,6 +2846,24 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       wording.startAction,
       line,
       backToScope(wording, request, decision, null, plan),
+      undefined,
+      null,
+      // **Which work holds the files, and its release, where the press was
+      // refused** (rondo#439, K3): the scope screen's own holder line
+      // (D-0076 rule 3.3), so a person never needs a terminal to go on. The
+      // release screen says whether the line can be released yet.
+      holders
+        .map(
+          ({ lineageId, request: words }) =>
+            `<p class="held-by">${escapeHtml(wording.planHeldBy)} ` +
+            `<span lang="">${escapeHtml(words === null ? "" : firstLine(words))}</span>` +
+            (release === null
+              ? ""
+              : ` <a href="${escapeHtml(viewHref({ kind: "release", iterationId: lineageId }, wording.lang))}">` +
+                `${escapeHtml(wording.releaseLink)}</a>`) +
+            "</p>",
+        )
+        .join(""),
     );
   }
 
@@ -3133,6 +3158,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
      * (D-0076 rule 4.2), closed, with where the rest of the host's output is.
      */
     note: string | null = null,
+    /** More of the refusal, as HTML already escaped, under its sentence. */
+    more = "",
   ) {
     const wording = wordingOf(c);
     return c.html(
@@ -3140,6 +3167,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         `<meta name="viewport" content="width=device-width, initial-scale=1">` +
         `<title>${escapeHtml(title)}</title></head><body>` +
         `<p id="scope-refused">${escapeHtml(line)}</p>` +
+        more +
         (note === null || note === ""
           ? ""
           : `<details id="refused-reason"><summary>${escapeHtml(wording.forMaintainer)}</summary>` +

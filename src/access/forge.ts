@@ -864,6 +864,11 @@ export type PullRequestState =
       readonly headCommit: string;
       /** The branch it merges into: where a merge lands. */
       readonly baseBranch: string;
+      /**
+       * The repository's default branch, or null where the forge did not name
+       * it: a merge into it is a landing (D-0073 rule 6, rondo#439).
+       */
+      readonly defaultBranch: string | null;
       /** The commit a merge made, or null before one. */
       readonly mergeCommit: string | null;
       /**
@@ -920,6 +925,7 @@ export async function readPullRequest(at: PullRequestAt): Promise<PullRequestSta
   }
   const merged = (json as Record<string, unknown>)["mergeCommit"];
   const queue = (json as Record<string, unknown>)["isMergeQueueEnabled"];
+  const repository = (json as Record<string, unknown>)["repository"] ?? null;
   // A forge that did not say is not a "no": merging as if there were no queue
   // is exactly the act a queue would turn into a later one.
   if (typeof queue !== "boolean") {
@@ -930,6 +936,10 @@ export async function readPullRequest(at: PullRequestAt): Promise<PullRequestSta
     state,
     headCommit,
     baseBranch,
+    defaultBranch: stringAt(
+      (repository as { defaultBranchRef?: unknown } | null)?.defaultBranchRef,
+      "name",
+    ),
     mergeCommit: stringAt(merged, "oid"),
     mergeQueue: queue,
   };
@@ -946,7 +956,8 @@ function hostOf(url: string): string {
 
 const PULL_REQUEST_QUERY =
   "query($url: URI!) { resource(url: $url) { ... on PullRequest { " +
-  "state headRefOid baseRefName mergeCommit { oid } isMergeQueueEnabled } } }";
+  "state headRefOid baseRefName mergeCommit { oid } isMergeQueueEnabled " +
+  "repository { defaultBranchRef { name } } } } }";
 
 /** How a merge is made; the flag `gh pr merge` takes for each. */
 export type MergeMethod = "squash" | "merge" | "rebase";
