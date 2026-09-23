@@ -141,7 +141,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0105 | rondo resolves a conflicting pull request on the page: the pin moves to cadenza `2c56970` so a worker may run `git merge --no-edit`, `D-0098` rule 2's take-in is switched on, and a conflict fix is one more attempt that takes the base in, stops at its gate, and is pushed onto the pull request it fixes | accepted |
 | D-0106 | What a person acts on sits at the top of every screen, and the thread runs newest first: presses, boxes and decisions come before any history or long content, nothing is stuck to the window's foot, and the answering box keeps every element it inherited | accepted |
 | D-0107 | Every connection to the store waits five seconds for another one's write lock instead of failing at once, and setup says so when its last step did not happen | accepted |
-| D-0110 | A lap that stops short is the person's turn: the host and the tab reach them, continuo's turn-timeout refusal is said in the person's words with what was left and what to do, and a try with no reported cost says so instead of *not yet* | accepted (point 1 pending the owner) |
+| D-0110 | A lap that stops short is the person's turn: setup gives a lap thirty minutes and tells it to commit as it goes, the host and the tab reach them, continuo's turn-timeout refusal is said in the person's words with what was left and what to do, and a try with no reported cost says so instead of *not yet* | accepted |
 
 ---
 
@@ -496,6 +496,9 @@ continuo's own gates can weigh them:
   `lap perform`, `gate list`/`show`/`answer`, `db`).
 
 ### What would falsify it
+
+- Laps are cut at thirty minutes too, or a worker told to commit as it goes still ends a cut try
+  with nothing committed.
 
 - **continuo is published** (`continuo D-0045`). This is the expected end, not a surprise.
 - **continuo grows a machine-readable surface** — `--json` on the driven subcommands and a
@@ -23346,9 +23349,9 @@ inside the press. rondo#409 names the start press, so they are left as they are.
 applies to them if the owner wants it. The row is polled rather than signalled from `reserve()`,
 which would have to be threaded through four layers to save at most a quarter second.
 
-## D-0110 — A lap that stops short is the person's turn: the host and the tab reach them, continuo's turn-timeout refusal is said in the person's words with what was left and what to do, and a try with no reported cost says so instead of *not yet*
+## D-0110 — A lap that stops short is the person's turn: setup gives a lap thirty minutes and tells it to commit as it goes, the host and the tab reach the person on a stop, continuo's turn-timeout refusal is said in the person's words, and a try with no reported cost says so instead of *not yet*
 
-**Status:** accepted (2026-09-23, rondo#432), point 1 pending the owner. Refs `D-0015`, `D-0068`,
+**Status:** accepted (2026-09-23, rondo#432). Point 1 was taken by the owner, as options A and Y. Refs `D-0015`, `D-0068`,
 `D-0076`, `D-0079`, `D-0108`, `D-0109`, rondo#311, rondo#378, rondo#432.
 
 **Numbering.** `D-0110` is taken by this lane; a parallel lane may renumber at merge.
@@ -23362,11 +23365,23 @@ stop is a thing rondo tells the person about, and `src/access/reach.ts` said an 
 
 ### The decision
 
-**1. The ceiling, and whether a cut try keeps its work.** Pending the owner. Measured on 2026-09-23:
-tries reported by continuo took 32 s to about 13 min across laps 5 to 12 (lap 10: 98 turns in about
-13 min; lap 12: 405.5 s). Lap 13's try was cut at 900 s with 15 files (+335 -78) uncommitted. A
-retry or revision is cut from the previous lap's commits (`src/refrain/revision.ts`), so uncommitted
-work does not carry over.
+**1. A lap gets thirty minutes, and is told to commit as it goes** (the owner, 2026-09-23, options A
+and Y). Measured the same day: tries reported by continuo took 32 s to about 13 min across laps 5 to
+12 (lap 10: 98 turns in about 13 min; lap 12: 405.5 s). Lap 13's try was cut at 900 s with 15 files
+(+335 -78) uncommitted. A retry or revision is cut from the previous lap's commits
+(`src/refrain/revision.ts`), so uncommitted work does not carry over.
+
+- **Setup writes `turn_timeout_ms` 1800000** (`scripts/dogfood-env.sh`), up from 900000. The
+  invocation ceiling is still derived from it: turn + git + read-back + 300000, so 2280000. A store
+  set up before this keeps the plan it has, and is changed by running setup again.
+- **The definition of done says the budget, in minutes, and what a stop keeps** (`definitionOfDone`,
+  `src/access/done.ts`, `D-0089`): *"This lap has N minutes; a lap still working then is stopped.
+  Commit each working step as you go: a stop keeps only what is committed."* N is read off the
+  plan's `turn_timeout_ms`, so the line is true of whatever plan the lap runs on. The scope screen's
+  exact wording shows the same line.
+- **rondo does not commit what a cut try left** (option Z, declined). That would deliver unverified
+  work under the worker's name. The page says the work was left and not delivered (rule 3).
+- Options not taken: keeping fifteen minutes (B), and sixty (C).
 
 **2. A lap that ends `failed` is told once, on the host and on the tab.** `lapsStopped`
 (`src/access/page-logic/waits.ts`) keys it `stopped:<lap>`. The host's minute tick claims it under

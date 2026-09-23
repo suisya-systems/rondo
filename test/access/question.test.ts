@@ -45,7 +45,7 @@ const report = (block: unknown): string =>
   `I built the reader and committed it.\n\n\`\`\`rondo-question\n${JSON.stringify(block, null, 2)}\n\`\`\`\n`;
 
 test("the definition of done asks for independent work first and names the block", () => {
-  const done = definitionOfDone([]);
+  const done = definitionOfDone([], null);
   expect(done).toContain(
     "first build, verify and commit everything that does not depend on the answer",
   );

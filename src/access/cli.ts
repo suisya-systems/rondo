@@ -5929,7 +5929,7 @@ export async function withNamedIssues(
   }
   const prompt =
     plan.prompt +
-    definitionOfDone(plan.reviewCriterion?.ruleFiles ?? []) +
+    definitionOfDone(plan.reviewCriterion?.ruleFiles ?? [], plan.turnTimeoutMs) +
     issuesQuote(threads.messages, requestMessageId);
   // **Refused whole rather than cut** (section 2.3's rule, at the lap's door):
   // the reader already bounds what one request's reads hold together, so only
