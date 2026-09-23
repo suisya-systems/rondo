@@ -1421,13 +1421,13 @@ test("a refused revise or publish sends nobody to a terminal, and folds rondo's 
       expect(refused.status).toBe(409);
       // The person's sentence: the fold below may name the terminal to the
       // maintainer, the sentence a person reads may not.
-      const line = /<p id="scope-refused">([^<]*)<\/p>/.exec(body)?.[1] ?? "";
+      const line = /<p id="scope-refused"[^>]*>([^<]*)<\/p>/.exec(body)?.[1] ?? "";
       expect(line, path).not.toBe("");
       expect(line, path).not.toMatch(/terminal|ターミナル/);
       // The sentence says who can look; the closed fold is what they look at:
       // the port's own reason, and where the rest of the host's output is.
-      const fold = body.slice(body.indexOf('<details id="refused-reason">'));
-      expect(fold).toContain(`<summary>${wording.forMaintainer}</summary>`);
+      const fold = body.slice(body.indexOf('<details id="refused-reason"'));
+      expect(fold).toContain(`>${wording.forMaintainer}</summary>`);
       expect(fold).toContain(`<p lang="en">${note}</p>`);
       expect(fold).toContain("journalctl --user -u rondo.service");
     }
@@ -2198,7 +2198,7 @@ test("(send) the same form sent twice records its message once", async () => {
   const native = await send(base, "/request?lang=ja", "POST", submitHeaders(base), other);
   expect(native.status).toBe(409);
   expect(native.body).toContain('<html lang="ja">');
-  expect(native.body).toContain('<a href="/?requests=open&amp;lang=ja">スレッドに戻る</a>');
+  expect(native.body).toMatch(/<a href="\/\?requests=open&amp;lang=ja"[^>]*>スレッドに戻る<\/a>/);
   expect(native.body).not.toContain(form.message_id);
   expect(native.body).not.toMatch(/D-00/);
   expect(connection.prepare("SELECT COUNT(*) AS n FROM conversation_message").get()).toEqual({
@@ -2578,6 +2578,44 @@ function draftedPorts(
     ),
   } as unknown as ServedPorts;
 }
+
+test("(start-plan) rondo#439: a start refused by held files names the holding request and offers its release, with no terminal", async () => {
+  const notThis = async () => await Promise.resolve({ ok: false, note: "not this route" });
+  const held = (release: boolean): ServedPorts =>
+    ({
+      ...draftedPorts([], []),
+      scope: new ScopePort(notThis, notThis, notThis, async () => ({
+        ok: false,
+        note: "Refused: held by line lap-14.",
+        why: "startRefusedHeld" as const,
+        holders: [{ lineageId: "lap-14", request: "Fix issue 200\nso the gate's report is kept" }],
+      })),
+      release: release ? new ReleasePort(async () => ({ ok: true, note: "" })) : null,
+    }) as unknown as ServedPorts;
+  for (const release of [true, false]) {
+    const { base, stop, closed } = await served(createApp(held(release), TOKEN));
+    const refused = await send(
+      base,
+      "/start-plan?lang=ja",
+      "POST",
+      pressHeaders(base),
+      planStartForm(),
+    );
+    expect(refused.status).toBe(409);
+    const body = refused.body.replaceAll("&#39;", "'");
+    expect(body).toContain(chromeFor("ja").startRefusedHeld);
+    // In the page's own frame: its stylesheet and its header (rondo#439).
+    expect(body).toContain('<link rel="stylesheet" href="/app.css"/>');
+    // The holder by the first line of the person's words for its request.
+    const card = body.slice(body.indexOf('<section class="held-by'));
+    expect(card).toContain(`>${chromeFor("ja").planHeldBy}</h3>`);
+    expect(card).toContain('lang="">Fix issue 200</p>');
+    // Its release, a press-shaped link, only where the host holds the release press.
+    expect(card.includes('href="/?release=lap-14&amp;lang=ja"')).toBe(release);
+    stop.abort();
+    expect(await closed).toBe(0);
+  }
+});
 
 /** The drafted scope's form, as the page draws it (rondo#238 C2b). */
 function draftedScopeForm(overrides: Record<string, string> = {}): Record<string, string> {

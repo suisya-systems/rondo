@@ -1040,6 +1040,8 @@ export interface Chrome extends PageWords {
   readonly releaseHeading: string;
   readonly releaseLead: string;
   readonly releaseWorkHeading: string;
+  /** The fold under the work's one line: the whole brief rondo gave it (rondo#439). */
+  readonly releaseBrief: string;
   readonly releaseHoldsHeading: string;
   readonly releaseWhyHeading: string;
   /** Why rondo has not let go of the files by itself (D-0073 rules 6 and 6.4). */

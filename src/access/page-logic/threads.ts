@@ -130,6 +130,20 @@ export function firstLine(body: string): string {
   return body.split("\n").find((line) => line.trim() !== "") ?? body;
 }
 
+/**
+ * A lap's request as the person wrote it (rondo#439), as the list and the
+ * thread name it: the brief rondo composed from it is not their words. The
+ * brief only where the message is not there to read.
+ */
+export function requestWords(
+  messages: readonly ThreadMessageDraft[],
+  lap: { readonly requestMessageId: string; readonly request: string },
+): string {
+  return (
+    messages.find((message) => message.messageId === lap.requestMessageId)?.body ?? lap.request
+  );
+}
+
 /** {@link firstLine} of a message, where a read issue is its name and title, not its JSON. */
 export function lineOf(message: ThreadMessageDraft): string {
   const read = message.authorKind === "forge" ? parseForgeRead(message.body) : null;

@@ -197,7 +197,7 @@ import type {
   ReviewBlock,
 } from "./page/contract.js";
 import { asksOverLine, conflictFixBlock, resultOf } from "./page-logic/result.js";
-import { threadsOf } from "./page-logic/threads.js";
+import { requestWords, threadsOf } from "./page-logic/threads.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
 import { notifierAt, reachThePerson, recordTabNotice } from "./reach.js";
 import { nextNumbers, numbersSection } from "./record-numbers.js";
@@ -6151,12 +6151,30 @@ async function admitScopedPlan(
   }
   sayReport(outcome.report);
   if (outcome.report.iterationId === null) {
+    const held = outcome.report.laneRefusal;
+    if (held === undefined) {
+      return { ok: false, why: "startRefusedNotAdmitted", note: outcome.report.lines.join("\n") };
+    }
+    // Refused by files another line holds (D-0073 rule 3.1), said as that, and
+    // **by the words the person wrote for the holding request** (rondo#439), as
+    // the list and the thread name it -- not the brief rondo composed from them
+    // -- so the refusal can name it and offer its release where the press was.
+    const read = await record.threadMessages();
+    const messages = read.kind === "read" ? read.messages : [];
+    const holders = await Promise.all(
+      held.holders.map(async ({ lineageId }) => {
+        const root = await store.read(lineageId);
+        return {
+          lineageId,
+          request: root.kind === "read" ? requestWords(messages, root.record) : null,
+        };
+      }),
+    );
     return {
       ok: false,
-      // Refused by files another line holds (D-0073 rule 3.1), said as that.
-      why:
-        outcome.report.laneRefusal === undefined ? "startRefusedNotAdmitted" : "startRefusedHeld",
+      why: "startRefusedHeld",
       note: outcome.report.lines.join("\n"),
+      holders,
     };
   }
   // **A lap this button started gets the reading the same lap started from a

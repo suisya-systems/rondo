@@ -111,7 +111,9 @@ explanation you pressed on and then answers the gate.`,
     "RONDO_APPROVER is not set, so there is nobody this page could answer as, and no inbox of " +
     "theirs to draw.",
 
-  endedHead: (status, since, why) => `${status} ${since} ago -- ${why}`,
+  // rondo#439: the status in the person's words, not the enum.
+  endedHead: (status, since, why) =>
+    `${({ closed: "Ended", failed: "Failed", abandoned: "Abandoned" } as Record<string, string | undefined>)[status] ?? status} ${since} ago, ${why}`,
   gateAnswered: (outcome) =>
     outcome === APPROVED_OUTCOME ? "approved at the gate" : `gate answered '${outcome}'`,
   statePill: (status, gateOutcome) =>
@@ -816,6 +818,7 @@ explanation you pressed on and then answers the gate.`,
     "This work has finished, and it still keeps its files to itself. Nothing else that needs " +
     "them can start until you release them or its change is found on the default branch.",
   releaseWorkHeading: "The work",
+  releaseBrief: "What rondo asked the work to do, in full",
   releaseHoldsHeading: "The files it keeps",
   releaseWhyHeading: "Why rondo has not released them itself",
   releaseWhy: [

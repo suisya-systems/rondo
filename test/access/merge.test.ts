@@ -39,6 +39,8 @@ interface Options {
   readonly movedGreen?: boolean;
   /** The lap is a closing lap (D-0098 rule 5.3). */
   readonly closing?: boolean;
+  /** The laps of the lap's line, root first; lap-1 alone and closed by default. */
+  readonly laps?: readonly { id: string; status: string; supersedesIterationId: string | null }[];
 }
 
 const open: PullRequestState = {
@@ -46,6 +48,7 @@ const open: PullRequestState = {
   state: "OPEN",
   headCommit: TIP,
   baseBranch: "main",
+  defaultBranch: "main",
   mergeCommit: null,
   mergeQueue: false,
 };
@@ -63,7 +66,21 @@ async function over(options: Options = {}) {
       asks: false,
     } as ThreadMessageDraft,
   ];
+  const releases: unknown[] = [];
   const store = {
+    laneLine: async () =>
+      ({
+        kind: "read",
+        line: {
+          lineageId: "lap-1",
+          claim: { claimId: "lap-1:1", paths: ["src/"] },
+          laps: options.laps ?? [{ id: "lap-1", status: "closed", supersedesIterationId: null }],
+        },
+      }) as never,
+    releaseLane: async (release: unknown) => {
+      releases.push(release);
+      return { kind: "released", lineageId: "lap-1" } as never;
+    },
     read: async (id: string) =>
       ({
         kind: "read",
@@ -212,7 +229,7 @@ async function over(options: Options = {}) {
       },
     },
   });
-  return { press, asked, messages, world };
+  return { press, asked, messages, world, releases };
 }
 
 const input = { iterationId: "lap-1", head: TIP };
@@ -387,4 +404,58 @@ test("a moved head is not merged on the green of the head the lap pushed", async
     why: "mergeRefusedMoved",
   });
   expect(pending.asked.concat(unshown.asked).some((line) => line.startsWith("merge "))).toBe(false);
+});
+
+test("rondo#439: a merge into the default branch is the line's landing, and its files are released at once", async () => {
+  const world = await over();
+  const merged = await world.press(input);
+  expect(merged.ok).toBe(true);
+  expect(world.releases).toEqual([
+    {
+      iterationId: "lap-1",
+      takenOver: { claimId: "lap-1:1", lapIds: ["lap-1"] },
+      landed: true,
+      authorKind: "drafter",
+      authorId: "rondo/lane-ledger/1",
+      bases: [
+        { form: "iteration", iterationId: "lap-1" },
+        { form: "landing", branch: "main", commit: "def5678" },
+      ],
+      nowMs: 9,
+    },
+  ]);
+  expect(merged.note).toContain("Its files were released");
+});
+
+test("rondo#439: a merge that is not the line's whole landing leaves its files to the landing reading", async () => {
+  for (const options of [
+    // Into a branch that is not the default one: not a landing (D-0073 rule 6).
+    {
+      before: { ...open, defaultBranch: "trunk" },
+      after: { ...open, state: "MERGED", defaultBranch: "trunk", mergeCommit: "def5678" },
+    },
+    // Retargeted off the default branch during the merge: where it went is the after's.
+    { after: { ...open, state: "MERGED", baseBranch: "release", mergeCommit: "def5678" } },
+    // Another lap of the line is still running.
+    {
+      laps: [
+        { id: "lap-1", status: "closed", supersedesIterationId: null },
+        { id: "lap-2", status: "running", supersedesIterationId: "lap-1" },
+      ],
+    },
+    // Another closed tip of the line is owed its own landing.
+    {
+      laps: [
+        { id: "lap-0", status: "closed", supersedesIterationId: null },
+        { id: "lap-1", status: "closed", supersedesIterationId: "lap-0" },
+        { id: "lap-3", status: "closed", supersedesIterationId: "lap-0" },
+      ],
+    },
+  ] as const) {
+    const world = await over(options as Options);
+    const merged = await world.press(input);
+    expect(merged.ok).toBe(true);
+    expect(world.releases).toEqual([]);
+    expect(merged.note).toContain("Its files were not released on the merge");
+  }
 });

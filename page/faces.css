@@ -64,6 +64,28 @@
 }
 
 /*
+ * Phone (rondo#439): one face across, the screen a person opened first. At
+ * 390px the 300px list beside it left the centre a sliver that set one
+ * character to a line, so the list folds under the thread and the right face,
+ * where it is still one scroll away.
+ */
+@media (max-width: 640px) {
+  .page-faces {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+  .face-list {
+    grid-row: auto;
+    order: 1;
+    border-inline: 0;
+    border-top: 1px solid var(--color-border);
+  }
+  .face-side {
+    grid-column: auto;
+  }
+}
+
+/*
  * The header and the notes under it span what the faces span (rondo#379): at
  * 2560 the three faces stop at 2,200px, and below 2000 they fill the screen,
  * so the header's items have the room the faces have rather than a 1,024px

@@ -142,6 +142,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0106 | What a person acts on sits at the top of every screen, and the thread runs newest first: presses, boxes and decisions come before any history or long content, nothing is stuck to the window's foot, and the answering box keeps every element it inherited | accepted |
 | D-0107 | Every connection to the store waits five seconds for another one's write lock instead of failing at once, and setup says so when its last step did not happen | accepted |
 | D-0110 | A lap that stops short is the person's turn: setup gives a lap thirty minutes and tells it to commit as it goes, the host and the tab reach them, continuo's turn-timeout refusal is said in the person's words with what was left and what to do, and a try with no reported cost says so instead of *not yet* | accepted |
+| D-0113 | A lap merged from the page releases its files at once, the merge being its landing; a start refused by held files names the holding request and links its release | accepted |
 
 ---
 
@@ -23599,3 +23600,89 @@ naming one before then could name the wrong one.
   They are rondo#437's kind of problem and a separate change.
 - **The brief's *依頼者は* and the gate's side face** (*変わったもの*, *作業者が実行したもの*) are not
   touched.
+
+## D-0113 — A lap merged from the page releases its files at once, the merge being its landing; a start refused by held files names the holding request and links its release
+
+**Status:** accepted (2026-09-23, rondo#439). Refs `D-0073`, `D-0076`, `D-0091`, `D-0098`, rondo#286,
+rondo#288, rondo#439.
+
+**Why an entry is needed.** Lap 15 (2026-09-23, a Japanese page) could not start. Its press of
+*この作業を始める* was refused twice with `startRefusedHeld`, and the store (read, not changed, at
+`~/rondo-lap-14/`) says why: both `admission_refusal` rows name lap 14's line
+(`lap-972ee316-…`, claim `["src/", "tests/"]`) as the holder. Lap 14 had been merged from the page
+as #436 (squash, 06:09Z). Then #438, made outside rondo, landed on `main` and changed two of the
+files lap 14 had changed (`src/access/question.ts`, `test/access/web-app.test.ts`). `D-0073` rule
+6 reads a line landed when the default branch's tree entry equals the tip's for every path the line
+changed. Rule 6.1 says this is sound because no other line held those paths, but that only covers
+rondo's own lines. A change made elsewhere moves the entries, so lap 14 read `notLanded` and would
+have kept reading it. The refusal screen said the files were held and did not say by what. The one
+release the person knew of was `rondo release` in a terminal (rondo#286), which breaks K3.
+
+### The decision
+
+**1. A merge the page made is the landing.** When the merge press (`D-0091`) is confirmed by the
+forge (`state` `MERGED`, with a merge commit), and the pull request went into the repository's
+default branch, the lap's line is released in the same press (`releaseMerged` in
+`src/access/merge.ts`). The release is `landed: true`. Its bases are the lap and
+`{ form: "landing", branch, commit: <merge commit> }`, so `first_landed` (`D-0098` rule 1.1) reads
+it as a landing, and the line keeps its decision-record numbers (rule 3.7). The press saw the merge
+happen, so it does not need the tree reading. This is the `first_merged` that `D-0067`
+expected (`D-0073` rule 6.3), now that rondo sees the merge. The default branch is taken from the same forge query that
+confirms the merge (`repository.defaultBranchRef`), not from the plan's base branch. A pull request
+into `develop` has not landed (rule 6).
+
+**2. Only where the merge is the whole landing.** The line is released only when nothing in it is
+still running and the merged lap is its **one** closed tip. A line with another closed tip still
+owes that tip's work, and a lap still running holds its paths (rule 10). In those cases the claim
+stays, and the tree reading and the release press (rule 4.3) keep their jobs. A release the store
+refuses does not undo the merge. The press's note for the terminal says the files were not
+released, and why.
+
+**3. A start refused by held files names the holding request, and links to its release.** The
+refusal page after the press now has, under its sentence, the lines the scope screen already draws
+(`D-0076` rule 3.3): *Held by* and the first line of the words the person wrote for the holding
+request, then *Release its files*. That link goes to the release screen of rule 4.3 (rondo#288). The link is drawn only where
+the host has the release press. The release screen decides whether the line can be released yet,
+and it has the press. No new press, name, permission or record is added: this reuses the existing
+release, for a person the allowlist accepts, recorded as `releasedBy: person`. The holders come from
+the refusal's own `laneRefusal`, after `D-0073` rule 7's landing reading has run once, so a holder
+that the reading released is not named.
+
+**4. A holding request is named by the person's words, everywhere it is named.** The refusal, the
+scope screen's *Held by* line and the release screen all name it the way the list and the thread
+do: the first line of the request message (`requestWords` in `src/access/page-logic/threads.ts`).
+Before this change they used the brief rondo composed for the worker (*このあとに引用されている
+issue 200 の内容に対応してください…*), which the person never wrote. The brief is used only when
+the message cannot be read.
+
+**5. A refused press answers in the page's own frame** (`src/access/screens/refused.tsx`, the
+secretary's screen review). All press refusals (start, scope, revise, publish, release, merge,
+conflict fix, raise, add repository, a claim, and a send made without script) used to answer with bare HTML: no stylesheet, no header, and the action
+as a plain link. They now use the page's stylesheet and header, the reason as a notice, and the
+maintainer's fold. For a held start there is also a card per holder, with *Release its files* drawn
+as the page's primary press-shaped link. It is still a link to the release screen, which says what
+releasing does and has the press. The ids a script or test reads (`scope-refused`,
+`answer-refused`, `refused-reason`) and the way back are unchanged.
+
+**6. The release screen puts what releasing does and the press first, and at 390px it is one
+column.** The order is now: *what happens*, the press, the work in one line (the person's words and
+how each attempt ended), the files, why rondo has not released them. The full brief, with the
+definition of done and the quoted issues, is closed under *What rondo asked the work to do, in
+full*. `page/faces.css` gains a phone fold (`max-width: 640px`). At that width there is one face
+across: the thread, then the right face, then the list. Before this, every screen kept the 1280
+fold's 300px list beside the centre, and the centre set one character per line.
+
+**7. How an attempt ended is said in the person's words.** `endedHead`, the line the release screen
+draws under the work, printed the stored status (*closed 3時間前 -- …*). It now says *3時間前に終了・
+ゲートで承認された* in Japanese and *Ended 3 hours ago, approved at the gate* in English: closed,
+failed and abandoned get words, and any other status is shown as it is stored.
+
+### What is not done
+
+- **Rule 6's tree reading is unchanged.** A merge made on the forge, not from the page, and then
+  followed by a change elsewhere on the same files, still reads `notLanded`. The person releases
+  that line with rule 4.3's press, which rule 3 now makes reachable from the refusal.
+- **On a phone the summary's list is below the centre**, as it is on every screen; a phone layout
+  of its own for the summary is not designed here.
+- **Lap 14's claim in `~/rondo-lap-14` is not released by this change.** That store's line was
+  merged before this change, so the owner releases it once with the release press.
