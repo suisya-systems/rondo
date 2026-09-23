@@ -19,7 +19,6 @@
  * there is something true to draw with it.
  */
 
-import { isNestedSandboxRefusal } from "../../continuo/protocol.js";
 import {
   APPROVED_OUTCOME,
   approvedForPublication,
@@ -28,6 +27,7 @@ import {
 } from "../../store/records.js";
 import type { ThreadEvent } from "../page/events.js";
 import type { Chrome } from "../wording.js";
+import { refusalSaid } from "./laps.js";
 import type { LapResult } from "./result.js";
 
 /**
@@ -143,12 +143,10 @@ function endedLine(
       // rule 7): this is the only place that still knows the failure was a
       // refusal rather than a stop, and the fold will not read the sentence
       // back to find out (rondo#317).
-      // continuo's nested-sandbox refusal names its own verb and an errno, so
-      // the person is told the move in rondo's words instead (D-0076).
+      // continuo refusals rondo knows by their words are told in rondo's
+      // words instead (D-0076, `refusalSaid`).
       return {
-        said: isNestedSandboxRefusal(record.reason)
-          ? wording.lapNestedSandbox
-          : wording.evRefused(record.reason),
+        said: refusalSaid(wording, record, record.reason) ?? wording.evRefused(record.reason),
         yours: true,
       };
     case "defect":

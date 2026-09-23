@@ -17,9 +17,8 @@ import {
   type ScopeBudgets,
 } from "../advisory/budget.js";
 import { readSplitPayload, type SplitPlan } from "../advisory/proposal.js";
-import type { StoredScope } from "../store/records.js";
+import type { JsonRecord, StoredScope } from "../store/records.js";
 import type { AdvisoryRecord } from "../store/sqlite.js";
-import { planRuleFiles } from "./done.js";
 import { type DrafterMaterial, isModelDrafterName } from "./model-draft/judgement.js";
 
 /** One drafted plan as the screen shows it: its words, where it runs, and its agent type. */
@@ -30,10 +29,11 @@ export interface DraftedPlanShown {
   readonly repository: string | null;
   readonly workspaceRoot: string | null;
   /**
-   * The rule files the template names (rondo#377), which a start of this plan
-   * points its worker at, or null when the snapshot no longer holds the template.
+   * The template's plan document, which a start of this plan runs on -- its
+   * rule files (rondo#377) and its turn budget (D-0110) are what the worker is
+   * told -- or null when the snapshot no longer holds the template.
    */
-  readonly ruleFiles: readonly string[] | null;
+  readonly templatePlan: JsonRecord | null;
 }
 
 /** A drafter's scope and the split it was drafted with. */
@@ -210,7 +210,7 @@ async function draftedShown(ports: Ports, scope: StoredScope): Promise<DraftedSc
       split,
       repository: template?.repository ?? null,
       workspaceRoot: template?.workspaceRoot ?? null,
-      ruleFiles: template === undefined ? null : planRuleFiles(template.plan),
+      templatePlan: template?.plan ?? null,
     };
   });
   const rounds = scope.payload.budgets.review_rounds;

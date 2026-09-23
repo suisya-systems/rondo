@@ -880,6 +880,45 @@ test("a second wait in an already-waiting request changes what the tab compares"
   );
 });
 
+test("a question answered *stop this line* leaves your turn, the count and the tab (D-0110)", async () => {
+  // A stopped lap's ask is the person's turn until they answer it; *stop this
+  // line* is one of the two answers, so it has to take the request off the
+  // list as well, though the line stays held.
+  const world = fresh();
+  await openRequest(world, "req-a", "have a look at this");
+  const asked = await world.record.recordThreadMessage({
+    messageId: "lap-stopped-i-0001",
+    body: "the work stopped partway",
+    authorKind: "drafter",
+    authorId: "rondo/advisory/deterministic",
+    inReplyTo: "req-a",
+    atMs: 600,
+    bases: [{ form: "message", messageId: "req-a" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  const ports = portsOver(world, "ada", []);
+  const before = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(before).toContain('data-waits="[&quot;ask:lap-stopped-i-0001&quot;]"');
+  expect(before).toContain("<title>(1) rondo</title>");
+
+  const stopped = await world.record.recordThreadMessage({
+    messageId: "m-stop",
+    body: "stop",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "lap-stopped-i-0001",
+    atMs: 700,
+    bases: [],
+    asks: false,
+    answerOutcome: "stop",
+  });
+  expect(stopped.kind).toBe("recorded");
+  const after = await operatorPage(ports, "t", { kind: "summary" }, EN, mint);
+  expect(after).toContain('data-waits="[]"');
+  expect(after).toContain("<title>rondo</title>");
+});
+
 test("the header offers three text sizes, script only, outside what the redraw swaps, in the page's language", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");

@@ -322,7 +322,9 @@ export interface PageWords extends DayWords {
    * What is held beside what was spent (rondo#378): `pair` is `govSpent`'s,
    * and the reserve follows it as its own figure rather than inside the spend.
    * `inProgress` says the tries holding it are still going; otherwise the
-   * sentence says only that their cost is not known yet, true of both.
+   * sentence says only that no cost was reported for them, true of both --
+   * and not *not yet*, because a try cut before it reported will never report
+   * one (rondo#432).
    */
   readonly govHeld: (pair: string, held: string, tries: number, inProgress: boolean) => string;
   /** The request's cost across every try, and each try's as the detail under it. */
@@ -609,7 +611,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   govHeld: (pair, held, tries, inProgress) =>
     inProgress
       ? `${pair}, with $${held} held for ${tries === 1 ? "the try" : `the ${String(tries)} tries`} in progress`
-      : `${pair}, with $${held} held for ${tries === 1 ? "a try" : `${String(tries)} tries`} whose cost is not known yet`,
+      : `${pair}, with $${held} held for ${tries === 1 ? "a try" : `${String(tries)} tries`} whose cost was not reported`,
   govByTryLabel: "Across all tries",
   govByTry: (total, tries) => `$${total} (${tries.join(", ")})`,
   govTryCost: (at, cost, running) =>
@@ -861,7 +863,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   govHeld: (pair, held, tries, inProgress) =>
     inProgress
       ? `${pair} ・ 実行中の${tries === 1 ? "回" : ` ${String(tries)} 回`}のために $${held} を確保`
-      : `${pair} ・ 費用がまだ分からない ${String(tries)} 回分として $${held} を確保`,
+      : `${pair} ・ 費用の報告がない ${String(tries)} 回分として $${held} を確保`,
   govByTryLabel: "全回の合計",
   govByTry: (total, tries) => `$${total}（${tries.join(" ・ ")}）`,
   govTryCost: (at, cost, running) =>

@@ -46,6 +46,19 @@ test("a drafted prompt that never says commit still reaches the lap asking for a
   expect(prompt).toContain("Never say it passed when it did not run.");
 });
 
+test("the worker is told the plan's turn budget and that a stop keeps only what is committed (D-0110)", async () => {
+  // Lap 13's try was cut at 15 minutes with 15 files edited and no commit, and
+  // a next try is cut from the last try's commits.
+  const prompt = await lapPrompt({
+    turn_timeout_ms: 1_800_000,
+    invocation_ceiling_ms: 2_280_000,
+  });
+  expect(prompt).toContain(
+    "- This lap has 30 minutes; a lap still working then is stopped. Commit each working step as you go: a stop keeps only what is committed.",
+  );
+  expect(definitionOfDone([], null)).not.toContain("minutes");
+});
+
 test("the plan's rule files are named to the worker, the files the model reviewer is handed", async () => {
   const prompt = await lapPrompt({ review_criterion: CRITERION });
   expect(prompt).toContain(
@@ -55,7 +68,7 @@ test("the plan's rule files are named to the worker, the files the model reviewe
 
 test("the section is ASCII, so it reaches continuo's command line on a cp932 console (D-0004)", () => {
   for (const files of [[], ["AGENTS.md"], ["AGENTS.md", "CONTRIBUTING.md"]]) {
-    expect(definitionOfDone(files)).toMatch(/^[\x20-\x7e\n]*$/);
+    expect(definitionOfDone(files, 1_800_000)).toMatch(/^[\x20-\x7e\n]*$/);
   }
 });
 

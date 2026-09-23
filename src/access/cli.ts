@@ -600,6 +600,17 @@ export function operatorLanguage(
 }
 
 /**
+ * The person's words for what rondo writes into a thread outside the page's
+ * own request (D-0079): the host's language, or English where it names none
+ * or names one that is not a tag -- `rondo web` refuses that at start, and a
+ * command that only writes a stop's ask is no place to refuse it again.
+ */
+function hostWords(environment: Readonly<Record<string, string | undefined>>): Chrome {
+  const selected = operatorLanguage(environment);
+  return chromeFor("tag" in selected ? selected.tag : null);
+}
+
+/**
  * One plan rondo holds for a request, by digest (rondo#238), or null when it is
  * not one; a refusal only when the plans will not read.
  */
@@ -1969,7 +1980,13 @@ export async function main(
     return refuse(`continuo is not usable: ${startup.reason}`);
   }
   const continuo = startup.continuo;
-  const ports = conductorPorts(continuo, store, openAdvisoryRecord(opened.path));
+  const ports = conductorPorts(
+    continuo,
+    store,
+    openAdvisoryRecord(opened.path),
+    Date.now,
+    hostWords(environment),
+  );
 
   switch (parsed.command) {
     case "start":
@@ -4412,7 +4429,13 @@ export async function answerFromPage(
     };
   }
   const report = await resume(
-    conductorPorts(continuo, store, openAdvisoryRecord(storePath)),
+    conductorPorts(
+      continuo,
+      store,
+      openAdvisoryRecord(storePath),
+      Date.now,
+      hostWords(environment),
+    ),
     record.id,
   );
   sayReport(report);
@@ -5484,7 +5507,7 @@ async function conflictFixPage(
     refuse(checked.refusal);
     return { ok: false, why: "conflictFixRefusedNotSetUp", note: checked.refusal };
   }
-  const ports = conductorPorts(continuo, store, advisory);
+  const ports = conductorPorts(continuo, store, advisory, Date.now, hostWords(environment));
   const outcome = await admitUnderScope(
     {
       store,
@@ -5667,7 +5690,7 @@ async function revisePage(
   }
   const gateId = record.gateId;
   const advisory = openAdvisoryRecord(storePath);
-  const ports = conductorPorts(continuo, store, advisory);
+  const ports = conductorPorts(continuo, store, advisory, Date.now, hostWords(environment));
   // **The gate walk and the first row's settlement**, `commandRevise`'s own
   // step, handed to `admitUnderScope` so a refused verdict walks nothing
   // (D-0070 section 2.1). A number halts the admission; null lets it go ahead.
@@ -5928,7 +5951,7 @@ export async function withNamedIssues(
   }
   const prompt =
     plan.prompt +
-    definitionOfDone(plan.reviewCriterion?.ruleFiles ?? []) +
+    definitionOfDone(plan.reviewCriterion?.ruleFiles ?? [], plan.turnTimeoutMs) +
     issuesQuote(threads.messages, requestMessageId);
   // **Refused whole rather than cut** (section 2.3's rule, at the lap's door):
   // the reader already bounds what one request's reads hold together, so only
@@ -6062,7 +6085,7 @@ async function admitScopedPlan(
     };
   }
   const continuo = startup.continuo;
-  const ports = conductorPorts(continuo, store, record);
+  const ports = conductorPorts(continuo, store, record, Date.now, hostWords(environment));
   const outcome = await admitUnderScope(
     {
       store,

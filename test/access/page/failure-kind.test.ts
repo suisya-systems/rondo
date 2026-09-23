@@ -151,3 +151,39 @@ test("continuo's nested-sandbox refusal reaches the person in their own language
   }
   expect(chromeFor("ja").lapNestedSandbox).not.toBe(EN.lapNestedSandbox);
 });
+
+test("continuo's turn-timeout refusal is said as running out of time, with the plan's budget (rondo#432)", () => {
+  // Lap 13's thread line, as continuo wrote it: a session id, milliseconds,
+  // a generation and the fence, in English on a Japanese page.
+  const sentence =
+    "session f02faa3f-b6ca-4158-98e4-5a2764bca6f9 did not finish its turn within 900000ms; " +
+    "the last answer was session 'f02faa3f-b6ca-4158-98e4-5a2764bca6f9' has written no " +
+    "result event on generation 0, so the turn has not ended. The workspace and the fence " +
+    "are left exactly as they are -- the refusal is about the turn, and deleting a checkout " +
+    "the worker may have written into is not a rollback -- and the session is stopped on " +
+    "the way out";
+  for (const wording of [EN, chromeFor("ja")]) {
+    const ended = lapEvents(
+      wording,
+      {
+        id: "i-cut",
+        status: "failed",
+        reason: sentence,
+        failureKind: "refusal",
+        plan: { turn_timeout_ms: 900_000 },
+        createdAtMs: 1_000,
+        updatedAtMs: 3_000,
+      } as unknown as IterationRecord,
+      [],
+      (status) => status === "failed",
+      () => "1h",
+      null,
+    ).find((event) => event.id === "i-cut:ended");
+    expect(ended?.said, wording.lang).toBe(wording.lapTurnTimedOut(15));
+    expect(ended?.yours).toBe(true);
+    expect(ended?.said).not.toMatch(/900000|session|generation|fence|f02faa3f/);
+  }
+  expect(chromeFor("ja").lapTurnTimedOut(15)).toContain("15 分");
+  expect(chromeFor("ja").lapTurnTimedOut(15)).toContain("費用");
+  expect(EN.lapTurnTimedOut(null)).toContain("the time it was given");
+});

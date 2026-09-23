@@ -585,6 +585,15 @@ export interface Chrome extends PageWords {
    * own verb and a kernel error code (D-0076).
    */
   readonly lapNestedSandbox: string;
+  /**
+   * A lap continuo cut because the worker's turn outlived the plan's turn
+   * budget (rondo#432). Said instead of continuo's sentence, which names a
+   * session id, milliseconds, a generation and the fence: what ran out, what
+   * was left, and what the person can do next. `minutes` is the plan's turn
+   * budget, or null where the plan does not carry one. The try's cost is said
+   * to be unknown because continuo reports no spend with a refusal.
+   */
+  readonly lapTurnTimedOut: (minutes: number | null) => string;
 
   // -- The scope screen (rondo#233 S3, D-0066 rule 1) --
   /**
@@ -1176,6 +1185,15 @@ export interface Chrome extends PageWords {
    * (D-0076 rule 4.2).
    */
   readonly startStoppedSaid: string;
+  /**
+   * What rondo writes into the request's thread when a lap it ran ended
+   * `failed` (D-0110 rule 2): an ask, so the stop is the person's turn until
+   * they answer it. `said` is rondo's own sentence for a stop it knows by name
+   * (`refusalSaid`, such as the turn running out), or null, when the thread's
+   * own line for the lap says what happened. The options are the answering
+   * box's two presses.
+   */
+  readonly lapStoppedSaid: (said: string | null) => string;
   /**
    * The same stop, when rondo could not end the lap either (D-0109 rule 3):
    * said as itself, because inviting somebody to start again over work that is

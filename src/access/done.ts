@@ -27,18 +27,44 @@ export function planRuleFiles(document: JsonRecord): readonly string[] {
   return planned.kind === "planned" ? (planned.plan.reviewCriterion?.ruleFiles ?? []) : [];
 }
 
+/**
+ * The worker's turn budget a plan document declares (`turn_timeout_ms`), or
+ * null for a document that does not read as a plan: what
+ * {@link definitionOfDone} tells a lap run on that plan it has.
+ */
+export function planTurnTimeoutMs(document: JsonRecord): number | null {
+  const planned = readRunPlan(document);
+  return planned.kind === "planned" ? planned.plan.turnTimeoutMs : null;
+}
+
 /** The line that opens the section. Exported so a lap's prompt can be told from its plan's. */
 export const DONE_OPENING = "\n\n---\nDefinition of done";
 
 /**
  * The section, for a plan naming `ruleFiles` (its `review_criterion.rule_files`,
- * or none). The same asks on every lap; the last line points at the
- * repository's own rules, named when the plan names them.
+ * or none) and giving the worker `turnTimeoutMs` (its `turn_timeout_ms`). The
+ * same asks on every lap; the last line points at the repository's own rules,
+ * named when the plan names them.
+ *
+ * **The time the lap has is said, with what a stop keeps** (D-0110 rule 1,
+ * rondo#432). Lap 13's try was cut at its turn budget mid-change, with 15 files
+ * edited and nothing committed, and a next try is cut from the last try's
+ * commits (`src/refrain/revision.ts`). So the worker is told the budget in
+ * minutes and to commit each working step as it goes. Null says nothing, for
+ * a caller with no plan to read it from.
  */
-export function definitionOfDone(ruleFiles: readonly string[]): string {
+export function definitionOfDone(
+  ruleFiles: readonly string[],
+  turnTimeoutMs: number | null,
+): string {
   return [
     `${DONE_OPENING} (rondo adds this to every lap, whatever the request says):`,
     "- Commit your work on this lap's branch. Work left uncommitted is not delivered.",
+    ...(turnTimeoutMs === null
+      ? []
+      : [
+          `- This lap has ${String(Math.round(turnTimeoutMs / 60_000))} minutes; a lap still working then is stopped. Commit each working step as you go: a stop keeps only what is committed.`,
+        ]),
     "- Before you report, run the repository's own install and verification, as the repository defines them.",
     "- If the verification cannot run, or does not pass, say so in your report. Never say it passed when it did not run.",
     // **D-0098 rule 4.1: a question at the lap's end, never a guess.** The

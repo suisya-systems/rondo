@@ -399,10 +399,10 @@ shim.
   "python": null,
   "poll_interval_ms": null,
 
-  "turn_timeout_ms": 900000,
+  "turn_timeout_ms": 1800000,
   "git_timeout_ms": 60000,
   "identity_readback_timeout_ms": 120000,
-  "invocation_ceiling_ms": 1800000,
+  "invocation_ceiling_ms": 2280000,
 
   "gate_options": ["approve", "revise"],
   "gate_deadline_at_ms": null,

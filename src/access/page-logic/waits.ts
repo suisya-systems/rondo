@@ -75,11 +75,17 @@ export interface Wait {
  * A waiting message whose root this store does not hold is dropped: it is a
  * wait with nowhere to send the person, and naming it would be an entry in the
  * list that opens nothing.
+ *
+ * **A question the person answered *stop this line* is not their turn**
+ * (D-0110 rule 2). The line stays held -- `threads.waiting` still has it, and
+ * a start still waits on a `carry_on` (`D-0072`) -- but the person has already
+ * acted on it, and a stop that stayed *your turn* would be a request nobody can
+ * take off the list short of pressing the answer they chose not to give.
  */
 export function waitsOnYou(threads: Threads, laps: readonly IterationRecord[]): readonly Wait[] {
   const waits: Wait[] = [];
   for (const message of threads.messages) {
-    if (!threads.waiting.has(message.messageId)) {
+    if (!threads.waiting.has(message.messageId) || threads.stopped.has(message.messageId)) {
       continue;
     }
     const root = threads.rootOf(message.messageId);

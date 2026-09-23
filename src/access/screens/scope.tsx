@@ -5,8 +5,13 @@ import {
   DEFAULT_REVIEW_ROUNDS,
   type ScopeBudgets,
 } from "../../advisory/budget.js";
-import { FINDING_SEVERITIES, SCOPE_OUTWARD_ACTS, type StoredScope } from "../../store/records.js";
-import { definitionOfDone, planRuleFiles } from "../done.js";
+import {
+  FINDING_SEVERITIES,
+  type JsonRecord,
+  SCOPE_OUTWARD_ACTS,
+  type StoredScope,
+} from "../../store/records.js";
+import { definitionOfDone, planRuleFiles, planTurnTimeoutMs } from "../done.js";
 import { draftedStartReadiness } from "../drafted-start.js";
 import {
   type DraftedPlanShown,
@@ -460,7 +465,8 @@ function scopeDone(wording: Chrome) {
  * beside the plan a start runs on -- for a drafted split, from the template
  * its snapshot froze, which is what `draftedPlanRun` starts.
  */
-function planDone(wording: Chrome, ruleFiles: readonly string[]) {
+function planDone(wording: Chrome, document: JsonRecord) {
+  const ruleFiles = planRuleFiles(document);
   return (
     <div class="plan-done space-y-1" data-rule-files={ruleFiles.join(" ")}>
       <p class="text-meta leading-5 wrap-anywhere text-muted-foreground">
@@ -475,7 +481,7 @@ function planDone(wording: Chrome, ruleFiles: readonly string[]) {
           class="mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
           lang="en"
         >
-          {definitionOfDone(ruleFiles).trimStart()}
+          {definitionOfDone(ruleFiles, planTurnTimeoutMs(document)).trimStart()}
         </p>
       </details>
     </div>
@@ -801,7 +807,7 @@ async function scopeForm(
             {wording.scopeWorkspace(workspace.repository, workspace.workspace_root)}
           </p>
         ))}
-        {planDone(wording, planRuleFiles(chosen.document))}
+        {planDone(wording, chosen.document)}
         <p class="text-meta leading-5 font-medium text-muted-foreground">
           {wording.scopeAgentTypeBounds}
         </p>
@@ -1356,7 +1362,7 @@ async function draftedPlansList(
         >
           {plan.split.prompt}
         </p>
-        {plan.ruleFiles === null ? null : planDone(wording, plan.ruleFiles)}
+        {plan.templatePlan === null ? null : planDone(wording, plan.templatePlan)}
         {startOf === undefined ? null : await startOf(plan)}
       </li>,
     );
@@ -1632,7 +1638,7 @@ async function scopeApproved(
           <p class="text-body leading-5 wrap-anywhere text-muted-foreground">
             {`${wording.scopePlanAsk}: ${planLine(wording, runsOn)}`}
           </p>
-          {planDone(wording, planRuleFiles(runsOn.document))}
+          {planDone(wording, runsOn.document)}
           {/* Minted at render, as the scope id is, and for its reason: rondo
               names the lap (D-0023) and a double press is one lap. */}
           <input type="hidden" name="iteration" value={newIterationId()} />

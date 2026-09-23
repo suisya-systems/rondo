@@ -12,7 +12,11 @@
  * `D-0046`'s distinction is the one to hold while reading these:
  * an unread cost is not a zero, and the three columns say so separately.
  */
-import { decodeLapCommands, isNestedSandboxRefusal } from "../../continuo/protocol.js";
+import {
+  decodeLapCommands,
+  isNestedSandboxRefusal,
+  isTurnTimeoutRefusal,
+} from "../../continuo/protocol.js";
 import type { IterationRecord } from "../../store/records.js";
 import { ago } from "../inbox.js";
 import type { Chrome } from "../wording.js";
@@ -89,10 +93,33 @@ export function endedWhy(wording: Chrome, record: IterationRecord): string {
     ? wording.gateAnswered(record.gateOutcome)
     : record.reason === null
       ? wording.noReasonRecorded
-      : // continuo's words name its own verb and an errno (D-0076).
-        isNestedSandboxRefusal(record.reason)
-        ? wording.lapNestedSandbox
-        : record.reason;
+      : (refusalSaid(wording, record, record.reason) ?? record.reason);
+}
+
+/**
+ * The person's sentence for a continuo refusal rondo knows by its pinned words,
+ * or null where it is not one of them and continuo's words are relayed.
+ *
+ * continuo's words name its own verb, an errno, a session id or milliseconds
+ * (D-0076), so these two are said in rondo's words instead (rondo#432 for the
+ * second). The turn budget is read off the plan, which is what the lap was
+ * given, rather than out of continuo's sentence.
+ */
+export function refusalSaid(
+  wording: Chrome,
+  record: IterationRecord,
+  reason: string,
+): string | null {
+  if (isNestedSandboxRefusal(reason)) {
+    return wording.lapNestedSandbox;
+  }
+  if (isTurnTimeoutRefusal(reason)) {
+    const budget = record.plan["turn_timeout_ms"];
+    return wording.lapTurnTimedOut(
+      typeof budget === "number" && budget > 0 ? Math.round(budget / 60_000) : null,
+    );
+  }
+  return null;
 }
 
 /** Which of the three questions a row answers, which is what its weight is decided by. */

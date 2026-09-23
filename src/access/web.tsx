@@ -2698,7 +2698,9 @@ export async function operatorPage(
   // summary's *waiting for your answer* heading both say this number -- gates,
   // questions in threads, and proposals an answer can settle -- so they cannot
   // disagree.
-  const waitingCount = waiting.length + threads.waiting.size + open.length;
+  // A question answered *stop this line* is held but no longer waits on the
+  // person (D-0110 rule 2), as in `waitsOnYou`.
+  const waitingCount = waiting.length + threads.waiting.size - threads.stopped.size + open.length;
 
   const keepsCurrent = isLive(view);
   // **The token arrives null exactly when there is no writer** (D-0041 rule 4,

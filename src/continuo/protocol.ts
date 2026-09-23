@@ -1142,6 +1142,27 @@ export function isNestedSandboxRefusal(text: string): boolean {
 }
 
 /**
+ * The two fixed parts of `lap perform`'s refusal when the worker's turn outlives
+ * `--turn-timeout-ms`: `outOfBudget` in continuo's `src/lap/root.ts` at the
+ * pinned revision, which interpolates the session, the budget and the last
+ * reader's answer between them.
+ *
+ * ponytail: matched on the pinned sentence for the reason
+ * {@link NESTED_SANDBOX_REFUSAL} is -- the class is the general `LapRefused`
+ * and there is no code. A reworded sentence at a later pin falls back to
+ * relaying continuo's words; the upgrade is a refusal code upstream.
+ */
+const TURN_TIMEOUT_REFUSAL = [
+  " did not finish its turn within ",
+  "The workspace and the fence are left exactly as they are -- the refusal is about the turn",
+] as const;
+
+/** Whether text holds continuo's turn-timeout refusal, as a message or a row's `reason`. */
+export function isTurnTimeoutRefusal(text: string): boolean {
+  return TURN_TIMEOUT_REFUSAL.every((part) => text.includes(part));
+}
+
+/**
  * Read back {@link LapPerformed.commands}' text, as a rondo column holds it.
  *
  * Three answers and no throw: the commands, continuo having said it cannot say

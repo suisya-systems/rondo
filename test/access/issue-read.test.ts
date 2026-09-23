@@ -284,7 +284,9 @@ test("the prompt ends with rondo's quote of every read, byte for byte, after the
   if ("refusal" in quoted) throw new Error(quoted.refusal);
   // After the request and its definition of done (rondo#377), which the quote follows.
   expect(
-    quoted.prompt.startsWith(`Fix #237 and #404.${definitionOfDone([])}${ISSUES_QUOTE_OPENING}`),
+    quoted.prompt.startsWith(
+      `Fix #237 and #404.${definitionOfDone([], planned.plan.turnTimeoutMs)}${ISSUES_QUOTE_OPENING}`,
+    ),
   ).toBe(true);
   expect(quoted.prompt).toContain(
     `Title: ${ISSUE.title}\nOpened by ada at ${ISSUE.created_at}:\n${ISSUE.body}`,

@@ -646,7 +646,9 @@ node -e '
   // must be strictly greater than their sum; rondo refuses a ceiling that
   // merely equals it, and a ceiling that fires is a rondo defect (it kills the
   // CLI and not the fenced child), so the margin here is deliberate.
-  const turnTimeoutMs = 900_000;
+  // Thirty minutes of turn (D-0110 rule 1): fifteen cut lap 13's try mid-change,
+  // and lap 10's took about thirteen.
+  const turnTimeoutMs = 1_800_000;
   const gitTimeoutMs = 60_000;
   const identityReadbackTimeoutMs = 120_000;
 
