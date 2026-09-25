@@ -144,6 +144,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0110 | A lap that stops short is the person's turn: setup gives a lap thirty minutes and tells it to commit as it goes, the host and the tab reach them, continuo's turn-timeout refusal is said in the person's words with what was left and what to do, and a try with no reported cost says so instead of *not yet* | accepted |
 | D-0113 | A lap merged from the page releases its files at once, the merge being its landing; a start refused by held files names the holding request and links its release | accepted |
 | D-0114 | A line gives its files up when its pull request opens, not when its work lands: the landing is still read and written after it, so an order still waits for a landing, and the numbers stay the line's | accepted |
+| D-0117 | The control layer for parallel work is `D-0073`'s lane ledger and `D-0098`'s five rules, read as one: its authorities in one table, each pointing to the rule that decided it and the change that built it, and rondo#250 done with what is left filed on its own | accepted |
 
 ---
 
@@ -23915,3 +23916,101 @@ sends it after the question is answered: the scope's `asks` test refuses it (`as
 question is answered (or, where the person answered it by stopping the line, until it is answered again with *carry on*), links to it, draws the press disabled, and leaves the box writable (the page
 keeps what is typed). A stale page's refusal says the same. Recording a change to send later would
 need a row of its own, and is not decided here.
+
+---
+
+## D-0117 — The control layer for parallel work is `D-0073`'s lane ledger and `D-0098`'s five rules, read as one: its authorities in one table, each pointing to the rule that decided it and the change that built it, and rondo#250 done with what is left filed on its own
+
+**Status:** accepted (2026-09-26, rondo's owner through the secretary, option A of three, rondo#250).
+Refs `D-0023`, `D-0063`, `D-0066`, `D-0067`, `D-0068`, `D-0073`, `D-0098`, `D-0103`, `D-0105`,
+`D-0113`, `D-0114`, rondo#250.
+
+**This entry decides two things and builds nothing.** It changes no rule of an earlier entry, adds no
+annotation, and nothing in `src/` changes with it.
+
+**Why an entry is needed.** rondo#250 asked for "a decision that names the layer and its
+authorities", and says what it is not. That decision was taken in parts. `D-0073` named the lane
+ledger and its two authorities (2026-09-19). `D-0098` answered a second day's observations
+(2026-09-22), calling itself "parallel control *beyond* the lane ledger". `D-0103` and `D-0105`
+built it, and `D-0113` and `D-0114` moved when a line's paths are released. So a reader asking what
+the control layer may do has to walk seven entries, and has no way to tell when rondo#250 is done.
+
+### What was measured, and how
+
+At rondo `2de3190` on **2026-09-26**, by reading `DECISIONS.md`, `git log` and the forge's issues.
+
+- Built on `main`: the ledger's store half (#280, `6722974`); the drafter's claim (#292, rondo#281); the
+  gate-time comparison (#293, rondo#283); the page's claims, waits, landings and release press (#295,
+  rondo#285); `D-0098`'s five rules (#421, `D-0103`); the take-in and the conflict fix (#425,
+  `D-0105`, rondo#417); the merge release and the held start that names its holder (#440, `D-0113`);
+  the publish release (#443, `D-0114`, rondo#441).
+- Open: rondo#282 (widen and narrow), rondo#284 (a refused admission waits for its paths),
+  rondo#286 (the landing reading assumes `origin`), rondo#287 (what building the ledger settled).
+- **Not filed**: the page half of `D-0098` rule 8, which that entry's gate answered on point 3 as
+  "a follow-up: no page change in this one". A grep of `src/` for rule 8's sentences finds only the
+  closing-fix note in the report, the CLI and the review host, and no page card. It was filed with this entry as rondo#452.
+
+### Decision
+
+1. **The control layer is one layer: `D-0073`'s lane ledger with `D-0098`'s five rules**, as
+   `D-0113` and `D-0114` moved its releases. `D-0098`'s "beyond the lane ledger" names what it added
+   to the ledger's rows and tests, not a second layer beside it. The layer's parts are the ones those
+   entries name: claim rows, `reserve()`'s test, the gate-time comparison, the landing reading, the
+   `sequence` with `after` and `first_landed`, the take-in field, the reserved numbers, the relayed
+   question and the scope's review numbers. **It still has no component, no record that groups lines
+   and no authority beyond `D-0073` rule 1's two.** Everything else below it does through a rule that
+   was already decided.
+
+2. **Its authorities, in one table.** Each row cites the rule that decides it. The table restates
+   those rules and does not replace them; where it differs from them, the rule wins.
+
+| Authority | What the layer does | Decided by | Built by | Still open |
+|---|---|---|---|---|
+| **Allocate** | Gives a line a claim on repository paths from its admission until its pull request opens; a plan not yet admitted holds nothing; a line with no drafted claim claims `/` | `D-0073` rule 2, `D-0114` | #280, #292 | |
+| **Refuse** | Refuses an admission, or a successor claim, that would share a path with another open line of the same repository, naming the holder | `D-0073` rule 3, `D-0113` | #280, #440 | A refusal that waits for the paths instead of turning the start away: rondo#284 |
+| **Move ownership** | Widens, narrows or releases a claim by a successor row; a lap that changed an unclaimed path widens onto it at its gate; a line is released when it ends, when its pull request opens, when it is merged from the page, or when the person presses release | `D-0073` rules 4, 5 and 6, `D-0113`, `D-0114` | #280, #293, #295, #440, #443 | Widening and narrowing while a line is open: rondo#282. The landing reading's remote: rondo#286 |
+| **Defer (decide not to start)** | A plan waits while an ask stands over it, an order holds it, or a count refuses it, and while it waits it holds nobody's paths | `D-0073` rule 8, `D-0066` rule 4.2, `D-0023` | #280, #421 | Waiting on held paths: rondo#284 |
+| **Re-order** | An order's `then` is admitted only on `first`'s landing, across repositories and within one. The order in which lines that each land alone are merged is drawn beside the merge press as its recommendation, not a hold | `D-0098` rule 1, `D-0114` rule 5.1, `D-0073` rule 9.1 | #421 | See the residual below |
+| **Fold** | Changes that must land together become one line: a widening held until the paths are free, then a `revise` | `D-0073` rules 9.2 and 9.3 | through widening and `revise` | Widening: rondo#282 |
+| **Take in** | A line that takes over paths another line landed first merges the default branch in, and a conflict fix is one more attempt | `D-0098` rule 2, `D-0105` | #421, #425 | |
+| **Reserve numbers** | Decision-record numbers are rows beside the claim, so decision entries are written in parallel | `D-0098` rule 3 | #421 | |
+| **Hold** | A line at its gate keeps its claim and holds no capacity; a worker's question is carried at its lap's end, and silence never answers it; the model session is not kept | `D-0073` rule 10, `D-0098` rule 4 | #421 | |
+| **Route a consequence** | Once a reader sees that a change makes another path false, the claim widens onto it, or a narrowing hands it over at once | `D-0073` rules 4 and 5 | #293 | Widening and narrowing: rondo#282 |
+| **Stop a review** | A review stops at the scope's numbers; a closing fix is the scope's option | `D-0098` rule 5 | #421 | |
+| **Say it on the page** | Claims, waits and landings in the person's words; parts, waits, questions, take-ins and a closing fix on the thread | `D-0073` rule 12, `D-0098` rule 8 | #295 | `D-0098` rule 8: rondo#452 |
+| **Stays with the person** | Approving (a scope, an irreversible act including the merge, the gate while it is theirs), and every judgement no row settles: whether a change alone breaks something, what a held line waits on, a fold after the pull request was shown, anything outside every scope | `D-0073` rule 11, `D-0064` | | |
+
+3. **rondo#250 is done with this entry.** Its ask, a decision naming the layer and its authorities,
+   is answered by `D-0073`, `D-0098` and this table. What is left is building work, and each piece has
+   an issue of its own: rondo#282, rondo#284, rondo#286, rondo#287 and rondo#452. The residuals of
+   `D-0073` and `D-0098` stay with whoever those entries named. A new observation of parallel work is
+   a new issue, not a reopening of rondo#250.
+
+### What this is not
+
+- **Not a new rule.** Every authority above was decided earlier; this entry gathers them.
+- **Not the drafting half** (`D-0063`), **not a bigger capacity number** (`D-0023`), **not a write
+  fence**, **not a coordinator**, **not an approver** and **not a reader of meaning**: `D-0073`
+  section 3, unchanged.
+
+### The options, and why the others were refused
+
+| Option | Outcome |
+|---|---|
+| **A. A closing entry**: one layer, one table, rondo#250's done condition | **Taken** |
+| **B. No entry**: close rondo#250 with a comment pointing at `D-0073` and `D-0098` | **Refused.** It leaves the authorities spread over seven entries, and a comment is not a record a later entry can cite. *What it would have kept*: one fewer entry with no new rule in it |
+| **C. Decide an open point here**: the one-repository landing order after `D-0114` | **Refused for now**, and kept as the residual below. It asks the owner for a new judgement before the cost has been seen |
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| **Two overlapping pull requests of one repository open at once.** Since `D-0114` releases a line's paths when its pull request opens, a second line can take them and open its own pull request before the first lands. Their merge order is only `D-0073` rule 9.1's recommendation beside the merge press, and `D-0114` rule 5.4 says a line whose paths another line landed first reads `notLanded` until the merge press or the release press ends it | Nothing has been observed to go wrong. `D-0105`'s conflict fix settles the textual collision, and whether the press should hold or warn is a judgement to take on a real case | a later entry, if observed |
+
+### What would falsify it
+
+- **A seventh capability**: parallel work under rondo needing a control that no row of the table
+  covers. The layer is then not whole, and a new entry names what is missing.
+- **A row whose "Still open" is empty but whose rule is not built**, or a "Still open" issue closed
+  without its rule being built. The table is then wrong, and gets a dated annotation.
+- Any measurement in "What was measured" failing to reproduce at rondo `2de3190`.
