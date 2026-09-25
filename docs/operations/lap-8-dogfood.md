@@ -431,7 +431,8 @@ Drafted in English as candidate issue bodies. Filing is the secretary's.
    gate answer record `actor_id` and `recorded_by rondo/cli` only. When an operator types
    `decide-scope` or `answer` on a person's relayed answer, nothing on the row says so. Consider a
    `relayed_by` / note field on `scope_decision` (and the gate answer), or state in D-0066 that
-   relaying is out of scope.*
+   relaying is out of scope.* **Decided (2026-09-26): the second of the two, as D-0118 -- relaying
+   is outside rondo's boundary, `actor_id` stays the approver's claim, and no column is added.**
 5. **The dogfood environment's plan names no review criterion, so no in-scope redo can be admitted
    on it** (N-29). *`scripts/dogfood-env.sh` writes a plan without a review criterion, so every lap's
    model reading is `unavailable` and `rondo retry --scope-decision-id` is always outside at
