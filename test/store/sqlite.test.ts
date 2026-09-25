@@ -578,6 +578,12 @@ test("reserving the same iteration id twice is a defect, not an occupied conduct
  * the write lock every open takes, and failed at once with "database is
  * locked". A second process holds that lock here for a moment and then lets
  * go; the open has to outlast it. Without the busy timeout this throws.
+ *
+ * The holder waits too, as every rondo connection does: while it holds the
+ * lock the open still reads the schema, and that read's shared lock can be
+ * standing at the moment the holder commits. A holder with no wait failed its
+ * own COMMIT with "database is locked" there (nightly 2026-09-24, Windows,
+ * rondo#429).
  */
 test("openIterationStore waits for a writer in another process", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "rondo-busy-")), "store.sqlite");
@@ -589,6 +595,7 @@ test("openIterationStore waits for a writer in another process", async () => {
       "-e",
       `const { DatabaseSync } = require("node:sqlite");
        const db = new DatabaseSync(process.argv[1]);
+       db.exec("PRAGMA busy_timeout = 5000");
        db.exec("BEGIN IMMEDIATE");
        process.stdout.write("held\\n");
        setTimeout(() => { db.exec("COMMIT"); db.close(); }, 500);`,
