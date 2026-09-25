@@ -1385,6 +1385,7 @@ function published(parts: Partial<IterationRecord> = {}): IterationRecord {
     reason: null,
     failureKind: null,
     gateAnswer: "approve",
+    gateAnswerActor: null,
     createdAtMs: 0,
     updatedAtMs: 0,
     ...parts,

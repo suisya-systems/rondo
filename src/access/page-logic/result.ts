@@ -303,25 +303,38 @@ export type ConflictFixBlock = "notConflicting" | "landed" | "fixing" | "asked";
  * (`askStandsOver`), so the press it offers is not refused for it either.
  */
 export function asksOverLine(
-  threads: {
-    readonly waiting: ReadonlySet<string>;
-    readonly byId: ReadonlyMap<string, { readonly bases: readonly unknown[] }>;
-    readonly rootOf: (messageId: string) => string | null;
-  },
+  threads: WaitingThreads,
   requestMessageId: string,
   lineIds: readonly string[],
 ): boolean {
-  return [...threads.waiting].some(
-    (id) =>
-      threads.rootOf(id) === requestMessageId &&
-      (threads.byId.get(id)?.bases ?? []).some(
-        (basis) =>
-          typeof basis === "object" &&
-          basis !== null &&
-          "iterationId" in basis &&
-          typeof basis.iterationId === "string" &&
-          lineIds.includes(basis.iterationId),
-      ),
+  return askOverLine(threads, requestMessageId, lineIds) !== null;
+}
+
+interface WaitingThreads {
+  readonly waiting: ReadonlySet<string>;
+  readonly byId: ReadonlyMap<string, { readonly bases: readonly unknown[] }>;
+  readonly rootOf: (messageId: string) => string | null;
+}
+
+/** The first such question's message id, or null: the gate links to it (rondo#448). */
+export function askOverLine(
+  threads: WaitingThreads,
+  requestMessageId: string,
+  lineIds: readonly string[],
+): string | null {
+  return (
+    [...threads.waiting].find(
+      (id) =>
+        threads.rootOf(id) === requestMessageId &&
+        (threads.byId.get(id)?.bases ?? []).some(
+          (basis) =>
+            typeof basis === "object" &&
+            basis !== null &&
+            "iterationId" in basis &&
+            typeof basis.iterationId === "string" &&
+            lineIds.includes(basis.iterationId),
+        ),
+    ) ?? null
   );
 }
 

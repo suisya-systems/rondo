@@ -2909,7 +2909,11 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   ) {
     const wording = wordingOf(c);
     const line =
-      why === "reviseRefusedOutside" ? wording.reviseRefusedOutside(test ?? "") : wording[why];
+      why !== "reviseRefusedOutside"
+        ? wording[why]
+        : test === "asks"
+          ? wording.reviseRefusedAsks
+          : wording.reviseRefusedOutside(test ?? "");
     return pressRefused(
       c,
       status,

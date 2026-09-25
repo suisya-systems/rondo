@@ -42,7 +42,7 @@ import {
   type RunPlan,
   runPlan,
 } from "../../src/refrain/plan.js";
-import { revisionPlan, takeInSection } from "../../src/refrain/revision.js";
+import { revisionInstruction, revisionPlan, takeInSection } from "../../src/refrain/revision.js";
 import type { IterationRecord, JsonRecord } from "../../src/store/records.js";
 import { REQUEST } from "../request-fixture.js";
 
@@ -188,6 +188,7 @@ function closedRecord(id: string, plan: AdmittedPlan): IterationRecord {
     reason: null,
     failureKind: null,
     gateAnswer: null,
+    gateAnswerActor: null,
     createdAtMs: 1_000,
     updatedAtMs: 2_000,
   };
@@ -520,4 +521,40 @@ test("a migrated predecessor whose typed run id collides with the derived one is
     expect(outcome.reason).toContain("run id");
     expect(outcome.reason).toContain("Nothing was touched");
   }
+});
+
+/**
+ * rondo#448: the words a person sent are read back off the lap they started,
+ * byte for byte -- with a take-in after them, and when the words quote the
+ * sentence that follows them -- and a conflict fix, which carries none, reads
+ * null.
+ */
+test("the words sent with a change are read back off the lap they started", () => {
+  const successor = (prompt: string): IterationRecord => ({
+    ...PREDECESSOR,
+    id: FRESH_ITERATION_ID,
+    plan: { ...PREDECESSOR.plan, prompt },
+  });
+  const words = "  keep the parser\n\nbut not the CLI  ";
+  expect(revisionInstruction(PREDECESSOR, successor(revised({ instruction: words }).prompt))).toBe(
+    words,
+  );
+  const quoting = `x\n\nThat lap's commits are already on '${FIRST.topicBranch}', which is the branch this workspace was cut from. Continue from them rather than starting the request over.\ny`;
+  expect(
+    revisionInstruction(PREDECESSOR, successor(revised({ instruction: quoting }).prompt)),
+  ).toBe(quoting);
+  const takeIn = {
+    cause: "conflict" as const,
+    remoteBranch: "main",
+    branch: "rondo/base/x",
+    commit: "a".repeat(40),
+    paths: [],
+  };
+  expect(
+    revisionInstruction(PREDECESSOR, successor(revised({ instruction: words, takeIn }).prompt)),
+  ).toBe(words);
+  expect(
+    revisionInstruction(PREDECESSOR, successor(revised({ instruction: null, takeIn }).prompt)),
+  ).toBeNull();
+  expect(revisionInstruction(PREDECESSOR, PREDECESSOR)).toBeNull();
 });

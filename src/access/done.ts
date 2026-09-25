@@ -71,6 +71,10 @@ export function definitionOfDone(
     // block's shape is what `./question.ts` reads out of the gate's rationale.
     "- If you need a decision you cannot make yourself: first build, verify and commit everything that does not depend on the answer. Then end your lap with the question. Do not guess.",
     `- To ask, end your report with one fenced block opened by \`\`\`${QUESTION_FENCE} holding one JSON object: {"question": "...", "options": [{"text": "...", "gives_up": "..."}], "recommended": <index of the option you recommend, from 0>, "recommendation": "why", "waits": "which part of the work waits on the answer"}.`,
+    // rondo#448: lap 17's first question came back in English although its
+    // report was asked for in Japanese -- a JSON block reads as data. It is
+    // relayed to the person word for word, so it says whose words they are.
+    "- Every string in that block is relayed to the person word for word: write it in the same language as the rest of your report, never in English because the block is JSON.",
     ruleFiles.length === 0
       ? "The repository says how it installs and verifies in its own files (such as AGENTS.md, CONTRIBUTING.md or README.md): read them first."
       : `The repository's own rules are in ${ruleFiles.join(", ")} in your workspace: read ${ruleFiles.length === 1 ? "it" : "them"} first and follow ${ruleFiles.length === 1 ? "its" : "their"} order of work.`,

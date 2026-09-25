@@ -130,6 +130,12 @@ export interface ReviewMaterial {
   readonly rationale: string | null;
   readonly deterministicFindings: readonly string[];
   readonly criterion: ReviewCriterion;
+  /**
+   * The language the person at the gate reads, as the lap's plan names it, or
+   * null where the plan names none (rondo#448): the findings are shown to that
+   * person as written, so they are asked for in it.
+   */
+  readonly language: string | null;
   /** Rule file contents at `baseCommit`. */
   readonly ruleFiles: readonly { readonly path: string; readonly content: string }[];
 }
@@ -289,6 +295,23 @@ const INSTRUCTIONS = [
 ];
 
 /**
+ * What asks the reviewer for its findings in the person's language (rondo#448).
+ *
+ * **The tag and nothing else**, as `materialLanguageSentence` asks the worker
+ * (D-0053 rule 7): no table of languages, and ASCII. The findings are the
+ * reviewer's words shown to the person as written, on every round; only
+ * `text` is asked for, so the severities and bases stay what rondo reads.
+ */
+export function findingsLanguageSentence(tag: string): string {
+  return (
+    `The person who answers at the gate reads the language with IETF language tag ${tag}, and ` +
+    'reads each finding\'s "text" as you write it: write every "text" in that language from the ' +
+    "start, not in English and then translated. The severities, the bases and the JSON keys stay " +
+    "exactly as specified above."
+  );
+}
+
+/**
  * The document rondo hands the reviewer on standard input (D-0065 1.1, 1.2).
  *
  * Fixed instructions first, then the six sections, each fenced by a delimiter
@@ -320,6 +343,7 @@ export function reviewDocument(material: ReviewMaterial): string {
     "Answer with ONE JSON object and nothing else:",
     '{"findings":[{"severity":"blocker|major|minor|nit","text":"one line","bases":[...]}]}',
     'No findings is {"findings":[]}.',
+    ...(material.language === null ? [] : [findingsLanguageSentence(material.language)]),
     "",
     section(
       "RANGE",

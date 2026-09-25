@@ -85,3 +85,11 @@ test("D-0098 rule 5.2: a closing lap's section quotes the findings with their ba
   // Rule 5.4 is observed on rondo's reading only: the report is not promised to stop the line.
   expect(section).not.toContain("the line then stops");
 });
+
+test("the worker's question block is asked for in the report's own language (rondo#448)", () => {
+  const done = definitionOfDone([], null);
+  const block = done.indexOf("```rondo-question");
+  const ask = done.indexOf("in the same language as the rest of your report");
+  expect(block).toBeGreaterThan(-1);
+  expect(ask).toBeGreaterThan(block);
+});

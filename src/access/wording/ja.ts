@@ -156,6 +156,18 @@ export const JA: Chrome = Object.freeze({
   askStoppedPill: "あなたが止めた線",
   answerStoppedPill: "この線を止めた",
   answerCarriedOnPill: "続けた",
+  askedChangePill: "変更を頼んだ",
+  reviseWaitsOnQuestion:
+    "作業者の質問に答えるまで、変更の依頼は送れません。答えると送れるようになります。" +
+    "ここに書いたものは、質問に答えて戻ってきても消えません。",
+  reviseWaitsLink: "質問へ",
+  reviseWaitsOnStopped:
+    "作業者の質問に「この線を止める」と答えたため、変更の依頼は送れません。依頼するには、" +
+    "質問に「続ける」で答え直してください。ここに書いたものは、戻ってきても消えません。",
+  reviseRefusedAsks:
+    "変更の依頼は送られていません。作業者の質問がまだこの線を止めています（答えていないか、" +
+    "止めると答えたため）。ゲートも枠もそのままです。質問に「続ける」で答えてから、もう一度" +
+    "押してください。書いた内容は欄に残っています。",
   you: "あなた",
   drafterNoDraft:
     "rondo はこの依頼の下書きを作れなかったので、まだ何も提案されていません。範囲はご自身で" +

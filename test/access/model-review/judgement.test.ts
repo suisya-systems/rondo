@@ -10,6 +10,7 @@ import { expect, test } from "vitest";
 import {
   DEFAULT_REVIEW_ROUND_BUDGET,
   DEFAULT_REVIEW_THRESHOLD,
+  findingsLanguageSentence,
   MODEL_REVIEW_INPUT_BOUND_BYTES,
   modelReadingLines,
   modelReadingOf,
@@ -85,6 +86,7 @@ function material(parts: Partial<ReviewMaterial> = {}): ReviewMaterial {
     },
     rationale: "Done; verify is green.",
     deterministicFindings: [],
+    language: null,
     criterion: CRITERION,
     ruleFiles: [{ path: "AGENTS.md", content: "Run npm ci first.\nThen verify.\n" }],
     ...parts,
@@ -629,4 +631,14 @@ test("continuo D-1112: a cut output is marked at the cut, and a whole one is not
   );
   expect(document.split("characters of this output were omitted").length).toBe(2);
   expect(document).toContain("--- event 9\n$ echo ok\nok");
+});
+
+test("the reviewer is asked for its findings in the person's language, by tag only (rondo#448)", () => {
+  const asked = reviewDocument(material({ language: "ja" }));
+  expect(asked).toContain(findingsLanguageSentence("ja"));
+  expect(findingsLanguageSentence("ja")).toContain("IETF language tag ja");
+  expect(findingsLanguageSentence("ja")).toMatch(/^[\x20-\x7e]+$/);
+  // Before the material, so no fenced section can be taken to have said it.
+  expect(asked.indexOf(findingsLanguageSentence("ja"))).toBeLessThan(asked.indexOf("RANGE"));
+  expect(reviewDocument(material())).not.toContain("IETF language tag");
 });

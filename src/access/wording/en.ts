@@ -166,6 +166,18 @@ explanation you pressed on and then answers the gate.`,
   askStoppedPill: "You stopped this line",
   answerStoppedPill: "Stopped this line",
   answerCarriedOnPill: "Carried on",
+  askedChangePill: "Asked for a change",
+  reviseWaitsOnQuestion:
+    "Until you answer the worker's question, the change cannot be sent. What you write here " +
+    "stays in the box while you do.",
+  reviseWaitsLink: "Go to the question",
+  reviseWaitsOnStopped:
+    "You answered the worker's question by stopping this line, so the change cannot be sent. " +
+    "To send it, answer the question again with Carry on. What you write here stays in the box.",
+  reviseRefusedAsks:
+    "The change was not sent: the worker's question still holds this line (it is unanswered, " +
+    "or you answered it by stopping the line). The gate and the budget are as they were. " +
+    "Answer the question with Carry on, then press again. What you wrote is still in the box.",
   you: "you",
   drafterNoDraft:
     "rondo could not draft this request, so nothing has been proposed. You can set the scope " +

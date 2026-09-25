@@ -48,7 +48,7 @@
  * that stop taking them -- and until it does, a module that guessed a topic
  * branch would be taking that decision inside an implementation diff.
  */
-import type { IterationRecord } from "../store/records.js";
+import { type IterationRecord, planField } from "../store/records.js";
 
 import { allocate } from "./allocator.js";
 import { type AdmittedPlan, type PlanOutcome, readPlan, runPlan, type TakeIn } from "./plan.js";
@@ -201,23 +201,60 @@ function revisionPrompt(plan: AdmittedPlan, input: RevisionRequest): string {
             " with the branch it merges into. The person asked rondo to settle the conflict." +
             " Change nothing else: the work itself was already approved.",
         ]
-      : [
-          "--- Revision requested at the gate ---",
-          "",
-          `A previous lap (run '${plan.runId}', iteration '${input.predecessor.id}') did this work and` +
-            " stopped at a gate. A person read it and asked for a change:",
-          "",
-          input.instruction,
-        ];
+      : [revisedHead(plan.runId, input.predecessor.id), input.instruction];
   return [
     plan.prompt,
     "",
     ...asked,
     "",
-    `That lap's commits are already on '${plan.topicBranch}', which is the branch this` +
-      " workspace was cut from. Continue from them rather than starting the request over.",
+    revisedTail(plan.topicBranch),
     ...(input.takeIn === null ? [] : ["", takeInSection(input.takeIn)]),
   ].join("\n");
+}
+
+/** What comes before the person's words in a revise's prompt, up to the blank line above them. */
+function revisedHead(runId: string, predecessorId: string): string {
+  return [
+    "--- Revision requested at the gate ---",
+    "",
+    `A previous lap (run '${runId}', iteration '${predecessorId}') did this work and` +
+      " stopped at a gate. A person read it and asked for a change:",
+    "",
+  ].join("\n");
+}
+
+/** The sentence that follows the person's words. */
+function revisedTail(topicBranch: string): string {
+  return (
+    `That lap's commits are already on '${topicBranch}', which is the branch this` +
+    " workspace was cut from. Continue from them rather than starting the request over."
+  );
+}
+
+/**
+ * The words a person sent with *ask for a change*, read back off the lap it
+ * started (rondo#448), or null where the successor's prompt is not a revise of
+ * this predecessor's as {@link revisionPrompt} writes one.
+ *
+ * **The prompt is the one place the words are kept**: the gate answer's row
+ * records which answer, not what it carried (D-0092), and continuo's copy is
+ * continuo's. The prompt is the predecessor's, then {@link revisedHead}, then
+ * the words, then {@link revisedTail} -- so the words are what lies between
+ * the known head and the **last** tail, and words that quote the tail
+ * themselves are still cut whole. A conflict fix carries no words and reads
+ * null here.
+ */
+export function revisionInstruction(
+  predecessor: IterationRecord,
+  successor: IterationRecord,
+): string | null {
+  const head =
+    `${planField(predecessor, "prompt")}\n\n` +
+    `${revisedHead(planField(predecessor, "run_id"), predecessor.id)}\n`;
+  const prompt = planField(successor, "prompt");
+  const tail = `\n\n${revisedTail(planField(predecessor, "topic_branch"))}`;
+  const end = prompt.lastIndexOf(tail);
+  return prompt.startsWith(head) && end >= head.length ? prompt.slice(head.length, end) : null;
 }
 
 /**

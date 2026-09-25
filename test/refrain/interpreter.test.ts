@@ -324,6 +324,7 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     reason: null,
     failureKind: null,
     gateAnswer: null,
+    gateAnswerActor: null,
     createdAtMs: NOW_MS,
     updatedAtMs: NOW_MS,
   };

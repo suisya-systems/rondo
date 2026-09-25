@@ -258,6 +258,7 @@ async function take(ports: ModelReviewPorts, iterationId: string): Promise<reado
             rationale: await ports.rationale(record),
             deterministicFindings: deterministic.findings,
             criterion,
+            language: plan.materialLanguage,
             ruleFiles: facts.ruleFiles,
           };
   }

@@ -90,6 +90,7 @@
 import { raw } from "hono/html";
 import { type AdvisorySnapshot, type Claim, propose, UNDETERMINED } from "../advisory/proposal.js";
 import { readTriagePayload, type TriagePayload } from "../advisory/triage.js";
+import { revisionInstruction } from "../refrain/revision.js";
 import {
   approvedForPublication,
   type FindingSeverity,
@@ -170,7 +171,13 @@ import {
   workerRuns,
 } from "./page-logic/laps.js";
 import { placeSaid, repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
-import { asksOverLine, conflictFixBlock, mergeBlock, resultOf } from "./page-logic/result.js";
+import {
+  askOverLine,
+  asksOverLine,
+  conflictFixBlock,
+  mergeBlock,
+  resultOf,
+} from "./page-logic/result.js";
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
 import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
@@ -1571,9 +1578,28 @@ function reviseForm(
         ) : null}
         {box.kind === "unavailable" ? maintainerFold("revise-why", wording, box.reason) : null}
         <p class="note text-meta leading-5 text-muted-foreground">{wording.reviseNote}</p>
+        {/* **A change waits on the question, and says so before the press**
+            (rondo#448): the scope's verdict refuses it while a question over
+            this line stands, so the press is drawn but not pressable. The box
+            stays, and what is written in it is kept, so the change can be
+            written now and sent once the question is answered. */}
+        {framing.questionOpen === null ? null : (
+          <p id="revise-waits" class="note text-meta leading-5 text-foreground">
+            {framing.questionOpen.stopped
+              ? wording.reviseWaitsOnStopped
+              : wording.reviseWaitsOnQuestion}{" "}
+            <a
+              href={`#${encodeURIComponent(framing.questionOpen.id)}`}
+              class="text-link hover:underline"
+            >
+              {wording.reviseWaitsLink}
+            </a>
+          </p>
+        )}
         <button
           type="submit"
           data-row=""
+          disabled={framing.questionOpen !== null}
           aria-describedby="revise-plain"
           data-busy={wording.reviseBusy}
           class={`${recommended ? PRIMARY : SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-end`}
@@ -1624,6 +1650,13 @@ interface Shown {
   readonly closedBy: BudgetClosed | null;
   /** The revise box's content and what is said beside it (D-0077 section 4). */
   readonly revise: ReviseBox;
+  /**
+   * The question over this lap's line that still holds it, by its message id,
+   * and whether the person answered it by stopping the line -- or null
+   * (rondo#448). The scope's verdict refuses a revise while it stands
+   * (`askStandsOver`, D-0072 rule 3), so the form says so before the press.
+   */
+  readonly questionOpen: { readonly id: string; readonly stopped: boolean } | null;
 }
 
 /**
@@ -1737,6 +1770,8 @@ async function shownBeforePress(
    * is answering.
    */
   answeringLapId: string | null = null,
+  /** The question over a lap's line that waits on the person, or null ({@link Shown.questionOpen}). */
+  questionOver: (record: IterationRecord) => Promise<Shown["questionOpen"]> = async () => null,
 ): Promise<ReadonlyMap<string, Shown>> {
   const shown = new Map<string, Shown>();
   const wanted = answeringLapId;
@@ -1763,6 +1798,7 @@ async function shownBeforePress(
       closedBy:
         tip.kind === "tip" ? await budgetClosing(ports, tip.scopeDecisionId, ports.now()) : null,
       revise: await reviseBox(ports, wording, record.id, readings),
+      questionOpen: await questionOver(record),
     });
   }
   return shown;
@@ -2907,7 +2943,27 @@ export async function operatorPage(
     selectedRoot === null
       ? null
       : (lapsUnder(selectedRoot).find((lap) => lap.question === "waiting")?.record.id ?? null);
-  const shown = await shownBeforePress(ports, wording, waiting, token, answeringLap);
+  // The lap's line as the ledger holds it, which is how the conflict fix reads
+  // a question over a line (D-0105); the verdict walks the lineage.
+  const shown = await shownBeforePress(
+    ports,
+    wording,
+    waiting,
+    token,
+    answeringLap,
+    async (record) => {
+      const id =
+        record.requestMessageId === null
+          ? null
+          : askOverLine(
+              threads,
+              record.requestMessageId,
+              (await ports.store.laneLedger()).find((line) => line.lapIds.includes(record.id))
+                ?.lapIds ?? [record.id],
+            );
+      return id === null ? null : { id, stopped: threads.stopped.has(id) };
+    },
+  );
   /*
    * **The lap everything about this confirmation is read from** (rule 6, and
    * Codex round 3): the one at the gate where there is one, and the one the
@@ -3091,6 +3147,30 @@ export async function operatorPage(
   /** Each message's moment, for rule 7's line: the items themselves do not carry it. */
   const messageTimes = new Map(selectedMessages.map((m) => [m.messageId, m.atMs]));
   /*
+   * **The words a change was asked with, under the name of who asked**
+   * (rondo#448). They are kept only in the prompt of the try they started, so
+   * a change whose next try never started has none to show, and its line
+   * says so on its own. Placed at the gate's answer, beside that line.
+   */
+  const askedChanges = selectedLaps.flatMap(({ record }) => {
+    const next = selectedLaps.find((lap) => lap.record.supersedesIterationId === record.id);
+    const words =
+      record.gateAnswer !== "revise" || record.gateAnswerActor === null || next === undefined
+        ? null
+        : revisionInstruction(record, next.record);
+    return words === null
+      ? []
+      : [
+          {
+            id: `revise-${record.id}`,
+            actor: record.gateAnswerActor ?? "",
+            atMs: record.updatedAtMs,
+            words,
+          },
+        ];
+  });
+  for (const asked of askedChanges) messageTimes.set(asked.id, asked.atMs);
+  /*
    * **What rondo would ask for next** (D-0097), read here and drawn on the
    * empty centre, on the goal page, in the box a person took a candidate into,
    * and as one line in a finished thread. Reads only: the host writes the rows.
@@ -3203,6 +3283,29 @@ export async function operatorPage(
         },
       };
     }),
+    ...askedChanges.map(
+      (asked): ThreadItem => ({
+        kind: "message",
+        message: {
+          id: asked.id,
+          who: "person",
+          voice: "operator",
+          said: asked.actor === ports.actorId ? wording.you : asked.actor,
+          body: asked.words,
+          drawn: null,
+          at: wording.age(ago(asked.atMs, nowMs)),
+          atTitle: new Date(asked.atMs).toISOString(),
+          waiting: null,
+          answered: wording.askedChangePill,
+          bases: [],
+          basesLabel: wording.basesLabel,
+          pending: [],
+          pendingSaid: wording.issuePending,
+          inReplyTo: null,
+          reply: null,
+        },
+      }),
+    ),
     ...selectedLaps.flatMap((lap, tryAt) =>
       lapEvents(
         wording,
