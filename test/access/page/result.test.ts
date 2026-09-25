@@ -537,6 +537,35 @@ test("merged outside rondo ends the request: who merged it, no press, and the cl
   expect(head(await merging(world, "en"))).toContain("Merged into main by someone on the forge");
 });
 
+test("a merge's close-out is said under it: what was deleted, what was refused, what is kept (rondo#403)", async () => {
+  const world = await approved();
+  await published(world);
+  await checked(world, { kind: "green", counted: 2, skipped: 0 });
+  await reportToRequest(
+    threadOf(world),
+    "i-r",
+    { kind: "mergedOutside", pullRequestUrl: PR, into: "main", by: "someone", mergeCommit: "m1" },
+    61_000,
+  );
+  await reportToRequest(
+    threadOf(world),
+    "i-r",
+    {
+      kind: "closedOut",
+      deleted: ["rondo/base/run-1", "rondo/base/run-2"],
+      refused: [{ branch: "rondo/base/run-3", reason: "checked out" }],
+      topicBranch: "rondo/topic",
+    },
+    62_000,
+  );
+  expect(head(await merging(world))).toContain("取り込み元ブランチを 2 本削除しました");
+  expect(head(await merging(world))).toContain("1 本は削除できませんでした");
+  const english = head(await merging(world, "en"));
+  expect(english).toContain("deleted the 2 base branches it made");
+  expect(english).toContain("could not delete 1");
+  expect(english).toContain("until continuo#230");
+});
+
 test("closed unmerged on the forge ends the request, and no press is offered (rondo#413)", async () => {
   const world = await approved();
   await published(world);

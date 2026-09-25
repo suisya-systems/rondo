@@ -27,6 +27,7 @@ import { type AdvisoryRecord, type IterationStore, LANE_LEDGER_AUTHOR } from "..
 import { reportToRequest } from "./conductor.js";
 import {
   type CommandOutcome,
+  deleteLapBase,
   type MergeMethodReading,
   mergePullRequest,
   type PullRequestState,
@@ -62,6 +63,8 @@ export interface MergePorts {
     readonly readMergeMethod: typeof readMergeMethod;
     readonly mergePullRequest: typeof mergePullRequest;
   };
+  /** The close-out's git (D-0119); tests replace it, the host reaches the real one. */
+  readonly deleteLapBase?: typeof deleteLapBase;
 }
 
 const REFUSED_BY: Readonly<Record<MergeBlock, MergeRefusal>> = {
@@ -239,7 +242,71 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
   // Where the forge says it went after the merge, not before: a retarget in
   // between is not something `--match-head-commit` refuses (Codex round 1).
   const released = await releaseMerged(ports, record.id, after.baseBranch, after);
-  return { ok: true, note: [line ?? "merged", released].join("\n") };
+  const closedOut = await closeOutMerged(ports, record.id);
+  return {
+    ok: true,
+    note: [line ?? "merged", released, ...(closedOut === null ? [] : [closedOut])].join("\n"),
+  };
+}
+
+/** What a close-out reads and writes (D-0119). */
+export interface CloseOutPorts {
+  readonly store: Pick<IterationStore, "read" | "readingsFor" | "laneLine">;
+  readonly record: Pick<AdvisoryRecord, "recordThreadMessage">;
+  readonly now: () => number;
+  /** Tests replace git; the host reaches the real one. */
+  readonly deleteLapBase?: typeof deleteLapBase;
+}
+
+/**
+ * **The close-out after a merge** (rondo#403, D-0119), run by whichever of the
+ * two paths wrote the merge line: the press above, or the checks host reading
+ * a merge made on the forge. It deletes every `rondo/base/<runId>` its line's
+ * laps were cut from -- rondo's own refs (D-0100), holding nobody's commits --
+ * and says in the thread what it deleted, what git refused, and what it keeps:
+ * the topic branch, and the worktrees, whose removal is continuo's and waits on
+ * continuo#230. A close without a merge closes nothing out.
+ *
+ * ponytail: run once, right after the merge line; a host stopped between the
+ * two leaves the branches for the person, and a retry sweep is the upgrade if
+ * that is ever seen.
+ */
+export async function closeOutMerged(
+  ports: CloseOutPorts,
+  iterationId: string,
+): Promise<string | null> {
+  const found = await ports.store.read(iterationId);
+  if (found.kind !== "read") {
+    return null;
+  }
+  const line = await ports.store.laneLine(iterationId);
+  const laps = line.kind === "read" ? line.line.laps : [found.record];
+  const remove = ports.deleteLapBase ?? deleteLapBase;
+  const deleted: string[] = [];
+  const refused: { branch: string; reason: string }[] = [];
+  for (const lap of laps) {
+    const repository = planField(lap, "repository");
+    if (lap.runId === null || repository === "") {
+      continue;
+    }
+    const outcome = await remove({ repository, runId: lap.runId });
+    if (outcome.kind === "deleted") {
+      deleted.push(outcome.branch);
+    } else if (outcome.kind === "refused") {
+      refused.push({ branch: outcome.branch, reason: outcome.reason });
+    }
+  }
+  return await reportToRequest(
+    ports,
+    iterationId,
+    {
+      kind: "closedOut",
+      deleted,
+      refused,
+      topicBranch: found.record.topicBranch ?? planField(found.record, "topic_branch"),
+    },
+    ports.now(),
+  );
 }
 
 /**

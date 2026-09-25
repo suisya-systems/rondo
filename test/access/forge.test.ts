@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { expect, test } from "vitest";
 
 import {
+  deleteLapBase,
   fetchLapBase,
   gatherReviewMaterialFacts,
   inspectLapWork,
@@ -831,6 +832,26 @@ test("a base the forge cannot hand over is a lap that does not start, and says w
     expect(refused.reason).toContain("could not fetch it");
     expect(refused.reason).toContain("No run was admitted");
   }
+});
+
+test("a close-out deletes the lap's base branch, is idempotent, and never one checked out", async () => {
+  const { clone } = staleClone();
+  await fetchLapBase(lapBase(clone, "run-a"));
+  await fetchLapBase(lapBase(clone, "run-b"));
+  git(clone, "switch", "rondo/base/run-b");
+
+  expect(await deleteLapBase({ repository: clone, runId: "run-a" })).toEqual({
+    kind: "deleted",
+    branch: "rondo/base/run-a",
+  });
+  expect(await deleteLapBase({ repository: clone, runId: "run-a" })).toEqual({
+    kind: "absent",
+    branch: "rondo/base/run-a",
+  });
+  // D-0119: somebody's checkout is git's to refuse, and the refusal is said.
+  const checkedOut = await deleteLapBase({ repository: clone, runId: "run-b" });
+  expect(checkedOut.kind).toBe("refused");
+  expect(revParse(clone, "HEAD")).toBe(revParse(clone, "refs/heads/rondo/base/run-b"));
 });
 
 // --- pushing onto an open pull request's branch (rondo#417, D-0105) ----------

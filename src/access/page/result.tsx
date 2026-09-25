@@ -103,11 +103,18 @@ export function ResultLine({
         </>
       )}
       {merged !== null ? (
-        <li className="result-done result-merged">
-          {merged.outside
-            ? wording.resultMergedOutside(merged.into, merged.by)
-            : wording.resultMerged(merged.into, merged.method ?? "")}
-        </li>
+        <>
+          <li className="result-done result-merged">
+            {merged.outside
+              ? wording.resultMergedOutside(merged.into, merged.by)
+              : wording.resultMerged(merged.into, merged.method ?? "")}
+          </li>
+          {result?.closedOut == null ? null : (
+            <li className="result-done">
+              {wording.resultClosedOut(result.closedOut.deleted, result.closedOut.refused)}
+            </li>
+          )}
+        </>
       ) : result?.closedAtMs == null ? (
         <li className="result-ahead">{wording.resultNotMerged}</li>
       ) : (

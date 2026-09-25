@@ -74,7 +74,9 @@ async function over(options: Options = {}) {
         line: {
           lineageId: "lap-1",
           claim: { claimId: "lap-1:1", paths: ["src/"] },
-          laps: options.laps ?? [{ id: "lap-1", status: "closed", supersedesIterationId: null }],
+          laps: (
+            options.laps ?? [{ id: "lap-1", status: "closed", supersedesIterationId: null }]
+          ).map((lap) => ({ runId: `run-of-${lap.id}`, plan: { repository: "/repo" }, ...lap })),
         },
       }) as never,
     releaseLane: async (release: unknown) => {
@@ -189,6 +191,7 @@ async function over(options: Options = {}) {
     } as ThreadMessageDraft);
   }
   const asked: string[] = [];
+  const deletedBases: string[] = [];
   let reads = 0;
   const pressing = new Set<string>();
   const world = { rereads: 0, pressedDuring: [] as string[] };
@@ -197,6 +200,10 @@ async function over(options: Options = {}) {
     record,
     now: () => 9,
     pressing,
+    deleteLapBase: async ({ runId }) => {
+      deletedBases.push(runId);
+      return { kind: "deleted", branch: `rondo/base/${runId}` };
+    },
     readAgain: async () => {
       // The press has let go of the lap by now, so the checks host reads it.
       world.pressedDuring.push(...pressing);
@@ -229,7 +236,7 @@ async function over(options: Options = {}) {
       },
     },
   });
-  return { press, asked, messages, world, releases };
+  return { press, asked, messages, world, releases, deletedBases };
 }
 
 const input = { iterationId: "lap-1", head: TIP };
@@ -250,6 +257,12 @@ test("a green head with nothing waiting merges by the repository's method and sa
       "'main' by squash as commit 'def5678'.",
   );
   expect(report?.inReplyTo).toBe("request-1");
+  // D-0119: the press closes the line out, every lap's base branch.
+  expect(world.deletedBases).toEqual(["run-of-lap-1"]);
+  expect(
+    world.messages.find((message) => message.messageId === "report-closeout-lap-1")?.body,
+  ).toContain("deleted 'rondo/base/run-of-lap-1'");
+  expect(merged.ok && merged.note).toContain("report-closeout-lap-1");
 });
 
 test("D-0098 rule 5.3: a closing lap's merge says it was not re-read and names what the reviewer last read", async () => {
@@ -318,6 +331,7 @@ test("the forge's refusal is carried as it said it, and nothing is reported merg
     detail: "Pull request is not mergeable: review required",
   });
   expect(world.messages.some((message) => message.messageId === "report-merged-lap-1")).toBe(false);
+  expect(world.deletedBases).toEqual([]);
 });
 
 test("a merge the forge accepted and did not confirm is said as that, and never reported merged", async () => {

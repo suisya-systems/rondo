@@ -146,6 +146,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0114 | A line gives its files up when its pull request opens, not when its work lands: the landing is still read and written after it, so an order still waits for a landing, and the numbers stay the line's | accepted |
 | D-0117 | The control layer for parallel work is `D-0073`'s lane ledger and `D-0098`'s five rules, read as one: its authorities in one table, each pointing to the rule that decided it and the change that built it, and rondo#250 done with what is left filed on its own | accepted |
 | D-0118 | A relayed approval is outside rondo's boundary: `actor_id` is the approver's claim, a relay is the operator's to write in `--verified`, and no column is added for it | accepted |
+| D-0119 | A merge is closed out: rondo deletes the `rondo/base/` branches it made for the line, keeps the topic branch, and leaves the worktree to a continuo verb (continuo#230); a close without a merge closes nothing out | accepted |
 
 ---
 
@@ -12769,6 +12770,12 @@ itself.
 > carried byte for byte into the next lap. A question raised in the middle of a lap still has no relay
 > (`D-0061` rule 6). The table and the list above are not edited.
 
+> **Annotation (2026-09-26, from D-0119).** Added after this entry was accepted, and additive. The
+> "CI and merge watch, cleanup" row's merge half is read by rondo (`D-0102` rule 2) and the run is
+> closed at `publish`, not at the merge. After a merge rondo deletes the base branches it made
+> itself (`D-0100`); removing the worktree stays continuo's and waits on a continuo verb
+> (continuo#230). The table and the list above are not edited.
+
 ### 6. Existing entries that have to move
 
 **None is edited here.** "Supersede" means a later entry retires what the named rule asserts (the
@@ -22424,6 +22431,9 @@ At rondo `77c41d7` and continuo `b7162ae`, by reading `src/access/conductor.ts` 
 
 - **One more branch in the target clone per first lap**, which `git branch` lists and nothing
   removes. Deleting it is safe once the lap's worktree exists.
+
+  > **Annotation (2026-09-26, from D-0119).** Additive (rondo#403): a merge's close-out deletes
+  > every `rondo/base/<runId>` of the merged line. A line that is never merged still keeps them.
 - **A second fetch per admission**, whose failure leaves `refs/remotes/origin/<branch>` where it was.
 - **The base is read at admission, not at perform.** They run back to back in one conductor pass.
 
@@ -24086,3 +24096,68 @@ At rondo `2de3190` on **2026-09-26**, by reading `DECISIONS.md`, `git log` and t
 - **A row whose "Still open" is empty but whose rule is not built**, or a "Still open" issue closed
   without its rule being built. The table is then wrong, and gets a dated annotation.
 - Any measurement in "What was measured" failing to reproduce at rondo `2de3190`.
+
+---
+
+## D-0119 — A merge is closed out: rondo deletes the `rondo/base/` branches it made for the line, keeps the topic branch, and leaves the worktree to a continuo verb (continuo#230); a close without a merge closes nothing out
+
+**Status:** accepted (2026-09-26, rondo#403; the owner's answer through the secretary, option C of
+three). Refs `D-0010`, `D-0064` section 5, `D-0091`, `D-0093`, `D-0100`, `D-0102`, rondo#403,
+continuo#230.
+
+**Why an entry is needed.** rondo#403 asks who closes out the work after a pull request rondo opened
+is merged, and what the close-out removes and keeps. `D-0093` refuses any rondo module that plays
+the *CI and merge watch, cleanup* row, which `D-0064` section 5 gives to continuo. So whatever rondo
+does here has to say which side of that row it is on.
+
+### What was measured
+
+At rondo `d40558e` and continuo `b7162ae` on **2026-09-26**, by reading:
+
+- **The merge is already seen.** `D-0102` rule 2: the checks host writes `report-merged-<lap>` for a
+  merge made on the forge, and the merge press writes the same id (`D-0091`).
+- **The run is already closed.** `publish` runs `run close --outcome completed` right after it opens
+  the pull request (`src/access/cli.ts`). The run is terminal from then on, not from the merge.
+- **Left behind after a merge:** the lap's worktree, which continuo's `lap perform` made; one
+  `rondo/base/<runId>` per first lap and per take-in, which rondo's `fetchLapBase` made (`D-0100`);
+  and the lap's local topic branch.
+- **continuo has no verb for the worktree.** rondo drives continuo only through its CLI (`D-0017`).
+  `removeWorktree` is a library export, and the `run` verbs are `admit`, `show` and `close`.
+
+### Decision
+
+1. **The close-out runs on a merge, and only on a merge.** It runs in whichever path wrote the merge
+   line: the press (`mergePress`), or the checks host reading a merge made on the forge. A pull
+   request closed without a merge closes nothing out, so the work can still be picked up.
+2. **rondo deletes the base branches it made.** For every lap of the merged lap's line (`D-0073`),
+   `git branch -D rondo/base/<runId>` in the lap's repository. A branch already gone is not an
+   error. A branch git refuses to delete (someone checked it out) is left alone and named with git's
+   reason. These are rondo's own refs, symmetric to `fetchLapBase`, and they hold nobody's commits.
+   So this is the same role as the fetch (*Publishing*, `D-0093` rule 2), not continuo's cleanup, and
+   `RELOCATING` does not grow.
+3. **The topic branch is kept.** It holds the lap's commits, and keeping it is the choice that can
+   be undone. The remote branch is the forge's to delete, by its own setting.
+4. **The worktree is kept until continuo has a verb for it** (continuo#230). Removing it is
+   continuo's (`D-0064` section 5), and rondo will call the verb when a pinned continuo has it.
+5. **The person sees it.** One thread line per merged lap, `report-closeout-<lap>`, names what was
+   deleted, what git refused and why, and what is kept. The result band shows it under the merge line.
+
+**Options not taken.** A: rondo also removes the worktree with git. It is faster, but it plays
+continuo's row and needs a `RELOCATING` entry that `D-0093` rule 5 says only shrinks. B: wait for
+continuo to own the whole close-out through `pr_merged`. It keeps the boundary, but it deletes
+nothing rondo made until a continuo release, and continuo's `pr_merged` consumer would close a run
+that `publish` has already closed.
+
+### What it costs
+
+- **It runs once.** A host stopped between the merge line and the close-out line leaves the
+  branches for the person to delete. Nothing sweeps later.
+- **One worktree per lap still stays** until continuo#230 is built and pinned.
+
+### What would falsify it
+
+- **A `rondo/base/` branch that holds a commit someone needs.** Then rule 2's "nobody's commits" is
+  wrong, and deleting it loses work.
+- **continuo#230 closed without a verb**, or with one that also deletes the topic branch. Then rule 4
+  has nothing to call, or its call breaks rule 3.
+- Any measurement in "What was measured" failing to reproduce at rondo `d40558e`.

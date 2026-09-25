@@ -188,12 +188,15 @@ async function hostOver(options: {
   readonly bodies?: Readonly<Record<string, string>>;
 }): Promise<{
   readonly written: readonly Recorded[];
+  /** The run ids whose `rondo/base/` branch the close-out deleted (D-0119). */
+  readonly deletedBases: readonly string[];
   readonly asked: number;
   /** Which lap each call was about, in order. */
   readonly askedIds: readonly string[];
 }> {
   const written: Recorded[] = [];
   const askedIds: string[] = [];
+  const deletedBases: string[] = [];
   let tick = 0;
   let clock = 100;
   const messages: {
@@ -232,7 +235,8 @@ async function hostOver(options: {
             id,
             requestMessageId: "request-1",
             runId: "run-1",
-            plan: { db: "/state/control.db" },
+            topicBranch: "rondo/topic",
+            plan: { db: "/state/control.db", repository: "/repo" },
           },
         }) as never,
       // The commit is the lap's, so a fake reading can be per lap.
@@ -254,6 +258,11 @@ async function hostOver(options: {
             releasedBy: options.releasedBy ?? null,
           },
         ] as never,
+      laneLine: async () => ({ kind: "absent" }),
+    },
+    deleteLapBase: async (request) => {
+      deletedBases.push(request.runId);
+      return { kind: "deleted", branch: `rondo/base/${request.runId}` };
     },
     record: {
       threadMessages: async () => ({ kind: "read", messages }) as never,
@@ -299,7 +308,7 @@ async function hostOver(options: {
     host.kick();
     await host.idle();
   }
-  return { written, asked: askedIds.length, askedIds };
+  return { written, deletedBases, asked: askedIds.length, askedIds };
 }
 
 test("a published lap whose line still holds is read, and its answer is one message", async () => {
@@ -491,20 +500,29 @@ test("a head the lap did not push is said with what it carries, and its checks a
   expect(over.written[0]?.body).toContain("- 'fff0000' resolve the conflict");
 });
 
-test("merged or closed on the forge ends the reading with one line", async () => {
+test("merged or closed on the forge ends the reading, and only a merge is closed out", async () => {
   const merged = await hostOver({
     reading: { kind: "green", counted: 1, skipped: 0 },
     pullRequest: { ...OPEN, state: "merged", mergedBy: "someone", mergeCommit: "m1" },
     messageIds: ["request-1", "report-published-lap-1"],
   });
-  expect(merged.written.map((one) => one.messageId)).toEqual(["report-merged-lap-1"]);
+  expect(merged.written.map((one) => one.messageId)).toEqual([
+    "report-merged-lap-1",
+    "report-closeout-lap-1",
+  ]);
   expect(merged.written[0]?.body).toContain("by 'someone'");
+  // D-0119: rondo's base branch goes; the topic branch and the worktree stay.
+  expect(merged.deletedBases).toEqual(["run-1"]);
+  expect(merged.written[1]?.body).toContain("deleted 'rondo/base/run-1'");
+  expect(merged.written[1]?.body).toContain("topic branch 'rondo/topic' is kept");
+  expect(merged.written[1]?.body).toContain("continuo#230");
   const closed = await hostOver({
     reading: { kind: "none" },
     pullRequest: { ...OPEN, state: "closed" },
     messageIds: ["request-1", "report-published-lap-1"],
   });
   expect(closed.written.map((one) => one.messageId)).toEqual(["report-closed-lap-1"]);
+  expect(closed.deletedBases).toEqual([]);
   // And the scan leaves the lap alone afterwards.
   for (const ended of ["report-merged-lap-1", "report-closed-lap-1"]) {
     const after = await hostOver({
