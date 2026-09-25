@@ -285,6 +285,11 @@ export interface PageWords extends DayWords {
   readonly resultMovedMore: (count: number) => string;
   readonly resultMergedOutside: (into: string, by: string | null) => string;
   readonly resultClosed: string;
+  /**
+   * rondo#403 (D-0119): what the close-out after the merge deleted, how many
+   * it could not (the thread says why), and what it keeps.
+   */
+  readonly resultClosedOut: (deleted: number, refused: number) => string;
   /** The same result as a list row's one sentence. */
   readonly rowApproved: string;
   readonly rowPublished: (pullRequest: string, checks: string) => string;
@@ -584,6 +589,12 @@ export const PAGE_EN: PageWords = Object.freeze({
       ? `Merged into ${into} on the forge, not from this page.`
       : `Merged into ${into} by ${by} on the forge, not from this page.`,
   resultClosed: "Closed on the forge without merging.",
+  resultClosedOut: (deleted, refused) =>
+    (deleted === 0
+      ? "Cleaned up: rondo had no base branch left to delete"
+      : `Cleaned up: rondo deleted the ${String(deleted)} base branch${deleted === 1 ? "" : "es"} it made for this work`) +
+    (refused === 0 ? ". " : `, and could not delete ${String(refused)} (the thread says why). `) +
+    "The topic branch is kept, and so is the worktree until continuo#230 lets rondo remove it.",
   rowApproved: "Approved, not published yet",
   rowPublished: (pullRequest, checks) => `Pull request ${pullRequest}, checks ${checks}`,
   rowMerged: (pullRequest) => `Pull request ${pullRequest}, merged`,
@@ -835,6 +846,14 @@ export const PAGE_JA: PageWords = Object.freeze({
       ? `GitHub 上で ${into} にマージされました（このページからではありません）。`
       : `GitHub 上で ${by} が ${into} にマージしました（このページからではありません）。`,
   resultClosed: "マージされないまま、GitHub 上で閉じられました。",
+  resultClosedOut: (deleted, refused) =>
+    (deleted === 0
+      ? "後片付け済み: rondo が消すべき取り込み元ブランチは残っていませんでした"
+      : `後片付け済み: この作業のために rondo が作った取り込み元ブランチを ${String(deleted)} 本削除しました`) +
+    (refused === 0
+      ? "。"
+      : `が、${String(refused)} 本は削除できませんでした（理由はスレッドにあります）。`) +
+    "トピックブランチは残します。作業ツリーも、continuo#230 で rondo が消せるようになるまで残ります。",
   rowApproved: "承認済み・まだ公開していません",
   rowPublished: (pullRequest, checks) => `プルリクエスト ${pullRequest}・チェック ${checks}`,
   rowMerged: (pullRequest) => `プルリクエスト ${pullRequest}・マージ済み`,

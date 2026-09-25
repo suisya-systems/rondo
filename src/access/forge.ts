@@ -1924,6 +1924,35 @@ export async function fetchLapBase(
 }
 
 /**
+ * Delete the branch {@link fetchLapBase} made for one lap, `rondo/base/<runId>`
+ * (D-0119 rule 2): the close-out after a merge. The ref is rondo's own and
+ * holds nobody's commits, so there is nothing to keep; a branch already gone
+ * is `absent`, which a revision (cut from its predecessor, D-0100) always is.
+ *
+ * `git branch -D` rather than a bare ref delete, so a branch somebody checked
+ * out is refused by git and said, never deleted from under them.
+ */
+export async function deleteLapBase(request: {
+  readonly repository: string;
+  readonly runId: string;
+}): Promise<
+  | { readonly kind: "deleted" | "absent"; readonly branch: string }
+  | { readonly kind: "refused"; readonly branch: string; readonly reason: string }
+> {
+  const branch = `rondo/base/${request.runId}`;
+  const git = (argv: readonly string[]) =>
+    runCommand("git", ["-C", request.repository, ...argv], PREFLIGHT_TIMEOUT_MS);
+  const found = await git(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]);
+  if (found.spawnError === null && found.status === 1) {
+    return { kind: "absent", branch };
+  }
+  const failure = queryFailure(found) ?? queryFailure(await git(["branch", "-D", "--", branch]));
+  return failure === null
+    ? { kind: "deleted", branch }
+    : { kind: "refused", branch, reason: failure };
+}
+
+/**
  * Whether `ancestor` is an ancestor of `descendant` in `repository`
  * (D-0098 rule 2.3's test), by `git merge-base --is-ancestor`.
  *

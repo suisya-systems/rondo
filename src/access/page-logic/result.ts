@@ -85,6 +85,12 @@ export interface LapResult {
   } | null;
   /** When it was closed on the forge without a merge (rondo#413), or null. */
   readonly closedAtMs: number | null;
+  /**
+   * What the close-out after the merge did (rondo#403, D-0119), or null where
+   * none is written: how many of rondo's base branches it deleted, and how many
+   * git refused, which the thread's line names with why.
+   */
+  readonly closedOut: { readonly deleted: number; readonly refused: number } | null;
   /** The base it conflicts with, where that is why no check runs now (rondo#411). */
   readonly conflictsWith: string | null;
   /**
@@ -181,10 +187,24 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
     checksCommit: conflicting ? null : (latest?.commit ?? null),
     merged: mergedOf(byId.get(`report-merged-${iterationId}`)),
     closedAtMs: byId.get(`report-closed-${iterationId}`)?.atMs ?? null,
+    closedOut: closedOutOf(byId.get(`report-closeout-${iterationId}`)),
     conflictsWith: conflicting
       ? (/its base '([^']+)'/.exec(conflictSaid?.body ?? "")?.[1] ?? "")
       : null,
     moved,
+  };
+}
+
+function closedOutOf(said: Said | undefined): LapResult["closedOut"] {
+  if (said === undefined) {
+    return null;
+  }
+  // `writeReport`'s sentence: "deleted 'a', 'b'", then one "; could not
+  // delete 'c': why" per refusal.
+  const deleted = /: deleted ('[^']+'(?:, '[^']+')*)/.exec(said.body)?.[1] ?? "";
+  return {
+    deleted: deleted === "" ? 0 : deleted.split(", ").length,
+    refused: said.body.split("; could not delete '").length - 1,
   };
 }
 

@@ -48,11 +48,13 @@ import { checksAnswerId, type LapEvent, reportToRequest } from "./conductor.js";
 import {
   type CommitsBetween,
   type CommitsBetweenRequest,
+  type deleteLapBase,
   fetchPullRequestChecks,
   type PullRequestChecksFetch,
   type PullRequestChecksRequest,
 } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
+import { closeOutMerged } from "./merge.js";
 import { type LapResult, resultOf } from "./page-logic/result.js";
 
 /**
@@ -141,8 +143,10 @@ export interface PullRequestFacts {
 
 /** What the host reaches, as values a test can replace. */
 export interface ChecksHostPorts {
-  readonly store: Pick<IterationStore, "read" | "readingsFor" | "laneLedger">;
+  readonly store: Pick<IterationStore, "read" | "readingsFor" | "laneLedger" | "laneLine">;
   readonly record: Pick<AdvisoryRecord, "threadMessages" | "recordThreadMessage">;
+  /** The close-out's git (D-0119); tests replace it, the host reaches the real one. */
+  readonly deleteLapBase?: typeof deleteLapBase;
   /** Fetch, observe and show; {@link continuoChecksReader} in the host. */
   readonly readChecks: (request: ChecksRequest) => Promise<ChecksRead>;
   /** What a moved head carries past the lap's own (`readCommitsBetween`). */
@@ -411,7 +415,14 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
             mergeCommit: pullRequest.mergeCommit,
           }
         : { kind: "closed", pullRequestUrl: address.url };
-    return { line: await reportToRequest(ports, iterationId, ended, ports.now()), halt: false };
+    const line = await reportToRequest(ports, iterationId, ended, ports.now());
+    // D-0119: a merge is closed out; a close without one keeps everything.
+    const closedOut =
+      ended.kind === "mergedOutside" ? await closeOutMerged(ports, iterationId) : null;
+    return {
+      line: [line, closedOut].filter((one) => one !== null).join("\n") || null,
+      halt: false,
+    };
   }
   if (head === null) {
     return { ...once("continuo judged its checks on no head commit"), halt: false };

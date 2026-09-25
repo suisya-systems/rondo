@@ -1171,6 +1171,17 @@ export type LapEvent =
   /** The pull request was closed on the forge without a merge (rondo#413). */
   | { readonly kind: "closed"; readonly pullRequestUrl: string }
   /**
+   * What the close-out after a merge removed and kept (rondo#403, D-0119):
+   * the line's `rondo/base/` branches deleted, those git refused with why,
+   * and the topic branch kept. The worktrees stay until continuo#230.
+   */
+  | {
+      readonly kind: "closedOut";
+      readonly deleted: readonly string[];
+      readonly refused: readonly { readonly branch: string; readonly reason: string }[];
+      readonly topicBranch: string;
+    }
+  /**
    * The forge will not merge the pull request as it stands at `head`, so it
    * runs no checks on it (rondo#411).
    */
@@ -1444,6 +1455,17 @@ export async function writeReport(
     body =
       `Lap '${iterationId}' ended unmerged: pull request ${event.pullRequestUrl} was closed on ` +
       "the forge without being merged. rondo did not close it, and it does not reopen one.";
+  } else if (event.kind === "closedOut") {
+    // One per lap, after its merge line (D-0119 rule 4).
+    messageId = `report-closeout-${iterationId}`;
+    body =
+      `Lap '${iterationId}' was closed out after its merge: ` +
+      (event.deleted.length === 0
+        ? "no base branch of rondo's was left to delete"
+        : `deleted ${event.deleted.map((branch) => `'${branch}'`).join(", ")}`) +
+      event.refused.map((one) => `; could not delete '${one.branch}': ${one.reason}`).join("") +
+      `. Its topic branch '${event.topicBranch}' is kept. Its worktrees are kept too: ` +
+      "removing them waits on continuo#230, a continuo verb rondo does not have yet.";
   } else if (event.kind === "conflict") {
     messageId = `report-conflict-${iterationId}-${event.head}`;
     body =
