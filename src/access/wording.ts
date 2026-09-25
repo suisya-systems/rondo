@@ -134,6 +134,16 @@ export interface Chrome extends PageWords {
   readonly askStoppedPill: string;
   readonly answerStoppedPill: string;
   readonly answerCarriedOnPill: string;
+  /** The mark on the words a change was asked with, read back into the thread (rondo#448). */
+  readonly askedChangePill: string;
+  /**
+   * Under the revise box while a question over the lap's line waits (rondo#448):
+   * why the press cannot be made yet, and the way to the question.
+   */
+  readonly reviseWaitsOnQuestion: string;
+  readonly reviseWaitsLink: string;
+  /** A revise press refused by the scope's `asks` test, the page having gone stale. */
+  readonly reviseRefusedAsks: string;
   /** The operator's own messages are "you"; the voice badge says which voice spoke (rule 2.3). */
   readonly you: string;
   /**

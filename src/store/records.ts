@@ -491,6 +491,11 @@ export interface IterationRecord {
    * answer (see {@link approvedForPublication}).
    */
   readonly gateAnswer: GateAnswer | null;
+  /**
+   * Who gave {@link gateAnswer}, off the same `gate_answer` row, or null with
+   * it (rondo#448): the name a revise's words are drawn under in the thread.
+   */
+  readonly gateAnswerActor: string | null;
   readonly createdAtMs: number;
   readonly updatedAtMs: number;
 }
@@ -602,6 +607,7 @@ export type IterationFields = Partial<
     | "supersedesIterationId"
     | "requestMessageId"
     | "gateAnswer"
+    | "gateAnswerActor"
   >
 >;
 

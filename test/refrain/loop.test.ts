@@ -80,6 +80,7 @@ const recordWith = (status: IterationStatus, attempts = 1): IterationRecord => (
   reason: null,
   failureKind: null,
   gateAnswer: null,
+  gateAnswerActor: null,
   createdAtMs: 0,
   updatedAtMs: 0,
 });

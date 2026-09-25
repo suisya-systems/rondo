@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import type {} from "../../src/access/inbox.js";
 import { viewHref } from "../../src/access/page-logic/routes.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
+import { revisionPlan } from "../../src/refrain/revision.js";
 import { contentDigest } from "../../src/store/plan.js";
 import { type JsonRecord, scopePayloadWithDefaults } from "../../src/store/records.js";
 import {
@@ -14,6 +15,7 @@ import {
   newerModelReading,
   openGate,
   operatorPage,
+  planFor,
   portsOver,
   REVISE_ANSWER,
   readableWithoutOpening,
@@ -1032,4 +1034,126 @@ test("a lap whose commands are not recorded says so on the checks card, and neve
   expect(checks).toContain(EN.workerRanUnrecorded);
   expect(checks).not.toContain("0 passed");
   expect(checks).not.toContain(EN.workerRanSource(41).slice(0, 12));
+});
+
+/** The worker's question relayed over the lap at the gate, as `relayQuestion` writes it. */
+async function workerAsks(world: ReturnType<typeof fresh>): Promise<void> {
+  const asked = await world.record.recordThreadMessage({
+    messageId: "question-i-0001",
+    body: "Which file should hold the retry budget?",
+    authorKind: "drafter",
+    authorId: "rondo/worker-question/1",
+    inReplyTo: "req-1",
+    atMs: 3_500,
+    bases: [
+      { form: "message", messageId: "req-1" },
+      { form: "iteration", iterationId: "i-0001" },
+    ],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+}
+
+test("a change waits on the worker's question, and the gate says so before the press (rondo#448)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await workerAsks(world);
+  const page = async () =>
+    barOf(
+      await operatorPage(
+        { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+        "t",
+        { kind: "summary" },
+        EN,
+        null,
+        null,
+        () => "lap-00000000-0000-4000-8000-000000000001",
+      ),
+    );
+  const waiting = await page();
+  // The box is still there to write in, the press is drawn but not pressable,
+  // and the sentence says why and leads to the question.
+  expect(waiting).toContain('<textarea name="body"');
+  expect(waiting).toContain(EN.reviseWaitsOnQuestion);
+  expect(waiting).toContain(`href="#question-i-0001"`);
+  expect(waiting).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Ask for a change</);
+
+  // Answered and carried on: the question no longer holds the change.
+  const answered = await world.record.recordThreadMessage({
+    messageId: "answer-1",
+    body: "src/retry.ts",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "question-i-0001",
+    atMs: 3_600,
+    bases: [],
+    asks: false,
+    answerOutcome: "carry_on",
+  });
+  expect(answered.kind).toBe("recorded");
+  const free = await page();
+  expect(free).not.toContain(EN.reviseWaitsOnQuestion);
+  expect(free).not.toMatch(/disabled=""[^>]*>Ask for a change</);
+});
+
+test("the words a change was asked with are in the thread, under the person's name (rondo#448)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await world.store.recordGateAnswer("i-0001", "gate-i-0001", "revise", "ada", 4_000);
+  const closed = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "answered_and_forwarded" },
+    4_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+  const predecessor = await world.store.read("i-0001");
+  if (predecessor.kind !== "read") throw new Error("the lap did not read");
+  const words = "Keep the parser.\nLeave the command line alone.";
+  const next = revisionPlan({
+    predecessor: predecessor.record,
+    iterationId: "i-0002",
+    instruction: words,
+    takeIn: null,
+  });
+  if (next.kind !== "planned") throw new Error(next.reason);
+  const reserved = await world.store.reserve({
+    numbers: null,
+    id: "i-0002",
+    request: next.plan.prompt,
+    plan: {
+      ...planFor("i-0002"),
+      prompt: next.plan.prompt,
+      base_branch: next.plan.baseBranch,
+    },
+    spend: null,
+    scopeSpend: null,
+    claim: null,
+    nowMs: 4_100,
+    supersedesIterationId: "i-0001",
+    requestMessageId: "req-1",
+    runId: "rondo-i-0002",
+    topicBranch: "rondo/i-0002",
+    workspace: "/srv/work/i-0002",
+  });
+  expect(reserved.kind).toBe("reserved");
+  const html = await operatorPage(portsOver(world, "ada"), null, {
+    kind: "thread",
+    messageId: "req-1",
+    to: null,
+  });
+  const at = html.indexOf('id="revise-i-0001"');
+  expect(at).toBeGreaterThan(-1);
+  const message = html.slice(at, html.indexOf("</article>", at));
+  expect(message).toContain('class="msg-who">you<');
+  expect(message).toContain(EN.askedChangePill);
+  expect(message).toContain(words);
+  // Another person's change is under their name.
+  const other = await operatorPage(portsOver(world, "bo"), null, {
+    kind: "thread",
+    messageId: "req-1",
+    to: null,
+  });
+  expect(other.slice(other.indexOf('id="revise-i-0001"'))).toContain('class="msg-who">ada<');
 });

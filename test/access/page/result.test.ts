@@ -260,6 +260,7 @@ function lap(parts: Partial<IterationRecord>): IterationRecord {
     reason: null,
     failureKind: null,
     gateAnswer: "approve",
+    gateAnswerActor: null,
     plan: { topic_branch: "rondo/i-1", base_branch: "main" },
     ...parts,
   } as IterationRecord;

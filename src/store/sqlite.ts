@@ -1986,6 +1986,8 @@ const SELECT_COLUMNS = [
   // D-0092: read from beside the gate answer, never from a column of the row.
   "(SELECT answer FROM gate_answer WHERE gate_answer.iteration_id = iteration.id " +
     "AND gate_answer.gate_id = iteration.gate_id) AS gate_answer",
+  "(SELECT actor_id FROM gate_answer WHERE gate_answer.iteration_id = iteration.id " +
+    "AND gate_answer.gate_id = iteration.gate_id) AS gate_answer_actor",
   "created_at_ms",
   "updated_at_ms",
 ].join(", ");
@@ -7133,6 +7135,7 @@ function toRecord(row: SqlRow): IterationRecord {
     reason: optionalText(row, "reason"),
     failureKind: optionalFailureKind(row),
     gateAnswer: optionalGateAnswer(row),
+    gateAnswerActor: optionalText(row, "gate_answer_actor"),
     createdAtMs: requireInteger(row, "created_at_ms"),
     updatedAtMs: requireInteger(row, "updated_at_ms"),
   };

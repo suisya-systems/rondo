@@ -223,6 +223,7 @@ test("the pull request is its own step, between the approval and the merge (rond
     status: "closed",
     gateOutcome: "answered_and_forwarded",
     gateAnswer: "approve",
+    gateAnswerActor: null,
   });
   expect(publish(approved)).toBe("yours");
   // rondo#385 / D-0092: a change asked for, or no record of which answer it
