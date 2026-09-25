@@ -142,6 +142,8 @@ export interface Chrome extends PageWords {
    */
   readonly reviseWaitsOnQuestion: string;
   readonly reviseWaitsLink: string;
+  /** The same, where the person answered the question by stopping the line (D-0072 rule 3). */
+  readonly reviseWaitsOnStopped: string;
   /** A revise press refused by the scope's `asks` test, the page having gone stale. */
   readonly reviseRefusedAsks: string;
   /** The operator's own messages are "you"; the voice badge says which voice spoke (rule 2.3). */

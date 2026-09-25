@@ -1078,6 +1078,25 @@ test("a change waits on the worker's question, and the gate says so before the p
   expect(waiting).toContain(`href="#question-i-0001"`);
   expect(waiting).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Ask for a change</);
 
+  // Answered by stopping the line: it still holds the change, and the gate
+  // says why without asking for an answer already given (D-0072 rule 3).
+  const stopped = await world.record.recordThreadMessage({
+    messageId: "answer-0",
+    body: "not now",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "question-i-0001",
+    atMs: 3_550,
+    bases: [],
+    asks: false,
+    answerOutcome: "stop",
+  });
+  expect(stopped.kind).toBe("recorded");
+  const held = await page();
+  expect(held).toContain(EN.reviseWaitsOnStopped);
+  expect(held).not.toContain(EN.reviseWaitsOnQuestion);
+  expect(held).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Ask for a change</);
+
   // Answered and carried on: the question no longer holds the change.
   const answered = await world.record.recordThreadMessage({
     messageId: "answer-1",

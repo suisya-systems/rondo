@@ -23912,6 +23912,6 @@ try never started has no words to show.
 **4. A change that waits on a question says so before the press.** Nothing records a change and
 sends it after the question is answered: the scope's `asks` test refuses it (`askStandsOver`,
 `D-0103` rule 4.3) and nothing is kept. So the gate says the change cannot be sent until the
-question is answered, links to it, draws the press disabled, and leaves the box writable (the page
+question is answered (or, where the person answered it by stopping the line, until it is answered again with *carry on*), links to it, draws the press disabled, and leaves the box writable (the page
 keeps what is typed). A stale page's refusal says the same. Recording a change to send later would
 need a row of its own, and is not decided here.

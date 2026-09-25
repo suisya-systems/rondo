@@ -1585,9 +1585,11 @@ function reviseForm(
             written now and sent once the question is answered. */}
         {framing.questionOpen === null ? null : (
           <p id="revise-waits" class="note text-meta leading-5 text-foreground">
-            {wording.reviseWaitsOnQuestion}{" "}
+            {framing.questionOpen.stopped
+              ? wording.reviseWaitsOnStopped
+              : wording.reviseWaitsOnQuestion}{" "}
             <a
-              href={`#${encodeURIComponent(framing.questionOpen)}`}
+              href={`#${encodeURIComponent(framing.questionOpen.id)}`}
               class="text-link hover:underline"
             >
               {wording.reviseWaitsLink}
@@ -1649,11 +1651,12 @@ interface Shown {
   /** The revise box's content and what is said beside it (D-0077 section 4). */
   readonly revise: ReviseBox;
   /**
-   * The question over this lap's line still waiting on the person, by its
-   * message id, or null (rondo#448). The scope's verdict refuses a revise
-   * while it stands (`askStandsOver`), so the form says so before the press.
+   * The question over this lap's line that still holds it, by its message id,
+   * and whether the person answered it by stopping the line -- or null
+   * (rondo#448). The scope's verdict refuses a revise while it stands
+   * (`askStandsOver`, D-0072 rule 3), so the form says so before the press.
    */
-  readonly questionOpen: string | null;
+  readonly questionOpen: { readonly id: string; readonly stopped: boolean } | null;
 }
 
 /**
@@ -1768,7 +1771,7 @@ async function shownBeforePress(
    */
   answeringLapId: string | null = null,
   /** The question over a lap's line that waits on the person, or null ({@link Shown.questionOpen}). */
-  questionOver: (record: IterationRecord) => Promise<string | null> = async () => null,
+  questionOver: (record: IterationRecord) => Promise<Shown["questionOpen"]> = async () => null,
 ): Promise<ReadonlyMap<string, Shown>> {
   const shown = new Map<string, Shown>();
   const wanted = answeringLapId;
@@ -2948,15 +2951,18 @@ export async function operatorPage(
     waiting,
     token,
     answeringLap,
-    async (record) =>
-      record.requestMessageId === null
-        ? null
-        : askOverLine(
-            threads,
-            record.requestMessageId,
-            (await ports.store.laneLedger()).find((line) => line.lapIds.includes(record.id))
-              ?.lapIds ?? [record.id],
-          ),
+    async (record) => {
+      const id =
+        record.requestMessageId === null
+          ? null
+          : askOverLine(
+              threads,
+              record.requestMessageId,
+              (await ports.store.laneLedger()).find((line) => line.lapIds.includes(record.id))
+                ?.lapIds ?? [record.id],
+            );
+      return id === null ? null : { id, stopped: threads.stopped.has(id) };
+    },
   );
   /*
    * **The lap everything about this confirmation is read from** (rule 6, and
