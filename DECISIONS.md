@@ -145,6 +145,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0113 | A lap merged from the page releases its files at once, the merge being its landing; a start refused by held files names the holding request and links its release | accepted |
 | D-0114 | A line gives its files up when its pull request opens, not when its work lands: the landing is still read and written after it, so an order still waits for a landing, and the numbers stay the line's | accepted |
 | D-0117 | The control layer for parallel work is `D-0073`'s lane ledger and `D-0098`'s five rules, read as one: its authorities in one table, each pointing to the rule that decided it and the change that built it, and rondo#250 done with what is left filed on its own | accepted |
+| D-0118 | A relayed approval is outside rondo's boundary: `actor_id` is the approver's claim, a relay is the operator's to write in `--verified`, and no column is added for it | accepted |
 
 ---
 
@@ -15820,6 +15821,11 @@ The points are kept as put, and the answer follows them.
 | A catalog of agent types (listing, retiring, recording without a scope) | Section 1 (b)'s loss; `D-0044` and `D-0062` leave it to its own entry | the catalog entry |
 | A relayed P1 recorded as the person's own (lap 8 N-28) | A column on `scope_decision`, not the first admission | the entry that answers lap 8's N-28 candidate issue |
 
+> **Annotation (2026-09-26, from D-0118).** Additive (rondo#204). The residual on a relayed P1 is
+> answered by `D-0118`, and not by the column the row names: relaying is outside rondo's boundary,
+> `actor_id` stays the approver's claim, and no column is added to `scope_decision` or `gate_answer`.
+> The row above is unedited.
+
 ### Annotations this entry adds
 
 - **`D-0062` rule 1.2** gains a dated annotation: section 3 rule 1, and the answer to its catalog
@@ -23916,6 +23922,72 @@ sends it after the question is answered: the scope's `asks` test refuses it (`as
 question is answered (or, where the person answered it by stopping the line, until it is answered again with *carry on*), links to it, draws the press disabled, and leaves the box writable (the page
 keeps what is typed). A stale page's refusal says the same. Recording a change to send later would
 need a row of its own, and is not decided here.
+
+## D-0118 — A relayed approval is outside rondo's boundary: `actor_id` is the approver's claim, a relay is the operator's to write in `--verified`, and no column is added for it
+
+**Status:** accepted (2026-09-26, rondo#204; the owner's answer through the secretary, option C of
+three). Refs `D-0009`, `D-0045`, `D-0064`, `D-0066`, `D-0076`, `D-0083`, rondo#204.
+
+**Numbering.** `D-0118` is taken by this lane; `D-0117` is reserved for a parallel lane.
+
+**Why an entry is needed.** In lap 8 (2026-09-13, `docs/operations/lap-8-dogfood.md` N-28) the
+person gave P1 and the gate answer through the claude-org secretary, and a worker typed
+`decide-scope` and `answer`. `scope_decision` recorded `actor_id happy_ryo` and `recorded_by
+rondo/cli`, and `gate_answer` recorded `actor_id happy_ryo`. These rows look exactly like the rows
+of an approval the person typed themselves. The only trace of the relay was the free text the worker
+put in `--verified`. `D-0066`'s residual table left this to "the entry that answers lap 8's N-28",
+and named a column on `scope_decision` as the likely answer. This entry is that answer, and it does
+not add the column.
+
+### What was measured
+
+At rondo `2de3190` on **2026-09-26**, by reading:
+
+- `scope_decision` has `actor_id` and `recorded_by` (`src/store/sqlite.ts`). `gate_answer` has
+  `actor_id` and no `recorded_by`.
+- `recorded_by` names the surface: `rondo/cli` (`COMMAND_LINE_SURFACE`) or `rondo/page`
+  (`OPERATOR_PAGE_SURFACE`, `src/access/advisory.ts`). Neither can say who typed on it.
+- `actor_id` must equal the approver the host was started with (`approvedActor` in
+  `src/access/cli.ts`). That makes it the same claim `D-0009` records for continuo's `--actor-id`:
+  an identity and not an authority.
+- `answer --verified=TEXT` is the one free-text field on either act. `decide-scope` has none.
+
+### The decision
+
+1. **Relaying is outside rondo's boundary.** rondo records who the approver says they are
+   (`actor_id`) and which surface wrote the row (`recorded_by`). It does not record, and does not
+   claim to know, whether that approver's words reached the surface through somebody else.
+2. **`actor_id` stays the approver's claim** (`D-0009`). A relayed approval is recorded as the
+   person's, because it is the person's answer. The operator who typed it answers for the relay
+   being faithful, as any operator answers for what they type under an approver's name.
+3. **An operator who relays says so in `answer --verified`** if they want the relay on record. That
+   text is kept as the operator's claim (`D-0045`), and rondo reads nothing from it. `decide-scope`
+   gains no field. A relayed scope approval leaves no trace on its row.
+4. **No column is added** to `scope_decision` or `gate_answer`, and no verb gains a flag.
+
+**Why.** Relaying happens only in claude-org dogfood, where a worker types for the person. The product
+assumes the person presses on the page themselves (`D-0076`, `D-0083`). A `relayed_by` field would
+also be a claim, and one the operator could leave out without anyone noticing. So it records an
+honest relay and misses a dishonest one, and a schema change is not worth that.
+
+**Options not taken.** A: a nullable `relayed_by` column on both tables and a `--relayed-by ID` flag
+on `decide-scope`, `answer` and `revise`. It would close `D-0066`'s residual in the shape the residual
+named, at the cost of a migration and a field whose absence proves nothing. B: A with a free-text note
+instead of an identifier. Nothing could query it, and it overlaps with `--verified`.
+
+### What would falsify it
+
+- **A relay seen outside claude-org dogfood.** An organisation that delegates operators to type a
+  person's approvals makes the gap that `D-0064` rule 3.5's audit names real. Option A can then be
+  added later with the same shape: a nullable column, so rows written before it read as "not said".
+- **A surface that can prove who pressed.** Then rondo could tell a relayed answer from a direct
+  one itself, and rule 1's boundary would be in the wrong place.
+
+### What this does not do
+
+- It changes nothing in `src/` and no schema.
+- It does not cover a relayed reply to a scope stop (`conversation_message.author_id`), which is the
+  same claim and stays as it is.
 
 ---
 
