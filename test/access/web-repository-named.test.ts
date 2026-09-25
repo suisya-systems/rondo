@@ -96,6 +96,22 @@ for (const wording of [EN, JA]) {
   });
 }
 
+for (const wording of [EN, JA]) {
+  test(`two requests that read the same in one repository each name it (${wording.lang})`, async () => {
+    // Pins the owner's decision on rondo#447: the rule is "the same title at
+    // least twice", and it does not ask whether the other row is elsewhere.
+    // Both rows say the repository, though it is the only one on the page.
+    const html = await pageOver(
+      wording,
+      { title: "the build is broken", repository: ONE },
+      { title: "the build is broken", repository: ONE },
+    );
+
+    expect(html.match(/shop-app/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(html).not.toContain("billing");
+  });
+}
+
 test("the place is said for the pair that collides and not for the request beside them", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "the build is broken", null, undefined, ONE);
