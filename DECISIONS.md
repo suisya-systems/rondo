@@ -23867,3 +23867,51 @@ the worker's.
 - **The fold's body keeps `lang` from the plan's material language**, which is wrong for a report
   written in another language, as lap 16's was. It is unchanged here, as rule 2 does not decide the
   language.
+
+## D-0116 — The reviewer writes its findings, and the worker its question, in the person's language because each is asked to; a change's words are read back into the thread, and a change that waits on a question says so before the press
+
+**Status:** accepted (2026-09-26, rondo#448; the owner's answer through the secretary, option A of
+three for items 1 and 2). Refs `D-0053`, `D-0065`, `D-0092`, `D-0103`, `D-0115`, rondo#448.
+
+**Numbering.** `D-0116` is taken by this lane; a parallel lane may renumber at merge.
+
+**Why an entry is needed.** Lap 17 (2026-09-23, K4 not met) showed three gaps on a Japanese page:
+the model review's findings were English on every round, the first try's relayed question was
+English, and after *ask for a change* the words sent could not be re-read, while a change pressed
+with the worker's question open left the gate looking unchanged.
+
+### The decision
+
+**1. The reviewer is asked for its findings in the person's language** (option A). The review
+document carried no language at all: the worker's language sentence sat inside the PROMPT section,
+material to judge and not an instruction. `findingsLanguageSentence` (`model-review/judgement.ts`)
+now follows the answer's shape, naming the plan's tag and nothing else, as `D-0053` rule 7's
+sentence does, and only where the plan names a language. Only `text` is asked for; severities,
+bases and keys are what rondo reads. The findings also reach the next round's worker, which reads
+them in any language.
+
+**2. The worker's question block is asked for in the report's language** (option A).
+`definitionOfDone` now says every string in the ```` ```rondo-question ```` block is relayed word
+for word and is written in the same language as the rest of the report, not in English because the
+block is JSON. It names no tag, so it holds for a lap that asked for none.
+
+**Options not taken for 1 and 2.** B: a translation call. It adds a model call and its cost on every
+round and every question, needs a check that the translation is faithful, and puts a second model's
+words in the reviewer's or worker's place (`D-0115`'s reason for not taking C); deciding when to
+translate by a script's guess of the language is `D-0115`'s rejected B. C: `D-0115`'s fold with a
+lead in the person's language. It tidies the screen, but a person deciding on findings, or choosing
+an answer to a question, still reads English. If A does not hold in later laps, B is a later issue.
+
+**3. A change's words are read back into the thread.** They are kept only in the prompt of the try
+they started (`revisionPrompt`); `gate_answer` records which answer and who, never the words
+(`D-0092`). `revisionInstruction` reads them back between the head and the last tail that
+`revisionPrompt` writes, and the thread draws them as the person's message, under the name of who
+answered the gate (`gateAnswerActor`), marked *変更を頼んだ* / *Asked for a change*. A change whose next
+try never started has no words to show.
+
+**4. A change that waits on a question says so before the press.** Nothing records a change and
+sends it after the question is answered: the scope's `asks` test refuses it (`askStandsOver`,
+`D-0103` rule 4.3) and nothing is kept. So the gate says the change cannot be sent until the
+question is answered, links to it, draws the press disabled, and leaves the box writable (the page
+keeps what is typed). A stale page's refusal says the same. Recording a change to send later would
+need a row of its own, and is not decided here.

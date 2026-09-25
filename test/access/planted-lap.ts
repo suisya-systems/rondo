@@ -121,6 +121,7 @@ export function plantedMaterial(variant: PlantedVariant): ReviewMaterial {
     },
     rationale: finalMessage,
     deterministicFindings: [],
+    language: null,
     criterion: CRITERION,
     ruleFiles: [{ path: "AGENTS.md", content: fixture("AGENTS.md-at-91e6fc3.txt") }],
   };
