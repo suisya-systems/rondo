@@ -614,6 +614,34 @@ test("a split reads back as plans against templates, or as holes, and nothing el
   expect(readPayload(planned).kind).toBe("unreadable");
 });
 
+test("a split plan's grounds read back only when they claim each condition once, on a basis (D-0062 rule 2.2, D-0122)", () => {
+  const plan = {
+    template_plan_digest: `sha256:${"a".repeat(64)}`,
+    prompt: "p",
+    agent_type_digest: `sha256:${"b".repeat(64)}`,
+    bases: [{ form: "message", messageId: "m-1" }],
+  };
+  const grounds = ["files_named", "bounded", "checks_are_acceptance"].map((condition) => ({
+    condition,
+    text: "t",
+    bases: [{ form: "message", messageId: "m-1" }],
+  }));
+  const grounded = { plans: [{ ...plan, grounds }], holes: [] };
+  expect(readSplitPayload(grounded)).toEqual({ kind: "split", payload: grounded });
+  for (const [why, bad] of [
+    ["a condition missing", grounds.slice(1)],
+    ["a condition twice", [...grounds.slice(1), grounds[1]]],
+    ["no basis", [{ ...grounds[0], bases: [] }, ...grounds.slice(1)]],
+    ["an unknown condition", [{ ...grounds[0], condition: "cheap" }, ...grounds.slice(1)]],
+    ["an unknown key", [{ ...grounds[0], tier: "mechanical" }, ...grounds.slice(1)]],
+  ] as const) {
+    expect(
+      readSplitPayload({ plans: [{ ...plan, grounds: bad }], holes: [] } as never).kind,
+      why,
+    ).toBe("unreadable");
+  }
+});
+
 test("a split plan may wait on an earlier plan of its split, and on no other (D-0098 rule 1.3)", () => {
   const plan = {
     template_plan_digest: `sha256:${"a".repeat(64)}`,

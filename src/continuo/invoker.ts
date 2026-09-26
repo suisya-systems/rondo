@@ -990,6 +990,10 @@ export async function performLap(
       ...optionalFlag("--endpoint-db", "endpointDb", request.endpointDb),
       ...optionalFlag("--endpoint-module", "endpointModule", request.endpointModule),
       ...optionalFlag("--node", "node", request.node),
+      // Always, like `--model`: the provider is the tier row's column (continuo
+      // D-1114 decision 2), so continuo's default is never what picks the CLI.
+      "--provider",
+      selection.provider,
       ...claudeCommandFlags(request.claudeCommand),
       // Two tokens and never `--model=<id>`, which is continuo's own rule for
       // this flag: the value is appended to the fenced child's command line as
