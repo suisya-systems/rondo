@@ -1,6 +1,7 @@
 /**
  * The claims `AGENTS.md` and `docs/operations/rondo-cli.md` make about the
- * tree, checked against the tree.
+ * tree, checked against the tree, and `DECISIONS.md`'s index checked against
+ * its entries.
  *
  * rondo#324 is the reason this file exists, and its finding is the design.
  * `DECISIONS.md` -- 83 entries, walked by hand -- had drifted from the
@@ -198,5 +199,34 @@ describe("AGENTS.md's enumerations match the tree", () => {
         "drives. The set moves whenever a verb is taken up or dropped, and the paragraph around " +
         "it is about which of them carry --json, which is a claim about exactly these verbs.",
     ).toEqual(driven);
+  });
+});
+
+describe("DECISIONS.md's index matches its entries", () => {
+  /**
+   * The index is written by hand beside every entry (AGENTS.md section 3), and
+   * nine accepted entries once went unindexed while one row kept a title its
+   * entry had since changed. Only the leading status is compared -- `accepted`,
+   * `superseded by D-NNNN` -- because a row may add a short note after it and
+   * an entry's status line goes on to give the date and the gate.
+   */
+  const DECISIONS = readFileSync(join(ROOT, "DECISIONS.md"), "utf8");
+  const status = (text: string) => /^[a-z]+(?: by D-\d{4})?/.exec(text)?.[0] ?? text;
+  const entries = [...DECISIONS.matchAll(/^## (D-\d{4}) — (.*)$/gm)].map((match) => {
+    const body = DECISIONS.slice(match.index).split(/^## (?=D-\d{4})/m)[1] ?? "";
+    const line = /^\*\*Status:\*\*\s*(.*)$/m.exec(body)?.[1] ?? "<no Status line>";
+    return `${match[1]} | ${match[2]} | ${status(line)}`;
+  });
+  const rows = [...DECISIONS.matchAll(/^\| (D-\d{4}) \| (.*) \| (.*) \|$/gm)].map(
+    (match) => `${match[1]} | ${match[2]} | ${status(match[3] ?? "")}`,
+  );
+
+  it("has one row per entry, with the entry's title and status", () => {
+    expect(entries.length).toBeGreaterThan(0);
+    expect(
+      [...rows].sort(),
+      "DECISIONS.md's index and its entries disagree. Every entry needs an index row whose title " +
+        "is the entry's heading and whose status begins as the entry's Status line does.",
+    ).toEqual([...entries].sort());
   });
 });
