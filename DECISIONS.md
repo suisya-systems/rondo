@@ -158,6 +158,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0119 | A merge is closed out: rondo deletes the `rondo/base/` branches it made for the line, keeps the topic branch, and leaves the worktree to a continuo verb (continuo#230); a close without a merge closes nothing out | accepted |
 | D-0120 | The close-out after a merge closes a superseded lap's run as `cancelled` before asking for its worktree, in both merge paths; this reads `D-0010` narrowly and does not supersede it | accepted |
 | D-0121 | A running lap is held to the scope's budget by the worker CLI's own spend stop: rondo sends each lap with the room the budget leaves it, continuo carries it (continuo#241), and a Codex lap is held only before it starts | accepted |
+| D-0122 | `mechanical` runs on `claude-sonnet-5` through the Claude CLI: the tier table gains a provider column passed as `lap perform --provider`, every row `claude`, and a drafter may name a `mechanical` agent type only with one grounded claim per condition of `D-0044` rule 1 | accepted |
 
 ---
 
@@ -8168,6 +8169,11 @@ rondo#89, rondo#96, `D-0021`.
 > measured laps actually say" and "Why this organisation's split does not transfer", or the `D-0052`
 > annotation. `D-0062` carries all of them as written, and they are still cited as `D-0044` rule N.
 > Rules 2 and 3 are restated as `D-0062` rules 1 and 2. Nothing below is edited.
+
+> **Annotation (2026-09-27, from D-0122).** Added after this entry was accepted, and additive.
+> Rule 5's gate opened when rondo#96 landed, and **`D-0122` writes the pair**: `mechanical` runs on
+> `claude-sonnet-5` through the Claude CLI. `D-0062` rule 2.2's grounds are built in the same
+> change. Rules 1, 4 and 6 stand as written; nothing below is edited.
 
 > **Annotation (2026-09-12, from D-0052).** Added after this entry was accepted, and additive:
 > nothing below is removed or rewritten, and **how a tier is chosen does not change**. Rule 3's "an
@@ -24355,3 +24361,87 @@ scope's budget, and a reserve is an estimate, not an approved amount.
   wrong shape, and the stop needs a gate of its own.
 - **Parallel laps that together pass the budget often.** Then the cap needs the other laps' caps,
   not their reserves.
+
+## D-0122 — `mechanical` runs on `claude-sonnet-5` through the Claude CLI: the tier table gains a provider column passed as `lap perform --provider`, every row `claude`, and a drafter may name a `mechanical` agent type only with one grounded claim per condition of `D-0044` rule 1
+
+**Status:** accepted (2026-09-27, rondo#89; the owner's answer through the secretary, option (a) of
+three). Refs `D-0021`, `D-0044` (rules 1, 5 and 6), `D-0052`, `D-0062` (rule 2), `D-0065`, `D-0071`,
+rondo#96, rondo#460, `continuo D-1114`, `continuo D-1120`.
+
+**Why an entry is needed.** `D-0021` says a changed pair in `MODEL_TIER_TABLE` is a new decision
+entry, and `D-0044` rule 5 kept the second pair shut until rondo recorded what a lap costs. rondo#96
+landed that record (`lap_cost_usd`, `lap_turns`, `lap_duration_ms` on every iteration row), so the
+gate is open. **Which work goes to which tier is not decided here**: `D-0044` rule 1 decided it
+(`mechanical` is a lap whose whole arc can be checked by something other than a person reading it),
+and `D-0062` rule 2 decided who may propose it and on what grounds. This entry picks the model, adds
+the provider column `continuo D-1114` decision 2 asked for, and builds the grounds check `D-0062`
+rule 2.2 left for the day a second tier was priced.
+
+### What was measured
+
+At rondo `ee290f0` and continuo `f2fb450` (the pin) on **2026-09-27**, by reading:
+
+- **The pinned continuo takes `lap perform --provider {claude,codex}`**, default `claude`, declared
+  before `--codex-home`, `--claude-command` and `--model` (`src/lap/cli.ts`). `--codex-home` is
+  refused without `--provider codex`.
+- **A Codex worker would break three things rondo has today.** Its family is the reviewer's
+  (`gpt-6-astra`, `gpt`), so `D-0065` rule 3.3 makes every reading of its laps `unavailable`, and
+  a gate that approves itself on a clear reading would never do so. It reports tokens and no dollar
+  figure (`continuo D-1114` rule 7), so `lap_cost_usd` stays null and the comparison `D-0044` asks
+  for cannot be made in one unit. And it needs the operator's Codex home as a host fact, and is
+  refused on Windows (`continuo D-1120`).
+- **The drafter could not name a `mechanical` agent type at all.** `judgement.ts` refused any
+  unpriced tier and said the grounds would become that check's second half once a second tier was
+  priced.
+
+### Decision
+
+1. **`mechanical` is `claude-sonnet-5`, family `claude`, provider `claude`.** `standard` keeps
+   `claude-opus-5`. `PRICED_MODEL_TIERS` gains `mechanical` in the same diff, as `D-0052` rule 4
+   requires. This is the operator's ratification `D-0021` rule 3 waits on, for this pair.
+2. **The tier table has a provider column, and `performLap` always passes it.** `--provider` goes
+   on every lap, like `--model`, so continuo's default never picks the worker CLI. Every row is
+   `claude`. **A `codex` row is rondo#460's**, and it waits on the three things measured above:
+   a reviewer of another family for a `gpt` worker, a dollar figure (or an explicit decision to do
+   without one) for a lap that reports tokens, and the Codex home as a host fact with the Windows
+   refusal said before the spawn.
+3. **A drafted plan whose agent type's tier is not `standard` carries `grounds`**, one per
+   condition of `D-0044` rule 1: `files_named`, `bounded` and `checks_are_acceptance`. Each claim has
+   words and at least one `message:` basis into the request thread. The drafter's answer is refused
+   when a condition is missing, is claimed twice, or has a basis that is no message of the thread.
+   A `standard` plan carries no grounds, and one that does is refused. The grounds are kept on the
+   split plan and read back by `readSplitPayload` under the same three rules. **This is `D-0062`
+   rule 2.2 exactly: a structural check, never a check that a claim is true.** The drafter's
+   instructions say what `mechanical` is for and that a condition it cannot ground means a
+   `standard` agent type. They are version 8.
+4. **`D-0062` rule 2.3 has nothing to rank yet.** The drafter names one agent type per plan, so a
+   plan never has options that differ in tier. Nothing is built for it.
+5. **The gate does not move with the tier** (`D-0044` rule 6). `claude-sonnet-5` is family `claude`,
+   so the reviewer stays of another family and `D-0065` is untouched.
+
+**Options not taken.** (b) `mechanical` on `gpt-6-astra` through Codex, with a Claude reviewer for
+`gpt` laps, the Codex home and the Windows refusal in this change: larger, and its cost is not
+comparable in dollars until the pricing question is answered. (c) Both tiers at once: the size of
+(a) and (b) together.
+
+### What it costs
+
+- **A `mechanical` agent type still has to exist.** Agent types arrive in plans an operator writes
+  or pastes (`D-0071`, `D-0075`), and nothing here writes one. Until an operator declares an agent
+  type with `modelTier: "mechanical"`, no lap runs on it.
+- **Its first scopes are budgeted at the cold-start reserve.** `computeScopeBudgets` finds no row
+  at the agent type's or the tier's level and uses `COLD_START_RESERVE_USD`, which is higher than
+  lap 2's measured cost. The budget narrows as `mechanical` laps are recorded.
+- **The page shows neither the tier nor the grounds.** The person approves a drafted scope without
+  seeing that a plan runs on the cheaper model or reading the claims behind it. The claims are kept
+  on the split row for a screen to render; which screen, and in the person's words (`D-0076`), is
+  not decided here.
+
+### What would falsify it
+
+- **`D-0044`'s own: a `mechanical` lap revised measurably more often than a `standard` one**, or
+  `mechanical` laps whose recorded cost is not lower because they spend more turns.
+- **The Claude CLI refusing `claude-sonnet-5`** as a model id. The pair is then wrong, and a new
+  entry replaces it.
+- **rondo#460 landing.** The provider column then carries its first `codex` row, and rule 2's
+  "every row `claude`" stops being true.
