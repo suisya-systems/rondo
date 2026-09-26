@@ -884,6 +884,7 @@ const COLUMN_BY_FIELD = {
   lapCostUsd: "lap_cost_usd",
   lapTurns: "lap_turns",
   lapDurationMs: "lap_duration_ms",
+  lapBudgetCapUsd: "lap_budget_cap_usd",
   reason: "reason",
   failureKind: "failure_kind",
 } as const satisfies Record<keyof IterationFields, string>;
@@ -1027,6 +1028,9 @@ CREATE TABLE IF NOT EXISTS iteration (
   lap_cost_usd          REAL,
   lap_turns             INTEGER,
   lap_duration_ms       INTEGER,
+  -- The room the scope's budget left this lap when it was sent (D-0121). NULL
+  -- where it was admitted under no approval, or the lap was never sent.
+  lap_budget_cap_usd    REAL,
   reason                TEXT,
   -- Whose failure a terminal 'failed' was (rondo#348). Nullable, and null on
   -- every row written before it: nothing on such a row recovers the kind, so
@@ -1775,6 +1779,8 @@ const ADDED_COLUMNS = Object.freeze({
   // continuo D-1112: nullable, no back-fill -- a row written before it was
   // read from the transcript at review time, which this column replaces.
   lap_commands: "TEXT",
+  // D-0121: nullable, no back-fill -- no lap before it was sent with a cap.
+  lap_budget_cap_usd: "REAL",
   occupying: GENERATED_COLUMNS.occupying,
   holds_identifiers: GENERATED_COLUMNS.holds_identifiers,
 });
@@ -1981,6 +1987,7 @@ const SELECT_COLUMNS = [
   "lap_cost_usd",
   "lap_turns",
   "lap_duration_ms",
+  "lap_budget_cap_usd",
   "reason",
   "failure_kind",
   // D-0092: read from beside the gate answer, never from a column of the row.
@@ -7132,6 +7139,7 @@ function toRecord(row: SqlRow): IterationRecord {
     lapCostUsd: optionalNumber(row, "lap_cost_usd"),
     lapTurns: optionalNumber(row, "lap_turns"),
     lapDurationMs: optionalNumber(row, "lap_duration_ms"),
+    lapBudgetCapUsd: optionalNumber(row, "lap_budget_cap_usd"),
     reason: optionalText(row, "reason"),
     failureKind: optionalFailureKind(row),
     gateAnswer: optionalGateAnswer(row),

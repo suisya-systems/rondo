@@ -321,6 +321,7 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     lapCostUsd: null,
     lapTurns: null,
     lapDurationMs: null,
+    lapBudgetCapUsd: null,
     reason: null,
     failureKind: null,
     gateAnswer: null,
@@ -390,6 +391,7 @@ function successfulAnswers(): Answers {
         turns: LAP_TURNS,
         durationMs: LAP_DURATION_MS,
         spendSource: "resultEvent",
+        budgetCapUsd: null,
       },
     },
     showGate: {
@@ -698,6 +700,41 @@ test("the row at the open gate says what the lap cost, in all three quantities",
   expect(says(report, String(LAP_COST_USD))).toBe(true);
 });
 
+test("D-0121: the room the lap was sent with is written beside its cost, and reaching it is said", async () => {
+  const sent = (budgetCapUsd: number | null) =>
+    harness({
+      performLap: {
+        kind: "answered",
+        value: {
+          runId: ALLOCATED_RUN_ID,
+          gateId: "gate-1",
+          sessionId: "session-1",
+          sessionPath: "started",
+          endpointLeaseFailure: null,
+          elapsedDeadlineAtMs: null,
+          model: MODEL,
+          requestedModel: MODEL,
+          permissionDenials: "[]",
+          commands: "[]",
+          costUsd: LAP_COST_USD,
+          turns: LAP_TURNS,
+          durationMs: LAP_DURATION_MS,
+          spendSource: "resultEvent",
+          budgetCapUsd,
+        },
+      },
+    });
+  const reached = sent(LAP_COST_USD);
+  const reachedReport = await admitOnce(reached);
+  expect((await readRow(reached.store, "i-0001"))?.lapBudgetCapUsd).toBe(LAP_COST_USD);
+  expect(says(reachedReport, "the scope's budget left it")).toBe(true);
+
+  const room = sent(LAP_COST_USD + 1);
+  const roomReport = await admitOnce(room);
+  expect((await readRow(room.store, "i-0001"))?.lapBudgetCapUsd).toBe(LAP_COST_USD + 1);
+  expect(says(roomReport, "the scope's budget left it")).toBe(false);
+});
+
 test("a lap whose transcript rondo could not read keeps three nulls, not three zeroes", async () => {
   // The distinction the nullable columns exist for. A row that recorded 0 here
   // would say the lap was free, which is a different claim from "rondo did not
@@ -721,6 +758,7 @@ test("a lap whose transcript rondo could not read keeps three nulls, not three z
         turns: null,
         durationMs: null,
         spendSource: "notReported",
+        budgetCapUsd: null,
       },
     },
   });
@@ -760,6 +798,7 @@ test("three nulls are explained by the read that produced them, not by one guess
           turns: null,
           durationMs: null,
           spendSource,
+          budgetCapUsd: null,
         },
       },
     });
@@ -826,6 +865,7 @@ test("what a lap reported that the row has no column for is not lost", async () 
         turns: null,
         durationMs: null,
         spendSource: "notReported",
+        budgetCapUsd: null,
       },
     },
   });
@@ -1428,6 +1468,7 @@ test("a withdrawal keeps what the lap already recorded on the row", async () => 
         turns: null,
         durationMs: null,
         spendSource: "notReported",
+        budgetCapUsd: null,
       },
     },
   });
@@ -1523,6 +1564,7 @@ test("abandon settles a row it cannot read, and the lock is genuinely released",
       turns: null,
       durationMs: null,
       spendSource: "notReported",
+      budgetCapUsd: null,
     },
   };
   const second = await admitOnce(h, "i-0002");
@@ -1889,6 +1931,7 @@ test("a lap answering for another run stalls rather than adopting its gate", asy
         turns: null,
         durationMs: null,
         spendSource: "notReported",
+        budgetCapUsd: null,
       },
     },
   });
@@ -1922,6 +1965,7 @@ test("a lap that ran on another model stalls, and the open gate is named first",
         turns: null,
         durationMs: null,
         spendSource: "notReported",
+        budgetCapUsd: null,
       },
     },
   });
@@ -1958,6 +2002,7 @@ test("a lap that named no model at all is the same stall, spelled for a reader",
         turns: null,
         durationMs: null,
         spendSource: "notReported",
+        budgetCapUsd: null,
       },
     },
   });
@@ -2017,6 +2062,7 @@ test("a reason contained in an earlier one is still recorded", async () => {
         turns: null,
         durationMs: null,
         spendSource: "notReported",
+        budgetCapUsd: null,
       },
     },
   });

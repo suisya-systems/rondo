@@ -28,7 +28,7 @@
  * carries the whole of it and the line draws the part that fits on a line.
  */
 import type { IterationRecord, ScopePayload, ScopeSpent } from "../../store/records.js";
-import { type IterationStatus, SCOPE_OUTWARD_ACTS } from "../../store/records.js";
+import { type IterationStatus, reachedBudgetCap, SCOPE_OUTWARD_ACTS } from "../../store/records.js";
 import type { Allowance } from "./week.js";
 
 /** One try's cost, as the right face lists it. */
@@ -82,6 +82,12 @@ export interface Governance {
    * `running` says whether that is because the try is still going.
    */
   readonly byTry: readonly TryCost[];
+  /**
+   * **This lap spent all the room the budget left it** (D-0121): what it cost
+   * and the room it was sent with, or null where it did not, or either number
+   * was not read.
+   */
+  readonly atBudgetCap: { readonly costUsd: number; readonly capUsd: number } | null;
   /** Which try of how many the approval allows, or null with no approval to read it from. */
   readonly tries: { readonly at: number; readonly of: number } | null;
   /** What remains, as rule 6's chain. */
@@ -206,6 +212,12 @@ export function governanceOf(
     askedAtMs,
     allowance: approval === null ? null : heldFor(allowanceOf(approval), byTry),
     byTry,
+    atBudgetCap:
+      record.lapCostUsd !== null &&
+      record.lapBudgetCapUsd !== null &&
+      reachedBudgetCap(record.lapCostUsd, record.lapBudgetCapUsd)
+        ? { costUsd: record.lapCostUsd, capUsd: record.lapBudgetCapUsd }
+        : null,
     tries:
       approval === null
         ? null

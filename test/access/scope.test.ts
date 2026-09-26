@@ -10,6 +10,8 @@ import { expect, test } from "vitest";
 import {
   admitUnderScope,
   gatherScopeSnapshot,
+  lapBudgetCap,
+  lapBudgetCapOf,
   reviewScopeOf,
   type ScopeAct,
   type ScopeAdmitPorts,
@@ -861,4 +863,35 @@ test("D-0098 rule 5.3: a closing redo carries what the reviewer last read into t
   expect(calls[0]?.[4]).toMatchObject({
     closing: { readTipCommit: "e".repeat(40), readingReadAtMs: 7, findings: [0, 1, 2] },
   });
+});
+
+test("D-0121: a lap's cap is the budget less what was read and the other unread laps' reserves", () => {
+  const budgets = PAYLOAD.budgets; // cost_usd 10, cost_reserve_usd 2
+  // Alone and first: the whole budget.
+  expect(lapBudgetCap(budgets, { admissions: 1, readCostUsd: 0, unreadLaps: 1 })).toBe(10);
+  // Beside one other unread lap, and after 3 USD read: 10 - 3 - 2.
+  expect(lapBudgetCap(budgets, { admissions: 3, readCostUsd: 3, unreadLaps: 2 })).toBe(5);
+  // Its admission already held its own reserve, so the cap is never below it
+  // unless a lap beside it was read over its reserve since.
+  expect(lapBudgetCap(budgets, { admissions: 3, readCostUsd: 12, unreadLaps: 1 })).toBe(-2);
+  // A spend read before the lap's admission landed counts no negative laps.
+  expect(lapBudgetCap(budgets, { admissions: 0, readCostUsd: 0, unreadLaps: 0 })).toBe(10);
+});
+
+test("D-0121: the cap is read through the approval that admitted the lap, and is null without one", async () => {
+  const record = (decision: string | null) => ({
+    scopeDecisionAdmitting: async () => decision,
+    readScopeDecision: async () =>
+      ({ kind: "read", decision: { scopeId: SCOPE.scopeId } }) as never,
+    readScope: async () => ({ kind: "read", scope: SCOPE }) as never,
+    scopeSpent: async () => ({ admissions: 2, readCostUsd: 1.5, unreadLaps: 2 }),
+  });
+  expect(await lapBudgetCapOf(record("d-1"), "it-1")).toBe(10 - 1.5 - 2);
+  expect(await lapBudgetCapOf(record(null), "it-1")).toBeNull();
+  expect(
+    await lapBudgetCapOf(
+      { ...record("d-1"), readScopeDecision: async () => ({ kind: "absent" }) as never },
+      "it-1",
+    ),
+  ).toBeNull();
 });
