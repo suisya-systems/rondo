@@ -1289,10 +1289,13 @@ export interface CloseRunRequest {
  * Record that a run reached a terminal status.
  *
  * **The operator's verb, and it is theirs in the sense D-0010 means**: it
- * records a human's observation that the work landed, and rondo drives it only
- * from `publish`, only when a person typed that command. Nothing in the
- * conductor reaches it -- the loop's own report says in as many words that the
- * run row is not rondo's to settle.
+ * records a human's observation that the work landed, and rondo drives it
+ * that way only from `publish`, only when a person typed that command. The one
+ * other caller is the close-out after a merge, which closes a superseded lap's
+ * run as `cancelled` -- rondo's own fact that it replaced the lap, not an
+ * observation of a merge (D-0120). Nothing in the conductor reaches it -- the
+ * loop's own report says in as many words that the run row is not rondo's to
+ * settle.
  *
  * Not idempotent: continuo refuses a second close, because which terminal
  * status a run reached is a fact rather than a setting. The refusal is relayed

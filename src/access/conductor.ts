@@ -1174,13 +1174,15 @@ export type LapEvent =
    * What the close-out after a merge removed and kept (rondo#403, D-0119):
    * the line's `rondo/base/` branches deleted, those git refused with why,
    * the topic branch kept, and each lap's worktree removed, already gone, or
-   * kept by continuo with why (rondo#456).
+   * kept by continuo with why (rondo#456), and the superseded laps' runs rondo
+   * closed as `cancelled` to remove them (rondo#457, D-0120).
    */
   | {
       readonly kind: "closedOut";
       readonly deleted: readonly string[];
       readonly refused: readonly { readonly branch: string; readonly reason: string }[];
       readonly worktrees: readonly WorktreeOutcome[];
+      readonly cancelled: readonly string[];
       readonly topicBranch: string;
     }
   /**
@@ -1467,6 +1469,11 @@ export async function writeReport(
         : `deleted ${event.deleted.map((branch) => `'${branch}'`).join(", ")}`) +
       event.refused.map((one) => `; could not delete '${one.branch}': ${one.reason}`).join("") +
       `. Its topic branch '${event.topicBranch}' is kept.` +
+      (event.cancelled.length === 0
+        ? ""
+        : ` rondo closed the run${event.cancelled.length === 1 ? "" : "s"} of its superseded ` +
+          `lap${event.cancelled.length === 1 ? "" : "s"} as cancelled: ` +
+          `${event.cancelled.map((runId) => `'${runId}'`).join(", ")}.`) +
       (event.worktrees.length === 0
         ? " No worktree of its line was left to remove."
         : ` Worktrees: ${event.worktrees.map(worktreeClause).join("; ")}.`);

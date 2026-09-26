@@ -558,6 +558,8 @@ test("a merge's close-out is said under it: what was deleted, what was refused, 
         { kind: "removed", workspace: "/wt/1" },
         { kind: "kept", runId: "run-2", reason: "run run-2 is at status running; close it" },
       ],
+      // rondo#457: the sentence naming the closed runs moves no count below.
+      cancelled: ["run-1"],
       topicBranch: "rondo/topic",
     },
     62_000,

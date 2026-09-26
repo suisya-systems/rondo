@@ -184,7 +184,9 @@ Consequences for anyone adding code here:
   `run close`, `run show`, `ci observe`, `ci show` (those two since
   `continuo D-1113`: the checks host fetches with the operator's `gh` and
   continuo records the evidence and folds the verdict) and `workspace remove`
-  (since `continuo D-1119`: the close-out after a merge, `D-0119`).
+  (since `continuo D-1119`: the close-out after a merge, `D-0119`). `run close`
+  runs at `publish`, and in that close-out as `cancelled` for a superseded lap's
+  run (`D-0120`).
 - **A contract rondo can spell is not a verb rondo uses.**
   `src/continuo/protocol.ts` declares three contracts beyond that list which no
   command invokes: `db create` and `gate list`, which only the end-to-end smoke

@@ -147,6 +147,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0117 | The control layer for parallel work is `D-0073`'s lane ledger and `D-0098`'s five rules, read as one: its authorities in one table, each pointing to the rule that decided it and the change that built it, and rondo#250 done with what is left filed on its own | accepted |
 | D-0118 | A relayed approval is outside rondo's boundary: `actor_id` is the approver's claim, a relay is the operator's to write in `--verified`, and no column is added for it | accepted |
 | D-0119 | A merge is closed out: rondo deletes the `rondo/base/` branches it made for the line, keeps the topic branch, and leaves the worktree to a continuo verb (continuo#230); a close without a merge closes nothing out | accepted |
+| D-0120 | The close-out after a merge closes a superseded lap's run as `cancelled` before asking for its worktree, in both merge paths; this reads `D-0010` narrowly and does not supersede it | accepted |
 
 ---
 
@@ -997,6 +998,12 @@ That is the price of the property, and it is taken deliberately.
 > **Annotation (2026-09-22, from D-0091).** Added after this entry was accepted, and additive. A
 > person's merge press on the page runs `gh pr merge` through the operator's own `gh`, as the
 > operator. **rondo still holds no credential of its own.** Nothing below is edited.
+
+> **Annotation (2026-09-26, from D-0120).** Added after this entry was accepted, and additive. The
+> close this entry gives the operator is the publish leg, `--outcome completed`, the operator's
+> observation of a merge. After a merge, rondo closes a *superseded* lap's run as `cancelled`:
+> that records rondo's own fact that it replaced the lap, observes no merge and publishes nothing,
+> so the property below, "the conductor cannot publish", is untouched. Nothing below is edited.
 
 ### Decision
 
@@ -24174,3 +24181,75 @@ that `publish` has already closed.
 > `publish`, so a lap of the line that was not published (a revised or taken-in one) is refused as
 > not terminal and its worktree is kept and said. Closing those runs is not decided here; it is
 > rondo#457. The text above is not edited.
+
+> **Annotation (2026-09-26, from D-0120).** Added after this entry was accepted, and additive:
+> rondo#457 is decided. The close-out closes each superseded lap's run as `cancelled` before
+> asking for its worktree, so rule 4's worktrees go too, except the ones continuo refuses with a
+> reason the thread says. The text above is not edited.
+
+---
+
+## D-0120 — The close-out after a merge closes a superseded lap's run as `cancelled` before asking for its worktree, in both merge paths; this reads `D-0010` narrowly and does not supersede it
+
+**Status:** accepted (2026-09-26, rondo#457; the owner's answer through the secretary, option A of
+three, with `cancelled` for every such run). Refs `D-0010`, `D-0119` and its rondo#456 annotation,
+`continuo D-0084`, `continuo D-1119`.
+
+**Why an entry is needed.** `D-0010` lists `run close` among the operator's publish legs, and
+rondo#457 asks rondo to call it outside `publish`. Doing that without an entry would be reading an
+accepted decision loosely.
+
+### What was measured
+
+At rondo `83bcc6b` and continuo `f2fb450` on **2026-09-26**:
+
+- **A superseded lap's worktree is always kept.** `continuo workspace remove` refuses a run that is
+  not terminal (`continuo D-1119` rule 4). Only `run close` makes a run terminal (`continuo
+  D-0084`), and rondo closes a run only at `publish`. A revised or taken-in lap is never
+  published, so its run stays at `created`. Every merged line with a revision kept at least one
+  worktree.
+- **`run close --outcome cancelled` publishes nothing.** It reaches no git and no GitHub and
+  appends no event. It takes the run's lease, so a lap still driving the run refuses it. A run
+  already terminal refuses a second close.
+
+### Decision
+
+1. **The close-out closes a superseded lap's run.** A superseded lap is one that another lap of the
+   merged line names in `supersedesIterationId`, and is not the merged lap. The close-out reads
+   the run with `run show`. If it is not terminal, the close-out runs `run close --outcome
+   cancelled` under the actor `rondo/close-out/1`, then `workspace remove`. The rest is
+   `D-0119`'s: one ask per lap, never retried, never forced.
+2. **Both merge paths**, the press and a merge the checks host reads on the forge, because the
+   close-out is one function for both (`D-0119` rule 1).
+3. **Only a superseded lap.** A second tip of the line that nothing replaced may still be
+   published, and `publish` closes its run as `completed`. Its run is left open, and continuo keeps
+   its worktree with the reason.
+4. **`cancelled` for every such run.** The close says the run ended without being published on its
+   own. Why the lap was replaced, or that it failed, stays in rondo's own record.
+5. **The person sees it.** `report-closeout-<lap>` names the runs rondo closed. A close continuo
+   refuses keeps the worktree, and the thread gives continuo's reason.
+
+**How this sits with `D-0010`.** `D-0010`'s close is the publish leg, `--outcome completed`: the
+operator's observation of a merge (`continuo D-0084`). This close records a different fact, rondo's
+own: it replaced the lap. It observes no merge, pushes nothing and needs no credential, so the
+property `D-0010` protects, "the conductor cannot publish", holds. `D-0010` is read narrowly and not
+superseded, and it carries an annotation saying so.
+
+**Options not taken.** B: close only in the press path. Every close would then follow a person's
+act, but a merge made on the forge would still leave the worktrees. C: close nothing, and print the
+commands for the operator. That leaves `D-0010` untouched, and the worktrees stay until someone
+types the commands.
+
+### What it costs
+
+- **In the forge-merge path, rondo moves `run.status` with no person's per-act command.** The lease
+  and the absorbing terminal status bound the close.
+- **It still runs once**, as `D-0119` says. A host stopped before the close-out leaves the runs
+  open.
+
+### What would falsify it
+
+- **A superseded lap whose run someone still needs open**: for example, a later take-in that reads
+  from the run rather than from its commits. Then closing it at the merge breaks that reader.
+- **A `pr_merged` consumer in continuo** (`continuo D-0084`) that closes runs itself. Then two
+  writers close one line's runs, and this rule should move to it.

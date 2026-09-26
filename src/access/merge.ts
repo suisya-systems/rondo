@@ -17,10 +17,14 @@
  */
 
 import {
+  closeRun,
   type RemoveWorkspaceRequest,
+  RUN_CLOSE_OUTCOMES,
   removeWorkspace,
+  showRun,
   startContinuo,
 } from "../continuo/invoker.js";
+import type { ContinuoResult } from "../continuo/protocol.js";
 import { lineShape } from "../store/lanes.js";
 import {
   isDeterministicReadingDrafter,
@@ -266,7 +270,17 @@ export interface CloseOutPorts {
   readonly removeWorkspace: RemoveLapWorkspace;
 }
 
-export type RemoveLapWorkspace = (request: RemoveWorkspaceRequest) => Promise<WorktreeOutcome>;
+/**
+ * `superseded` is a lap another lap of the line replaced (D-0120): its run is
+ * closed as `cancelled` first when it is not terminal yet, and the answer
+ * names the run it closed.
+ */
+export type RemoveLapWorkspace = (
+  request: RemoveWorkspaceRequest & { readonly superseded: boolean },
+) => Promise<WorktreeOutcome & { readonly cancelledRun?: string }>;
+
+/** Who closes a superseded lap's run in continuo's lease row: rondo, not a person (D-0120). */
+export const CLOSE_OUT_ACTOR = "rondo/close-out/1";
 
 /**
  * `continuo workspace remove` (continuo D-1119) for the close-out, started on
@@ -289,20 +303,45 @@ export function continuoWorkspaceRemover(
       started = null;
       return kept(`continuo is not usable: ${startup.reason}`);
     }
-    const result = await removeWorkspace(startup.continuo, request);
-    switch (result.kind) {
-      case "answered":
-        return result.payload.outcome === "absent"
-          ? { kind: "absent", workspace: result.payload.workspace }
-          : { kind: "removed", workspace: result.payload.workspace };
-      case "refused":
-        return kept(result.message);
-      case "refusedInProse":
-        return kept(result.text);
-      default:
-        return kept(result.reason);
+    const target = { db: request.db, runId: request.runId };
+    let cancelled: { cancelledRun?: string } = {};
+    // D-0120: a superseded lap's run was never published, so nothing closed
+    // it. A run show that does not answer leaves the removal to say why.
+    if (request.superseded) {
+      const shown = await showRun(startup.continuo, target);
+      if (shown.kind === "answered" && !RUN_CLOSE_OUTCOMES.includes(shown.payload.status)) {
+        const closed = await closeRun(startup.continuo, {
+          ...target,
+          outcome: "cancelled",
+          actorId: CLOSE_OUT_ACTOR,
+        });
+        if (closed.kind !== "answered") {
+          return kept(`its run was not closed: ${reasonOf(closed)}`);
+        }
+        cancelled = { cancelledRun: request.runId };
+      }
     }
+    const result = await removeWorkspace(startup.continuo, target);
+    if (result.kind !== "answered") {
+      return { ...kept(reasonOf(result)), ...cancelled };
+    }
+    return {
+      kind: result.payload.outcome === "absent" ? "absent" : "removed",
+      workspace: result.payload.workspace,
+      ...cancelled,
+    };
   };
+}
+
+function reasonOf(result: Exclude<ContinuoResult<unknown>, { kind: "answered" }>): string {
+  switch (result.kind) {
+    case "refused":
+      return result.message;
+    case "refusedInProse":
+      return result.text;
+    default:
+      return result.reason;
+  }
 }
 
 /**
@@ -313,7 +352,8 @@ export function continuoWorkspaceRemover(
  * and says in the thread what it deleted, what git refused, and what it keeps:
  * the topic branch. Then it asks continuo to remove each lap's worktree
  * (rondo#456, continuo D-1119) and says which went and which continuo kept,
- * with why. A close without a merge closes nothing out.
+ * with why, closing a superseded lap's run as `cancelled` first (rondo#457,
+ * D-0120). A close without a merge closes nothing out.
  *
  * ponytail: run once, right after the merge line; a host stopped between the
  * two leaves the branches and worktrees for the person, and a retry sweep is the upgrade if
@@ -345,12 +385,24 @@ export async function closeOutMerged(
     }
   }
   // After the base refs, and only for a lap continuo ran: a lap with no run
-  // never had a worktree.
+  // never had a worktree. Superseded is a lap another lap of the line
+  // replaced; a sibling tip nothing replaced may still be published, so its
+  // run is left open (D-0120).
+  const replaced = new Set(laps.map((lap) => lap.supersedesIterationId));
   const worktrees: WorktreeOutcome[] = [];
+  const cancelled: string[] = [];
   for (const lap of laps) {
     const db = planField(lap, "db");
     if (lap.runId !== null && db !== "") {
-      worktrees.push(await ports.removeWorkspace({ db, runId: lap.runId }));
+      const { cancelledRun, ...outcome } = await ports.removeWorkspace({
+        db,
+        runId: lap.runId,
+        superseded: lap.id !== iterationId && replaced.has(lap.id),
+      });
+      worktrees.push(outcome);
+      if (cancelledRun !== undefined) {
+        cancelled.push(cancelledRun);
+      }
     }
   }
   return await reportToRequest(
@@ -361,6 +413,7 @@ export async function closeOutMerged(
       deleted,
       refused,
       worktrees,
+      cancelled,
       topicBranch: found.record.topicBranch ?? planField(found.record, "topic_branch"),
     },
     ports.now(),
