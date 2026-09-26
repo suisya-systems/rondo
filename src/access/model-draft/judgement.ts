@@ -27,7 +27,13 @@ import {
   DEFAULT_REVIEW_ROUNDS,
   type ScopeBudgets,
 } from "../../advisory/budget.js";
-import type { SplitPayload, SplitPlan } from "../../advisory/proposal.js";
+import {
+  GROUND_CONDITIONS,
+  type GroundCondition,
+  type SplitGround,
+  type SplitPayload,
+  type SplitPlan,
+} from "../../advisory/proposal.js";
 import type { DrafterRow } from "../../continuo/roles.js";
 import { normalizeClaim } from "../../store/lanes.js";
 import {
@@ -44,7 +50,7 @@ import { optionLines } from "../question.js";
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
  * {@link INSTRUCTIONS} is a new version, a changed model a new table entry.
  */
-const DRAFTER_INSTRUCTIONS_VERSION = 7;
+const DRAFTER_INSTRUCTIONS_VERSION = 8;
 
 /** What every row a model drafter writes is named under (rule 1.4). */
 export const MODEL_DRAFTER_PREFIX = "rondo/drafter/";
@@ -240,6 +246,14 @@ const INSTRUCTIONS = [
   "- A plan is a template from TEMPLATES, by its plan_digest, an agent type from AGENT TYPES, by",
   "  its digest, and the prompt the worker will run on, which you write. Nothing else of the",
   "  template changes. Name only an agent type whose tier is priced.",
+  "- An agent type's tier says which model does the work. 'standard' is the default. 'mechanical'",
+  "  is a cheaper model, for a plan where all three hold: the thread names the files to change",
+  "  (files_named); the change is bounded (bounded); and the repository's own checks passing is",
+  "  the whole of the acceptance, so nobody has to read what the worker decided",
+  "  (checks_are_acceptance). A plan naming an agent type whose tier is not 'standard' carries",
+  '  "grounds": one per condition, each with its words and the ids of the messages in THREAD it',
+  "  rests on. If any condition has no message to rest on, name a 'standard' agent type instead.",
+  "  A 'standard' plan carries no \"grounds\".",
   "- TEMPLATES may be of several repositories, and picking a template picks the repository the",
   "  work happens in. Where they are all of one, there is nothing to settle. Where they are of",
   "  several and neither the request nor its thread says which of them the work belongs in, ask:",
@@ -337,7 +351,11 @@ export function drafterDocument(material: DrafterMaterial): string {
     '               "bases": ["<message id>"]},                              ("ask" only)',
     '  "plans": [{"template_plan_digest": "sha256:...", "agent_type_digest": "sha256:...",',
     '             "prompt": "...", "claim": ["src/store/", "README.md"],',
-    '             "after": 0, "bases": ["<message id>"]}],                    ("split" only;',
+    '             "after": 0, "bases": ["<message id>"],',
+    '             "grounds": [{"condition": "files_named", "text": "...",',
+    '                          "bases": ["<message id>"]}]}],                 ("split" only;',
+    '                                                   "grounds" only on a plan whose agent',
+    "                                                   type's tier is not 'standard';",
     '                                                   "after" only on a plan that waits;',
     '                                                   "entries": 1 only on one that writes',
     "                                                   new decision entries)",
@@ -732,7 +750,16 @@ function plan(
   const what = `plan ${String(index)}`;
   const p = only(
     value,
-    ["template_plan_digest", "agent_type_digest", "prompt", "claim", "after", "entries", "bases"],
+    [
+      "template_plan_digest",
+      "agent_type_digest",
+      "prompt",
+      "claim",
+      "after",
+      "entries",
+      "bases",
+      "grounds",
+    ],
     what,
   );
   // D-0098 rule 1.3: an earlier plan of this split, so a chain is acyclic.
@@ -759,14 +786,14 @@ function plan(
       `${what} names agent type '${typeDigest}', which rondo neither holds nor can record from this thread`,
     );
   }
-  // **Only a priced tier** (D-0052, D-0071 rule 6.4). Today that is `standard`
-  // alone, so D-0062 rule 2.2's grounds for another tier have nothing to
-  // ground; they become this check's second half when a second tier is priced.
+  // **Only a priced tier** (D-0052, D-0071 rule 6.4), and one that is not
+  // `standard` only with its grounds (D-0062 rule 2.2, D-0122).
   if (!agentType.priced) {
     throw new DraftDefect(
       `${what} names an agent type of tier '${agentType.modelTier ?? "unknown"}', which rondo does not price`,
     );
   }
+  const grounds = groundsOf(p["grounds"], agentType, what, bases);
   // D-0098 rule 3.3: a count of new decision entries, only where the
   // template names a record to reserve its numbers in.
   const entries = p["entries"];
@@ -804,8 +831,62 @@ function plan(
       claim: claim.paths,
       ...(after === undefined ? {} : { after }),
       ...(entries === undefined ? {} : { entries }),
+      ...(grounds === null ? {} : { grounds }),
     },
   };
+}
+
+/**
+ * D-0062 rule 2.2's grounds, checked structurally: a plan whose agent type's
+ * tier is not `standard` claims each condition of D-0044 rule 1 once, each
+ * claim resting on messages of the thread, and a `standard` plan claims none.
+ * **A condition the drafter cannot ground refuses the draft**; the remedy the
+ * instructions give it is a `standard` agent type. Whether a claim is true is
+ * never checked here: the person follows each basis back to the words.
+ */
+function groundsOf(
+  value: unknown,
+  agentType: DraftAgentType,
+  what: string,
+  bases: (value: unknown, what: string) => string[],
+): SplitGround[] | null {
+  const tier = agentType.modelTier ?? "unknown";
+  if (tier === "standard") {
+    if (value !== undefined) {
+      throw new DraftDefect(`${what} carries grounds, and its agent type's tier is standard`);
+    }
+    return null;
+  }
+  if (value === undefined) {
+    throw new DraftDefect(
+      `${what} names an agent type of tier '${tier}' with no grounds for it (D-0062 rule 2.2)`,
+    );
+  }
+  const grounds = list(value, `${what}'s grounds`).map((one, i) => {
+    const at = `${what} ground ${String(i)}`;
+    const g = only(one, ["condition", "text", "bases"], at);
+    const condition = g["condition"];
+    if (!(GROUND_CONDITIONS as readonly unknown[]).includes(condition)) {
+      throw new DraftDefect(
+        `${at} names ${JSON.stringify(condition)}, not one of ${GROUND_CONDITIONS.join(", ")}`,
+      );
+    }
+    return {
+      condition: condition as GroundCondition,
+      text: words(g["text"], `${at}'s text`),
+      bases: bases(g["bases"], at).map((messageId) => ({ form: "message" as const, messageId })),
+    };
+  });
+  for (const condition of GROUND_CONDITIONS) {
+    const claimed = grounds.filter((g) => g.condition === condition).length;
+    if (claimed !== 1) {
+      throw new DraftDefect(
+        `${what} names an agent type of tier '${tier}' and grounds '${condition}' ` +
+          `${String(claimed)} times, not once (D-0062 rule 2.2)`,
+      );
+    }
+  }
+  return grounds;
 }
 
 function narrowing(value: unknown, what: string, operatorIds: ReadonlySet<string>): Narrowing {

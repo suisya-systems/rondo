@@ -186,7 +186,18 @@ describe("the model table, which is a policy rather than a transcription", () =>
     // and provisional is not the same as free to move quietly.
     expect(mappedModelTiers().map((tier) => [tier, selectedModel(tier)])).toEqual([
       ["standard", "claude-opus-5"],
+      ["mechanical", "claude-sonnet-5"],
     ]);
+  });
+
+  test("every tier names its provider, and every provider is claude until rondo#460 (D-0122)", () => {
+    // continuo D-1114 decision 2 puts the provider in this table. A `codex` row
+    // is rondo#460's: it needs a reviewer of another family (D-0065 rule 3.3).
+    for (const tier of mappedModelTiers()) {
+      const selection = mapModelTier(tier);
+      expect(selection.kind === "selected" && selection.provider).toBe("claude");
+      expect(modelFamilyOf(selectedModel(tier))).toBe("claude");
+    }
   });
 
   test("every model is a plain model id, which is continuo's own rule for the flag", () => {

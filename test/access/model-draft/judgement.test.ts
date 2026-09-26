@@ -28,7 +28,8 @@ import { drafterRow } from "../../../src/continuo/roles.js";
 const DIGEST = (c: string) => `sha256:${c.repeat(64)}`;
 const TEMPLATE = DIGEST("1");
 const STANDARD = DIGEST("a");
-const MECHANICAL = DIGEST("b");
+const UNPRICED = DIGEST("b");
+const MECHANICAL = DIGEST("d");
 const PASTED = DIGEST("c");
 const T0 = Date.UTC(2026, 8, 19, 0, 0, 0);
 
@@ -71,7 +72,8 @@ const MATERIAL: DrafterMaterial = {
   ],
   agentTypes: [
     held(STANDARD, "standard", true),
-    held(MECHANICAL, "mechanical", false),
+    held(UNPRICED, "frugal", false),
+    held(MECHANICAL, "mechanical", true),
     {
       digest: PASTED,
       modelTier: "standard",
@@ -127,14 +129,14 @@ function refusal(answer: unknown, material: DrafterMaterial = MATERIAL): string 
 }
 
 test("the row name counts the drafter's instructions and names the table's model (D-0071 rule 1.4)", () => {
-  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/7/claude-opus-5");
+  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/8/claude-opus-5");
 });
 
 test("the document carries the thread, the templates, the agent types and the measurements, and never a ceiling", () => {
   const document = drafterDocument(MATERIAL);
   expect(document).toContain("Fix the flaky test in the scope screen, and keep it under $3.");
   expect(document).toContain(`--- template ${TEMPLATE}`);
-  expect(document).toContain(`agent type ${MECHANICAL}: tier mechanical (not priced`);
+  expect(document).toContain(`agent type ${UNPRICED}: tier frugal (not priced`);
   expect(document).toContain(`recorded from message r1 if a scope lists it`);
   expect(document).toContain("first_lap_cost: 2.5 USD (cold start: not measured in this store)");
   expect(document).toContain("@@RONDO-0@@ BEGIN STANDING POLICIES\n(none)\n");
@@ -464,7 +466,7 @@ test.each([
   ],
   [
     "an agent type of an unpriced tier",
-    { ...SPLIT, plans: [{ ...SPLIT.plans[0], agent_type_digest: MECHANICAL }] },
+    { ...SPLIT, plans: [{ ...SPLIT.plans[0], agent_type_digest: UNPRICED }] },
     "which rondo does not price",
   ],
   [
@@ -668,4 +670,81 @@ test("a plan says how many decision entries it writes, only where its template n
     );
   }
   expect(drafterDocument(MATERIAL)).toContain('"entries"');
+});
+
+/** The three grounds D-0062 rule 2.2 asks of a non-`standard` plan, each resting on the request. */
+const GROUNDS = [
+  { condition: "files_named", text: "The request names the scope screen's test.", bases: ["r1"] },
+  { condition: "bounded", text: "One flaky test is fixed.", bases: ["r1"] },
+  { condition: "checks_are_acceptance", text: "The suite passing is the fix.", bases: ["r1"] },
+];
+const MECHANICAL_PLAN = { ...SPLIT.plans[0], agent_type_digest: MECHANICAL, grounds: GROUNDS };
+
+test("a mechanical plan carries its three grounds into the split, each on a message basis (D-0062 rule 2.2, D-0122)", () => {
+  const outcome = drafted(draftOf(MATERIAL, answered({ ...SPLIT, plans: [MECHANICAL_PLAN] })));
+  expect(outcome.split?.plans[0]?.grounds).toEqual(
+    GROUNDS.map((g) => ({
+      condition: g.condition,
+      text: g.text,
+      bases: [{ form: "message", messageId: "r1" }],
+    })),
+  );
+  expect(outcome.scope?.payload["agent_types"]).toEqual([MECHANICAL]);
+});
+
+test("a standard plan's split carries no grounds", () => {
+  expect(drafted(draftOf(MATERIAL, answered(SPLIT))).split?.plans[0]).not.toHaveProperty("grounds");
+});
+
+test.each([
+  [
+    "a mechanical plan with no grounds",
+    { ...MECHANICAL_PLAN, grounds: undefined },
+    "with no grounds for it",
+  ],
+  [
+    "a mechanical plan missing a condition",
+    { ...MECHANICAL_PLAN, grounds: GROUNDS.slice(0, 2) },
+    "grounds 'checks_are_acceptance' 0 times",
+  ],
+  [
+    "a mechanical plan grounding one condition twice",
+    { ...MECHANICAL_PLAN, grounds: [...GROUNDS, GROUNDS[0]] },
+    "grounds 'files_named' 2 times",
+  ],
+  [
+    "a ground with no basis",
+    { ...MECHANICAL_PLAN, grounds: [{ ...GROUNDS[0], bases: [] }, ...GROUNDS.slice(1)] },
+    "ground 0 has no basis",
+  ],
+  [
+    "a ground on a message not in the thread",
+    {
+      ...MECHANICAL_PLAN,
+      grounds: [{ ...GROUNDS[0], bases: ["elsewhere"] }, ...GROUNDS.slice(1)],
+    },
+    "no message in the thread",
+  ],
+  [
+    "a ground naming no condition of D-0044 rule 1",
+    {
+      ...MECHANICAL_PLAN,
+      grounds: [{ ...GROUNDS[0], condition: "cheap" }, ...GROUNDS.slice(1)],
+    },
+    'names "cheap"',
+  ],
+  [
+    "a standard plan carrying grounds",
+    { ...SPLIT.plans[0], grounds: GROUNDS },
+    "its agent type's tier is standard",
+  ],
+])("refused: %s", (_what, plan, reason) => {
+  expect(refusal({ ...SPLIT, plans: [plan] })).toContain(reason);
+});
+
+test("the document tells the drafter what the mechanical tier is for and what grounds it needs", () => {
+  const document = drafterDocument(MATERIAL);
+  expect(document).toContain("'mechanical'");
+  expect(document).toContain("files_named");
+  expect(document).toContain("checks_are_acceptance");
 });
