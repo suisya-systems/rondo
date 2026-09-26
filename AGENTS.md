@@ -8,7 +8,7 @@ name), and where this file and that evidence disagree, the evidence wins.
 
 `README.md` says what rondo is. This file says how work on it is done.
 
-## 1. rondo is a host, and it now conducts exactly one lap
+## 1. rondo is a host, and it conducts laps
 
 `src/` holds these layers: `src/store/`, `src/refrain/`, `src/continuo/`,
 `src/cadenza/`, `src/advisory/` and `src/access/`. `src/continuo/` drives the
@@ -28,12 +28,14 @@ is supposed to: it classifies against a contract, admits a run, walks one lap,
 and suspends at a gate a human has yet to answer. It never composes the answer
 (D-0009), never publishes (D-0010) and never closes a gate (D-0013). It now runs
 **one lap at a time and several iterations at once**: an iteration suspended at a
-gate holds no worker, so it stops occupying an execution slot (D-0023). There is
-a read-only web page now, served on localhost by `rondo web`; there is still no
-MCP surface and no agent-type registry. rondo **does** have an
-allocator now, and single-flight over *executing* laps is what remains of the
-reduction — held there by continuo's single delivery resource rather than by
-rondo's schema (D-0023 rules 8 and 17).
+gate holds no worker, so it stops occupying an execution slot (D-0023). The
+page `rondo web` serves on localhost is where a person works, and its presses
+write (D-0041, D-0083); there is still no MCP surface. rondo **does** have an
+allocator, and single-flight over *executing* laps is what remains of the
+reduction by default — `RONDO_MAX_OCCUPYING` is 1 because continuo's single
+delivery resource holds it there, not rondo's schema (D-0023 rules 8 and 17).
+Lines that hold disjoint paths may be open at once under the lane ledger
+(D-0073, D-0117).
 
 **Two rules of this layer are worth knowing before you touch it.**
 `src/refrain/`'s external allowance is *empty* and must stay empty: that is why
@@ -128,7 +130,7 @@ Consequences for anyone adding code here:
 - **Run `node vendor/pin.mjs check` before `npm ci`, always.** npm enforces its
   integrity hash against its cache, so a drifted tarball is `EINTEGRITY` on a
   cold cache and a silent install of the *previously pinned* bytes on a warm one
-  (D-0018 rule 4). CI does this in all three installing jobs, and the pin test
+  (D-0018 rule 4). CI does this in every job that installs, and the pin test
   fails if an install ever loses its check.
 - **`src/cadenza/facade.ts` is the only module that may import the package, and
   its bindings are granted one by one** (D-0018 rule 5). Needing another value
@@ -137,8 +139,10 @@ Consequences for anyone adding code here:
   and `delegate` and `adopt` compose a widening successor rondo must never
   compose (D-0009). A second module in `src/cadenza/` is not granted the
   package, and neither is a deep path into it.
-- **`src/refrain -> src/cadenza` does not exist yet.** Add that arrow in the
-  diff where conductor code actually consumes the facade, not in advance.
+- **`src/refrain -> src/cadenza` is the loop's one arrow into the facade**
+  (D-0019 rule 1): `src/refrain/plan.ts` and `src/refrain/classification.ts`
+  classify against cadenza through it. `src/refrain -> src/continuo` is still
+  refused; continuo arrives as a port.
 - **Do not add a dependency on continuo without superseding D-0015 / D-0017.**
   D-0001's measurements of that seam were kept when it was superseded; each cost
   is written down, and reaching for a git specifier because it "should work"
@@ -170,9 +174,9 @@ Consequences for anyone adding code here:
   never stand in for the pin. The end-to-end smoke is mandatory in every CI cell
   and capability-gated locally.
 - When continuo is driven, it is driven as a **subprocess whose revision rondo
-  verifies and records** (cadenza `C-14`, D-0015 rule 6). Verification exists;
-  the per-run persistence does not, because there is no store schema yet, and
-  D-0017 rule 5 says so rather than letting the rule read as done. `--version` now
+  verifies and records** (cadenza `C-14`, D-0015 rule 6). Both exist: the
+  invoker verifies the build before it drives, and the store keeps the observed
+  revision on the iteration's row (`continuo_revision`). `--version` now
   reports the build's git revision, so provenance is no longer rondo inventing
   an answer the seam cannot give — it is rondo *checking* the seam's answer
   against the pinned sha and persisting what was observed. A mismatch, the
@@ -239,18 +243,21 @@ rules, from that file's own "How to use this file":
 - Cite other repositories' decisions as `continuo D-00NN` / `cadenza D-00NN` and
   cadenza's design rows as `cadenza C-NN`; the numbering spaces are unrelated.
 
-Add the ID to the index table at the top of the file as well as to the body.
+Add the ID to the index table at the top of the file as well as to the body,
+with the entry's heading as its title and the start of its `Status` line as its
+status. `test/architecture/docs-claims.test.ts` fails when an entry has no row
+or a row's title or status differs from its entry.
 
 ## 4. Verification
 
-`npm run verify` is the whole of it: `lint`, `knip`, `typecheck`, `test`. Run it
-before reporting anything as done. It takes a few seconds.
+`npm run verify` is the whole of it: `build`, `page:check`, `lint`, `knip`,
+`typecheck`, `test`. Run it before reporting anything as done.
 
 Read its status from an unpiped run -- `npm run verify; echo "EXIT=$?"`, never
 `npm run verify 2>&1 | tail -40; echo "EXIT=$?"`, whose `EXIT=0` is `tail`'s and
 not the verification's (rondo#113, `docs/operations/lap-5-dogfood.md` N-15).
 
-Four things about it are not obvious:
+Five things about it are not obvious:
 
 - **`node vendor/pin.mjs check` comes first, and `npm ci` second** (D-0018 rule
   4). The full local sequence is
@@ -279,8 +286,8 @@ Four things about it are not obvious:
 
 ## 5. The boundary test is the point of the build (D-0006)
 
-`test/architecture/import-boundaries.test.ts` is what CI exists to run while
-rondo has no behaviour. Two habits keep it worth its runtime:
+`test/architecture/import-boundaries.test.ts` is what keeps the layers and roles
+honest as rondo grows. Two habits keep it worth its runtime:
 
 - **When you add a module under `src/`, the test tells you what to decide.** A
   new top-level module is unclassified and fails; a new external dependency is
@@ -297,7 +304,8 @@ rondo has no behaviour. Two habits keep it worth its runtime:
   prose** (rondo#324). Where this file or `docs/operations/rondo-cli.md`
   *enumerates* something the tree also enumerates — the layers under `src/`,
   the modules that may start a process, the continuo verbs rondo drives, the
-  commands the CLI dispatches — the two lists are compared, so a sentence that
+  commands the CLI dispatches, and `DECISIONS.md`'s index against its entries —
+  the two lists are compared, so a sentence that
   went stale is a red gate rather than something a reader discovers. Each list
   is found by an anchor phrase, and deleting the sentence fails the test too:
   the cheap way out of a red check must not be removing the claim.
