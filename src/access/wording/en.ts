@@ -607,6 +607,7 @@ explanation you pressed on and then answers the gate.`,
     ({
       push_branch: "push a branch",
       open_pull_request: "open a pull request",
+      merge_default_branch: "merge into the default branch once the checks pass",
     })[act] ?? act,
   scopeOutwardNone: "none",
   scopeIrreversibleNone: "No act is added to the irreversible list.",
@@ -1196,6 +1197,9 @@ explanation you pressed on and then answers the gate.`,
     "The forge accepted the merge, and rondo could not see it made -- the repository may merge " +
     "through a queue, or the forge did not answer. Look at the pull request on the forge before " +
     "pressing again.",
+  mergeRefusedInFlight:
+    "Nothing was merged by this press: a merge of this pull request is already under way. Go " +
+    "back to the request in a moment to see how it went.",
   nextStepConflictFix: (pullRequest, base) =>
     `${pullRequest} conflicts with ${base}, so the forge runs no checks on it. rondo can bring ` +
     `${base} into the branch and settle the conflict, changing nothing else; the result comes ` +

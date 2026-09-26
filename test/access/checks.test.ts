@@ -186,7 +186,11 @@ async function hostOver(options: {
   readonly duringRead?: () => void;
   /** A message's body, where it is not the one the fixture composes. */
   readonly bodies?: Readonly<Record<string, string>>;
+  /** Given, the host merges on green (D-0126) through this; its calls are kept. */
+  readonly mergeOnGreen?: string | null;
 }): Promise<{
+  /** Each merge on green asked, as `lap head` (D-0126). */
+  readonly mergesAsked: readonly string[];
   readonly written: readonly Recorded[];
   /** The run ids whose `rondo/base/` branch the close-out deleted (D-0119). */
   readonly deletedBases: readonly string[];
@@ -197,6 +201,7 @@ async function hostOver(options: {
   const written: Recorded[] = [];
   const askedIds: string[] = [];
   const deletedBases: string[] = [];
+  const mergesAsked: string[] = [];
   let tick = 0;
   let clock = 100;
   const messages: {
@@ -300,6 +305,14 @@ async function hostOver(options: {
       total: request.to === "many" ? 300 : 1,
     }),
     ...(options.pressing === undefined ? {} : { pressing: options.pressing }),
+    ...(options.mergeOnGreen === undefined
+      ? {}
+      : {
+          mergeOnGreen: async (iterationId: string, head: string) => {
+            mergesAsked.push(`${iterationId} ${head}`);
+            return options.mergeOnGreen ?? null;
+          },
+        }),
     host: "github.com",
     now: () => clock,
     log: () => {},
@@ -309,7 +322,7 @@ async function hostOver(options: {
     host.kick();
     await host.idle();
   }
-  return { written, deletedBases, asked: askedIds.length, askedIds };
+  return { written, deletedBases, asked: askedIds.length, askedIds, mergesAsked };
 }
 
 test("a published lap whose line still holds is read, and its answer is one message", async () => {
@@ -533,6 +546,45 @@ test("merged or closed on the forge ends the reading, and only a merge is closed
     });
     expect(after.asked).toBe(0);
   }
+});
+
+test("D-0126: a green just written on the lap's own head asks for a merge on green, once", async () => {
+  const green = { kind: "green", counted: 1, skipped: 0 } as const;
+  const once = await hostOver({
+    reading: green,
+    pullRequest: OPEN,
+    messageIds: ["request-1", "report-published-lap-1"],
+    mergeOnGreen: "merged",
+    passes: 2,
+  });
+  expect(once.mergesAsked).toEqual(["lap-1 commit-of-lap-1"]);
+  // Not on a red, a pending, a conflict, or a green already said.
+  for (const options of [
+    { reading: { kind: "red", failed: ["build"], cancelled: [], timedOut: [] } },
+    { reading: { kind: "pending", pending: ["build"] } },
+    { reading: green, pullRequest: { ...OPEN, conflicting: true } },
+    {
+      reading: green,
+      messageIds: ["request-1", "report-published-lap-1", "report-checks-lap-1-green"],
+    },
+  ] as const) {
+    const over = await hostOver({
+      pullRequest: OPEN,
+      messageIds: ["request-1", "report-published-lap-1"],
+      mergeOnGreen: "merged",
+      ...options,
+    });
+    expect(over.mergesAsked).toEqual([]);
+  }
+  // Nor on a head the lap did not push: that is the person's (D-0102).
+  const moved = await hostOver({
+    reading: green,
+    head: "fff0000",
+    pullRequest: OPEN,
+    messageIds: ["request-1", "report-published-lap-1"],
+    mergeOnGreen: "merged",
+  });
+  expect(moved.mergesAsked).toEqual([]);
 });
 
 test("a lap a merge press holds is left alone", async () => {

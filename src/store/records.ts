@@ -1702,12 +1702,16 @@ export interface ScopeBudgets {
 }
 
 /**
- * The closed vocabulary of reversible outward acts a scope may include
- * (rule 1.2.6, D-0064 O7). `merge_default_branch` is not a member: the writer
- * refuses it by name until the entry that builds CI observation takes D-0064
- * rule 3.4's transition.
+ * The closed vocabulary of outward acts a scope may include (rule 1.2.6,
+ * D-0064 O7). `merge_default_branch` joined it with D-0126, which takes D-0064
+ * rule 3.4's transition: absent by default, and a scope that holds it lets the
+ * checks host merge a lap of it on green (`mergeOnGreen`, `src/access/merge.ts`).
  */
-export const SCOPE_OUTWARD_ACTS = Object.freeze(["push_branch", "open_pull_request"] as const);
+export const SCOPE_OUTWARD_ACTS = Object.freeze([
+  "push_branch",
+  "open_pull_request",
+  "merge_default_branch",
+] as const);
 
 export type ScopeOutwardAct = (typeof SCOPE_OUTWARD_ACTS)[number];
 
@@ -1720,6 +1724,10 @@ export type ScopeOutwardAct = (typeof SCOPE_OUTWARD_ACTS)[number];
  * request; and spending past a budget." **The list grows only by an entry**, so
  * it is a frozen constant here and never a column: the effective list for a
  * scope is this plus its `irreversible_additions` (D-0066 rule 1.2.7).
+ *
+ * `merge_default_branch` stays listed: D-0126 takes rule 3.4's transition for
+ * a merge on green only, where the lap's scope includes the act and continuo
+ * read the lap's own head green. Every other merge is a person's press.
  */
 export const IRREVERSIBLE_ACTS = Object.freeze([
   "merge_default_branch",
@@ -1735,23 +1743,27 @@ export const IRREVERSIBLE_ACTS = Object.freeze([
  * `push_branch` and `open_pull_request` are **named and not writable** until
  * the entry that supersedes D-0025 rule 6 lets the organisation publish; a gate
  * answer and `revise` get their kinds from the entry that opens O6, so they are
- * not named at all.
+ * not named at all. `merge_default_branch` is a merge on green (D-0126), whose
+ * `subject_id` is the iteration id.
  */
 export const SCOPE_ACT_KINDS = Object.freeze([
   "admission",
   "push_branch",
   "open_pull_request",
+  "merge_default_branch",
 ] as const);
 
 export type ScopeActKind = (typeof SCOPE_ACT_KINDS)[number];
 
 /**
- * The act kinds a `scope_consumption` row may be written with today: one
- * (D-0066 rule 3.2). An admission's `subject_id` is the iteration id, written
- * in `reserve()`'s own transaction.
+ * The act kinds a `scope_consumption` row may be written with today (D-0066
+ * rule 3.2). An admission's `subject_id` is the iteration id, written in
+ * `reserve()`'s own transaction; a merge on green's is the iteration id too,
+ * written before the merge is asked of the forge (D-0126).
  */
 export const WRITABLE_SCOPE_ACT_KINDS = Object.freeze([
   "admission",
+  "merge_default_branch",
 ] as const satisfies readonly ScopeActKind[]);
 
 /** Who wrote a scope row (D-0066 rule 1.5, D-0061 rule 2.3's voice column). */
@@ -2201,13 +2213,6 @@ export function readScopePayload(json: JsonValue): ScopePayloadReading {
     return refused(outward);
   }
   for (const act of outward) {
-    if (act === "merge_default_branch") {
-      return refused(
-        "outward_acts holds 'merge_default_branch', which the scope writer refuses: merging stays " +
-          "on D-0064 rule 3.4's irreversible list until the entry that builds CI observation takes " +
-          "that rule's transition (D-0066 rule 1.2.6)",
-      );
-    }
     if (!(SCOPE_OUTWARD_ACTS as readonly string[]).includes(act)) {
       return refused(
         `outward_acts holds '${act}', which is not one of ${SCOPE_OUTWARD_ACTS.join(", ")} ` +

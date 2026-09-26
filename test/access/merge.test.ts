@@ -15,7 +15,12 @@ import {
   mergeMethodOf,
   type PullRequestState,
 } from "../../src/access/forge.js";
-import { mergePress, repositoryOf } from "../../src/access/merge.js";
+import {
+  type MergeOnGreenPorts,
+  mergeOnGreen,
+  mergePress,
+  repositoryOf,
+} from "../../src/access/merge.js";
 import type { ThreadMessageDraft } from "../../src/store/records.js";
 
 const PR = "https://github.com/owner/name/pull/372";
@@ -41,6 +46,16 @@ interface Options {
   readonly closing?: boolean;
   /** The laps of the lap's line, root first; lap-1 alone and closed by default. */
   readonly laps?: readonly { id: string; status: string; supersedesIterationId: string | null }[];
+  /** The acts the lap's approved scope tip includes (D-0126); the merge by default. */
+  readonly acts?: readonly string[];
+  /** The scope's expiry; far ahead by default. */
+  readonly expiresAtMs?: number;
+  /** How the lap's scope chain reads: one tip by default. */
+  readonly scopeTip?: "tip" | "forked" | "none";
+  /** What the person answered at the gate; `approve` by default. */
+  readonly answer?: "approve" | "revise";
+  /** A merge on green was already claimed for the lap. */
+  readonly claimed?: boolean;
 }
 
 const open: PullRequestState = {
@@ -95,6 +110,9 @@ async function over(options: Options = {}) {
           requestMessageId: "request-1",
           runId: "run-1",
           plan: { base_branch: "main" },
+          status: "closed",
+          gateOutcome: "answered_and_forwarded",
+          gateAnswer: options.answer ?? "approve",
         },
       }) as never,
     readingsFor: async () =>
@@ -131,7 +149,40 @@ async function over(options: Options = {}) {
           }
         : null,
   };
+  const claims: string[] = [];
   const record = {
+    // D-0126: the lap's scope chain, for a merge on green.
+    scopeDecisionAdmitting: async () => (options.scopeTip === "none" ? null : "sd-1"),
+    scopeTip: async () =>
+      (options.scopeTip === "forked"
+        ? { kind: "forked", scopeDecisionIds: ["sd-2", "sd-3"] }
+        : { kind: "tip", scopeDecisionId: "sd-2" }) as never,
+    readScopeDecision: async (id: string) =>
+      ({
+        kind: "read",
+        decision: { scopeDecisionId: id, scopeId: "scope-2", outcome: "approved" },
+      }) as never,
+    readScope: async () =>
+      ({
+        kind: "read",
+        scope: {
+          payload: {
+            outward_acts: options.acts ?? [
+              "push_branch",
+              "open_pull_request",
+              "merge_default_branch",
+            ],
+            budgets: { expires_at_ms: options.expiresAtMs ?? 1_000_000 },
+          },
+        },
+      }) as never,
+    claimScopedMerge: async (claim: { scopeDecisionId: string; iterationId: string }) => {
+      if (options.claimed === true) {
+        return { kind: "refused", reason: "already claimed" } as const;
+      }
+      claims.push(`${claim.scopeDecisionId} ${claim.iterationId} before ${asked.length} asks`);
+      return { kind: "recorded" } as const;
+    },
     threadMessages: async () => ({ kind: "read", messages }) as never,
     recordThreadMessage: async (draft: ThreadMessageDraft) => {
       messages.push(draft);
@@ -201,7 +252,7 @@ async function over(options: Options = {}) {
   let reads = 0;
   const pressing = new Set<string>();
   const world = { rereads: 0, pressedDuring: [] as string[] };
-  const press = mergePress({
+  const ports: MergeOnGreenPorts = {
     store,
     record,
     now: () => 9,
@@ -253,8 +304,22 @@ async function over(options: Options = {}) {
         };
       },
     },
-  });
-  return { press, asked, messages, world, releases, deletedBases, removedRuns, supersededRuns };
+  };
+  const press = mergePress(ports);
+  const onGreen = async (head = TIP) => await mergeOnGreen(ports, "lap-1", head);
+  return {
+    press,
+    onGreen,
+    pressing,
+    claims,
+    asked,
+    messages,
+    world,
+    releases,
+    deletedBases,
+    removedRuns,
+    supersededRuns,
+  };
 }
 
 const input = { iterationId: "lap-1", head: TIP };
@@ -532,4 +597,82 @@ test("rondo#457: only a lap another lap of the line replaced has its run closed,
   expect(
     world.messages.find((message) => message.messageId === "report-closeout-lap-1")?.body,
   ).toContain("rondo closed the run of its superseded lap as cancelled: 'run-of-lap-0'.");
+});
+
+// --- Merge on green (rondo#465, D-0126) -------------------------------------
+
+test("D-0126: a scope that includes the merge merges on green, claimed before the forge merges", async () => {
+  const world = await over();
+  const note = await world.onGreen();
+  expect(note).toContain("merged");
+  expect(world.asked).toEqual([
+    `view ${PR}`,
+    "methods github.com/owner/name",
+    `merge ${PR} --squash ${TIP}`,
+    `view ${PR}`,
+  ]);
+  // Claim, then act: the row went in after the reads and before the merge.
+  expect(world.claims).toEqual(["sd-2 lap-1 before 2 asks"]);
+  const report = world.messages.find((message) => message.messageId === "report-merged-lap-1");
+  expect(report?.body).toBe(
+    "Lap 'lap-1' was merged by rondo under scope 'scope-2', on checks read green: pull request " +
+      `${PR} went into 'main' by squash as commit 'def5678'.`,
+  );
+  // The close-out follows as after a press, and the lap is let go.
+  expect(world.deletedBases).toEqual(["run-of-lap-1"]);
+  expect([...world.pressing]).toEqual([]);
+  // The press held the lap while it worked, as a press does.
+  expect(world.world.pressedDuring).toEqual(["lap-1"]);
+});
+
+test("D-0126: nothing is merged on green, and nothing asked, unless every condition holds", async () => {
+  for (const options of [
+    { acts: ["push_branch", "open_pull_request"] },
+    { expiresAtMs: 9 },
+    { scopeTip: "forked" },
+    { scopeTip: "none" },
+    { answer: "revise" },
+  ] as const) {
+    const world = await over(options);
+    expect(await world.onGreen()).toBe(null);
+    expect(world.asked).toEqual([]);
+    expect(world.claims).toEqual([]);
+  }
+  // mergeBlock, asked again inside the press's path: nothing reaches the forge.
+  for (const options of [{ asking: true }, { gated: true }, { checks: "red" }] as const) {
+    const world = await over(options);
+    expect(await world.onGreen()).toContain("left for the press");
+    expect(world.asked).toEqual([]);
+    expect(world.claims).toEqual([]);
+  }
+  // A moved head is the person's (D-0102), even read green: only a press takes it.
+  const moved = await over({
+    movedTo: "fff0000",
+    movedGreen: true,
+    before: { ...open, headCommit: "fff0000" },
+  });
+  expect(await moved.onGreen("fff0000")).toContain("left for the press");
+  expect(moved.asked).toEqual([]);
+  expect((await moved.press({ ...input, head: "fff0000" })).ok).toBe(true);
+});
+
+test("D-0126: a merge already claimed is not asked of the forge again", async () => {
+  const world = await over({ claimed: true });
+  expect(await world.onGreen()).toContain("already claimed");
+  // The reads ran; the merge did not.
+  expect(world.asked).toEqual([`view ${PR}`, "methods github.com/owner/name"]);
+  expect(world.messages.some((message) => message.messageId === "report-merged-lap-1")).toBe(false);
+});
+
+test("D-0126: the forge's refusals are left for the press, and a press waits out a merge on green", async () => {
+  const queued = await over({ before: { ...open, mergeQueue: true } });
+  expect(await queued.onGreen()).toContain("left for the press");
+  expect(queued.claims).toEqual([]);
+  // A lap held by a merge on green is not pressed at the same time, and not
+  // merged on green twice.
+  const world = await over();
+  world.pressing.add("lap-1");
+  expect(await world.press(input)).toMatchObject({ ok: false, why: "mergeRefusedInFlight" });
+  expect(await world.onGreen()).toBe(null);
+  expect(world.asked).toEqual([]);
 });

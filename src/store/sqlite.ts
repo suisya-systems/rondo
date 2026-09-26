@@ -1505,9 +1505,10 @@ CREATE TABLE IF NOT EXISTS scope_decision (
 -- scope_decision authorises many acts, each once (rule 5.2).
 --
 -- act_kind is a closed union the writer refuses outside of, and today it has
--- one writable member, admission, whose subject_id is the iteration id and
+-- two writable members: admission, whose subject_id is the iteration id and
 -- whose row lands in reserve()'s BEGIN IMMEDIATE beside the iteration row
--- (rule 3.2). **No CHECK spells the union**: proposal.kind's precedent, so that
+-- (rule 3.2), and merge_default_branch, a merge on green claimed before the
+-- forge is asked, once per iteration (D-0126). **No CHECK spells the union**: proposal.kind's precedent, so that
 -- the entries that make push_branch and open_pull_request writable change a
 -- constant and not a table.
 --
@@ -3458,6 +3459,18 @@ export interface AdvisoryRecord {
    */
   scopeTip(scopeDecisionId: string): Promise<ScopeTip>;
   /**
+   * Claim a merge on green under an approved scope (D-0126 rule 3): the
+   * `merge_default_branch` consumption row, written before the merge is asked
+   * of the forge -- claim, then act, as `D-0042` -- so a second attempt is
+   * refused. **One per lap, whichever approval claims it**: the key alone
+   * would let a successor approval claim the same lap again.
+   */
+  claimScopedMerge(claim: {
+    readonly scopeDecisionId: string;
+    readonly iterationId: string;
+    readonly nowMs: number;
+  }): Promise<RecordOutcome>;
+  /**
    * The messages with `asks` set and no reply in the thread `requestMessageId`
    * opens, each with the iterations its bases name (D-0061 rule 2.7, D-0066
    * rule 4.2). The same query `reserve()` re-tests under the write lock.
@@ -4986,6 +4999,36 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return tipOf(connection, scopeDecisionId);
     },
 
+    async claimScopedMerge(claim): Promise<RecordOutcome> {
+      const actKind: (typeof WRITABLE_SCOPE_ACT_KINDS)[number] = "merge_default_branch";
+      try {
+        const written = connection
+          .prepare(
+            "INSERT INTO scope_consumption (scope_decision_id, act_kind, subject_id, proposal_id, " +
+              "consumed_at_ms) SELECT ?, ?, ?, NULL, ? WHERE NOT EXISTS (SELECT 1 FROM " +
+              "scope_consumption WHERE act_kind = ? AND subject_id = ?)",
+          )
+          .run(
+            claim.scopeDecisionId,
+            actKind,
+            claim.iterationId,
+            claim.nowMs,
+            actKind,
+            claim.iterationId,
+          );
+        return Number(written.changes) === 1
+          ? { kind: "recorded" }
+          : {
+              kind: "refused",
+              reason:
+                `a merge of '${claim.iterationId}' is already claimed under a scope, and a lap ` +
+                "is merged on green once (D-0126 rule 3)",
+            };
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
     async openAsksIn(requestMessageId: string): Promise<OpenAsksReadOutcome> {
       return openAsksIn(connection, requestMessageId);
     },
@@ -5874,8 +5917,8 @@ function spendScope(
   if (refusal !== null) {
     return { kind: "scopeRefused", ...refusal };
   }
-  // The one act kind a writer may record today (D-0066 rule 3.2).
-  const actKind: (typeof WRITABLE_SCOPE_ACT_KINDS)[number] = WRITABLE_SCOPE_ACT_KINDS[0];
+  // An admission's act kind (D-0066 rule 3.2).
+  const actKind: (typeof WRITABLE_SCOPE_ACT_KINDS)[number] = "admission";
   try {
     connection
       .prepare(

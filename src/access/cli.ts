@@ -176,7 +176,7 @@ import {
   requestOf,
   unreadIssues,
 } from "./issue-read.js";
-import { continuoWorkspaceRemover, mergePress, releasePublished } from "./merge.js";
+import { continuoWorkspaceRemover, mergeOnGreen, mergePress, releasePublished } from "./merge.js";
 import {
   type DrafterPorts,
   draftedPlanRun,
@@ -1513,6 +1513,14 @@ export async function main(
       readCommits: readCommitsBetween,
       removeWorkspace,
       pressing,
+      // D-0126: a lap whose scope includes the merge is merged on green, through
+      // the press's own path and holding the same `pressing` set.
+      mergeOnGreen: async (iterationId, head) =>
+        await mergeOnGreen(
+          { store, record, now: Date.now, pressing, removeWorkspace },
+          iterationId,
+          head,
+        ),
       host: forgeHost(environment),
       now: Date.now,
       log: say,

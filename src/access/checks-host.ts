@@ -18,10 +18,11 @@
  * `continuo ci show`'s. What rondo keeps is the mapping of that verdict onto
  * the one line it writes in the request's thread ({@link readingOf}).
  *
- * **A read and no more.** Merging is on `D-0064` rule 3.4's irreversible list
- * and a comment on a pull request is not an act a scope can include
- * (`SCOPE_OUTWARD_ACTS`), so neither is reachable from here and neither is
- * meant to be.
+ * **A read, and a merge only where a scope includes it.** A comment on a pull
+ * request is not an act a scope can include (`SCOPE_OUTWARD_ACTS`), so it is
+ * not reachable from here. Merging is, since D-0126: right after a `green`
+ * answer on the lap's own head, through `mergeOnGreen`, which merges only where
+ * the lap's scope includes `merge_default_branch`.
  *
  * **Nobody is woken by it.** Whether a person who is not looking at the page
  * should be told is rondo#311's question, and its mechanism is where that
@@ -159,6 +160,13 @@ export interface ChecksHostPorts {
    * written it (rondo#413).
    */
   readonly pressing?: ReadonlySet<string>;
+  /**
+   * Merge on green (D-0126): `mergeOnGreen` over the press's ports in the
+   * host, asked right after a `green` answer on the lap's own head is written.
+   * A line for the terminal, or null where the lap is not rondo's to merge.
+   * Absent, nothing is merged here.
+   */
+  readonly mergeOnGreen?: (iterationId: string, head: string) => Promise<string | null>;
   /** The forge host, as `publish` reads it (`GH_HOST`), or null for `gh`'s own. */
   readonly host: string | null;
   readonly now: () => number;
@@ -436,15 +444,17 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
   // newer line has since said otherwise -- a head that went red, green and red
   // again, a branch pushed back to a head it had, a conflict that came back
   // (Codex round 1). Without it the page keeps the newer line for ever.
-  const say = async (messageId: string, shownNow: boolean, event: LapEvent): Promise<void> => {
+  // True where it asked for the line to be written.
+  const say = async (messageId: string, shownNow: boolean, event: LapEvent): Promise<boolean> => {
     if (due.said.has(messageId) && shownNow) {
-      return;
+      return false;
     }
     const retold = due.said.has(messageId) ? { retold: ports.now() } : {};
     const line = await reportToRequest(ports, iterationId, { ...event, ...retold }, ports.now());
     if (line !== null) {
       lines.push(line);
     }
+    return true;
   };
   // **A head the lap did not push** (rondo#412): somebody pushed to the
   // branch outside rondo. Said once per head, with what it carries, before
@@ -501,12 +511,20 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
       },
     );
   } else if (reading.kind !== "pending") {
-    await say(
+    const told = await say(
       checksAnswerId(iterationId, reading.kind, head, moved),
       shown?.checks.kind === reading.kind &&
         (shown.checksCommit === null || shown.checksCommit === head),
       { kind: "checks", commit: head, reading, moved },
     );
+    // D-0126: a green just said on the lap's own head is where a scope that
+    // includes the merge merges. The rest of the test is `mergeOnGreen`'s.
+    if (told && reading.kind === "green" && !moved && ports.mergeOnGreen !== undefined) {
+      const merged = await ports.mergeOnGreen(iterationId, head);
+      if (merged !== null) {
+        lines.push(merged);
+      }
+    }
   }
   return { line: lines.length === 0 ? null : lines.join(" "), halt: false };
 }

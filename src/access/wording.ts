@@ -1311,6 +1311,8 @@ export interface Chrome extends PageWords {
   readonly mergeRefusedFailed: (detail: string) => string;
   readonly mergeRefusedQueue: string;
   readonly mergeRefusedUnconfirmed: string;
+  /** A merge of the lap is already in flight: rondo's on green (D-0126), or another press. */
+  readonly mergeRefusedInFlight: string;
 
   /**
    * rondo#417 (D-0105): the next-step card that offers to settle a published
