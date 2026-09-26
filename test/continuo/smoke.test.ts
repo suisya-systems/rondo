@@ -37,6 +37,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, expect, test } from "vitest";
+import { continuoWorkspaceRemover } from "../../src/access/merge.js";
 
 import {
   admitRun,
@@ -44,6 +45,7 @@ import {
   deliverGate,
   removeWorkspace,
   run,
+  showRun,
   startContinuo,
   unusableArgument,
   type VerifiedContinuo,
@@ -361,6 +363,23 @@ test.skipIf(!available)(
       errorClass: expect.any(String),
       message: expect.stringContaining("close it before removing its worktree"),
     });
+
+    // **A superseded lap's run is closed first** (rondo#457, D-0120): the
+    // close-out's remover reads the run, closes it as `cancelled` under
+    // rondo's own actor, and only then asks for the worktree. This run never
+    // performed, so continuo has no worktree to name and keeps saying so; the
+    // close is what is asserted, and a second ask closes nothing again.
+    const remover = continuoWorkspaceRemover(process.env);
+    const superseded = { db: database, runId: "rondo-smoke-1", superseded: true };
+    expect(await remover(superseded)).toEqual({
+      kind: "kept",
+      runId: "rondo-smoke-1",
+      reason: expect.any(String),
+      cancelledRun: "rondo-smoke-1",
+    });
+    const cancelled = await showRun(continuo, { db: database, runId: "rondo-smoke-1" });
+    expect(cancelled.kind === "answered" && cancelled.payload.status).toBe("cancelled");
+    expect(await remover(superseded)).not.toHaveProperty("cancelledRun");
   },
   // Eight subprocesses on a cold Windows runner. The per-invocation cost measured
   // in D-0015 is about a tenth of a second; this cap is a floor under runner
