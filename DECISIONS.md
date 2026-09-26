@@ -24275,7 +24275,8 @@ types the commands.
 
 **Status:** accepted (2026-09-27, rondo#398; the owner's answer through the secretary, option A of
 three, with the cap as the room left in the scope). Refs `D-0066` rule 3.4.2 and its annotation from
-this entry, `D-0046`, `D-0019` rule 12, `continuo D-1112`, `continuo D-1114`, continuo#241.
+this entry, `D-0046`, `D-0019` rule 12, `continuo D-1112`, `continuo D-1114`, continuo#241 and
+`continuo D-1122` (continuo#242).
 
 **Why an entry is needed.** `D-0066` holds a lap to the budget once, at its admission. Nothing stops
 a lap that spends past it while it runs. Lap 10 was admitted under $7.50 with a $2.50 reserve and
@@ -24299,8 +24300,9 @@ At rondo `ee290f0` and continuo `f2fb450` on **2026-09-27**:
 ### Decision
 
 1. **The stop is the worker CLI's own.** continuo gains `lap perform --max-budget-usd <n>` and
-   passes it to the Claude CLI (continuo#241, continuo's own entry). The Codex provider refuses the
-   flag, as `continuo D-1114` refuses a layer it cannot enforce.
+   passes it to the Claude CLI (continuo#241, `continuo D-1122`). The Codex provider refuses the
+   flag, as `continuo D-1114` refuses a layer it cannot enforce. A lap the CLI stops is refused as
+   `LapBudgetExhausted` (exit 2), with its `total_cost_usd` and `session_id`, and no gate is opened.
 2. **rondo sets the cap: the room the scope's budget leaves the lap.** It is `cost_usd`, less the
    cost its laps were read to spend, less `cost_reserve_usd` for every **other** lap still unread.
    It is read when the lap is sent, not at its admission, so costs read in between count. A lap
@@ -24313,17 +24315,20 @@ At rondo `ee290f0` and continuo `f2fb450` on **2026-09-27**:
    report says so, and so does the right face of the request's page, beside the cost. The cost is
    still what `D-0066` rule 3.4.2 counts; a stopped lap's cost is read from its `result` event like
    any other (`continuo D-1112`).
-5. **A stopped lap goes to its gate like any other.** Its commits stay, and nothing starts another
-   lap for it. The person decides: take the work as it is, revise it under a larger budget, or close
-   it.
+5. **A stopped lap opens no gate, and its cost is still counted.** rondo reads the refusal's
+   `total_cost_usd` into `lap_cost_usd`, so the stop is counted as what it spent and holds no
+   reserve. The lap ends with the reason that it was stopped at the scope's budget, and its commits
+   stay on its topic branch. Nothing starts another lap for it. The person decides: close it, or try
+   again under a larger budget.
 6. **A Codex lap is held only before it starts.** This is a known limit: rondo drives no Codex lap
    today, and when it does, `D-0066` rule 3.4.2 is its only check until a Codex stop exists.
 
 ### Order
 
-Items 2 to 5 land first, with no flag sent. The page and the report then say when a lap *reached*
-its cap, which is true whether or not it was stopped. Once continuo#241 is merged, rondo moves its
-pin and sends the cap on every Claude lap. Only then does a lap stop at it.
+Items 2 to 4 land first, with no flag sent. The page and the report then say when a lap *reached*
+its cap, which is true whether or not it was stopped. Once `continuo D-1122` is merged, rondo moves
+its pin, sends the cap on every Claude lap, and reads a budget stop as item 5 says. Only then does a
+lap stop at it.
 
 **Options not taken.** B: rondo watches the running transcript, prices its tokens and kills `lap
 perform` when the cap is passed. That puts the `stream-json` shape and the pricing back in rondo,
@@ -24338,15 +24343,15 @@ scope's budget, and a reserve is an estimate, not an approved amount.
   *reserve* off, not what the other will spend. So together they can pass the budget by as much as
   each passes its reserve. Two parallel laps is the owner's current setting.
 - **The CLI checks between API calls.** A lap stops after the call that crosses the cap, so it can
-  pass the cap by one call.
+  pass the cap by one call (`continuo D-1122` measured a $0.01 cap stopping at $0.021).
 - **The cap is only as good as the CLI's own count.** It is the CLI's `total_cost_usd`, the same
   number rondo records.
 
 ### What would falsify it
 
-- **A stopped lap whose `result` event carries no cost.** Then its cost reads as null, it keeps its
-  reserve, and the accounting in item 4 needs a second source.
-- **A lap stopped mid-edit whose commits cannot be taken as they are.** Then item 5's gate needs a
-  state of its own.
+- **A budget stop whose refusal carries no `total_cost_usd`.** Then its cost reads as null, it
+  keeps its reserve, and the accounting in item 5 needs a second source.
+- **A person who wants a stopped lap's work at a gate.** Then item 5's end without a gate is the
+  wrong shape, and the stop needs a gate of its own.
 - **Parallel laps that together pass the budget often.** Then the cap needs the other laps' caps,
   not their reserves.
