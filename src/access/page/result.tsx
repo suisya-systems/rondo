@@ -110,9 +110,7 @@ export function ResultLine({
               : wording.resultMerged(merged.into, merged.method ?? "")}
           </li>
           {result?.closedOut == null ? null : (
-            <li className="result-done">
-              {wording.resultClosedOut(result.closedOut.deleted, result.closedOut.refused)}
-            </li>
+            <li className="result-done">{wording.resultClosedOut(result.closedOut)}</li>
           )}
         </>
       ) : result?.closedAtMs == null ? (

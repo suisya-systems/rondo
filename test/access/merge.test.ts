@@ -76,7 +76,11 @@ async function over(options: Options = {}) {
           claim: { claimId: "lap-1:1", paths: ["src/"] },
           laps: (
             options.laps ?? [{ id: "lap-1", status: "closed", supersedesIterationId: null }]
-          ).map((lap) => ({ runId: `run-of-${lap.id}`, plan: { repository: "/repo" }, ...lap })),
+          ).map((lap) => ({
+            runId: `run-of-${lap.id}`,
+            plan: { repository: "/repo", db: "/state/control.db" },
+            ...lap,
+          })),
         },
       }) as never,
     releaseLane: async (release: unknown) => {
@@ -192,6 +196,7 @@ async function over(options: Options = {}) {
   }
   const asked: string[] = [];
   const deletedBases: string[] = [];
+  const removedRuns: string[] = [];
   let reads = 0;
   const pressing = new Set<string>();
   const world = { rereads: 0, pressedDuring: [] as string[] };
@@ -203,6 +208,13 @@ async function over(options: Options = {}) {
     deleteLapBase: async ({ runId }) => {
       deletedBases.push(runId);
       return { kind: "deleted", branch: `rondo/base/${runId}` };
+    },
+    // continuo keeps a run it was never told closed (continuo D-1119).
+    removeWorkspace: async ({ runId }) => {
+      removedRuns.push(runId);
+      return runId === "run-of-lap-1"
+        ? { kind: "removed", workspace: `/wt/${runId}` }
+        : { kind: "kept", runId, reason: `run ${runId} is at status running; close it first` };
     },
     readAgain: async () => {
       // The press has let go of the lap by now, so the checks host reads it.
@@ -236,7 +248,7 @@ async function over(options: Options = {}) {
       },
     },
   });
-  return { press, asked, messages, world, releases, deletedBases };
+  return { press, asked, messages, world, releases, deletedBases, removedRuns };
 }
 
 const input = { iterationId: "lap-1", head: TIP };
@@ -259,9 +271,13 @@ test("a green head with nothing waiting merges by the repository's method and sa
   expect(report?.inReplyTo).toBe("request-1");
   // D-0119: the press closes the line out, every lap's base branch.
   expect(world.deletedBases).toEqual(["run-of-lap-1"]);
-  expect(
-    world.messages.find((message) => message.messageId === "report-closeout-lap-1")?.body,
-  ).toContain("deleted 'rondo/base/run-of-lap-1'");
+  const closeOut = world.messages.find(
+    (message) => message.messageId === "report-closeout-lap-1",
+  )?.body;
+  expect(closeOut).toContain("deleted 'rondo/base/run-of-lap-1'");
+  // rondo#456: and its worktree, through continuo, after the base branch.
+  expect(world.removedRuns).toEqual(["run-of-lap-1"]);
+  expect(closeOut).toContain("Worktrees: removed '/wt/run-of-lap-1'.");
   expect(merged.ok && merged.note).toContain("report-closeout-lap-1");
 });
 
@@ -472,4 +488,23 @@ test("rondo#439: a merge that is not the line's whole landing leaves its files t
     expect(world.releases).toEqual([]);
     expect(merged.note).toContain("Its files were not released on the merge");
   }
+});
+
+test("rondo#456: every lap's worktree is asked for once, and one continuo keeps is said with why", async () => {
+  const world = await over({
+    laps: [
+      { id: "lap-0", status: "closed", supersedesIterationId: null },
+      { id: "lap-1", status: "closed", supersedesIterationId: "lap-0" },
+    ],
+  });
+  const merged = await world.press(input);
+  expect(merged.ok).toBe(true);
+  // Once each, and never again with force: a kept worktree stays kept.
+  expect(world.removedRuns).toEqual(["run-of-lap-0", "run-of-lap-1"]);
+  expect(
+    world.messages.find((message) => message.messageId === "report-closeout-lap-1")?.body,
+  ).toContain(
+    "Worktrees: kept for run 'run-of-lap-0': run run-of-lap-0 is at status running; close it " +
+      "first; removed '/wt/run-of-lap-1'.",
+  );
 });

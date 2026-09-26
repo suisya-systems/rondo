@@ -176,7 +176,7 @@ import {
   requestOf,
   unreadIssues,
 } from "./issue-read.js";
-import { mergePress, releasePublished } from "./merge.js";
+import { continuoWorkspaceRemover, mergePress, releasePublished } from "./merge.js";
 import {
   type DrafterPorts,
   draftedPlanRun,
@@ -1504,11 +1504,14 @@ export async function main(
     // The laps a merge press is working on, which the checks host leaves
     // alone until the press has written what it did (rondo#413).
     const pressing = new Set<string>();
+    // One continuo for both close-outs, the press's and the forge's merge.
+    const removeWorkspace = continuoWorkspaceRemover(environment);
     const checks = checksHost({
       store,
       record,
       readChecks: continuoChecksReader(environment),
       readCommits: readCommitsBetween,
+      removeWorkspace,
       pressing,
       host: forgeHost(environment),
       now: Date.now,
@@ -1899,6 +1902,7 @@ export async function main(
                   record,
                   now: Date.now,
                   pressing,
+                  removeWorkspace,
                   readAgain: async () => {
                     checks.kick();
                     await checks.idle();

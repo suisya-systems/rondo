@@ -181,9 +181,10 @@ Consequences for anyone adding code here:
   at build time.
 - **These are the continuo verbs rondo drives**: `run admit`, `lap perform`,
   `gate show`, `gate present`, `gate deliver`, `gate ack`, `gate answer`,
-  `run close`, `run show`, `ci observe` and `ci show` (the last two since
+  `run close`, `run show`, `ci observe`, `ci show` (those two since
   `continuo D-1113`: the checks host fetches with the operator's `gh` and
-  continuo records the evidence and folds the verdict).
+  continuo records the evidence and folds the verdict) and `workspace remove`
+  (since `continuo D-1119`: the close-out after a merge, `D-0119`).
 - **A contract rondo can spell is not a verb rondo uses.**
   `src/continuo/protocol.ts` declares three contracts beyond that list which no
   command invokes: `db create` and `gate list`, which only the end-to-end smoke
@@ -193,7 +194,8 @@ Consequences for anyone adding code here:
   at the pinned revision: D-0015 recorded ten verbs carrying it, `continuo
   D-0092` added `gate close`, `continuo D-0097` brought it to the three gate
   verbs of the walk, and `run show` is a read verb that arrived with it
-  (`continuo D-0096`), as are `ci observe` and `ci show` (`continuo D-1113`).
+  (`continuo D-0096`), as are `ci observe` and `ci show` (`continuo D-1113`);
+  `workspace remove` carried it from its start (`continuo D-1119`).
   `gate reconcile` is the one verb in the surveyed set
   still without the flag; it is human-only, and rondo does not drive it.
   rondo owns the runtime decoders and converts validated documents into rondo's

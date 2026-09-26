@@ -16,6 +16,11 @@
  * moved in between (`--match-head-commit`).
  */
 
+import {
+  type RemoveWorkspaceRequest,
+  removeWorkspace,
+  startContinuo,
+} from "../continuo/invoker.js";
 import { lineShape } from "../store/lanes.js";
 import {
   isDeterministicReadingDrafter,
@@ -24,7 +29,7 @@ import {
   planField,
 } from "../store/records.js";
 import { type AdvisoryRecord, type IterationStore, LANE_LEDGER_AUTHOR } from "../store/sqlite.js";
-import { reportToRequest } from "./conductor.js";
+import { reportToRequest, type WorktreeOutcome } from "./conductor.js";
 import {
   type CommandOutcome,
   deleteLapBase,
@@ -65,6 +70,8 @@ export interface MergePorts {
   };
   /** The close-out's git (D-0119); tests replace it, the host reaches the real one. */
   readonly deleteLapBase?: typeof deleteLapBase;
+  /** The close-out's worktree removal (rondo#456); {@link continuoWorkspaceRemover} in the host. */
+  readonly removeWorkspace: RemoveLapWorkspace;
 }
 
 const REFUSED_BY: Readonly<Record<MergeBlock, MergeRefusal>> = {
@@ -256,6 +263,46 @@ export interface CloseOutPorts {
   readonly now: () => number;
   /** Tests replace git; the host reaches the real one. */
   readonly deleteLapBase?: typeof deleteLapBase;
+  readonly removeWorkspace: RemoveLapWorkspace;
+}
+
+export type RemoveLapWorkspace = (request: RemoveWorkspaceRequest) => Promise<WorktreeOutcome>;
+
+/**
+ * `continuo workspace remove` (continuo D-1119) for the close-out, started on
+ * first use as {@link continuoChecksReader} is. Asked once per lap and never
+ * retried: a refusal keeps the worktree, and nothing here forces it.
+ */
+export function continuoWorkspaceRemover(
+  environment: Readonly<Record<string, string | undefined>>,
+): RemoveLapWorkspace {
+  let started: ReturnType<typeof startContinuo> | null = null;
+  return async (request) => {
+    const kept = (reason: string): WorktreeOutcome => ({
+      kind: "kept",
+      runId: request.runId,
+      reason,
+    });
+    started ??= startContinuo(environment);
+    const startup = await started;
+    if (startup.kind === "refused") {
+      started = null;
+      return kept(`continuo is not usable: ${startup.reason}`);
+    }
+    const result = await removeWorkspace(startup.continuo, request);
+    switch (result.kind) {
+      case "answered":
+        return result.payload.outcome === "absent"
+          ? { kind: "absent", workspace: result.payload.workspace }
+          : { kind: "removed", workspace: result.payload.workspace };
+      case "refused":
+        return kept(result.message);
+      case "refusedInProse":
+        return kept(result.text);
+      default:
+        return kept(result.reason);
+    }
+  };
 }
 
 /**
@@ -264,11 +311,12 @@ export interface CloseOutPorts {
  * a merge made on the forge. It deletes every `rondo/base/<runId>` its line's
  * laps were cut from -- rondo's own refs (D-0100), holding nobody's commits --
  * and says in the thread what it deleted, what git refused, and what it keeps:
- * the topic branch, and the worktrees, whose removal is continuo's and waits on
- * continuo#230. A close without a merge closes nothing out.
+ * the topic branch. Then it asks continuo to remove each lap's worktree
+ * (rondo#456, continuo D-1119) and says which went and which continuo kept,
+ * with why. A close without a merge closes nothing out.
  *
  * ponytail: run once, right after the merge line; a host stopped between the
- * two leaves the branches for the person, and a retry sweep is the upgrade if
+ * two leaves the branches and worktrees for the person, and a retry sweep is the upgrade if
  * that is ever seen.
  */
 export async function closeOutMerged(
@@ -296,6 +344,15 @@ export async function closeOutMerged(
       refused.push({ branch: outcome.branch, reason: outcome.reason });
     }
   }
+  // After the base refs, and only for a lap continuo ran: a lap with no run
+  // never had a worktree.
+  const worktrees: WorktreeOutcome[] = [];
+  for (const lap of laps) {
+    const db = planField(lap, "db");
+    if (lap.runId !== null && db !== "") {
+      worktrees.push(await ports.removeWorkspace({ db, runId: lap.runId }));
+    }
+  }
   return await reportToRequest(
     ports,
     iterationId,
@@ -303,6 +360,7 @@ export async function closeOutMerged(
       kind: "closedOut",
       deleted,
       refused,
+      worktrees,
       topicBranch: found.record.topicBranch ?? planField(found.record, "topic_branch"),
     },
     ports.now(),

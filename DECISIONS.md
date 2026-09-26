@@ -24161,3 +24161,16 @@ that `publish` has already closed.
 - **continuo#230 closed without a verb**, or with one that also deletes the topic branch. Then rule 4
   has nothing to call, or its call breaks rule 3.
 - Any measurement in "What was measured" failing to reproduce at rondo `d40558e`.
+
+> **Annotation (2026-09-26, from rondo#456).** Added after this entry was accepted, and additive:
+> rule 4's request is carried out. continuo#230 closed with a verb, `continuo workspace remove`
+> (continuo PR #235, `continuo D-1119`), which removes only the worktree the run's own
+> `workspace_materialized` event names and leaves the topic branch alone, so the second falsifier
+> did not fire. The pin moves to continuo `f2fb450`, and the close-out calls the verb for every lap
+> of the merged line after the base branches, once per lap and never with force. The
+> `report-closeout-<lap>` line names each worktree as removed, already gone, or kept with
+> continuo's reason, and the result band counts the kept ones. Measured at continuo `f2fb450` on
+> 2026-09-26: only `run close` moves a run to a terminal status, and rondo closes a run only at
+> `publish`, so a lap of the line that was not published (a revised or taken-in one) is refused as
+> not terminal and its worktree is kept and said. Closing those runs is not decided here; it is
+> rondo#457. The text above is not edited.
