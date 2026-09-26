@@ -1274,6 +1274,29 @@ export interface SplitPlan {
    * "not a plan field"); absent means none.
    */
   readonly entries?: number;
+  /**
+   * The grounds for an agent type whose tier is not `standard` (D-0062 rule
+   * 2.2, D-0122): one claim per condition of D-0044 rule 1, each resting on
+   * messages of the request thread. **Absent on a `standard` plan.** The
+   * writer checks that each condition is claimed and each basis resolves; it
+   * never checks that a claim is true, which stays the person's to judge.
+   */
+  readonly grounds?: readonly SplitGround[];
+}
+
+/** The three conditions of D-0044 rule 1 a non-`standard` plan must ground. */
+export const GROUND_CONDITIONS = Object.freeze([
+  "files_named",
+  "bounded",
+  "checks_are_acceptance",
+] as const);
+export type GroundCondition = (typeof GROUND_CONDITIONS)[number];
+
+/** One condition's claim and the messages it rests on (D-0062 rule 2.2). */
+export interface SplitGround {
+  readonly condition: GroundCondition;
+  readonly text: string;
+  readonly bases: readonly Basis[];
 }
 
 /**
@@ -1300,7 +1323,9 @@ const SPLIT_PLAN_KEYS: readonly string[] = [
   "claim",
   "after",
   "entries",
+  "grounds",
 ];
+const SPLIT_GROUND_KEYS: readonly string[] = ["condition", "text", "bases"];
 const SPLIT_DIGEST = /^sha256:[0-9a-f]{64}$/;
 
 /**
@@ -1357,6 +1382,7 @@ export function readSplitPayload(document: JsonRecord): SplitPayloadReading {
         ),
         ...(after === undefined ? {} : { after }),
         ...(entries === undefined ? {} : { entries }),
+        ...(plan.grounds === undefined ? {} : { grounds: readGrounds(plan.grounds, what) }),
       };
       if (plan.claim === undefined) {
         return read;
@@ -1388,6 +1414,36 @@ export function readSplitPayload(document: JsonRecord): SplitPayloadReading {
     }
     throw error;
   }
+}
+
+/** D-0062 rule 2.2's grounds, read back: each condition exactly once, each with a basis. */
+function readGrounds(value: unknown, what: string): SplitGround[] {
+  const grounds = readList(value, `${what}'s grounds`).map((one, g) => {
+    const at = `${what} ground ${String(g)}`;
+    const row = object(one, at);
+    refuseUnknownKeys(row, SPLIT_GROUND_KEYS, at);
+    const condition = text(row, "condition", at);
+    if (!(GROUND_CONDITIONS as readonly string[]).includes(condition)) {
+      throw new PayloadDefect(`${at} names '${condition}', which is no condition of D-0044 rule 1`);
+    }
+    const bases = readList(row.bases, `${at}'s bases`).map((basis, b) =>
+      readBasis(basis, `${at} basis ${String(b)}`),
+    );
+    if (bases.length === 0) {
+      throw new PayloadDefect(`${at} has no basis`);
+    }
+    return { condition: condition as GroundCondition, text: text(row, "text", at), bases };
+  });
+  const named = grounds.map((g) => g.condition);
+  if (
+    named.length !== GROUND_CONDITIONS.length ||
+    !GROUND_CONDITIONS.every((c) => named.includes(c))
+  ) {
+    throw new PayloadDefect(
+      `${what}'s grounds do not claim each of ${GROUND_CONDITIONS.join(", ")} once`,
+    );
+  }
+  return grounds;
 }
 
 function refuseUnknownKeys(at: Record<string, unknown>, known: readonly string[], what: string) {
