@@ -66,7 +66,7 @@ function Agreed({
   readonly governance: Governance;
   readonly steps: readonly WorkStep[];
 }) {
-  const { allowance, byTry, tries, touches, decided } = governance;
+  const { allowance, atBudgetCap, byTry, tries, touches, decided } = governance;
   return (
     <section className="side-gov">
       <h2 className="side-heading">{wording.sideAgreed}</h2>
@@ -111,6 +111,15 @@ function Agreed({
                       wording.govTryCost(index + 1, one.costUsd?.toFixed(2) ?? null, one.running),
                     ),
                   )}
+                </dd>
+              </div>
+            )}
+            {/* D-0121: a lap that spent all the room the budget left it. */}
+            {atBudgetCap === null ? null : (
+              <div className="side-week-wide">
+                <dt>{wording.govAtCapLabel}</dt>
+                <dd>
+                  {wording.govAtCap(atBudgetCap.costUsd.toFixed(2), atBudgetCap.capUsd.toFixed(2))}
                 </dd>
               </div>
             )}

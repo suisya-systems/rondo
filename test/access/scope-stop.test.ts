@@ -180,6 +180,7 @@ async function harness(path = ":memory:", payload: JsonRecord = PAYLOAD) {
       turns: null,
       durationMs: null,
       spendSource: "notReported",
+      budgetCapUsd: null,
     },
   });
   const conductor: ConductorPorts = {
