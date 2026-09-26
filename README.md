@@ -28,10 +28,13 @@ against a cadenza contract, admit a run, walk one lap, and **suspend at the gate
 a human has yet to answer**, resuming through `resume(iterationId)` when the
 operating surface says they have. It never composes the answer (D-0009), never
 publishes (D-0010) and never closes a gate (D-0013). Single-flight was a lap-1
-reduction (D-0012). Parallel lines are decided (a lane ledger, D-0073, and
-D-0098), but only the ledger's store half is built: nothing drafts a claim
-narrower than `/`, so every line holds the whole repository, and
-`RONDO_MAX_OCCUPYING` (how many laps may execute at once) defaults to 1; raising it needs continuo to allow a second concurrent lap first.
+reduction (D-0012). Parallel lines are built on a lane ledger (D-0073): the
+drafter claims the paths each plan of a split will change (`/` when nothing
+narrows it), and an admission that would share a path with another line is
+refused. D-0098's rules for working in parallel are built as D-0103 describes,
+and D-0117 reads the two as one control layer. `RONDO_MAX_OCCUPYING` (how many
+laps may execute at once) still defaults to 1; raising it needs continuo to
+allow a second concurrent lap first.
 
 **As of D-0024 and D-0025 there is a way in**, and it has grown since. rondo
 ships a binary (`bin/rondo.mjs`) whose subcommands cover the lap itself
@@ -49,13 +52,17 @@ thread, answer a question the organisation asked back, approve a drafted scope
 approve a lap or ask for a change (D-0070, with the revise instruction drafted
 by the organisation, D-0077), open the pull request, merge it where rondo's own
 reading of its checks is green on the head (D-0091, through the operator's own
-`gh`), release the paths a finished line holds (D-0073), and add a repository
-rondo does not yet work in with one press (D-0090). Every press is a real form
+`gh`), have a worker resolve a pull request that conflicts with its base
+(D-0105), release the paths a finished line holds (D-0073), add a repository
+rondo does not yet work in with one press (D-0090), and put what rondo proposes
+to ask for next into the request box (D-0097). Every press is a real form
 checked again on the port's side; the page's text follows the person's language
 (D-0056, D-0079).
 
 Around the lap, rondo runs two models outside it: a drafter that turns a
-request into a scope and a revise instruction (D-0071, D-0077), and a reviewer
+request into a scope and a revise instruction (D-0071, D-0077) and ranks what
+is worth asking for next against a goal the person wrote down, without ever
+starting it (D-0097), and a reviewer
 of another model family that grades findings by severity (D-0065). When a request names an issue, rondo reads it outside the lap and carries it
 into the prompt quoted (D-0078), and every lap's prompt carries a fixed definition of done (D-0089).
 
@@ -74,21 +81,14 @@ What does **not** exist yet:
 - **the localhost MCP surface.** `src/access/` is where it will live, and
   nothing of it exists; its shape is undecided, and the first design is to start
   read-only;
-- **running lines in parallel.** D-0073 decides a lane ledger that gives each
-  line its paths and refuses an admission that would share one; the store half
-  is built, but nothing drafts a narrower claim, so every line claims `/` and a
-  repository runs one line at a time. D-0098 adds an order across
-  repositories released only by a landing, taking in the default branch before
-  taking over landed paths, reserved decision-record numbers so entries are
-  written in parallel, carrying a worker's question at its lap's end, and
-  stopping a review by the scope's numbers. D-0098 decides and does not build; the
-  same goes for D-0067's `sequence`;
-- **triage.** D-0097 decides that the advisory ranks candidate requests against
-  a goal the person wrote down and brings one recommendation, never starting
-  what it proposes. Nothing of it is built;
-- **merge watch and cleanup.** continuo's `pr_merged` and worktree removal are
-  not driven by rondo (D-0095), and D-0064 rule 3.4's transition, which would
-  take merging off the per-act list, is not taken.
+- **more than one executing lap by default.** `RONDO_MAX_OCCUPYING` defaults to
+  1 (see above), so lines that hold disjoint paths still take turns executing;
+- **merging without a press.** rondo reads a merge or a close made on the forge
+  itself (D-0102) and closes out a merge by deleting the base branches it made
+  and removing each lap's worktree through continuo's `workspace remove`
+  (D-0119, D-0120). continuo's `pr_merged` is not driven by rondo, and D-0064
+  rule 3.4's transition, which would take merging off the per-act list, is not
+  taken (D-0091, D-0095).
 
 No design row sent to rondo's gate by its siblings is open. cadenza's
 `docs/design/conductor.md` section 11 sent eight of its seventeen rows to
@@ -164,7 +164,7 @@ How each is reached:
   subprocess is gone.
 - **cadenza is consumed as a library** (D-0018), through the bridge cadenza
   accepted for exactly this (`cadenza D-0035`): a tarball packed once from
-  cadenza `5d5d9f408c29f6500c422c8e10e6b6a3a6882aaf`, committed under `vendor/`
+  the cadenza commit `cadenza.pin.json` names, committed under `vendor/`
   with its sha256, and named in `package.json` as
   `file:vendor/suisya-systems-cadenza-0.0.0.tgz`. Three separate facts are
   pinned and never conflated — the **commit** (`cadenza.pin.json`) is what was
@@ -201,7 +201,7 @@ written to be thrown away.
 
 | Path | What it is |
 |---|---|
-| `src/refrain/` | The loop (D-0019): a pure `nextStep` planner, an async interpreter over injected ports, the `RunPlan` and its validation, and the one module that consumes cadenza. Imports nothing external, ever — that is the boundary, and it is why continuo arrives as a port rather than as an import. |
+| `src/refrain/` | The loop (D-0019): a pure `nextStep` planner, an async interpreter over injected ports, the `RunPlan` and its validation, and classification against a cadenza contract through `src/cadenza/`. Imports nothing external, ever — that is the boundary, and it is why continuo arrives as a port rather than as an import. |
 | `src/access/` | Access points: the command line (`cli.ts`, `cli-parse.ts`) and the page (`web.tsx`, `web-app.ts`, with `page/`, `page-logic/` and `screens/` for its views and `wording/` for each language's catalogue); the localhost MCP surface will live here too. May reach the loop, the store and both seams; none may reach back. `conductor.ts` is the composition root that wires the ports and carries `resume` and `abandon`; `console.ts` is the one place output is escaped to ASCII; `advisory.ts` gathers the snapshot the advisory reads, records the proposal and renders it; `model-draft/`, `model-review/` and `revise-draft/` host the models run outside the lap; `forge.ts` publishes, merges and fetches a pull request's check documents with the operator's `gh`. |
 | `src/advisory/` | The advisory (D-0022 rules 1 and 2): `propose(snapshot)` and the payload vocabulary -- claims, options and the closed union of bases D-0032 rule 2 fixes. The one layer whose allowance exists to *remove* reach: it reaches `src/store` for the types it cites and nothing else, it is absent from the external table, and so it cannot compose a contract, start a process or read a world it was not handed. |
 | `src/continuo/` | The seam to continuo (D-0017): a pure protocol decoder, the pin and its verification, and `invoker.ts` — the one module under `src/` allowed to start a process. `transcript.ts`, which reads a running lap's log, is the one module still listed as waiting to move to continuo (D-0093). Reaches only itself. |
@@ -211,11 +211,11 @@ written to be thrown away.
 | `continuo.pin.json` | Which continuo rondo drives: repository, full sha, and the exact `--version` line that build prints. CI provisions from it; `src/continuo/pin.ts` mirrors it; a test fails if they drift. |
 | `cadenza.pin.json` | Which cadenza rondo carries: repository and full sha — the *source* pin, and no version, because every cadenza build is `0.0.0`. |
 | `page/` | The inputs of the operator page's browser files (D-0059, D-0084): the stylesheets the Tailwind CLI compiles, `client/`, the React client Vite builds, and rondo's own small scripts (`keys.js` for `j`/`k`/`Enter`/`Esc`, among others). `npm run build` also copies htmx and the two faces beside them, and `page.manifest.json` pins the sha256 of every file served. |
-| `vendor/` | The committed cadenza tarball and its sha256 file, with `pin.mjs` — the portable `record`/`check` helper cadenza's bridge prescribes. `node vendor/pin.mjs check` runs immediately before every install, locally and in all three installing CI jobs. |
+| `vendor/` | The committed cadenza tarball and its sha256 file, with `pin.mjs` — the portable `record`/`check` helper cadenza's bridge prescribes. `node vendor/pin.mjs check` runs immediately before every install, locally and in every CI job that installs. |
 | `DECISIONS.md` | The append-only design record. Cite by ID. |
 | `AGENTS.md` | How work here is done. |
 | `scripts/` | Setup (`dogfood-env.sh`, which writes the store, the plan and the one-word start command, D-0075, D-0080), the page's build and preview, and `dogfood-lap.md`, the full lap as a manual procedure. That is not a test, and D-0019 rule 17 says why. |
-| `docs/` | Index of the records, and of where the enforced rules live. `docs/design/` holds the designs (the lap-1 conductor D-0019 decides, the advisory, parallel admission), and `docs/operations/` the runbook and each lap's dogfood record. |
+| `docs/` | Index of the records, and of where the enforced rules live. `docs/design/` holds the designs (the lap-1 conductor D-0019 decides, the advisory, parallel admission, a review stage for the lap and the lock a refusal releases), and `docs/operations/` the runbook and each lap's dogfood record. |
 
 ## The name
 
