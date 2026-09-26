@@ -675,6 +675,18 @@ export interface CiScope {
 }
 
 /**
+ * `workspace remove`: the worktree a terminal run was materialised into,
+ * removed or found already gone (`continuo D-1119`). A refusal (a run not yet
+ * closed, uncommitted changes, a path a later run reused) is exit 2 and keeps
+ * the worktree; the topic branch is never touched.
+ */
+export interface WorkspaceRemoved {
+  readonly runId: string;
+  readonly workspace: string;
+  readonly outcome: string;
+}
+
+/**
  * `measure report`, which is the one verb whose success is NOT an envelope.
  *
  * Exit 0 and stdout is an unwrapped document identified by `report_kind`, with
@@ -1018,6 +1030,17 @@ export const CI_SHOW: VerbContract<CiShown> = {
       verdict: requireString(scope, "verdict"),
       detail: nullableString(scope, "detail"),
     })),
+  }),
+};
+
+export const WORKSPACE_REMOVE: VerbContract<WorkspaceRemoved> = {
+  command: ["workspace", "remove"],
+  schema: "continuo.workspace.remove/1",
+  timeoutMs: CONTROL_PLANE_TIMEOUT_MS,
+  read: (payload) => ({
+    runId: requireString(payload, "run_id"),
+    workspace: requireString(payload, "workspace"),
+    outcome: requireString(payload, "outcome"),
   }),
 };
 

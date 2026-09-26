@@ -54,7 +54,7 @@ import {
   type PullRequestChecksRequest,
 } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
-import { closeOutMerged } from "./merge.js";
+import { closeOutMerged, type RemoveLapWorkspace } from "./merge.js";
 import { type LapResult, resultOf } from "./page-logic/result.js";
 
 /**
@@ -147,6 +147,8 @@ export interface ChecksHostPorts {
   readonly record: Pick<AdvisoryRecord, "threadMessages" | "recordThreadMessage">;
   /** The close-out's git (D-0119); tests replace it, the host reaches the real one. */
   readonly deleteLapBase?: typeof deleteLapBase;
+  /** The close-out's worktree removal (rondo#456); `continuoWorkspaceRemover` in the host. */
+  readonly removeWorkspace: RemoveLapWorkspace;
   /** Fetch, observe and show; {@link continuoChecksReader} in the host. */
   readonly readChecks: (request: ChecksRequest) => Promise<ChecksRead>;
   /** What a moved head carries past the lap's own (`readCommitsBetween`). */

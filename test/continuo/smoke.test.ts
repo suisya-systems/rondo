@@ -42,6 +42,7 @@ import {
   admitRun,
   CLI_PATH_ENV,
   deliverGate,
+  removeWorkspace,
   run,
   startContinuo,
   unusableArgument,
@@ -347,6 +348,18 @@ test.skipIf(!available)(
       // branches on neither.
       errorClass: expect.any(String),
       message: expect.stringContaining("no-such-gate"),
+    });
+
+    // **The close-out's worktree removal** (rondo#456, `continuo D-1119`),
+    // refused for a run nobody closed -- which is what an earlier lap of a
+    // revised line is when its line is merged. A refusal, decoded as one, and
+    // the worktree kept: the one answer the page has to say with its reason.
+    const notClosed = await removeWorkspace(continuo, { db: database, runId: "rondo-smoke-1" });
+    expect(notClosed).toEqual({
+      kind: "refused",
+      db: database,
+      errorClass: expect.any(String),
+      message: expect.stringContaining("close it before removing its worktree"),
     });
   },
   // Eight subprocesses on a cold Windows runner. The per-invocation cost measured

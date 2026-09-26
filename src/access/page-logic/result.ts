@@ -88,9 +88,15 @@ export interface LapResult {
   /**
    * What the close-out after the merge did (rondo#403, D-0119), or null where
    * none is written: how many of rondo's base branches it deleted, and how many
-   * git refused, which the thread's line names with why.
+   * git refused, which the thread's line names with why; and how many of the
+   * line's worktrees are gone and how many continuo kept (rondo#456).
    */
-  readonly closedOut: { readonly deleted: number; readonly refused: number } | null;
+  readonly closedOut: {
+    readonly deleted: number;
+    readonly refused: number;
+    readonly worktreesGone: number;
+    readonly worktreesKept: number;
+  } | null;
   /** The base it conflicts with, where that is why no check runs now (rondo#411). */
   readonly conflictsWith: string | null;
   /**
@@ -200,11 +206,17 @@ function closedOutOf(said: Said | undefined): LapResult["closedOut"] {
     return null;
   }
   // `writeReport`'s sentence: "deleted 'a', 'b'", then one "; could not
-  // delete 'c': why" per refusal.
-  const deleted = /: deleted ('[^']+'(?:, '[^']+')*)/.exec(said.body)?.[1] ?? "";
+  // delete 'c': why" per refusal, then " Worktrees: " with one "removed 'p'",
+  // "already gone 'p'" or "kept for run 'r': why" each. A line written before
+  // rondo#456 has no worktree part and counts none.
+  const [branches = "", worktrees = ""] = said.body.split(" Worktrees: ");
+  const deleted = /: deleted ('[^']+'(?:, '[^']+')*)/.exec(branches)?.[1] ?? "";
+  const count = (marker: RegExp) => worktrees.match(marker)?.length ?? 0;
   return {
     deleted: deleted === "" ? 0 : deleted.split(", ").length,
-    refused: said.body.split("; could not delete '").length - 1,
+    refused: branches.split("; could not delete '").length - 1,
+    worktreesGone: count(/(?:^|; )(?:removed|already gone) '/g),
+    worktreesKept: count(/(?:^|; )kept for run '/g),
   };
 }
 

@@ -554,6 +554,10 @@ test("a merge's close-out is said under it: what was deleted, what was refused, 
       kind: "closedOut",
       deleted: ["rondo/base/run-1", "rondo/base/run-2"],
       refused: [{ branch: "rondo/base/run-3", reason: "checked out" }],
+      worktrees: [
+        { kind: "removed", workspace: "/wt/1" },
+        { kind: "kept", runId: "run-2", reason: "run run-2 is at status running; close it" },
+      ],
       topicBranch: "rondo/topic",
     },
     62_000,
@@ -563,7 +567,9 @@ test("a merge's close-out is said under it: what was deleted, what was refused, 
   const english = head(await merging(world, "en"));
   expect(english).toContain("deleted the 2 base branches it made");
   expect(english).toContain("could not delete 1");
-  expect(english).toContain("until continuo#230");
+  expect(english).toContain("1 of 2 worktrees is kept (the thread says why)");
+  expect(english).not.toContain("continuo#230");
+  expect(head(await merging(world))).toContain("作業ツリー 2 個のうち 1 個は残しました");
 });
 
 test("closed unmerged on the forge ends the request, and no press is offered (rondo#413)", async () => {

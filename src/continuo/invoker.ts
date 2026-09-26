@@ -60,6 +60,8 @@ import {
   type RunClosed,
   type RunObserved,
   type VerbContract,
+  WORKSPACE_REMOVE,
+  type WorkspaceRemoved,
 } from "./protocol.js";
 import { mapModelTier, mapNeutralRole } from "./roles.js";
 
@@ -1486,4 +1488,37 @@ export async function ciShow(
     throw error;
   }
   return await run(continuo, CI_SHOW, argv);
+}
+
+/** What `workspace remove` needs: the run, never a path (`continuo D-1119`). */
+export interface RemoveWorkspaceRequest {
+  readonly db: string;
+  readonly runId: string;
+}
+
+/**
+ * Remove the worktree a closed run was materialised into (`continuo D-1119`),
+ * which continuo reads from the run's own event. Idempotent: a worktree
+ * already gone answers `absent`. There is no force, and rondo never retries a
+ * refusal: a refused worktree is kept and its reason said (`D-0119`).
+ */
+export async function removeWorkspace(
+  continuo: VerifiedContinuo,
+  request: RemoveWorkspaceRequest,
+): Promise<ContinuoResult<WorkspaceRemoved>> {
+  let argv: readonly string[];
+  try {
+    argv = [
+      "--db",
+      requireAbsolute("db", request.db),
+      "--run-id",
+      requireIdentifier("runId", request.runId),
+    ];
+  } catch (error) {
+    if (error instanceof ArgumentRefusal) {
+      return refusedArgument(WORKSPACE_REMOVE, error);
+    }
+    throw error;
+  }
+  return await run(continuo, WORKSPACE_REMOVE, argv);
 }

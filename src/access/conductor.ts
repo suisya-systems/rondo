@@ -1173,12 +1173,14 @@ export type LapEvent =
   /**
    * What the close-out after a merge removed and kept (rondo#403, D-0119):
    * the line's `rondo/base/` branches deleted, those git refused with why,
-   * and the topic branch kept. The worktrees stay until continuo#230.
+   * the topic branch kept, and each lap's worktree removed, already gone, or
+   * kept by continuo with why (rondo#456).
    */
   | {
       readonly kind: "closedOut";
       readonly deleted: readonly string[];
       readonly refused: readonly { readonly branch: string; readonly reason: string }[];
+      readonly worktrees: readonly WorktreeOutcome[];
       readonly topicBranch: string;
     }
   /**
@@ -1464,8 +1466,10 @@ export async function writeReport(
         ? "no base branch of rondo's was left to delete"
         : `deleted ${event.deleted.map((branch) => `'${branch}'`).join(", ")}`) +
       event.refused.map((one) => `; could not delete '${one.branch}': ${one.reason}`).join("") +
-      `. Its topic branch '${event.topicBranch}' is kept. Its worktrees are kept too: ` +
-      "removing them waits on continuo#230, a continuo verb rondo does not have yet.";
+      `. Its topic branch '${event.topicBranch}' is kept.` +
+      (event.worktrees.length === 0
+        ? " No worktree of its line was left to remove."
+        : ` Worktrees: ${event.worktrees.map(worktreeClause).join("; ")}.`);
   } else if (event.kind === "conflict") {
     messageId = `report-conflict-${iterationId}-${event.head}`;
     body =
@@ -1602,6 +1606,25 @@ function checksBody(
  * page reads the lines back (`page-logic/result.ts`), so their shape is pinned
  * by a test.
  */
+/**
+ * What became of one lap's worktree: removed, already gone, or kept with the
+ * reason -- continuo's refusal, or why continuo could not be asked.
+ */
+export type WorktreeOutcome =
+  | { readonly kind: "removed" | "absent"; readonly workspace: string }
+  | { readonly kind: "kept"; readonly runId: string; readonly reason: string };
+
+function worktreeClause(one: WorktreeOutcome): string {
+  switch (one.kind) {
+    case "removed":
+      return `removed '${one.workspace}'`;
+    case "absent":
+      return `already gone '${one.workspace}'`;
+    default:
+      return `kept for run '${one.runId}': ${one.reason}`;
+  }
+}
+
 function movedBody(iterationId: string, event: Extract<LapEvent, { kind: "moved" }>): string {
   const total = Math.max(event.total ?? 0, event.commits.length);
   const hidden = total - Math.min(event.commits.length, LIST_LIMIT);

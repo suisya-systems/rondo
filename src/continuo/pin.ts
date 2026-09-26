@@ -79,8 +79,14 @@ export const CONTINUO_REPOSITORY = "https://github.com/suisya-systems/continuo.g
  * verdict rondo used to join itself. The third commit, `D-1111`, is
  * continuo's own Windows schedule. The added keys sit under the same
  * `continuo.lap.perform/1`, which `protocol.ts` reads by name.
+ *
+ * **It moves again to take `continuo D-1119`** (continuo#230): `workspace
+ * remove`, the verb rondo's close-out after a merge calls for each lap's
+ * worktree (`D-0119` rule 4). The commits in between (`D-1114` to `D-1118`)
+ * add a Codex worker and sandbox checks that rondo does not select; the keys
+ * rondo reads are unchanged.
  */
-export const CONTINUO_REVISION = "b7162ae49f1ea381e33a070de364a08dda400794";
+export const CONTINUO_REVISION = "f2fb45092f8d3f00613b1612ecbf6932a229d35a";
 
 /**
  * The exact line the pinned build's `--version` prints.
@@ -96,7 +102,7 @@ export const CONTINUO_REVISION = "b7162ae49f1ea381e33a070de364a08dda400794";
  * rondo wrote for itself.
  */
 export const CONTINUO_VERSION_LINE =
-  "@suisya-systems/continuo 0.0.0 (rev b7162ae49f1ea381e33a070de364a08dda400794)";
+  "@suisya-systems/continuo 0.0.0 (rev f2fb45092f8d3f00613b1612ecbf6932a229d35a)";
 
 /** What a build reports when it has no git information (`continuo`'s literal). */
 const REVISION_UNKNOWN = "unknown";

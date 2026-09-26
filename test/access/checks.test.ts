@@ -264,6 +264,7 @@ async function hostOver(options: {
       deletedBases.push(request.runId);
       return { kind: "deleted", branch: `rondo/base/${request.runId}` };
     },
+    removeWorkspace: async (request) => ({ kind: "absent", workspace: `/wt/${request.runId}` }),
     record: {
       threadMessages: async () => ({ kind: "read", messages }) as never,
       recordThreadMessage: async (draft) => {
@@ -511,11 +512,12 @@ test("merged or closed on the forge ends the reading, and only a merge is closed
     "report-closeout-lap-1",
   ]);
   expect(merged.written[0]?.body).toContain("by 'someone'");
-  // D-0119: rondo's base branch goes; the topic branch and the worktree stay.
+  // D-0119: rondo's base branch goes and the topic branch stays; rondo#456:
+  // the worktree is continuo's to remove, here already gone.
   expect(merged.deletedBases).toEqual(["run-1"]);
   expect(merged.written[1]?.body).toContain("deleted 'rondo/base/run-1'");
   expect(merged.written[1]?.body).toContain("topic branch 'rondo/topic' is kept");
-  expect(merged.written[1]?.body).toContain("continuo#230");
+  expect(merged.written[1]?.body).toContain("Worktrees: already gone '/wt/run-1'.");
   const closed = await hostOver({
     reading: { kind: "none" },
     pullRequest: { ...OPEN, state: "closed" },
