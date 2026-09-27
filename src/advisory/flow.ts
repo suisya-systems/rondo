@@ -137,8 +137,7 @@ export function flowMessageId(scopeDecisionId: string, candidateKey: string): st
 
 /**
  * The id an ask over a candidate's open points is raised under: the `round`th
- * ask over that candidate, so the same pick names the same ask, and points the
- * ranking added since an answer are asked again under the next round.
+ * ask over that candidate, so the same pick names the same ask.
  */
 export function flowAskId(scopeDecisionId: string, candidateKey: string, round: number): string {
   return `flow-ask-${scopeDecisionId}-${candidateKey}-${String(round)}`;
@@ -181,23 +180,9 @@ export function pickNext(input: FlowInput): FlowPick {
     return wait("open_ask");
   }
   const aside = new Set(input.putAside);
-  // **One ask at a time** (rondo#487): an unanswered one holds the flow while
-  // its candidate is still ranked and not put aside; *not now* is a way to
-  // decline it.
-  const ranked = new Set(input.triage.ranked.map((one) => one.key));
-  if (
-    input.asks.some(
-      (ask) => ask.answers === null && ranked.has(ask.candidateKey) && !aside.has(ask.candidateKey),
-    )
-  ) {
-    return wait("points_asked");
-  }
-  if (
+  const noSlot =
     input.occupancy.occupying >= input.bounds.maxOccupying ||
-    input.occupancy.live >= input.bounds.maxLive
-  ) {
-    return wait("no_slot");
-  }
+    input.occupancy.live >= input.bounds.maxLive;
   const injected = new Set(input.injections.map((one) => one.candidateKey));
   const skip = (one: Ranked): SkipReason | null =>
     injected.has(one.key)
@@ -207,8 +192,20 @@ export function pickNext(input: FlowInput): FlowPick {
         : one.source.form !== "issue"
           ? "not_issue"
           : null;
-  const candidate = input.triage.ranked.find((one) => skip(one) === null);
+  const eligible = input.triage.ranked.filter((one) => skip(one) === null);
+  // **A candidate the person answered comes first** (rondo#504): the answer is
+  // what the flow was waiting for, so it is not passed over for the ranking's
+  // first candidate, which would ask the person again elsewhere.
+  const answeredKeys = new Set(
+    input.asks.filter((ask) => ask.answers !== null).map((ask) => ask.candidateKey),
+  );
+  const candidate =
+    eligible.find((one) => answeredKeys.has(one.key)) ??
+    (eligible[0] as (typeof eligible)[number] | undefined);
   if (candidate === undefined) {
+    if (noSlot) {
+      return wait("no_slot");
+    }
     return {
       kind: "wait",
       reason: "nothing_eligible",
@@ -218,29 +215,56 @@ export function pickNext(input: FlowInput): FlowPick {
       }),
     };
   }
-  // An answer counts when it answered every point the ranking holds now: a
-  // re-ranking can add a point nobody was asked.
+  // **An answer stands for its candidate** (rondo#504): triage words the
+  // points afresh on every reading, so a re-ranking's points cannot be matched
+  // to the ones answered. The newest answer goes in as asked and as answered,
+  // and an ask open over another candidate does not hold it back.
   const asked = input.asks.filter((ask) => ask.candidateKey === candidate.key);
-  const answered = asked.findLast(
-    (ask) =>
-      ask.answers !== null && candidate.openPoints.every((one) => ask.points.includes(one.point)),
-  );
-  if (candidate.openPoints.length > 0 && answered === undefined) {
-    return {
-      kind: "ask",
-      candidate,
-      askId: flowAskId(input.scopeDecisionId, candidate.key, asked.length + 1),
-    };
+  const answered = asked.findLast((ask) => ask.answers !== null);
+  const inject = (): FlowPick =>
+    noSlot
+      ? wait("no_slot")
+      : {
+          kind: "inject",
+          candidate: {
+            ...candidate,
+            request: answered?.request ?? candidate.request,
+            why: answered?.why ?? candidate.why,
+          },
+          messageId: flowMessageId(input.scopeDecisionId, candidate.key),
+          answers:
+            answered?.points.map((point, at) => ({
+              point,
+              answer: answered.answers?.[at] ?? "",
+            })) ?? [],
+        };
+  if (answered !== undefined) {
+    return inject();
   }
-  return {
-    kind: "inject",
-    candidate: {
-      ...candidate,
-      request: answered?.request ?? candidate.request,
-      why: answered?.why ?? candidate.why,
-    },
-    messageId: flowMessageId(input.scopeDecisionId, candidate.key),
-    answers:
-      answered?.points.map((point, at) => ({ point, answer: answered.answers?.[at] ?? "" })) ?? [],
-  };
+  // **One ask at a time** (rondo#487): an unanswered one holds the flow while
+  // its candidate is still ranked, not put aside and not started; *not now* is
+  // a way to decline it. An ask left open when an earlier answer started its
+  // candidate holds nothing (rondo#504).
+  const ranked = new Set(input.triage.ranked.map((one) => one.key));
+  if (
+    input.asks.some(
+      (ask) =>
+        ask.answers === null &&
+        ranked.has(ask.candidateKey) &&
+        !aside.has(ask.candidateKey) &&
+        !injected.has(ask.candidateKey),
+    )
+  ) {
+    return wait("points_asked");
+  }
+  if (candidate.openPoints.length === 0) {
+    return inject();
+  }
+  return noSlot
+    ? wait("no_slot")
+    : {
+        kind: "ask",
+        candidate,
+        askId: flowAskId(input.scopeDecisionId, candidate.key, asked.length + 1),
+      };
 }

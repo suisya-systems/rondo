@@ -288,3 +288,33 @@ test("a candidate still mixing scripts is marked on the card, on a runner-up and
   expect(html.split(EN.triageMixedScript)).toHaveLength(4);
   expect(html).toContain('aria-describedby="flow-ask-o-r-mixed"');
 });
+
+test("an ask left open over a candidate an earlier answer covers is not waited on (rondo#504)", async () => {
+  const { waitingPointsAsk } = await import("../../src/access/page/triage.js");
+  const ask = (askId: string, answer: null | { answers: string[] }) => ({
+    askId,
+    repository: "o/r",
+    goalId: "g-1",
+    scopeDecisionId: "sd-1",
+    proposalId: "t-1",
+    candidate: "issue:o/r#1",
+    points: [{ point: "p", recommendation: "r" }],
+    request: null,
+    why: null,
+    askedAtMs: 2,
+    answer:
+      answer === null
+        ? null
+        : { ...answer, answeredBy: "ada", answeredAtMs: 3, request: null, why: null },
+  });
+  const payload = {
+    repository: "o/r",
+    goalId: "g-1",
+    ranked: [{ key: "issue:o/r#1" }],
+  } as never;
+  const open = ask("ask-2", null);
+  expect(waitingPointsAsk([open], "g-1", payload, [])).toBe(open);
+  expect(waitingPointsAsk([ask("ask-1", { answers: ["a"] }), open], "g-1", payload, [])).toBe(
+    undefined,
+  );
+});
