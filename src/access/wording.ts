@@ -838,6 +838,8 @@ export interface Chrome extends PageWords {
   readonly scopeDefaultNote: string;
   readonly scopeSeverityLabel: string;
   readonly scopeOutwardLabel: string;
+  /** Under the outward acts, when a goal scope's are the default (D-0140 rule 1). */
+  readonly scopeOutwardFromGoal: string;
   /**
    * One outward act as a person reads it. The enum value is the token a scope
    * records and `rondo scope` prints, so it stays beside the words rather than

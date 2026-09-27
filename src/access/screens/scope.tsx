@@ -21,6 +21,7 @@ import {
   draftedPlansUnder,
   draftedStanding,
 } from "../drafted-view.js";
+import { goalOutwardActs } from "../goal-scope.js";
 import { hostFailure } from "../host-failure.js";
 import { ago } from "../inbox.js";
 import { latestReads } from "../issue-read.js";
@@ -267,6 +268,13 @@ export function sampleCaveat(
         ) : null,
       )}
     </section>
+  );
+}
+
+/** Why the outward acts start checked: a goal scope allows them here (D-0140 rule 1). */
+function outwardFromGoal(wording: Chrome) {
+  return (
+    <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeOutwardFromGoal}</p>
   );
 }
 
@@ -720,6 +728,7 @@ async function scopeForm(
     );
   }
   const rounds = view.rounds;
+  const inherited = await goalOutwardActs(ports.record, [chosen.repository]);
   const budgets = await scopeBudgetsFromStore(
     { store: ports.store, record: ports.record },
     {
@@ -812,7 +821,7 @@ async function scopeForm(
         </div>
         {sampleCaveat(wording, budgets.cost_reserve_usd.bases)}
         {budgetBoxes(wording, budgets, true)}
-        {defaultsSection(wording, "major", [])}
+        {defaultsSection(wording, "major", inherited, inherited.length > 0)}
         {/* D-0066's first gate answer, on the screen and not only in a terminal. */}
         <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
         {/* **The same press again under the last box** (D-0106, the owner's answer
@@ -953,6 +962,8 @@ export function defaultsSection(
   wording: Chrome,
   threshold: FindingSeverity,
   outward: readonly ScopeOutwardAct[],
+  /** The acts are a goal scope's, drawn as this request's default (D-0140 rule 1). */
+  fromGoal = false,
 ) {
   return (
     <section class={`${CARD} space-y-3`}>
@@ -989,6 +1000,7 @@ export function defaultsSection(
             <span class="font-mono text-id text-faint">{act}</span>
           </label>
         ))}
+        {fromGoal ? outwardFromGoal(wording) : null}
       </fieldset>
       {/*
        * **Not a box** (rondo#233 S3): `irreversible_additions` adds
@@ -1190,6 +1202,16 @@ async function draftedForm(
   }
   const payload = drafted.scope.payload;
   const computed = drafted.computed;
+  // A drafter never allows an outward act (D-0071 rule 4.1); a goal scope over
+  // the same repository is the default the person starts from (D-0140 rule 1).
+  const inherited =
+    payload.outward_acts.length === 0
+      ? await goalOutwardActs(
+          ports.record,
+          payload.workspaces.map((w) => w.repository),
+        )
+      : [];
+  const outward = inherited.length > 0 ? inherited : payload.outward_acts;
   // **A narrowed value says so, and on whose words** (D-0071 rule 4.1): the
   // winning narrowing of each field, as the drafter's run recorded it, with the
   // person's message it rests on linked rather than paraphrased. Nothing is
@@ -1371,12 +1393,13 @@ async function draftedForm(
                   name="outward_acts"
                   value={act}
                   class="size-3.5"
-                  {...(payload.outward_acts.includes(act) ? { checked: true } : {})}
+                  {...(outward.includes(act) ? { checked: true } : {})}
                 />
                 <span>{wording.scopeOutwardAct(act)}</span>
                 <span class="font-mono text-id text-faint">{act}</span>
               </label>
             ))}
+            {inherited.length > 0 ? outwardFromGoal(wording) : null}
           </fieldset>
           <p class="text-body leading-6">
             {payload.irreversible_additions.length === 0

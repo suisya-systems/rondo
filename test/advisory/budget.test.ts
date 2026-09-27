@@ -58,8 +58,18 @@ test("a fresh store gets the cold start on every field, and 20.00 for one plan a
 });
 
 test("with no lap of the agent type or its tier, the scope's repository's laps set the reserve (D-0140)", () => {
-  const here = row({ agentTypeDigest: B, modelTier: "large", lapCostUsd: 8.12, repository: "/r/one" });
-  const there = row({ agentTypeDigest: B, modelTier: "large", lapCostUsd: 20, repository: "/r/two" });
+  const here = row({
+    agentTypeDigest: B,
+    modelTier: "large",
+    lapCostUsd: 8.12,
+    repository: "/r/one",
+  });
+  const there = row({
+    agentTypeDigest: B,
+    modelTier: "large",
+    lapCostUsd: 20,
+    repository: "/r/two",
+  });
   const b = computeScopeBudgets({
     agentTypes: [{ digest: A, modelTier: "standard" }],
     plans: 1,

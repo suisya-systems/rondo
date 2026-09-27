@@ -665,6 +665,9 @@ explanation you pressed on and then answers the gate.`,
   scopeDefaultNote: "A default, not derived from your request.",
   scopeSeverityLabel: "Findings this severe or worse end a round",
   scopeOutwardLabel: "Outward acts this scope allows",
+  scopeOutwardFromGoal:
+    "Checked as the goal's scope for this repository allows them, since this request works " +
+    "toward the same goal. Uncheck any you want to do yourself.",
   scopeOutwardAct: (act) =>
     ({
       push_branch: "push a branch",

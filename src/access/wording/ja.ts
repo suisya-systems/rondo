@@ -685,6 +685,9 @@ export const JA: Chrome = Object.freeze({
   scopeDefaultNote: "既定値で、依頼から導いたものではありません。",
   scopeSeverityLabel: "この重大度以上の指摘が出たら 1 ラウンド終了",
   scopeOutwardLabel: "この範囲で許す外向きの行為",
+  scopeOutwardFromGoal:
+    "このリポジトリの目標の範囲で許しているものに、チェックを入れてあります。この依頼も同じ目標に" +
+    "向けた作業だからです。自分でしたいものは外してください。",
   scopeOutwardAct: (act) =>
     ({
       push_branch: "ブランチを push する",
