@@ -44,86 +44,101 @@
 //
 // Served as a file under `script-src 'self'`, and its digest is in
 // `page.manifest.json` beside everything the browser receives.
+//
+// **Everything below is inside a function, and that is not a style** (the gate
+// of 2026-09-27). A classic `<script src>` shares one top-level scope with
+// every other classic script on the page, so a `const` here with a name
+// `page/chime.js` also declares is a redeclaration: the browser refuses the
+// *whole file* with a `SyntaxError` before its first line runs, and the wash
+// silently does not exist. That is exactly what shipped -- `ledger` and `read`
+// were declared in both -- and reading either file alone could not show it.
+// The bindings are shut in here so this file can name what it likes;
+// `test/access/page-scripts.test.ts` runs every one of the page's scripts in
+// **one** global, in the order the document loads them, so the next collision
+// is a red test rather than a page that quietly stops working.
 
-/** What the server marks as an element a person can act on. */
-const WATCHED = "[data-can-act]";
-/** What this script sets on one that changed; the stylesheet draws it. */
-const MARK = "data-just-changed";
+(() => {
+  /** What the server marks as an element a person can act on. */
+  const WATCHED = "[data-can-act]";
+  /** What this script sets on one that changed; the stylesheet draws it. */
+  const MARK = "data-just-changed";
 
-const ledger = () => document.querySelector("#ledger");
+  const ledger = () => document.querySelector("#ledger");
 
-/** The word the mark carries, in the language this document was drawn in. */
-const word = () => ledger()?.getAttribute("data-changed-word") ?? null;
+  /** The word the mark carries, in the language this document was drawn in. */
+  const word = () => ledger()?.getAttribute("data-changed-word") ?? null;
 
-/**
- * The words an element shows, with the text that moves on its own left out and
- * whitespace flattened: a redraw that only re-wrapped a line is not a change.
- */
-const said = (element) => {
-  let words = element.textContent ?? "";
-  for (const ticking of element.querySelectorAll("[data-ticks]")) {
-    const moves = ticking.textContent ?? "";
-    if (moves !== "") {
-      words = words.replace(moves, " ");
+  /**
+   * The words an element shows, with the text that moves on its own left out
+   * and whitespace flattened: a redraw that only re-wrapped a line is not a
+   * change.
+   */
+  const said = (element) => {
+    let words = element.textContent ?? "";
+    for (const ticking of element.querySelectorAll("[data-ticks]")) {
+      const moves = ticking.textContent ?? "";
+      if (moves !== "") {
+        words = words.replace(moves, " ");
+      }
     }
-  }
-  return words.replace(/\s+/g, " ").trim();
-};
+    return words.replace(/\s+/g, " ").trim();
+  };
 
-/** The words each watched node showed when it was last read. */
-const before = new WeakMap();
-/** What this script marked, so the next change clears it first. */
-let marked = [];
+  /** The words each watched node showed when it was last read. */
+  const before = new WeakMap();
+  /** What this script marked, so the next change clears it first. */
+  let marked = [];
 
-const wash = (element) => {
-  element.setAttribute(MARK, word() ?? "");
-  marked.push(element);
-  // **Cleared when the fade ends**, so the next change can fade again: an
-  // attribute that is already there restarts no animation. With reduced
-  // motion there is no animation and none of these ever arrives, which is
-  // what leaves the static mark standing.
-  element.addEventListener(
-    "animationend",
-    () => {
+  const wash = (element) => {
+    element.setAttribute(MARK, word() ?? "");
+    marked.push(element);
+    // **Cleared when the fade ends**, so the next change can fade again: an
+    // attribute that is already there restarts no animation. With reduced
+    // motion there is no animation and none of these ever arrives, which is
+    // what leaves the static mark standing.
+    element.addEventListener(
+      "animationend",
+      () => {
+        element.removeAttribute(MARK);
+      },
+      { once: true },
+    );
+  };
+
+  /**
+   * One reading. `first` is the document as it arrived: it establishes what the
+   * words were and washes nothing, because a person is looking at the page they
+   * asked for and not at a change to it.
+   */
+  const read = (first) => {
+    const changed = [];
+    const now = [];
+    for (const element of document.querySelectorAll(WATCHED)) {
+      const words = said(element);
+      now.push([element, words]);
+      const was = before.get(element);
+      if (!first && words !== was) {
+        changed.push(element);
+      }
+    }
+    for (const [element, words] of now) {
+      before.set(element, words);
+    }
+    if (changed.length === 0) {
+      return;
+    }
+    // **The marks of an earlier redraw go when a later one lands.** Under
+    // reduced motion a mark is static and would otherwise add up until every
+    // element on the page said it had just changed.
+    for (const element of marked) {
       element.removeAttribute(MARK);
-    },
-    { once: true },
-  );
-};
-
-/**
- * One reading. `first` is the document as it arrived: it establishes what the
- * words were and washes nothing, because a person is looking at the page they
- * asked for and not at a change to it.
- */
-const read = (first) => {
-  const changed = [];
-  const now = [];
-  for (const element of document.querySelectorAll(WATCHED)) {
-    const words = said(element);
-    now.push([element, words]);
-    const was = before.get(element);
-    if (!first && words !== was) {
-      changed.push(element);
     }
-  }
-  for (const [element, words] of now) {
-    before.set(element, words);
-  }
-  if (changed.length === 0) {
-    return;
-  }
-  // **The marks of an earlier redraw go when a later one lands.** Under
-  // reduced motion a mark is static and would otherwise add up until every
-  // element on the page said it had just changed.
-  for (const element of marked) {
-    element.removeAttribute(MARK);
-  }
-  marked = [];
-  for (const element of changed) {
-    wash(element);
-  }
-};
+    marked = [];
+    for (const element of changed) {
+      wash(element);
+    }
+  };
 
-document.addEventListener("htmx:afterSwap", () => read(false));
-read(true);
+  document.addEventListener("htmx:afterSwap", () => read(false));
+  read(true);
+})();

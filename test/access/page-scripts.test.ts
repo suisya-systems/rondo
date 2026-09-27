@@ -9,8 +9,19 @@
  * `node:vm` context over the few browser objects each one touches, and nothing
  * else. There is no DOM here, so the morph itself is not run: what is held is
  * what rondo tells it, which is the part rondo wrote.
+ *
+ * **And once over, all of them together in one global** (the gate of
+ * 2026-09-27, rondo#494). Running each file in a context of its own says what
+ * that file does and nothing about what the page does, and the page is where a
+ * browser gives every classic `<script src>` a single top-level scope: two
+ * files that declare the same `const` are a `SyntaxError` that stops the
+ * second one before its first line. `page/changed.js` shipped that way --
+ * `ledger` and `read` were `page/chime.js`'s too -- so the wash and the
+ * reduced-motion mark did nothing at all, and every suite here was green. The
+ * last test in this file is that page.
  */
-import { runInNewContext } from "node:vm";
+import { readdirSync } from "node:fs";
+import { createContext, runInContext, runInNewContext } from "node:vm";
 import { expect, test } from "vitest";
 import { bytesOf } from "./page-world.js";
 
@@ -764,4 +775,151 @@ test("an element the redraw built is a change, and a ledger with no word marks i
   // The word is empty rather than invented, which `page/app.css` draws as no
   // mark at all; the wash is the same.
   expect(page.marks()).toEqual([null, ""]);
+});
+
+/**
+ * rondo's own scripts, in the order a document that keeps itself current loads
+ * them (`src/access/web.tsx`; the rendered list is
+ * `test/access/web-page.test.ts`'s). The vendored two -- htmx and its morph
+ * extension -- are not run: what they declare is theirs, and a name of ours
+ * colliding with a name of theirs is not what this fixes.
+ */
+const LOADED = ["text-size.js", "keys.js", "composer.js", "chime.js", "changed.js"];
+
+/** An element of the page below: everything these five touch on a node. */
+class Painted {
+  readonly attributes = new Map<string, string>();
+  readonly classList = { add: () => {} };
+  readonly dataset: Record<string, string> = {};
+  hidden = false;
+  /** The one event `page/changed.js` asks for, and never fired here. */
+  ended: (() => void) | null = null;
+  constructor(public words = "") {}
+  get textContent() {
+    return this.words;
+  }
+  get outerHTML() {
+    return this.words;
+  }
+  getAttribute(name: string) {
+    return this.attributes.get(name) ?? null;
+  }
+  setAttribute(name: string, value: string) {
+    this.attributes.set(name, value);
+  }
+  removeAttribute(name: string) {
+    this.attributes.delete(name);
+  }
+  querySelector() {
+    return null;
+  }
+  querySelectorAll() {
+    return [];
+  }
+  addEventListener(type: string, listener: () => void) {
+    if (type === "animationend") {
+      this.ended = listener;
+    }
+  }
+}
+
+/**
+ * One page, one global: every script in {@link LOADED} run in the same `vm`
+ * context, in the document's order, over a page holding a ledger and one
+ * element a person can act on. A browser's classic scripts share exactly this
+ * much -- one top-level scope -- so a redeclaration between two of them throws
+ * here where it throws there, out of the *second* file, before it runs.
+ */
+function onePage() {
+  const ledger = new Painted();
+  for (const [name, value] of Object.entries({
+    "data-changed-word": "Updated",
+    "data-waits": "[]",
+    "data-chime": "Your turn",
+    "data-title": "rondo",
+    "data-title-turn": "Your turn - rondo",
+    "data-icon": "/icon.svg",
+  })) {
+    ledger.setAttribute(name, value);
+  }
+  const acts = new Painted("four points");
+  const heard = new Map<string, ((event?: unknown) => void)[]>();
+  const listen = (type: string, listener: (event?: unknown) => void) => {
+    heard.set(type, [...(heard.get(type) ?? []), listener]);
+  };
+  const storage = () => {
+    const kept = new Map<string, string>();
+    return {
+      getItem: (key: string) => kept.get(key) ?? null,
+      setItem: (key: string, value: string) => kept.set(key, value),
+      removeItem: (key: string) => kept.delete(key),
+    };
+  };
+  const document = {
+    title: "rondo",
+    body: new Painted(),
+    documentElement: new Painted(),
+    visibilityState: "visible",
+    hasFocus: () => true,
+    getElementById: () => null,
+    querySelector: (selector: string) => (selector === "#ledger" ? ledger : null),
+    querySelectorAll: (selector: string) => (selector === "[data-can-act]" ? [acts] : []),
+    addEventListener: listen,
+  };
+  const context = createContext({
+    document,
+    // On the page the global object is the window, so the two are one
+    // listener: `page/composer.js` asks the global and `page/chime.js` the
+    // window, and both reach the same tab.
+    addEventListener: listen,
+    window: { addEventListener: listen, focus: () => {} },
+    sessionStorage: storage(),
+    localStorage: storage(),
+    location: { hash: "" },
+    CSS: { escape: (text: string) => text },
+    MutationObserver: class {
+      observe() {}
+    },
+    Idiomorph: { defaults: { callbacks: {} } },
+    Element: Painted,
+    HTMLDetailsElement: class {},
+    HTMLTextAreaElement: class {},
+    HTMLFormElement: class {},
+    HTMLButtonElement: class {},
+  });
+  for (const name of LOADED) {
+    // Thrown as it is: a `SyntaxError` here names the file the browser would
+    // have refused, which is the whole of what this case is for.
+    runInContext(bytesOf(`page/${name}`).toString("utf8"), context, { filename: name });
+  }
+  return {
+    document,
+    acts,
+    redraw(words: string) {
+      acts.words = words;
+      for (const listener of heard.get("htmx:afterSwap") ?? []) listener();
+    },
+  };
+}
+
+test("every script the page loads is run in one global, and none of them stops another", () => {
+  // Non-vacuous: a script added to `page/` is covered or this fails. The set
+  // is asserted rather than the walk trusted, because a walk that found
+  // nothing would load nothing and pass.
+  expect(
+    readdirSync(new URL("../../page/", import.meta.url))
+      .filter((name) => name.endsWith(".js"))
+      .sort(),
+  ).toEqual([...LOADED].sort());
+
+  const page = onePage();
+  // **Both of the two that collided are alive after the load.** A file the
+  // browser refuses still leaves every earlier file running, so the proof is
+  // the later one's own work: the redraw washes the element whose words
+  // changed (`page/changed.js`) while the tab's title still follows the ledger
+  // (`page/chime.js`).
+  expect(page.acts.getAttribute("data-just-changed")).toBe(null);
+  page.redraw("three points");
+  expect(page.acts.getAttribute("data-just-changed")).toBe("Updated");
+  expect(page.document.title).toBe("rondo");
 });
