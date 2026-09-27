@@ -259,6 +259,20 @@ export interface PageWords extends DayWords {
   readonly flowAskRefusedNoApprover: string;
   readonly flowAskRefusedPress: string;
   readonly flowAskRefused: string;
+  /**
+   * The press beside English-held text (rondo#490, D-0144), naming the page's
+   * own language: it reads the record in the language this set is written in.
+   */
+  readonly readInAction: string;
+  readonly readInBusy: string;
+  /** The fold under a reading that holds the English original, which stays the record. */
+  readonly readInOriginal: string;
+  /** Under a reading: when it was read and what it cost, as `triageRead` says it. */
+  readonly readInRead: (when: string, cost: string | null) => string;
+  readonly readInRefusedNoApprover: string;
+  readonly readInRefusedPress: string;
+  readonly readInRefusedForm: string;
+  readonly readInRefused: string;
   readonly goalScopeHeading: string;
   readonly goalScopeRunningHeading: string;
   readonly goalScopePausedHeading: string;
@@ -717,6 +731,17 @@ export const PAGE_EN: PageWords = Object.freeze({
     "Nothing was answered: no approver is set for this rondo, so it writes nothing from the page.",
   flowAskRefusedPress: "Nothing was answered: this did not come from a press on this page.",
   flowAskRefused: "Nothing was answered: the question has moved on since the page was drawn.",
+  readInAction: "Read in English",
+  readInBusy: "Putting it in English...",
+  readInOriginal: "Original (the record)",
+  readInRead: (when, cost) =>
+    `Read in English ${when}` + (cost === null ? "." : `; this reading cost $${cost}.`),
+  readInRefusedNoApprover:
+    "Nothing was read: no approver is set for this rondo, so it spends nothing from the page.",
+  readInRefusedPress: "Nothing was read: this did not come from a press on this page.",
+  readInRefusedForm:
+    "Nothing was read: the words to read were missing, or longer than a press carries.",
+  readInRefused: "Nothing was read: the reading failed. The original stands as written.",
   goalScopeHeading: "Let rondo work toward this goal",
   goalScopeRunningHeading: "rondo is working toward this goal",
   goalScopePausedHeading: "Work toward this goal is paused",
@@ -1246,6 +1271,16 @@ export const PAGE_JA: PageWords = Object.freeze({
     "回答していません。この rondo には承認者が設定されていないので、画面からは何も書き込みません。",
   flowAskRefusedPress: "回答していません。この画面のボタンから送られたものではありません。",
   flowAskRefused: "回答していません。画面を開いたあとで、この質問は新しくなっています。",
+  readInAction: "日本語で読む",
+  readInBusy: "日本語にしています…",
+  readInOriginal: "原文（記録）",
+  readInRead: (when, cost) =>
+    `日本語にしました（${when}）` + (cost === null ? "。" : `。この訳の費用は $${cost}。`),
+  readInRefusedNoApprover:
+    "訳していません。この rondo には承認者が設定されていないので、画面からは費用を使いません。",
+  readInRefusedPress: "訳していません。この画面のボタンから送られたものではありません。",
+  readInRefusedForm: "訳していません。訳す文がないか、ボタンで送れる長さを超えています。",
+  readInRefused: "訳していません。訳す途中で失敗しました。原文はそのまま残っています。",
   goalScopeHeading: "この目標に向けて rondo に進めてもらう",
   goalScopeRunningHeading: "rondo がこの目標に向けて進めています",
   goalScopePausedHeading: "この目標に向けた作業は一時停止中です",

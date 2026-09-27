@@ -216,6 +216,7 @@ import { requestWords, threadsOf } from "./page-logic/threads.js";
 import { publishHost } from "./publish-host.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
 import { notifierAt, reachThePerson, recordTabNotice } from "./reach.js";
+import { readIn } from "./read-in.js";
 import { nextNumbers, numbersSection } from "./record-numbers.js";
 import {
   cloneDirectory,
@@ -253,6 +254,7 @@ import {
   PublishPort,
   type PublishRefusal,
   type RaiseInput,
+  ReadInPort,
   type Released,
   type ReleaseInput,
   ReleasePort,
@@ -2045,6 +2047,16 @@ export async function main(
         // rondo ranks, written as rows in rondo's store and nowhere else.
         triageRepositories,
         triageWritable: sender !== null && !("refusal" in sender),
+        // **Read in my language** (rondo#490, D-0144), on `triage`'s condition:
+        // a reading spends as the person, so it needs an approver the
+        // allowlist accepts, and is a row in rondo's store and nowhere else.
+        translating: sender !== null && !("refusal" in sender),
+        readIn:
+          sender === null || "refusal" in sender
+            ? null
+            : new ReadInPort(
+                async (input) => await readIn({ record, runDrafter, now: () => Date.now() }, input),
+              ),
         triage:
           sender === null || "refusal" in sender
             ? null

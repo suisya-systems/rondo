@@ -24,6 +24,7 @@ import type { FlowStopRead } from "../flow-stop.js";
 import { ago } from "../inbox.js";
 import { viewHref } from "../page-logic/routes.js";
 import type { Chrome } from "../wording.js";
+import { Held, type HeldReads } from "./held.js";
 import { localTime, money, PRIMARY, SECONDARY } from "./vocabulary.js";
 
 /** The presses' own sizing, as the gate's: stacked at phone width. */
@@ -424,9 +425,11 @@ export interface TriageSectionProps {
   readonly blocks: readonly TriageBlock[];
   /** The page's press token, or null where nothing can be written: no *not now* then. */
   readonly token: string | null;
+  /** Reading the English-held points in the page's language (rondo#490); null where not offered. */
+  readonly reads?: HeldReads | null;
 }
 
-export function TriageSection({ wording, blocks, token }: TriageSectionProps) {
+export function TriageSection({ wording, blocks, token, reads = null }: TriageSectionProps) {
   if (blocks.length === 0) {
     return null;
   }
@@ -436,11 +439,16 @@ export function TriageSection({ wording, blocks, token }: TriageSectionProps) {
       {blocks.map((block) => (
         <div className="triage-repo" key={block.repository}>
           <span className="list-repo">{block.repository}</span>
-          <Block wording={wording} block={block} token={token} />
+          <Block wording={wording} block={block} token={token} reads={reads} />
           {block.kind === "noGoal" ? null : (
             <>
               {block.goalScope.ask === null ? null : (
-                <PointsAskForm wording={wording} ask={block.goalScope.ask} token={token} />
+                <PointsAskForm
+                  wording={wording}
+                  ask={block.goalScope.ask}
+                  token={token}
+                  reads={reads}
+                />
               )}
               <GoalScopeRow wording={wording} line={block.goalScope} />
             </>
@@ -455,10 +463,12 @@ function Block({
   wording,
   block,
   token,
+  reads,
 }: {
   readonly wording: Chrome;
   readonly block: TriageBlock;
   readonly token: string | null;
+  readonly reads: HeldReads | null;
 }) {
   switch (block.kind) {
     case "noGoal":
@@ -541,12 +551,18 @@ function Block({
                   <dt>{wording.triageOpenPoints}</dt>
                   <dd>
                     <ul className="triage-points">
-                      {block.first.openPoints.map((point) => (
-                        <li key={point.point} lang="">
-                          <b>{point.point}</b>
-                          <span>{point.recommendation}</span>
-                        </li>
-                      ))}
+                      {block.first.openPoints.map((point) =>
+                        reads === null ? (
+                          <li key={point.point} lang="">
+                            <b>{point.point}</b>
+                            <span>{point.recommendation}</span>
+                          </li>
+                        ) : (
+                          <li key={point.point}>
+                            <Held wording={wording} reads={reads} text={pointHeld(point)} />
+                          </li>
+                        ),
+                      )}
                     </ul>
                   </dd>
                 </>
@@ -686,14 +702,24 @@ function GoalScopeRow({
  * a field that starts as rondo's suggestion, and one press that sends them.
  * Beside the goal scope, because it is the flow under that approval that asks.
  */
+/**
+ * A point and rondo's suggestion as one held text (rondo#490): the suggestion
+ * is what the answer box is filled with, so it is read with the point.
+ */
+function pointHeld(point: { readonly point: string; readonly recommendation: string }): string {
+  return `${point.point}\n-> ${asDecision(point.recommendation)}`;
+}
+
 function PointsAskForm({
   wording,
   ask,
   token,
+  reads,
 }: {
   readonly wording: Chrome;
   readonly ask: PointsAsk;
   readonly token: string | null;
+  readonly reads: HeldReads | null;
 }) {
   return (
     <form
@@ -747,19 +773,21 @@ function PointsAskForm({
       <ol className="triage-flow-ask-points">
         {ask.points.map((point, at) => (
           <li key={String(at)}>
-            <label>
-              <span lang="">{point.point}</span>
-              <textarea
-                name={`answer-${String(at + 1)}`}
-                // Kept across the page's redraw as the composer's words are
-                // (`page/composer.js`), so an edited answer is what is sent.
-                data-draft={`flow-ask:${ask.askId}:${String(at + 1)}`}
-                rows={1}
-                required
-                className={FIELD}
-                defaultValue={asDecision(point.recommendation)}
-              />
-            </label>
+            {reads === null ? (
+              // biome-ignore lint/a11y/noLabelWithoutControl: the textarea is inside, drawn by PointAnswer
+              <label>
+                <span lang="">{point.point}</span>
+                <PointAnswer ask={ask} point={point} at={at} label={null} />
+              </label>
+            ) : (
+              // **The press is not inside the label** (Codex, design review):
+              // a button there would be the label's control, and a click on the
+              // point would spend. The box is named by the point instead.
+              <>
+                <Held wording={wording} reads={reads} text={pointHeld(point)} />
+                <PointAnswer ask={ask} point={point} at={at} label={point.point} />
+              </>
+            )}
           </li>
         ))}
       </ol>
@@ -771,6 +799,37 @@ function PointsAskForm({
         </div>
       )}
     </form>
+  );
+}
+
+/**
+ * One point's answer box, filled with rondo's suggestion. **What the person
+ * writes is kept as written** (rondo#490 point 4): an answer in their own
+ * language goes into the request as it is.
+ */
+function PointAnswer({
+  ask,
+  point,
+  at,
+  label,
+}: {
+  readonly ask: PointsAsk;
+  readonly point: { readonly point: string; readonly recommendation: string };
+  readonly at: number;
+  readonly label: string | null;
+}) {
+  return (
+    <textarea
+      name={`answer-${String(at + 1)}`}
+      aria-label={label ?? undefined}
+      // Kept across the page's redraw as the composer's words are
+      // (`page/composer.js`), so an edited answer is what is sent.
+      data-draft={`flow-ask:${ask.askId}:${String(at + 1)}`}
+      rows={1}
+      required
+      className={FIELD}
+      defaultValue={asDecision(point.recommendation)}
+    />
   );
 }
 

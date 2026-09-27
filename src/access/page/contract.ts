@@ -98,9 +98,16 @@ export interface WebPorts extends InboxReadPorts {
       // *not now* that makes one hold nothing.
       | "flowAsks"
       | "triageDeclines"
+      // rondo#490: the readings of English-held text in the page's language.
+      | "translations"
     >;
   readonly policy: HostPolicy;
   readonly actorId: string | null;
+  /**
+   * Whether a *read in my language* press may be drawn (rondo#490): true
+   * where the server holds the port that spends on it. Absent is false.
+   */
+  readonly translating?: boolean;
   /**
    * The tag this host stated about its one operator, or null when it stated
    * nothing (D-0055 rule 5, D-0056 rules 2 and 3).

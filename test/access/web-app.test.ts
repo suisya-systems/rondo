@@ -26,6 +26,7 @@ import { DatabaseSync } from "node:sqlite";
 import { type Context, Hono } from "hono";
 import { expect, test } from "vitest";
 import { recordTabNotice } from "../../src/access/reach.js";
+import { heldAnchor, heldDigest } from "../../src/access/read-in.js";
 import {
   type AddedRepository,
   type AddRepositoryInput,
@@ -52,6 +53,8 @@ import {
   type PublishInput,
   PublishPort,
   type RaiseInput,
+  type ReadInInput,
+  ReadInPort,
   type ReleaseInput,
   ReleasePort,
   type RetakeReviewFromWeb,
@@ -1005,6 +1008,89 @@ test("(retake-review) a person's press takes the review again once; a script, a 
   expect(retaken).toHaveLength(1);
 });
 
+test("(read-in) a person's press reads the text once and lands back on it; a script, an English page, a bad form or no port reads nothing (rondo#490)", async () => {
+  const read: ReadInInput[] = [];
+  const withReadIn = (port: ReadInPort | null) =>
+    ({ ...spyPorts([]), readIn: port }) as ServedPorts;
+  const { base, stop, closed } = await served(
+    createApp(
+      withReadIn(
+        new ReadInPort(async (input) => {
+          read.push(input);
+          return await Promise.resolve({ ok: true, digest: heldDigest(input.text) });
+        }),
+      ),
+      TOKEN,
+    ),
+  );
+  const person = pressHeaders(base);
+  const text = "Keep it as an open question?\r\n-> Keep it open";
+  const form = { token: TOKEN, text, back: "/?thread=req-1&lang=ja#elsewhere" };
+
+  const pressed = await send(base, "/read-in?lang=ja", "POST", person, form);
+  expect(pressed.status).toBe(303);
+  // Back where the words were: the anchor the page drew from the LF text.
+  expect(pressed.location).toBe(
+    `/?thread=req-1&lang=ja#${heldAnchor(heldDigest("Keep it as an open question?\n-> Keep it open"))}`,
+  );
+  expect(read).toEqual([{ text, language: "ja" }]);
+
+  // Never to another origin.
+  const away = await send(base, "/read-in?lang=ja", "POST", person, {
+    ...form,
+    back: "//evil.example/",
+  });
+  expect(away.location?.startsWith("/?")).toBe(true);
+  expect(away.location?.includes("evil")).toBe(false);
+
+  const script = await send(
+    base,
+    "/read-in?lang=ja",
+    "POST",
+    { ...person, "sec-fetch-user": undefined },
+    form,
+  );
+  expect(script.status).toBe(403);
+  const english = await send(base, "/read-in?lang=en", "POST", person, form);
+  expect(english.status).toBe(400);
+  const empty = await send(base, "/read-in?lang=ja", "POST", person, { ...form, text: " " });
+  expect(empty.status).toBe(400);
+  const long = await send(base, "/read-in?lang=ja", "POST", person, {
+    ...form,
+    text: "x".repeat(16_001),
+  });
+  expect(long.status).toBe(400);
+  expect(read).toHaveLength(2);
+  stop.abort();
+  expect(await closed).toBe(0);
+
+  const none = await served(createApp(withReadIn(null), TOKEN));
+  const refused = await send(none.base, "/read-in?lang=ja", "POST", pressHeaders(none.base), form);
+  expect(refused.status).toBe(403);
+  none.stop.abort();
+  expect(await none.closed).toBe(0);
+
+  // A reading that failed says so, with rondo's own reason, and the way back.
+  const failing = await served(
+    createApp(
+      withReadIn(new ReadInPort(async () => await Promise.resolve({ ok: false, note: "boom" }))),
+      TOKEN,
+    ),
+  );
+  const failed = await send(
+    failing.base,
+    "/read-in?lang=ja",
+    "POST",
+    pressHeaders(failing.base),
+    form,
+  );
+  expect(failed.status).toBe(409);
+  expect(failed.body).toContain(chromeFor("ja").readInRefused);
+  expect(failed.body).toContain("boom");
+  failing.stop.abort();
+  expect(await failing.closed).toBe(0);
+});
+
 test("(revise) every other shape of request to the revise route is refused and writes nothing", async () => {
   const revised: Revised = [];
   const { base, stop, closed } = await served(createApp(spyPorts([], [], [], [], revised), TOKEN));
@@ -1671,6 +1757,8 @@ const WRITE_TABLE = [
   "ALL /fix-conflict",
   // Taking a gate's model review again (rondo#500, D-0138).
   "ALL /retake-review",
+  // Reading English-held text in the page's language (rondo#490, D-0144).
+  "ALL /read-in",
   // An open tab's report of its notice (rondo#414, D-0108).
   "ALL /notice",
   "ALL /*",
@@ -1693,6 +1781,7 @@ const WRITE_TABLE = [
   "POST /notice",
   "POST /not-now",
   "POST /flow-answer",
+  "POST /read-in",
   "POST /retake-review",
   "POST /fix-conflict",
   "POST /merge",
@@ -1748,6 +1837,8 @@ const PRESS_ROUTES = [
   "/fix-conflict",
   // Taking a gate's model review again, one more review round (rondo#500, D-0138).
   "/retake-review",
+  // A reading of English-held text, which spends (rondo#490, D-0144).
+  "/read-in",
 ];
 
 /**

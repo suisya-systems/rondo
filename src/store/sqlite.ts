@@ -123,12 +123,14 @@ import {
   type StoredScope,
   type StoredScopeDecision,
   type StoredSetupPlan,
+  type StoredTranslation,
   type StoredTriage,
   type StoredTriageDecline,
   SUSPENDED_STATUSES,
   scopeCoversRequest,
   TERMINAL_STATUSES,
   type ThreadMessageDraft,
+  type TranslationDraft,
   type TriageDeclineDraft,
   type UnconsumedDecision,
   type WithheldByRule,
@@ -1730,6 +1732,20 @@ CREATE TABLE IF NOT EXISTS flow_answer (
   answered_at_ms              INTEGER NOT NULL,
   request                     TEXT,
   why                         TEXT
+);
+
+-- rondo#490 (D-0144). A reading of English-held text in the person's
+-- language, on their press: keyed by the original's digest and the language,
+-- written once (the first reading stands). The original stays the record;
+-- nothing else names these rows.
+CREATE TABLE IF NOT EXISTS translation (
+  digest                      TEXT    NOT NULL,
+  language                    TEXT    NOT NULL,
+  text                        TEXT    NOT NULL,
+  drafter                     TEXT    NOT NULL,
+  cost_usd                    REAL,
+  read_at_ms                  INTEGER NOT NULL,
+  PRIMARY KEY (digest, language)
 );
 
 -- D-0098 rule 3.2. A decision-record number a line was handed at admission.
@@ -3523,6 +3539,15 @@ export interface AdvisoryRecord {
   /** Every flow stop, oldest first. */
   flowStops(): Promise<readonly StoredFlowStop[]>;
   /**
+   * Record one reading in the person's language (rondo#490). A second write
+   * under the same digest and language is `duplicate`: the first stands.
+   */
+  recordTranslation(
+    draft: TranslationDraft,
+  ): Promise<RecordOutcome | { readonly kind: "duplicate" }>;
+  /** Every reading in one language, oldest first. */
+  translations(language: string): Promise<readonly StoredTranslation[]>;
+  /**
    * Record the flow host's ask over a candidate's open points (rondo#487). A
    * second write under the same id is `duplicate`: the ask is asked once.
    */
@@ -5248,6 +5273,40 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
             ]
           : [];
       });
+    },
+
+    async recordTranslation(
+      draft: TranslationDraft,
+    ): Promise<RecordOutcome | { readonly kind: "duplicate" }> {
+      const written = connection
+        .prepare(
+          "INSERT OR IGNORE INTO translation " +
+            "(digest, language, text, drafter, cost_usd, read_at_ms) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          draft.digest,
+          draft.language,
+          draft.text,
+          draft.drafter,
+          draft.costUsd,
+          draft.readAtMs,
+        );
+      return Number(written.changes) === 0 ? { kind: "duplicate" } : { kind: "recorded" };
+    },
+
+    async translations(language: string): Promise<readonly StoredTranslation[]> {
+      return (
+        connection
+          .prepare("SELECT * FROM translation WHERE language = ? ORDER BY read_at_ms, rowid")
+          .all(language) as SqlRow[]
+      ).map((row) => ({
+        digest: String(row["digest"]),
+        language: String(row["language"]),
+        text: String(row["text"]),
+        drafter: String(row["drafter"]),
+        costUsd: typeof row["cost_usd"] === "number" ? row["cost_usd"] : null,
+        readAtMs: Number(row["read_at_ms"]),
+      }));
     },
 
     async latestTriage(): Promise<readonly StoredTriage[]> {

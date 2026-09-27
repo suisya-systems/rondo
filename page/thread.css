@@ -1102,3 +1102,60 @@
     padding-left: 8px;
   }
 }
+
+/*
+ * English-held text and its reading in the page's language (rondo#490). The
+ * press is small and quiet, after the words it reads: a reading aid and not an
+ * act. A reading stands in the text's place, with the original folded under
+ * it as the record, and one faint line of when it was read and what it cost.
+ */
+.held {
+  min-width: 0;
+}
+
+.held-press {
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: calc(12px * var(--text-scale));
+  color: var(--color-link);
+  cursor: pointer;
+}
+
+.held-press:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.held-original > summary {
+  cursor: pointer;
+  font-size: calc(12px * var(--text-scale));
+  color: var(--color-muted-foreground);
+}
+
+.held-original > div {
+  opacity: 0.85;
+}
+
+.held-cost {
+  font-size: calc(12px * var(--text-scale));
+  color: var(--color-faint);
+}
+
+/* A thread message's held words read as its prose does (rule 1). */
+.msg .held > div:first-child,
+.msg .held-original > div {
+  margin-top: 4px;
+  max-width: 45em;
+  font-size: calc(16px * var(--text-scale));
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A point and its suggestion keep their line break. */
+.triage-flow-ask-points .held > div,
+.triage-points .held > div {
+  white-space: pre-wrap;
+}
