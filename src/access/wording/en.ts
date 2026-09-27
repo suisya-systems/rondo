@@ -336,10 +336,10 @@ explanation you pressed on and then answers the gate.`,
   blockedUnknown: "not known what was blocked",
   fenceHeading: "The fence:",
   fenceMeaning:
-    "These commands were stopped before they ran, because this lap's limits do not allow them. " +
-    "They changed nothing: the worker went on without them, and the changes above are the whole " +
-    "result. If the work needed one of them, the checks and the worker's test runs below are where " +
-    "a missing step would show.",
+    "These commands were stopped before they ran, because this lap's limits do not allow them, so " +
+    "they changed nothing. The worker went on without them, and rondo cannot tell whether the work " +
+    "needed them: if one of them was a step the work depends on (a check, an install, a push), the " +
+    "result may be missing it.",
   reportHeading: "The worker's report",
   reportFold: "In full, as the worker wrote it",
   reportNotRead: "The worker's report could not be read; it is in the text below if it was.",
@@ -390,9 +390,9 @@ explanation you pressed on and then answers the gate.`,
   workerRanErrored: "The command itself ended in error.",
   workerRanEarlier: (runs) => `and ${String(runs)} earlier run${runs === 1 ? "" : "s"}`,
   workerRanSuperseded: (line) =>
-    `The worker ran the tests again after this (transcript line ${String(line)}) and that run ` +
-    "finished without error, so this failure is not the lap's result. A worker often breaks the " +
-    "code on purpose to see a test fail, then puts it back.",
+    `After this run the worker ran the whole test suite again (transcript line ${String(line)}), ` +
+    "and it finished without error, so this failure is not the lap's result. It may be a check " +
+    "the worker made on purpose, breaking the code to see a test fail and then putting it back.",
   workerRanSource: (line) =>
     `Read by rondo from the commands continuo recorded for this lap (transcript line ${String(line)}); ` +
     "rondo did not run it.",
