@@ -447,6 +447,14 @@ export interface IterationRecord {
   readonly lapTurns: number | null;
   readonly lapDurationMs: number | null;
   /**
+   * The room the scope's budget left this lap when it was sent (D-0121): the
+   * scope's `cost_usd`, less what its laps were read to cost and the reserve of
+   * each other unread lap. A lap whose {@link lapCostUsd} reached it spent all
+   * the room it had. `null` where the lap was admitted under no approval, the
+   * approval did not read, or the lap was never sent.
+   */
+  readonly lapBudgetCapUsd: number | null;
+  /**
    * Why this iteration failed, stalled, or is asking for a withdrawal.
    *
    * One column for all three because the question a reader asks is the same --
@@ -519,6 +527,15 @@ export type GateAnswer = "approve" | "revise";
  * them is a person saying yes.
  */
 export const APPROVED_OUTCOME = "answered_and_forwarded";
+
+/**
+ * Whether a lap spent all the room the scope's budget left it when it was sent
+ * (D-0121). Both numbers or no answer: a cost or a cap rondo did not read says
+ * nothing.
+ */
+export function reachedBudgetCap(costUsd: number | null, capUsd: number | null): boolean {
+  return costUsd !== null && capUsd !== null && costUsd >= capUsd;
+}
 
 /**
  * Whether an iteration records a person having actually approved the work.

@@ -77,6 +77,7 @@ const recordWith = (status: IterationStatus, attempts = 1): IterationRecord => (
   lapCostUsd: null,
   lapTurns: null,
   lapDurationMs: null,
+  lapBudgetCapUsd: null,
   reason: null,
   failureKind: null,
   gateAnswer: null,

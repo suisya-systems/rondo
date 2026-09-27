@@ -228,3 +228,14 @@ test("what rondo decided without asking is counted, and named heaviest first", (
     "duplicate-delivery",
   ]);
 });
+
+test("a lap whose cost reached the room it was sent with is marked, and only then (D-0121)", () => {
+  const at = (lapCostUsd: number | null, lapBudgetCapUsd: number | null) =>
+    governanceOf(lap({ lapCostUsd, lapBudgetCapUsd }), null, 1, approval(), false, []).atBudgetCap;
+  expect(at(7.5, 7.5)).toEqual({ costUsd: 7.5, capUsd: 7.5 });
+  expect(at(8.46, 7.5)).toEqual({ costUsd: 8.46, capUsd: 7.5 });
+  expect(at(7.49, 7.5)).toBeNull();
+  // A number rondo did not read says nothing either way.
+  expect(at(null, 7.5)).toBeNull();
+  expect(at(7.5, null)).toBeNull();
+});

@@ -55,7 +55,7 @@ import type {
   LapReadingDraft,
   ScopeRefusal,
 } from "../store/records.js";
-import { isTerminal, readingCoverage } from "../store/records.js";
+import { isTerminal, reachedBudgetCap, readingCoverage } from "../store/records.js";
 import { allocate } from "./allocator.js";
 import { nextStep, type Step } from "./loop.js";
 import {
@@ -1314,7 +1314,7 @@ async function performStep(
       "the ceiling the plan declared.",
   );
 
-  const walked = await ports.performLap(plan.plan, modelTier);
+  const walked = await ports.performLap(plan.plan, modelTier, record.id);
   switch (walked.kind) {
     case "answered": {
       const lap = walked.value;
@@ -1457,6 +1457,8 @@ async function performStep(
           lapCostUsd: lap.costUsd,
           lapTurns: lap.turns,
           lapDurationMs: lap.durationMs,
+          // D-0121: the room the lap was sent with, beside what it spent.
+          lapBudgetCapUsd: lap.budgetCapUsd,
           ...lapNoteFields(
             performing.record.reason,
             lap.endpointLeaseFailure,
@@ -1925,7 +1927,11 @@ function spendLine(lap: LapPerformance): string {
   }
   return (
     `The lap cost ${spelledNumber(lap.costUsd)} USD over ${spelledNumber(lap.turns)} turn(s) in ` +
-    `${spelledNumber(lap.durationMs)} ms, read from its terminal 'result' event.`
+    `${spelledNumber(lap.durationMs)} ms, read from its terminal 'result' event.` +
+    (reachedBudgetCap(lap.costUsd, lap.budgetCapUsd)
+      ? ` It reached the ${String(lap.budgetCapUsd)} USD the scope's budget left it when it was ` +
+        "sent (D-0121)."
+      : "")
   );
 }
 
