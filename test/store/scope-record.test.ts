@@ -273,11 +273,6 @@ const PAYLOAD_REFUSALS: readonly (readonly [string, JsonRecord, string])[] = [
   ],
   ["a fractional expiry", withBudgets({ expires_at_ms: 1.5 }), "'expires_at_ms' must be a whole"],
   ["an unknown threshold", { ...PAYLOAD, severity_threshold: "p1" }, "severity_threshold must be"],
-  [
-    "merge_default_branch",
-    { ...PAYLOAD, outward_acts: ["merge_default_branch"] },
-    "CI observation",
-  ],
   ["an unknown outward act", { ...PAYLOAD, outward_acts: ["tag"] }, "'tag', which is not one of"],
   ["an empty irreversible name", { ...PAYLOAD, irreversible_additions: [""] }, "an empty name"],
   ["a non-string irreversible name", { ...PAYLOAD, irreversible_additions: [1] }, "only strings"],
@@ -291,11 +286,12 @@ test.each(PAYLOAD_REFUSALS)("the scope writer refuses %s", async (_name, payload
   expect(count(connection, "SELECT COUNT(*) AS n FROM scope")).toBe(0);
 });
 
-test("the payload refusals' control: zeros, both outward acts and an addition record", async () => {
+test("the payload refusals' control: zeros, every outward act and an addition record", async () => {
   const { record } = await seeded();
   const payload = {
     ...withBudgets({ laps: 0, review_rounds: 0, cost_usd: 0, cost_reserve_usd: 0 }),
-    outward_acts: ["push_branch", "open_pull_request"],
+    // D-0126: the merge is admitted, where it used to be refused by name.
+    outward_acts: ["push_branch", "open_pull_request", "merge_default_branch"],
     irreversible_additions: ["rotate_secret"],
   };
   expect(await record.recordScope(scope({ payload }))).toEqual({ kind: "recorded" });
@@ -752,6 +748,39 @@ test("the approval a lap was admitted under is read back off its admission row (
     )
     .run();
   expect(await record.scopeDecisionAdmitting("i-a")).toBe(null);
+});
+
+test("D-0126: a merge on green is claimed once per lap, whichever approval claims it", async () => {
+  const { connection, record } = await approved();
+  admitted(connection, "i-a", null);
+  const claim = { scopeDecisionId: "sd-0001", iterationId: "i-a", nowMs: 9 };
+  expect(await record.claimScopedMerge(claim)).toEqual({ kind: "recorded" });
+  // The second attempt is refused, and so is a successor approval's: the key
+  // alone would take it, so the writer asks after the lap and not the pair.
+  expect((await record.claimScopedMerge(claim)).kind).toBe("refused");
+  expect((await record.claimScopedMerge({ ...claim, scopeDecisionId: "sd-0002" })).kind).toBe(
+    "refused",
+  );
+  expect(
+    connection
+      .prepare("SELECT * FROM scope_consumption WHERE act_kind = 'merge_default_branch'")
+      .all(),
+  ).toEqual([
+    {
+      scope_decision_id: "sd-0001",
+      act_kind: "merge_default_branch",
+      subject_id: "i-a",
+      proposal_id: null,
+      consumed_at_ms: 9,
+    },
+  ]);
+  // A merge is not a lap: the approval's spend and the lap's admission read as before.
+  expect((await record.scopeSpent("sd-0001")).admissions).toBe(1);
+  expect(await record.scopeDecisionAdmitting("i-a")).toBe("sd-0001");
+  // Another lap is claimed on its own.
+  expect(
+    await record.claimScopedMerge({ scopeDecisionId: "sd-0001", iterationId: "i-b", nowMs: 9 }),
+  ).toEqual({ kind: "recorded" });
 });
 
 // --- The spend inside reserve() (D-0066 rule 4.3) ---------------------------
