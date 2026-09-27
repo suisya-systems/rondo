@@ -35,6 +35,7 @@ import {
   deliverGate,
   type GateDelegation,
   presentGate,
+  type ShowGateRequest,
   showGate,
   showRun,
   startContinuo,
@@ -223,6 +224,7 @@ import { requestWords, threadsOf } from "./page-logic/threads.js";
 import {
   type ComposedBodyOutcome,
   composePublishBody,
+  type PublishBodyPorts,
   publishBodyOnce,
   recordedPublishBody,
 } from "./publish-body.js";
@@ -8045,29 +8047,6 @@ export type PublishPlanned =
   | { readonly kind: "ready"; readonly plan: PublishPlan };
 
 /**
- * Everything that happens before a publish pushes anything, as one function.
- *
- * **Extracted so the terminal and the page cannot drift** (rondo#233 S5), which
- * is `revisionPreflight`'s argument in S4 and, here, a sharper one: D-0059
- * section 5a's `publish` press is pressed only from a screen that already shows
- * this result, so the screen and the act have to be computed by the same code
- * or the screen is a description of something else.
- *
- * **Every step is a read**, in `commandPublish`'s own order: the plan's fields,
- * git's answer about the push target, git's answer about the work, the pull
- * request's text, and the stored readings. Nothing in it can be taken back,
- * which is what lets both surfaces run it and refuse for free -- and what lets
- * the page run it twice, once to show and once inside the press.
- *
- * **The uncommitted-work refusal is here and the review refusal is not.**
- * D-0060 rule 4's refusal is not overridable by anybody, so it is a refusal;
- * the reading's is a judgement a person may overrule, so it is carried.
- *
- * **The body's English is composed through a caller's port** ({@link
- * PublishBodyComposing}), so the one model run a publish makes is a value this
- * function is handed rather than a process it starts.
- */
-/**
  * How one caller comes by the body's English, given what is known about the
  * language the lap's report is written in (`D-0079` section 4, rondo#290).
  *
@@ -8109,22 +8088,64 @@ async function composedBodyFor(
 }
 
 /**
+ * How a report is read: one `gate show`, as a value rather than as a continuo
+ * (rondo#290).
+ *
+ * **The handle is not a value a caller can make**, which is why the port is the
+ * call and not the continuo: `startContinuo` is what mints a `VerifiedContinuo`
+ * and `run` refuses one that did not come from there, so a function that took
+ * the handle could only ever be exercised against a real pinned build. What both
+ * publish routes actually need from continuo is this one answer.
+ */
+export type GateShowing = (request: ShowGateRequest) => Promise<ContinuoResult<GateDetail>>;
+
+/**
  * The gate rationale of one lap, which is the report itself: continuo's
  * word-for-word copy of the worker's last words (`./question.ts`). Null where
  * the lap records no gate, or the gate does not read as answered.
+ *
+ * **Which gate and which database are the row's**, not the caller's: a publish is
+ * of one closed lap, and the lap's own `gate_id` and plan say where its last
+ * words are. A gate that reads as anything but answered is no report, because the
+ * rationale a worker wrote is what an answered gate carries.
  */
-async function lapReport(
-  continuo: VerifiedContinuo,
+export async function lapReport(
+  showing: GateShowing,
   record: IterationRecord,
 ): Promise<string | null> {
   if (record.gateId === null) {
     return null;
   }
-  const observed = await showGate(continuo, {
+  const observed = await showing({
     db: planField(record, "db"),
     gateId: record.gateId,
   });
   return observed.kind === "answered" ? observed.payload.rationale : null;
+}
+
+/**
+ * How the terminal's `publish` comes by the body's English (`D-0079` section 4,
+ * rondo#290): read this lap's report, then compose an English account of it.
+ *
+ * **One composing per publish, and no row.** The terminal's body is compared
+ * against nothing -- there is no earlier screen of it to disagree with -- so
+ * unlike the page's ({@link pagePublishBody}) this neither records nor reads a
+ * row. What it shares with the page is the two legs it is handed and the ask
+ * itself, so the two surfaces put the same question to the same drafter.
+ */
+export function commandPublishBody(
+  ports: PublishBodyPorts & { readonly report: () => Promise<string | null> },
+): PublishBodyComposing {
+  return async (reportLanguage) => {
+    const report = await ports.report();
+    return report === null
+      ? {
+          kind: "unavailable",
+          reason:
+            "the gate this lap reported at would not read, so there was no report to compose from",
+        }
+      : await composePublishBody(ports, { report, reportLanguage });
+  };
 }
 
 /**
@@ -8151,7 +8172,9 @@ function pagePublishBody(
         record,
         report: async () => {
           const startup = await startContinuo(environment);
-          return startup.kind === "refused" ? null : await lapReport(startup.continuo, lap);
+          return startup.kind === "refused"
+            ? null
+            : await lapReport(async (request) => await showGate(startup.continuo, request), lap);
         },
         runDrafter: async (document) => await runDrafter(drafterRow(), document),
         drafter: drafterRow(),
@@ -8185,6 +8208,29 @@ function pressedPublishBody(
   return async () => await recordedPublishBody(record, subject);
 }
 
+/**
+ * Everything that happens before a publish pushes anything, as one function.
+ *
+ * **Extracted so the terminal and the page cannot drift** (rondo#233 S5), which
+ * is `revisionPreflight`'s argument in S4 and, here, a sharper one: D-0059
+ * section 5a's `publish` press is pressed only from a screen that already shows
+ * this result, so the screen and the act have to be computed by the same code
+ * or the screen is a description of something else.
+ *
+ * **Every step is a read**, in `commandPublish`'s own order: the plan's fields,
+ * git's answer about the push target, git's answer about the work, the pull
+ * request's text, and the stored readings. Nothing in it can be taken back,
+ * which is what lets both surfaces run it and refuse for free -- and what lets
+ * the page run it twice, once to show and once inside the press.
+ *
+ * **The uncommitted-work refusal is here and the review refusal is not.**
+ * D-0060 rule 4's refusal is not overridable by anybody, so it is a refusal;
+ * the reading's is a judgement a person may overrule, so it is carried.
+ *
+ * **The body's English is composed through a caller's port** ({@link
+ * PublishBodyComposing}), so the one model run a publish makes is a value this
+ * function is handed rather than a process it starts.
+ */
 export async function publishPlanFor(
   record: IterationRecord,
   asked: PublishAsked,
@@ -9126,19 +9172,11 @@ async function commandPublish(
     // 4, rondo#290). Both legs are reachable from here and from nowhere inside
     // that function: continuo is this command's own, and the drafter is the one
     // `./forge.ts` runs for every other composed draft.
-    async (reportLanguage) => {
-      const report = await lapReport(continuo, record);
-      return report === null
-        ? {
-            kind: "unavailable",
-            reason:
-              "the gate this lap reported at would not read, so there was no report to compose from",
-          }
-        : await composePublishBody(
-            { runDrafter: async (document) => await runDrafter(drafterRow(), document) },
-            { report, reportLanguage },
-          );
-    },
+    commandPublishBody({
+      report: async () =>
+        await lapReport(async (request) => await showGate(continuo, request), record),
+      runDrafter: async (document) => await runDrafter(drafterRow(), document),
+    }),
   );
   if (planned.kind === "refused") {
     return refuse(planned.reason);

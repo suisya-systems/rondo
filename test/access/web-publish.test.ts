@@ -11,6 +11,8 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import {
+  commandPublishBody,
+  lapReport,
   publishFromPage,
   publishingForPage,
   publishPlanFor,
@@ -26,7 +28,8 @@ import { threadsOf } from "../../src/access/page-logic/threads.js";
 import { COMPOSED_SECTIONS, publishBodyOnce } from "../../src/access/publish-body.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
-import { CLI_PATH_ENV } from "../../src/continuo/invoker.js";
+import { CLI_PATH_ENV, type ShowGateRequest } from "../../src/continuo/invoker.js";
+import type { ContinuoResult, GateDetail } from "../../src/continuo/protocol.js";
 import { drafterRow } from "../../src/continuo/roles.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, runPlan } from "../../src/refrain/plan.js";
@@ -493,6 +496,12 @@ async function publishableWorld(
   commits = 1,
   /** The remote's URL; the default is a repository nobody has. */
   remoteUrl = "https://github.com/suisya-systems/rondo-not-real.git",
+  /**
+   * The language the lap asked its worker to write in (`material_language`), or
+   * null where it asked for none -- which is the default and the case rondo#290
+   * is about.
+   */
+  materialLanguage: string | null = null,
 ): Promise<{
   readonly store: ReturnType<typeof iterationStore>;
   readonly storePath: string;
@@ -507,7 +516,12 @@ async function publishableWorld(
   await openRequest(connection);
   const iterationId = "lap-00000000-0000-4000-8000-0000000000c1";
   const workspaceRoot = join(dir, "work");
-  const planned = runPlan({ ...PLAN, workspaceRoot, repository: join(dir, "repo") });
+  const planned = runPlan({
+    ...PLAN,
+    workspaceRoot,
+    repository: join(dir, "repo"),
+    materialLanguage,
+  });
   if (planned.kind !== "planned") {
     throw new Error(`the fixture plan is not valid: ${planned.reason}`);
   }
@@ -1071,6 +1085,131 @@ test(
       expect(without).toContain(`## ${heading}`);
     }
     expect(without).toContain("there was no report to compose from");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+/** A report as a lap asked for Japanese leaves it: the worker's own last words. */
+const JAPANESE_REPORT = [
+  "## 変更の要旨",
+  "端末の publish でも、報告から起こした英語の本文が使われるようにしました。",
+  "",
+  "## 確認結果",
+  "npm run verify を通しました。",
+].join("\n");
+
+/** One `gate show` answer carrying a report, as continuo's decoder gives it. */
+function answeredGate(gateId: string, db: string, rationale: string): ContinuoResult<GateDetail> {
+  return {
+    kind: "answered",
+    db,
+    payload: {
+      gateId,
+      gateType: "human_decision",
+      runId: "run-1",
+      stage: "answered",
+      outcome: APPROVED_OUTCOME,
+      rationale,
+      options: '["approve","revise"]',
+    },
+  };
+}
+
+test(
+  "the terminal's publish reads the lap's gate for its report and puts an English account of it in the body (D-0079 section 4, rondo#290)",
+  async () => {
+    // **The route `rondo publish` takes**, leg by leg: the language comes off the
+    // lap's own plan, the report comes off the lap's own gate, and what reaches
+    // the body is the English account composed from it.
+    const world = await publishableWorld("clear", 1, undefined, "ja");
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    expect(record.record.plan["material_language"]).toBe("ja");
+
+    const asked: ShowGateRequest[] = [];
+    const documents: string[] = [];
+    const composed = {
+      summary: "The terminal's publish now writes an English account of the lap's report.",
+      grounds: "D-0079 section 4 requires English in a pull request body and nowhere earlier.",
+      verification: "The repository's own verification was run and it passed.",
+    };
+    const planned = await publishPlanFor(
+      record.record,
+      world.asked,
+      {},
+      world.store,
+      null,
+      commandPublishBody({
+        report: async () =>
+          await lapReport(async (request) => {
+            asked.push(request);
+            return answeredGate(request.gateId, request.db, JAPANESE_REPORT);
+          }, record.record),
+        runDrafter: async (document) => {
+          documents.push(document);
+          return { kind: "answered", costUsd: null, finalMessage: JSON.stringify(composed) };
+        },
+      }),
+    );
+    if (planned.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(planned)}`);
+    }
+
+    // **The report is fetched from this lap's gate, in this lap's database.**
+    expect(asked).toEqual([
+      { db: String(record.record.plan["db"]), gateId: `gate-${world.iterationId}` },
+    ]);
+    // **The language decides what the ask says and never whether it runs**: the
+    // tag the lap asked for is named, and the report itself is the material.
+    expect(documents).toHaveLength(1);
+    expect(documents[0]).toContain("IETF language tag 'ja'");
+    expect(documents[0]).toContain(JAPANESE_REPORT);
+
+    const body = planned.plan.pullRequest.body;
+    const headings = COMPOSED_SECTIONS.map((one) => body.indexOf(`## ${one.heading}`));
+    expect(headings.every((at) => at >= 0)).toBe(true);
+    expect([...headings].sort((a, b) => a - b)).toEqual(headings);
+    for (const section of Object.values(composed)) {
+      expect(body).toContain(section);
+    }
+    // **The report's own words are on the record and not in the body** (rule 4.2).
+    expect(body).not.toContain("変更の要旨");
+    expect(body).not.toContain("端末の publish");
+
+    // **A gate that does not read as answered is no report**, and the body then
+    // keeps its three sections and says it has no account -- it does not fall
+    // back to the report, and it does not go without a heading.
+    const unread = await publishPlanFor(
+      record.record,
+      world.asked,
+      {},
+      world.store,
+      null,
+      commandPublishBody({
+        report: async () =>
+          await lapReport(
+            async (request) => ({
+              kind: "refused",
+              db: request.db,
+              errorClass: "continuo.gate.unknown",
+              message: "no such gate",
+            }),
+            record.record,
+          ),
+        runDrafter: async () => {
+          throw new Error("nothing is composed from a gate that would not read");
+        },
+      }),
+    );
+    if (unread.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(unread)}`);
+    }
+    for (const { heading } of COMPOSED_SECTIONS) {
+      expect(unread.plan.pullRequest.body).toContain(`## ${heading}`);
+    }
+    expect(unread.plan.pullRequest.body).toContain("there was no report to compose from");
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );

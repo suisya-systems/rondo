@@ -18915,7 +18915,10 @@ put to the human gate, and its answer". Refs `D-0053`,
 > 4. **The body has one bound and it is the body's** (`BODY_LIMIT`, `src/access/pull-request.ts`).
 >    A length per section would have thrown all three accounts away because one of them ran long.
 >    What a report may be composed *from* is still bounded, because half a report composes a wrong
->    account rather than a short one (`D-0071` rule 1.5).
+>    account rather than a short one (`D-0071` rule 1.5). Where that one bound does bite, what gives
+>    way is the quoted request first and the accounts second -- each fitted inside the room the body
+>    has and saying what it left -- and never a section: cutting the body's tail would have taken the
+>    last two headings with it, which point 1 forbids.
 >
 > **The page's publish composes through a recorded row.** Its preview and its press each run
 > `publishPlanFor`, and the body is inside the digest the press compares against what the screen
@@ -18933,6 +18936,13 @@ put to the human gate, and its answer". Refs `D-0053`,
 > leaves the preview with no body -- exactly what a press with no row has -- and the two render one
 > body without an account rather than two different bodies. The terminal's `publish` composes once per
 > publish and compares its body against nothing, so it needs no row.
+>
+> **Both routes read the report the same way, as a value and not as a continuo handle.** The report is
+> the answered gate's `rationale`, found by the lap's own `gate_id` in the lap's own database
+> (`lapReport`), and the one `gate show` it takes arrives as a function -- because a
+> `VerifiedContinuo` is only ever minted by `startContinuo` and `run` refuses one that was not, so a
+> leg that took the handle could be exercised only against a real pinned build. That is what lets the
+> route both surfaces publish through be covered without one.
 
 **This entry decides and builds.** The building change is the pull request that carries it:
 `src/access/wording.ts`, `src/access/model-draft.ts` and `src/continuo/invoker.ts`, with their tests.
