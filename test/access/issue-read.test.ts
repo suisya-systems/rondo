@@ -17,6 +17,7 @@ import type { CommandOutcome } from "../../src/access/forge.js";
 import {
   type BareIssueRepository,
   bareIssueRepository,
+  bareRepositoryUnsettled,
   type ForgeIssueRead,
   forgeBody,
   ISSUE_BOUND_BYTES,
@@ -81,6 +82,7 @@ function readerOver(
 ) {
   let n = 0;
   let reads = 0;
+  const said: string[] = [];
   const reader = issueReader({
     record: w.record,
     read,
@@ -90,12 +92,12 @@ function readerOver(
       n += 1;
       return `forge-${String(n)}`;
     },
-    log: () => undefined,
+    log: (line) => said.push(line),
     onRead: () => {
       reads += 1;
     },
   });
-  return { reader, onReads: () => reads };
+  return { reader, onReads: () => reads, said };
 }
 
 async function forgeMessages(w: World) {
@@ -402,6 +404,13 @@ const rowsHolding = (
 /** The reference was named before any scope above, which is the usual order. */
 const NAMED_AT = 50;
 
+/** One naming that disagrees, as the answer carries it: the plan's own slug. */
+const byPlan = (repository: string, repo: string) => ({ repository, repo, named: "plan" as const });
+/** The same, answered for a slug-less plan by the host's `--repo`. */
+const byFlag = (repository: string, repo: string) => ({ repository, repo, named: "flag" as const });
+/** A plan neither it nor the host names a repository for. */
+const unnamed = (repository: string) => ({ repository, repo: null, named: "nothing" as const });
+
 test("a bare #N is read in the repository of the plan its request is drafted from (D-0081 rule 3.4)", async () => {
   const a = heldIn("/srv/a", "o/a");
   const b = heldIn("/srv/b", "o/b");
@@ -410,9 +419,11 @@ test("a bare #N is read in the repository of the plan its request is drafted fro
   expect(await bareIssueRepository(rowsHolding([a], [], "o/host"), "r1", NAMED_AT)).toEqual({
     repo: "o/a",
   });
-  // Two, and nothing has said which: the read waits for the person (rule 2.4).
+  // Two, and nothing has said which: the read waits for the person (rule 2.4),
+  // told which naming came from where (`D-0137` rule 3).
   expect(await bareIssueRepository(rowsHolding([a, b], [], "o/host"), "r1", NAMED_AT)).toEqual({
     disputed: true,
+    namings: [byPlan("/srv/a", "o/a"), byPlan("/srv/b", "o/b")],
   });
   // A scope for the request -- the drafter's split, or the person's own -- has
   // said which workspaces the work runs in, so the other plan is out of play.
@@ -444,7 +455,7 @@ test("a bare #N is read in the repository of the plan its request is drafted fro
   // beside a second repository's plan that is two answers, not agreement.
   expect(
     await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), b], [], "o/a"), "r1", NAMED_AT),
-  ).toEqual({ disputed: true });
+  ).toEqual({ disputed: true, namings: [byFlag("/srv/a", "o/a"), byPlan("/srv/b", "o/b")] });
   // The same plan beside one naming what the host names is still one answer.
   expect(
     await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), a], [], "o/a"), "r1", NAMED_AT),
@@ -453,18 +464,22 @@ test("a bare #N is read in the repository of the plan its request is drafted fro
   // and standing beside one that is known that is two answers, not agreement.
   expect(
     await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), b], []), "r1", NAMED_AT),
-  ).toEqual({ disputed: true });
+  ).toEqual({ disputed: true, namings: [unnamed("/srv/a"), byPlan("/srv/b", "o/b")] });
 
   // **Setup run again for a repository it already recorded is one answer.** An
   // older plan of that repository naming no slug says nothing about it, which
-  // is how a store set up before D-0081 comes to name its slug (rule 6.2).
+  // is how a store set up before D-0081 comes to name its slug (rule 6.2), and
+  // with no `--repo` there is no second naming for it to disagree with.
   expect(
     await bareIssueRepository(rowsHolding([heldIn("/srv/a", null), a], []), "r1", NAMED_AT),
   ).toEqual({ repo: "o/a" });
   // Two slugs recorded for one repository is a conflict, not a record of it.
   expect(
     await bareIssueRepository(rowsHolding([a, heldIn("/srv/a", "o/other")], []), "r1", NAMED_AT),
-  ).toEqual({ disputed: true });
+  ).toEqual({
+    disputed: true,
+    namings: [byPlan("/srv/a", "o/a"), byPlan("/srv/a", "o/other")],
+  });
 
   // **A scope older than the message that named the issue settles nothing.**
   // A person replying in this thread with work in another repository is
@@ -473,7 +488,59 @@ test("a bare #N is read in the repository of the plan its request is drafted fro
   // repository and recorded as read for good.
   expect(await bareIssueRepository(rowsHolding([a, b], [["/srv/a"]]), "r1", 1_000)).toEqual({
     disputed: true,
+    namings: [byPlan("/srv/a", "o/a"), byPlan("/srv/b", "o/b")],
   });
+});
+
+test("a bare #N is read where its request would publish, and a second naming of one repository stops it (D-0137)", async () => {
+  // **The case rondo#313 item 2 names.** One local repository holds an old
+  // setup row carrying no slug and a newer one naming `o/new`, and the host was
+  // started with `--repo o/old`. This reckoning used to take the newer row's
+  // slug and read `o/new#N`, while a publish of the older plan fell back to the
+  // flag and opened the pull request in `o/old` -- two repositories for one
+  // piece of work, chosen silently and in two different places.
+  const older = heldIn("/srv/a", null);
+  const newer = heldIn("/srv/a", "o/new");
+  expect(await bareIssueRepository(rowsHolding([older, newer], [], "o/old"), "r1", NAMED_AT)).toEqual(
+    { disputed: true, namings: [byFlag("/srv/a", "o/old"), byPlan("/srv/a", "o/new")] },
+  );
+  // **And no scope narrows it**: both plans are of the one repository a scope
+  // would name, so the person's own answer about which work is meant cannot
+  // settle this. What settles it is the flag or the row, which is why the
+  // namings say which is which.
+  expect(
+    await bareIssueRepository(rowsHolding([older, newer], [["/srv/a"]], "o/old"), "r1", NAMED_AT),
+  ).toEqual({ disputed: true, namings: [byFlag("/srv/a", "o/old"), byPlan("/srv/a", "o/new")] });
+
+  // **The route through: the flag naming what the plan names.** The same rows
+  // under a host started with `--repo o/new` -- or with no flag at all -- are
+  // one answer, and the read lands where the publish will.
+  expect(
+    await bareIssueRepository(rowsHolding([older, newer], [], "o/new"), "r1", NAMED_AT),
+  ).toEqual({ repo: "o/new" });
+  expect(await bareIssueRepository(rowsHolding([older, newer], []), "r1", NAMED_AT)).toEqual({
+    repo: "o/new",
+  });
+});
+
+test("the line about an unsettled bare #N names which naming came from where (D-0137 rule 3)", () => {
+  // Nothing to name: the repository the request is in is not one this store
+  // holds a plan for (D-0090), so there is no naming that disagrees.
+  expect(bareRepositoryUnsettled([])).toBe("waits on which repository this request is in");
+
+  // Two pieces of work: the person, or the draft, says which is meant.
+  expect(bareRepositoryUnsettled([byPlan("/srv/a", "o/a"), unnamed("/srv/b")])).toBe(
+    "waits on which repository this request is in: a plan of /srv/a names o/a; a plan of /srv/b " +
+      "names none and this host was given no --repo",
+  );
+
+  // One piece of work named twice: the sentence says that instead, because no
+  // draft and no press will settle it -- one of the two namings has to change.
+  expect(bareRepositoryUnsettled([byFlag("/srv/a", "o/old"), byPlan("/srv/a", "o/new")])).toBe(
+    "is read where its request would publish, and 2 repositories are named for that one publish: " +
+      "a plan of /srv/a names none, so this host's --repo o/old answers for it; a plan of /srv/a " +
+      "names o/new; nothing is read until they agree",
+  );
 });
 
 test("a bare #N still in dispute waits for the person: it holds the lap's door and not the drafter (D-0081 rules 2.4, 3.4)", async () => {
@@ -486,7 +553,7 @@ test("a bare #N still in dispute waits for the person: it holds the lap's door a
   const { reader } = readerOver(
     w,
     read,
-    () => (disputed ? { disputed: true } : { repo: "o/r" }),
+    () => (disputed ? { disputed: true, namings: [] } : { repo: "o/r" }),
     tick,
   );
   await reader.unread([]);
@@ -549,4 +616,35 @@ test("a bare #N still in dispute waits for the person: it holds the lap's door a
   drafter.kick();
   await drafter.idle();
   expect(handed).toHaveLength(1);
+});
+
+test("a bare #N two namings of one repository disagree about is not read, and the host says both (D-0137 rules 2, 3)", async () => {
+  const w = await world();
+  const { read, asked } = fakeForge();
+  const { reader, said } = readerOver(w, read, () => ({
+    disputed: true,
+    namings: [byFlag("/srv/a", "o/old"), byPlan("/srv/a", "o/new")],
+  }));
+  await reader.unread([]);
+  await w.say("r1", "Fix #237.", null, 1_000);
+  reader.kick();
+  await reader.idle();
+
+  // **Nothing is read and nothing is written**: neither repository is picked
+  // for the person, so the lap's door keeps waiting on the reference.
+  expect(asked).toEqual([]);
+  expect(await forgeMessages(w)).toEqual([]);
+  const thread = await w.record.threadMessages();
+  if (thread.kind !== "read") throw new Error(thread.reason);
+  expect(await reader.unread(thread.messages)).toEqual(
+    new Map([["r1", [{ named: "#237", host: null, repo: null, number: 237 }]]]),
+  );
+
+  // **And the person is told which two namings disagree, and where each is
+  // from**, because ending this means editing one of them.
+  expect(said).toEqual([
+    "issues   r1: #237 is read where its request would publish, and 2 repositories are named for " +
+      "that one publish: a plan of /srv/a names none, so this host's --repo o/old answers for it; " +
+      "a plan of /srv/a names o/new; nothing is read until they agree",
+  ]);
 });

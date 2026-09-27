@@ -173,7 +173,7 @@ import {
   readRepositoryPaths,
   runDrafter,
 } from "./forge.js";
-import { forgeHost, publishPreflight, redactRemoteUrl } from "./forge-preflight.js";
+import { forgeHost, publishesTo, publishPreflight, redactRemoteUrl } from "./forge-preflight.js";
 import { GATE_ACTOR, gateHost, type ScopedAnswer } from "./gate-host.js";
 import { goalScopeMaterial, goalScopeStanding } from "./goal-scope.js";
 import { hostFailure } from "./host-failure.js";
@@ -1487,11 +1487,13 @@ export async function main(
       read: readIssueFromForge,
       // **A request naming a repository rondo does not hold waits** (rondo#383,
       // D-0090): its bare `#N` belongs to that repository, and reading it in
-      // one of the held ones would record the wrong issue for good.
+      // one of the held ones would record the wrong issue for good. No naming
+      // travels with it: nothing here disagrees with anything, the repository
+      // the request names is simply not one this store holds a plan for.
       bareRepository: async (requestMessageId, namedAtMs) =>
         (await requestRepository({ store, record, now: Date.now }, requestMessageId)).work.kind ===
         "unheld"
-          ? { disputed: true }
+          ? { disputed: true, namings: [] }
           : await bareIssueRepository(
               {
                 record,
@@ -7488,10 +7490,14 @@ async function commandRevise(
  * that carries no such key and for one whose value is not a string; either way
  * the plan named nothing, and the fallback is what a plan that named nothing
  * gets.
+ *
+ * **The rule itself is `publishesTo`, shared with the reader of a bare `#N`**
+ * (rondo#313 item 2, `D-0137`): where an issue is read is where its request
+ * would publish, so the two cannot be allowed to drift apart in two copies.
  */
 export function publishRepository(record: IterationRecord, asked: PublishAsked): string | null {
   const named = planField(record, "forge_repository");
-  return named === "" ? asked.repo : named;
+  return publishesTo(named === "" ? null : named, asked.repo).repo;
 }
 
 /** What a publish needs to know that the lap's own row does not carry. */

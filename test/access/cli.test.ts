@@ -52,6 +52,7 @@ import {
   publishPreflight,
   repositoryFromRemoteUrl,
 } from "../../src/access/forge-preflight.js";
+import { bareIssueRepository } from "../../src/access/issue-read.js";
 import { type PullRequestTextInput, pullRequestText } from "../../src/access/pull-request.js";
 import { evidenceOf } from "../../src/access/review.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
@@ -1486,6 +1487,40 @@ test("the repository a publish is about is the lap's own plan's, and the flag is
   // what a plan that named nothing gets rather than a slug read out of a number.
   const odd = published({ plan: { ...somePublishedPlan(), forge_repository: 7 } });
   expect(publishRepository(odd, asked("suisya-systems/rondo"))).toBe("suisya-systems/rondo");
+});
+
+test("a bare #N is read in the repository the same work publishes to, by one rule (D-0137 rule 1)", async () => {
+  // **The two sides are asked the same question over the same facts.** Where a
+  // publish goes is `publishRepository` over the lap's own plan; where a bare
+  // `#N` is read is `bareIssueRepository` over the plans the request could run
+  // on. Both go through `publishesTo`, and this pins them to one answer: the
+  // drift rondo#313 item 2 reports was two copies of the rule, and a test of
+  // either side alone could not have caught it.
+  const asked = (repo: string | null) => ({ repo, remote: "origin", allowRemoteMismatch: false });
+  const rows = (slug: string | null, hostRepo: string | null) =>
+    ({
+      record: { scopesFor: async () => [] },
+      held: async () => [{ repository: "/srv/a", forgeRepository: slug }],
+      hostRepo,
+    }) as unknown as Parameters<typeof bareIssueRepository>[0];
+
+  for (const [slug, hostRepo] of [
+    ["suisya-systems/rondo", null],
+    ["suisya-systems/rondo", "suisya-systems/rondo"],
+    // The flag naming somewhere else is the shape the drift came out of: the
+    // plan wins on both sides, and neither side reaches for the flag.
+    ["suisya-systems/rondo", "somebody/else"],
+    [null, "suisya-systems/rondo"],
+    [null, null],
+  ] as const) {
+    const record = published({
+      plan:
+        slug === null ? somePublishedPlan() : { ...somePublishedPlan(), forge_repository: slug },
+    });
+    expect(await bareIssueRepository(rows(slug, hostRepo), "r1", 0)).toEqual({
+      repo: publishRepository(record, asked(hostRepo)),
+    });
+  }
 });
 
 /** What `inspectLapWork` read, with one commit and one file unless varied. */

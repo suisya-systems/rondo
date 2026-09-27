@@ -114,6 +114,44 @@ const FORGE_HOST_ENV = "GH_HOST";
 const DEFAULT_FORGE_HOST = "github.com";
 
 /**
+ * Where a publish of one plan would go, and which of the two places named it.
+ *
+ * `named` is not decoration: it is the difference between two sentences a
+ * person acts on differently. A slug on the plan is the repository's own
+ * record, written by setup or by the press that added the repository; the flag
+ * is one host-wide value that answers for every plan carrying none.
+ */
+export type PublishTarget =
+  | { readonly repo: string; readonly named: "plan" | "flag" }
+  /** Neither the plan nor the host named one: nothing is known, not "nowhere". */
+  | { readonly repo: null; readonly named: "nothing" };
+
+/**
+ * The one rule for which forge repository a plan's work belongs to (D-0081
+ * rules 3.2 and 6.3): **the plan's own slug, and the host's `--repo` only
+ * where the plan carries none.**
+ *
+ * **This function exists to have one caller's answer and not two.** A publish
+ * asks it of the lap's own plan, and the reader of a bare `#N` asks it of every
+ * plan the request could run on, so a read cannot land in one repository while
+ * the publish of the same work goes to another (rondo#313 item 2). Two copies
+ * of the rule drifted once -- the read took a repository's newest slug while
+ * the publish of an older plan of that same repository fell back to the flag --
+ * and the drift was invisible until a pull request was opened in the wrong
+ * place.
+ *
+ * `planSlug` is null for a plan that names none: `cli.ts` normalises
+ * `planField`'s `""` to it, since a missing key and a non-string value both
+ * mean the plan named nothing.
+ */
+export function publishesTo(planSlug: string | null, hostRepo: string | null): PublishTarget {
+  if (planSlug !== null) {
+    return { repo: planSlug, named: "plan" };
+  }
+  return hostRepo === null ? { repo: null, named: "nothing" } : { repo: hostRepo, named: "flag" };
+}
+
+/**
  * A remote URL as it may be printed: any credentials in it replaced.
  *
  * A push URL can carry a token in its userinfo (`https://user:TOKEN@host/...`),
