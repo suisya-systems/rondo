@@ -1200,6 +1200,12 @@ describe("the verbs that answer a gate and settle a run", () => {
           enqueued: true,
           message_id: "relay/g1/forwarded",
           to_stage: "forwarded",
+          answered_by: {
+            actor_kind: "human",
+            actor_id: "happy_ryo",
+            on_behalf_of: null,
+            authority_ref: null,
+          },
         }),
       }),
     );
@@ -1211,8 +1217,47 @@ describe("the verbs that answer a gate and settle a run", () => {
         enqueued: true,
         messageId: "relay/g1/forwarded",
         toStage: "forwarded",
+        answeredBy: {
+          actorKind: "human",
+          actorId: "happy_ryo",
+          onBehalfOf: null,
+          authorityRef: null,
+        },
       },
     });
+  });
+
+  test("gate answer reads a delegated answerer, and refuses a payload without one", () => {
+    const payload = {
+      advanced: true,
+      enqueued: true,
+      message_id: "relay/g1/forwarded",
+      to_stage: "forwarded",
+    };
+    const delegated = decode(
+      GATE_ANSWER,
+      output({
+        stdout: success(GATE_ANSWER.schema, {
+          ...payload,
+          answered_by: {
+            actor_kind: "delegate",
+            actor_id: "rondo/gate/1",
+            on_behalf_of: "happy_ryo",
+            authority_ref: "sd-1",
+          },
+        }),
+      }),
+    );
+    expect(delegated.kind === "answered" && delegated.payload.answeredBy).toEqual({
+      actorKind: "delegate",
+      actorId: "rondo/gate/1",
+      onBehalfOf: "happy_ryo",
+      authorityRef: "sd-1",
+    });
+    // A continuo older than D-1121 cannot say whose answer it holds.
+    expect(decode(GATE_ANSWER, output({ stdout: success(GATE_ANSWER.schema, payload) })).kind).toBe(
+      "invokerDefect",
+    );
   });
 
   test("run close reads the step and the writer epoch", () => {

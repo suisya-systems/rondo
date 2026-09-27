@@ -28,6 +28,7 @@ import {
   type LedgerLine,
 } from "../store/sqlite.js";
 import { DONE_OPENING } from "./done.js";
+import { draftedPlansUnder, draftedStanding } from "./drafted-view.js";
 import { ISSUES_QUOTE_OPENING } from "./issue-read.js";
 import { type DraftedPlanRun, draftedPlanRun } from "./model-draft/host.js";
 import { NUMBERS_OPENING } from "./record-numbers.js";
@@ -52,12 +53,6 @@ export type DraftedStartReadiness =
       readonly after: number;
       readonly first: Extract<PlanOrder, { kind: "waiting" }>["first"];
     }
-  /**
-   * Another lap of the same request is open (rondo#463 point 5): until the
-   * page can show several lines of one request (rondo#452), its parts run one
-   * after another. rondo#452 removes this.
-   */
-  | { readonly kind: "sibling"; readonly iterationId: string }
   /** Other laps hold every execution slot this host allows (D-0012, D-0124). */
   | { readonly kind: "busy"; readonly occupying: number; readonly limit: number }
   /** As many laps are open as this host allows (D-0023). */
@@ -157,14 +152,6 @@ export async function draftedStartReadiness(
   );
   if (verdict.kind !== "inside") {
     return { kind: verdict.kind, test: verdict.test, reason: verdict.reason };
-  }
-  // ponytail: one open line per request until rondo#452 draws several; that change deletes this.
-  // A readiness test, not a lock: a press racing the tick before its row is reserved can pass it.
-  const sibling = (await ports.store.readLive()).find(
-    (outcome) => outcome.kind === "read" && outcome.record.requestMessageId === requestMessageId,
-  );
-  if (sibling?.kind === "read") {
-    return { kind: "sibling", iterationId: sibling.record.id };
   }
   const holders = heldBy(await ports.store.laneLedger(), run);
   return holders.length === 0 ? { kind: "ready", run } : { kind: "held", run, holders };
@@ -294,6 +281,68 @@ export function onLanding(
           }
         : { ...run.claim, bases: [...run.claim.bases, { form: "landing", ...landing }] },
   };
+}
+
+/**
+ * One part of a request run as several lines (D-0098 rule 8): a plan of the
+ * split its approved scope was drafted with, and where it stands in the split's
+ * order. Read only; the page says it (`page-logic/parts.ts`).
+ */
+export interface PartRead {
+  /** The plan's index in its split, from 0; the page says *part* `index + 1`. */
+  readonly index: number;
+  /** The plan's place, or null when its template is gone from the draft's snapshot. */
+  readonly repository: string | null;
+  /** The paths the part asked to hold, or null for a split drafted before claims. */
+  readonly claim: readonly string[] | null;
+  /** The part's line: the first lap started from the plan, or null while none is. */
+  readonly lineageId: string | null;
+  readonly order: PlanOrder;
+  /** The split, for the id of rule 1.5's question about this part (`order-host.ts`). */
+  readonly proposalId: string;
+}
+
+/**
+ * The parts of `requestMessageId`, or none where it is not run as several
+ * lines: its scope is not an approved drafted one, or its split has one plan.
+ *
+ * ponytail: `startedFrom` scans every lap once per part, on every redraw; a
+ * store with thousands of laps wants the plan's line recorded on the lap.
+ */
+export async function partsOf(
+  ports: Pick<DraftedStartPorts, "store"> & {
+    readonly record: DraftedStartPorts["record"] &
+      Pick<AdvisoryRecord, "scopesFor" | "scopeDecisionOf" | "readScopeDecision" | "readScope">;
+  },
+  requestMessageId: string,
+): Promise<readonly PartRead[]> {
+  const standing = await draftedStanding(ports, requestMessageId);
+  if (standing.kind !== "decided") {
+    return [];
+  }
+  const decided = await ports.record.readScopeDecision(standing.scopeDecisionId);
+  const scope =
+    decided.kind === "read" ? await ports.record.readScope(decided.decision.scopeId) : null;
+  const drafted = scope?.kind === "read" ? await draftedPlansUnder(ports, scope.scope) : null;
+  if (drafted === null || drafted.plans.length < 2) {
+    return [];
+  }
+  return await Promise.all(
+    drafted.plans.map(async (plan): Promise<PartRead> => {
+      const run = await draftedPlanRun(ports, requestMessageId, drafted.proposalId, plan.index);
+      return {
+        index: plan.index,
+        repository: plan.repository,
+        claim: plan.split.claim ?? null,
+        lineageId: run.kind === "runnable" ? await startedFrom(ports, requestMessageId, run) : null,
+        order:
+          run.kind === "runnable"
+            ? await planOrder(ports, requestMessageId, drafted.proposalId, run)
+            : { kind: "none" },
+        proposalId: drafted.proposalId,
+      };
+    }),
+  );
 }
 
 /** The open lines of the plan's repository holding a path its claim asks for. */

@@ -1754,10 +1754,12 @@ function viewOf(query: URLSearchParams): PageView {
   const thread = query.get("thread");
   if (thread !== null && thread !== "") {
     const to = query.get("to");
+    const gate = query.get("gate");
     return {
       kind: "thread",
       messageId: thread,
       to: to === null || to === "" ? null : to,
+      ...(gate === null || gate === "" ? {} : { gate }),
     };
   }
   const scoping = query.get("scope");

@@ -69,6 +69,12 @@ export type PageView =
       readonly kind: "thread";
       readonly messageId: string;
       readonly to: string | null;
+      /**
+       * Which lap's gate the box answers, where several parts of the request
+       * wait at one (D-0098 rule 8.3, D-0129): a part's step links it. Absent,
+       * or naming no lap at a gate, the first waiting one is answered.
+       */
+      readonly gate?: string;
     }
   /**
    * One request's scope (rondo#233 S3, D-0066 rule 1): the form rondo drafts
@@ -228,7 +234,7 @@ export function viewHref(view: PageView, tag: string): string {
     case "thread":
       return `/?thread=${encodeURIComponent(view.messageId)}${
         view.to === null ? "" : `&to=${encodeURIComponent(view.to)}`
-      }&${lang}`;
+      }${view.gate === undefined ? "" : `&gate=${encodeURIComponent(view.gate)}`}&${lang}`;
     case "scope":
       return (
         `/?scope=${encodeURIComponent(view.messageId)}` +

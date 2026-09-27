@@ -1,6 +1,6 @@
 {
-  "$comment": "The pinned continuo build rondo drives (DECISIONS.md D-0017 rule 4, moved by D-0021 and moved again to take continuo D-1110; D-0017's own open questions say that moving the pin is this edit and a green matrix, not a new decision). CI provisions exactly this revision; src/continuo/pin.ts mirrors these three values as literals so that no module under src/ needs a filesystem capability, and test/continuo/pin.test.ts fails if the two ever drift. Moving the pin is an edit to this file, to that module and to the recorded version line together.",
+  "$comment": "The pinned continuo build rondo drives (DECISIONS.md D-0017 rule 4, moved by D-0021 and moved again to take continuo D-1110 and again to take D-1121; D-0017's own open questions say that moving the pin is this edit and a green matrix, not a new decision). CI provisions exactly this revision; src/continuo/pin.ts mirrors these three values as literals so that no module under src/ needs a filesystem capability, and test/continuo/pin.test.ts fails if the two ever drift. Moving the pin is an edit to this file, to that module and to the recorded version line together.",
   "repository": "https://github.com/suisya-systems/continuo.git",
-  "revision": "24f1e004a141c9b51374c13ea8a480d8f8066349",
-  "versionLine": "@suisya-systems/continuo 0.0.0 (rev 24f1e004a141c9b51374c13ea8a480d8f8066349)"
+  "revision": "1894e08ba9f72e1c0c0cd6113e583a4561bf3150",
+  "versionLine": "@suisya-systems/continuo 0.0.0 (rev 1894e08ba9f72e1c0c0cd6113e583a4561bf3150)"
 }

@@ -152,11 +152,18 @@ function fakeVerbs(
     },
     answer: async (_continuo, request) => {
       calls.push(`answer:${request.body}`);
+      const delegation = request.delegation ?? null;
       return answered({
         advanced: true,
         enqueued: true,
         messageId: "m-forwarded-relay",
         toStage: "forwarded",
+        answeredBy: {
+          actorKind: delegation === null ? "human" : "delegate",
+          actorId: request.actorId,
+          onBehalfOf: delegation?.onBehalfOf ?? null,
+          authorityRef: delegation?.authorityRef ?? null,
+        },
       });
     },
   };
@@ -422,6 +429,64 @@ test("from 'received' the walk is six verbs, in continuo's order", () => {
       "ack:m-forwarded-relay",
     ]);
   })();
+});
+
+test("a deliver refused LeaseHeld while the lap's lease runs out is tried again (#467)", async () => {
+  // Measured over a real continuo: the lap's delivery lease outlives its turn
+  // by up to a second, so a walk started right after a lap met `LeaseHeld`.
+  const { verbs, calls } = fakeVerbs("received");
+  let refusals = 1;
+  const walked = await walkGate(continuo, walkRequest, {
+    ...verbs,
+    deliver: async (c, request) => {
+      if (refusals > 0) {
+        refusals -= 1;
+        calls.push("deliver:refused");
+        return {
+          kind: "refused",
+          db: request.db,
+          errorClass: "LeaseHeld",
+          message: "lease 'outbox-delivery:run:r1' is held",
+        };
+      }
+      return await verbs.deliver(c, request);
+    },
+  });
+  expect(walked).toEqual({ kind: "walked", closed: true, answerSent: true });
+  expect(calls.slice(0, 4)).toEqual([
+    "show:g1",
+    "present:g1",
+    "deliver:refused",
+    "deliver:rondo-operator:r1",
+  ]);
+});
+
+test("a delegation reaches `gate answer`, and the recorder is handed who continuo holds", async () => {
+  // rondo#467: the organisation's answer is recorded as delegated, and rondo
+  // records `approve` only off continuo's own `answered_by`.
+  const { verbs } = fakeVerbs("presented");
+  const seen: unknown[] = [];
+  const outcome = await walkGate(
+    continuo,
+    {
+      ...walkRequest,
+      actorId: "rondo/gate/1",
+      delegation: { onBehalfOf: "happy_ryo", authorityRef: "sd-1" },
+      recordAnswer: async (answered) => {
+        seen.push(answered.answeredBy);
+      },
+    },
+    verbs,
+  );
+  expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
+  expect(seen).toEqual([
+    {
+      actorKind: "delegate",
+      actorId: "rondo/gate/1",
+      onBehalfOf: "happy_ryo",
+      authorityRef: "sd-1",
+    },
+  ]);
 });
 
 /**
@@ -710,8 +775,9 @@ test("a refusal partway through stops the walk where it happened", () => {
         return {
           kind: "refused",
           db: "/srv/rondo/cp.sqlite3",
-          errorClass: "LeaseHeld",
-          message: "the outbox-delivery lease is held",
+          // Not `LeaseHeld`, which is waited out for a moment (#467).
+          errorClass: "UnknownGateRefused",
+          message: "continuo knows no run 'r1'",
         };
       },
     };

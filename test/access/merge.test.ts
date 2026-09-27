@@ -178,11 +178,16 @@ async function over(options: Options = {}) {
           },
         },
       }) as never,
-    claimScopedMerge: async (claim: { scopeDecisionId: string; iterationId: string }) => {
+    claimScopedAct: async (claim: {
+      actKind: string;
+      scopeDecisionId: string;
+      subjectId: string;
+    }) => {
       if (options.claimed === true) {
         return { kind: "refused", reason: "already claimed" } as const;
       }
-      claims.push(`${claim.scopeDecisionId} ${claim.iterationId} before ${asked.length} asks`);
+      expect(claim.actKind).toBe("merge_default_branch");
+      claims.push(`${claim.scopeDecisionId} ${claim.subjectId} before ${asked.length} asks`);
       return { kind: "recorded" } as const;
     },
     threadMessages: async () => ({ kind: "read", messages }) as never,

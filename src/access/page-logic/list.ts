@@ -20,6 +20,7 @@
  */
 import { approvedForPublication, type IterationRecord } from "../../store/records.js";
 import { byDay, type DayCut } from "./days.js";
+import type { PartCounts } from "./parts.js";
 import type { LapResult } from "./result.js";
 
 /**
@@ -48,6 +49,12 @@ export interface RequestRow {
   readonly state: RowState;
   /** Where the row is `approved`: what its publish came to, or null before one. */
   readonly published?: LapResult | null;
+  /**
+   * Where the request runs as several lines, its parts counted (D-0098 rule
+   * 8.1): the row's sentence counts them instead of saying one state. Absent
+   * or null for a request run as one line.
+   */
+  readonly parts?: PartCounts | null;
   /** When the request last moved, which is what the day cut reads. */
   readonly atMs: number;
 }
@@ -85,7 +92,7 @@ export function repositoryOf(record: IterationRecord | null): string | null {
  * read off, and the answer is then null: rondo says nothing rather than
  * falling back to the path, which is the one thing rule 4.2 forbids.
  */
-function placeName(repository: string): string | null {
+export function placeName(repository: string): string | null {
   const segments = repository.split(/[/\\]/).filter((segment) => segment !== "");
   return segments[segments.length - 1] ?? null;
 }

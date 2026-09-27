@@ -601,6 +601,26 @@ describe("the gate walk's verbs, at the argument boundary", () => {
     expect(defectReason(result)).toContain(REACHED_RUN);
   });
 
+  test("gate answer carries a delegation, and refuses an option-shaped one", async () => {
+    const request = {
+      db: "/srv/rondo/cp.sqlite3",
+      gateId: "g1",
+      body: "approve",
+      actorId: "rondo/gate/1",
+    };
+    const ok = await answerGate(unissued, {
+      ...request,
+      delegation: { onBehalfOf: "happy_ryo", authorityRef: "sd-1" },
+    });
+    expect(defectReason(ok)).toContain(REACHED_RUN);
+    const bad = await answerGate(unissued, {
+      ...request,
+      delegation: { onBehalfOf: "happy_ryo", authorityRef: "--json" },
+    });
+    expect(defectReason(bad)).toContain("authorityRef");
+    expect(defectReason(bad)).not.toContain(REACHED_RUN);
+  });
+
   test("run close refuses an outcome outside continuo's terminal set", async () => {
     const result = await closeRun(unissued, {
       db: "/srv/rondo/cp.sqlite3",
