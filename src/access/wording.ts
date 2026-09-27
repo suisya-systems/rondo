@@ -440,10 +440,18 @@ export interface Chrome extends PageWords {
    * rondo's own note in the thread when it answered a gate by itself (D-0125,
    * D-0145, rondo#533), with the conditions it rests on. `approval` is
    * {@link approvalNamed}'s; `line` the review's severity threshold; `notSent`
-   * why the next lap did not start after the change was sent, or null.
+   * why the next lap did not start after the change was sent, or null. For
+   * `gateReviseSaid`, `left` is the findings below `line` the drafter marked as
+   * the person's call, which rondo left out of what it sent (D-0156).
    */
   readonly gateAutoSaid: (approval: string, approver: string, line: string) => string;
-  readonly gateReviseSaid: (approval: string, approver: string, notSent: string | null) => string;
+  readonly gateReviseSaid: (
+    approval: string,
+    approver: string,
+    notSent: string | null,
+    line: string,
+    left: readonly string[],
+  ) => string;
   /** The line by the button when the model review raised a blocker or a major. */
   readonly modelRaised: (blockers: number, majors: number) => string;
   /** A model finding's severity (`blocker`, `major`, `minor`, `nit`) as a word, and counted. */
