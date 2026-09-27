@@ -215,7 +215,7 @@ import {
   threadsOf,
   waitingAsk,
 } from "./page-logic/threads.js";
-import { waitsOnYou } from "./page-logic/waits.js";
+import { draftsOwedNow, scopesAwaitingYou, waitsOnYou } from "./page-logic/waits.js";
 import {
   type Allowance,
   finishedAt,
@@ -2509,24 +2509,6 @@ function draftingOver(standing: Awaited<ReturnType<typeof scopeStanding>>, owed:
   return owed && (standing.kind === "none" || standing.kind === "drafted");
 }
 
-/**
- * Which requests rondo still owes a draft, read once per drawing (rondo#495).
- * **A read that fails withholds the scope, and does not offer it**: a draft
- * may be on its way, and a scope pressed over it is the act this guards
- * against (Codex). Absent where no drafter runs: nothing is owed.
- */
-async function draftsOwedNow(ports: WebPorts): Promise<(requestMessageId: string) => boolean> {
-  if (ports.draftsOwed === undefined) {
-    return () => false;
-  }
-  try {
-    const owed = await ports.draftsOwed();
-    return (id) => owed.has(id);
-  } catch {
-    return () => true;
-  }
-}
-
 /** Whether this request's latest model drafter run drafted nothing (rondo#495 item 2). */
 function draftedNothing(threads: Threads, requestMessageId: string): boolean {
   const runs = threads.messages.filter(
@@ -3642,11 +3624,25 @@ export async function operatorPage(
    * turn* -- and out of D-0083 rule 3's selection -- with an unanswered
    * question on it. `waitsOnYou` reads every lap for that reason.
    */
-  const waits = waitsOnYou(threads, [...waiting, ...running]);
-  /** The requests of those, which is the row the list draws and the person opens. */
-  const turnsHere = new Set(waits.map((wait) => wait.root));
   /** The drafts rondo still owes, read once for the thread, its right face and the list (rondo#495). */
   const owes = await draftsOwedNow(ports);
+  /** Drafted scopes ready for the person's approval (rondo#534), by the thread card's conditions. */
+  const scopeWaits = await scopesAwaitingYou(
+    {
+      record: ports.record,
+      // A reckoning that will not read draws the card, as the thread does.
+      unheld: async (id) =>
+        ports.repositoryFor === undefined
+          ? false
+          : (await ports.repositoryFor(id).catch(() => null))?.work.kind === "unheld",
+    },
+    threads,
+    [...waiting, ...running, ...terminal],
+    owes,
+  );
+  const waits = [...waitsOnYou(threads, [...waiting, ...running]), ...scopeWaits];
+  /** The requests of those, which is the row the list draws and the person opens. */
+  const turnsHere = new Set(waits.map((wait) => wait.root));
   // **Only the ones an answer can settle** (D-0032 rule 5). `openProposals`
   // returns every proposal nobody has decided, and an explanation is
   // undecidable by construction -- `recordDecision` refuses the non-binding
@@ -3662,7 +3658,9 @@ export async function operatorPage(
   // disagree.
   // A question answered *stop this line* is held but no longer waits on the
   // person (D-0110 rule 2), as in `waitsOnYou`.
-  const waitingCount = waiting.length + threads.waiting.size - threads.stopped.size + open.length;
+  // A drafted scope ready to approve is one more (rondo#534).
+  const waitingCount =
+    waiting.length + threads.waiting.size - threads.stopped.size + open.length + scopeWaits.length;
 
   const keepsCurrent = isLive(view);
   // **The token arrives null exactly when there is no writer** (D-0041 rule 4,
