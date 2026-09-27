@@ -185,6 +185,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0150 | The gate says what happened on the way to it: the laps of its line, what each was asked and committed, and the request's other parts; the execution limits say what was stopped and that its impact is unknown; and a failing test run the latest clean whole-suite run supersedes does not withhold automatic approval | accepted |
 | D-0151 | The scope card waits for rondo's draft: while the drafter still owes a request its draft, the thread, the right face and the list all say it is rondo's turn, and no scope is offered | accepted |
 | D-0152 | A lap continuo refused before its cost was read holds its reserve at a lap's send, the number the page counts, and not its cap; reading a timed-out lap's cost is continuo's | accepted |
+| D-0153 | The landing is read from the remote the publish recorded pushing to: no record is undetermined and waits for a release press, and a record this host disagrees with is a person's to settle | accepted |
 
 ---
 
@@ -27133,3 +27134,73 @@ scope, which is what the issue is about.
 - **A refused lap whose worker kept spending** after continuo answered.
 - **Scopes passed by more than their reserves because of timed-out laps.** Then continuo's report of
   a stopped turn's spend is needed before this rule is safe.
+
+---
+
+## D-0153 — The landing is read from the remote the publish recorded pushing to: no record is undetermined and waits for a release press, and a record this host disagrees with is a person's to settle
+
+**Status:** accepted (2026-09-28, rondo#286; the operator chose both halves -- the publish's remote
+setting as the one basis, and stopping at a disagreement rather than deciding it). Follow-up to
+`D-0073` rule 6 and rondo#280, where the Codex gate raised this as a P2 the operator kept as a known
+limitation. Refs `D-0029` rule 10, `D-0098` rule 1.1, `D-0114`, `D-0139`.
+
+**Why an entry is needed.** The landing reading fetched a hard-coded `origin` (`READING_REMOTE`),
+and rondo recorded nothing about where `publish` had pushed. So `rondo publish --remote X` left two
+wrong readings and no right one: the reading consulted a forge the work was never on and the line
+never read as landed, or an unrelated `origin` that happened to hold the same tree entries released
+the line early. Releasing a line early is the worse of the two -- it hands the line's paths to the
+next lap on evidence about somebody else's repository -- and neither is something the reading could
+have told apart, because the fact it needed was not stored anywhere.
+
+### What was measured
+
+At rondo `2fe4f51` on **2026-09-28**:
+
+- **`READING_REMOTE` is a constant**, and every landing reading took it: the resident host's tick,
+  the admission refusal's read of its holders, and the order tick all passed `"origin"`.
+- **`--remote NAME` reaches the push and nothing else.** `publish` and `web` both parse it, and
+  `pushTopicBranch` is given it; no column, release basis or thread message carried it afterwards.
+- **A publish that stops at the pull request has still pushed.** The press says so in the terminal
+  and returns `publishRefusedPullRequestFailed`; the branch is on the remote either way.
+
+### Decision
+
+1. **`publish` records the remote it pushed to, on the lap, at the push** (`published_remote`,
+   `IterationStore.markPublishedRemote`) -- before the pull request leg, so a publish that stops
+   there has recorded it. Both publishes write it: the page's press (a scope's included) and the
+   command line's. It is rondo's record of its own act, not of the forge's state, which is what
+   keeps it inside `publishPage`'s refusal to persist how far a publish got.
+2. **The landing reading reads that record and nothing else.** The remote in a `LandingRequest` is
+   what the line's laps recorded; `origin` is never assumed.
+3. **No record is `undetermined`**, never `notLanded` and never `landed`: a lap pushed by hand, a
+   row written before the column, a publish that never reached its push. The line holds its paths
+   and waits for a person's release press, which is `D-0073` rule 6's own treatment of a reading
+   that could not be taken.
+4. **A record this host does not read from is a person's to settle.** Where the recorded remote and
+   the remote this host reads landings from differ -- or two laps of one line recorded two remotes
+   -- rondo reads neither, runs no git, and says what the disagreement is. Choosing one of them
+   would be rondo deciding, in passing, which of two repositories the work belongs to.
+
+**Options not taken.** Read the landing from the recorded remote whatever it is, silently: the
+reading would then answer over a forge nobody in this host's configuration reads, and a wrong
+`--remote` would release lines against it with nothing said. Fall back to `origin` when no record
+is there: that is the early release this entry exists to remove. Record the remote on the line's
+release row instead of the lap: `releasePublished` writes that row only where the published lap is
+the line's one closed tip (`D-0114`), so the fact would be missing exactly where a line has more
+than one lap.
+
+### What it costs
+
+- **Every line published before this column waits for a press.** There is no back-fill: nothing on
+  such a row says where it was pushed, and inventing `origin` for it is the guess the entry
+  refuses. The cost is one press per open line, once.
+- **A host pointed at a remote the publish did not use releases nothing by itself.** That is rule
+  4 working, and it is a stop rather than an error: the operator points the host at the same
+  remote, or presses release.
+
+### What would falsify it
+
+- **Lines that sit unreleased because the record is routinely missing.** Then the push is not the
+  only way work reaches a forge here, and what else pushes has to record it too.
+- **An operator who keeps two remotes on purpose** and wants both read. Then the reading needs a
+  set of remotes rather than one, and rule 4 becomes a read of each instead of a stop.
