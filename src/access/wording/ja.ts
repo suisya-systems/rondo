@@ -570,6 +570,8 @@ export const JA: Chrome = Object.freeze({
   planStartPlain: "この作業で周回を 1 つ始め、承認した範囲に数えます",
   planStarted: "開始済みです。",
   planStartedLink: "周回を開く",
+  planSibling:
+    "待機中です。この依頼の別の作業がまだ開いています。その作業が終わると、この作業は自動で始まります。",
   planBusy: (limit) =>
     limit === 1
       ? "まだ空きがありません。同時に動かせる周回は 1 件までで、いまその 1 件が動いています。" +

@@ -389,7 +389,8 @@ test("the capacity ledger still answers its own question beside the claim (rule 
   const connection = new DatabaseSync(":memory:");
   const store = storeWithRequest(connection, CONSERVATIVE_HOST_POLICY);
   await reserved(store, input("a", { claim: asking(["a/"]) }));
-  expect((await store.reserve(input("b", { claim: asking(["b/"]) }))).kind).toBe("atCapacity");
+  await reserved(store, input("b", { claim: asking(["b/"]) }));
+  expect((await store.reserve(input("c", { claim: asking(["c/"]) }))).kind).toBe("atCapacity");
 });
 
 test("one repository spelled two ways is one ledger: a trailing '/' or a '.' segment is no second repository", async () => {

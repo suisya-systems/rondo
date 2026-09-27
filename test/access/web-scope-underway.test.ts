@@ -312,10 +312,9 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   // The person's held-plan start is not drawn under a drafted scope.
   expect(ready).not.toContain('id="start-form"');
 
-  // A lap admitted from plan 0 exactly: plan 0 is started, and plan 1 -- which
-  // claims the whole repository too -- is held by it (D-0073 rule 3.1): the
-  // reason and the work holding it by its request, and no press while that
-  // work is still running, since it cannot have landed.
+  // A lap admitted from plan 0 exactly: plan 0 is started, and plan 1 waits
+  // while that lap of its request is open (rondo#463 point 5, until rondo#452),
+  // with the reason and no press.
   const run = await draftedPlanRun(w, "r1", w.proposalId, 0);
   if (run.kind !== "runnable") throw new Error(run.reason);
   const allocation = allocate("lap-plan-0", run.plan.workspaceRoot);
@@ -347,11 +346,10 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   // the summary named an element nothing drew.
   expect(once).toContain('href="/?thread=r1&amp;lang=en"');
   expect(once).not.toContain("#lap-");
-  expect(once.replaceAll("&#39;", "'")).toContain(EN.planHeld(["/"]));
-  expect(once).toContain(EN.planHeldBy);
-  expect(once).toContain("Two things, please.");
-  expect(once).not.toContain(EN.planHeldTry);
+  expect(once).toContain(EN.planSibling);
+  expect(once).not.toContain(EN.planHeldBy);
   expect(once).not.toContain("?release=");
+  expect(await render(ports, chromeFor("ja"))).toContain(chromeFor("ja").planSibling);
 
   // No room: the reason, and no button to press.
   const full = await render({ ...ports, policy: { maxOccupying: 4, maxLive: 1 } });

@@ -18,7 +18,7 @@ import {
 } from "../advisory/budget.js";
 import { readSplitPayload, type SplitPlan } from "../advisory/proposal.js";
 import type { JsonRecord, StoredScope } from "../store/records.js";
-import type { AdvisoryRecord } from "../store/sqlite.js";
+import type { AdvisoryRecord, ApprovedSplit } from "../store/sqlite.js";
 import { type DrafterMaterial, isModelDrafterName } from "./model-draft/judgement.js";
 
 /** One drafted plan as the screen shows it: its words, where it runs, and its agent type. */
@@ -154,6 +154,33 @@ async function undecided(
     return null;
   }
   return await draftedShown(ports, draft);
+}
+
+/**
+ * Every split an approval in force covers, once per request its scope names
+ * (D-0127): approving a split's scope is the go, so these are the splits the
+ * order tick starts, whether or not a part was pressed. A scope nothing was
+ * drafted for is not a split and is not here.
+ */
+export async function approvedSplits(
+  ports: Ports & { readonly record: Pick<AdvisoryRecord, "readScope" | "approvalsInForce"> },
+): Promise<readonly ApprovedSplit[]> {
+  const splits: ApprovedSplit[] = [];
+  for (const approval of await ports.record.approvalsInForce()) {
+    const read = await ports.record.readScope(approval.scopeId);
+    const drafted = read.kind === "read" ? await draftedPlansUnder(ports, read.scope) : null;
+    if (read.kind !== "read" || drafted === null) {
+      continue;
+    }
+    for (const requestMessageId of read.scope.payload.requests) {
+      splits.push({
+        scopeDecisionId: approval.scopeDecisionId,
+        proposalId: drafted.proposalId,
+        requestMessageId,
+      });
+    }
+  }
+  return splits;
 }
 
 /**
