@@ -326,3 +326,30 @@ test("a body with no account keeps all three sections and says what it does not 
     expect(without).toContain("1 file changed against `refs/remotes/origin/main`:");
   }
 });
+
+test("an account past the body's own bound is fitted, and the three sections still stand", () => {
+  // **What gives way is the account and never a section** (rondo#290). The
+  // accounts are the one part of this body nothing else bounds, and a body cut
+  // at its tail to fit the forge's size would take the last two headings with
+  // it -- so each account is fitted instead and every heading is still there.
+  const flooded = {
+    summary: `The change is this. ${"s".repeat(40_000)}`,
+    grounds: `It was made for this reason. ${"g".repeat(40_000)}`,
+    verification: `This was run. ${"v".repeat(40_000)}`,
+  };
+  const fitted = body({ kind: "composed", ...flooded });
+  expect(fitted.length).toBeLessThanOrEqual(60_000);
+  const positions = headingsIn(fitted);
+  expect(positions.every((at) => at >= 0)).toBe(true);
+  expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+
+  // Each account keeps its opening and says what it left and where the whole of
+  // it is, rather than stopping without saying so.
+  for (const opening of ["The change is this.", "It was made for this reason.", "This was run."]) {
+    expect(fitted).toContain(opening);
+  }
+  expect(fitted).toContain("more characters. This body is over the size a forge takes");
+  expect(fitted).toContain("the whole of it is in rondo's own record of this lap");
+  // And the sections after them are still under their own headings.
+  expect(fitted.indexOf("## How this got here")).toBeGreaterThan(positions[2] as number);
+});

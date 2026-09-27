@@ -258,6 +258,15 @@ function labelTitle(input: PullRequestTextInput): string {
  * refuses is refused after the push, which is the one leg `publish` cannot take
  * back. The quoted request is what gives way first, because it is the one part
  * of the body that is not about this change and is recoverable from the row.
+ *
+ * **What gives way second is the composed account, and never a section**
+ * (rondo#290). A model's three accounts are the one part of this body that
+ * nothing else bounds, and cutting the body's tail to fit would take the last
+ * headings with it -- so a body over the bound is composed again with the
+ * accounts fitted inside the room there is, and all three sections stand with
+ * each saying what it left. That is not a length rule on an answer: an account
+ * is cut only where this whole body is past what a forge takes, and it is never
+ * the reason an answer is thrown away.
  */
 function pullRequestBody(input: PullRequestTextInput): string {
   const whole = composeBody(input, true);
@@ -265,7 +274,59 @@ function pullRequestBody(input: PullRequestTextInput): string {
     return whole;
   }
   const withoutRequest = composeBody(input, false);
-  return withoutRequest.length <= BODY_LIMIT ? withoutRequest : withoutRequest.slice(0, BODY_LIMIT);
+  if (withoutRequest.length <= BODY_LIMIT) {
+    return withoutRequest;
+  }
+  // The room the accounts have is measured rather than guessed: the body with
+  // every account cut to nothing already carries each one's note, so what is
+  // left under the bound is what their words may take between them.
+  const bare = composeBody(
+    { ...input, composedBody: accountsWithin(input.composedBody, 0) },
+    false,
+  );
+  const share = Math.max(0, Math.floor((BODY_LIMIT - bare.length) / COMPOSED_SECTIONS.length));
+  const fitted = composeBody(
+    { ...input, composedBody: accountsWithin(input.composedBody, share) },
+    false,
+  );
+  return fitted.length <= BODY_LIMIT ? fitted : fitted.slice(0, BODY_LIMIT);
+}
+
+/**
+ * The same outcome with each composed account inside `share` characters
+ * (rondo#290), or the outcome untouched where there is no account to fit.
+ *
+ * Every section keeps its place and its heading; an account longer than its
+ * share keeps its opening and says how much it left and where the whole of it
+ * is, which is `claimBullet`'s rule for the same asymmetry.
+ */
+function accountsWithin(
+  outcome: ComposedBodyOutcome | null | undefined,
+  share: number,
+): ComposedBodyOutcome | null {
+  const composed = outcome ?? null;
+  if (composed === null || composed.kind !== "composed") {
+    return composed;
+  }
+  return {
+    kind: "composed",
+    summary: within(composed.summary, share),
+    grounds: within(composed.grounds, share),
+    verification: within(composed.verification, share),
+  };
+}
+
+/** One composed account, cut to `share` characters where it is longer than that. */
+function within(account: string, share: number): string {
+  const cut = account.length - share;
+  if (cut <= 0) {
+    return account;
+  }
+  return (
+    `${account.slice(0, share)}\n\n[...${String(cut)} more characters. This body is over the size ` +
+    "a forge takes, so rondo's account of the lap's report is cut here; the whole of it is in " +
+    "rondo's own record of this lap.]"
+  );
 }
 
 /** The body, section by section. */
