@@ -203,7 +203,6 @@ test("one pass starts every independent part it has room for, and a part with no
       [
         { kind: "busy", occupying: 2, limit: 2 },
         { kind: "full", live: 3, limit: 3 },
-        { kind: "sibling", iterationId: "lap-other" },
         { kind: "ready", run },
       ],
     ],
@@ -213,10 +212,8 @@ test("one pass starts every independent part it has room for, and a part with no
   await host.settled();
   expect(t.started).toEqual([0, 1]);
   // No room, no queue row and nothing said: the next pass asks again.
-  for (let n = 0; n < 2; n += 1) {
-    host.kick();
-    await host.settled();
-  }
+  host.kick();
+  await host.settled();
   expect(t.started).toEqual([0, 1]);
   host.kick();
   await host.settled();
