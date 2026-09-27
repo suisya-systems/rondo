@@ -287,9 +287,29 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
           opener.messageId.startsWith("flow-") &&
           opener.messageId.endsWith(`-${key}`),
       )?.messageId ?? null;
-    const [first, ...rest] = payload.ranked.map((ranked) =>
-      candidateView(wording, row.proposalId, repository, ranked, clauses, started(ranked.key)),
+    // **Put aside is gone from the card at once** (rondo#540): the next
+    // reading withholds it, and until it lands the press must still show.
+    const aside = new Set(
+      (reads.putAside ?? [])
+        .filter((one) => one.repository === repository)
+        .map((one) => one.candidate),
     );
+    const views = payload.ranked
+      .filter((ranked) => !aside.has(ranked.key))
+      .map((ranked) =>
+        candidateView(wording, row.proposalId, repository, ranked, clauses, started(ranked.key)),
+      );
+    // **The card is the candidate the flow asks about** (rondo#540): a newer
+    // reading may rank another first, and the person answers what they read.
+    const ask = goalScope.ask;
+    const askedView = ask === null ? undefined : views.find((one) => one.key === ask.candidate);
+    const [first, ...rest] =
+      ask === null || askedView === undefined
+        ? views
+        : [
+            { ...askedView, request: ask.request, why: ask.why },
+            ...views.filter((one) => one !== askedView),
+          ];
     return first === undefined
       ? { kind: "nothing", repository, goalHref, goalScope, readSaid }
       : { kind: "ranked", repository, goalHref, goalScope, readSaid, first, rest };

@@ -4214,7 +4214,7 @@ export async function operatorPage(
   );
   const latestTriage = triageRepositories.length === 0 ? [] : await ports.record.latestTriage();
   const flowAsks = goalScopes.size === 0 ? [] : await ports.record.flowAsks();
-  const putAside = flowAsks.length === 0 ? [] : await ports.record.triageDeclines();
+  const putAside = latestTriage.length === 0 ? [] : await ports.record.triageDeclines();
   const triagePayloads = new Map(
     latestTriage.flatMap((row): [string, TriagePayload][] => {
       const payload = readTriagePayload(row.payload);
