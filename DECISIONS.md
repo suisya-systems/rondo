@@ -25231,6 +25231,29 @@ the newest goal: an edit would widen an approval nobody re-read.
 > in the waiting colour, and the goal scope screen says the same with the way to them. Nothing above
 > is edited.
 
+> **Annotation (2026-09-27, from rondo#492).** Added after this entry was accepted, and additive:
+> **a request the person sends is theirs to fix before it is sent** (the owner's words in lap 18,
+> where triage's request line carried a Russian word inside Japanese and only the open points were
+> fields). **The ask's request line and why are fields**, prefilled with the ranking's words; the
+> injected opener carries what the person pressed with. The `flow_ask` row now keeps the ranking's
+> line and why as asked, and the `flow_answer` row the line and why as pressed (a line break in the
+> line is folded into a space; an empty line or why is refused), so both are on record. Both columns
+> are nullable with no back-fill: an ask recorded before this reads the ranking's words, and a press
+> from a page drawn before it posts none and sends the ranking's words. **Triage's words are checked
+> for mixed scripts**: a candidate whose request, why or open points hold letters of a script
+> neither the operator's language nor English is written in (Cyrillic in a Japanese reading) is read
+> once more on its own, and the second reading is kept when it is clean; otherwise the first words
+> stay, marked, and the page says so on the card and in the ask rather than drawing them as sound.
+> The second reading's spend counts with the first. **One way to start a candidate**: while the
+> flow asks about it, its card leads to the ask in place of *put it in the box*; *not now* stays.
+> **A suggestion is prefilled as a decision**: triage is asked to write each recommendation as the
+> decision itself, and the page strips the framing ("I recommend", 「〜することを推奨」) an older
+> reading still carries, so an answer kept as drawn states what was decided. Options not taken:
+> checking scripts on the page only (the flow injects without a page), and refusing the whole
+> reading on a mixed script (one slipped word would cost every candidate). A candidate with no open
+> points is not asked, so its words are not editable before the flow sends it; the check above is
+> what guards it. Nothing above is edited.
+
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 
 **Status:** accepted (2026-09-27, rondo#452). The issue records `D-0098`'s gate (2026-09-22, point

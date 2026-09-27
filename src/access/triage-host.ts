@@ -24,6 +24,7 @@ import {
   type Judged,
   materialDigest,
   materialDocument,
+  mixesScripts,
   offered,
   rankTriage,
   readJudgement,
@@ -203,10 +204,13 @@ async function read(ports: TriageHostPorts, material: TriageMaterial, digest: st
     } else {
       costUsd = run.costUsd;
       const judged = readJudgement(material, run.finalMessage);
-      payload =
-        judged.kind === "judged"
-          ? rankTriage(material, judged.judged as readonly Judged[])
-          : unavailableTriage(material, judged.reason);
+      if (judged.kind === "judged") {
+        const mended = await mendScripts(ports, row, material, judged.judged);
+        costUsd = mended.costUsd === null ? costUsd : (costUsd ?? 0) + mended.costUsd;
+        payload = rankTriage(material, mended.judged);
+      } else {
+        payload = unavailableTriage(material, judged.reason);
+      }
     }
   }
   const nowMs = ports.now();
@@ -247,6 +251,50 @@ async function read(ports: TriageHostPorts, material: TriageMaterial, digest: st
         }`
       : `triage   ${material.repository}: the proposal was not recorded: ${written.reason}`,
   );
+}
+
+/**
+ * **A candidate whose words mix in another script is read once more**
+ * (rondo#492): Cyrillic in a Japanese reading is the model's slip, and the
+ * request line is what the flow sends. Only those candidates are read again;
+ * one the second reading does not mend keeps its first words and is marked,
+ * so the page says so rather than drawing it as sound.
+ */
+async function mendScripts(
+  ports: TriageHostPorts,
+  row: ReturnType<typeof drafterRow>,
+  material: TriageMaterial,
+  judged: readonly Judged[],
+): Promise<{ readonly judged: readonly Judged[]; readonly costUsd: number | null }> {
+  const mixed = new Set(
+    judged.filter((one) => mixesScripts(one, ports.language)).map((one) => one.key),
+  );
+  if (mixed.size === 0) {
+    return { judged, costUsd: null };
+  }
+  const again: TriageMaterial = {
+    ...material,
+    candidates: material.candidates.filter((one) => mixed.has(one.key)),
+  };
+  const run = await ports.runDrafter(row, triageDocument(again, ports.language));
+  const reread = run.kind === "failed" ? null : readJudgement(again, run.finalMessage);
+  const mended = new Map(
+    reread?.kind === "judged"
+      ? reread.judged
+          .filter((one) => one.clause !== null && !mixesScripts(one, ports.language))
+          .map((one) => [one.key, one])
+      : [],
+  );
+  ports.log(
+    `triage   ${material.repository}: ${String(mixed.size)} candidate(s) mixed scripts; ` +
+      `${String(mended.size)} mended on a second reading`,
+  );
+  return {
+    judged: judged.map((one) =>
+      mixed.has(one.key) ? (mended.get(one.key) ?? { ...one, mixedScript: true }) : one,
+    ),
+    costUsd: run.kind === "failed" ? null : run.costUsd,
+  };
 }
 
 /**
@@ -373,9 +421,12 @@ export function triageDocument(material: TriageMaterial, language: string | null
     "- why: one or two sentences on how it goes against that clause.",
     "- openPoints: at most four decisions the person would have to make before the work can start,",
     "  each with your recommendation, so that answering 'as recommended' is enough. Empty if none.",
+    "  Write the recommendation as the decision itself, the words the person would answer with",
+    "  ('Keep it as an open question'), not as advice ('I recommend keeping it open').",
     language === null
       ? ""
-      : `Write request, why and openPoints in the language tagged ${language}.`,
+      : `Write request, why and openPoints in the language tagged ${language}, in its own script; ` +
+        "names and code may stay in Latin letters. No word of another language.",
     "",
     "Goal:",
     clauses,

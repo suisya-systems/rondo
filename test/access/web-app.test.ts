@@ -3268,7 +3268,25 @@ test("(triage) a person's press answers the flow's open points, each in order (r
   const sent = await send(base, "/flow-answer", "POST", person, form);
   expect(sent.status).toBe(303);
   expect(sent.location).toBe("/?requests=open&lang=en#triage-heading");
-  expect(answered).toEqual([{ askId: "flow-ask-sd-1-issue:o/r#7", answers: ["yes", "no"] }]);
+  // A page drawn before rondo#492 posts no words: the ranking's are sent.
+  expect(answered).toEqual([
+    { askId: "flow-ask-sd-1-issue:o/r#7", answers: ["yes", "no"], request: null, why: null },
+  ]);
+  answered.pop();
+  // The request line and why the person fixed ride with the answers (rondo#492).
+  await send(base, "/flow-answer", "POST", person, {
+    ...form,
+    request: "Fix the reader",
+    why: "It drifts",
+  });
+  expect(answered).toEqual([
+    {
+      askId: "flow-ask-sd-1-issue:o/r#7",
+      answers: ["yes", "no"],
+      request: "Fix the reader",
+      why: "It drifts",
+    },
+  ]);
   // Four long answers in Japanese are past the press's 12 KiB and still taken.
   const long = "答".repeat(1_500);
   const big = await send(base, "/flow-answer", "POST", person, {

@@ -2042,6 +2042,8 @@ export async function main(
                   const answered = await record.recordFlowAnswer({
                     askId: input.askId,
                     answers: input.answers,
+                    request: input.request,
+                    why: input.why,
                     answeredBy: sender.actorId,
                     answeredAtMs: Date.now(),
                   });

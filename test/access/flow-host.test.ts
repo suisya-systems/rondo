@@ -627,6 +627,8 @@ test("open points are asked once before the request, and the answers go into it 
     w.record.recordFlowAnswer({
       askId: `flow-ask-sd-goal-issue:${REPO}#7-1`,
       answers,
+      request: null,
+      why: null,
       answeredBy: "oidc|operator-1",
       answeredAtMs: 11_000,
     });
@@ -640,6 +642,60 @@ test("open points are asked once before the request, and the answers go into it 
     "Open points, as the person answered them:\n- p: yes\n- p: as rondo suggests",
   );
   expect(w.injectedCount()).toBe(1);
+});
+
+test("the request line and why the person fixed in the ask are what the flow sends (rondo#492)", async () => {
+  const w = await world({}, [ranked(7, 1)]);
+  await w.pass();
+  const [ask] = await w.record.flowAsks();
+  // The ask keeps the ranking's words, so what the person changed is on record.
+  expect([ask?.request, ask?.why]).toEqual([
+    `Fix issue 7 in ${REPO}`,
+    "the person has to open a terminal for it",
+  ]);
+  const answer = (request: string | null, why: string | null) =>
+    w.record.recordFlowAnswer({
+      askId: `flow-ask-sd-goal-issue:${REPO}#7-1`,
+      answers: ["keep it"],
+      request,
+      why,
+      answeredBy: "oidc|operator-1",
+      answeredAtMs: 11_000,
+    });
+  expect((await answer(" ", "why")).kind).toBe("refused");
+  expect((await answer("line", "")).kind).toBe("refused");
+  expect(await answer("Fix the repository\nname in the reader ", " it drifts ")).toEqual({
+    kind: "recorded",
+  });
+  expect((await w.record.flowAsks())[0]?.answer).toMatchObject({
+    request: "Fix the repository name in the reader",
+    why: "it drifts",
+  });
+  await w.pass();
+  const [opener] = (await w.messages()).filter((m) => m.inReplyTo === null);
+  expect(opener?.body.split("\n")[0]).toBe("Fix the repository name in the reader");
+  expect(opener?.body).toContain("Why: it drifts");
+  expect(opener?.body).not.toContain("open a terminal");
+  expect(opener?.body).toContain("- p: keep it");
+});
+
+test("an ask answered before rondo#492 sends the ranking's words", async () => {
+  const w = await world({}, [ranked(7, 1)]);
+  await w.pass();
+  expect(
+    await w.record.recordFlowAnswer({
+      askId: `flow-ask-sd-goal-issue:${REPO}#7-1`,
+      answers: ["keep it"],
+      request: null,
+      why: null,
+      answeredBy: "oidc|operator-1",
+      answeredAtMs: 11_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  await w.pass();
+  const [opener] = (await w.messages()).filter((m) => m.inReplyTo === null);
+  expect(opener?.body.split("\n")[0]).toBe(`Fix issue 7 in ${REPO}`);
+  expect(opener?.body).toContain("Why: the person has to open a terminal for it");
 });
 
 test("a put-aside ask holds nothing: the flow moves on to the next candidate", async () => {

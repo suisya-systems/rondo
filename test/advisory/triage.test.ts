@@ -7,6 +7,7 @@ import { expect, test } from "vitest";
 
 import {
   labelRank,
+  mixesScripts,
   RUNNERS_UP,
   rankTriage,
   readJudgement,
@@ -122,4 +123,21 @@ test("a payload reads back as it was written, and a row that will not read is no
   const document = JSON.parse(JSON.stringify(triagePayloadDocument(payload)));
   expect(readTriagePayload(document)).toEqual(payload);
   expect(readTriagePayload({ ...document, ranked: [{ key: "x" }] })).toBeNull();
+});
+
+test("mixed scripts are letters of a script neither the operator's language nor English uses (rondo#492)", () => {
+  const one = (request: string) => ({ ...judged("issue:o/r#1", 1), request });
+  expect(mixesScripts(one("o/r の репозиторий を直す"), "ja")).toBe(true);
+  expect(mixesScripts(one("o/r の README（ｒｅａｄｍｅ）を直す　ー"), "ja-JP")).toBe(false);
+  expect(mixesScripts(one("Fix the репозиторий"), "en")).toBe(true);
+  expect(mixesScripts(one("Исправить README"), "ru")).toBe(false);
+  expect(mixesScripts({ ...one("ok"), why: "理由" }, "en")).toBe(true);
+  // Unset or unlisted, nothing is checked; nor is a candidate against no clause.
+  expect(mixesScripts(one("o/r の репозиторий"), null)).toBe(false);
+  expect(mixesScripts(one("o/r の репозиторий"), "tlh")).toBe(false);
+  expect(mixesScripts({ ...one("репозиторий"), clause: null }, "ja")).toBe(false);
+  // The mark reads back as written.
+  const payload = rankTriage(material([issue(1, [])]), [{ ...one("x"), mixedScript: true }]);
+  const document = JSON.parse(JSON.stringify(triagePayloadDocument(payload)));
+  expect(readTriagePayload(document)?.ranked[0]?.mixedScript).toBe(true);
 });
