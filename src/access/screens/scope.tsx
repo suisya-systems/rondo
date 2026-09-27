@@ -240,10 +240,14 @@ function budgetField(
  * do about it now, before the first lap spends it (D-0074 lets it be raised
  * later, from the gate).
  */
-export function sampleCaveat(wording: Chrome, bases: readonly BudgetBasis[]) {
+export function sampleCaveat(
+  wording: Chrome,
+  bases: readonly BudgetBasis[],
+  heading: string = wording.scopeSampleHeading,
+) {
   return (
     <section class={`rounded-md border px-3 py-2 ${TONE.wait} space-y-1`}>
-      <h3 class="text-body leading-5 font-semibold">{wording.scopeSampleHeading}</h3>
+      <h3 class="text-body leading-5 font-semibold">{heading}</h3>
       {bases.map((basis) =>
         basis.kind === "rows" ? (
           <p class="text-body leading-5 text-foreground">
@@ -566,7 +570,7 @@ async function chosenPlan(
  * the paths twice, a hash, `standard` and `command.run` in the person's way,
  * and nothing on them is theirs to act on.
  */
-function recordedFold(wording: Chrome, lines: readonly string[]) {
+export function recordedFold(wording: Chrome, lines: readonly string[]) {
   return (
     <details class="group rounded-md border border-border">
       <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">

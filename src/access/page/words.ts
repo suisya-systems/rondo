@@ -240,7 +240,9 @@ export interface PageWords extends DayWords {
   readonly goalScopeRefusedMoved: string;
   readonly scopeStopLead: string;
   readonly scopeStopOptions: string;
+  readonly goalScopeSampleHeading: string;
   readonly scopeStopWider: string;
+  readonly scopeStopWiderLink: string;
   readonly scopeStopWiderDoes: string;
   readonly scopeStopChange: string;
   readonly scopeStopChangeDoes: string;
@@ -606,7 +608,8 @@ export const PAGE_EN: PageWords = Object.freeze({
   triageNotNowRefusedPress: "Nothing was put aside: this did not come from a press on this page.",
   triageNotNowRefused: "Nothing was put aside: the proposal has moved on since the page was drawn.",
   triageBack: "Back to the front",
-  triageGoalScopeOffer: "Or let rondo send these itself, one at a time, under one approval.",
+  triageGoalScopeOffer:
+    "rondo can also send the goal's requests itself, one at a time, under one approval.",
   triageGoalScopeAction: "Let rondo work toward this goal",
   triageGoalScopeRunning: "rondo is working toward this goal on its own.",
   triageGoalScopePaused: "Work toward this goal is paused.",
@@ -658,18 +661,18 @@ export const PAGE_EN: PageWords = Object.freeze({
   scopeStopLead:
     "rondo stopped this line: going on would have been outside what you approved. It waits for you.",
   scopeStopOptions: "What you can do",
+  goalScopeSampleHeading: "This draft assumes each request is the size of past laps",
   scopeStopWider: "Approve more room",
+  scopeStopWiderLink: "Open the request's scope",
   scopeStopWiderDoes:
-    "Raise the approval, or approve a new one, then answer with Carry on. The old approval is " +
-    "retired when the new one is approved.",
+    ', raise the approval or approve a new one, then press "Carry on". The old approval is ' +
+    "retired once the new one is approved.",
   scopeStopChange: "Change the work",
   scopeStopChangeDoes:
-    "Say below what to change, then press Carry on. What runs is the changed work, not the " +
-    "planned one.",
+    'Write below what to change, then press "Carry on". The changed work runs, not the planned one.',
   scopeStopStop: "Stop this line",
   scopeStopStopDoes:
-    "Press Stop this line. This line's work ends; the request's other lines carry on, and you " +
-    "can carry on later.",
+    "This line's work ends here. The request's other lines go on, and you can start it again later.",
   evProposal: "rondo has a proposal for what to ask next.",
   evProposalLink: "See it",
   sevenDays: "The last seven days",
@@ -997,7 +1000,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   goalClausePlaceholder: "例: ターミナルを開かせない",
   goalUnmetPlaceholder: "例: 一度でもターミナルが必要になったとき",
   goalKeep: "この目標を保存する",
-  goalKeptAt: (when) => `${when}に保存しました。`,
+  goalKeptAt: (when) => `${when}前に保存しました。`,
   goalDraft: "まだ保存していません。これは rondo の下書きです。直してから保存してください。",
   goalNotKept: "まだ保存していません。項目を書いてから保存してください。",
   goalBack: "最初の画面へ戻る",
@@ -1026,7 +1029,8 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageNotNowRefusedPress: "見送っていません。この画面のボタンから送られたものではありません。",
   triageNotNowRefused: "見送っていません。画面を開いたあとで、提案が新しくなっています。",
   triageBack: "最初の画面へ戻る",
-  triageGoalScopeOffer: "1 回の承認で、rondo にこれらを 1 件ずつ自分で依頼させることもできます。",
+  triageGoalScopeOffer:
+    "1 回の承認で、目標に向けた依頼を rondo に 1 件ずつ自分で送らせることもできます。",
   triageGoalScopeAction: "この目標に向けて rondo に進めてもらう",
   triageGoalScopeRunning: "rondo がこの目標に向けて自分で進めています。",
   triageGoalScopePaused: "この目標に向けた作業は一時停止中です。",
@@ -1055,7 +1059,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   goalScopePlain: "この目標から rondo が立てる依頼すべてについて、下の上限を承認します。",
   goalScopeWhereHeading: "作業する場所",
   goalScopeGoalHeading: "目標",
-  goalScopeGoalNote: (when) => `${when}に保存した版です。この承認はこの版に対するものです。`,
+  goalScopeGoalNote: (when) => `${when}前に保存した版です。この承認はこの版に対するものです。`,
   goalScopeRunningLead:
     "空きがあり、rondo が始めた依頼であなたを待っているものがなければ、rondo は目標の次の依頼を自分で送ります。" +
     "異論があるときや上限に達したときは、あなたに聞きます。",
@@ -1071,9 +1075,11 @@ export const PAGE_JA: PageWords = Object.freeze({
   scopeStopLead:
     "rondo はこの線を止めました。このまま進めると、承認した範囲の外に出るためです。あなたの判断を待っています。",
   scopeStopOptions: "選べること",
+  goalScopeSampleHeading: "どの依頼も過去の周回と同じくらいの大きさだと見て、予算を出しています",
   scopeStopWider: "範囲を広げて承認する",
+  scopeStopWiderLink: "依頼の範囲を開き",
   scopeStopWiderDoes:
-    "承認を引き上げるか新しく承認してから、「続ける」で答えます。新しい承認が通ると、前の承認は使われなくなります。",
+    "、承認を引き上げるか新しく承認してから「続ける」を押します。新しい承認が通ると、前の承認は使われなくなります。",
   scopeStopChange: "作業を変える",
   scopeStopChangeDoes:
     "下に変えてほしいことを書いてから「続ける」を押します。予定していた作業ではなく、変えた作業が動きます。",

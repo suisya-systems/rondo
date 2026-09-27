@@ -421,7 +421,7 @@ function GoalScopeRow({
     return (
       <div className="triage-goal-scope">
         <p>{wording.triageGoalScopeOffer}</p>
-        <a className={`${SECONDARY} ${SMALL_PRESS}`} href={line.href}>
+        <a className="triage-goal-link" href={line.href}>
           {wording.triageGoalScopeAction}
         </a>
       </div>

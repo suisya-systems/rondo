@@ -32,7 +32,7 @@ import {
 import { type PageView, viewHref } from "../page-logic/routes.js";
 import { heldAgentTypeLines, scopeBudgetsFromStore } from "../scope.js";
 import type { Chrome } from "../wording.js";
-import { budgetBoxes, defaultsSection, sampleCaveat } from "./scope.js";
+import { budgetBoxes, defaultsSection, recordedFold, sampleCaveat } from "./scope.js";
 
 const PRESS = "h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start";
 const LINK = "text-link underline-offset-2 hover:underline";
@@ -128,6 +128,7 @@ export async function goalScopeView(
             token,
             newScopeId,
             nowMs,
+            goalCard(wording, goal, goalHref, nowMs),
           )
         }
       </>
@@ -136,7 +137,11 @@ export async function goalScopeView(
     <div id="goal-scope" class="space-y-4">
       {head}
       {body}
-      {goalCard(wording, goal, goalHref, nowMs)}
+      {/* On a draft the goal sits under its press, where the approval is read
+          over it; elsewhere it is the screen's foot. */}
+      {material !== null && standing.kind !== "running"
+        ? null
+        : goalCard(wording, goal, goalHref, nowMs)}
     </div>
   );
 }
@@ -236,6 +241,7 @@ async function draft(
   token: string | null,
   newScopeId: MintScopeId | null,
   nowMs: number,
+  goal: unknown,
 ): Promise<unknown> {
   const plans = material.goal.clauses.length;
   const budgets = await scopeBudgetsFromStore(
@@ -246,10 +252,16 @@ async function draft(
       draftedAtMs: nowMs,
     },
   );
+  // **The places and agent types are rondo's record, so they are folded**
+  // (D-0076), as the request's scope screen folds them; the repository is
+  // what a person reads.
   const where = (
-    <section class={`${CARD} space-y-1`}>
+    <section class={`${CARD} space-y-2`}>
       <h3 class={CARD_HEADING}>{wording.goalScopeWhereHeading}</h3>
-      {[
+      {[...new Set(material.workspaces.map((workspace) => workspace.repository))].map((place) => (
+        <p class="text-body leading-5 text-muted-foreground wrap-anywhere">{place}</p>
+      ))}
+      {recordedFold(wording, [
         ...material.workspaces.map((workspace) =>
           wording.scopeWorkspace(workspace.repository, workspace.workspace_root),
         ),
@@ -258,14 +270,13 @@ async function draft(
           ports.record,
           material.agentTypes.map((one) => one.agentTypeDigest),
         )),
-      ].map((line) => (
-        <p class="text-meta leading-5 text-muted-foreground wrap-anywhere">{line}</p>
-      ))}
+      ])}
     </section>
   );
+  // A resume is over an approval the person already read: the lead once.
   const lead = (
     <>
-      <p class="text-body leading-6">{wording.goalScopeLead}</p>
+      {resumes === null ? <p class="text-body leading-6">{wording.goalScopeLead}</p> : null}
       <p class="note text-meta leading-5 text-muted-foreground">
         {wording.goalScopePlansNote(plans)}
       </p>
@@ -276,6 +287,7 @@ async function draft(
       <>
         {lead}
         {note(wording.scopeNoApprover)}
+        {goal}
         {where}
       </>
     );
@@ -316,8 +328,9 @@ async function draft(
             {wording.goalScopePlain}
           </span>
         </div>
+        {goal}
         {where}
-        {sampleCaveat(wording, budgets.cost_reserve_usd.bases)}
+        {sampleCaveat(wording, budgets.cost_reserve_usd.bases, wording.goalScopeSampleHeading)}
         {budgetBoxes(wording, budgets, false)}
         {defaultsSection(wording, "major", [])}
         <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>

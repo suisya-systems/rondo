@@ -820,6 +820,14 @@
   color: var(--color-muted-foreground);
 }
 
+/* Under a one-sentence block the rule would frame nothing: no hairline there. */
+.triage-note + .triage-goal-scope,
+.triage-read + .triage-goal-scope {
+  margin-top: 8px;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .triage-goal-scope > p {
   display: flex;
   align-items: center;
