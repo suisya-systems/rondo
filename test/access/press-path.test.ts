@@ -853,7 +853,11 @@ async function publishableLap(label: string) {
   const record = read.record;
   const workspace = record.workspace ?? "";
   writeFileSync(join(workspace, "RETRY.md"), "# a retry budget, and it ends\n", "utf8");
-  git(workspace, "add", "RETRY.md");
+  // `--all` rather than the one path: D-0060 rule 4 refuses a publish over a
+  // worktree holding anything uncommitted, and what a worker leaves behind is
+  // its own business -- so the stood-in turn ends the way a real one does, with
+  // a clean tree, whatever else the materialisation put there.
+  git(workspace, "add", "--all");
   git(workspace, "commit", "--quiet", "-m", "feat: a retry budget");
   const tip = git(workspace, "rev-parse", "HEAD").trim();
 
