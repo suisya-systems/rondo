@@ -51,7 +51,7 @@ import {
   readMergeMethod,
   readPullRequest,
 } from "./forge.js";
-import { type MergeBlock, mergeBlock, resultOf } from "./page-logic/result.js";
+import { askHoldsMerge, type MergeBlock, mergeBlock, resultOf } from "./page-logic/result.js";
 import { threadsOf } from "./page-logic/threads.js";
 import { approvalTip } from "./scope.js";
 import type { Merged, MergeInput, MergeRefusal } from "./web-app.js";
@@ -276,12 +276,12 @@ async function mergeOnce(
   }
   const threads = threadsOf(read.messages, new Set(), new Map());
   const result = resultOf(threads.byId, record.id);
-  const holding = (await ports.store.laneLedger()).some(
+  const held = (await ports.store.laneLedger()).find(
     (line) => line.releasedBy === null && line.lapIds.includes(record.id),
   );
   // **A question or a gate of this request still waiting on the person** is
-  // `D-0064`'s P2 to P4 item open: an ask nobody carried on, or another lap
-  // of the same request standing at its gate.
+  // `D-0064`'s P2 to P4 item open: an ask nobody carried on that holds this
+  // line (rondo#539), or another lap of the same request standing at its gate.
   const gated = (await ports.store.readLive()).some(
     (live) =>
       live.kind === "read" &&
@@ -290,8 +290,8 @@ async function mergeOnce(
   );
   const block = mergeBlock(
     result,
-    gated || [...threads.waiting].some((id) => threads.rootOf(id) === record.requestMessageId),
-    holding,
+    gated || askHoldsMerge(threads, record.requestMessageId, held?.lapIds ?? [record.id]),
+    held !== undefined,
   );
   if (block !== null || result === null || result.url === null) {
     return refused(REFUSED_BY[block ?? "notPublished"], `the merge is not offered: ${block}`);
