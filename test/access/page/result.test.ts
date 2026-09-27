@@ -17,6 +17,7 @@ import { lapEvents } from "../../../src/access/page-logic/thread-events.js";
 import { threadsOf } from "../../../src/access/page-logic/threads.js";
 import { chromeFor, EN } from "../../../src/access/wording.js";
 import type { IterationRecord } from "../../../src/store/records.js";
+import { ownLane } from "../../lane-claims.js";
 import {
   fresh,
   openGate,
@@ -723,6 +724,38 @@ test("while the fix's attempt runs, no press is drawn and the band says rondo is
   expect(japanese).not.toContain("/fix-conflict?");
   expect(head(japanese)).toContain("rondo が main を取り込む新しい回で、競合を解消しています。");
   expect(head(japanese)).not.toContain("push してください");
+});
+
+test("another part at its gate is not the fix: the band says why nothing started and whose move it is (rondo#500)", async () => {
+  const world = await conflicting();
+  // A second part of the same request, later and still at its gate, that does
+  // not descend from the published lap.
+  const part = await world.store.reserve({
+    numbers: null,
+    id: "i-p2",
+    request: "#291 の文言を分けて",
+    plan: planFor("i-p2"),
+    spend: null,
+    scopeSpend: null,
+    claim: ownLane("i-p2"),
+    nowMs: 8_000,
+    supersedesIterationId: null,
+    requestMessageId: "req-r",
+    runId: "rondo-i-p2",
+    topicBranch: "rondo/i-p2",
+    workspace: "/srv/work/i-p2",
+  });
+  expect(part.kind).toBe("reserved");
+  await openGate(world, "i-p2");
+  const japanese = await fixing(world);
+  expect(japanese).not.toContain("/fix-conflict?");
+  expect(head(japanese)).not.toContain("競合を解消しています");
+  expect(head(japanese)).toContain("rondo はまだ解消を始めていません。");
+  const english = await fixing(world, "en");
+  expect(head(english)).not.toContain("rondo is settling the conflict");
+  expect(head(english)).toContain(
+    "rondo has not started resolving it: another gate or question of this request is waiting on you.",
+  );
 });
 
 test("a fix's publish names the open pull request and its branch, up the line, and opens nothing", async () => {
