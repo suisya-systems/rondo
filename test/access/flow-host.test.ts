@@ -13,6 +13,7 @@ import { expect, test } from "vitest";
 import { approvedSplits } from "../../src/access/drafted-view.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { type FlowHostPorts, flowHost } from "../../src/access/flow-host.js";
+import { unreadIssues } from "../../src/access/issue-read.js";
 import { MODEL_DRAFTER_PREFIX } from "../../src/access/model-draft/judgement.js";
 import { flowMessageId } from "../../src/advisory/flow.js";
 import { type TriagePayload, triagePayloadDocument } from "../../src/advisory/triage.js";
@@ -255,6 +256,20 @@ test("the flow writes the goal's next request as rondo/flow/1, once, and counts 
   expect(await approvedSplits({ record: w.record })).toEqual([]);
   // It starts nothing itself.
   expect(w.laps).toEqual([]);
+  // The store takes the issue reader's reply to it, as to a person's message.
+  const reply = (inReplyTo: string) =>
+    w.record.recordThreadMessage({
+      messageId: `forge-${inReplyTo}`,
+      body: "read",
+      authorKind: "forge",
+      authorId: "rondo/issue-reader/1",
+      inReplyTo,
+      atMs: 1,
+      bases: [],
+      asks: false,
+    });
+  expect(await reply(first)).toEqual({ kind: "recorded" });
+  expect((await reply(`forge-${first}`)).kind).toBe("refused");
 });
 
 test("the drafter drafts a flow opener under its goal scope, and the tick starts its split", async () => {
@@ -356,22 +371,86 @@ test("two failed injections stop the flow, and the person is asked once in the l
   expect(asks[0]?.body).toContain("Recommended: stop");
 });
 
-test("the scope's cost, triage readings included, stops the flow", async () => {
+test("the scope's cost, triage readings included, stops the flow before the request is written", async () => {
   // 10 USD, 2 reserved per lap: a 9 USD reading leaves no room for the next request.
   const w = await world();
   await w.pass();
   await w.drafted("split-1", first, 1);
   w.lap("lap-1", first, "closed", 1);
   await w.triage("t-2", 9);
-  // The next request is injected from t-2, which is claimed: 10.5 USD read.
+  // t-2 is claimed for the next request, and then there is no room for it.
   await w.pass();
   expect((await w.record.scopeSpent("sd-goal")).readCostUsd).toBe(10.5);
-  await w.drafted("split-2", second, 1);
-  w.lap("lap-2", second, "closed", 2);
-  await w.pass();
-  const asks = (await w.messages()).filter((m) => m.asks);
-  expect(asks.map((m) => m.messageId)).toEqual([`flow-stop-sd-goal-cost-${second}`]);
+  const messages = await w.messages();
+  expect(messages.filter((m) => m.inReplyTo === null).map((m) => m.messageId)).toEqual([first]);
+  const asks = messages.filter((m) => m.asks);
+  expect(asks.map((m) => m.messageId)).toEqual([`flow-stop-sd-goal-cost-${first}`]);
   expect(asks[0]?.body).toContain("triage readings included");
+  expect(asks[0]?.body).toContain("Recommended: widen the scope");
+});
+
+test("a successor approval keeps the goal's requests: nothing is asked for twice, and an old failure does not stop it", async () => {
+  const w = await world({}, [ranked(7), ranked(8), ranked(9)]);
+  await w.pass();
+  await w.drafted("split-1", first, 1);
+  w.lap("lap-1", first, "failed", 1);
+  await w.pass();
+  // #8 is drafted and waiting to start when the person widens the scope.
+  await w.drafted("split-2", second, 1);
+  const payload = goalPayload({ laps: 9 });
+  expect(
+    await w.record.recordScope({
+      scopeId: "s-wide",
+      payload,
+      supersedesScopeId: "s-goal",
+      authorKind: "operator",
+      authorId: "oidc|operator-1",
+      bases: [],
+      createdAtMs: 4,
+      agentTypeRecords: [],
+    }),
+  ).toEqual({ kind: "recorded" });
+  expect(
+    await w.record.recordScopeDecision({
+      scopeDecisionId: "sd-wide",
+      scopeId: "s-wide",
+      scopeDigest: contentDigest(payload),
+      outcome: "approved",
+      actorId: "oidc|operator-1",
+      recordedBy: "rondo/cli",
+      decidedAtMs: 5,
+    }),
+  ).toEqual({ kind: "recorded" });
+  await w.pass();
+  expect((await w.messages()).filter((m) => m.inReplyTo === null)).toHaveLength(2);
+  // #8 fails too; under the old approval that was two failures in a row.
+  w.lap("lap-2", second, "failed", 2);
+  await w.pass();
+  const openers = (await w.messages()).filter((m) => m.inReplyTo === null);
+  expect(openers.map((m) => m.messageId)).toEqual([
+    first,
+    second,
+    flowMessageId("sd-wide", `issue:${REPO}#9`),
+  ]);
+  expect((await w.messages()).filter((m) => m.asks)).toEqual([]);
+});
+
+test("the flow's opener names an issue the reader reads, as a person's message does", () => {
+  const opener = {
+    messageId: first,
+    body: `Fix it\n\nIssue: ${REPO}#7`,
+    authorKind: "drafter" as const,
+    authorId: FLOW_AUTHOR,
+    inReplyTo: null,
+    atMs: 1,
+    bases: [],
+    asks: false,
+  };
+  expect([...unreadIssues([opener], new Set()).keys()]).toEqual([first]);
+  // Another drafter row naming an issue is not read.
+  expect(
+    unreadIssues([{ ...opener, authorId: "rondo/advisory/deterministic" }], new Set()).size,
+  ).toBe(0);
 });
 
 test("an expired scope stops the flow before its first request, said on the terminal", async () => {

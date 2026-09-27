@@ -25115,11 +25115,16 @@ the newest goal: an edit would widen an approval nobody re-read.
 > asks `pickNext`; on `inject` it writes the opener under the pick's id with author kind `drafter`
 > and author `rondo/flow/1` -- rondo's voice, never the person's -- body the ranked request followed
 > by "rondo started this because it goes against clause N of the goal", and bases the triage
-> proposal and the goal (no basis form locates an issue, so the issue is named in the body). **The
+> proposal and the goal (no basis form locates an issue, so the issue is named in the body, and
+> the issue reader reads and quotes it as it does a person's: `D-0078` section 3.1's "a read answers
+> only an operator message" is widened by this one opener). **The
 > triage reading's model spend is the approval's**: the flow host claims it as a `scope_consumption`
 > row of a new act kind, `triage_reading` (subject the triage proposal id, one per reading whichever
 > approval claims it), before it writes the opener, and the scope's spend adds that reading's
-> `cost_usd` to what was read, for `reserve()`'s cost test and the lap's cap alike. The split
+> `cost_usd` to what was read, for `reserve()`'s cost test and the lap's cap alike; the budgets are
+> asked again once the reading is counted, so a reading that leaves no room writes no request. What
+> the flow injected from the goal under an approval it replaced (a widening, a resume) is not asked
+> for again, and an earlier approval's failures do not stop the new one. The split
 > drafter treats the flow's opener as it treats a person's message (due, covered, stale) and, where
 > a goal scope covers it, drafts the split and no scope; `approvedSplits` gives the tick the newest
 > split drafted for each opener a goal scope in force covers, so the last bullet of *What it costs*

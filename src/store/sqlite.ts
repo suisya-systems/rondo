@@ -5579,14 +5579,18 @@ function threadMessageRefusal(connection: DatabaseSync, draft: ThreadMessageDraf
   // **A read answers the message that named the issue, and nothing else**
   // (D-0078 section 3.1): a `forge` row opening a request, or under a
   // drafter's words, would be the forge speaking where only a person asked.
+  // The flow host's opener is the one drafter row that asks for work, under a
+  // goal scope a person approved (rondo#469), so its issue is read too.
   if (
     draft.authorKind === "forge" &&
     (draft.inReplyTo === null ||
       connection
         .prepare(
-          "SELECT 1 FROM conversation_message WHERE message_id = ? AND author_kind = 'operator'",
+          "SELECT 1 FROM conversation_message WHERE message_id = ? AND (author_kind = " +
+            "'operator' OR (author_kind = 'drafter' AND in_reply_to IS NULL AND " +
+            "substr(author_id, 1, length(?)) = ?))",
         )
-        .get(draft.inReplyTo) === undefined)
+        .get(draft.inReplyTo, FLOW_AUTHOR_PREFIX, FLOW_AUTHOR_PREFIX) === undefined)
   ) {
     return (
       `'${draft.messageId}' is what rondo read of an issue, and it replies to no operator ` +

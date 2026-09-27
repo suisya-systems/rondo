@@ -37,6 +37,7 @@ import {
   requestsGoal,
   type StoredGoal,
   type StoredScope,
+  scopeCoversRequest,
   TERMINAL_STATUSES,
   type ThreadMessageDraft,
 } from "../store/records.js";
@@ -195,27 +196,35 @@ async function flowOne(
       ports.log(`flow     ${repository}: ${line}`);
     }
   };
-  const prefix = `${flowPrefix(scopeDecisionId)}`;
-  const own = seen.messages.filter(
-    (message) => opensFlowRequest(message) && message.messageId.startsWith(prefix),
+  // **Every request the flow injected from this goal**, under this approval or
+  // one it replaced (a widening, a resume after a pause): what is started, or
+  // still waits to start, is not asked for twice. What ended under an earlier
+  // approval was asked about under it, and the person's new approval is the
+  // answer, so it is read as closed: a failure there does not stop this one.
+  const prefix = flowPrefix(scopeDecisionId);
+  const openers = seen.messages.filter(
+    (message) =>
+      opensFlowRequest(message) && scopeCoversRequest({ from_goal: goal.goalId }, message),
   );
   const injections: Injection[] = [];
   let ownOpenAsk = false;
-  for (const opener of own) {
+  for (const opener of openers) {
     const asks = await ports.record.openAsksIn(opener.messageId);
     if (asks.kind !== "read") {
       throw new Error(asks.reason);
     }
+    const own = opener.messageId.startsWith(prefix);
     const asked = asks.asks.length > 0;
-    ownOpenAsk ||= asked;
+    ownOpenAsk ||= own && asked;
+    const state = await injectionState(ports, seen, opener.messageId, asked);
     injections.push({
-      candidateKey: opener.messageId.slice(prefix.length),
+      candidateKey: candidateKeyOf(opener.messageId),
       messageId: opener.messageId,
-      state: await injectionState(ports, seen, opener.messageId, asked),
+      state: own || (state !== "failed" && state !== "abandoned") ? state : "closed",
     });
   }
   const stop = async (reason: FlowStop, detail: string): Promise<void> =>
-    await askStop(ports, sayOnce, flow, repository, own.at(-1) ?? null, reason, detail);
+    await askStop(ports, sayOnce, flow, repository, openers.at(-1) ?? null, reason, detail);
 
   // The scope and the goal first: past either, nothing the picker says matters.
   const newest = seen.goals.filter((one) => one.repository === repository).at(-1);
@@ -237,22 +246,29 @@ async function flowOne(
       `the scope expired at ${new Date(budgets.expires_at_ms).toISOString()}`,
     );
   }
-  const spent = await ports.record.scopeSpent(scopeDecisionId);
-  if (spent.admissions >= budgets.laps) {
-    return await stop(
-      "laps",
-      `the scope has admitted ${String(spent.admissions)} of ${String(budgets.laps)} laps`,
-    );
-  }
-  const committed = spent.readCostUsd + (spent.unreadLaps + 1) * budgets.cost_reserve_usd;
-  if (committed > budgets.cost_usd) {
-    return await stop(
-      "cost",
-      `another request would commit ${committed.toFixed(2)} USD against a budget of ` +
-        `${String(budgets.cost_usd)}: ${spent.readCostUsd.toFixed(2)} spent, triage readings ` +
-        `included, plus ${String(budgets.cost_reserve_usd)} reserved for each of ` +
-        `${String(spent.unreadLaps)} unread laps and the next one`,
-    );
+  // The laps and the cost, as `reserve()` will test the next request's first lap.
+  const spentStop = async (): Promise<readonly [FlowStop, string] | null> => {
+    const spent = await ports.record.scopeSpent(scopeDecisionId);
+    if (spent.admissions >= budgets.laps) {
+      return [
+        "laps",
+        `the scope has admitted ${String(spent.admissions)} of ${String(budgets.laps)} laps`,
+      ];
+    }
+    const committed = spent.readCostUsd + (spent.unreadLaps + 1) * budgets.cost_reserve_usd;
+    return committed > budgets.cost_usd
+      ? [
+          "cost",
+          `another request would commit ${committed.toFixed(2)} USD against a budget of ` +
+            `${String(budgets.cost_usd)}: ${spent.readCostUsd.toFixed(2)} spent, triage ` +
+            `readings included, plus ${String(budgets.cost_reserve_usd)} reserved for each of ` +
+            `${String(spent.unreadLaps)} unread laps and the next one`,
+        ]
+      : null;
+  };
+  const spentBefore = await spentStop();
+  if (spentBefore !== null) {
+    return await stop(...spentBefore);
   }
 
   const triage = (await ports.record.latestTriage()).find((one) => one.repository === repository);
@@ -299,6 +315,11 @@ async function flowOne(
   if (claimed.kind === "defect") {
     return sayOnce(`the triage reading could not be counted: ${claimed.reason}`);
   }
+  // Asked again with the reading counted: it may be what leaves no room.
+  const spentAfter = await spentStop();
+  if (spentAfter !== null) {
+    return await stop(...spentAfter);
+  }
   const written = await ports.record.recordThreadMessage({
     messageId: pick.messageId,
     body: flowBody(pick.candidate, goal),
@@ -329,6 +350,19 @@ async function flowOne(
 /** How a flow's request ids begin: `flowMessageId` without the candidate. */
 function flowPrefix(scopeDecisionId: string): string {
   return `flow-${scopeDecisionId}-`;
+}
+
+/**
+ * The candidate an opener was injected for, read back from its id
+ * (`flowMessageId`). The picker injects only issues, whose keys begin
+ * `issue:`, so the key is what follows the first `-issue:`.
+ *
+ * ponytail: parsed from the id; a candidate column on the opener if another
+ * key form is ever injected.
+ */
+function candidateKeyOf(messageId: string): string {
+  const at = messageId.indexOf("-issue:");
+  return at < 0 ? messageId : messageId.slice(at + 1);
 }
 
 /**

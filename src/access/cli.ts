@@ -1660,7 +1660,11 @@ export async function main(
             policy: bounds.policy,
             now: Date.now,
             log: say,
-            injected: () => drafter.kick(),
+            // Its issue is read first; the drafter waits on the read.
+            injected: () => {
+              issues.kick();
+              drafter.kick();
+            },
           });
     // **And the organisation's answer at a gate** (D-0125 rule 6, rondo#467):
     // a lap whose gate would be approved automatically is approved under its

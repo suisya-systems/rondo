@@ -30,7 +30,7 @@
  * explicit name is read where it points.
  */
 
-import type { ThreadMessageDraft } from "../store/records.js";
+import { asksForWork, type ThreadMessageDraft } from "../store/records.js";
 import { type AdvisoryRecord, asRefusal } from "../store/sqlite.js";
 import type { CommandOutcome, IssueReadRequest } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
@@ -713,7 +713,9 @@ export function unreadIssues(
   }
   const unread = new Map<string, readonly NamedIssue[]>();
   for (const m of messages) {
-    if (m.authorKind !== "operator" || before.has(m.messageId)) {
+    // The flow host's opener names its issue as a person's message would
+    // (rondo#469): its work is read and quoted the same way.
+    if (!asksForWork(m) || before.has(m.messageId)) {
       continue;
     }
     const done = answered.get(m.messageId);
