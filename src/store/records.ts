@@ -481,6 +481,25 @@ export interface IterationRecord {
    */
   readonly lapBudgetCapUsd: number | null;
   /**
+   * The remote `publish` pushed this lap's branch to (rondo#286), as the
+   * operator's `--remote` named it, or null.
+   *
+   * **The landing reading's only basis for where to look** (D-0153). The
+   * reading used to fetch a hard-coded `origin`, so a publish to anywhere else
+   * was read against a forge the work was never pushed to -- and an unrelated
+   * `origin` holding the same bytes would have released the line early.
+   *
+   * **Null is "rondo holds no record", and it is read as neither landed nor
+   * not landed**: every row written before this column, every lap pushed by
+   * hand, and every publish that did not reach its push. Such a line waits for
+   * a person's release press.
+   *
+   * It is rondo's record of its own act -- which remote *rondo* pushed to --
+   * and not a record of the forge's state, which is why `publish` may write it
+   * while it still refuses to persist how far it got.
+   */
+  readonly publishedRemote: string | null;
+  /**
    * Why this iteration failed, stalled, or is asking for a withdrawal.
    *
    * One column for all three because the question a reader asks is the same --
@@ -695,6 +714,10 @@ export type IterationFields = Partial<
     | "requestMessageId"
     | "gateAnswer"
     | "gateAnswerActor"
+    // rondo#286: written by `markPublishedRemote` at the push and by nothing
+    // else, for the reason the triple above is omitted -- where rondo pushed
+    // is a fact about what it did, not a field a later transition may edit.
+    | "publishedRemote"
   >
 >;
 

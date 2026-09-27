@@ -45,6 +45,11 @@ import type { LapWorkInspection } from "./forge.js";
  * `--remote` an operator may have typed. Re-measuring the reading's range with
  * the operator's remote would compare two different ranges and call the
  * difference staleness.
+ *
+ * **It is no longer what a landing is read from** (rondo#286, D-0153). The
+ * landing reading fetches the remote `publish` recorded pushing to, and where
+ * this constant and that record disagree it reads neither and waits for a
+ * person.
  */
 export const READING_REMOTE = "origin";
 

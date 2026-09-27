@@ -711,6 +711,19 @@ export interface IterationStore {
   /** Every `performing` lap with the processes {@link markLapProcess} wrote (D-0139). */
   performingLaps(): Promise<readonly PerformingLap[]>;
   /**
+   * Record which remote `publish` pushed this lap's branch to (rondo#286,
+   * D-0153 rule 1), written at the push and read by the landing reading.
+   *
+   * **The push, not the pull request**: the push is the leg that put the work
+   * on a forge, and a publish whose pull request failed pushed all the same.
+   * Written again by a later publish of the same lap, which pushed again:
+   * where the branch went last is what a reading of it has to ask.
+   *
+   * It moves no status and asserts none: a publish happens to a lap that is
+   * already closed.
+   */
+  markPublishedRemote(iterationId: string, remote: string, nowMs: number): Promise<void>;
+  /**
    * The highest number ever reserved in `record` of `repository` (as
    * `repositoryKey` spells it), released ones included, or 0 (D-0098 rule
    * 3.3): half of the floor an admission's numbers start above.
@@ -1070,6 +1083,10 @@ CREATE TABLE IF NOT EXISTS iteration (
   -- The room the scope's budget left this lap when it was sent (D-0121). NULL
   -- where it was admitted under no approval, or the lap was never sent.
   lap_budget_cap_usd    REAL,
+  -- The remote publish pushed this lap's branch to (rondo#286, D-0153). NULL
+  -- is "rondo holds no record", which the landing reading reads as neither
+  -- landed nor not landed.
+  published_remote      TEXT,
   -- Which processes drive a performing lap (D-0139): NULL on a row sent
   -- before them, which is told lost by its ceiling instead.
   driver_host           TEXT,
@@ -1885,6 +1902,10 @@ const ADDED_COLUMNS = Object.freeze({
   lap_commands: "TEXT",
   // D-0121: nullable, no back-fill -- no lap before it was sent with a cap.
   lap_budget_cap_usd: "REAL",
+  // rondo#286 (D-0153): nullable, no back-fill -- no publish before it
+  // recorded where it pushed, so a null is the truth about such a row and the
+  // landing reading answers `undetermined` over it.
+  published_remote: "TEXT",
   // D-0139: nullable, no back-fill -- no lap before it recorded its processes.
   driver_host: "TEXT",
   driver_pid: "INTEGER",
@@ -2109,6 +2130,7 @@ const SELECT_COLUMNS = [
   "lap_turns",
   "lap_duration_ms",
   "lap_budget_cap_usd",
+  "published_remote",
   "reason",
   "failure_kind",
   // D-0092: read from beside the gate answer, never from a column of the row.
@@ -2837,6 +2859,12 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
         lapPid: optionalNumber(row, "lap_pid"),
         updatedAtMs: Number(row["updated_at_ms"]),
       }));
+    },
+
+    async markPublishedRemote(iterationId: string, remote: string, nowMs: number): Promise<void> {
+      connection
+        .prepare("UPDATE iteration SET published_remote = ?, updated_at_ms = ? WHERE id = ?")
+        .run(remote, nowMs, iterationId);
     },
 
     async numberReservations(iterationId: string): Promise<readonly NumberReservation[]> {
@@ -7994,6 +8022,7 @@ function toRecord(row: SqlRow): IterationRecord {
     lapTurns: optionalNumber(row, "lap_turns"),
     lapDurationMs: optionalNumber(row, "lap_duration_ms"),
     lapBudgetCapUsd: optionalNumber(row, "lap_budget_cap_usd"),
+    publishedRemote: optionalText(row, "published_remote"),
     reason: optionalText(row, "reason"),
     failureKind: optionalFailureKind(row),
     gateAnswer: optionalGateAnswer(row),

@@ -1451,6 +1451,7 @@ function published(parts: Partial<IterationRecord> = {}): IterationRecord {
     lapTurns: null,
     lapDurationMs: null,
     lapBudgetCapUsd: null,
+    publishedRemote: null,
     reason: null,
     failureKind: null,
     gateAnswer: "approve",

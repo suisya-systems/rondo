@@ -1537,7 +1537,11 @@ export async function inspectLapWork(request: LapWorkRequest): Promise<LapWorkIn
 export interface LandingRequest {
   /** The repository the line's workspaces were cut from: where git is asked. */
   readonly repository: string;
-  /** The remote `publish` pushes to, whose default branch is the forge's. */
+  /**
+   * The remote `publish` recorded pushing to (rondo#286, D-0153 rule 2),
+   * whose default branch is the forge's. Never an assumed `origin`: the
+   * caller reads it off the line's laps.
+   */
   readonly remote: string;
   /** The lineage's first `baseCommit`. */
   readonly baseCommit: string;
