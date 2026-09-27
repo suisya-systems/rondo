@@ -376,7 +376,7 @@ test("a flow stopped before its first request is said on the front and the scree
     expect(html).toContain("Make setup finish without a shell");
     expect(html).toContain(EN.flowStopSkipped("open_points"));
     expect(html).toContain(quoted(EN.flowStopSkipped("put_aside")));
-    expect(html).toContain(EN.flowStopNext("nothing_eligible"));
+    expect(html).toContain(quoted(EN.flowStopNext("nothing_eligible")));
   }
 
   // Once a request is written the stop is asked in its thread: the front's

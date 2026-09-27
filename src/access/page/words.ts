@@ -236,6 +236,8 @@ export interface PageWords extends DayWords {
   readonly goalScopeGoalNote: (when: string) => string;
   readonly goalScopeRunningLead: string;
   readonly goalScopePauseNote: string;
+  /** The pause's note under a stop (rondo#488): nothing is being sent already. */
+  readonly goalScopePauseNoteStopped: string;
   readonly goalScopePauseAction: string;
   readonly goalScopePausedLead: string;
   readonly goalScopeRefusedGoalChanged: string;
@@ -670,6 +672,8 @@ export const PAGE_EN: PageWords = Object.freeze({
     "waiting on you. It asks you when something is in dispute or a limit is reached.",
   goalScopePauseNote:
     "Pausing sends nothing more toward this goal. Work already under way carries on to its end.",
+  goalScopePauseNoteStopped:
+    "Pausing ends this approval: rondo sends nothing toward this goal until you approve again.",
   goalScopePauseAction: "Pause",
   goalScopePausedLead:
     "rondo sends nothing more toward this goal. To resume, approve again below; the limits count " +
@@ -716,7 +720,7 @@ export const PAGE_EN: PageWords = Object.freeze({
         return "Nothing in the latest ranking is something rondo may send by itself.";
     }
   },
-  flowStopExpiredAt: (at) => `It was approved until ${at}.`,
+  flowStopExpiredAt: (at) => `It was approved until ${at} UTC.`,
   flowStopLapsUsed: (admissions, laps) =>
     `${String(admissions)} of ${String(laps)} ${laps === 1 ? "lap has" : "laps have"} been used.`,
   flowStopCostOver: (spent, committed, budget) =>
@@ -755,8 +759,8 @@ export const PAGE_EN: PageWords = Object.freeze({
         );
       case "nothing_eligible":
         return (
-          "rondo looks again each time the ranking is read. To send one of these now, take " +
-          "it into the request box yourself. To stop, pause the approval."
+          "rondo looks again each time the ranking is read. To send one of these now, press " +
+          '"Put it in the box" on it. To stop, pause the approval.'
         );
     }
   },
@@ -1156,6 +1160,8 @@ export const PAGE_JA: PageWords = Object.freeze({
     "異論があるときや上限に達したときは、あなたに聞きます。",
   goalScopePauseNote:
     "一時停止すると、この目標に向けた新しい依頼は送りません。いま進んでいる作業は最後まで続きます。",
+  goalScopePauseNoteStopped:
+    "一時停止すると、この承認は終わります。もう一度承認するまで、rondo はこの目標に向けた依頼を送りません。",
   goalScopePauseAction: "一時停止する",
   goalScopePausedLead:
     "この目標に向けた新しい依頼は送りません。再開するには、下でもう一度承認してください。上限はそこから数え直します。",
@@ -1197,7 +1203,7 @@ export const PAGE_JA: PageWords = Object.freeze({
         return "最新の順位付けに、rondo が自分で送ってよい依頼が残っていません。";
     }
   },
-  flowStopExpiredAt: (at) => `承認の期限は ${at} でした。`,
+  flowStopExpiredAt: (at) => `承認の期限は ${at} (UTC) でした。`,
   flowStopLapsUsed: (admissions, laps) =>
     `${String(laps)} 周のうち ${String(admissions)} 周を使いました。`,
   flowStopCostOver: (spent, committed, budget) =>
@@ -1210,7 +1216,7 @@ export const PAGE_JA: PageWords = Object.freeze({
       case "put_aside":
         return "あなたが「今はやらない」で見送りました。";
       case "open_points":
-        return "先に決めることが残っています。rondo が代わりに決めることはしません。";
+        return "先に決めることが残っています（rondo は代わりに決めません）。";
       case "not_issue":
         return "止まった依頼の続きです。続けるかどうかはあなたが決めて送ります。";
     }
@@ -1232,7 +1238,7 @@ export const PAGE_JA: PageWords = Object.freeze({
         return "失敗した 2 件の理由を、それぞれの依頼のスレッドで確かめてください。そのうえで一時停止するか、もう一度承認して続けさせます。";
       case "nothing_eligible":
         return (
-          "順位付けが新しくなるたびに、rondo は見直します。いますぐ送りたい候補があれば、依頼欄に入れてご自分で送ってください。" +
+          "順位付けが新しくなるたびに、rondo は見直します。いますぐ送りたい候補があれば、その候補の「依頼の欄に入れる」を押してください。" +
           "やめるなら、承認を一時停止します。"
         );
     }

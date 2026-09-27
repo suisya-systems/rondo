@@ -864,8 +864,17 @@
 
 .triage-goal-stop {
   display: grid;
-  gap: 4px;
+  flex: 1 1 24em;
+  gap: 6px;
   max-width: 45em;
+}
+
+.triage-goal-scope[data-state="stopped"] > .triage-goal-link {
+  flex: none;
+}
+
+.triage-goal-stop > p:first-child b {
+  color: var(--color-wait-ink);
 }
 
 .triage-goal-stop > p:first-child {
@@ -882,7 +891,7 @@
 
 .triage-goal-skipped {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   margin: 2px 0;
 }
 
@@ -892,6 +901,7 @@
 
 .triage-goal-skipped > li > span:first-child {
   color: var(--color-foreground);
+  font-weight: 500;
 }
 
 .triage-goal-link {

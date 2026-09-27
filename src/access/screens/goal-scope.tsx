@@ -238,7 +238,9 @@ async function running(
           <input type="hidden" name="pause" value={scopeDecisionId} />
           {/* Minted when drawn: one form pressed twice pauses once. */}
           <input type="hidden" name="scope_id" value={newScopeId()} />
-          <p class="note text-meta leading-5 text-muted-foreground">{wording.goalScopePauseNote}</p>
+          <p class="note text-meta leading-5 text-muted-foreground">
+            {stop === null ? wording.goalScopePauseNote : wording.goalScopePauseNoteStopped}
+          </p>
           <button
             type="submit"
             data-row=""
@@ -264,7 +266,7 @@ function stopCard(wording: Chrome, stop: FlowStopSaid) {
       class="space-y-3 rounded-lg border border-wait/40 bg-wait-wash px-4 py-3"
     >
       <div class="space-y-1">
-        <p class="text-body leading-6 font-medium">{stop.reason}</p>
+        <p class="text-body leading-6 font-medium text-wait-ink">{stop.reason}</p>
         {stop.facts === null ? null : (
           <p class="text-body leading-6 text-muted-foreground">{stop.facts}</p>
         )}
@@ -284,11 +286,14 @@ function stopCard(wording: Chrome, stop: FlowStopSaid) {
           </ul>
         </div>
       )}
-      <div class="space-y-1">
-        <h3 class={CARD_HEADING}>{wording.flowStopNextHeading}</h3>
-        <p class="text-body leading-6">{stop.next}</p>
+      <div class="flex flex-col gap-2">
+        <div class="space-y-1">
+          <h3 class={CARD_HEADING}>{wording.flowStopNextHeading}</h3>
+          <p class="text-body leading-6">{stop.next}</p>
+        </div>
+        {/* The one thing to do is answer: the card's press, as scope.tsx's. */}
         {stop.askedHref === null ? null : (
-          <a href={stop.askedHref} class={`text-meta ${LINK}`}>
+          <a href={stop.askedHref} class={`${PRIMARY} h-10 justify-center self-start px-6 text-sm`}>
             {wording.flowStopAskedLink}
           </a>
         )}
