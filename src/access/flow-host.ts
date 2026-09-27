@@ -32,7 +32,8 @@
  * inject has open points nobody answered, it records one ask with rondo's
  * suggestion for each (`flow_ask`), which the page draws beside the goal scope,
  * and injects nothing. The person's answers go into the request's body once
- * given. While the ask is open the flow waits, and the wait is not a failure.
+ * given, and the request line and why go as the person left them (rondo#492).
+ * While the ask is open the flow waits, and the wait is not a failure.
  */
 
 import { type Answered, type Injection, type InjectionState, pickNext } from "../advisory/flow.js";
@@ -306,6 +307,8 @@ async function flowOne(
       candidateKey: ask.candidate,
       points: ask.points.map((one) => one.point),
       answers: ask.answer?.answers ?? null,
+      request: ask.answer?.request ?? null,
+      why: ask.answer?.why ?? null,
     })),
   });
   if (pick.kind === "wait") {
@@ -339,6 +342,8 @@ async function flowOne(
       proposalId: triage.proposalId,
       candidate: pick.candidate.key,
       points: pick.candidate.openPoints,
+      request: pick.candidate.request,
+      why: pick.candidate.why,
       askedAtMs: nowMs,
     });
     if (asked.kind === "recorded") {

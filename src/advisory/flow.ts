@@ -69,6 +69,9 @@ export interface FlowAsked {
   /** The points as asked: the ranking may say them differently by the time they are answered. */
   readonly points: readonly string[];
   readonly answers: readonly string[] | null;
+  /** The request line and why as the person answered them (rondo#492), or null: the ranking's. */
+  readonly request?: string | null;
+  readonly why?: string | null;
 }
 
 /** One open point as the person answered it. */
@@ -108,6 +111,7 @@ export interface Skipped {
 export type FlowPick =
   | {
       readonly kind: "inject";
+      /** In the person's words where they edited them in the ask (rondo#492). */
       readonly candidate: Ranked;
       readonly messageId: string;
       /** The person's answers to its open points; empty when it had none. */
@@ -230,7 +234,11 @@ export function pickNext(input: FlowInput): FlowPick {
   }
   return {
     kind: "inject",
-    candidate,
+    candidate: {
+      ...candidate,
+      request: answered?.request ?? candidate.request,
+      why: answered?.why ?? candidate.why,
+    },
     messageId: flowMessageId(input.scopeDecisionId, candidate.key),
     answers:
       answered?.points.map((point, at) => ({ point, answer: answered.answers?.[at] ?? "" })) ?? [],

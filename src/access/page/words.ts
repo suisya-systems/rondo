@@ -224,7 +224,14 @@ export interface PageWords extends DayWords {
    * before it starts the request, the press that answers, and its refusals.
    */
   readonly flowAskLead: string;
+  /** The request line and why as fields the person can fix before it starts (rondo#492). */
+  readonly flowAskRequestLabel: string;
+  readonly flowAskWhyLabel: string;
   readonly flowAskAction: string;
+  /** The card over the asked candidate leads to the ask, not to the box (rondo#492). */
+  readonly triageAnswerAsk: string;
+  /** A candidate whose words mix in another script after a second reading (rondo#492). */
+  readonly triageMixedScript: string;
   readonly flowAskRefusedNoApprover: string;
   readonly flowAskRefusedPress: string;
   readonly flowAskRefused: string;
@@ -654,8 +661,14 @@ export const PAGE_EN: PageWords = Object.freeze({
   triageGoalScopeResume: "See the approval, or resume",
   triageStarted: "Started",
   triageStartedLink: "Go to the request",
-  flowAskLead: "rondo asks before it starts this. Answer each point, or keep the suggestion.",
+  flowAskLead:
+    "rondo asks before it starts this. Fix the request if it needs it, then answer each point or keep what is filled in.",
+  flowAskRequestLabel: "Request",
+  flowAskWhyLabel: "Why",
   flowAskAction: "Start with these answers",
+  triageAnswerAsk: "Answer rondo's questions below",
+  triageMixedScript:
+    "These words mix in letters of another language, and reading them again did not fix it. Check them before they are sent.",
   flowAskRefusedNoApprover:
     "Nothing was answered: no approver is set for this rondo, so it writes nothing from the page.",
   flowAskRefusedPress: "Nothing was answered: this did not come from a press on this page.",
@@ -1157,8 +1170,13 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageStarted: "開始済み",
   triageStartedLink: "依頼を見る",
   flowAskLead:
-    "始める前に rondo が聞いています。決めることに一つずつ答えるか、案のままにしてください。",
+    "始める前に rondo が聞いています。依頼の文は必要なら直し、決めることに一つずつ答えるか、入っている答えのままにしてください。",
+  flowAskRequestLabel: "依頼",
+  flowAskWhyLabel: "理由",
   flowAskAction: "この答えで始める",
+  triageAnswerAsk: "下の質問に答える",
+  triageMixedScript:
+    "この文には別の言語の文字が混じっていて、読み直しても直りませんでした。送られる前に確かめてください。",
   flowAskRefusedNoApprover:
     "回答していません。この rondo には承認者が設定されていないので、画面からは何も書き込みません。",
   flowAskRefusedPress: "回答していません。この画面のボタンから送られたものではありません。",

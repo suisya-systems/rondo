@@ -2059,6 +2059,12 @@ export interface FlowAskDraft {
   readonly proposalId: string;
   readonly candidate: string;
   readonly points: readonly { readonly point: string; readonly recommendation: string }[];
+  /**
+   * The request line and why as the ranking wrote them (rondo#492): null on an
+   * ask recorded before it, whose words are the ranking's still.
+   */
+  readonly request: string | null;
+  readonly why: string | null;
   readonly askedAtMs: number;
 }
 
@@ -2066,6 +2072,12 @@ export interface FlowAskDraft {
 export interface FlowAnswerDraft {
   readonly askId: string;
   readonly answers: readonly string[];
+  /**
+   * The request line and why as the person pressed them (rondo#492): null
+   * where the press carried none, and the ranking's words are sent.
+   */
+  readonly request: string | null;
+  readonly why: string | null;
   readonly answeredBy: string;
   readonly answeredAtMs: number;
 }

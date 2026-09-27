@@ -66,6 +66,11 @@ export interface Judged {
   readonly request: string;
   readonly why: string;
   readonly openPoints: readonly OpenPoint[];
+  /**
+   * Its words hold letters of a script neither the operator's language nor
+   * English is written in, and a second reading did not mend them (rondo#492).
+   */
+  readonly mixedScript?: boolean;
 }
 
 /** One ranked candidate: the first of a payload is the recommendation. */
@@ -260,6 +265,49 @@ export function labelRank(labels: readonly string[]): number {
   return stated.length === 0 ? 2 : Math.min(...stated);
 }
 
+/**
+ * The scripts a language is written in besides Latin, which English and every
+ * reading may use for names and code (rondo#492).
+ *
+ * ponytail: the languages rondo is read in; a language not listed is not
+ * checked, so a new one is a line here rather than a false alarm.
+ */
+const SCRIPTS: Readonly<Record<string, readonly string[]>> = {
+  en: [],
+  de: [],
+  es: [],
+  fr: [],
+  it: [],
+  pt: [],
+  ja: ["Han", "Hiragana", "Katakana"],
+  zh: ["Han"],
+  ko: ["Hangul", "Han"],
+  ru: ["Cyrillic"],
+  uk: ["Cyrillic"],
+  el: ["Greek"],
+};
+
+/**
+ * Whether a judged candidate's words hold a letter of a script neither the
+ * operator's language nor English is written in -- Cyrillic in a Japanese
+ * reading (rondo#492). False when the language is unset or not listed.
+ */
+export function mixesScripts(judged: Judged, language: string | null): boolean {
+  const scripts = SCRIPTS[(language ?? "").split(/[-_]/)[0]?.toLowerCase() ?? ""];
+  if (scripts === undefined || judged.clause === null) {
+    return false;
+  }
+  const allowed = ["Latin", "Common", "Inherited", ...scripts]
+    .map((script) => `\\p{sc=${script}}`)
+    .join("");
+  const foreign = new RegExp(`(?![${allowed}])\\p{L}`, "u");
+  return [
+    judged.request,
+    judged.why,
+    ...judged.openPoints.flatMap((one) => [one.point, one.recommendation]),
+  ].some((words) => foreign.test(words));
+}
+
 /** Rank a checked judgement into the payload the page draws (point 2.3 (a)). */
 export function rankTriage(material: TriageMaterial, judged: readonly Judged[]): TriagePayload {
   const found = new Map(
@@ -342,6 +390,7 @@ export function triagePayloadDocument(payload: TriagePayload): JsonRecord {
       source: sourceDocument(one.source),
       title: one.title,
       labels: [...one.labels],
+      ...(one.mixedScript === true ? { mixed_script: true } : {}),
     })),
     withheld: payload.withheld.map((one) => ({ key: one.key, why: one.why })),
     read: { issues: payload.read.issues, stopped: payload.read.stopped },
@@ -401,6 +450,7 @@ export function readTriagePayload(document: JsonRecord): TriagePayload | null {
           ? [{ point: point["point"], recommendation: point["recommendation"] }]
           : [],
       ),
+      ...(one["mixed_script"] === true ? { mixedScript: true } : {}),
     });
   }
   return {

@@ -1695,14 +1695,18 @@ CREATE TABLE IF NOT EXISTS flow_ask (
   proposal_id                 TEXT    NOT NULL,
   candidate                   TEXT    NOT NULL,
   points                      TEXT    NOT NULL,
-  asked_at_ms                 INTEGER NOT NULL
+  asked_at_ms                 INTEGER NOT NULL,
+  request                     TEXT,
+  why                         TEXT
 );
 
 CREATE TABLE IF NOT EXISTS flow_answer (
   ask_id                      TEXT    PRIMARY KEY,
   answers                     TEXT    NOT NULL,
   answered_by                 TEXT    NOT NULL,
-  answered_at_ms              INTEGER NOT NULL
+  answered_at_ms              INTEGER NOT NULL,
+  request                     TEXT,
+  why                         TEXT
 );
 
 -- D-0098 rule 3.2. A decision-record number a line was handed at admission.
@@ -1882,6 +1886,16 @@ const CONVERSATION_ADDED_COLUMNS = Object.freeze({
   answer_outcome: "TEXT",
 });
 
+/**
+ * rondo#492: the request's words on the flow's ask as asked and on its answer
+ * as pressed. Nullable, no back-fill: an ask before it asked no words, and its
+ * answer edited none.
+ */
+function addFlowWords(connection: DatabaseSync): void {
+  addMissingColumns(connection, "flow_ask", { request: "TEXT", why: "TEXT" });
+  addMissingColumns(connection, "flow_answer", { request: "TEXT", why: "TEXT" });
+}
+
 /** Add every column of `columns` that `table` lacks, inside the caller's transaction. */
 function addMissingColumns(
   connection: DatabaseSync,
@@ -1943,6 +1957,7 @@ function migrate(connection: DatabaseSync): void {
     addMissingColumns(connection, "lap_reading", LAP_READING_ADDED_COLUMNS);
     addMissingColumns(connection, "conversation_message", CONVERSATION_ADDED_COLUMNS);
     addMissingColumns(connection, "admission_refusal", { holders: "TEXT" });
+    addFlowWords(connection);
     connection.exec("DROP INDEX IF EXISTS iteration_one_live");
     connection.exec("COMMIT");
   } catch (error) {
@@ -3755,9 +3770,10 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
   connection.exec(SCHEMA);
   // The thread's columns, for a database this port opens before the iteration
   // store has migrated it: `changedSince` names `at_ms`.
-  immediateTransaction(connection, () =>
-    addMissingColumns(connection, "conversation_message", CONVERSATION_ADDED_COLUMNS),
-  );
+  immediateTransaction(connection, () => {
+    addMissingColumns(connection, "conversation_message", CONVERSATION_ADDED_COLUMNS);
+    addFlowWords(connection);
+  });
 
   /**
    * Run one insert, translating a throw into an outcome.
@@ -4994,7 +5010,7 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
         connection
           .prepare(
             "INSERT INTO flow_ask (ask_id, repository, goal_id, scope_decision_id, proposal_id, " +
-              "candidate, points, asked_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+              "candidate, points, asked_at_ms, request, why) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           )
           .run(
             draft.askId,
@@ -5007,6 +5023,8 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
               draft.points.map((one) => ({ point: one.point, recommendation: one.recommendation })),
             ),
             draft.askedAtMs,
+            draft.request,
+            draft.why,
           );
         return { kind: "recorded" as const };
       });
@@ -5036,16 +5054,27 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
             reason: `'${draft.askId}' asks ${String(points.length)} points, and each needs an answer`,
           };
         }
+        // The request is one line, as the box's first line; the why is not empty.
+        const request = draft.request?.replace(/\s*[\r\n]+\s*/g, " ").trim() ?? null;
+        const why = draft.why?.trim() ?? null;
+        if (request === "" || why === "") {
+          return {
+            kind: "refused",
+            reason: `'${draft.askId}' needs a request and a why`,
+          };
+        }
         connection
           .prepare(
-            "INSERT INTO flow_answer (ask_id, answers, answered_by, answered_at_ms) " +
-              "VALUES (?, ?, ?, ?)",
+            "INSERT INTO flow_answer (ask_id, answers, answered_by, answered_at_ms, request, why) " +
+              "VALUES (?, ?, ?, ?, ?, ?)",
           )
           .run(
             draft.askId,
             canonicalJson(draft.answers.map((answer) => answer.trim())),
             draft.answeredBy,
             draft.answeredAtMs,
+            request,
+            why,
           );
         return { kind: "recorded" };
       });
@@ -5055,7 +5084,8 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return (
         connection
           .prepare(
-            "SELECT k.*, a.answers, a.answered_by, a.answered_at_ms FROM flow_ask k " +
+            "SELECT k.*, a.answers, a.answered_by, a.answered_at_ms, " +
+              "a.request AS answered_request, a.why AS answered_why FROM flow_ask k " +
               "LEFT JOIN flow_answer a ON a.ask_id = k.ask_id ORDER BY k.asked_at_ms, k.rowid",
           )
           .all() as SqlRow[]
@@ -5074,10 +5104,14 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
           proposalId: String(row["proposal_id"]),
           candidate: String(row["candidate"]),
           points: flowPoints(String(row["points"])),
+          request: row["request"] === null ? null : String(row["request"]),
+          why: row["why"] === null ? null : String(row["why"]),
           askedAtMs: Number(row["asked_at_ms"]),
           answer: Array.isArray(answers)
             ? {
                 answers: answers.map(String),
+                request: row["answered_request"] === null ? null : String(row["answered_request"]),
+                why: row["answered_why"] === null ? null : String(row["answered_why"]),
                 answeredBy: String(row["answered_by"]),
                 answeredAtMs: Number(row["answered_at_ms"]),
               }

@@ -1021,3 +1021,37 @@ test("every answer against one proposal is read, not the earliest one", async ()
     outcome.kind === "read" && outcome.proposal.decisions.map((one) => one.decisionId),
   ).toEqual(["d-0001", "d-0002"]);
 });
+
+test("a flow ask asked before rondo#492 reads back and is answered with the request's words", async () => {
+  // The flow ask tables as rondo#487 wrote them, with an open ask in them.
+  const connection = new DatabaseSync(":memory:");
+  connection.exec(`
+    CREATE TABLE flow_ask (ask_id TEXT PRIMARY KEY, repository TEXT NOT NULL,
+      goal_id TEXT NOT NULL, scope_decision_id TEXT NOT NULL, proposal_id TEXT NOT NULL,
+      candidate TEXT NOT NULL, points TEXT NOT NULL, asked_at_ms INTEGER NOT NULL);
+    CREATE TABLE flow_answer (ask_id TEXT PRIMARY KEY, answers TEXT NOT NULL,
+      answered_by TEXT NOT NULL, answered_at_ms INTEGER NOT NULL);
+    INSERT INTO flow_ask VALUES ('ask-1', 'o/r', 'g-1', 'sd-1', 't-1', 'issue:o/r#313',
+      '[{"point":"p","recommendation":"r"}]', 1000);
+  `);
+  const record = advisoryRecord(connection);
+  const [ask] = await record.flowAsks();
+  expect([ask?.request, ask?.why, ask?.answer]).toEqual([null, null, null]);
+  expect(
+    await record.recordFlowAnswer({
+      askId: "ask-1",
+      answers: ["a"],
+      request: "Fix the reader",
+      why: "It drifts",
+      answeredBy: "ada",
+      answeredAtMs: 2_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  expect((await record.flowAsks())[0]?.answer).toEqual({
+    answers: ["a"],
+    request: "Fix the reader",
+    why: "It drifts",
+    answeredBy: "ada",
+    answeredAtMs: 2_000,
+  });
+});

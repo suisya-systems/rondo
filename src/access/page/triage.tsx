@@ -49,6 +49,8 @@ export interface CandidateView {
    * (D-0128), or null: a started one is not offered for the box again.
    */
   readonly startedHref: string | null;
+  /** Its words mix in another script and a second reading did not mend them (rondo#492). */
+  readonly mixedScript: boolean;
 }
 
 /**
@@ -70,7 +72,12 @@ export interface PointsAsk {
   readonly askId: string;
   /** The candidate asked about: its card does not list the same points again. */
   readonly candidate: string;
+  /** Where the form is: the card over the candidate leads here instead of to the box. */
+  readonly anchor: string;
+  /** The request line and why, as fields the person can fix before it starts (rondo#492). */
   readonly request: string;
+  readonly why: string;
+  readonly mixedScript: boolean;
   readonly points: readonly { readonly point: string; readonly recommendation: string }[];
 }
 
@@ -234,6 +241,8 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
       state === "none" || payload === undefined
         ? undefined
         : waitingPointsAsk(reads.flowAsks ?? [], goal.goalId, payload, reads.putAside ?? []);
+    // An ask recorded before rondo#492 kept no words: the ranking's are its words.
+    const rankedAsked = payload?.ranked.find((one) => one.key === asked?.candidate);
     const goalScope: GoalScopeLine = {
       state,
       href: viewHref({ kind: "goalScope", repository }, wording.lang),
@@ -244,9 +253,10 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
           : {
               askId: asked.askId,
               candidate: asked.candidate,
-              request:
-                payload?.ranked.find((one) => one.key === asked.candidate)?.request ??
-                asked.candidate,
+              anchor: `flow-ask-${repository.replace(/[^A-Za-z0-9_-]/g, "-")}`,
+              request: asked.request ?? rankedAsked?.request ?? asked.candidate,
+              why: asked.why ?? rankedAsked?.why ?? "",
+              mixedScript: rankedAsked?.mixedScript === true,
               points: asked.points,
             },
     };
@@ -341,7 +351,29 @@ function candidateView(
       started === null
         ? null
         : viewHref({ kind: "thread", messageId: started, to: null }, wording.lang),
+    mixedScript: ranked.mixedScript === true,
   };
+}
+
+/**
+ * A suggestion as the decision it suggests (rondo#492): the field is the
+ * person's answer, and an answer kept as drawn should say what was decided,
+ * not that it was recommended. The prompt asks for the decision itself; this
+ * strips the framing a reading written before it, or a slip, still carries.
+ *
+ * ponytail: the framings seen in English and Japanese readings; another
+ * language's framing stays as written, and the person can still edit it.
+ */
+export function asDecision(recommendation: string): string {
+  const stripped = recommendation
+    .trim()
+    .replace(/^(?:recommended|recommendation|suggested|suggestion)\s*[:：]\s*/iu, "")
+    .replace(/^(?:i|we)\s+(?:would\s+)?(?:recommend|suggest)\s+(?:that\s+)?/iu, "")
+    .replace(/^(?:推奨|おすすめ|提案)\s*[:：]\s*/u, "")
+    .replace(/こと(?:を|が)(?:推奨|おすすめ|お勧め|勧め)(?:します|する|されます|です)?[。.]?$/u, "")
+    .replace(/を(?:推奨|おすすめ|お勧め)(?:します|する|です)?[。.]?$/u, "")
+    .trim();
+  return stripped === "" ? recommendation : stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
 /**
@@ -498,8 +530,17 @@ function Block({
                 </>
               )}
             </dl>
+            {block.first.mixedScript ? (
+              <p className="triage-mixed">{wording.triageMixedScript}</p>
+            ) : null}
             <p className="triage-read">{block.readSaid}</p>
-            <Acts wording={wording} candidate={block.first} token={token} size={PRESS} />
+            <Acts
+              wording={wording}
+              candidate={block.first}
+              token={token}
+              size={PRESS}
+              ask={block.goalScope.ask}
+            />
           </article>
           {block.rest.length === 0 ? null : (
             <details className="triage-fold">
@@ -521,6 +562,7 @@ function Block({
                       candidate={candidate}
                       token={token}
                       size={SMALL_PRESS}
+                      ask={block.goalScope.ask}
                     />
                   </li>
                 ))}
@@ -624,6 +666,7 @@ function PointsAskForm({
 }) {
   return (
     <form
+      id={ask.anchor}
       className="triage-flow-ask"
       aria-label={wording.flowAskLead}
       method="post"
@@ -631,10 +674,36 @@ function PointsAskForm({
     >
       {token === null ? null : <input type="hidden" name="token" value={token} />}
       <input type="hidden" name="ask" value={ask.askId} />
-      <p className="triage-ask" lang="">
-        {ask.request}
-      </p>
       <p className="triage-flow-ask-lead">{wording.flowAskLead}</p>
+      {/* **The request is the person's before it starts** (rondo#492): its
+          line and why are fields, so a slip in the ranking is fixed here. */}
+      <div className="triage-flow-ask-words">
+        <label>
+          <span>{wording.flowAskRequestLabel}</span>
+          {/* A textarea, as the answers are, so the page's redraw keeps it
+              (`page/composer.js`); the store folds a line break into a space. */}
+          <textarea
+            name="request"
+            data-draft={`flow-ask:${ask.askId}:request`}
+            rows={1}
+            required
+            className={FIELD}
+            defaultValue={ask.request}
+          />
+        </label>
+        <label>
+          <span>{wording.flowAskWhyLabel}</span>
+          <textarea
+            name="why"
+            data-draft={`flow-ask:${ask.askId}:why`}
+            rows={2}
+            required
+            className={FIELD}
+            defaultValue={ask.why}
+          />
+        </label>
+        {ask.mixedScript ? <p className="triage-mixed">{wording.triageMixedScript}</p> : null}
+      </div>
       <ol className="triage-flow-ask-points">
         {ask.points.map((point, at) => (
           <li key={String(at)}>
@@ -648,7 +717,7 @@ function PointsAskForm({
                 rows={1}
                 required
                 className={FIELD}
-                defaultValue={point.recommendation}
+                defaultValue={asDecision(point.recommendation)}
               />
             </label>
           </li>
@@ -683,11 +752,13 @@ function Acts({
   candidate,
   token,
   size,
+  ask,
 }: {
   readonly wording: Chrome;
   readonly candidate: CandidateView;
   readonly token: string | null;
   readonly size: string;
+  readonly ask: PointsAsk | null;
 }) {
   // **Started is said, and nothing is offered for the box** (D-0128): the
   // flow already sent it, and a second request would be the same work twice.
@@ -701,11 +772,20 @@ function Acts({
       </div>
     );
   }
+  // **One way to start it** (rondo#492): while the flow asks about this
+  // candidate, its card leads to the ask, not to the box as well.
+  const asked = ask?.candidate === candidate.key ? ask : null;
   return (
     <div className="triage-acts">
-      <a className={`${PRIMARY} ${size}`} href={candidate.takeHref}>
-        {wording.triagePutInBox}
-      </a>
+      {asked === null ? (
+        <a className={`${PRIMARY} ${size}`} href={candidate.takeHref}>
+          {wording.triagePutInBox}
+        </a>
+      ) : (
+        <a className="triage-goal-link" href={`#${asked.anchor}`}>
+          {wording.triageAnswerAsk}
+        </a>
+      )}
       {token === null ? null : (
         <form method="post" action={`/not-now?lang=${encodeURIComponent(wording.lang)}`}>
           <input type="hidden" name="token" value={token} />

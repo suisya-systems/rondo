@@ -1305,6 +1305,9 @@ export interface NotNowInput {
 export interface FlowAnswerInput {
   readonly askId: string;
   readonly answers: readonly string[];
+  /** The request line and why as the person left them (rondo#492); null from a page drawn before. */
+  readonly request: string | null;
+  readonly why: string | null;
 }
 
 /** What a triage press did; `note` is rondo's own reason when it did nothing. */
@@ -2804,6 +2807,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     const form = await c.req.parseBody();
     const askId = typeof form["ask"] === "string" ? form["ask"] : "";
     const answers = postedAnswers(form);
+    const request = typeof form["request"] === "string" ? form["request"] : null;
+    const why = typeof form["why"] === "string" ? form["why"] : null;
     if (triage === null) {
       return triageRefused(c, 403, "flowAskRefusedNoApprover", null);
     }
@@ -2814,7 +2819,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (askId === "" || answers.length === 0) {
       return triageRefused(c, 400, "flowAskRefused", null);
     }
-    const answered = await triage.answer(minting.press, { askId, answers });
+    const answered = await triage.answer(minting.press, { askId, answers, request, why });
     if (!answered.ok) {
       return triageRefused(c, 409, "flowAskRefused", null, answered.note);
     }

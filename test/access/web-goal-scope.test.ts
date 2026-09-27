@@ -618,6 +618,9 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
         { point: "Where the token is read from", recommendation: "The keychain" },
         { point: "Whether to keep the old flag", recommendation: "Keep it one release" },
       ],
+      // Asked before rondo#492: no words kept, and the ranking's are drawn.
+      request: null,
+      why: null,
       askedAtMs: 3_000,
     }),
   ).toEqual({ kind: "recorded" });
@@ -629,6 +632,17 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
   expect(block).not.toContain(EN.triageOpenPoints);
   expect(block).toContain(EN.flowAskAction);
   expect(block).toMatch(/name="answer-1"[^>]*>The keychain<\/textarea>/);
+  // The request line and why are the person's to fix (rondo#492): an ask
+  // recorded before that kept no words, so the ranking's are drawn.
+  expect(block).toMatch(
+    /name="request"[^>]*>Make setup in o\/r finish without a shell<\/textarea>/,
+  );
+  expect(block).toMatch(/name="why"[^>]*>Setup asks for a terminal today.<\/textarea>/);
+  // One way to start it: the card leads to the ask, and *not now* stays.
+  expect(block).not.toContain(EN.triagePutInBox);
+  expect(block).toContain(`href="#flow-ask-o-r">${EN.triageAnswerAsk}`);
+  expect(block).toContain('id="flow-ask-o-r"');
+  expect(block).toContain(EN.triageNotNow);
   // Each field keeps what the person typed across the page's redraw.
   expect(block).toContain(`data-draft="flow-ask:${askId}:2"`);
   expect(block).toMatch(/name="answer-2"[^>]*>Keep it one release<\/textarea>/);
@@ -651,6 +665,8 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
     proposalId: "triage-1",
     candidate: "issue:o/r#7",
     points: [{ point: "p", recommendation: "r" }],
+    request: null,
+    why: null,
     askedAtMs: 2_000,
   });
   expect(aside).toEqual({ kind: "recorded" });
@@ -670,6 +686,8 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
     await w.record.recordFlowAnswer({
       askId,
       answers: ["The keychain", "Drop it"],
+      request: null,
+      why: null,
       answeredBy: "ada",
       answeredAtMs: 4_000,
     }),

@@ -175,3 +175,17 @@ test("a box taken from an older proposal still fills after a newer reading is wr
   );
   expect(html).toContain('data-draft-take="triage-1:issue:o/r#7"');
 });
+
+test("a suggestion is drawn as the decision it suggests, not as advice (rondo#492)", async () => {
+  const { asDecision } = await import("../../src/access/page/triage.js");
+  // Lap 18's prefills, and the English framings.
+  expect(asDecision("進めずに争点として提示することを推奨")).toBe("進めずに争点として提示する");
+  expect(asDecision("読み取り側に合わせることを推奨します。")).toBe("読み取り側に合わせる");
+  expect(asDecision("案 A を推奨")).toBe("案 A");
+  expect(asDecision("推奨: キーチェーンから読む")).toBe("キーチェーンから読む");
+  expect(asDecision("Recommended: keep it one release")).toBe("Keep it one release");
+  expect(asDecision("I recommend that we keep the flag")).toBe("We keep the flag");
+  // A decision already, or nothing left once stripped, stays as written.
+  expect(asDecision("The keychain")).toBe("The keychain");
+  expect(asDecision("推奨")).toBe("推奨");
+});

@@ -27,7 +27,18 @@ const listed = (issues: { number: number; title: string; labels: string[] }[]): 
   spawnError: null,
 });
 
-function world(issues: () => CommandOutcome, answer: "answered" | "failed" = "answered") {
+function world(
+  issues: () => CommandOutcome,
+  answer: "answered" | "failed" = "answered",
+  /** The request line drafted for a key on the `call`th run, and the operator's language. */
+  drafting: {
+    readonly request: (key: string, call: number) => string;
+    readonly language: string;
+  } = {
+    request: (key) => `Fix ${key} in o/r`,
+    language: "",
+  },
+) {
   const clock = { ms: 10_000 };
   const record = advisoryRecord(new DatabaseSync(":memory:"));
   const handed: string[] = [];
@@ -51,7 +62,7 @@ function world(issues: () => CommandOutcome, answer: "answered" | "failed" = "an
           candidates: keys.map((key) => ({
             key,
             clause: 1,
-            request: `Fix ${String(key)} in o/r`,
+            request: drafting.request(String(key), handed.length),
             why: "A terminal is required today.",
             openPoints: [],
           })),
@@ -64,7 +75,7 @@ function world(issues: () => CommandOutcome, answer: "answered" | "failed" = "an
       n += 1;
       return `triage-${String(n)}`;
     },
-    language: null,
+    language: drafting.language === "" ? null : drafting.language,
     log: (line) => logged.push(line),
   };
   return { record, host: triageHost(ports), handed, logged, clock };
@@ -178,4 +189,53 @@ test("a reading that came to nothing is read again after an hour, not on the nex
   w.host.kick();
   await w.host.idle();
   expect(w.handed).toHaveLength(2);
+});
+
+test("a candidate whose words mix in another script is read once more, and marked if still mixed (rondo#492)", async () => {
+  const issues = () =>
+    listed([
+      { number: 7, title: "the reader drifts", labels: [] },
+      { number: 8, title: "setup asks for a shell", labels: [] },
+    ]);
+  // Lap 18's slip: a Russian word inside a Japanese request line.
+  const slipped = "o/r で、読み取りと公開先の репозиторий が食い違う点を直してください。";
+  const mended = world(issues, "answered", {
+    request: (key, call) =>
+      key === "issue:o/r#7" && call === 1 ? slipped : `o/r で ${key} を直してください。`,
+    language: "ja",
+  });
+  await mended.record.recordGoal(goal);
+  mended.host.kick();
+  await mended.host.idle();
+  // Only the slipped candidate is read again, and the second reading is kept.
+  expect(mended.handed).toHaveLength(2);
+  expect(mended.handed[1]).toContain("key: issue:o/r#7");
+  expect(mended.handed[1]).not.toContain("key: issue:o/r#8");
+  expect(mended.handed[0]).toContain("in its own script");
+  const [row] = await mended.record.latestTriage();
+  const payload = readTriagePayload(row?.payload ?? {});
+  expect(payload?.ranked.map((one) => [one.key, one.request, one.mixedScript])).toEqual([
+    ["issue:o/r#7", "o/r で issue:o/r#7 を直してください。", undefined],
+    ["issue:o/r#8", "o/r で issue:o/r#8 を直してください。", undefined],
+  ]);
+  // Both readings are spent toward the triage's cost.
+  expect(row?.snapshot["cost_usd"]).toBe(0.04);
+
+  const still = world(issues, "answered", {
+    request: (key) => (key === "issue:o/r#7" ? slipped : `o/r で ${key} を直してください。`),
+    language: "ja",
+  });
+  await still.record.recordGoal(goal);
+  still.host.kick();
+  await still.host.idle();
+  expect(still.handed).toHaveLength(2);
+  const [kept] = await still.record.latestTriage();
+  // Not mended: shown with its first words and marked, never silently.
+  expect(
+    readTriagePayload(kept?.payload ?? {})?.ranked.map((one) => [one.request, one.mixedScript]),
+  ).toEqual([
+    [slipped, true],
+    ["o/r で issue:o/r#8 を直してください。", undefined],
+  ]);
+  expect(still.logged.join("\n")).toContain("1 candidate(s) mixed scripts; 0 mended");
 });
