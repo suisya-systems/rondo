@@ -1578,6 +1578,9 @@ const WRITE_TABLE = [
   "ALL /scope-draft",
   // The raise press (D-0074 section 4): a budgets-only successor, approved.
   "ALL /raise",
+  // The goal scope's approve and pause (D-0128, rondo#471).
+  "ALL /goal-scope",
+  "ALL /goal-scope-pause",
   "ALL /start-plan",
   "ALL /publish",
   // The release press (D-0073 rule 4.3, rondo#288).
@@ -1600,6 +1603,8 @@ const WRITE_TABLE = [
   "POST /scope",
   "POST /scope-draft",
   "POST /raise",
+  "POST /goal-scope",
+  "POST /goal-scope-pause",
   "POST /start-plan",
   "POST /start",
   "POST /revise",
@@ -1639,6 +1644,9 @@ const PRESS_ROUTES = [
   "/scope",
   "/scope-draft",
   "/raise",
+  // One approval over every request the flow draws from a goal, and its pause (D-0128).
+  "/goal-scope",
+  "/goal-scope-pause",
   // The scoped starts (rondo#233 S3).
   "/start",
   "/start-plan",

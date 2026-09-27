@@ -60,6 +60,11 @@ export type PageView =
     }
   /** The goal a repository's triage is ranked against (D-0097 point 2.1 (a)). */
   | { readonly kind: "goal"; readonly repository: string }
+  /**
+   * The approval that lets rondo work toward a repository's goal (D-0128): the
+   * drafted goal scope, or the one in force with its pause.
+   */
+  | { readonly kind: "goalScope"; readonly repository: string }
   | {
       readonly kind: "thread";
       readonly messageId: string;
@@ -187,7 +192,8 @@ export function isLive(view: PageView): boolean {
     view.kind !== "publish" &&
     view.kind !== "merge" &&
     view.kind !== "release" &&
-    view.kind !== "goal"
+    view.kind !== "goal" &&
+    view.kind !== "goalScope"
   );
 }
 
@@ -223,6 +229,8 @@ export function viewHref(view: PageView, tag: string): string {
             `&candidate=${encodeURIComponent(view.take.candidate)}&${lang}`;
     case "goal":
       return `/?goal=${encodeURIComponent(view.repository)}&${lang}`;
+    case "goalScope":
+      return `/?goal_scope=${encodeURIComponent(view.repository)}&${lang}`;
     case "thread":
       return `/?thread=${encodeURIComponent(view.messageId)}${
         view.to === null ? "" : `&to=${encodeURIComponent(view.to)}`

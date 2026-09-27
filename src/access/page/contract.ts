@@ -90,6 +90,8 @@ export interface WebPorts extends InboxReadPorts {
       // the empty centre draws under the request box.
       | "goals"
       | "latestTriage"
+      // D-0128: the goal scope in force over a goal, and whether it is paused.
+      | "approvalsInForce"
     >;
   readonly policy: HostPolicy;
   readonly actorId: string | null;

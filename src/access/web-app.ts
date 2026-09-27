@@ -671,6 +671,10 @@ export type ScopeRefusal =
   | "scopeRefusedNotRead"
   | "scopeRefusedNotShown"
   | "scopeRefusedNotApproved"
+  /** D-0128 rule 3: the goal was edited after the screen was drawn, so this is another goal. */
+  | "goalScopeRefusedGoalChanged"
+  /** The goal's approval is not where the screen drew it: approved, paused or resumed since. */
+  | "goalScopeRefusedMoved"
   | RaiseRefusal;
 
 /**
@@ -762,6 +766,33 @@ export interface RaiseInput {
 }
 
 export type RaiseFromWeb = (input: RaiseInput) => Promise<ScopeRecorded>;
+
+/**
+ * What the goal scope's press posts (D-0128, rondo#471): the goal and the
+ * lists it was drawn over, compared with the port's own re-read, and the
+ * values. The lists are never posted: the port reads them again.
+ */
+export interface GoalScopeInput {
+  readonly scopeId: string;
+  readonly repository: string;
+  readonly goalId: string;
+  /** `GoalScopeMaterial.drawn` as the screen drew it. */
+  readonly drawn: string;
+  /** The paused approval this one resumes, or null for a first one. */
+  readonly resumes: string | null;
+  readonly budgets: ScopeFormDraft["budgets"];
+  readonly severityThreshold: FindingSeverity;
+  readonly outwardActs: readonly ScopeOutwardAct[];
+}
+
+/** The pause press (D-0128 rule 4): a successor of this approval with `laps` 0. */
+export interface GoalPauseInput {
+  readonly scopeId: string;
+  readonly scopeDecisionId: string;
+}
+
+export type GoalScopeFromWeb = (input: GoalScopeInput) => Promise<ScopeRecorded>;
+export type GoalPauseFromWeb = (input: GoalPauseInput) => Promise<ScopeRecorded>;
 export type PlanStartFromWeb = (input: PlanStartInput) => Promise<Started>;
 
 /**
@@ -782,6 +813,7 @@ export class ScopePort {
   readonly #recordDrafted: RecordDraftedScopeFromWeb | null;
   readonly #startPlan: PlanStartFromWeb | null;
   readonly #raise: RaiseFromWeb | null;
+  readonly #goal: { readonly record: GoalScopeFromWeb; readonly pause: GoalPauseFromWeb } | null;
 
   constructor(
     record: RecordScopeFromWeb,
@@ -791,12 +823,33 @@ export class ScopePort {
     startPlan: PlanStartFromWeb | null = null,
     /** The raise press (D-0074 section 4); null where the host offers none. */
     raise: RaiseFromWeb | null = null,
+    /** The goal scope's approve and pause presses (D-0128); null where the host offers none. */
+    goal: { readonly record: GoalScopeFromWeb; readonly pause: GoalPauseFromWeb } | null = null,
   ) {
     this.#record = record;
     this.#start = start;
     this.#recordDrafted = recordDrafted;
     this.#startPlan = startPlan;
     this.#raise = raise;
+    this.#goal = goal;
+  }
+
+  /** Record a goal scope and approve it, on one press (the person's P1, D-0128). */
+  async recordGoal(press: Press, input: GoalScopeInput): Promise<ScopeRecorded> {
+    if (!minted.has(press) || this.#goal === null) {
+      return { ok: false, note: "nothing was recorded: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#goal.record(input);
+  }
+
+  /** Pause a goal scope: its `laps: 0` successor, recorded and approved on one press. */
+  async pauseGoal(press: Press, input: GoalPauseInput): Promise<ScopeRecorded> {
+    if (!minted.has(press) || this.#goal === null) {
+      return { ok: false, note: "nothing was recorded: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#goal.pause(input);
   }
 
   /** Record a budgets-only successor of one approval and approve it, on one press. */
@@ -1428,6 +1481,12 @@ const START_ROUTE = "/start";
 const SCOPE_DRAFT_ROUTE = "/scope-draft";
 /** The raise press (D-0074 rule 4.3): a budgets-only successor, recorded and approved. */
 const RAISE_ROUTE = "/raise";
+/**
+ * The goal scope's two presses (D-0128, rondo#471): approving one -- a first
+ * one, or one that resumes a paused one -- and pausing it (rule 4).
+ */
+const GOAL_SCOPE_ROUTE = "/goal-scope";
+const GOAL_PAUSE_ROUTE = "/goal-scope-pause";
 const START_PLAN_ROUTE = "/start-plan";
 
 /**
@@ -1487,6 +1546,8 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   START_ROUTE,
   SCOPE_DRAFT_ROUTE,
   RAISE_ROUTE,
+  GOAL_SCOPE_ROUTE,
+  GOAL_PAUSE_ROUTE,
   START_PLAN_ROUTE,
   PUBLISH_ROUTE,
   RELEASE_ROUTE,
@@ -1730,6 +1791,10 @@ function viewOf(query: URLSearchParams): PageView {
     return take === null || take === "" || candidate === null || candidate === ""
       ? { kind: "requests" }
       : { kind: "requests", take: { proposalId: take, candidate } };
+  }
+  const goalScope = query.get("goal_scope");
+  if (goalScope !== null && goalScope !== "") {
+    return { kind: "goalScope", repository: goalScope };
   }
   const goal = query.get("goal");
   if (goal !== null && goal !== "") {
@@ -2250,6 +2315,85 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     // Back to where the question is standing, which since D-0083 rule 3 is
     // the request's own thread rather than a screen named by the lap.
     return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
+  });
+
+  // **The goal scope's press** (D-0128, rondo#471): the person's P1 over every
+  // request the flow injects from this goal. The lists are the port's re-read,
+  // compared with the digest the screen drew them under. Back to the screen,
+  // which then says the goal is being worked toward.
+  app.post(GOAL_SCOPE_ROUTE, async (c) => {
+    const form = await c.req.parseBody({ all: true });
+    const repository = typeof form["repository"] === "string" ? form["repository"] : "";
+    if (scope === null) {
+      return goalScopeRefused(c, 403, "scopeRefusedNoApprover", repository);
+    }
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return goalScopeRefused(c, minting.status, "scopeRefusedPress", repository);
+    }
+    const scopeId = form["scope_id"];
+    const goalId = form["goal"];
+    const drawn = form["drawn"];
+    const resumes = form["resumes"];
+    if (
+      typeof scopeId !== "string" ||
+      !PAGE_SCOPE_ID.test(scopeId) ||
+      repository === "" ||
+      typeof goalId !== "string" ||
+      goalId === "" ||
+      typeof drawn !== "string" ||
+      drawn === "" ||
+      (resumes !== undefined && typeof resumes !== "string")
+    ) {
+      return goalScopeRefused(c, 400, "scopeRefusedForm", repository);
+    }
+    const values = scopeValuesOf(form);
+    if (values === null) {
+      return goalScopeRefused(c, 400, "scopeRefusedFields", repository);
+    }
+    const recorded = await scope.recordGoal(minting.press, {
+      scopeId,
+      repository,
+      goalId,
+      drawn,
+      resumes: resumes === undefined || resumes === "" ? null : resumes,
+      ...values,
+    });
+    if (!recorded.ok) {
+      return goalScopeRefused(c, 409, recorded.why ?? "scopeRefusedNotTaken", repository);
+    }
+    return c.redirect(viewHref({ kind: "goalScope", repository }, tagOf(c)), 303);
+  });
+
+  // **The pause press** (D-0128 rule 4): a `laps: 0` successor of the approval
+  // in force, recorded and approved as a raise is. Nothing already running is
+  // stopped by it; the flow starts nothing more under it.
+  app.post(GOAL_PAUSE_ROUTE, async (c) => {
+    const form = await c.req.parseBody();
+    const repository = typeof form["repository"] === "string" ? form["repository"] : "";
+    if (scope === null) {
+      return goalScopeRefused(c, 403, "scopeRefusedNoApprover", repository);
+    }
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return goalScopeRefused(c, minting.status, "scopeRefusedPress", repository);
+    }
+    const scopeId = form["scope_id"];
+    const decision = form["pause"];
+    if (
+      typeof scopeId !== "string" ||
+      !PAGE_SCOPE_ID.test(scopeId) ||
+      repository === "" ||
+      typeof decision !== "string" ||
+      decision === ""
+    ) {
+      return goalScopeRefused(c, 400, "scopeRefusedForm", repository);
+    }
+    const paused = await scope.pauseGoal(minting.press, { scopeId, scopeDecisionId: decision });
+    if (!paused.ok) {
+      return goalScopeRefused(c, 409, paused.why ?? "scopeRefusedNotTaken", repository);
+    }
+    return c.redirect(viewHref({ kind: "goalScope", repository }, tagOf(c)), 303);
   });
 
   // **One drafted plan's start** (rondo#238 C2b): the plan named by its split
@@ -2962,6 +3106,32 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         wording.lang,
       ),
       wording.gateBack,
+    );
+  }
+
+  /** A goal scope press's refusal, with the way back to the goal scope's screen. */
+  function goalScopeRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why:
+      | "scopeRefusedNoApprover"
+      | "scopeRefusedPress"
+      | "scopeRefusedForm"
+      | "scopeRefusedFields"
+      | ScopeRefusal,
+    repository: string,
+  ) {
+    const wording = wordingOf(c);
+    return pressRefused(
+      c,
+      status,
+      wording.goalScopeHeading,
+      wording[why],
+      viewHref(
+        repository === "" ? { kind: "requests" } : { kind: "goalScope", repository },
+        wording.lang,
+      ),
+      wording.goalScopeBack,
     );
   }
 

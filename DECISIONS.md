@@ -25075,6 +25075,19 @@ predicate over requests". Annotates `D-0067` section 3 option A and `D-0064` sec
 discovery* row. Keeps `D-0063` rule 1. Refs `D-0061` rule 2.6, `D-0066` rules 1.2.1, 1.4 and 4.3,
 `D-0097`, `D-0127`, `D-0130`.
 
+> **Annotation (2026-09-27, rondo#471).** Added after this entry was accepted, and additive: the
+> page's approve and pause presses, which "What this does not do" left to rondo#471, are carried
+> out. `?goal_scope=OWNER/NAME` drafts a goal scope from the repository's newest goal and the plans
+> rondo holds whose forge repository is that one (their workspaces and agent types), with
+> `src/advisory/budget.ts`'s budgets for one plan per clause; `POST /goal-scope` records and
+> approves it, re-reading the goal and the lists and refusing a press drawn over another goal or
+> other plans, and refusing a first approval while one is in force over the goal. `POST
+> /goal-scope-pause` writes rule 4's `laps: 0` successor, and a resume is the paused approval's
+> successor, so one approval over a goal is in force at a time. A triage candidate whose key ends
+> the id of an opener the flow wrote for the goal (`flowMessageId`) reads *started*, and a scope
+> stop (`scope-stop-` from the deterministic drafter) is drawn as its three options in the page's
+> language, with the record under the fold. Nothing below is edited.
+
 **Why an entry is needed.** A scope names its requests one by one (`D-0066` rule 1.2.1). Work toward
 a goal is a stream of requests nobody has written yet, so each one needed its own scope and its own
 approval: `D-0066`'s falsifier ("each request gets its own P1"). The owner decided on 2026-09-27

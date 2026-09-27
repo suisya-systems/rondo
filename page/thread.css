@@ -800,6 +800,82 @@
 }
 
 /*
+ * The goal scope under a repository's block (D-0128): one quiet row, set off
+ * by a hairline. Offered, it is a sentence and a secondary link -- the card
+ * above keeps the primary; running or paused, a state with a dot and the way
+ * to the approval. Green only while it runs, never amber: nothing here waits
+ * on the person (D-0082 rule 2).
+ */
+.triage-goal-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--color-border);
+  font-size: var(--text-meta);
+  line-height: 1.5;
+  color: var(--color-muted-foreground);
+}
+
+/* Under a one-sentence block the rule would frame nothing: no hairline there. */
+.triage-note + .triage-goal-scope,
+.triage-read + .triage-goal-scope {
+  margin-top: 8px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.triage-goal-scope > p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 45em;
+}
+
+.triage-goal-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-faint);
+}
+
+.triage-goal-scope[data-state="running"] {
+  color: var(--color-foreground);
+}
+
+.triage-goal-scope[data-state="running"] .triage-goal-dot {
+  background: var(--color-ok);
+}
+
+.triage-goal-link {
+  font-size: var(--text-meta);
+  font-weight: 500;
+  color: var(--color-link);
+}
+
+.triage-goal-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* A candidate the flow already started: said, and not offered for the box. */
+.triage-started {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: var(--text-id);
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+}
+
+/*
  * The goal page (D-0097 point 2): numbered clauses in the person's words,
  * each saying when it is unmet. A plain form; the fields are the gate's own
  * free-text field.
