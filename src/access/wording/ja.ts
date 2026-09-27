@@ -1316,6 +1316,9 @@ export const JA: Chrome = Object.freeze({
     `レビューはやり直していません。この作業は、範囲が認めるレビュー ${String(budget)} 回の` +
     `うち ${String(taken)} 回を使っていて、やり直しはもう 1 回に数えます。範囲のレビュー回数を` +
     "引き上げれば、やり直せます。",
+  retakeRefusedForked:
+    "レビューはやり直していません。この作業の承認が別々に 2 回引き上げられていて、レビューが" +
+    "あと何回できるかが決まらず、rondo はどちらかを選びません。",
   retakeRefusedNoContinuo:
     "レビューはやり直していません。作業を動かす rondo の部分が起動しません。",
   nextStepPublishUpdate: (pullRequest) =>

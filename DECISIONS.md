@@ -25701,6 +25701,10 @@ conflicted with `main`; part 2 finished and waited at its gate. **Measured on 20
   counts laps and not reviewer runs, so this entry adds none.
 - **The retake is not recorded as the person's act.** It is a second reading row, and the round count
   tells it from a resumed gate only by its first reading's reason.
+- **Once is held by one process.** Two `rondo web` processes serving one store could each pass
+  `retakeOffered` before either appends, and run the reviewer twice. A store-backed claim would close
+  it; one host process per store is what is run today. A forked approval refuses the press, because
+  its budget cannot be told (`D-0074` rule 2.1).
 
 ### Annotations this entry adds
 

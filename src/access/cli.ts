@@ -6211,6 +6211,14 @@ async function retakeReviewPage(
   }
   const advisory = openAdvisoryRecord(storePath);
   const tip = await approvalTip(advisory, record.id);
+  // Two approved tips leave the budget undecidable, not absent (Codex).
+  if (tip.kind === "forked") {
+    return {
+      ok: false,
+      why: "retakeRefusedForked",
+      note: `iteration '${record.id}' was admitted under a line with two approved tips (D-0074 rule 2.1)`,
+    };
+  }
   if (tip.kind === "tip") {
     const decided = await advisory.readScopeDecision(tip.scopeDecisionId);
     const scope =

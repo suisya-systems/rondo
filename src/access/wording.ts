@@ -1349,6 +1349,7 @@ export interface Chrome extends PageWords {
   readonly retakeRefusedForm: string;
   readonly retakeRefusedGone: string;
   readonly retakeRefusedBudget: (taken: number, budget: number) => string;
+  readonly retakeRefusedForked: string;
   readonly retakeRefusedNoContinuo: string;
   /**
    * The approved fix's publish (rondo#417, D-0105): it pushes onto the pull

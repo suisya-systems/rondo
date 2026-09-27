@@ -1300,6 +1300,9 @@ explanation you pressed on and then answers the gate.`,
     `The review was not taken again: this work has used ${String(taken)} of the ` +
     `${String(budget)} review rounds its scope allows, and taking it again is one more. Raising ` +
     "the scope's review rounds makes room for it.",
+  retakeRefusedForked:
+    "The review was not taken again: this work's approval was raised twice, separately, so how " +
+    "many review rounds it has left cannot be told, and rondo does not pick one of them.",
   retakeRefusedNoContinuo:
     "The review was not taken again: the part of rondo that runs the work will not start.",
   nextStepPublishUpdate: (pullRequest) =>

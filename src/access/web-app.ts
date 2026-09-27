@@ -975,7 +975,11 @@ export interface ConflictFixed {
 export type ConflictFixFromWeb = (input: ConflictFixInput) => Promise<ConflictFixed>;
 
 /** Why a *take the review again* press took nothing, as the wording key the page says it in. */
-export type RetakeRefusal = "retakeRefusedGone" | "retakeRefusedBudget" | "retakeRefusedNoContinuo";
+export type RetakeRefusal =
+  | "retakeRefusedGone"
+  | "retakeRefusedBudget"
+  | "retakeRefusedForked"
+  | "retakeRefusedNoContinuo";
 
 /** What one *take the review again* press came to (D-0138 rule 3). */
 export interface Retaken {
