@@ -94,7 +94,8 @@ function basisSaid(wording: Chrome, basis: BudgetBasis): string {
       return wording.scopeBasisRows(
         basis.measurement,
         basis.iterationIds.length,
-        basis.level === "model_tier" ? basis.modelTier : null,
+        basis.level,
+        basis.modelTier,
       );
     case "cold_start":
       return wording.scopeBasisColdStart(basis.measurement);
@@ -253,7 +254,8 @@ export function sampleCaveat(
           <p class="text-body leading-5 text-foreground">
             {wording.scopeSampleRows(
               basis.iterationIds.length,
-              basis.level === "model_tier" ? basis.modelTier : null,
+              basis.level,
+              basis.modelTier,
               money(basis.lowest),
               money(basis.value),
             )}
@@ -726,6 +728,7 @@ async function scopeForm(
       // split's (D-0071 section 4), which this form is not.
       plans: 1,
       ...(rounds === null ? {} : { reviewRounds: rounds }),
+      repositories: [chosen.repository],
       draftedAtMs: nowMs,
     },
   );
@@ -1060,6 +1063,7 @@ async function raiseForm(
       agentTypes: payload.agent_types,
       plans: 1,
       reviewRounds: was.review_rounds,
+      repositories: payload.workspaces.map((w) => w.repository),
       draftedAtMs: nowMs,
     },
   );

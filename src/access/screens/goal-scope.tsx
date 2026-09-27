@@ -352,6 +352,7 @@ async function draft(
     {
       agentTypes: material.agentTypes.map((one) => one.agentTypeDigest),
       plans,
+      repositories: material.workspaces.map((w) => w.repository),
       draftedAtMs: nowMs,
     },
   );

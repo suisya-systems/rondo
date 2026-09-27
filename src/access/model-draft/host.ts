@@ -36,7 +36,7 @@ import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
 import type { readRepositoryPaths, runDrafter } from "../forge.js";
 import { hostFailure } from "../host-failure.js";
 import { issueForDrafter, type WorkRepository, workRepository } from "../issue-read.js";
-import { agentTypeRecordOf } from "../scope.js";
+import { agentTypeRecordOf, planRepository } from "../scope.js";
 import {
   type DraftAgentType,
   type DrafterMaterial,
@@ -158,6 +158,7 @@ function budgetRow(record: IterationRecord): BudgetRow {
     lapCostUsd: record.lapCostUsd,
     lapDurationMs: record.lapDurationMs,
     createdAtMs: record.createdAtMs,
+    repository: planRepository(record.plan),
   };
 }
 

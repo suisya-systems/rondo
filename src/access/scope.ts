@@ -1195,18 +1195,29 @@ export async function scopeBudgetsFromStore(
     readonly agentTypes: readonly string[];
     readonly plans: number;
     readonly reviewRounds?: number;
+    readonly repositories?: readonly string[];
     readonly draftedAtMs: number;
   },
 ): Promise<ScopeBudgets> {
   const rows = [
     ...(await ports.store.readLive()),
     ...(await ports.store.terminalIterations()),
-  ].flatMap((outcome) => (outcome.kind === "read" ? [outcome.record] : []));
+  ].flatMap((outcome) =>
+    outcome.kind === "read"
+      ? [{ ...outcome.record, repository: planRepository(outcome.record.plan) }]
+      : [],
+  );
   const agentTypes: BudgetAgentType[] = [];
   for (const digest of input.agentTypes) {
     agentTypes.push({ digest, modelTier: await heldTier(ports.record, digest) });
   }
   return computeScopeBudgets({ ...input, agentTypes, rows });
+}
+
+/** A plan's `repository` (D-0140 rule 2), or null where it names none. */
+export function planRepository(plan: JsonRecord): string | null {
+  const repository = plan["repository"];
+  return typeof repository === "string" ? repository : null;
 }
 
 async function heldTier(

@@ -614,17 +614,25 @@ explanation you pressed on and then answers the gate.`,
     `draft time + laps x the longest lap + a day for your replies = draft time + ` +
     `${String(laps)} x ${String(seconds)}s + 24h`,
   scopeBasesFold: (count) => `where this came from (${String(count)})`,
-  scopeBasisRows: (measurement, laps, tier) =>
+  scopeBasisRows: (measurement, laps, level, tier) =>
     `the highest ${EN_MEASURE[measurement] ?? measurement} of the ${String(laps)} most recent ` +
-    `recorded lap${laps === 1 ? "" : "s"} of ` +
-    `${tier === null ? "this agent type" : `tier ${tier}`}`,
+    `recorded lap${laps === 1 ? "" : "s"} ` +
+    `${
+      level === "agent_type"
+        ? "of this agent type"
+        : level === "model_tier"
+          ? `of tier ${String(tier)}`
+          : "in this repository"
+    }`,
   scopeBasisColdStart: (measurement) =>
     `${EN_MEASURE[measurement] ?? measurement}: nothing in this store has measured it, so rondo ` +
     `used its own starting figure`,
   scopeColdStartNote: (whole) =>
     whole
-      ? "No lap has been recorded here yet, so this is rondo's default, not a measurement."
-      : "Part of this is rondo's default: one of the listed agent types has no lap recorded here yet.",
+      ? "No lap has been recorded here yet, so this is rondo's guess, not a measurement. Raise it " +
+        "if the work is large."
+      : "Part of this is rondo's guess: one of the listed agent types has no lap recorded here " +
+        "yet. Raise it if the work is large.",
   scopeBasisPlans: (plans) => `plans: ${String(plans)}`,
   scopeBasisRounds: (rounds, byDefault) =>
     byDefault
@@ -634,18 +642,25 @@ explanation you pressed on and then answers the gate.`,
     "a day for your own replies, which is an allowance and not a measurement",
   scopeBasisLap: (iterationId) => `lap ${iterationId}`,
   scopeSampleHeading: "This draft assumes your request is the size of past laps",
-  scopeSampleRows: (laps, tier, lowest, highest) =>
-    `Drafted from ${String(laps)} recorded first lap${laps === 1 ? "" : "s"} of ` +
-    `${tier === null ? "this agent type" : `other agent types on tier ${tier}, as none of this one's is recorded`}` +
+  scopeSampleRows: (laps, level, tier, lowest, highest) =>
+    `Drafted from ${String(laps)} recorded first lap${laps === 1 ? "" : "s"} ` +
+    `${
+      level === "agent_type"
+        ? "of this agent type"
+        : level === "model_tier"
+          ? `of other agent types on tier ${String(tier)}, as none of this one's is recorded`
+          : "of other agent types in this repository, as none of this one's or its tier's is recorded"
+    }` +
     `, which cost ${lowest === highest ? highest : `${lowest} to ${highest}`} USD; the reserve ` +
     `is the highest. rondo records what a lap cost, not how much work it did, so it cannot tell ` +
     `whether your request is as large as theirs. If it is larger, raise the cost here; if the ` +
     `first attempt uses it all, you can still raise it when the work comes back to you.`,
   scopeSampleColdStart: (reserve) =>
-    `No lap of this agent type or its tier is recorded, so the reserve is rondo's starting ` +
-    `figure, ${reserve} USD, which nobody measured, and nothing here knows how large your ` +
-    `request is. If it is more than a small change, raise the cost here, or raise it later when ` +
-    `the work comes back to you.`,
+    `No lap of this agent type, its tier or this repository is recorded, so the reserve is ` +
+    `rondo's guess, ${reserve} USD: about what a first lap has cost where rondo has measured one. ` +
+    `Nobody measured it here, and nothing here knows how large your request is. If the work is ` +
+    `large, raise the cost here; if a lap stops at the budget, you can raise it and carry on ` +
+    `from its question.`,
   scopeDefaultsHeading: "What rondo filled in for you",
   scopeDefaultNote: "A default, not derived from your request.",
   scopeSeverityLabel: "Findings this severe or worse end a round",

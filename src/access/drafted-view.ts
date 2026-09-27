@@ -298,6 +298,7 @@ async function draftedShown(ports: Ports, scope: StoredScope): Promise<DraftedSc
     // A narrowed round budget is R in every formula (rule 4.2.4); unnarrowed, the default.
     ...(rounds < DEFAULT_REVIEW_ROUNDS ? { reviewRounds: rounds } : {}),
     rows: material.rows,
+    repositories: scope.payload.workspaces.map((w) => w.repository),
     draftedAtMs: material.draftedAtMs,
   });
   const recorded = read.proposal.snapshot["narrowed"];

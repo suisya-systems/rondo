@@ -41,6 +41,7 @@
  * somebody takes.
  */
 
+import type { BudgetLevel } from "../advisory/budget.js";
 import { isLanguageTag } from "../refrain/plan.js";
 import type { ReadingReach } from "../store/records.js";
 import type { GateAuto } from "./gate-auto.js";
@@ -796,7 +797,16 @@ export interface Chrome extends PageWords {
    * rondo#233 S3's screen review found it in front of a person, folded but
    * present, in four of the five budgets.
    */
-  readonly scopeBasisRows: (measurement: string, laps: number, tier: string | null) => string;
+  /**
+   * `level` is which laps were read (D-0140 rule 2): the agent type's own, its
+   * tier's (`tier` set), or any lap in the scope's repositories.
+   */
+  readonly scopeBasisRows: (
+    measurement: string,
+    laps: number,
+    level: BudgetLevel,
+    tier: string | null,
+  ) => string;
   readonly scopeBasisColdStart: (measurement: string) => string;
   /**
    * Beside a drafted value that rests on a cold start (rondo#378): said next
@@ -815,9 +825,10 @@ export interface Chrome extends PageWords {
    * the size of the laps it measured, and nothing recorded can say whether it is.
    */
   readonly scopeSampleHeading: string;
-  /** `tier` is set when the laps are other agent types' on this one's tier. */
+  /** `level` as in {@link scopeBasisRows}. */
   readonly scopeSampleRows: (
     laps: number,
+    level: BudgetLevel,
     tier: string | null,
     lowest: string,
     highest: string,

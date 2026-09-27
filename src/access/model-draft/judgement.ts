@@ -208,6 +208,7 @@ function measurementBases(material: DrafterMaterial, type: DraftAgentType): Budg
     agentTypes: [{ digest: type.digest, modelTier: type.modelTier }],
     plans: 1,
     rows: material.rows,
+    repositories: material.templates.map((t) => t.repository),
     draftedAtMs: material.draftedAtMs,
   });
   return [
@@ -1017,6 +1018,7 @@ function draftedScope(
     // Absent unless narrowed, so the page still shows D-0064's default as a default.
     ...(reviewRounds === DEFAULT_REVIEW_ROUNDS ? {} : { reviewRounds }),
     rows: material.rows,
+    repositories: workspaces.map((w) => w.repository),
     draftedAtMs: material.draftedAtMs,
   });
   // **Stored as the form shows them** (rondo#238 C2b): the page draws a cost to

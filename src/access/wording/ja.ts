@@ -636,16 +636,24 @@ export const JA: Chrome = Object.freeze({
     `下書き時刻 + 周回数 x 最長の周回 + 返信のための 1 日 = 下書き時刻 + ` +
     `${String(laps)} x ${String(seconds)} 秒 + 24 時間`,
   scopeBasesFold: (count) => `この数の出どころ (${String(count)})`,
-  scopeBasisRows: (measurement, laps, tier) =>
-    `${tier === null ? "このエージェント種別" : `tier ${tier}`}の直近 ${String(laps)} 周回のうち、` +
+  scopeBasisRows: (measurement, laps, level, tier) =>
+    `${
+      level === "agent_type"
+        ? "このエージェント種別"
+        : level === "model_tier"
+          ? `tier ${String(tier)}`
+          : "このリポジトリ"
+    }の直近 ${String(laps)} 周回のうち、` +
     `${JA_MEASURE[measurement] ?? measurement}が最も高かったもの`,
   scopeBasisColdStart: (measurement) =>
     `${JA_MEASURE[measurement] ?? measurement}: このストアでは一度も測っていないので、rondo の` +
     `初期値を使いました`,
   scopeColdStartNote: (whole) =>
     whole
-      ? "ここではまだ周回が記録されていないため、この値は rondo の既定値で、測った値ではありません。"
-      : "一部は rondo の既定値です。挙げたエージェント種別のうち、ここでまだ周回が記録されていないものがあります。",
+      ? "ここではまだ周回が記録されていないため、この値は rondo の見込みで、測った値ではありません。" +
+        "大きな作業なら上げてください。"
+      : "一部は rondo の見込みです。挙げたエージェント種別のうち、ここでまだ周回が記録されていない" +
+        "ものがあります。大きな作業なら上げてください。",
   scopeBasisPlans: (plans) => `プラン数: ${String(plans)}`,
   scopeBasisRounds: (rounds, byDefault) =>
     byDefault
@@ -654,11 +662,13 @@ export const JA: Chrome = Object.freeze({
   scopeBasisReplyAllowance: "あなたの返信のための 1 日。測った値ではなく、見込みの余裕です",
   scopeBasisLap: (iterationId) => `周回 ${iterationId}`,
   scopeSampleHeading: "依頼の大きさが過去の周回と同じくらいだと見て、予算を出しています",
-  scopeSampleRows: (laps, tier, lowest, highest) =>
+  scopeSampleRows: (laps, level, tier, lowest, highest) =>
     `${
-      tier === null
+      level === "agent_type"
         ? "このエージェント種別"
-        : `まだ記録のないエージェント種別なので、同じ tier ${tier} の別のエージェント種別`
+        : level === "model_tier"
+          ? `まだ記録のないエージェント種別なので、同じ tier ${String(tier)} の別のエージェント種別`
+          : "このエージェント種別にもその tier にも記録がないので、このリポジトリの別のエージェント種別"
     }の初回周回 ${String(laps)} 件をもとに下書きしました。費用は ` +
     `${lowest === highest ? highest : `${lowest}〜${highest}`} USD で、引当にはその最高値を` +
     `使っています。rondo が記録しているのは周回にかかった費用だけで、どれだけの作業をしたかは` +
@@ -666,10 +676,11 @@ export const JA: Chrome = Object.freeze({
     `大きいと思うなら、ここで費用を上げてください。初回の作業で使い切っても、作業があなたの` +
     `確認に戻ってきたときに引き上げられます。`,
   scopeSampleColdStart: (reserve) =>
-    `このエージェント種別にも、その tier にも、記録された周回がありません。そのため引当は ` +
-    `rondo の初期値 ${reserve} USD で、誰かが測った値ではありません。依頼がどれだけの大きさ` +
-    `かも分かりません。小さな変更では済まないと思うなら、ここで費用を上げてください。作業が` +
-    `あなたの確認に戻ってきたときに引き上げることもできます。`,
+    `このエージェント種別にも、その tier にも、このリポジトリにも、記録された周回がありません。` +
+    `そのため引当は rondo の見込み ${reserve} USD で、rondo が測れた場所での初回周回の費用に` +
+    `合わせた値です。ここで誰かが測った値ではなく、依頼がどれだけの大きさかも分かりません。` +
+    `大きな作業なら、ここで費用を上げてください。予算の上限で止まったときは、その質問から` +
+    `予算を増やして続けることもできます。`,
   scopeDefaultsHeading: "rondo が埋めたもの",
   scopeDefaultNote: "既定値で、依頼から導いたものではありません。",
   scopeSeverityLabel: "この重大度以上の指摘が出たら 1 ラウンド終了",

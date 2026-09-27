@@ -19,8 +19,13 @@
  * was English: a pre-interpolated line is a line no second set can rewrite.
  */
 
-/** Rule 4.2.2: the reserve laps 8 and 9 chose by hand. */
-export const COLD_START_RESERVE_USD = 2.5;
+/**
+ * Rule 4.2.2's starting reserve, where no lap of the agent type, its tier or
+ * its repository is recorded (D-0140 rule 2): above every first lap lap 18
+ * measured ($7.21 to $8.12), so a first lap is not stopped by a guess. It was
+ * $2.50, the reserve laps 8 and 9 chose by hand for one-line changes.
+ */
+export const COLD_START_RESERVE_USD = 10;
 /** Rule 4.2.6: above every recorded lap duration. */
 export const COLD_START_LAP_DURATION_MS = 30 * 60 * 1000;
 /** Rule 4.2.6: the person's replies. Not a measurement (D-0071 residual). */
@@ -39,6 +44,8 @@ export interface BudgetRow {
   readonly lapCostUsd: number | null;
   readonly lapDurationMs: number | null;
   readonly createdAtMs: number;
+  /** The plan's `repository` (D-0140 rule 2), where it names one. */
+  readonly repository?: string | null;
 }
 
 /** A listed agent type, with its tier read back from the held record, or null when none reads. */
@@ -53,11 +60,19 @@ export interface BudgetInput {
   readonly plans: number;
   readonly reviewRounds?: number;
   readonly rows: readonly BudgetRow[];
+  /**
+   * The repositories the scope's workspaces name (D-0140 rule 2): laps there
+   * answer for an agent type and a tier with none of their own.
+   */
+  readonly repositories?: readonly string[];
   /** The draft time (rule 4.2.6). */
   readonly draftedAtMs: number;
 }
 
 export type Measurement = "first_lap_cost" | "redo_cost" | "lap_duration";
+
+/** Which rows a measurement was read from, nearest first (rule 4.2.1, D-0140 rule 2). */
+export type BudgetLevel = "agent_type" | "model_tier" | "repository";
 
 /**
  * Where one measurement came from, for one listed agent type.
@@ -71,7 +86,7 @@ export type BudgetBasis =
       readonly kind: "rows";
       readonly measurement: Measurement;
       readonly agentTypeDigest: string;
-      readonly level: "agent_type" | "model_tier";
+      readonly level: BudgetLevel;
       readonly modelTier: string | null;
       /** The highest value those rows hold. */
       readonly value: number;
@@ -144,9 +159,13 @@ function measured(row: BudgetRow, measurement: Measurement): number | null {
   }
 }
 
-/** Rule 4.2.1: the 10 most recent rows holding the measurement, by digest, then by tier. */
+/**
+ * Rule 4.2.1: the 10 most recent rows holding the measurement, by digest, then
+ * by tier, then by the scope's repositories (D-0140 rule 2).
+ */
 function lookUp(
   rows: readonly BudgetRow[],
+  repositories: readonly string[],
   agentType: BudgetAgentType | null,
   measurement: Measurement,
   coldStart: number,
@@ -156,7 +175,7 @@ function lookUp(
       .filter((row) => match(row) && measured(row, measurement) !== null)
       .sort((a, b) => b.createdAtMs - a.createdAtMs || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
       .slice(0, SAMPLE);
-  const levels: readonly (readonly ["agent_type" | "model_tier", BudgetRow[]])[] =
+  const levels: readonly (readonly [BudgetLevel, BudgetRow[]])[] =
     agentType === null
       ? []
       : [
@@ -166,6 +185,10 @@ function lookUp(
             agentType.modelTier === null
               ? []
               : recent((row) => row.modelTier === agentType.modelTier),
+          ],
+          [
+            "repository",
+            recent((row) => row.repository != null && repositories.includes(row.repository)),
           ],
         ];
   for (const [level, found] of levels) {
@@ -193,7 +216,9 @@ function lookUp(
 /** Each listed agent type's lookup, or one cold start when none is listed. */
 function lookUpAll(input: BudgetInput, measurement: Measurement, coldStart: number): BudgetBasis[] {
   const types = input.agentTypes.length === 0 ? [null] : input.agentTypes;
-  return types.map((type) => lookUp(input.rows, type, measurement, coldStart));
+  return types.map((type) =>
+    lookUp(input.rows, input.repositories ?? [], type, measurement, coldStart),
+  );
 }
 
 function highest(bases: readonly BudgetBasis[]): number {
