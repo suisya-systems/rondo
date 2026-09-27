@@ -624,3 +624,144 @@ test("a taken request wins over a draft kept for another take, and a reload of t
   });
   expect(reloaded.box.value).toBe("A, edited");
 });
+
+/**
+ * A tab running `page/changed.js` (rondo#494 item 1): a ledger carrying the
+ * mark's word, and the elements the server marked `data-can-act`. `redraw`
+ * gives them their words again and fires the swap htmx fires, which is the
+ * whole of what this script listens to; a node kept across a redraw is the
+ * same object, as idiomorph's morph keeps it.
+ */
+function changedPage(first: readonly string[], word: string | null = "Updated") {
+  class Watched {
+    readonly attributes = new Map<string, string>();
+    /** Text that moves with the clock, left out of what is compared. */
+    ticking = "";
+    /** The one event the script asks for: the fade ending. */
+    ended: (() => void) | null = null;
+    words: string;
+    constructor(words: string) {
+      this.words = words;
+    }
+    get textContent() {
+      return `${this.words} ${this.ticking}`;
+    }
+    querySelectorAll(selector: string) {
+      return selector === "[data-ticks]" && this.ticking !== ""
+        ? [{ textContent: this.ticking }]
+        : [];
+    }
+    getAttribute(name: string) {
+      return this.attributes.get(name) ?? null;
+    }
+    setAttribute(name: string, value: string) {
+      this.attributes.set(name, value);
+    }
+    removeAttribute(name: string) {
+      this.attributes.delete(name);
+    }
+    addEventListener(type: string, listener: () => void) {
+      if (type === "animationend") {
+        this.ended = listener;
+      }
+    }
+  }
+  const watched = first.map((words) => new Watched(words));
+  const ledger = {
+    getAttribute: (name: string) => (name === "data-changed-word" ? word : null),
+  };
+  const heard = new Map<string, (() => void)[]>();
+  runInNewContext(bytesOf("page/changed.js").toString("utf8"), {
+    WeakMap,
+    document: {
+      querySelector: (selector: string) => (selector === "#ledger" ? ledger : null),
+      querySelectorAll: (selector: string) => (selector === "[data-can-act]" ? watched : []),
+      addEventListener: (type: string, listener: () => void) => {
+        heard.set(type, [...(heard.get(type) ?? []), listener]);
+      },
+    },
+  });
+  const swap = () => {
+    for (const listener of heard.get("htmx:afterSwap") ?? []) listener();
+  };
+  return {
+    /** What each watched element wears now: the mark's value, or null. */
+    marks: () => watched.map((element) => element.getAttribute("data-just-changed")),
+    redraw(words: readonly (string | null)[], ticking: readonly string[] = []) {
+      words.forEach((said, at) => {
+        const element = watched[at];
+        if (element !== undefined && said !== null) {
+          element.words = said;
+        }
+      });
+      ticking.forEach((moves, at) => {
+        const element = watched[at];
+        if (element !== undefined) {
+          element.ticking = moves;
+        }
+      });
+      swap();
+    },
+    /** What morph built again: a node this tab has never read. */
+    rebuilt(words: string) {
+      watched.push(new Watched(words));
+      swap();
+    },
+    /** The fade running out on everything marked, which is what clears a wash. */
+    faded() {
+      for (const element of watched) {
+        const ended = element.ended;
+        element.ended = null;
+        ended?.();
+      }
+    },
+  };
+}
+
+test("a redraw washes the element whose words changed, and leaves the others alone", () => {
+  const page = changedPage(["four points", "started", "step: work"]);
+  // The document as it arrived washes nothing: the person asked for it.
+  expect(page.marks()).toEqual([null, null, null]);
+
+  page.redraw(["three points", null, null]);
+  expect(page.marks()).toEqual(["Updated", null, null]);
+
+  // The fade ends and the element is exactly as it was found, so the next
+  // change can fade again rather than sit on an attribute already there.
+  page.faded();
+  expect(page.marks()).toEqual([null, null, null]);
+  page.redraw(["two points", null, null]);
+  expect(page.marks()).toEqual(["Updated", null, null]);
+});
+
+test("text that moves with the clock is not a change, and a redraw that changes nothing washes nothing", () => {
+  const page = changedPage(["four points", "started"]);
+  page.redraw([null, null], ["read 2m ago", ""]);
+  expect(page.marks()).toEqual([null, null]);
+  // A minute later the same card says the same thing about itself.
+  page.redraw([null, null], ["read 3m ago", ""]);
+  expect(page.marks()).toEqual([null, null]);
+  // And the words themselves changing is a wash, age or no age.
+  page.redraw(["three points", null], ["read 3m ago", ""]);
+  expect(page.marks()).toEqual(["Updated", null]);
+});
+
+test("the marks of an earlier redraw go when a later one lands, so a static mark does not add up", () => {
+  // The reduced-motion case: no fade runs, so nothing clears itself, and the
+  // page must not end up saying every element on it has just changed.
+  const page = changedPage(["four points", "started"]);
+  page.redraw(["three points", null]);
+  expect(page.marks()).toEqual(["Updated", null]);
+  page.redraw([null, "stopped"]);
+  expect(page.marks()).toEqual([null, "Updated"]);
+});
+
+test("an element the redraw built is a change, and a ledger with no word marks it without inventing one", () => {
+  const page = changedPage(["four points"], null);
+  page.redraw(["four points"]);
+  expect(page.marks()).toEqual([null]);
+  page.rebuilt("three points");
+  // The word is empty rather than invented, which `page/app.css` draws as no
+  // mark at all; the wash is the same.
+  expect(page.marks()).toEqual([null, ""]);
+});

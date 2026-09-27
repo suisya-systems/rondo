@@ -530,6 +530,9 @@ test("liveness is per view: two views poll and swap, and the answer view updates
       '<script src="/keys.js" defer="">',
       '<script src="/composer.js" defer="">',
       '<script src="/chime.js" defer="">',
+      // What the redraw changed, said in colour (rondo#494 item 1): loaded
+      // where the page keeps itself current, since that is what it listens to.
+      '<script src="/changed.js" defer="">',
     ]);
     expect(html).not.toContain("//cdn");
     // **The count and the badge in the tab strip** (rondo#414), before any
