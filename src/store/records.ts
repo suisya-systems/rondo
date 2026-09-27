@@ -1703,11 +1703,11 @@ export interface StoredDecision {
  */
 export interface ScopePayload {
   /**
-   * Message ids, each one that opens a request (D-0061 rule 1). **The named
-   * form only** (rule 1.2.1): a predicate is the form whose match can be
-   * undecidable, and an undecidable match is outside anyway.
+   * Message ids, each one that opens a request (D-0061 rule 1), or the one
+   * predicate D-0128 adds: every request the flow injects from one goal. Both
+   * are decidable by an equality test on the opener row (D-0066 rule 1.2.1).
    */
-  readonly requests: readonly string[];
+  readonly requests: ScopeRequests;
   readonly workspaces: readonly ScopeWorkspace[];
   /**
    * `agentTypeDigest` values (rule 1.2.3). The digest covers `model_tier`, so
@@ -1731,6 +1731,51 @@ export interface ScopePayload {
    * table). `fix_unread` allows one closing lap that is not read again (rule 5.3).
    */
   readonly below_threshold?: BelowThreshold;
+}
+
+/**
+ * The two forms of a scope's `requests` (D-0066 rule 1.2.1, D-0128 rule 1):
+ * named message ids, or `{"from_goal": "<goal_id>"}`.
+ */
+export type ScopeRequests = readonly string[] | { readonly from_goal: string };
+
+/** The `author_id` prefix of the flow host's request openers (D-0128 rule 1). */
+export const FLOW_AUTHOR_PREFIX = "rondo/flow/";
+
+/** A message that opens a request, as the scope's request test reads it. */
+export interface RequestOpener {
+  readonly messageId: string;
+  readonly authorId: string;
+  readonly bases: readonly JsonValue[];
+}
+
+/**
+ * Whether `requests` covers the request `opener` opens (D-0066 rule 1.2.1,
+ * D-0128 rule 1). The goal form matches exactly an opener the flow host wrote
+ * that names `goal:<goal_id>`: a newer goal is another id, so it matches
+ * nothing an older scope approved (rule 3).
+ */
+export function scopeCoversRequest(requests: ScopeRequests, opener: RequestOpener): boolean {
+  const goalId = requestsGoal(requests);
+  if (goalId === null) {
+    return (requests as readonly string[]).includes(opener.messageId);
+  }
+  return (
+    opener.authorId.startsWith(FLOW_AUTHOR_PREFIX) &&
+    opener.bases.some(
+      (basis) => isRecord(basis) && basis["form"] === "goal" && basis["goalId"] === goalId,
+    )
+  );
+}
+
+/** The goal a goal scope covers the requests of, null for the named form. */
+export function requestsGoal(requests: ScopeRequests): string | null {
+  return Array.isArray(requests) ? null : (requests as { readonly from_goal: string }).from_goal;
+}
+
+/** The named ids a scope lists, empty for the goal form. */
+export function namedRequests(requests: ScopeRequests): readonly string[] {
+  return requestsGoal(requests) === null ? (requests as readonly string[]) : [];
 }
 
 /** D-0098 rule 5.2's two values. */
@@ -2182,9 +2227,24 @@ export function readScopePayload(json: JsonValue): ScopePayloadReading {
     );
   }
 
-  const requests = distinctStrings(json["requests"], "requests", false);
-  if (typeof requests === "string") {
-    return refused(requests);
+  const requestsValue = json["requests"];
+  let requests: ScopeRequests;
+  if (isRecord(requestsValue)) {
+    const extra = unknownKey(requestsValue, ["from_goal"]);
+    const goalId = requestsValue["from_goal"];
+    if (extra !== null || typeof goalId !== "string" || goalId === "") {
+      return refused(
+        'requests is a list of message ids or {"from_goal": "<goal_id>"} and nothing else ' +
+          "(D-0066 rule 1.2.1, D-0128 rule 1)",
+      );
+    }
+    requests = Object.freeze({ from_goal: goalId });
+  } else {
+    const named = distinctStrings(requestsValue, "requests", false);
+    if (typeof named === "string") {
+      return refused(named);
+    }
+    requests = Object.freeze(named);
   }
   const agentTypes = distinctStrings(json["agent_types"], "agent_types", false);
   if (typeof agentTypes === "string") {
@@ -2306,7 +2366,7 @@ export function readScopePayload(json: JsonValue): ScopePayloadReading {
   return {
     kind: "read",
     payload: Object.freeze({
-      requests: Object.freeze(requests),
+      requests,
       workspaces: Object.freeze(workspaces),
       agent_types: Object.freeze(agentTypes),
       budgets: Object.freeze({

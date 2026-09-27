@@ -164,6 +164,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0125 | rondo decides whether a lap's gate would be approved automatically, and says why on the gate card: clear checks, no model finding at or above `major` on the same tip, a green test run read off the lap, no open question and no closing lap; the organisation's answer itself waits on continuo#240 | accepted |
 | D-0126 | Merge on green, opted into per scope: a scope may include `merge_default_branch`, and the checks host then merges a lap of it through the press's own path right after continuo reads the lap's own head green; `D-0064` rule 3.4's merge transition is taken, and `D-0025` rule 6's "never merges" gives way for such a merge | accepted |
 | D-0127 | Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended | accepted |
+| D-0128 | A scope can cover the requests rondo injects from a goal: `requests` gains one decidable form, `{"from_goal": "<goal_id>"}`, and under it the flow host, never triage, starts the goal's next request | accepted |
 | D-0130 | A lap's cap is written when it is sent and held until its cost is read, one reserve is kept for each lane a partner could still run in, and a budget stop ends the lap with what it spent | accepted |
 
 ---
@@ -12592,6 +12593,11 @@ and the proposed `D-0059` and `D-0063`.
 > is still continuo#240; until it lands the gate card only says whether a gate would be approved
 > automatically. Nothing below is edited.
 
+> **Annotation (2026-09-27, from D-0128).** Added after this entry was accepted, and additive. Section
+> 5's *Work discovery* row is filled by `D-0097` (triage proposes) and `D-0128` (under a goal scope,
+> the flow host starts the next request). `D-0063` rule 1 is kept: the advisory still only proposes.
+> Nothing below is edited.
+
 **This entry decides and does not build.** Nothing in `src/` changes with it, and **no earlier entry
 is edited by it**. Section 6 lists the entries that have to move and says how each should move; each
 move is its own later change.
@@ -14399,6 +14405,11 @@ are recorded in section "What was put to the human gate, and its answer". The re
 `D-0022`, `D-0023`, `D-0025`, `D-0030`, `D-0032`, `D-0036`, `D-0042`, `D-0046`, `D-0047`, `D-0049`,
 `D-0061`, `D-0062`, `D-0063`, `D-0064`, `D-0065`, `D-0059`.
 
+> **Annotation (2026-09-27, from D-0128).** Added after this entry was accepted, and additive. Rule
+> 1.2.1's "a later entry may add one" and the residual "a predicate over requests" are `D-0128`:
+> `requests` may be `{"from_goal": "<goal_id>"}`, matched by equality on the request's opener.
+> Nothing below is edited.
+
 **This entry decides and does not build.** Nothing in `src/` changes with it. The earlier entries it
 annotates are listed in section "Annotations this entry adds".
 
@@ -14887,6 +14898,11 @@ predecessor's); those are part of the text accepted.
 recommended option on both, and named `D-0068` as the entry for two of the losses in section 4; the
 answers are recorded in section "What was put to the human gate, and its answer". Refs `D-0012`, `D-0023`, `D-0027`, `D-0030`, `D-0032`, `D-0033`, `D-0036`,
 `D-0038`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`.
+
+> **Annotation (2026-09-27, from D-0128).** Added after this entry was accepted, and additive. The
+> flow host of `D-0128` injects a goal's next request, and is not option A's coordinator: it
+> decides no order, holds no line, and every act it causes is still refused or admitted by
+> `D-0066` section 4's verdict alone. Nothing below is edited.
 
 **This entry decides and does not build.** Nothing in `src/` changes with it. The earlier entries it
 annotates are listed in section "Annotations this entry adds".
@@ -21776,6 +21792,11 @@ points to the owner, each with options, what each gives up and one recommendatio
 answer". Supersedes nothing. `D-0083` rule 4 gains an annotation (listed at the end). Refs `D-0032`, `D-0061` rule 6, `D-0063`, `D-0064`, `D-0075`, `D-0081`,
 `D-0082`, `D-0083`, `D-0093`, rondo#250, rondo#298, rondo#319, rondo#320.
 
+> **Annotation (2026-09-27, from D-0128).** Added after this entry was accepted, and **not
+> additive**: `D-0128` amends section 1 rule 2 and point 3 (c) / 4.4. Triage still never starts
+> work, and a proposal still goes into the box for a person to send. Under a goal scope a person
+> approved, the flow host starts the goal's next request itself. The text below is not edited.
+
 **This entry decides and does not build.** Nothing in `src/` changes with it; the building is after
 lap 12.
 
@@ -24973,6 +24994,82 @@ was never released.
   screen then has to say that approving starts the work.
 - **An approval whose parts must not all run**, for example a part the person meant to drop before
   it started. That needs a per-part "not this one" that no rule decides yet.
+
+## D-0128 — A scope can cover the requests rondo injects from a goal: `requests` gains one decidable form, `{"from_goal": "<goal_id>"}`, and under it the flow host, never triage, starts the goal's next request
+
+**Status:** accepted (2026-09-27, rondo's owner, through the window; rondo#466, rondo#468, rondo#469,
+rondo#471). Amends `D-0097` section 1 rule 2 and point 3 (c) / 4.4, and fills `D-0066`'s residual "a
+predicate over requests". Annotates `D-0067` section 3 option A and `D-0064` section 5's *Work
+discovery* row. Keeps `D-0063` rule 1. Refs `D-0061` rule 2.6, `D-0066` rules 1.2.1, 1.4 and 4.3,
+`D-0097`, `D-0127`, `D-0130`.
+
+**Why an entry is needed.** A scope names its requests one by one (`D-0066` rule 1.2.1). Work toward
+a goal is a stream of requests nobody has written yet, so each one needed its own scope and its own
+approval: `D-0066`'s falsifier ("each request gets its own P1"). The owner decided on 2026-09-27
+that a component inside rondo keeps work flowing by injecting the goal's next request itself, under
+one approval.
+
+### What was measured
+
+At rondo `b17961f` on **2026-09-27**:
+
+- `requests` is a non-empty list of message ids, tested with `includes` in the verdict
+  (`src/access/scope.ts`) and in `reserve()`'s re-test (`src/store/sqlite.ts`).
+- A goal is an append-only row (`goal` table, `D-0097` point 2.1 (a)). An edit is a new row with a
+  new id, and the newest row of a repository is its goal.
+- A request opener is a `conversation_message` row with no `in_reply_to`, with its `author_id` and
+  its bases stored verbatim (`D-0061` rules 2.3 and 2.6).
+- The flow picker (`src/advisory/flow.ts`, rondo#466) says which ranked candidate would be injected
+  next, under the id `flow-<scopeDecisionId>-<candidateKey>`. Nothing is wired.
+
+### Decision
+
+1. **`requests` gains a second form, `{"from_goal": "<goal_id>"}`.** It covers exactly the request
+   openers whose `author_id` starts with `rondo/flow/` and whose bases include `goal:<goal_id>`
+   (`{"form": "goal", "goalId": ...}`, a new basis form that must name a goal row). Both tests are
+   equalities on the opener row, so the match is decidable, which is what `D-0066` rule 1.2.1 asked
+   of a predicate. A scope naming a goal that is no row is refused when it is written. The object
+   holds `from_goal` and nothing else.
+2. **Every other field is unchanged**: workspaces, agent types, the five budgets, the severity
+   threshold, `below_threshold` and outward acts (`merge_default_branch` and `publish` included).
+   The budgets are counted per approval, so they cover every injected request together (`D-0130`).
+3. **A newer goal does not match an older scope.** The match is on the goal's id, and an edited goal
+   is a new id, so editing the goal means approving again.
+4. **Pause is a successor scope with `laps: 0`** (`D-0066` rule 1.4). No new table.
+5. **Triage still never starts work.** The flow host (rondo#469) starts the goal's next request, and
+   only under a goal scope a person approved. It writes the opener; the drafter drafts the split;
+   `D-0127`'s tick starts it. Every start goes through the lane ledger and `reserve()`'s re-test.
+
+**Options not taken.** A goal scope that covers any request naming the goal, whoever wrote it: a
+person's request would then start under an approval given for the flow. A goal scope that follows
+the newest goal: an edit would widen an approval nobody re-read.
+
+### What it costs
+
+- **Anyone who can write an opener as `rondo/flow/...` can write into a goal scope.** Only the
+  flow host does today; the opener's author is a column, not a signature.
+- **A scope's screen lists no requests for the goal form**; it names the goal.
+- **`D-0127`'s tick finds no split under a goal scope yet**: it walks a scope's named requests,
+  and a goal scope has none. rondo#469 gives it the injected ones.
+
+### What this does not do
+
+- It does not wire the flow host, the drafter's treatment of a flow opener, or the page's approve
+  and pause presses (rondo#469, rondo#471).
+
+### Annotations this entry adds
+
+- **`D-0097`** section 1 rule 2 and point 3 (c) / 4.4: not additive (rules 5 and 1).
+- **`D-0066`** section 1.2.1 and its residual "a predicate over requests": filled (rule 1).
+- **`D-0067`** section 3 option A: the flow host is not a coordinator.
+- **`D-0064`** section 5's *Work discovery* row.
+
+### What would falsify it
+
+- **A goal scope that starts a request the person would not have sent**, found afterwards. Then the
+  picker's order is not the person's, and the goal scope is wider than it reads.
+- **Goal scopes paused more often than they run.** Then one approval per goal is still too coarse,
+  and the pause is the per-request approval with more steps.
 
 ## D-0130 — A lap's cap is written when it is sent and held until its cost is read, one reserve is kept for each lane a partner could still run in, and a budget stop ends the lap with what it spent
 

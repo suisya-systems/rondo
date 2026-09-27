@@ -300,6 +300,8 @@ export function basisLine(basis: Basis, snapshot: object): string {
       return `proposal ${basis.proposalId}`;
     case "setup":
       return `setup ${basis.setupId}`;
+    case "goal":
+      return `goal ${basis.goalId}`;
     default:
       return `${basis.path}:${String(basis.firstLine)}-${String(basis.lastLine)} at ${basis.commit}`;
   }
@@ -2134,6 +2136,9 @@ const BASIS_FRESHNESS: {
   // A setup row is append-only (D-0075 rule 2.2), and nothing here reads it.
   setup: () =>
     undetermined("nothing here reads the setup row this basis names, so it cannot confirm it"),
+  // A goal row is append-only (D-0097 point 2.1 (a)), and nothing here reads it.
+  goal: () =>
+    undetermined("nothing here reads the goal row this basis names, so it cannot confirm it"),
 };
 
 /** What re-gathering produced for a proposal's candidates or its readings, so bases can be compared. */

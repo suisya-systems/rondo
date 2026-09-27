@@ -84,9 +84,15 @@ export type Basis =
    * rule 2.4, where a drafted scope rests on the setup row it records an agent
    * type from.
    */
-  | { readonly form: "setup"; readonly setupId: string };
+  | { readonly form: "setup"; readonly setupId: string }
+  /**
+   * A goal row, by its id: append-only, and an edit is a new row. Added for
+   * D-0128 rule 1, where a request the flow host injects names the goal it
+   * was picked for, and a goal scope covers it by that name.
+   */
+  | { readonly form: "goal"; readonly goalId: string };
 
-/** The nine forms of {@link Basis}, written once so a reader can check the union is closed. */
+/** The ten forms of {@link Basis}, written once so a reader can check the union is closed. */
 export const BASIS_FORMS = Object.freeze([
   "snapshot",
   "iteration",
@@ -97,6 +103,7 @@ export const BASIS_FORMS = Object.freeze([
   "scope",
   "proposal",
   "setup",
+  "goal",
 ] as const satisfies readonly Basis["form"][]);
 
 /**
