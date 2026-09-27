@@ -817,6 +817,37 @@ test("three nulls are explained by the read that produced them, not by one guess
   );
 });
 
+test("a Codex lap's priced cost is recorded and said to be priced, not read (D-0123)", async () => {
+  const h = harness({
+    performLap: {
+      kind: "answered",
+      value: {
+        runId: ALLOCATED_RUN_ID,
+        gateId: "gate-1",
+        sessionId: "session-1",
+        sessionPath: "started",
+        endpointLeaseFailure: null,
+        elapsedDeadlineAtMs: null,
+        model: MODEL,
+        requestedModel: MODEL,
+        permissionDenials: "[]",
+        commands: "[]",
+        costUsd: 0.4125,
+        turns: null,
+        durationMs: 61_000,
+        spendSource: "priced",
+        budgetCapUsd: null,
+      },
+    },
+  });
+  const report = await admitOnce(h);
+  const row = await readRow(h.store, "i-0001");
+
+  expect(row?.lapCostUsd).toBe(0.4125);
+  expect(says(report, "priced from its token counts at the public API rate")).toBe(true);
+  expect(says(report, "read from its terminal 'result' event")).toBe(false);
+});
+
 test("the row at the open gate carries the gate, the session and the walk's name", async () => {
   const h = harness();
   await admitOnce(h);

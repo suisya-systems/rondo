@@ -159,6 +159,9 @@ C-NN`, so the spaces can never be read as one.
 | D-0120 | The close-out after a merge closes a superseded lap's run as `cancelled` before asking for its worktree, in both merge paths; this reads `D-0010` narrowly and does not supersede it | accepted |
 | D-0121 | A running lap is held to the scope's budget by the worker CLI's own spend stop: rondo sends each lap with the room the budget leaves it, continuo carries it (continuo#241), and a Codex lap is held only before it starts | accepted |
 | D-0122 | `mechanical` runs on `claude-sonnet-5` through the Claude CLI: the tier table gains a provider column passed as `lap perform --provider`, every row `claude`, and a drafter may name a `mechanical` agent type only with one grounded claim per condition of `D-0044` rule 1 | accepted |
+| D-0123 | The host's worker is the Claude CLI or the Codex CLI: `RONDO_WORKER_PROVIDER` picks the tier table, a `gpt` lap is read by a Claude reviewer, a Codex lap's tokens are priced at OpenAI's public API rate, and Windows refuses `codex` at start | accepted |
+| D-0124 | Two laps at once by default: D-0023 rule 17's condition is met by the pinned continuo, the default `maxOccupying` is 2, host-wide and across repositories, and `maxLive` stays 3 | accepted |
+| D-0127 | Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended | accepted |
 
 ---
 
@@ -1145,6 +1148,12 @@ it authorises. Part 3 means rondo will not be asking for that half for four of t
 ## D-0012 — Single-flight in lap 1, and what parallel admission actually waits on (cadenza `C-7`)
 
 **Status:** accepted (2026-09-05, rondo's human gate)
+
+> **Annotation (2026-09-27, from D-0124).** Added after this entry was accepted, and additive. The
+> "further change" this entry's falsifier waits on has landed: the pinned continuo `f2fb450` carries
+> `continuo D-1104`'s holder-identity half (the outbox delivery lease is per run) and `D-1105`'s
+> per-run state root, and rondo's capacity ledger is `D-0023`'s. `D-0124` raises the default
+> `maxOccupying` to 2. Nothing below is edited.
 
 ### Decision
 
@@ -3757,6 +3766,14 @@ Four laps at roughly $0.17 each is the whole cost of the evidence in this entry.
 > rather than less: a prefix that removes the whole class of reserved device names is checked by
 > a Linux runner asserting the *derivation* (`test/refrain/allocator.test.ts`), so the guarantee
 > does not wait for a night. A denylist would have been the thing now verified only nightly.
+
+> **Annotation (2026-09-27, from D-0124).** Added after this entry was accepted, and additive.
+> **Rule 17's condition is met**: the pinned continuo `f2fb450` carries `continuo D-1104`'s
+> holder-identity half, not merely its column, so a second concurrent lap is no longer refused
+> there, and `D-0124` makes the policy edit rule 17 promised: the default `maxOccupying` is 2.
+> **Rule 18's dependency is met by the same pin**: fence keys are per run (`D-1104` point 5), and
+> each lap's state root is its own (`D-1105`). Rule 13's durable, operator-editable form is still
+> not taken. Nothing below is edited.
 
 `D-0012` decided single-flight for lap 1 and named what a second admission waits on. Two of its
 three conditions are rondo's: **an allocator** for the `(run id, topic branch, workspace)` triple,
@@ -16745,6 +16762,11 @@ human gate, and its answer". Refs `D-0012`, `D-0023`, `D-0027`,
 `D-0030`, `D-0033`, `D-0048`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`, `D-0067`, `D-0068`,
 `D-0070`, `D-0071`, rondo#8, rondo#250.
 
+> **Annotation (2026-09-27, from D-0124).** Added after this entry was accepted, and additive.
+> `D-0124` raises the default `maxOccupying` to 2. That is the policy edit section 3 names. Section
+> 3's "not a bigger capacity number" is kept: the ledger still decides which lines may run
+> together, and the count decides only how many run at once. Nothing below is edited.
+
 **This entry decides and does not build.** Nothing in `src/` changes with it. The annotations it adds
 are listed in "Annotations this entry adds".
 
@@ -22585,6 +22607,13 @@ put to the owner while the build ran; the answers are in "What was put to the ga
 answer". Refs `D-0098`, `D-0100`, `D-0073`, `D-0067`, `D-0065`, `D-0066`, `D-0064`, `D-0015`,
 `D-0009`, `D-0089`, rondo#250, rondo#417, cadenza#74.
 
+> **Annotation (2026-09-27, from D-0127).** Added after this entry was accepted, and **not
+> additive**: `D-0127` amends rule 1.4. The tick now walks every split under an approval in force,
+> and not only the ones a press has admitted a part of. It starts every part that can start, not
+> only parts with `after`, and it answers once the lap's row is reserved. A part with `after` is
+> still released only by its predecessor's landing. The text below is not edited, so read rule 1.4
+> through `D-0127`.
+
 **Why an entry is needed.** `D-0098` "decides and does not build". Building it took choices its
 text does not make: where a release fact is stored, how an order is written into a split, where a
 record is named, how a question is signalled, how a closing lap is chosen. Each is recorded once
@@ -24445,3 +24474,246 @@ comparable in dollars until the pricing question is answered. (c) Both tiers at 
   entry replaces it.
 - **rondo#460 landing.** The provider column then carries its first `codex` row, and rule 2's
   "every row `claude`" stops being true.
+
+## D-0123 — The host's worker is the Claude CLI or the Codex CLI: `RONDO_WORKER_PROVIDER` picks the tier table, a `gpt` lap is read by a Claude reviewer, a Codex lap's tokens are priced at OpenAI's public API rate, and Windows refuses `codex` at start
+
+**Status:** accepted (2026-09-27, rondo#460; the owner's answers through the secretary). Refs
+`D-0021`, `D-0044`, `D-0046`, `D-0065` (rule 3), `D-0066` (rule 3.4), `D-0071`, `D-0121`, `D-0122`, rondo#398,
+rondo#462, `continuo D-1114`, `continuo D-1120`.
+
+**Why an entry is needed.** `D-0122` left a `codex` row to rondo#460 behind three things: a reviewer
+of another family for a `gpt` worker, a dollar figure (or a decision to do without one) for a lap
+that reports tokens, and the Codex home as a host fact with the Windows refusal said before the
+spawn. A changed tier pair and a changed reviewer row are each a new entry (`D-0021`, `D-0065` rule
+3.2). The owner answered each through the secretary on 2026-09-27; the answers are the decision.
+
+### What was put to the owner, and the answers
+
+1. *Price table or null with tokens.* **Price at the public API rate**, with the source and the date
+   recorded, and a price change a new entry. The owner asked first whether `gpt-6-astra` had a public
+   API price at all; it has (below).
+2. *Which Claude model reads a `gpt` lap.* **`claude-opus-5`**, the model the drafter and `standard`
+   already run on, over `claude-sonnet-5`: the reading feeds automatic gate approval, so it is not
+   the place to save.
+3. *Which work goes to Codex.* **The question was reframed by the owner**: Codex is not a cheaper
+   tier for some kind of work. It is either the reviewer (as today) or the main worker in place of
+   the Claude CLI. So the switch is the worker's provider, and the reviewer follows it to the other
+   family. Asked for the unit of the switch (host, request, scope, agent type), the owner chose **the
+   host**, with a per-request choice filed as rondo#462. Asked what `mechanical` runs on under Codex,
+   **`gpt-6-astra` too**: it is the one current model a ChatGPT login runs, so there is no cheaper
+   `gpt` model to give it.
+4. *Windows.* **Refused before the spawn, with the reason.**
+
+### What was measured
+
+At rondo `e537068` and continuo `f2fb450` (the pin) on **2026-09-27**:
+
+- **`gpt-6-astra` has a public API price.** https://developers.openai.com/api/docs/pricing and
+  https://developers.openai.com/api/docs/models/gpt-6-astra, read on 2026-09-27: standard tier,
+  per million tokens, input **$10**, cached input **$1**, cache writes **$12.50**, output **$50**. A
+  prompt over 272K input tokens is priced at 2x the input and cache rates and 1.5x output for the
+  whole request; Batch and Flex are half, Fast mode double. Neither page says how reasoning tokens
+  are billed.
+- **The pinned continuo already runs Codex laps.** `lap perform --provider codex --codex-home DIR`,
+  with the worker command given as `--claude-command` (or `--worker-command`) and never defaulted;
+  `--codex-home` must be absolute. A Codex lap's `spend` carries `model` and five token counts and
+  leaves `total_cost_usd` and `num_turns` null; a Claude lap carries the six new keys as nulls
+  (`continuo D-1114` rule 7). The Windows refusal is `continuo D-1120`, which is past the pin.
+- **One real Codex turn's usage** (`codex exec --json`, codex-cli 0.153.4, `gpt-6-astra`, a one-word
+  prompt): `input_tokens` 19830, `cached_input_tokens` 11520, `cache_write_input_tokens` 0,
+  `output_tokens` 5, `reasoning_output_tokens` 0. The cached count is part of the input, not beside
+  it. Reasoning and cache writes were zero, so rule 5's nesting of those two is the CLI's usage
+  semantics as read, not observed.
+- **Every path that drives continuo starts with `startContinuo(environment)`**, which already reads
+  the host's other facts (`RONDO_CONTINUO_CLI`), and every lap's `spend` reaches the row through one
+  function (`lapSpendFields`).
+- **The reviewer's spawn is one of two already in `forge.ts`.** `runDrafter` runs `claude -p` over
+  one document with no tools and refuses an answer that reports a tool call (`D-0071` rule 1.3),
+  which is what a reviewer needs (`D-0065` rule 1.1).
+
+### Decision
+
+1. **The host names its worker.** `RONDO_WORKER_PROVIDER` is `claude` (unset or empty is `claude`,
+   so every host today is unchanged) or `codex`. With `codex`, `RONDO_CODEX_HOME` and
+   `RONDO_CODEX_COMMAND` are required and absolute. `startContinuo` reads the three with
+   `RONDO_CONTINUO_CLI` and **refuses to start** on anything else. `scripts/start-command.sh` takes
+   them as `--worker-provider`, `--codex-home` and `--codex-command` and writes them into the
+   service. Switching is a restart; a choice per request is rondo#462.
+2. **One tier table per provider.** The Claude table is `D-0122`'s. The Codex table has the same
+   tiers, each `gpt-6-astra`, family `gpt`, provider `codex`. `performLap` looks the tier up in the
+   host's table; on a Codex host it passes `--provider codex --codex-home <home>` and the Codex CLI as
+   the worker command, in place of the plan's Claude command. The tier vocabulary, and so
+   `PRICED_MODEL_TIERS` and a drafter's grounds (`D-0122` rule 3), are the same on either host.
+3. **The reviewer is the first row of another family than the lap's.** The reviewer table gains
+   `claude-opus-5`, family `claude`, run through `claude`. A Claude lap is still read by
+   `gpt-6-astra`; a Codex lap by `claude-opus-5`. A lap whose model rondo files under no family, or
+   no model, gets the first row, and `D-0065` rule 3.3's check refuses it as before: choosing a
+   reviewer is not a way around the check. A `claude`-family reviewer runs through `runDrafter`'s
+   spawn, so it holds `D-0065` rule 1.1 the way the drafter holds `D-0071` rule 1.3.
+4. **A Codex lap's cost is its tokens at the public API rate.** When `lap perform` reports no
+   `total_cost_usd`, `lapSpendFields` prices the token counts with the table in `roles.ts`
+   (`gpt-6-astra` at the rates above, standard, short context) and records the result as
+   `lap_cost_usd`, with the source `priced`, which the gate report says ("priced from its token
+   counts at the public API rate"). A reported cost is never replaced. Counts that are missing, a
+   model with no price, or counts that do not add up leave the column null (`D-0046`: not read, not
+   zero), and the scope's budget charges it the reserve as it charges any unread lap (`D-0066` rule
+   3.4). The figure is what the tokens would cost through the API, which is what the Claude CLI's
+   `total_cost_usd` is too, so the providers compare in one unit; the lap itself runs under a
+   ChatGPT login. **A changed price is a new entry.**
+5. **The counts nest.** Cached input and cache writes are parts of `input_tokens`, and reasoning is
+   part of `output_tokens`, as the Codex CLI's usage counts them, so the uncached input is what is
+   left and reasoning is not priced twice.
+6. **Windows refuses `codex` at start.** `startContinuo` refuses a host whose worker is `codex` on
+   win32, naming `continuo D-1120`, before any run is admitted. A Claude host on Windows is unchanged.
+
+**Options not taken.** For 1: the provider per request (rondo#462: the request form, the store and the
+thread all change), per scope (a new field on `D-0066`'s approval), per agent type (the reading the
+owner set aside: Codex as a kind of work). For 4: null with the token counts kept (the owner chose a
+figure), a price table the owner supplies (unneeded: the price is public). For 6: a refusal at
+`performLap` only (a run would be admitted before it).
+
+### What it costs
+
+- **Two known limits of the price.** The usage is the turn's total, so a request inside it that went
+  past 272K input tokens is priced at the short-context rate and the lap is **undercounted**. And
+  the price pages do not say how reasoning is billed; it is priced as the output it is counted in.
+- **The token counts are not kept.** Only the priced figure reaches the row. A lap priced wrongly by
+  a later price change cannot be re-priced from the row.
+- **A Codex lap is held to the budget only before it starts.** This is `D-0121` rule 6, which this
+  entry makes live: `D-0121` wrote it for the day rondo drives a Codex lap. When `D-0121`'s cap is
+  sent, it goes on Claude laps only, because continuo's Codex provider refuses the flag. A Codex
+  lap's priced cost is what `D-0121` rule 2 counts against the room of the laps after it, and what
+  the report compares with the cap it was sent with (rule 4).
+- **A host runs one worker.** Comparing the two on the same work means two hosts, or a restart
+  between laps, until rondo#462.
+- **A Claude reviewer's failure speaks the drafter's words.** A tool call it reports is refused with
+  `D-0071` rule 1.3's sentence, since the spawn is shared.
+
+### What would falsify it
+
+- **OpenAI changing the price, or the Codex CLI's usage not nesting** (a cached count above the
+  input count, or a total that adds reasoning to output). The first is a new entry; the second makes
+  rule 5 wrong, and such counts already price nothing.
+- **The Codex CLI refusing `gpt-6-astra`** under a ChatGPT login. The Codex table is then wrong.
+- **A `gpt` lap read by a `gpt` reviewer**, or a Claude lap by a Claude one: rule 3 has failed.
+- **A Codex lap admitted on Windows.**
+
+## D-0124 — Two laps at once by default: D-0023 rule 17's condition is met by the pinned continuo, the default `maxOccupying` is 2, host-wide and across repositories, and `maxLive` stays 3
+
+**Status:** accepted (2026-09-27, rondo#463; the owner's decision through the secretary: run laps in
+parallel now, at 2). Refs `D-0012`, `D-0023` rules 17 and 18, `D-0073` section 3, `D-0109`,
+`continuo D-1104`, `continuo D-1105`, `D-0127`.
+
+**Why an entry is needed.** `D-0023` rule 17 held `maxOccupying` at one on a named condition, and it
+said that once the condition held, raising the number would be a policy edit. This entry records
+that the condition holds, and it makes the edit.
+
+### What was measured
+
+At rondo `7a038e1` and continuo `f2fb450` on **2026-09-27**:
+
+- **Only the default holds rondo to one lap.** `CONSERVATIVE_HOST_POLICY.maxOccupying` is 1
+  (`src/refrain/policy.ts`). `reserve()` already tests capacity, lane claims and decision numbers
+  in one `BEGIN IMMEDIATE`, and the scope budget already reserves `cost_reserve_usd` for each
+  unread lap. Neither assumes one lap.
+- **Rule 17's condition is met by the pin rondo already has.** continuo `f2fb450` carries
+  `continuo D-1104`'s holder-identity half: the outbox delivery lease is per run (point 5), not
+  merely a column. It also carries `D-1105`'s per-run state root. So continuo no longer refuses a
+  second concurrent lap, and rule 18's fence keys are per run.
+- **The smoke run: two laps at once against this continuo and one store, in two repositories.**
+  Both performed at the same time (`in flight (2)`) and both reached their gate, and continuo
+  refused neither of them. It is recorded in
+  [`docs/operations/parallel-two-smoke.md`](docs/operations/parallel-two-smoke.md).
+
+### Decision
+
+1. **The default `maxOccupying` is 2.** The bound is host-wide and counts laps in every
+   repository. `RONDO_MAX_OCCUPYING` still overrides it, and `RONDO_MAX_OCCUPYING=1` goes back to
+   one lap at a time.
+2. **`maxLive` stays 3.** `maxLive >= maxOccupying` still holds (`D-0023` rule 8).
+3. **A third start is refused as today**: `reserve()` answers `atCapacity`, the press says the host
+   has no room, and the order tick tries again the next minute (`D-0127`).
+4. **`D-0073` section 3 is kept.** The lane ledger decides which lines may run together, and this
+   number decides only how many run at once. Two lines that share a path still take turns.
+5. **The stale comments are corrected** (`policy.ts`, `sqlite.ts`, `cli.ts`'s usage and
+   `hostPolicyOf`, `docs/operations/rondo-cli.md`). `D-0012`, `D-0023` and `D-0073` carry
+   annotations. None of them is superseded.
+
+### What it costs
+
+- **Two laps spend at once.** The scope budget reserves each unread lap's cost, so an approval
+  cannot be overspent by two parts together. A host-wide cap on spend is rondo#398's.
+- **Two parts of one request do not run together yet.** `D-0127` rule 5 keeps them apart until the
+  page can show several lines of one request (rondo#452).
+
+### What would falsify it
+
+- **A second concurrent lap refused by continuo** (`LeaseHeld`, or a shared state root). That would
+  mean the pin does not carry what point 2 of "What was measured" says it does.
+- **Two laps in different repositories that break each other** through something neither claims,
+  such as a shared cache, a port or a global tool install. The number is then too high for this
+  host, whatever the ledger says.
+
+## D-0127 — Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended
+
+**Status:** accepted (2026-09-27, rondo#463; the owner's decision through the secretary: a request
+split into parts runs its parts in parallel. On old approvals the owner chose option B of three,
+with no cutoff). It amends `D-0103` rule 1.4. Refs `D-0098` rule 1, `D-0103`, `D-0109`,
+`D-0066` rule 1.4, `D-0073` rule 7, `D-0124`, rondo#284, rondo#452.
+
+**Why an entry is needed.** `D-0103` rule 1.4 says that only plans with `after` are ever ticked.
+Under that rule every part without `after`, the first one included, waits for a person's press. The
+owner decided that approving the scope is the press.
+
+### Decision
+
+1. **Approving a split's scope is the go.** The order tick walks every split under an approval in
+   force (`approvedSplits`: approved, and not retired by an approved successor, `D-0066` rule 1.4),
+   whether or not a part of it has been started. It is no longer limited to the splits a press
+   admitted.
+2. **It starts each part that can start**: readiness `ready`, or `held` where no holding line is
+   in flight (`D-0073` rule 7). It starts the part through `startSplitFromPage`, in the approver's
+   name. The scope's tests, the lane ledger, the dedup against a simultaneous press and the refusal
+   are the press's own.
+3. **A part with `after` is still released only by its predecessor's landing** (`D-0098` rule 1.2).
+   The unlanded ask and its "drop" (rule 1.5) are unchanged.
+4. **Nothing is queued.** A part that is `busy`, `full`, `held` or `sibling` (rule 5) is tried
+   again on the next minute's pass. There are no queue rows. This covers the waiting half of
+   rondo#284.
+5. **Two parts of one request are not started together until rondo#452 lands.** A part whose
+   request already has an open lap reads `sibling`. The page says why, and the press is refused.
+   The guard is in `src/access/drafted-start.ts`, and rondo#452 removes it. **It is a readiness
+   test, not a lock.** The tick is safe, because it starts parts one after another and each start
+   answers once its row exists. But a person pressing another part of the request while the tick's
+   start has not yet reserved its row can slip past it. The page then has two lines of one request
+   to show. That is the thing rondo#452 builds, and nothing is lost.
+6. **The tick's start answers once the lap's row is reserved** (`answerOnceReserved`, as the
+   press's does since `D-0109`). One pass can start two parts and still read landings while they
+   run. A start that ends badly after that is an ask in the request's thread.
+7. **One scope per split and one pull request per part**, as today. There is no maximum number of
+   parts. `maxOccupying` (`D-0124`) and `maxLive` bound what runs.
+
+**Old approvals are not treated differently** (the owner's choice B). A split that was approved
+under `D-0103` and never pressed starts on the first pass after the upgrade. The store holds no
+released data. **Before upgrading, discard a store that holds an approval whose parts you left
+unpressed.** No verb closes an approval, and an approved successor still covers the same split,
+so discarding is the only way. `docs/operations/rondo-cli.md` says the same.
+
+**Options not taken.** A: walk the splits admitted today, plus approvals decided after an epoch
+recorded on this store's first `D-0127` tick (`drafter_epoch`'s precedent). Old approvals would
+then keep their press. C: a fixed cutoff date in code. Both carry a migration concern for data that
+was never released.
+
+### What it costs
+
+- **The approver's name is on starts nobody pressed.** The approval is the act they took, and each
+  start is tested against it exactly as a press is.
+- **The tick reads every approval every minute.** `startedFrom` scans the iterations for each part.
+  That is cheap at today's size, and it grows with the store.
+
+### What would falsify it
+
+- **A person who approves a scope and expects nothing to run until they press.** The approve
+  screen then has to say that approving starts the work.
+- **An approval whose parts must not all run**, for example a part the person meant to drop before
+  it started. That needs a per-part "not this one" that no rule decides yet.

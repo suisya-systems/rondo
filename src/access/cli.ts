@@ -140,6 +140,7 @@ import {
   onLanding,
   planOrder,
 } from "./drafted-start.js";
+import { approvedSplits } from "./drafted-view.js";
 import { drafterHost } from "./drafter-host.js";
 import {
   cloneRepository,
@@ -473,8 +474,14 @@ environment:
   RONDO_MAX_LIVE      how many iterations may be open at once. Default 3. An
                       iteration suspended at a gate holds no worker, so this
                       bounds how many questions may wait on a person at once
-  RONDO_MAX_OCCUPYING how many may be executing at once. Default 1, and raising
-                      it needs continuo to allow a second concurrent lap first
+  RONDO_MAX_OCCUPYING how many may be executing at once, across every
+                      repository. Default 2
+  RONDO_WORKER_PROVIDER
+                      the worker CLI every lap runs on: claude (the default)
+                      or codex. codex is refused on Windows
+  RONDO_CODEX_HOME    the Codex home a Codex lap logs in through. Absolute;
+                      required with codex
+  RONDO_CODEX_COMMAND the Codex CLI. Absolute; required with codex
   GH_HOST             the forge host the repository is on. Default: github.com
 
 The command line never merges a pull request, and nothing here runs unless you
@@ -1249,17 +1256,11 @@ async function pickWaiting(
 /**
  * The host's two bounds, from the environment, validated.
  *
- * Absent means the default rather than zero: a host nobody has configured
- * should behave the way lap 1 measured, which is one lap at a time with room
- * for a few unanswered questions beside it.
- *
- * **`maxOccupying` is settable, and setting it above one is currently a way to
- * make continuo refuse laps rather than a way to run them.** continuo
- * serialises `lap perform` on one global delivery resource until its `D-1104`
- * lands the holder-identity half; until then a second concurrent lap is refused
- * there. The knob exists here so that the day it lands is a policy edit and not
- * a code change, and this paragraph is what stops the number being raised on
- * the assumption that rondo is the thing in the way.
+ * Absent means the default rather than zero: a host nobody has configured runs
+ * two laps at a time (D-0124) with room for a few unanswered questions beside
+ * them. The pinned continuo carries `D-1104`'s holder-identity half, so a
+ * second concurrent lap is no longer refused there; `RONDO_MAX_OCCUPYING=1`
+ * is how a host goes back to one.
  */
 function hostPolicyOf(
   environment: Readonly<Record<string, string | undefined>>,
@@ -1543,15 +1544,17 @@ export async function main(
       language: selected.tag,
       log: say,
     });
-    // **And the order tick** (D-0098 rule 1.4): a drafted plan that waits on
-    // an earlier plan of its split starts on that plan's landing, through the
-    // press's own path and in the approver's name -- so only where there is an
-    // approver the allowlist accepts, the start press's own condition.
+    // **And the order tick** (D-0098 rule 1.4, D-0127): each part of an
+    // approved split starts once it can -- a part with `after` on its
+    // predecessor's landing -- through the press's own path and in the
+    // approver's name, so only where there is an approver the allowlist
+    // accepts, the start press's own condition.
     const order =
       sender === null || "refusal" in sender
         ? null
         : orderHost({
             record,
+            splits: async () => await approvedSplits({ record }),
             readiness: async (split, planIndex) =>
               await draftedStartReadiness(
                 { store, record, policy: bounds.policy, nowMs: Date.now() },
@@ -1566,21 +1569,31 @@ export async function main(
                 lineageId,
                 Date.now(),
               ),
-            start: async (split, planIndex) =>
-              await startSplitFromPage(
-                environment,
+            // Answered once the row is reserved (D-0109), as the press is, so
+            // one pass starts two parts rather than waiting out the first lap.
+            start: async (split, planIndex) => {
+              const input = {
+                iterationId: newIterationId(),
+                requestMessageId: split.requestMessageId,
+                scopeDecisionId: split.scopeDecisionId,
+                proposalId: split.proposalId,
+                planIndex,
+              };
+              return await answerOnceReserved(
                 store,
-                opened.path,
-                sender.actorId,
-                bounds.policy,
-                {
-                  iterationId: newIterationId(),
-                  requestMessageId: split.requestMessageId,
-                  scopeDecisionId: split.scopeDecisionId,
-                  proposalId: split.proposalId,
-                  planIndex,
-                },
-              ),
+                record,
+                chromeFor(selected.tag),
+                input,
+                startSplitFromPage(
+                  environment,
+                  store,
+                  opened.path,
+                  sender.actorId,
+                  bounds.policy,
+                  input,
+                ),
+              );
+            },
             now: Date.now,
             log: say,
           });
@@ -5066,6 +5079,12 @@ async function startSplit(
     // pressed or ticked. No press lifts an order (rule 1.5 is the person's P3).
     case "ordered":
       return { ok: false, why: "startRefusedNotAdmitted", note: orderedNote(ready) };
+    case "sibling":
+      return {
+        ok: false,
+        why: "startRefusedNotAdmitted",
+        note: `iteration '${ready.iterationId}' of this request is still open; this plan starts once it ends`,
+      };
     case "busy":
     case "full":
       return {

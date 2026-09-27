@@ -212,6 +212,24 @@ posix("a machine with nothing that shows a notification still gets a whole unit"
   expect(unit).toContain("ExecStart=");
 });
 
+posix("the host's worker goes to the service, and a Claude host writes none of it (D-0123)", () => {
+  const { unit } = write([
+    "--worker-provider",
+    "codex",
+    "--codex-home",
+    "/home/p/.codex",
+    "--codex-command",
+    "/home/p/.local/bin/codex",
+  ]);
+  expect(unit).toContain('Environment="RONDO_WORKER_PROVIDER=codex"');
+  expect(unit).toContain('Environment="RONDO_CODEX_HOME=/home/p/.codex"');
+  expect(unit).toContain('Environment="RONDO_CODEX_COMMAND=/home/p/.local/bin/codex"');
+
+  const plain = write([]).unit;
+  expect(plain).not.toContain("RONDO_WORKER_PROVIDER");
+  expect(plain).not.toContain("RONDO_CODEX_");
+});
+
 posix("a fact that was not given is not written as an empty one", () => {
   const { unit } = write([]);
 

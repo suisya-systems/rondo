@@ -192,20 +192,21 @@ test("the plan digest does not depend on the order the plan's keys were written 
   expect(second.plan).toEqual(first.plan);
 });
 
-test("the occupying bound refuses a second executing iteration and names it", async () => {
-  // rondo#8's constant 1 is `maxOccupying` under `CONSERVATIVE_HOST_POLICY`
-  // now, and the row it refuses beside (D-0019's `occupied`) is replaced by
-  // the count and the bound it hit (D-0023 rule 27): a `planned` row is
-  // `occupying`, so a second reservation while it is live is refused before
-  // any row or claim is written.
+test("the occupying bound admits two executing iterations, refuses a third and names it", async () => {
+  // rondo#8's constant 1 became `maxOccupying` under `CONSERVATIVE_HOST_POLICY`,
+  // which is 2 since D-0124, and the row it refuses beside (D-0019's
+  // `occupied`) is replaced by the count and the bound it hit (D-0023 rule
+  // 27): a `planned` row is `occupying`, so a third reservation while two are
+  // live is refused before any row or claim is written.
   const store = freshStore();
   await reserveOne(store, "i-0001");
+  expect((await reserveOne(store, "i-0002", 2_000)).kind).toBe("reserved");
 
-  const second = await reserveOne(store, "i-0002", 2_000);
+  const third = await reserveOne(store, "i-0003", 3_000);
 
   // Not a defect -- a conductor that is already conducting saying so.
-  expect(second).toEqual({ kind: "atCapacity", bound: "maxOccupying", limit: 1, occupancy: 1 });
-  expect(await store.read("i-0002")).toEqual({ kind: "absent" });
+  expect(third).toEqual({ kind: "atCapacity", bound: "maxOccupying", limit: 2, occupancy: 2 });
+  expect(await store.read("i-0003")).toEqual({ kind: "absent" });
 });
 
 test("a suspended status holds no occupying slot, but still counts toward maxLive", async () => {
