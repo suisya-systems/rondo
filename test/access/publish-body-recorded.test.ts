@@ -164,6 +164,28 @@ test("the body is composed once from the lap's report, recorded, and read back b
   expect(await recordedPublishBody(advisory, subject)).toEqual(composed);
 });
 
+test("two previews running at once compose one body between them (rondo#290)", async () => {
+  const { record, advisory } = await closedLap("ja");
+  const subject = { iterationId: record.id, gateId: `gate-${record.id}` };
+  // **The page redraws while it is drawing**: two passes reach this together,
+  // and what must not happen is two model answers and two rows -- the second is
+  // `covered` under the write's own lock, and both passes answer with the row
+  // that was written. A body that differed between two open screens would refuse
+  // whichever press came second.
+  const passes = [
+    ports(advisory, REPORT),
+    ports(advisory, REPORT, { ...SECTIONS, summary: "Something else entirely." }),
+  ];
+  const both = await Promise.all(
+    passes.map(async (pass) => await publishBodyOnce(pass.ports, subject, "ja")),
+  );
+  expect(both[0]).toEqual(both[1]);
+  expect(both[0]?.kind).toBe("composed");
+  expect(passes.reduce((all, pass) => all + pass.documents.length, 0)).toBeLessThanOrEqual(2);
+  // One row, whichever pass wrote it, and it is what a press reads.
+  expect(await recordedPublishBody(advisory, subject)).toEqual(both[0]);
+});
+
 test("a report that would not read is recorded as such, so the screen and the press still agree (rondo#290)", async () => {
   const { record, advisory } = await closedLap("ja");
   const subject = { iterationId: record.id, gateId: `gate-${record.id}` };

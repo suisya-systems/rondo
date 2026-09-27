@@ -18890,11 +18890,12 @@ put to the human gate, and its answer". Refs `D-0053`,
 `D-0055`, `D-0056`, `D-0063`, `D-0071`, `D-0076`, rondo#257, rondo#159.
 
 > **Annotation (2026-09-28, from rondo#290).** Added after this entry was accepted, and additive.
-> **Section 4 is built for the terminal's `publish`.** `src/access/publish-body.ts` composes the
-> English body from the lap's own report: the ask names reading the report and writing an English
-> account of it and refuses going sentence by sentence (rule 4.2), and the report's own words are
-> quoted nowhere in the body, which says instead that they are on the gate the person answered.
-> Three things the requester settled on that issue, and the code holds:
+> **Section 4 is built, for the terminal's `publish` and for the page's.**
+> `src/access/publish-body.ts` composes the English body from the lap's own report: the ask names
+> reading the report and writing an English account of it and refuses going sentence by sentence
+> (rule 4.2), and the report's own words are quoted nowhere in the body, which says instead that they
+> are on the gate the person answered. Four things the requester settled on that issue, and the code
+> holds:
 >
 > 1. **The body carries three sections, in one order, always** -- what changed, why, what was
 >    verified. An account that could not be composed changes what a section *says* and never whether
@@ -18908,27 +18909,27 @@ put to the human gate, and its answer". Refs `D-0053`,
 >    what rondo prints and is kept where rondo prints it (`src/access/console.ts`); a dash, a
 >    quotation mark or the letters of somebody's name in a body bound for a forge is not a defect,
 >    and an answer thrown away for one would be a body refused for being English.
+> 4. **The body has one bound and it is the body's** (`BODY_LIMIT`, `src/access/pull-request.ts`).
+>    A length per section would have thrown all three accounts away because one of them ran long.
+>    What a report may be composed *from* is still bounded, because half a report composes a wrong
+>    account rather than a short one (`D-0071` rule 1.5).
 >
-> **The page's publish composes nothing yet**: its preview and its press each run `publishPlanFor`,
-> and the body is inside the digest the press compares against what the screen showed, so a model's
-> answer taken twice would refuse every press. That path needs a composed body recorded once and read
-> by both, which is a row and is not taken here; the residual below stays open for it, and a body
-> composed from nothing still carries its three sections.
-
-> **Annotation (2026-09-28, from rondo#290, second part).** Added after this entry was accepted, and
-> additive. **Section 4 is now built for the page's `publish` too, as a row**, which closes the
-> residual the annotation above left open. The row is a `publish_body` proposal, named
-> `rondo/publish-body/<version>/<model-id>` and **never approvable**: what a person answers is the
-> publish itself, so the kind is absent from `APPROVABLE_PROPOSAL_KINDS` for `revise_draft`'s reason.
-> **The preview writes it and the press only reads it.** D-0059 section 5a's Q1 already makes the
-> screen a precondition of the press, so the run that draws the screen is the one composing run there
-> is; the press reads the row, spawns nothing and spends nothing, and the body therefore stays inside
-> the digest it compares -- the body was **not** taken out of it, which would have let the one part of
-> a pull request a person can only check by reading move under a press that matched everything else.
-> One row per lap per gate: a second pass is `covered` and reads what the first wrote, and an outcome
-> that could not be composed is recorded as such, so a missing body is missing on both surfaces
-> rather than on one. A lap whose plan names no language composes nothing and records nothing, and
-> the terminal's `publish` is unchanged: it composes per publish, as the annotation above describes.
+> **The page's publish composes through a recorded row.** Its preview and its press each run
+> `publishPlanFor`, and the body is inside the digest the press compares against what the screen
+> showed, so a model's answer taken twice would refuse every press -- and the body was **not** taken
+> out of that digest, which would have let the one part of a pull request a person can only check by
+> reading move under a press that matched everything else. So the composed body is a `publish_body`
+> proposal, named `rondo/publish-body/<version>/<model-id>` and **never approvable**: what a person
+> answers is the publish itself, so the kind is absent from `APPROVABLE_PROPOSAL_KINDS` for
+> `revise_draft`'s reason. The preview writes it and the press only reads it, spawning nothing and
+> spending nothing. One row per lap per gate: a second pass is `covered` and reads what the first
+> wrote, and an outcome that could not be composed is recorded as such.
+>
+> **What the two surfaces read is the row and never a run's own answer**, which is how they are kept
+> from disagreeing: `publishBodyOnce` answers with the row it read back, so a row that would not write
+> leaves the preview with no body -- exactly what a press with no row has -- and the two render one
+> body without an account rather than two different bodies. The terminal's `publish` composes once per
+> publish and compares its body against nothing, so it needs no row.
 
 **This entry decides and builds.** The building change is the pull request that carries it:
 `src/access/wording.ts`, `src/access/model-draft.ts` and `src/continuo/invoker.ts`, with their tests.

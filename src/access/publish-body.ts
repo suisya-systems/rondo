@@ -68,17 +68,6 @@ export const COMPOSED_SECTIONS = [
   },
 ] as const;
 
-/**
- * How long one composed section may be.
- *
- * The body's own bound is the sum of its parts (`BODY_LIMIT`, `./pull-request.ts`),
- * and a model's answer is as long as the model made it. Past this the section is
- * **refused rather than cut**, as an over-large drafter document is
- * (`D-0071` rule 1.5): a cut account of a change cannot be told from a wrong
- * one, and the deterministic body below it is still a true one.
- */
-const SECTION_LIMIT = 4000;
-
 /** What the drafter is handed: the lap's report, and the language it was asked for in. */
 export interface PublishBodyMaterial {
   /** The report as the worker wrote it, byte for byte (`D-0053`). */
@@ -250,26 +239,29 @@ function checked(answer: unknown): ComposedBody {
 }
 
 /**
- * One section as the body may print it: prose, bounded, and nothing else asked
- * of it.
+ * One section as the body may print it: prose, and nothing else asked of it.
  *
- * **What is checked is that there is a section and that it fits** (rondo#290).
+ * **What is checked is that there is a section** (rondo#290), and the checks this
+ * does not make are the point.
+ *
  * English prose carries marks and names -- an em dash, a quoted phrase, the
  * letters of a person's name -- and an answer thrown away for one of those is a
  * body refused for being English, which is what this file exists to produce. The
  * bytes cannot answer whether a section was composed rather than translated, so
- * they are not asked: the document is the ask (`D-0053` rule 8), and the one
- * surface that prints this body escapes it at the print (`D-0004`,
+ * they are not asked either: the document is the ask (`D-0053` rule 8), and the
+ * one surface that prints this body escapes it at the print (`D-0004`,
  * `./console.ts`).
+ *
+ * **Nor is there a length of its own here.** The body has one bound, `BODY_LIMIT`
+ * in `./pull-request.ts`, and that is where it is kept; a second bound per section
+ * would throw away all three accounts because one of them ran long, which is a
+ * refusal rondo#290 never asked for. What a report may be composed from *is*
+ * bounded, in {@link preparePublishBody}, because half a report composes a wrong
+ * account rather than a short one (`D-0071` rule 1.5).
  */
 function words(value: unknown, key: string): string {
   if (typeof value !== "string" || value.trim() === "") {
     throw new ComposeDefect(`'${key}' is not a non-empty string`);
-  }
-  if (value.length > SECTION_LIMIT) {
-    throw new ComposeDefect(
-      `'${key}' is ${String(value.length)} characters, over the bound of ${String(SECTION_LIMIT)}`,
-    );
   }
   return value;
 }

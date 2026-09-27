@@ -133,9 +133,6 @@ test("an answer is three sections, and anything else is unavailable", () => {
     "'grounds' is not a non-empty string",
   );
   expect(unavailable({ ...SECTIONS, summary: undefined })).toContain("'summary'");
-  expect(unavailable({ ...SECTIONS, verification: "v".repeat(4001) })).toContain(
-    "over the bound of 4000",
-  );
 
   // A drafter that would not run at all is the same outcome, naming why.
   expect(composedBodyOf({ kind: "failed", reason: "claude exited 1" })).toEqual({
@@ -164,6 +161,18 @@ test("English prose is not thrown away for the marks and names it carries (rondo
   for (const section of Object.values(marked)) {
     expect(composed).toContain(section);
   }
+});
+
+test("a long section does not cost the other two their accounts (rondo#290)", () => {
+  // **The body has one bound and it is the body's** (`BODY_LIMIT`,
+  // `src/access/pull-request.ts`). A second bound per section would answer a
+  // wordy "what was verified" by throwing away the summary and the grounds too,
+  // which is a refusal this issue never asked for.
+  const wordy = { ...SECTIONS, verification: `${"v".repeat(4001)} and it passed.` };
+  expect(answered(wordy)).toEqual({ kind: "composed", ...wordy });
+  const composed = body({ kind: "composed", ...wordy });
+  expect(composed).toContain(SECTIONS.summary);
+  expect(composed).toContain(SECTIONS.grounds);
 });
 
 test("one run is prepared, run and checked, and a thrown port is an unavailable body", async () => {
