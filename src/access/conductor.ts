@@ -95,12 +95,15 @@ import {
   fetchLapBase,
   inspectLapWork,
   isAncestor,
+  type KeptWork,
+  keepStoppedWork,
   type LandingReading,
   type LandingRequest,
   type MergeMethod,
   readChangedPaths,
   readLanding,
   readRecordAdditions,
+  stoppedAtTimeLimit,
 } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
 import { thisDriver } from "./lost-laps.js";
@@ -309,6 +312,7 @@ export function conductorPorts(
             },
           },
     lanes: { store, readLanding, readChangedPaths, remote: READING_REMOTE },
+    keepWork: keepStoppedWork,
     now,
     classify: async (plan) => classifyPlan(plan),
     startContinuo: async () => ({ kind: "answered", value: { revision: continuo.revision } }),
@@ -630,7 +634,7 @@ export async function admit(
     return await withGateReport(ports, await withClaimComparison(ports, report));
   }
   if (report.status === "failed") {
-    return await withStopAsk(ports, report);
+    return await withStopAsk(ports, report, await keptWork(ports, report));
   }
   if (report.status !== "abandoned" || report.iterationId === null) {
     return report;
@@ -1007,7 +1011,7 @@ export async function resume(ports: ReportingPorts, iterationId: string): Promis
     report.status === "failed" &&
     !(before.kind === "read" && before.record.status === "failed")
   ) {
-    return await withStopAsk(ports, report);
+    return await withStopAsk(ports, report, await keptWork(ports, report));
   }
   if (report.status !== "awaiting_human") {
     return report;
@@ -1082,6 +1086,14 @@ export interface ReportingPorts extends ConductorPorts {
    * first). Absent in a fake that does not exercise it.
    */
   readonly lanes?: LandingPorts | null;
+  /**
+   * What keeps a lap's uncommitted work when it is stopped at its time limit
+   * (D-0143). Absent in a fake that does not exercise it, which keeps nothing.
+   */
+  readonly keepWork?: (request: {
+    readonly workspace: string;
+    readonly topicBranch: string;
+  }) => Promise<KeptWork>;
 }
 
 /** What {@link admit} reads and writes to release a line whose work has landed. */
@@ -1292,10 +1304,57 @@ async function gateIdOf(ports: ConductorPorts, iterationId: string): Promise<str
  * writes none, and a write that fails is a line of the report: the lap's own
  * ending is committed before this runs.
  */
+/**
+ * **D-0143: a lap stopped at its time limit keeps what it had not committed**
+ * (rondo#516), as one unverified commit on its own branch, before the stop is
+ * asked. Null for any other ending, or where nothing keeps work (a fake). A
+ * throw is a sentence, like a failed keep: the lap's ending is already
+ * committed, and the work is still in the workspace either way.
+ */
+async function keptWork(
+  ports: ReportingPorts,
+  report: ConductorReport,
+): Promise<{ readonly branch: string; readonly kept: KeptWork } | null> {
+  if (ports.keepWork === undefined || report.iterationId === null) {
+    return null;
+  }
+  const found = await ports.store.read(report.iterationId);
+  if (found.kind !== "read") {
+    return null;
+  }
+  const row = found.record;
+  if (!stoppedAtTimeLimit(row) || row.workspace === null || row.topicBranch === null) {
+    return null;
+  }
+  const branch = row.topicBranch;
+  try {
+    return {
+      branch,
+      kept: await ports.keepWork({ workspace: row.workspace, topicBranch: branch }),
+    };
+  } catch (error) {
+    return { branch, kept: { kind: "notKept", reason: hostFailure(error).text } };
+  }
+}
+
 async function withStopAsk(
   ports: ReportingPorts,
   report: ConductorReport,
+  kept: { readonly branch: string; readonly kept: KeptWork } | null = null,
 ): Promise<ConductorReport> {
+  const keptLine =
+    kept === null
+      ? []
+      : [
+          kept.kept.kind === "kept"
+            ? `The work lap '${String(report.iterationId)}' had not committed was kept as ` +
+              `${kept.kept.commit} on '${kept.branch}', unverified (D-0143).`
+            : kept.kept.kind === "clean"
+              ? `Lap '${String(report.iterationId)}' left nothing uncommitted.`
+              : `The work lap '${String(report.iterationId)}' had not committed was NOT kept: ` +
+                kept.kept.reason,
+        ];
+  report = { ...report, lines: [...report.lines, ...keptLine] };
   const thread = ports.thread;
   if (
     thread === undefined ||
@@ -1315,7 +1374,11 @@ async function withStopAsk(
     body: (row.failureKind === "budget"
       ? thread.words.lapBudgetStoppedSaid
       : thread.words.lapStoppedSaid)(
-      row.reason === null ? null : refusalSaid(thread.words, row, row.reason),
+      withKeptSaid(
+        thread.words,
+        row.reason === null ? null : refusalSaid(thread.words, row, row.reason),
+        kept,
+      ),
     ),
     authorKind: "drafter",
     authorId: DETERMINISTIC_DRAFTER,
@@ -1340,6 +1403,21 @@ async function withStopAsk(
             said.reason,
         ],
       };
+}
+
+/** The stop's sentence with what was kept after it (D-0143); a clean workspace adds nothing. */
+function withKeptSaid(
+  words: Chrome,
+  said: string | null,
+  kept: { readonly branch: string; readonly kept: KeptWork } | null,
+): string | null {
+  const keptSaid =
+    kept === null || kept.kept.kind === "clean"
+      ? null
+      : kept.kept.kind === "kept"
+        ? words.lapWorkKept(kept.branch, kept.kept.commit)
+        : words.lapWorkNotKept(kept.kept.reason);
+  return keptSaid === null ? said : said === null ? keptSaid : `${said} ${keptSaid}`;
 }
 
 async function withGateReport(

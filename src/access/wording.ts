@@ -205,6 +205,13 @@ export interface Chrome extends PageWords {
   /** What each of the two presses does, said where the words are typed. */
   readonly answerOutcomeNote: string;
   /**
+   * A worker's question at its gate (D-0142): *carry on* starts the next
+   * attempt with the answer, on the one press. `answerReviseDraftLead` heads
+   * the change the reading drafted, which goes with it as shown.
+   */
+  readonly answerReviseNote: string;
+  readonly answerReviseDraftLead: string;
+  /**
    * A budget stop's first answer (D-0140 rule 3): a budgets-only successor of
    * the lap's approval, then *carry on*, on one press. `answerRaiseLabel` is
    * its amount's box; `answerRaiseLeft` what the rest of the approval allows,
@@ -647,6 +654,15 @@ export interface Chrome extends PageWords {
    * to be unknown because continuo reports no spend with a refusal.
    */
   readonly lapTurnTimedOut: (minutes: number | null) => string;
+  /**
+   * What rondo kept of a lap stopped at its time limit (D-0143, rondo#516):
+   * the work it had not committed, now one unverified commit on the lap's
+   * branch, which a retry of the lap starts from. Said after
+   * {@link lapTurnTimedOut} in the stop's ask.
+   */
+  readonly lapWorkKept: (branch: string, commit: string) => string;
+  /** rondo tried to keep that work and could not; it is still in the workspace. */
+  readonly lapWorkNotKept: (reason: string) => string;
 
   // -- The scope screen (rondo#233 S3, D-0066 rule 1) --
   /**

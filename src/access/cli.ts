@@ -63,7 +63,7 @@ import {
   hostPolicy,
   type LoopPolicy,
 } from "../refrain/policy.js";
-import { revisionPlan } from "../refrain/revision.js";
+import { revisionPlan, stoppedRetryPlan } from "../refrain/revision.js";
 import { pathsOverlap, repositoryKey } from "../store/lanes.js";
 import { canonicalJson, contentDigest } from "../store/plan.js";
 import {
@@ -174,6 +174,7 @@ import {
   readRecordFloor,
   readRepositoryPaths,
   runDrafter,
+  stoppedAtTimeLimit,
 } from "./forge.js";
 import { forgeHost, publishesTo, publishPreflight, redactRemoteUrl } from "./forge-preflight.js";
 import { GATE_ACTOR, gateHost, type ScopedAnswer } from "./gate-host.js";
@@ -3046,7 +3047,8 @@ async function commandRetry(
   const report = await admit(
     ports,
     advisory,
-    retry.plan,
+    // From where a lap stopped at its time limit left its work (D-0143).
+    stoppedAtTimeLimit(subject.record) ? stoppedRetryPlan(retry.plan, subject.record) : retry.plan,
     START_POLICY,
     retry.successorId,
     // The retry supersedes the row it was proposed about (D-0030 rule 1), and
@@ -3418,7 +3420,11 @@ export async function commandScopedRetry(
     {
       kind: "redo",
       iterationId: successorId,
-      plan: decoded.plan,
+      // A retry reruns the stored plan -- from where a lap stopped at its time
+      // limit left its work, when it was (D-0143).
+      plan: stoppedAtTimeLimit(predecessor.record)
+        ? stoppedRetryPlan(decoded.plan, predecessor.record)
+        : decoded.plan,
       predecessorId,
       requestMessageId: predecessor.record.requestMessageId,
       // A retry reruns the stored plan; the closing lap is a revise press.

@@ -19,6 +19,7 @@ import {
   gatherReviewMaterialFacts,
   inspectLapWork,
   isAncestor,
+  keepStoppedWork,
   pushTopicBranch,
   readChangedPaths,
   readLanding,
@@ -26,6 +27,7 @@ import {
   runReviewer,
 } from "../../src/access/forge.js";
 import { evidenceOf, materialDigestOf, readingOf } from "../../src/access/review.js";
+import { KEPT_WORK_SUBJECT } from "../../src/refrain/revision.js";
 import { contentDigest } from "../../src/store/plan.js";
 
 function git(cwd: string, ...args: string[]): void {
@@ -967,4 +969,73 @@ test("a drafter's path listing is the base branch's whole tree, directories endi
     "src/store/lanes.ts",
   ]);
   expect(await readRepositoryPaths({ repository: work, ref: "no-such-branch" })).toBeNull();
+});
+
+// --- D-0143: a lap stopped at its time limit keeps what it had not committed --
+
+test("D-0143: the stopped lap's uncommitted work becomes one unverified commit on its branch", async () => {
+  const work = workspace();
+  writeFileSync(join(work, "a.txt"), "changed\n");
+  writeFileSync(join(work, "new.txt"), "new\n");
+  writeFileSync(join(work, "ignored.log"), "noise\n");
+  const before = gitOut(work, "rev-parse", "HEAD");
+
+  const kept = await keepStoppedWork({ workspace: work, topicBranch: "topic" });
+
+  expect(kept.kind).toBe("kept");
+  const head = gitOut(work, "rev-parse", "HEAD");
+  expect(kept).toEqual({ kind: "kept", commit: head });
+  expect(gitOut(work, "rev-parse", "HEAD~1")).toBe(before);
+  expect(gitOut(work, "log", "-1", "--format=%an|%s")).toBe(`rondo|${KEPT_WORK_SUBJECT}`);
+  // Tracked changes and new files; what .gitignore leaves out stays out.
+  expect(gitOut(work, "show", "--name-only", "--format=", "HEAD").split("\n").sort()).toEqual([
+    "a.txt",
+    "new.txt",
+  ]);
+  expect(gitOut(work, "status", "--porcelain")).toBe("");
+  // A second look finds nothing left.
+  expect(await keepStoppedWork({ workspace: work, topicBranch: "topic" })).toEqual({
+    kind: "clean",
+  });
+});
+
+test("D-0143: a workspace that is not the row's branch, or not a checkout, is not written", async () => {
+  const work = workspace();
+  writeFileSync(join(work, "a.txt"), "changed\n");
+  const other = await keepStoppedWork({ workspace: work, topicBranch: "someone-else" });
+  expect(other.kind).toBe("notKept");
+  expect(gitOut(work, "status", "--porcelain")).toBe("M a.txt");
+  const nowhere = mkdtempSync(join(tmpdir(), "rondo-forge-none-"));
+  expect((await keepStoppedWork({ workspace: nowhere, topicBranch: "topic" })).kind).toBe(
+    "notKept",
+  );
+});
+
+test("D-0143: new files are kept even where git is set not to show them", async () => {
+  const work = workspace();
+  git(work, "config", "status.showUntrackedFiles", "no");
+  writeFileSync(join(work, "only-new.txt"), "new\n");
+  const kept = await keepStoppedWork({ workspace: work, topicBranch: "topic" });
+  expect(kept.kind).toBe("kept");
+  expect(gitOut(work, "show", "--name-only", "--format=", "HEAD")).toBe("only-new.txt");
+});
+
+test("D-0143: the kept commit is rondo's even where the host's environment names another author", async () => {
+  const work = workspace();
+  writeFileSync(join(work, "a.txt"), "changed\n");
+  const before = { name: process.env["GIT_AUTHOR_NAME"], email: process.env["GIT_AUTHOR_EMAIL"] };
+  process.env["GIT_AUTHOR_NAME"] = "someone";
+  process.env["GIT_AUTHOR_EMAIL"] = "someone@example.invalid";
+  try {
+    expect((await keepStoppedWork({ workspace: work, topicBranch: "topic" })).kind).toBe("kept");
+  } finally {
+    for (const [key, value] of [
+      ["GIT_AUTHOR_NAME", before.name],
+      ["GIT_AUTHOR_EMAIL", before.email],
+    ] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+  expect(gitOut(work, "log", "-1", "--format=%an <%ae>")).toBe("rondo <rondo@localhost>");
 });

@@ -181,6 +181,35 @@ describe("gateHost (D-0125 rule 6)", () => {
     }
   });
 
+  test("a lap that put a worker's question is the person's, answered or not (D-0142)", async () => {
+    const w = world([lap("i-1", "g-1")]);
+    const at = { authorKind: "drafter", atMs: 1, bases: [] } as const;
+    w.messages.push(
+      {
+        ...at,
+        messageId: "question-i-1",
+        body: "which?",
+        authorId: "rondo/worker-question/1",
+        inReplyTo: "msg-1",
+        asks: true,
+      },
+      // Carried on: the ask is closed, and the answer goes on by the revise.
+      {
+        ...at,
+        messageId: "answer-1",
+        body: "this one",
+        authorKind: "operator",
+        authorId: "ada",
+        inReplyTo: "question-i-1",
+        asks: false,
+        answerOutcome: "carry_on",
+      },
+    );
+    await pass(w);
+    expect(w.claims.size).toBe(0);
+    expect(w.answered).toEqual([]);
+  });
+
   test("two lines in flight, and two hosts, answer each gate once", async () => {
     const w = world([lap("i-1", "g-1"), lap("i-2", "g-2")]);
     const a = host(w);

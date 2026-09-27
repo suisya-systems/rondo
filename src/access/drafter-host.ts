@@ -30,6 +30,7 @@ import {
   type ProposalDraft,
   requestsGoal,
   type ThreadMessageDraft,
+  WORKER_QUESTION_AUTHOR,
 } from "../store/records.js";
 import type { AdvisoryRecord } from "../store/sqlite.js";
 import { hostFailure } from "./host-failure.js";
@@ -234,7 +235,7 @@ async function scan(
   for (const m of read.messages) {
     // The flow host's opener is due as a person's message is (rondo#469): a
     // goal scope a person approved stands behind it (D-0128 rule 5).
-    if (!asksForWork(m)) {
+    if (!asksForWork(m) || answersWorkerQuestion(m, read.messages)) {
       continue;
     }
     const root = rootOf(m.messageId);
@@ -263,6 +264,24 @@ async function scan(
     }
   }
   return { due, past: [...past].filter((root) => !uncovered.has(root)).length };
+}
+
+/**
+ * Whether `m` is the person's answer to a worker's question (D-0142): its
+ * words go to the next lap by the revise its press makes (D-0098 rule 4.5), so
+ * drafting them as well would start the same work twice. It is still in the
+ * thread a later run reads.
+ */
+function answersWorkerQuestion(
+  m: ThreadMessageDraft,
+  messages: readonly ThreadMessageDraft[],
+): boolean {
+  return (
+    m.answerOutcome !== undefined &&
+    messages.some(
+      (asked) => asked.messageId === m.inReplyTo && asked.authorId === WORKER_QUESTION_AUTHOR,
+    )
+  );
 }
 
 /**

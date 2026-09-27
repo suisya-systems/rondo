@@ -262,6 +262,8 @@ export const JA: Chrome = Object.freeze({
     "書いたとおりに送られます。「続ける」は仕事をもう一度試させ、「この線を止める」は止めたままにします。" +
     "あとから「続ける」こともできます。",
   answerRaiseAction: "予算を増やして続ける",
+  answerReviseNote: "「続ける」を押すと、この回答を持たせて次の試行をすぐに始めます。",
+  answerReviseDraftLead: "次の試行には、次の変更依頼も一緒に渡します:",
   answerRaiseLabel: "これからの予算（USD）",
   answerRaiseRoundsLabel: "この線のレビュー回数",
   answerRaiseLeft: (left, reserve, enough) =>
@@ -528,9 +530,16 @@ export const JA: Chrome = Object.freeze({
   lapTurnTimedOut: (minutes) =>
     `時間切れで止まりました。作業する側が${minutes === null ? "決められた時間" : ` ${String(minutes)} 分`}` +
     "のうちに作業を終えられなかったため、途中で止めています。それまでの変更は作業場所に残っていますが、" +
-    "コミットされていない変更は届けられず、次の試行にも引き継がれません。この回にかかった費用は報告" +
+    "コミットされていない変更は届けられません。この回にかかった費用は報告" +
     "されなかったため分かりません。続けるには、もう一度始めるか、作業を小さく分けて範囲を決め直して" +
     "ください。",
+  lapWorkKept: (branch, commit) =>
+    "コミットされていなかった変更は、rondo が未検証の印を付けて、この作業のブランチに 1 つの" +
+    `コミットとして残しました（${branch}、${commit.slice(0, 12)}）。届けてはいません。この作業を` +
+    "やり直すときはそれを取り込み、まずその中身を確かめます。",
+  lapWorkNotKept: (reason) =>
+    "コミットされていなかった変更を rondo は残せませんでした。変更は作業場所にだけあり、やり直しは" +
+    `そこから始まりません: ${reason}`,
 
   scopeAction: "範囲を決める",
   scopeHeading: "この依頼の範囲",
