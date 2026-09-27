@@ -235,3 +235,16 @@ test("a person's carry on starts a lost lap again", async () => {
   await pass(ports);
   expect(restarted).toEqual(["lap-2"]);
 });
+
+test("a pass cut short after the end is finished by the next: the lost row is asked about", async () => {
+  const w = await world(true);
+  w.lap("lap-2", null);
+  // Ended by an earlier pass that stopped before it asked anything.
+  expect(await endLost({ store: w.store, now: () => 20 }, "lap-2", "gone")).toBe("failed");
+  expect((await messages(w)).map((m) => m.messageId)).not.toContain(lostAskId("lap-2"));
+  await pass(portsOf(w));
+  expect((await messages(w)).map((m) => m.messageId)).toContain(lostAskId("lap-2"));
+  // Asked once, not a second time on the next pass.
+  await pass(portsOf(w));
+  expect((await messages(w)).filter((m) => m.messageId === lostAskId("lap-2"))).toHaveLength(1);
+});

@@ -6083,7 +6083,7 @@ export async function restartLostFromPage(
       requestMessageId: lost.requestMessageId,
       closing: false,
     },
-  ).then((outcome): Started => {
+  ).then(async (outcome): Promise<Started> => {
     if (outcome.kind === "refused") {
       return {
         ok: false,
@@ -6098,7 +6098,21 @@ export async function restartLostFromPage(
         note: `nothing was admitted; the admission stopped with status ${String(outcome.status)}`,
       };
     }
-    sayReport(outcome.report);
+    const report = outcome.report;
+    sayReport(report);
+    // A reservation refused (a line holds the paths, the host is full) admits nothing.
+    if (report.iterationId === null) {
+      return { ok: false, why: "startRefusedNotAdmitted", note: report.lines.join("\n") };
+    }
+    // The gate-opening review, as every other admission takes it.
+    if (report.status === "awaiting_human") {
+      await sayGateOpen(() =>
+        takeModelReading(
+          modelReviewPorts(startup.continuo, store, ports.thread ?? null),
+          report.iterationId ?? successorId,
+        ),
+      );
+    }
     return { ok: true, note: `iteration '${successorId}' ran` };
   });
   return await answerOnceReserved(

@@ -114,7 +114,7 @@ export function lostLapHost(ports: LostLapPorts): LostLapHost {
       again = false;
       try {
         await endTheLost(ports);
-        await startTheCarriedOn(ports, said);
+        await settleTheLost(ports, said);
       } catch (error) {
         ports.log(`lost     ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -163,36 +163,7 @@ async function endTheLost(ports: LostLapPorts): Promise<void> {
     ports.log(`lost     lap '${lap.iterationId}' was lost: ${reason}`);
     if (status !== "failed") {
       ports.log(`lost     lap '${lap.iterationId}' was not ended; it is '${String(status)}'`);
-      continue;
     }
-    const ended = await ports.store.read(lap.iterationId);
-    if (ended.kind !== "read") {
-      continue;
-    }
-    const started =
-      ports.restart !== null &&
-      (await firstLoss(ports, ended.record)) &&
-      (await ports.byItself(ended.record))
-        ? await ports.restart(ended.record)
-        : null;
-    if (started?.ok === true) {
-      ports.log(`lost     lap '${lap.iterationId}' was started again by itself: ${started.note}`);
-      await tell(
-        ports,
-        ended.record,
-        `report-lost-${lap.iterationId}`,
-        false,
-        [
-          `Lap '${lap.iterationId}' was lost: ${reason}.`,
-          `rondo started it again by itself as '${againId(lap.iterationId)}' (D-0139).`,
-        ].join(" "),
-      );
-      continue;
-    }
-    if (started !== null) {
-      ports.log(`lost     lap '${lap.iterationId}' was not started again: ${started.note}`);
-    }
-    await tell(ports, ended.record, lostAskId(lap.iterationId), true, ports.words.lapLostAsk);
   }
 }
 
@@ -205,11 +176,14 @@ async function firstLoss(ports: LostLapPorts, lap: IterationRecord): Promise<boo
   return before.kind !== "read" || before.record.failureKind !== "lost";
 }
 
-/** A lost lap whose stop a person answered *carry on*, started again once (D-0139 rule 3). */
-async function startTheCarriedOn(ports: LostLapPorts, said: Set<string>): Promise<void> {
-  if (ports.restart === null) {
-    return;
-  }
+/**
+ * Every lost lap not started again yet (D-0139 rule 3), read from the rows
+ * rather than remembered, so a pass cut short -- the host stopped between the
+ * end and the ask -- is finished by the next: started again by itself where it
+ * may be and has not been asked about, else asked, and on the person's *carry
+ * on* started again.
+ */
+async function settleTheLost(ports: LostLapPorts, said: Set<string>): Promise<void> {
   const lost = (await ports.store.terminalIterations()).flatMap((one) =>
     one.kind === "read" && one.record.failureKind === "lost" ? [one.record] : [],
   );
@@ -218,16 +192,44 @@ async function startTheCarriedOn(ports: LostLapPorts, said: Set<string>): Promis
   }
   const read = await ports.record.threadMessages();
   if (read.kind !== "read") {
+    ports.log(`lost     the threads did not read: ${read.reason}`);
     return;
   }
   for (const lap of lost) {
+    if ((await ports.store.read(againId(lap.id))).kind === "read") {
+      continue;
+    }
+    const asked = read.messages.some((message) => message.messageId === lostAskId(lap.id));
+    if (!asked) {
+      const started =
+        ports.restart !== null && (await firstLoss(ports, lap)) && (await ports.byItself(lap))
+          ? await ports.restart(lap)
+          : null;
+      if (started?.ok === true) {
+        ports.log(`lost     lap '${lap.id}' was started again by itself: ${started.note}`);
+        await tell(
+          ports,
+          lap,
+          `report-lost-${lap.id}`,
+          false,
+          `Lap '${lap.id}' was lost: ${String(lap.reason)}. rondo started it again by itself ` +
+            `as '${againId(lap.id)}' (D-0139).`,
+        );
+        continue;
+      }
+      if (started !== null) {
+        ports.log(`lost     lap '${lap.id}' was not started again: ${started.note}`);
+      }
+      await tell(ports, lap, lostAskId(lap.id), true, ports.words.lapLostAsk);
+      continue;
+    }
     const carriedOn = read.messages.some(
       (message) =>
         message.inReplyTo === lostAskId(lap.id) &&
         message.authorKind === "operator" &&
         message.answerOutcome === "carry_on",
     );
-    if (!carriedOn || (await ports.store.read(againId(lap.id))).kind === "read") {
+    if (!carriedOn || ports.restart === null) {
       continue;
     }
     const started = await ports.restart(lap);
