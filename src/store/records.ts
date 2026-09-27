@@ -1553,6 +1553,12 @@ export interface LaneClaimAsk {
   readonly authorId: string;
   /** D-0032 rule 2 bases, stored verbatim beside the paths. */
   readonly bases: readonly JsonValue[];
+  /**
+   * Why the paths are this wide, in the drafter's words for the person
+   * (rondo#509): a claim naming a directory or `/` says what it could not
+   * narrow. Absent or null says nothing.
+   */
+  readonly why?: string | null;
 }
 
 /** One open line an admission's claim overlaps, and the asked paths it shares (D-0073 rule 3.1). */

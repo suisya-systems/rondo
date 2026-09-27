@@ -754,6 +754,11 @@ export interface LedgerLine {
   readonly claimId: string | null;
   /** What it holds now; empty once released. */
   readonly paths: readonly string[];
+  /**
+   * Why its drafter asked for paths this wide (rondo#509), or null when it said
+   * nothing: a claim of files, a claim written by rule, or one from before.
+   */
+  readonly why: string | null;
   /** Every lap of the line, root first. */
   readonly lapIds: readonly string[];
   /** Some lap has not ended: it holds its paths whatever its diff says (rule 10). */
@@ -1655,6 +1660,7 @@ CREATE TABLE IF NOT EXISTS lane_claim (
   author_id                   TEXT    NOT NULL,
   bases                       TEXT    NOT NULL,
   created_at_ms               INTEGER NOT NULL,
+  why                         TEXT,
   CHECK (author_kind IN ('operator', 'drafter'))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS lane_claim_one_root
@@ -1978,6 +1984,8 @@ function migrate(connection: DatabaseSync): void {
     addMissingColumns(connection, "lap_reading", LAP_READING_ADDED_COLUMNS);
     addMissingColumns(connection, "conversation_message", CONVERSATION_ADDED_COLUMNS);
     addMissingColumns(connection, "admission_refusal", { holders: "TEXT" });
+    // rondo#509: nullable, no back-fill -- no claim before it said why.
+    addMissingColumns(connection, "lane_claim", { why: "TEXT" });
     addFlowWords(connection);
     connection.exec("DROP INDEX IF EXISTS iteration_one_live");
     connection.exec("COMMIT");
@@ -6848,6 +6856,7 @@ interface ClaimRow {
   readonly repository: string;
   readonly paths: readonly string[];
   readonly supersedesClaimId: string | null;
+  readonly why: string | null;
 }
 
 /** A claim row to write. */
@@ -6859,9 +6868,11 @@ interface ClaimWrite {
   readonly authorKind: "operator" | "drafter";
   readonly authorId: string;
   readonly bases: readonly JsonValue[];
+  /** Why the paths are as wide as they are (rondo#509); absent says nothing. */
+  readonly why?: string | null;
 }
 
-const CLAIM_COLUMNS = "claim_id, lineage_id, repository, paths, supersedes_claim_id";
+const CLAIM_COLUMNS = "claim_id, lineage_id, repository, paths, supersedes_claim_id, why";
 
 function toClaimRow(row: SqlRow): ClaimRow {
   const paths: unknown = JSON.parse(requireText(row, "paths", "lane_claim"));
@@ -6875,6 +6886,7 @@ function toClaimRow(row: SqlRow): ClaimRow {
     repository: requireText(row, "repository", "lane_claim"),
     paths,
     supersedesClaimId: supersedes === null ? null : String(supersedes),
+    why: row["why"] === null ? null : String(row["why"]),
   };
 }
 
@@ -6934,7 +6946,7 @@ function insertClaim(connection: DatabaseSync, write: ClaimWrite, nowMs: number)
   connection
     .prepare(
       "INSERT INTO lane_claim (claim_id, lineage_id, repository, paths, supersedes_claim_id, " +
-        "author_kind, author_id, bases, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "author_kind, author_id, bases, created_at_ms, why) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .run(
       `${write.lineageId}:${String(count + 1)}`,
@@ -6946,6 +6958,7 @@ function insertClaim(connection: DatabaseSync, write: ClaimWrite, nowMs: number)
       write.authorId,
       canonicalJson([...write.bases]),
       nowMs,
+      write.why ?? null,
     );
 }
 
@@ -7248,6 +7261,7 @@ function ledgerLines(connection: DatabaseSync): readonly LedgerLine[] {
       repository: head.repository,
       claimId: head.claimId,
       paths: head.paths,
+      why: head.why,
       lapIds: laps.map((lap) => lap.id),
       inFlight: shape.inFlight,
       closedTips: shape.closedTips,
@@ -7269,6 +7283,7 @@ function ledgerLines(connection: DatabaseSync): readonly LedgerLine[] {
         repository: tree.repository,
         claimId: null,
         paths: [WHOLE_REPOSITORY],
+        why: null,
         lapIds: tree.laps.map((lap) => lap.id),
         inFlight: true,
         closedTips: shape.closedTips,
@@ -7326,6 +7341,7 @@ function laneAdmission(connection: DatabaseSync, input: ReserveInput): LaneAdmis
             authorKind: input.claim.authorKind,
             authorId: input.claim.authorId,
             bases: input.claim.bases,
+            why: input.claim.why ?? null,
           };
   } else {
     if (input.claim !== null) {
@@ -7361,13 +7377,16 @@ function laneAdmission(connection: DatabaseSync, input: ReserveInput): LaneAdmis
       given = row === undefined ? undefined : toClaimRow(row);
       from = given === undefined || given.paths.length > 0 ? null : given.supersedesClaimId;
     }
+    const taken = given === undefined || given.paths.length === 0 ? null : given;
     write = {
       lineageId,
       repository,
-      paths: given === undefined || given.paths.length === 0 ? [WHOLE_REPOSITORY] : given.paths,
+      paths: taken === null ? [WHOLE_REPOSITORY] : taken.paths,
       supersedesClaimId: head === null ? null : head.claimId,
       ...byRule,
       bases,
+      // The paths taken back keep the words that said why they were asked.
+      why: taken === null ? null : taken.why,
     };
   }
   const holders = openLines(connection, repository, write.lineageId).flatMap((line) => {

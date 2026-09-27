@@ -14,6 +14,7 @@ import {
   type DrafterMaterial,
   type DraftOutcome,
   drafterDocument,
+  drafterListing,
   draftOf,
   modelDrafterName,
   prepareDraft,
@@ -132,7 +133,7 @@ function refusal(answer: unknown, material: DrafterMaterial = MATERIAL): string 
 }
 
 test("the row name counts the drafter's instructions and names the table's model (D-0071 rule 1.4)", () => {
-  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/8/claude-opus-5");
+  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/9/claude-opus-5");
 });
 
 test("the document carries the thread, the templates, the agent types and the measurements, and never a ceiling", () => {
@@ -169,7 +170,7 @@ test("the language the host's operator reads is asked for by its tag, prompts in
   // gate, so with a language set it is in that language rather than the
   // template's; with none set, the template's language stands.
   const asked = drafterDocument({ ...MATERIAL, language: "ja" });
-  expect(asked).toContain("the question and each prompt in the language tagged 'ja'");
+  expect(asked).toContain("each prompt and each claim_why in the language tagged 'ja'");
   expect(asked).toContain("do not\ncompose in English and translate");
   expect(asked).not.toContain("its template's prompt is written in");
   expect(drafterDocument(MATERIAL)).toContain("its template's prompt is written in");
@@ -586,8 +587,60 @@ test("a plan's claim is kept as the store would write it: deduplicated and sorte
   expect(outcome.split?.plans[0]?.claim).toEqual(["README.md", "src/store/"]);
   // The document tells the drafter what a claim is, and asks for one per plan.
   const document = drafterDocument(MATERIAL);
-  expect(document).toContain('"claim": ["src/store/", "README.md"]');
-  expect(document).toContain("Claim the files and directories the work touches");
+  expect(document).toContain('"claim": ["src/store/lanes.ts", "README.md"]');
+  expect(document).toContain("Claim the files the work will edit");
+});
+
+test("a claim naming a directory keeps the drafter's words for why, and a why that is no words is refused (rondo#509)", () => {
+  const plan = { ...SPLIT.plans[0], claim: ["src/access/"] };
+  const why = "the change reaches every screen under it";
+  const outcome = drafted(
+    draftOf(MATERIAL, answered({ ...SPLIT, plans: [{ ...plan, claim_why: why }] })),
+  );
+  expect(outcome.split?.plans[0]?.claim_why).toBe(why);
+  // Asked for, not required: without it the claim still stands.
+  expect(
+    drafted(draftOf(MATERIAL, answered({ ...SPLIT, plans: [plan] }))).split?.plans[0],
+  ).not.toHaveProperty("claim_why");
+  const refused = draftOf(MATERIAL, answered({ ...SPLIT, plans: [{ ...plan, claim_why: " " }] }));
+  expect(refused.kind === "unavailable" && refused.reason).toContain("claim_why");
+  const document = drafterDocument(MATERIAL);
+  expect(document).toContain('"claim_why"');
+  expect(document).toContain("Do not claim a whole top-level directory");
+});
+
+test("the listing goes deeper under a directory the words name, and keeps within its bytes (rondo#509)", () => {
+  // Lap 18 at two levels: every change to src/access/ could only claim it whole.
+  const small = [
+    "README.md",
+    "src/",
+    "src/access/",
+    "src/access/screens/",
+    "src/access/screens/scope.tsx",
+  ];
+  expect(drafterListing(small, [])).toEqual([...small].sort());
+  // A tree past the bytes: 3000 files three levels down under each of a/ and b/.
+  const big = ["a/", "b/"];
+  for (const top of ["a", "b"]) {
+    for (let i = 0; i < 30; i++) {
+      big.push(`${top}/d${String(i)}/`);
+      for (let j = 0; j < 50; j++) {
+        big.push(`${top}/d${String(i)}/file-${String(j)}.ts`);
+      }
+    }
+  }
+  const plain = drafterListing(big, []);
+  expect(plain).toContain("a/d7/");
+  expect(plain).not.toContain("a/d7/file-3.ts");
+  // Named as a directory, or through a file in it: listed to its files.
+  for (const words of [["Fix `a/d7/` please."], ["see ./a/d7/file-3.ts, line 4"]]) {
+    const named = drafterListing(big, words);
+    expect(named).toContain("a/d7/file-3.ts");
+    expect(named).not.toContain("a/d8/file-3.ts");
+  }
+  // Tokens naming nothing tracked change nothing.
+  expect(drafterListing(big, ["and/or https://github.com/a/d7"])).toEqual(plain);
+  expect(plain.join("\n").length).toBeLessThanOrEqual(16_000);
 });
 
 test("one narrowing wins per field, and only the winner is cited: the scope's bases support the value it carries", () => {
@@ -758,7 +811,7 @@ test("the drafter claims from the repository's paths, and '/' only for work acro
   const document = drafterDocument(MATERIAL);
   expect(document).toContain("REPOSITORY PATHS");
   expect(document).toContain("--- /srv/repo at main\nREADME.md\nsrc/\nsrc/store/");
-  expect(document).toContain("Claim '/' only when the work really spans the whole repository.");
+  expect(document).toContain("claim '/' only when the work really\n  spans the whole repository");
   expect(document).not.toContain("When nothing narrows it, claim '/'.");
   expect(
     drafterDocument({

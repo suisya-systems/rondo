@@ -332,7 +332,8 @@ test("an approved drafted scope offers each plan its own start, and says so wher
     plan: planPayload(admitted.plan),
     spend: null,
     scopeSpend: null,
-    claim: ownLane("lap-plan-0"),
+    // With the words its drafter gave for claiming so wide (rondo#509).
+    claim: { ...ownLane("lap-plan-0"), why: "it renames a word used everywhere" },
     nowMs: 3_000,
     supersedesIterationId: null,
     requestMessageId: "r1",
@@ -350,6 +351,9 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   expect(once).not.toContain("#lap-");
   expect(once.replaceAll("&#39;", "'")).toContain(EN.planHeld(["/"]));
   expect(once).toContain(EN.planHeldBy);
+  expect(once).toContain(
+    EN.planHeldWhy(ownLane("lap-plan-0").paths, "it renames a word used everywhere"),
+  );
   expect(once).toContain("Two things, please.");
   expect(once).not.toContain(EN.planHeldTry);
   expect(once).not.toContain("?release=");

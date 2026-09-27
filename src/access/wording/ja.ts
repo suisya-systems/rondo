@@ -951,6 +951,7 @@ export const JA: Chrome = Object.freeze({
     `まだ始められません。終わった作業が ${filesJa(paths)} を押さえたままです。その作業の` +
     "プルリクエストがまだ作られていないためです。作られるか、ファイルが手放されれば始められます。",
   planHeldBy: "押さえている作業",
+  planHeldWhy: (paths, why) => `${filesJa(paths)} をまとめて押さえている理由: ${why}`,
   planHeldTry:
     "その作業は終わっています。開始するときに、まずその変更が既定ブランチに入っているかを確かめます。",
   startRefusedHeld:

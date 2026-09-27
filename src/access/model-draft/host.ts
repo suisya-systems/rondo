@@ -43,6 +43,7 @@ import {
   type DrafterRun,
   type DraftOutcome,
   type DraftTemplate,
+  drafterListing,
   draftOf,
   isModelDrafterName,
   modelDrafterName,
@@ -318,21 +319,6 @@ export async function gatherDrafterMaterial(
     }
   }
 
-  // **The paths a claim is drawn from** (D-0136, rondo#496): each offered
-  // repository at the branch its laps start from, read once per pair.
-  const listPaths = ports.listPaths;
-  const listings = new Map<string, { readonly repository: string; readonly ref: string }>();
-  for (const template of offered) {
-    const planned = readRunPlan(template.plan);
-    if (listPaths !== undefined && planned.kind === "planned") {
-      const { repository, baseBranch: ref } = planned.plan;
-      listings.set(`${repository}\0${ref}`, { repository, ref });
-    }
-  }
-  const repositoryPaths = await Promise.all(
-    [...listings.values()].map(async (at) => ({ ...at, paths: (await listPaths?.(at)) ?? null })),
-  );
-
   const laps = [];
   for (const record of records
     .filter((r) => r.requestMessageId === requestMessageId)
@@ -352,6 +338,27 @@ export async function gatherDrafterMaterial(
       })),
     });
   }
+
+  // **The paths a claim is drawn from** (D-0136, rondo#496): each offered
+  // repository at the branch its laps start from, read once per pair.
+  const listPaths = ports.listPaths;
+  const listings = new Map<string, { readonly repository: string; readonly ref: string }>();
+  for (const template of offered) {
+    const planned = readRunPlan(template.plan);
+    if (listPaths !== undefined && planned.kind === "planned") {
+      const { repository, baseBranch: ref } = planned.plan;
+      listings.set(`${repository}\0${ref}`, { repository, ref });
+    }
+  }
+  // Deeper where the thread, an issue it read or a lap's prompt names a
+  // directory (rondo#509), within the listing's bytes.
+  const named = [...thread.map((m) => m.body), ...laps.flatMap((lap) => lap.prompt ?? [])];
+  const repositoryPaths = await Promise.all(
+    [...listings.values()].map(async (at) => {
+      const paths = (await listPaths?.(at)) ?? null;
+      return { ...at, paths: paths === null ? null : drafterListing(paths, named) };
+    }),
+  );
 
   return {
     requestMessageId,
@@ -770,6 +777,7 @@ export async function draftedPlanRun(
             authorKind: "drafter",
             authorId: proposal.drafter,
             bases: [{ form: "proposal", proposalId }, ...split.bases],
+            why: split.claim_why ?? null,
           },
   };
 }

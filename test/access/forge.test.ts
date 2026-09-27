@@ -945,7 +945,7 @@ posix("a Claude reviewer row runs claude -p over the document with no tools (D-0
   expect(refused.kind).toBe("failed");
 });
 
-test("a drafter's path listing is the base branch's tree, two levels deep, directories ending in '/' (D-0136)", async () => {
+test("a drafter's path listing is the base branch's whole tree, directories ending in '/' (D-0136, rondo#509)", async () => {
   const work = mkdtempSync(join(tmpdir(), "rondo-paths-"));
   git(work, "init", work);
   mkdirSync(join(work, "src", "store"), { recursive: true });
@@ -964,6 +964,7 @@ test("a drafter's path listing is the base branch's tree, two levels deep, direc
     "src/",
     "src/index.ts",
     "src/store/",
+    "src/store/lanes.ts",
   ]);
   expect(await readRepositoryPaths({ repository: work, ref: "no-such-branch" })).toBeNull();
 });
