@@ -1294,6 +1294,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/framing.ts": [SPLITTING, "Reviewer"],
   // D-0125: whether the readings would let a gate be approved without the person.
   "src/access/gate-auto.ts": ["Reviewer"],
+  // D-0125 rule 6: the organisation's answer on that reading, recorded as delegated.
+  "src/access/gate-host.ts": ["Reviewer"],
   "src/access/host-failure.ts": [HUMAN],
   "src/access/inbox.ts": [DIALOGUE],
   "src/access/issue-read.ts": [SPLITTING],

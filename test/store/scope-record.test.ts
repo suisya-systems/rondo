@@ -753,12 +753,17 @@ test("the approval a lap was admitted under is read back off its admission row (
 test("D-0126: a merge on green is claimed once per lap, whichever approval claims it", async () => {
   const { connection, record } = await approved();
   admitted(connection, "i-a", null);
-  const claim = { scopeDecisionId: "sd-0001", iterationId: "i-a", nowMs: 9 };
-  expect(await record.claimScopedMerge(claim)).toEqual({ kind: "recorded" });
+  const claim = {
+    actKind: "merge_default_branch",
+    scopeDecisionId: "sd-0001",
+    subjectId: "i-a",
+    nowMs: 9,
+  } as const;
+  expect(await record.claimScopedAct(claim)).toEqual({ kind: "recorded" });
   // The second attempt is refused, and so is a successor approval's: the key
   // alone would take it, so the writer asks after the lap and not the pair.
-  expect((await record.claimScopedMerge(claim)).kind).toBe("refused");
-  expect((await record.claimScopedMerge({ ...claim, scopeDecisionId: "sd-0002" })).kind).toBe(
+  expect((await record.claimScopedAct(claim)).kind).toBe("refused");
+  expect((await record.claimScopedAct({ ...claim, scopeDecisionId: "sd-0002" })).kind).toBe(
     "refused",
   );
   expect(
@@ -778,9 +783,29 @@ test("D-0126: a merge on green is claimed once per lap, whichever approval claim
   expect((await record.scopeSpent("sd-0001")).admissions).toBe(1);
   expect(await record.scopeDecisionAdmitting("i-a")).toBe("sd-0001");
   // Another lap is claimed on its own.
-  expect(
-    await record.claimScopedMerge({ scopeDecisionId: "sd-0001", iterationId: "i-b", nowMs: 9 }),
-  ).toEqual({ kind: "recorded" });
+  expect(await record.claimScopedAct({ ...claim, subjectId: "i-b" })).toEqual({ kind: "recorded" });
+});
+
+test("D-0125 rule 5: a gate answer is claimed once per gate, and spends no lap", async () => {
+  const { connection, record } = await approved();
+  admitted(connection, "i-a", null);
+  const claim = {
+    actKind: "gate_answer",
+    scopeDecisionId: "sd-0001",
+    subjectId: "g-1",
+    nowMs: 9,
+  } as const;
+  expect(await record.claimScopedAct(claim)).toEqual({ kind: "recorded" });
+  // Two lines in flight, or a successor approval, still answer a gate once.
+  expect((await record.claimScopedAct(claim)).kind).toBe("refused");
+  expect((await record.claimScopedAct({ ...claim, scopeDecisionId: "sd-0002" })).kind).toBe(
+    "refused",
+  );
+  // A merge claim on the same subject id is its own act.
+  expect((await record.claimScopedAct({ ...claim, actKind: "merge_default_branch" })).kind).toBe(
+    "recorded",
+  );
+  expect((await record.scopeSpent("sd-0001")).admissions).toBe(1);
 });
 
 // --- The spend inside reserve() (D-0066 rule 4.3) ---------------------------

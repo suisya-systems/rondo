@@ -113,7 +113,8 @@ import {
 import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
 import { draftedStanding } from "./drafted-view.js";
 import type { LapWorkInspection } from "./forge.js";
-import { type GateAuto, type GateScope, gateAuto } from "./gate-auto.js";
+import { type GateAuto, gateAuto } from "./gate-auto.js";
+import { gateScope } from "./gate-host.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
 import { type IssueComment, parseForgeRead } from "./issue-read.js";
 import { isModelDrafterName } from "./model-draft/judgement.js";
@@ -1723,23 +1724,6 @@ interface BudgetClosed {
   readonly spent: ScopeSpent;
 }
 
-/** The approval a lap spends, as {@link gateAuto} reads it, or null where it will not read. */
-async function gateScope(ports: WebPorts, scopeDecisionId: string): Promise<GateScope | null> {
-  const decided = await ports.record.readScopeDecision(scopeDecisionId);
-  if (decided.kind !== "read") {
-    return null;
-  }
-  const stored = await ports.record.readScope(decided.decision.scopeId);
-  if (stored.kind !== "read") {
-    return null;
-  }
-  return {
-    outcome: decided.decision.outcome,
-    payload: stored.scope.payload,
-    supersededByApproved: await ports.record.scopeSupersededByApproved(decided.decision.scopeId),
-  };
-}
-
 /** Whether one approval's budgets would refuse one more attempt now, and which. */
 async function budgetClosing(
   ports: WebPorts,
@@ -1833,7 +1817,7 @@ async function shownBeforePress(
         runs: workerRuns(record.lapCommands),
         questionOpen: questionOpen !== null,
         closing: (await ports.store.closingLapOf(record.id)) !== null,
-        scope: tip.kind === "tip" ? await gateScope(ports, tip.scopeDecisionId) : null,
+        scope: tip.kind === "tip" ? await gateScope(ports.record, tip.scopeDecisionId) : null,
         nowMs: ports.now(),
       }),
     });

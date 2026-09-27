@@ -6,8 +6,9 @@
  * lap's readings, the worker's last test run, the question over the line, the
  * closing-lap mark and the approval the lap spends -- and says *would approve*
  * or *would not approve* with every reason that holds. No gate is answered
- * from here: the organisation's answer waits on continuo#240's delegated
- * actor (D-0064 rule 3.6), and until then this is one line on the gate card.
+ * from here: it is one line on the gate card, and the resident host's gate
+ * pass (`gate-host.ts`, rondo#467) answers on *would approve*, recorded as
+ * delegated (D-0064 rule 3.6, continuo#240).
  *
  * The caller asks only of a lap at `awaiting_human`; the status is not
  * re-tested here.

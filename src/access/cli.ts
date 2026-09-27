@@ -33,6 +33,7 @@ import {
   answerGate,
   closeRun,
   deliverGate,
+  type GateDelegation,
   presentGate,
   showGate,
   showRun,
@@ -41,6 +42,7 @@ import {
 } from "../continuo/invoker.js";
 import {
   type ContinuoResult,
+  type GateAnswered,
   type GateDetail,
   isNestedSandboxRefusal,
   type ObservedSession,
@@ -168,6 +170,7 @@ import {
   runDrafter,
 } from "./forge.js";
 import { forgeHost, publishPreflight, redactRemoteUrl } from "./forge-preflight.js";
+import { GATE_ACTOR, gateHost, type ScopedAnswer } from "./gate-host.js";
 import { hostFailure } from "./host-failure.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
 import {
@@ -222,6 +225,7 @@ import {
   scopeCovers,
 } from "./scope.js";
 import { triageHost } from "./triage-host.js";
+import { APPROVE_BODY } from "./web.js";
 import {
   type AddedRepository,
   type AddRepositoryInput,
@@ -776,9 +780,15 @@ export interface WalkRequest {
    * A function rather than the store because the walk knows *when* and only
    * its caller knows *which* -- the verb the person used, never the text: the
    * approve press and `rondo answer` record `approve`, the revise press and
-   * `rondo revise` record `revise`.
+   * `rondo revise` record `revise`. It is handed what continuo recorded, so
+   * the organisation's answer records only where its delegated answer went in.
    */
-  readonly recordAnswer: () => Promise<void>;
+  readonly recordAnswer: (answered: GateAnswered) => Promise<void>;
+  /**
+   * The organisation's answer under a scope (D-0125, `gate-host.ts`), recorded
+   * by continuo as delegated. Absent on every person's answer.
+   */
+  readonly delegation?: GateDelegation;
 }
 
 /**
@@ -885,6 +895,7 @@ export async function walkGate(
     gateId: request.gateId,
     body: request.body,
     actorId: request.actorId,
+    delegation: request.delegation ?? null,
   });
   if (answered.kind !== "answered") {
     return { kind: "failed", status: relayFailure("gate answer", answered) };
@@ -901,7 +912,7 @@ export async function walkGate(
   // the walk: the answer is already spent, and a lap with no record is one the
   // page says it cannot tell -- never one it calls approved.
   try {
-    await request.recordAnswer();
+    await request.recordAnswer(answered.payload);
   } catch (error) {
     say(
       `  rondo could not record which answer this was, so the page will say it has no record ` +
@@ -946,12 +957,29 @@ async function deliverOnce(
   runId: string | null,
   verbs: GateVerbs,
 ): Promise<number | null> {
-  const delivered = await verbs.deliver(continuo, {
-    db: request.db,
-    destinationDir: request.destinationDir,
-    holder: request.holder,
-    runId,
-  });
+  const deliver = async () =>
+    await verbs.deliver(continuo, {
+      db: request.db,
+      destinationDir: request.destinationDir,
+      holder: request.holder,
+      runId,
+    });
+  let delivered = await deliver();
+  // **The lap's own delivery lease outlives its turn by up to a second**
+  // (measured 2026-09-27, rondo#467: `LeaseHeld` on epoch 1 until ~0.8 s
+  // after `lap perform` returned). A walk started right after a lap -- the
+  // organisation's answer, or a quick press -- waits it out rather than
+  // failing; a drain is idempotent, so trying again sends nothing twice.
+  // ponytail: a fixed 250 ms poll for at most 5 s; read the lease's own
+  // expiry if continuo ever reports it as a field.
+  for (
+    let tries = 0;
+    tries < 20 && delivered.kind === "refused" && delivered.errorClass === "LeaseHeld";
+    tries += 1
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    delivered = await deliver();
+  }
   if (delivered.kind !== "answered") {
     return relayFailure("gate deliver", delivered);
   }
@@ -1608,6 +1636,18 @@ export async function main(
             now: Date.now,
             log: say,
           });
+    // **And the organisation's answer at a gate** (D-0125 rule 6, rondo#467):
+    // a lap whose gate would be approved automatically is approved under its
+    // scope, on the tick and right after a model reading lands here.
+    const gates = gateHost({
+      store,
+      record,
+      answer: async (lap, delegation) =>
+        await answerUnderScope(environment, store, opened.path, lap, delegation),
+      now: Date.now,
+      log: say,
+    });
+    afterGateReading = gates.kick;
     /**
      * **Reaching a person who is not looking at the page** (rondo#311), on the
      * same minute the rescan already runs on.
@@ -1640,6 +1680,7 @@ export async function main(
         checks.kick();
         triage.kick();
         order?.kick();
+        gates.kick();
         // **Reaching starts a minute in, and not in the burst above.** The
         // person who has just started rondo is looking at it this second, and
         // what was already waiting when the host was last stopped is on the
@@ -1652,6 +1693,7 @@ export async function main(
           checks.kick();
           triage.kick();
           order?.kick();
+          gates.kick();
           // **Order on the tick buys nothing, and nothing here depends on
           // it**: every kick above returns before its own pass finishes, so
           // this reads what is committed when it runs and not what the same
@@ -3332,7 +3374,18 @@ export async function sayGateOpen(take: (() => Promise<readonly string[]>) | nul
   for (const line of await take()) {
     say(line);
   }
+  afterGateReading?.();
 }
+
+/**
+ * The resident host's gate pass, kicked right after a model reading lands in
+ * this process (rondo#467); null outside `rondo web`, whose one-minute tick
+ * finds a reading another process wrote.
+ *
+ * ponytail: module state rather than a port through the seven callers of
+ * `sayGateOpen`; a port when a second process hosts it.
+ */
+let afterGateReading: (() => void) | null = null;
 
 /** Door two: see what is waiting, and answer it. */
 /**
@@ -4563,6 +4616,91 @@ export async function answerFromPage(
     };
   }
   return { ok: true, note: `iteration '${record.id}' is closed` };
+}
+
+/**
+ * The organisation's answer at one gate (D-0125 rule 6, rondo#467): the
+ * approve press's walk, in {@link GATE_ACTOR}'s name and carrying the
+ * delegation, then `resume` to settle rondo's row. The gate host has already
+ * decided and claimed it; this is the act.
+ *
+ * **Recorded only where continuo holds rondo's delegated answer.** A person
+ * who answered the same gate first keeps it: continuo hands back their answer
+ * (`answered_by`), and rondo records nothing over it and reports no approval.
+ */
+export async function answerUnderScope(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  record: IterationRecord,
+  delegation: GateDelegation,
+): Promise<ScopedAnswer> {
+  if (record.gateId === null) {
+    return { kind: "notDelegated", note: "no gate is open on it" };
+  }
+  const startup = await startContinuo(environment);
+  if (startup.kind === "refused") {
+    return { kind: "notDelegated", note: `continuo is not usable: ${startup.reason}` };
+  }
+  const continuo = startup.continuo;
+  const gateId = record.gateId;
+  let delegated = false;
+  const walked = await walkGate(continuo, {
+    db: planField(record, "db"),
+    gateId,
+    destinationDir: planField(record, "endpoint_destination_dir"),
+    holder: planField(record, "lease_claimant_id"),
+    actorId: GATE_ACTOR,
+    body: APPROVE_BODY,
+    delegation,
+    recordAnswer: async (answered) => {
+      delegated =
+        answered.answeredBy.actorKind === "delegate" && answered.answeredBy.actorId === GATE_ACTOR;
+      if (delegated) {
+        await store.recordGateAnswer(record.id, gateId, "approve", GATE_ACTOR, Date.now());
+      }
+    },
+  });
+  if (walked.kind === "failed") {
+    return {
+      kind: "notDelegated",
+      note: delegated
+        ? "continuo holds rondo's answer and the walk did not finish; the approve press " +
+          "finishes it"
+        : "not approved by rondo, left for the person: the gate walk did not finish, and the " +
+          "lines above have continuo's own diagnosis",
+    };
+  }
+  if (!delegated) {
+    return {
+      kind: "notDelegated",
+      note: "not approved by rondo, left for the person: the gate was already answered or closed",
+    };
+  }
+  const report = await resume(
+    conductorPorts(
+      continuo,
+      store,
+      openAdvisoryRecord(storePath),
+      Date.now,
+      hostWords(environment),
+    ),
+    record.id,
+  );
+  sayReport(report);
+  // **The answer and the row are two facts** (`answerFromPage`'s reason). A
+  // gate rondo answered whose row did not settle is not reported approved;
+  // the approve press settles it, since its walk finds the gate closed and
+  // `resume` runs again.
+  if (report.status !== "closed") {
+    return {
+      kind: "notDelegated",
+      note:
+        `rondo answered the gate and the row is ${report.status ?? "in an unnamed state"} ` +
+        "rather than closed; the approve press settles it",
+    };
+  }
+  return { kind: "delegated" };
 }
 
 /**

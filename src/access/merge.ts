@@ -133,7 +133,7 @@ export interface MergeOnGreenPorts extends MergePorts {
   readonly record: MergePorts["record"] &
     Pick<
       AdvisoryRecord,
-      "scopeDecisionAdmitting" | "scopeTip" | "readScopeDecision" | "readScope" | "claimScopedMerge"
+      "scopeDecisionAdmitting" | "scopeTip" | "readScopeDecision" | "readScope" | "claimScopedAct"
     >;
 }
 
@@ -182,9 +182,10 @@ export async function mergeOnGreen(
               reason: "the scope that allowed the merge no longer does, or has been replaced",
             };
           }
-          return await ports.record.claimScopedMerge({
+          return await ports.record.claimScopedAct({
+            actKind: "merge_default_branch",
             scopeDecisionId: authority.scopeDecisionId,
-            iterationId,
+            subjectId: iterationId,
             nowMs: ports.now(),
           });
         },

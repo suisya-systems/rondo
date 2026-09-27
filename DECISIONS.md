@@ -24827,6 +24827,29 @@ At rondo `a8181d1` on **2026-09-27**, by reading:
 - **continuo#240 landing in a shape that cannot name the scope approval.** Rule 6 then needs a new
   entry.
 
+> **Annotation (2026-09-27, from rondo#467).** Added after this entry was accepted, and additive:
+> rule 6 is carried out, and the second falsifier did not fire. continuo#240 closed with
+> `gate answer --on-behalf-of --authority-ref` (continuo PR #244, `continuo D-1121`), which records
+> the answer under actor kind `delegate`, naming the person and the approval, and answers
+> `answered_by` with whoever the gate's answer is recorded as. It accepts a delegated answer only on
+> a `worker_escalation` gate, which is the gate a lap ends at. The pin moves to continuo `1894e08`.
+> The resident host's gate pass (`src/access/gate-host.ts`) runs on the one-minute tick and right
+> after a model reading lands in that process; for each lap at `awaiting_human` that `gateAuto`
+> answers `would approve`, it claims the `gate_answer` row (subject the gate id, one per gate
+> whichever approval claims it), then walks the gate as `rondo/gate/1` on behalf of the scope
+> decision's approver with that decision id as the authority, records `approve` (`D-0092`) only
+> where continuo's `answered_by` is that delegate, settles the row and writes a thread report naming
+> the scope and the conditions it met. **Rule 5's "in the same transaction as the answer" is read as
+> claim, then act**, as a merge on green is (`D-0126`): the answer is written in continuo's database
+> and the row in rondo's, so no one transaction holds both, and the claim first is what keeps two
+> lines in flight, two passes or two processes from answering a gate twice. A walk that fails after
+> the claim is not tried again, and the gate stays the person's with both presses drawn. Only
+> `approve` is automatic: revise, a review extension, a spent round, a scope exit, a closing lap and
+> publish stay with the person. From this change the moves this entry marks *on the follow-up* take
+> effect: `D-0022` rule 13, `D-0029` rule 6 and `D-0019` rule 7's first reason are superseded for
+> the organisation's answer only, and a gate so answered leaves the person's list (`D-0036` rule 5).
+> Nothing above is edited.
+
 ## D-0126 — Merge on green, opted into per scope: a scope may include `merge_default_branch`, and the checks host then merges a lap of it through the press's own path right after continuo reads the lap's own head green; `D-0064` rule 3.4's merge transition is taken, and `D-0025` rule 6's "never merges" gives way for such a merge
 
 **Status:** accepted (2026-09-27, rondo#465; the owner's decision of 2026-09-27, written in the

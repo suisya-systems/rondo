@@ -1350,6 +1350,18 @@ export interface AnswerGateRequest {
   readonly gateId: string;
   readonly body: string;
   readonly actorId: string;
+  /**
+   * The organisation's answer under a scope (`D-0125`, `continuo D-1121`):
+   * recorded as a `delegate` acting for `onBehalfOf` (the scope's approver) on
+   * `authorityRef` (the scope decision id). Absent or null is a person's own
+   * answer, recorded as `human` as before.
+   */
+  readonly delegation?: GateDelegation | null;
+}
+
+export interface GateDelegation {
+  readonly onBehalfOf: string;
+  readonly authorityRef: string;
 }
 
 /**
@@ -1380,6 +1392,14 @@ export async function answerGate(
       `--body=${requireText("body", request.body)}`,
       "--actor-id",
       requireIdentifier("actorId", request.actorId),
+      ...(request.delegation == null
+        ? []
+        : [
+            "--on-behalf-of",
+            requireIdentifier("onBehalfOf", request.delegation.onBehalfOf),
+            "--authority-ref",
+            requireIdentifier("authorityRef", request.delegation.authorityRef),
+          ]),
     ];
   } catch (error) {
     if (error instanceof ArgumentRefusal) {
