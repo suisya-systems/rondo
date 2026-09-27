@@ -26624,7 +26624,8 @@ the same thing.
    ledger. It takes lines of the same repository whose root lap answers the same request and that no
    plan of this split started. It drops a line that landed, a line the person released, and a line
    whose last lap was abandoned. A line counts as having work when a deterministic reading of one
-   of its laps read a commit. Its work is the newest lap rondo read.
+   of its laps read a commit. Its work is the newest lap rondo read, by when each lap was made (the
+   ledger orders a line's laps by depth, so two retries of one lap are not in time order there).
    - **Exactly one such line, not running**: the plan is cut from that lap's topic branch, and
      `pull_request_base_branch` keeps the plan's own base. This is the revision's convention
      (`D-0027`): the pull request opens against the default branch, nothing is fetched for a branch

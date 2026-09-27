@@ -834,6 +834,23 @@ test(
 );
 
 test(
+  "of two retries of one lap, the part starts from the one made last, whatever the ledger's order (rondo#520)",
+  async () => {
+    const w = await drafted();
+    await earlierLap(w, "lap-early", 12_000);
+    // The ledger orders a line's laps by depth, then id, so 'a' reads before 'z' there.
+    await earlierLap(w, "lap-early-z", 13_000, { id: "lap-early", tip: "d".repeat(40) });
+    await earlierLap(w, "lap-early-a", 14_000, { id: "lap-early", tip: "e".repeat(40) });
+    const run = await draftedPlanRun(w, "r1", w.proposalId, 0);
+    if (run.kind !== "runnable") throw new Error("plan 0 does not run");
+    expect(
+      await earlierWork({ store: w.store, record: w.record }, "r1", w.proposalId, run),
+    ).toMatchObject({ kind: "line", branch: "rondo/lap-early-a", commit: "e".repeat(40) });
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
   "earlier work on several lines is not chosen between, and the part says so (rondo#520)",
   async () => {
     const w = await drafted();

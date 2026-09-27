@@ -335,30 +335,33 @@ export async function earlierWork(
     if (line.repository !== repository || own.has(line.lineageId)) {
       continue;
     }
-    const root = await ports.store.read(line.lineageId);
-    const last = await ports.store.read(line.lapIds.at(-1) ?? line.lineageId);
+    // Newest first, by when each lap was made: the ledger orders a line's laps
+    // by depth, so a retry beside a revision is not after it there.
+    const laps = (await Promise.all(line.lapIds.map((id) => ports.store.read(id))))
+      .flatMap((read) => (read.kind === "read" ? [read.record] : []))
+      .sort((a, b) => b.createdAtMs - a.createdAtMs);
+    const root = laps.find((lap) => lap.id === line.lineageId);
     if (
-      root.kind !== "read" ||
-      root.record.requestMessageId !== requestMessageId ||
+      root === undefined ||
+      root.requestMessageId !== requestMessageId ||
       line.releasedBy === "person" ||
-      (last.kind === "read" && last.record.status === "abandoned") ||
+      laps[0]?.status === "abandoned" ||
       (await ports.store.landingOf(line.lineageId)) !== null
     ) {
       continue;
     }
     let work: Extract<EarlierWork, { kind: "line" }> | null = null;
     let committed = false;
-    // Newest first: the branch is the newest read lap's, and the base the
-    // oldest's, so the changed paths are the whole line's and not only the
-    // last revision's (whose range starts at its predecessor's tip).
+    // The branch is the newest read lap's and the base the oldest's, so the
+    // changed paths are the whole line's and not only the last revision's
+    // (whose range starts at its predecessor's tip).
     let baseCommit = "";
-    for (const lapId of line.lapIds.toReversed()) {
+    for (const lap of laps) {
       const evidence = latestReading(
-        await ports.store.readingsFor(lapId),
+        await ports.store.readingsFor(lap.id),
         isDeterministicReadingDrafter,
       )?.evidence;
-      const lap = await ports.store.read(lapId);
-      if (evidence === null || evidence === undefined || lap.kind !== "read") {
+      if (evidence === null || evidence === undefined) {
         continue;
       }
       committed ||= evidence.commitCount > 0;
@@ -366,7 +369,7 @@ export async function earlierWork(
       work ??= {
         kind: "line",
         lineageId: line.lineageId,
-        branch: lap.record.topicBranch ?? "",
+        branch: lap.topicBranch ?? "",
         commit: evidence.tipCommit,
         baseCommit: "",
         held: line.paths,
