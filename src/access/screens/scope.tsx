@@ -1549,6 +1549,8 @@ async function planStart(
     // ponytail: no sentence of its own yet (rule 8.2's step is page work).
     case "ordered":
       return null;
+    case "sibling":
+      return line(wording.planSibling);
     case "busy":
       return line(wording.planBusy(ready.limit));
     case "full":

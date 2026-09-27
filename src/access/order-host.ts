@@ -1,8 +1,12 @@
 /**
- * The order tick (D-0098 rule 1.4): a drafted plan that waits on an earlier
- * plan of its split starts by itself once that plan's line has landed, read in
+ * The order tick (D-0098 rule 1.4, D-0127): approving a split's scope is the
+ * go, so every part of an approved split starts by itself once it can, read in
  * the resident host -- today the `rondo web` process -- on the minute it
- * already rescans on (`D-0073` rule 7).
+ * already rescans on (`D-0073` rule 7). A part with no `after` starts once it
+ * is `ready`, or `held` by lines none of which is in flight; one with `after`
+ * starts once its predecessor's line has landed. A part the host has no room
+ * for (`busy`, `full`) or another line holds is tried again the next minute:
+ * nothing is queued.
  *
  * **Only a landing releases it** (rule 1.2): the release fact is
  * `first_landed`, the landing basis the landing reading writes on `first`'s
@@ -14,29 +18,32 @@
  * **The start is the press's own path** ({@link OrderHostPorts.start} is
  * `startSplitFromPage`, deduplicated by plan against a person's simultaneous
  * press), in the approver's name, so the scope's tests, the lane ledger and the
- * readiness are asked exactly as for a press. Nothing here admits a plan
- * without an order: those stay the person's to press.
+ * readiness are asked exactly as for a press. It answers once the lap's row is
+ * reserved (D-0109), so one pass starts two parts and goes on reading landings
+ * while they run.
  */
 
 import { readSplitPayload } from "../advisory/proposal.js";
-import type { AdmittedSplit, AdvisoryRecord } from "../store/sqlite.js";
+import type { AdvisoryRecord, ApprovedSplit } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
 import type { DraftedStartReadiness } from "./drafted-start.js";
 
 export interface OrderHostPorts {
-  readonly record: Pick<
-    AdvisoryRecord,
-    "admittedSplits" | "readProposal" | "recordThreadMessage" | "openAsksIn"
-  >;
-  /** `draftedStartReadiness` for one plan of an admitted split. */
-  readonly readiness: (split: AdmittedSplit, planIndex: number) => Promise<DraftedStartReadiness>;
+  readonly record: Pick<AdvisoryRecord, "readProposal" | "recordThreadMessage" | "openAsksIn">;
+  /** Every split under an approval in force (`approvedSplits`). */
+  readonly splits: () => Promise<readonly ApprovedSplit[]>;
+  /** `draftedStartReadiness` for one plan of an approved split. */
+  readonly readiness: (split: ApprovedSplit, planIndex: number) => Promise<DraftedStartReadiness>;
   /** `readHolder` over the lane ledger: reads `first`'s landing and releases it if it landed. */
   readonly readHolder: (
     lineageId: string,
   ) => Promise<{ readonly released: boolean; readonly line: string }>;
-  /** `startSplitFromPage` in the approver's name, with a freshly minted iteration id. */
+  /**
+   * `startSplitFromPage` in the approver's name, with a freshly minted
+   * iteration id, answered once the lap's row is reserved (`answerOnceReserved`).
+   */
   readonly start: (
-    split: AdmittedSplit,
+    split: ApprovedSplit,
     planIndex: number,
   ) => Promise<{ readonly ok: boolean; readonly note: string }>;
   readonly now: () => number;
@@ -60,11 +67,11 @@ export function orderHost(ports: OrderHostPorts): OrderHost {
   const pass = async (): Promise<void> => {
     while (again) {
       again = false;
-      let splits: readonly AdmittedSplit[];
+      let splits: readonly ApprovedSplit[];
       try {
-        splits = await ports.record.admittedSplits();
+        splits = await ports.splits();
       } catch (error) {
-        ports.log(`order    the admitted splits could not be read: ${describe(error)}`);
+        ports.log(`order    the approved splits could not be read: ${describe(error)}`);
         return;
       }
       for (const split of splits) {
@@ -99,7 +106,7 @@ export function orderHost(ports: OrderHostPorts): OrderHost {
 
 async function readSplit(
   ports: OrderHostPorts,
-  split: AdmittedSplit,
+  split: ApprovedSplit,
   said: Set<string>,
 ): Promise<void> {
   const read = await ports.record.readProposal(split.proposalId);
@@ -111,9 +118,6 @@ async function readSplit(
     return;
   }
   for (const [index, plan] of payload.payload.plans.entries()) {
-    if (plan.after === undefined) {
-      continue;
-    }
     let ready = await ports.readiness(split, index);
     // `first` has ended and still holds its claim: read its landing now, which
     // writes `first_landed` if it landed, then ask again.
@@ -129,7 +133,7 @@ async function readSplit(
       await askUnlanded(ports, said, split, index, ready.after, ready.first);
       continue;
     }
-    // D-0098 rule 1.3: a `then` the scope does not admit is not started, and
+    // D-0098 rule 1.3: a part the scope does not admit is not started, and
     // it is said rather than skipped in silence; the page draws the same
     // reason where the press is.
     if (ready.kind === "outside" || ready.kind === "undecidable") {
@@ -163,7 +167,11 @@ async function readSplit(
     const started = await ports.start(split, index);
     ports.log(
       `order    ${split.proposalId} plan ${String(index)}: ` +
-        (started.ok ? "started on its dependency's landing" : `not started: ${started.note}`),
+        (!started.ok
+          ? `not started: ${started.note}`
+          : plan.after === undefined
+            ? "started under its approved scope"
+            : "started on its dependency's landing"),
     );
   }
 }
@@ -182,7 +190,7 @@ async function readSplit(
 async function askUnlanded(
   ports: OrderHostPorts,
   said: Set<string>,
-  split: AdmittedSplit,
+  split: ApprovedSplit,
   index: number,
   after: number,
   first: { readonly lineageId: string; readonly lastLapId: string },
@@ -219,12 +227,12 @@ async function askUnlanded(
   ports.log(`order    the question about plan ${String(index)} was not written: ${outcome.reason}`);
 }
 
-function unlandedPrefix(split: AdmittedSplit, index: number): string {
+function unlandedPrefix(split: ApprovedSplit, index: number): string {
   return `order-unlanded-${split.proposalId}-${String(index)}-`;
 }
 
 /** Whether an unlanded ask about this plan stands answered `stop` (rule 1.5's drop). */
-async function dropped(ports: OrderHostPorts, split: AdmittedSplit, index: number) {
+async function dropped(ports: OrderHostPorts, split: ApprovedSplit, index: number) {
   const open = await ports.record.openAsksIn(split.requestMessageId);
   if (open.kind !== "read") {
     // Unreadable is not a drop, and not a go: start nothing on it.

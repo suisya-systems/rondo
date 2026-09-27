@@ -302,11 +302,11 @@ export interface HostPolicy {
    * How many iterations may be *executing* at once.
    *
    * Counted over the generated `occupying` column: every non-terminal status
-   * except `awaiting_human` and `withdrawal_requested`. **One, until continuo's
-   * D-1104 lands its holder-identity half** -- continuo serialises `lap perform`
-   * on a single global delivery resource, so a second concurrent lap is refused
-   * there rather than here. Raising this number is then a policy edit and not a
-   * code change.
+   * except `awaiting_human` and `withdrawal_requested`. **Two by default
+   * since D-0124**: the pinned continuo carries D-1104's holder-identity half,
+   * so a second concurrent lap is no longer refused there, and `reserve()`'s
+   * one `BEGIN IMMEDIATE` is what keeps two admissions from both taking the
+   * last slot.
    */
   readonly maxOccupying: number;
   /**
@@ -707,8 +707,8 @@ export interface IterationStore {
   closingLapOf(iterationId: string): Promise<ClosingLap | null>;
 }
 
-/** One split an approval admitted a plan of ({@link AdvisoryRecord.admittedSplits}). */
-export interface AdmittedSplit {
+/** One split under an approval in force, and the request it answers (D-0127). */
+export interface ApprovedSplit {
   readonly scopeDecisionId: string;
   readonly proposalId: string;
   readonly requestMessageId: string;
@@ -3465,12 +3465,13 @@ export interface AdvisoryRecord {
    */
   scopeDecisionAdmitting(iterationId: string): Promise<string | null>;
   /**
-   * Every split an approved scope has admitted a plan of (D-0098 rule 1.4):
-   * the approval, the proposal and the request, one row each, read off the
-   * `admission` consumption rows naming a proposal. Where the order tick looks
-   * for a `then` whose `first` may have landed. Writes nothing.
+   * Every approval still in force, oldest first: `approved`, and no successor of
+   * its scope at any depth approved (D-0066 rule 1.4). Where the order tick
+   * finds the splits it starts (D-0127). Writes nothing.
    */
-  admittedSplits(): Promise<readonly AdmittedSplit[]>;
+  approvalsInForce(): Promise<
+    readonly { readonly scopeDecisionId: string; readonly scopeId: string }[]
+  >;
   /**
    * Whether some successor of this scope, at any depth, carries an `approved`
    * decision (D-0066 rule 1.4). A drafted-only or declined successor retires
@@ -4989,21 +4990,19 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return admittedUnder(connection, iterationId);
     },
 
-    async admittedSplits(): Promise<readonly AdmittedSplit[]> {
+    async approvalsInForce() {
       const rows = connection
         .prepare(
-          "SELECT DISTINCT c.scope_decision_id, c.proposal_id, i.request_message_id " +
-            "FROM scope_consumption c JOIN iteration i ON i.id = c.subject_id " +
-            "WHERE c.act_kind = 'admission' AND c.proposal_id IS NOT NULL " +
-            "AND i.request_message_id IS NOT NULL " +
-            "ORDER BY c.scope_decision_id, c.proposal_id, i.request_message_id",
+          "SELECT scope_decision_id, scope_id FROM scope_decision WHERE outcome = 'approved' " +
+            "ORDER BY decided_at_ms, scope_decision_id",
         )
         .all() as SqlRow[];
-      return rows.map((row) => ({
-        scopeDecisionId: String(row["scope_decision_id"]),
-        proposalId: String(row["proposal_id"]),
-        requestMessageId: String(row["request_message_id"]),
-      }));
+      return rows
+        .map((row) => ({
+          scopeDecisionId: String(row["scope_decision_id"]),
+          scopeId: String(row["scope_id"]),
+        }))
+        .filter(({ scopeId }) => !supersededByApproved(connection, scopeId));
     },
 
     async scopeSupersededByApproved(scopeId: string): Promise<boolean> {

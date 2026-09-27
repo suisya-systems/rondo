@@ -504,9 +504,18 @@ that name cannot be created.
 **More than one iteration can be open at once.** An iteration waiting at its gate holds no worker,
 so it does not occupy an execution slot and a second `start` is accepted beside it.
 `RONDO_MAX_LIVE` bounds how many may be open at once (default 3) and `RONDO_MAX_OCCUPYING` how many
-may be *executing* (default 1; raising it needs continuo to allow a second concurrent lap first).
+may be *executing* (default 2, across every repository, D-0124; set it to 1 to run one at a time).
 When more than one is open, `answer` needs `--iteration-id ID` to say which one you mean -- it
 refuses and lists them rather than picking.
+
+**Approving a drafted split starts its parts** (D-0127). While `rondo web` runs with an approver,
+its minute tick starts every part of an approved split that can start, in the approver's name, as a
+press would. A part with no room, or held by another line, is tried again the next minute. A part
+that waits on another part (`after`) starts when that part's work lands. Until the page can show
+several lines of one request (rondo#452), a part waits while another lap of its request is open.
+**Before upgrading to this, discard a store that holds an approved split whose parts you left
+unpressed**: they start on the first minute after the upgrade. No verb closes an approval, and
+an approved successor scope still covers the same split.
 
 ---
 
@@ -895,9 +904,9 @@ yours.
 
 | What you see | What it means | What to do |
 |---|---|---|
-| `Refused: 1 of a permitted 1 iterations are already executing on this host` | A lap is running. The bound is `RONDO_MAX_OCCUPYING`, which is 1 until continuo allows a second concurrent lap. | Wait for it, or `abandon` it. An iteration merely *waiting at a gate* does not count here. |
+| `Refused: 2 of a permitted 2 iterations are already executing on this host` | Two laps are running. The bound is `RONDO_MAX_OCCUPYING`, which is 2 by default (D-0124). | Wait for it, or `abandon` it. An iteration merely *waiting at a gate* does not count here. |
 | `Refused: 3 of a permitted 3 iterations are already open on this host` | Three iterations are unfinished, most likely waiting on you. The bound is `RONDO_MAX_LIVE`. | `answer` them, `abandon` them, or raise `RONDO_MAX_LIVE`. |
-| `Refused: 2 of a permitted 1 ... more than the bound rather than equal to it` | Expected, not corruption: an iteration already counted re-entered the executing set without a new admission. | Nothing. It drains as those iterations end; no further admission is accepted meanwhile. |
+| `Refused: 3 of a permitted 2 ... more than the bound rather than equal to it` | Expected, not corruption: an iteration already counted re-entered the executing set without a new admission. | Nothing. It drains as those iterations end; no further admission is accepted meanwhile. |
 | `the iteration id '<id>' is not a rondo identifier` | rondo derives the run id, branch and workspace from it, so it must be `[a-z][a-z0-9_-]{0,63}`. | Pick a conforming id. Nothing was written. |
 | `N iterations are live, so "the live one" does not name anything` | More than one is open, which is now normal. | Re-run with `--iteration-id ID`; the message lists them. |
 | `continuo gate deliver refused (LeaseHeld)` | A lap holds the global delivery lease. | Wait; the lease is 60 s. |
