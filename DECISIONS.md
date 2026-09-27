@@ -167,6 +167,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0128 | A scope can cover the requests rondo injects from a goal: `requests` gains one decidable form, `{"from_goal": "<goal_id>"}`, and under it the flow host, never triage, starts the goal's next request | accepted |
 | D-0129 | How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed | accepted |
 | D-0130 | A lap's cap is written when it is sent and held until its cost is read, one reserve is kept for each lane a partner could still run in, and a budget stop ends the lap with what it spent | accepted |
+| D-0136 | A drafted claim is drawn from the repository's own paths: the drafter is handed each offered repository's tracked paths at its base branch, two levels deep, and claims `/` only for work that spans the whole repository; `D-0073` rule 5's gate widening is the safety valve | accepted |
 
 ---
 
@@ -16955,6 +16956,13 @@ number.
       code paths the work touches (rondo#219's lesson, already the runbooks' convention), with bases.
       The claim sits beside the plan in the split proposal and **is not a plan field**, so `D-0063`
       rule 4.2's "only two fields may differ" stands.
+
+      > **Annotation (2026-09-27, from D-0136).** Added after this entry was accepted. "Derived from
+      > the code paths the work touches" had nothing to derive from: the drafter saw the thread and
+      > not the repository, and was told to claim `/` when nothing narrowed it, so on lap 18 every
+      > drafted plan claimed `/` (rondo#496). The drafter is now handed each offered repository's
+      > tracked paths at its base branch, two levels deep, and claims `/` only for work that spans
+      > the whole repository. Rule 2.5 and the rest of this rule are unedited.
    4. **A plan not yet admitted holds nothing.** Its drafted claim is a request. The first
       `lane_claim` row is written by `reserve()` in the same `BEGIN IMMEDIATE` as the iteration row,
       both or neither, which is `D-0023` rule 5's reason for the triple.
@@ -24207,6 +24215,10 @@ At rondo `2de3190` on **2026-09-26**, by reading `DECISIONS.md`, `git log` and t
 | **Say it on the page** | Claims, waits and landings in the person's words; parts, waits, questions, take-ins and a closing fix on the thread | `D-0073` rule 12, `D-0098` rule 8 | #295 | `D-0098` rule 8: rondo#452 |
 | **Stays with the person** | Approving (a scope, an irreversible act including the merge, the gate while it is theirs), and every judgement no row settles: whether a change alone breaks something, what a held line waits on, a fold after the pull request was shown, anything outside every scope | `D-0073` rule 11, `D-0064` | | |
 
+> **Annotation (2026-09-27, from D-0136).** The **Allocate** row's drafted claim is drawn from the
+> repository's own paths since rondo#496: before it, the drafter claimed `/` for nearly every plan,
+> so lines of one repository ran one at a time whatever `maxOccupying` allowed. The row is unedited.
+
 3. **rondo#250 is done with this entry.** Its ask, a decision naming the layer and its authorities,
    is answered by `D-0073`, `D-0098` and this table. What is left is building work, and each piece has
    an issue of its own: rondo#282, rondo#284, rondo#286, rondo#287 and rondo#452. The residuals of
@@ -25429,3 +25441,63 @@ and a lap beside it is refused, so parallel work under one approval stops.
   lap spends, and the sum can pass the budget.
 - **An approval whose laps are usually run one at a time on a host with a second lane**: then the
   reserve kept for a partner is room nobody uses, and the free-lane count should read the queue.
+
+## D-0136 — A drafted claim is drawn from the repository's own paths: the drafter is handed each offered repository's tracked paths at its base branch, two levels deep, and claims `/` only for work that spans the whole repository; `D-0073` rule 5's gate widening is the safety valve
+
+**Status:** accepted (2026-09-27, rondo#496; the owner's answer through the secretary). Annotates
+`D-0073` rule 2.3 and `D-0117`'s **Allocate** row, and narrows `D-0106` rule 1 on the approved scope
+screen.
+
+### Context
+
+On lap 18 (2026-09-27) a flow lap for rondo#313 and a person's two-plan split for rondo#494 ran in
+the same repository. Every plan of both splits claimed `/`, so the person's plans waited on the flow
+lap and goal clause 5 ("requests touching different places run 2 at a time") could not hold. It was
+not specific to flow laps. The drafter's instructions said to claim from what the thread names, to
+claim wider when unsure, and to claim `/` when nothing narrowed it; its material held the thread,
+the templates, the agent types and past laps, and no view of the repository. Issues seldom name a
+file, so `/` was the answer nearly every time.
+
+The same screen showed no press. The person's split had been approved 17 minutes earlier. Every plan
+was held by the flow lap's `/`, which was waiting at its gate, and the start press is not drawn while
+the holder is in flight (rondo#238 C2b). The screen said so, but the approval sat under the plans and
+read as one still to give.
+
+### Decision
+
+1. **The drafter is handed each offered repository's tracked paths**, as a `REPOSITORY PATHS`
+   section of its document: `git ls-tree` of the template's base branch, entries at most two levels
+   deep, directories ending in `/` as a claim spells them (`D-0073` rule 2.2), at most 400. A
+   repository git will not list says so, and the drafter claims from the thread alone. Only a drafter
+   run lists; the page's reads of held plans list nothing.
+2. **The drafter claims the files and directories the work touches**, shared files such as tests,
+   documents and word lists included, and claims `/` only when the work spans the whole repository.
+3. **`D-0073` rule 5 is the safety valve**, unchanged: a path a lap changed outside its claim is
+   widened onto at its gate, or is `D-0067` rule 2's collision when another open line holds it. A
+   claim drafted too narrow is corrected at most one lap late.
+4. **On the approved scope screen, the approval line comes before the plans.** It is one heading and
+   a digest; the budgets it approved stay below as a record. This narrows `D-0106` rule 1 for this
+   screen: the approval is a decision already taken, and without it first, plans that all wait read
+   as nothing to act on.
+5. **A split drafted before this entry keeps its claims.** Proposal rows are immutable; a plan held
+   by a `/` starts once its holder's pull request opens or its files are released, as before.
+
+**Options not taken.** Keeping `/` as the default and accepting one lap at a time per repository:
+simple, and goal clause 5 stays false. A press for the person to narrow a claim on the scope screen:
+a new authority surface, and to help lap 18 it would have had to narrow the holder's claim too.
+
+### What it costs
+
+- **Two plans can change one file at once** when both claims miss it. The gate finds it at the end
+  of the lap (`D-0073` rule 5) and the second one waits there, rather than before it starts.
+- **One `git ls-tree -r` per offered repository per drafter run.** Bounded by the 400-entry cut,
+  which also bounds the document.
+- **The listing is the base branch as the host's clone holds it**, not the forge's: a clone that lags
+  its remote lists older paths.
+
+### What would falsify it
+
+- **Gate-time widenings that collide more often than lines run in parallel**: then claims are drawn
+  too narrow for the ledger to pay for itself, and the default should move back towards `/`.
+- **Drafted claims that still come back `/` for work the thread localises**: then the listing is not
+  what the drafter needs, and the fault is in the instructions or the depth.

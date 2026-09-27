@@ -2028,6 +2028,37 @@ export async function readChangedPaths(request: ChangedPathsRequest): Promise<Ch
     : { kind: "read", paths: changed };
 }
 
+/** How deep {@link readRepositoryPaths} lists: `src/store/` and `README.md`, not `src/store/lanes.ts`. */
+const PATH_LISTING_DEPTH = 2;
+/** At most this many entries, so a large repository cannot swamp the drafter's document. */
+const PATH_LISTING_LIMIT = 400;
+
+/**
+ * The paths a drafter may claim from (D-0136, rondo#496): a repository's
+ * tracked files and directories at `ref`, at most two levels deep, each
+ * directory ending in `/` as a claim spells it (D-0073 rule 2.2). Null when git
+ * would not list them; the drafter then claims from the thread alone.
+ */
+export async function readRepositoryPaths(request: {
+  readonly repository: string;
+  readonly ref: string;
+}): Promise<readonly string[] | null> {
+  const entries = await treeEntries(
+    (argv) => runCommand("git", ["-C", request.repository, ...argv], PREFLIGHT_TIMEOUT_MS),
+    request.ref,
+  );
+  if (typeof entries === "string") {
+    return null;
+  }
+  const paths = [];
+  for (const [path, head] of entries) {
+    if (path.split("/").length <= PATH_LISTING_DEPTH) {
+      paths.push(head.split(" ")[1] === "tree" ? `${path}/` : path);
+    }
+  }
+  return paths.sort().slice(0, PATH_LISTING_LIMIT);
+}
+
 /**
  * Every entry of a commit's tree, recursively, as `mode type oid` by path, or
  * why git would not list it. `-t` lists the trees too, so a file one side

@@ -170,6 +170,7 @@ import {
   readPullRequest,
   readRecordAdditions,
   readRecordFloor,
+  readRepositoryPaths,
   runDrafter,
 } from "./forge.js";
 import { forgeHost, publishPreflight, redactRemoteUrl } from "./forge-preflight.js";
@@ -1510,6 +1511,7 @@ export async function main(
       store,
       record,
       runDrafter,
+      listPaths: readRepositoryPaths,
       now: Date.now,
       mintId: newDraftId,
       language: selected.tag,

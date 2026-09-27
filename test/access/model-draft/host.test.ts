@@ -535,3 +535,35 @@ test("one store holds the setups of several repositories (D-0081 rule 5, withdra
   expect(await cite("setup-nope", "m-1")).toMatchObject({ kind: "refused" });
   expect(await cite("setup-1", "m-2")).toEqual({ kind: "recorded" });
 });
+
+test("the drafter is handed each offered repository's paths at its base branch, and the page lists none (D-0136)", async () => {
+  const w = await world();
+  const document = planDocument();
+  await w.say("r1", "Fix the flaky test.", null, 1_000);
+  await w.say("r1-plan", JSON.stringify(document), "r1", 2_000);
+  const asked: unknown[] = [];
+  const material = await gatherDrafterMaterial(
+    {
+      store: w.store,
+      record: w.record,
+      now: () => 5_000,
+      listPaths: async (at) => {
+        asked.push(at);
+        return ["README.md", "src/"];
+      },
+    },
+    "r1",
+    null,
+  );
+  expect(asked).toEqual([{ repository: REPOSITORY, ref: "main" }]);
+  expect(material.repositoryPaths).toEqual([
+    { repository: REPOSITORY, ref: "main", paths: ["README.md", "src/"] },
+  ]);
+  // The page's held-plan reads go through the same gathering with no lister.
+  const page = await gatherDrafterMaterial(
+    { store: w.store, record: w.record, now: () => 5_000 },
+    "r1",
+    null,
+  );
+  expect(page.repositoryPaths).toEqual([]);
+});

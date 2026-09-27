@@ -89,6 +89,9 @@ const MATERIAL: DrafterMaterial = {
   ],
   policies: [],
   laps: [],
+  repositoryPaths: [
+    { repository: "/srv/repo", ref: "main", paths: ["README.md", "src/", "src/store/"] },
+  ],
   rows: [],
   draftedAtMs: T0,
   language: null,
@@ -584,7 +587,7 @@ test("a plan's claim is kept as the store would write it: deduplicated and sorte
   // The document tells the drafter what a claim is, and asks for one per plan.
   const document = drafterDocument(MATERIAL);
   expect(document).toContain('"claim": ["src/store/", "README.md"]');
-  expect(document).toContain("claim wider");
+  expect(document).toContain("Claim the files and directories the work touches");
 });
 
 test("one narrowing wins per field, and only the winner is cited: the scope's bases support the value it carries", () => {
@@ -747,4 +750,20 @@ test("the document tells the drafter what the mechanical tier is for and what gr
   expect(document).toContain("'mechanical'");
   expect(document).toContain("files_named");
   expect(document).toContain("checks_are_acceptance");
+});
+
+test("the drafter claims from the repository's paths, and '/' only for work across all of it (D-0136, rondo#496)", () => {
+  // Lap 18: with no paths in front of it and "when nothing narrows it, claim
+  // '/'", every plan claimed the whole repository and every other waited.
+  const document = drafterDocument(MATERIAL);
+  expect(document).toContain("REPOSITORY PATHS");
+  expect(document).toContain("--- /srv/repo at main\nREADME.md\nsrc/\nsrc/store/");
+  expect(document).toContain("Claim '/' only when the work really spans the whole repository.");
+  expect(document).not.toContain("When nothing narrows it, claim '/'.");
+  expect(
+    drafterDocument({
+      ...MATERIAL,
+      repositoryPaths: [{ repository: "/srv/repo", ref: "main", paths: null }],
+    }),
+  ).toContain("--- /srv/repo at main\n(git would not list it)");
 });

@@ -518,3 +518,75 @@ test(
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
+
+test(
+  "a goal-scope flow lap and a person's split in one repository, on different paths, both start (rondo#496)",
+  async () => {
+    const w = await drafted();
+    const ports = { store: w.store, record: w.record, policy: DEFAULT_HOST_POLICY, nowMs: 20_000 };
+    const approved = await recordDraftedScopeFromPage(ENV, w.storePath, "ada", {
+      draftScopeId: w.draft.scopeId,
+      draftDigest: w.draft.scopeDigest,
+      scopeId: "scope-mine-1",
+      budgets: w.draft.payload.budgets,
+      severityThreshold: w.draft.payload.severity_threshold,
+      outwardActs: w.draft.payload.outward_acts,
+    });
+    const decision = approved.scopeDecisionId as string;
+    const run = await draftedPlanRun(w, "r1", w.proposalId, 0);
+    if (run.kind !== "runnable") throw new Error("plan 0 does not run");
+    // The flow's lap, running in the same repository under the goal scope and
+    // still in flight, with the claim its own drafted split named.
+    await w.record.recordThreadMessage({
+      messageId: "r-flow",
+      body: "The goal's next request.",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: null,
+      atMs: 3_000,
+      bases: [],
+      asks: false,
+    });
+    const flowLap = (id: string, paths: readonly string[]) =>
+      w.store.reserve({
+        numbers: null,
+        id,
+        request: "The goal's next request.",
+        plan: admittedPayload({ ...run.plan, prompt: `flow work ${id}` }, id),
+        spend: null,
+        scopeSpend: null,
+        claim: { paths, authorKind: "drafter", authorId: "rondo/drafter/8/m", bases: [] },
+        nowMs: 15_000,
+        supersedesIterationId: null,
+        requestMessageId: "r-flow",
+        runId: `rondo-${id}`,
+        topicBranch: `rondo/${id}`,
+        workspace: `/srv/work/${id}`,
+      });
+    expect((await flowLap("lap-flow", ["src/access/model-draft/", "DECISIONS.md"])).kind).toBe(
+      "reserved",
+    );
+    // The person's plan claims other paths: it is ready, and admission takes it.
+    const ready = await draftedStartReadiness(ports, "r1", decision, w.proposalId, 0);
+    expect(ready.kind, JSON.stringify(ready)).toBe("ready");
+    const person = await w.store.reserve({
+      numbers: null,
+      id: "lap-person",
+      request: "Two things, please.",
+      plan: admittedPayload(run.plan, "lap-person"),
+      spend: null,
+      scopeSpend: null,
+      claim: run.claim,
+      nowMs: 16_000,
+      supersedesIterationId: null,
+      requestMessageId: "r1",
+      runId: "rondo-lap-person",
+      topicBranch: "rondo/lap-person",
+      workspace: "/srv/work/lap-person",
+    });
+    expect(person.kind, JSON.stringify(person)).toBe("reserved");
+    // What lap 18 did: a flow lap claiming '/' holds every other plan off.
+    expect((await flowLap("lap-flow-whole", ["/"])).kind).toBe("laneRefused");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
