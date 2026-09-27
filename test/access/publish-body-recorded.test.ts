@@ -168,10 +168,10 @@ test("two previews running at once compose one body between them (rondo#290)", a
   const { record, advisory } = await closedLap("ja");
   const subject = { iterationId: record.id, gateId: `gate-${record.id}` };
   // **The page redraws while it is drawing**: two passes reach this together,
-  // and what must not happen is two model answers and two rows -- the second is
-  // `covered` under the write's own lock, and both passes answer with the row
-  // that was written. A body that differed between two open screens would refuse
-  // whichever press came second.
+  // and what must not happen is two model answers and two rows. The second pass
+  // joins the first's run rather than putting the question again, so there is
+  // one document, one row and one body -- and a body that differed between two
+  // open screens would refuse whichever press came second.
   const passes = [
     ports(advisory, REPORT),
     ports(advisory, REPORT, { ...SECTIONS, summary: "Something else entirely." }),
@@ -180,8 +180,12 @@ test("two previews running at once compose one body between them (rondo#290)", a
     passes.map(async (pass) => await publishBodyOnce(pass.ports, subject, "ja")),
   );
   expect(both[0]).toEqual(both[1]);
-  expect(both[0]?.kind).toBe("composed");
-  expect(passes.reduce((all, pass) => all + pass.documents.length, 0)).toBeLessThanOrEqual(2);
+  expect(both[0]).toEqual({ kind: "composed", ...SECTIONS });
+  // **Composed once, not composed twice and reconciled**: a drafter run is
+  // spent, and the answer the losing pass would have thrown away is never asked
+  // for at all.
+  expect(passes.reduce((all, pass) => all + pass.documents.length, 0)).toBe(1);
+  expect(passes.reduce((all, pass) => all + pass.reports(), 0)).toBe(1);
   // One row, whichever pass wrote it, and it is what a press reads.
   expect(await recordedPublishBody(advisory, subject)).toEqual(both[0]);
 });

@@ -37,7 +37,10 @@
  * **Pure but for the one run**, on `./revise-draft/judgement.ts`'s division: the
  * `claude` process is `./forge.ts`'s and arrives here as a port, and everything
  * else -- the document, the answer's checks, the sections -- is a total function
- * over strings.
+ * over strings. The one exception is named where it is: {@link inFlight}, which
+ * is how "composed once" holds between two passes that are both still running,
+ * and which the store cannot answer because a pass that has not written yet is
+ * not there to be found.
  */
 
 import type { DrafterRow } from "../continuo/roles.js";
@@ -411,8 +414,48 @@ export async function recordedPublishBody(
  *
  * **Never throws**, for {@link composePublishBody}'s reason: a body is not worth
  * refusing an approved lap over.
+ *
+ * **Once also means once while it is running** ({@link inFlight}): a pass that
+ * arrives while another is composing this lap's body joins it rather than putting
+ * the same question to a second drafter. The row's `covered` arm is what settles
+ * two passes that both got as far as writing; this is what keeps two open screens
+ * from spending twice to reach the answer one of them will throw away.
  */
 export async function publishBodyOnce(
+  ports: RecordedBodyPorts,
+  subject: PublishBodySubject,
+  reportLanguage: string | null,
+): Promise<ComposedBodyOutcome | null> {
+  const key = `${subject.iterationId}\u0000${subject.gateId}`;
+  const running = inFlight.get(key);
+  if (running !== undefined) {
+    return await running;
+  }
+  const started = composedAndRecorded(ports, subject, reportLanguage);
+  inFlight.set(key, started);
+  try {
+    return await started;
+  } finally {
+    inFlight.delete(key);
+  }
+}
+
+/**
+ * The composings running right now, by lap and gate.
+ *
+ * **The one piece of state in this file, and it is a host's rather than a
+ * record's.** The store settles which *row* wins; what it cannot do is stop a
+ * second model run from happening at all, because a pass that has not written
+ * yet is not in the database to be found. A page redraws while it is drawing and
+ * a person may have two screens of one lap open, so the second pass would
+ * otherwise spend a drafter run on an answer the first has already made the
+ * body. It is keyed by what a body is of and is deleted as soon as the run
+ * settles, so nothing here outlives the composing it is about.
+ */
+const inFlight = new Map<string, Promise<ComposedBodyOutcome | null>>();
+
+/** One composing, from the row that may already hold it to the row it writes. */
+async function composedAndRecorded(
   ports: RecordedBodyPorts,
   subject: PublishBodySubject,
   reportLanguage: string | null,

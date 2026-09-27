@@ -18931,6 +18931,13 @@ put to the human gate, and its answer". Refs `D-0053`,
 > spending nothing. One row per lap per gate: a second pass is `covered` and reads what the first
 > wrote, and an outcome that could not be composed is recorded as such.
 >
+> **Once, including while it is running.** The row settles which answer becomes the body; what it
+> cannot settle is a second drafter run, because a pass that has not written yet is not in the
+> database to be found -- so a pass that arrives while another is composing this lap's body joins it
+> (`inFlight`, `src/access/publish-body.ts`). A page redraws while it is drawing and a person may have
+> two screens of one lap open, and spending a model run on an answer the first pass has already made
+> the body is the cost that buys nothing.
+>
 > **What the two surfaces read is the row and never a run's own answer**, which is how they are kept
 > from disagreeing: `publishBodyOnce` answers with the row it read back, so a row that would not write
 > leaves the preview with no body -- exactly what a press with no row has -- and the two render one
