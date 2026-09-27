@@ -26640,8 +26640,9 @@ the same thing.
 4. **The claim asks for the inherited paths too.** A lap cut from a branch is read from that branch
    (the revision's range), so the paths the earlier line changed would never be compared against
    this line's claim, though its pull request carries them. When the plan has a drafted claim
-   (`D-0073` rule 2.3), rondo adds the paths changed between the earlier reading's base and tip,
-   and a basis naming the earlier line. It leaves out paths the earlier line still holds: a closed
+   (`D-0073` rule 2.3), rondo adds the paths changed from the base of the line's first reading to
+   the tip of its newest (a revision's own reading starts at its predecessor's tip, so the newest
+   alone would miss the earlier laps), and a basis naming the earlier line. It leaves out paths the earlier line still holds: a closed
    line that has not landed keeps its claim (rule 3.3), no other line can take those paths, and
    asking for them would refuse the part on the line it builds on. If the changed paths cannot be
    read, the whole repository is asked for (rule 2.5), unless the earlier line still holds paths,

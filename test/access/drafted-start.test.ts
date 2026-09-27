@@ -647,7 +647,12 @@ test(
 );
 
 /** A lap of request r1 that no plan of the split started, ended with work rondo read (rondo#520). */
-async function earlierLap(w: Awaited<ReturnType<typeof drafted>>, id: string, atMs: number) {
+async function earlierLap(
+  w: Awaited<ReturnType<typeof drafted>>,
+  id: string,
+  atMs: number,
+  revises: { readonly id: string; readonly tip: string } | null = null,
+) {
   const run = await draftedPlanRun(w, "r1", w.proposalId, 0);
   if (run.kind !== "runnable") throw new Error("plan 0 does not run");
   const reserved = await w.store.reserve({
@@ -657,14 +662,17 @@ async function earlierLap(w: Awaited<ReturnType<typeof drafted>>, id: string, at
     plan: admittedPayload({ ...run.plan, prompt: "Both things at once." }, id),
     spend: null,
     scopeSpend: null,
-    claim: {
-      paths: [`src/${id}.ts`],
-      authorKind: "drafter",
-      authorId: "rondo/drafter/9/m",
-      bases: [],
-    },
+    claim:
+      revises === null
+        ? {
+            paths: [`src/${id}.ts`],
+            authorKind: "drafter",
+            authorId: "rondo/drafter/9/m",
+            bases: [],
+          }
+        : null,
     nowMs: atMs,
-    supersedesIterationId: null,
+    supersedesIterationId: revises?.id ?? null,
     requestMessageId: "r1",
     runId: `rondo-${id}`,
     topicBranch: `rondo/${id}`,
@@ -686,8 +694,9 @@ async function earlierLap(w: Awaited<ReturnType<typeof drafted>>, id: string, at
             findings: [],
             evidence: {
               baseRef: "refs/remotes/origin/main",
-              baseCommit: "a".repeat(40),
-              tipCommit: "c".repeat(40),
+              // A revision is read from its predecessor's tip.
+              baseCommit: revises === null ? "a".repeat(40) : "c".repeat(40),
+              tipCommit: revises?.tip ?? "c".repeat(40),
               materialDigest: "sha256:x",
               commitCount: 1,
               fileCount: 1,
@@ -797,6 +806,28 @@ test(
     expect(await earlierWork(ports, "r1", w.proposalId, run)).toMatchObject({
       kind: "line",
       lineageId: "lap-early",
+    });
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a revised earlier line starts the part from its newest read lap, and its changes are counted from the line's first base (rondo#520)",
+  async () => {
+    const w = await drafted();
+    await earlierLap(w, "lap-early", 12_000);
+    await earlierLap(w, "lap-early-r2", 13_000, { id: "lap-early", tip: "d".repeat(40) });
+    const run = await draftedPlanRun(w, "r1", w.proposalId, 0);
+    if (run.kind !== "runnable") throw new Error("plan 0 does not run");
+    expect(
+      await earlierWork({ store: w.store, record: w.record }, "r1", w.proposalId, run),
+    ).toEqual({
+      kind: "line",
+      lineageId: "lap-early",
+      branch: "rondo/lap-early-r2",
+      commit: "d".repeat(40),
+      baseCommit: "a".repeat(40),
+      held: ["src/lap-early.ts"],
     });
   },
   WINDOWS_HEAVY_TIMEOUT_MS,

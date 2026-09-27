@@ -348,6 +348,10 @@ export async function earlierWork(
     }
     let work: Extract<EarlierWork, { kind: "line" }> | null = null;
     let committed = false;
+    // Newest first: the branch is the newest read lap's, and the base the
+    // oldest's, so the changed paths are the whole line's and not only the
+    // last revision's (whose range starts at its predecessor's tip).
+    let baseCommit = "";
     for (const lapId of line.lapIds.toReversed()) {
       const evidence = latestReading(
         await ports.store.readingsFor(lapId),
@@ -358,18 +362,20 @@ export async function earlierWork(
         continue;
       }
       committed ||= evidence.commitCount > 0;
+      baseCommit = evidence.baseCommit;
       work ??= {
         kind: "line",
         lineageId: line.lineageId,
         branch: lap.record.topicBranch ?? "",
         commit: evidence.tipCommit,
-        baseCommit: evidence.baseCommit,
+        baseCommit: "",
         held: line.paths,
       };
     }
     if (work === null || !committed || work.branch === "") {
       continue;
     }
+    work = { ...work, baseCommit };
     if (line.inFlight) {
       running.push(line.lineageId);
     } else {
