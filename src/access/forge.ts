@@ -2356,12 +2356,27 @@ function readReviewerEvents(stdout: string): ReviewerEvents {
  *
  * A failed reason carries the exit status or signal and the event stream's
  * error messages, bounded ASCII -- never stderr, where codex echoes the document.
+ *
+ * **A `claude`-family row is run as the drafter is** (D-0123): the reviewer of a Codex
+ * lap is Claude, and {@link runDrafter} is already the one way rondo runs
+ * `claude` over one document with no tools, refusing any answer that reports a
+ * tool call. What it returns is read the same way either CLI answered.
  */
 export async function runReviewer(
   row: ReviewerRow,
   document: string,
   timeoutMs: number = REVIEWER_TIMEOUT_MS,
 ): Promise<ReviewerRun> {
+  if (row.family === "claude") {
+    const run = await runDrafter(row, document, timeoutMs);
+    return run.kind === "failed"
+      ? run
+      : {
+          kind: "answered",
+          finalMessage: run.finalMessage,
+          deliveredDigest: contentDigest({ delivered: document }),
+        };
+  }
   let directory: string;
   try {
     directory = mkdtempSync(join(tmpdir(), "rondo-reviewer-"));
