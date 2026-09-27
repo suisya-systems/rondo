@@ -1797,6 +1797,9 @@ const FORECLOSES: Record<ProposalKind, readonly string[]> = {
   // D-0097: a proposal of the next request binds nothing; its answer is a
   // request the person sends or a *not now*. Empty, for the same reason.
   triage: [],
+  // D-0079 section 4: a composed body is never approved; what a person answers
+  // is the publish itself. Empty, for the same reason.
+  publish_body: [],
 };
 
 /**

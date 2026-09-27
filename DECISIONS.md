@@ -18895,6 +18895,65 @@ through the window and it chose the recommended option on each; the answers are 
 put to the human gate, and its answer". Refs `D-0053`,
 `D-0055`, `D-0056`, `D-0063`, `D-0071`, `D-0076`, rondo#257, rondo#159.
 
+> **Annotation (2026-09-28, from rondo#290).** Added after this entry was accepted, and additive.
+> **Section 4 is built, for the terminal's `publish` and for the page's.**
+> `src/access/publish-body.ts` composes the English body from the lap's own report: the ask names
+> reading the report and writing an English account of it and refuses going sentence by sentence
+> (rule 4.2), and the report's own words are quoted nowhere in the body, which says instead that they
+> are on the gate the person answered. Four things the requester settled on that issue, and the code
+> holds:
+>
+> 1. **The body carries three sections, in one order, always** -- what changed, why, what was
+>    verified. An account that could not be composed changes what a section *says* and never whether
+>    it is there, because a reader cannot tell a missing heading from a change with nothing to say
+>    about its own grounds.
+> 2. **A report is composed from whether or not the lap asked its worker for a language.**
+>    `material_language` records what was *asked*, not what came back, so gating on it left exactly
+>    the case this is for -- a lap that asked for nothing and reported in the person's language --
+>    publishing a body with no account of the work in it.
+> 3. **A composed section is not refused for the marks English carries.** `D-0004` is a rule about
+>    what rondo prints and is kept where rondo prints it (`src/access/console.ts`); a dash, a
+>    quotation mark or the letters of somebody's name in a body bound for a forge is not a defect,
+>    and an answer thrown away for one would be a body refused for being English.
+> 4. **The body has one bound and it is the body's** (`BODY_LIMIT`, `src/access/pull-request.ts`).
+>    A length per section would have thrown all three accounts away because one of them ran long.
+>    What a report may be composed *from* is still bounded, because half a report composes a wrong
+>    account rather than a short one (`D-0071` rule 1.5). Where that one bound does bite, what gives
+>    way is the quoted request first and the accounts second -- each fitted inside the room the body
+>    has and saying what it left -- and never a section: cutting the body's tail would have taken the
+>    last two headings with it, which point 1 forbids.
+>
+> **The page's publish composes through a recorded row.** Its preview and its press each run
+> `publishPlanFor`, and the body is inside the digest the press compares against what the screen
+> showed, so a model's answer taken twice would refuse every press -- and the body was **not** taken
+> out of that digest, which would have let the one part of a pull request a person can only check by
+> reading move under a press that matched everything else. So the composed body is a `publish_body`
+> proposal, named `rondo/publish-body/<version>/<model-id>` and **never approvable**: what a person
+> answers is the publish itself, so the kind is absent from `APPROVABLE_PROPOSAL_KINDS` for
+> `revise_draft`'s reason. The preview writes it and the press only reads it, spawning nothing and
+> spending nothing. One row per lap per gate: a second pass is `covered` and reads what the first
+> wrote, and an outcome that could not be composed is recorded as such.
+>
+> **Once, including while it is running.** The row settles which answer becomes the body; what it
+> cannot settle is a second drafter run, because a pass that has not written yet is not in the
+> database to be found -- so a pass that arrives while another is composing this lap's body joins it
+> (`inFlight`, `src/access/publish-body.ts`). A page redraws while it is drawing and a person may have
+> two screens of one lap open, and spending a model run on an answer the first pass has already made
+> the body is the cost that buys nothing.
+>
+> **What the two surfaces read is the row and never a run's own answer**, which is how they are kept
+> from disagreeing: `publishBodyOnce` answers with the row it read back, so a row that would not write
+> leaves the preview with no body -- exactly what a press with no row has -- and the two render one
+> body without an account rather than two different bodies. The terminal's `publish` composes once per
+> publish and compares its body against nothing, so it needs no row.
+>
+> **Both routes read the report the same way, as a value and not as a continuo handle.** The report is
+> the answered gate's `rationale`, found by the lap's own `gate_id` in the lap's own database
+> (`lapReport`), and the one `gate show` it takes arrives as a function -- because a
+> `VerifiedContinuo` is only ever minted by `startContinuo` and `run` refuses one that was not, so a
+> leg that took the handle could be exercised only against a real pinned build. That is what lets the
+> route both surfaces publish through be covered without one.
+
 **This entry decides and builds.** The building change is the pull request that carries it:
 `src/access/wording.ts`, `src/access/model-draft.ts` and `src/continuo/invoker.ts`, with their tests.
 The rule on where English is written (section 4) is decided here and built elsewhere.
