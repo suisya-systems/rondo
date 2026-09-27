@@ -302,6 +302,45 @@
   color: var(--color-wait-ink);
 }
 
+/* One step per part (D-0098 rule 8.2): the part's name, then what it waits on. */
+.side-parts-heading {
+  margin-top: 10px;
+  font-size: calc(12px * var(--text-scale));
+  font-weight: 700;
+}
+
+.side-parts {
+  margin-top: 6px;
+  list-style: none;
+}
+
+.side-part {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 10px;
+  padding: 4px 0 4px 8px;
+  border-left: 2px solid var(--color-border);
+  font-size: calc(12px * var(--text-scale));
+  line-height: 1.5;
+}
+
+.side-part span {
+  font-weight: 700;
+}
+
+.side-part a {
+  color: var(--color-link);
+}
+
+/* The person's: a gate, or a question about a part whose earlier part ended
+   unmerged (D-0098 rule 8.2), which rondo cannot clear by itself. The amber
+   edge and ink are the question's own, as `.gov-waiting` spends them. */
+.side-part-yours {
+  border-left-color: var(--color-wait);
+  background: var(--color-wait-wash);
+  color: var(--color-wait-ink);
+}
+
 /* rondo will not do this step, whatever else is true (D-0064 rule 3.4). */
 .gov-yours {
   font-style: italic;

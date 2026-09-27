@@ -14,6 +14,8 @@ import { expect, test } from "vitest";
 import { recordDraftedScopeFromPage } from "../../src/access/cli.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { draftedPlanRun } from "../../src/access/model-draft/host.js";
+import { unlandedBody, unlandedPrefix } from "../../src/access/order-host.js";
+import { partStepOf } from "../../src/access/page/thread-side.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 
 import { allocate } from "../../src/refrain/allocator.js";
@@ -170,4 +172,71 @@ test("a request run as one line keeps its one sentence of state", async () => {
   const w = await split([undefined]);
   await w.start(0, "lap-one");
   expect(rowSaid(await page(w.world))).toBe(EN.rowRunning);
+});
+
+/** The right face's steps, one per part, as text: name, then what it says. */
+function partSteps(html: string): string[] {
+  return [...html.matchAll(/<li class="side-part( side-part-yours)?">([\s\S]*?)<\/li>/g)].map(
+    (m) => `${m[1] === undefined ? "" : "[yours] "}${(m[2] ?? "").replace(/<[^>]+>/g, "")}`,
+  );
+}
+
+test("each part's wait is one step of what remains, and starts by itself (D-0098 rule 8.2)", async () => {
+  const w = await split([undefined, 0]);
+  await w.start(0, "lap-one");
+  expect(partSteps(await page(w.world))).toEqual([
+    "Part 1under way",
+    "Part 2waiting until part 1 is merged; then it starts by itself",
+  ]);
+});
+
+test("a part whose earlier part ended unmerged is the person's: amber, with the question linked (D-0098 rules 1.5 and 8.2)", async () => {
+  const w = await split([undefined, 0]);
+  await w.start(0, "lap-one");
+  expect((await w.world.store.transition("lap-one", "planned", "abandoned", {}, 3_600)).kind).toBe(
+    "transitioned",
+  );
+  const askId = `${unlandedPrefix({ proposalId: w.proposalId }, 1)}lap-one`;
+  const asked = await w.world.record.recordThreadMessage({
+    messageId: askId,
+    body: unlandedBody(1, 0, "lap-one"),
+    authorKind: "drafter",
+    authorId: "rondo/deterministic/1",
+    inReplyTo: "r1",
+    atMs: 3_700,
+    bases: [{ form: "message", messageId: "r1" }],
+    asks: true,
+  });
+  expect(asked.kind, JSON.stringify(asked)).toBe("recorded");
+  const html = await page(w.world);
+  expect(partSteps(html)).toEqual([
+    "Part 1stopped",
+    "[yours] Part 2part 1 ended without being merged, so this one will not start by itself Answer the question",
+  ]);
+  expect(html).toContain(`href="#${askId}"`);
+  // The row is the person's turn, and says which part.
+  expect(html).toContain("list-row-mine");
+  expect(rowSaid(html)).toBe("2 parts: 1 needs you, 1 stopped");
+});
+
+test("a wait on another repository names it and its pull request", () => {
+  const step = partStepOf(EN, {
+    index: 1,
+    standing: "waiting",
+    wait: {
+      after: 0,
+      first: "awaitingLanding",
+      place: "cadenza",
+      pullRequest: { url: "https://github.com/o/cadenza/pull/131", number: "131" },
+      askId: null,
+    },
+    pullRequest: null,
+    laps: [],
+  });
+  expect(step).toEqual({
+    name: "Part 2",
+    said: "waiting until cadenza #131 is merged; then it starts by itself",
+    yours: false,
+    links: [{ href: "https://github.com/o/cadenza/pull/131", said: "#131" }],
+  });
 });

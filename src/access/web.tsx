@@ -134,7 +134,7 @@ import { facesMarkup } from "./page/render.js";
 import { ResultLine } from "./page/result.js";
 import { Raw } from "./page/shell.js";
 import { ThreadFace, type ThreadItem } from "./page/thread.js";
-import { ThreadSide } from "./page/thread-side.js";
+import { partStepOf, ThreadSide } from "./page/thread-side.js";
 import {
   currentGoals,
   GoalScreen,
@@ -3745,6 +3745,10 @@ export async function operatorPage(
             })(),
             material: sideMaterial === null ? null : Raw({ html: sideMaterial }),
             asking: sideAsking,
+            parts:
+              selectedRoot === null
+                ? []
+                : partsOfRequest(selectedRoot).map((part) => partStepOf(wording, part)),
           }),
         };
   const emptySide = !centreIsEmpty

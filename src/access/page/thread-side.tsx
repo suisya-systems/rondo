@@ -28,6 +28,7 @@
  */
 import type { ReactNode } from "react";
 import type { Governance } from "../page-logic/governance.js";
+import type { PartView } from "../page-logic/parts.js";
 import type { WorkStep } from "../page-logic/week.js";
 import type { Chrome } from "../wording.js";
 import { spendSaid } from "./governance.js";
@@ -50,6 +51,104 @@ export interface ThreadSideProps {
    * something is being asked, *what is known so far* when nothing is.
    */
   readonly asking: boolean;
+  /**
+   * One step per part where the request runs as several lines (D-0098 rule
+   * 8.2, D-0129), in the split's order; empty for a request run as one.
+   */
+  readonly parts?: readonly PartStep[];
+}
+
+/** A link a part's step carries: a pull request, or a question in the thread. */
+export interface PartLink {
+  readonly href: string;
+  readonly said: string;
+}
+
+/** One part's step, already said. */
+export interface PartStep {
+  readonly name: string;
+  readonly said: string;
+  /**
+   * The part is the person's (rule 8.2): the one amber on this face, since
+   * what it waits on is a question or a gate and not something rondo clears.
+   */
+  readonly yours: boolean;
+  readonly links: readonly PartLink[];
+}
+
+/**
+ * A part's step in the person's words (rule 8.2): what it waits on, and the
+ * pull request or the question that says why, with nothing to press here --
+ * a part that waits on an earlier one's merge starts by itself.
+ */
+export function partStepOf(wording: Chrome, view: PartView): PartStep {
+  const name = wording.partName(view.index + 1);
+  const pullRequest = (pr: PartView["pullRequest"]): PartLink[] =>
+    pr?.url == null ? [] : [{ href: pr.url, said: wording.pullRequest(pr.number) }];
+  const wait = view.wait;
+  if (wait !== null && wait.first === "endedUnlanded") {
+    return {
+      name,
+      said: wording.partUnlanded(wait.after),
+      yours: true,
+      links:
+        wait.askId === null
+          ? []
+          : [{ href: `#${encodeURIComponent(wait.askId)}`, said: wording.partUnlandedLink }],
+    };
+  }
+  if (wait !== null) {
+    return {
+      name,
+      said: wording.partWaiting(
+        wait.after,
+        wait.place,
+        wait.pullRequest === null ? null : wording.pullRequest(wait.pullRequest.number),
+      ),
+      yours: false,
+      links: pullRequest(wait.pullRequest),
+    };
+  }
+  switch (view.standing) {
+    case "yours":
+      return { name, said: wording.partYours, yours: true, links: [] };
+    case "running":
+      return { name, said: wording.partRunning, yours: false, links: [] };
+    case "merged":
+      return { name, said: wording.partMerged, yours: false, links: pullRequest(view.pullRequest) };
+    case "finished":
+      return {
+        name,
+        said: wording.partFinished,
+        yours: false,
+        links: pullRequest(view.pullRequest),
+      };
+    case "stopped":
+      return { name, said: wording.partStopped, yours: false, links: [] };
+    default:
+      return { name, said: wording.partToStart, yours: false, links: [] };
+  }
+}
+
+function PartSteps({ parts }: { readonly parts: readonly PartStep[] }) {
+  return (
+    <ol className="side-parts">
+      {parts.map((part) => (
+        <li className={`side-part${part.yours ? " side-part-yours" : ""}`} key={part.name}>
+          <span>{part.name}</span>
+          <p>
+            {part.said}
+            {part.links.map((link) => (
+              <span key={link.href}>
+                {" "}
+                <a href={link.href}>{link.said}</a>
+              </span>
+            ))}
+          </p>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 /** A figure in dollars, in the shape `govSpent` writes one (`D-0082`'s scale). */
@@ -61,10 +160,12 @@ function Agreed({
   wording,
   governance,
   steps,
+  parts,
 }: {
   readonly wording: Chrome;
   readonly governance: Governance;
   readonly steps: readonly WorkStep[];
+  readonly parts: readonly PartStep[];
 }) {
   const { allowance, atBudgetCap, byTry, tries, touches, decided } = governance;
   return (
@@ -159,6 +260,14 @@ function Agreed({
         </div>
       )}
       <h3 className="side-sub">{wording.govStepsLabel}</h3>
+      {/* Each part's wait is one step of what remains (D-0098 rule 8.2); the
+          five steps under it are the part being answered. */}
+      {parts.length === 0 ? null : (
+        <>
+          <h4 className="side-parts-heading">{wording.partsHeading}</h4>
+          <PartSteps parts={parts} />
+        </>
+      )}
       <SideSteps wording={wording} steps={steps} />
       {/*
        * **What rondo decided without asking** (rule 6), counted and named.
@@ -189,8 +298,15 @@ function Agreed({
   );
 }
 
-export function ThreadSide({ wording, governance, steps, material, asking }: ThreadSideProps) {
-  const agreed = <Agreed wording={wording} governance={governance} steps={steps} />;
+export function ThreadSide({
+  wording,
+  governance,
+  steps,
+  material,
+  asking,
+  parts = [],
+}: ThreadSideProps) {
+  const agreed = <Agreed wording={wording} governance={governance} steps={steps} parts={parts} />;
   const known =
     material === null ? null : (
       <section className="side-material">
