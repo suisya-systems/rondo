@@ -179,6 +179,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0144 | The record's language is not what the reader sees: English-held text is read in the person's language on a press, stored by the original's digest beside it and never in its place, and drawn in place with the original one fold away | accepted |
 | D-0145 | Under a goal scope, rondo sends the drafted change itself when only plain review findings withhold the gate: every standing finding quoted, none marked a judgment call, a round and the budget left, no question on the lap | accepted |
 | D-0147 | The goal flow's open question is in the person's turn: its block stays on the empty centre while another request waits on them | accepted |
+| D-0148 | A budget stop under a paused goal scope offers no raise; its box says the work is paused and links to resuming it | accepted |
 
 ---
 
@@ -26623,3 +26624,41 @@ somewhere else: the question's form is only drawn in the triage block.
 
 - **A person answering the flow's ask before the gate they came for** and saying they were pulled
   away from it: then the block should follow the gate in the walk, not stand beside it.
+
+## D-0148 — A budget stop under a paused goal scope offers no raise; its box says the work is paused and links to resuming it
+
+**Status:** accepted (2026-09-28, rondo#524; found while fixing #522 on the lap 19 store). Amends
+`D-0141` "What it costs" (a raise on a paused goal scope carries its `laps: 0`) and `D-0140` rule 3
+(where the raise is offered). Refs `D-0128` rule 4.
+
+### Context
+
+Pausing a goal scope records a successor approval with `laps: 0` (`D-0128` rule 4). A budget stop's
+answering box drew *Raise the budget and carry on* over the lap's approval tip, which for a
+goal-scoped lap is that paused approval. The raise copied `laps: 0` into its successor, the
+*carry on* admitted nothing, and the work stopped again with nothing on the page saying why.
+`D-0141` recorded this as a cost. On the lap 19 store the press was made and read as broken.
+
+### Decision
+
+1. **Where the lap's approval tip is a goal scope's with `laps: 0`, the stop's box offers no raise.**
+   *Carry on* and *Stop this line* stay, as on any other stop.
+2. **In the raise's place the box says the work toward the goal is paused, so a raise here would stop
+   again, and links to the goal scope screen**, where it is resumed (the triage row's link, same
+   words).
+
+**Options not taken.** Letting the box's raise resume too (carry the paused approval's last `laps`):
+resuming is the goal screen's press, over what that screen shows, and a raise changes budgets only
+(`D-0074` rule 1.1). Refusing the press on the server: a form drawn before the pause names an
+approval that is no longer the tip, which `raiseScope` already refuses; a form drawn after it no
+longer carries the raise.
+
+### What it costs
+
+- **The gate's own raise screen is unchanged.** Its laps field is the person's to set, so a raise
+  there over a paused approval is a visible choice, not a copied `laps: 0`.
+
+### What would falsify it
+
+- **A paused goal scope's stop that the person resumes and still cannot carry on from**: then the
+  resume does not reach the lap's approval tip, and the link sends them to the wrong press.

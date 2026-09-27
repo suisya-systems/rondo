@@ -270,6 +270,8 @@ export const JA: Chrome = Object.freeze({
     `この承認に残っているのは $${left} で、次の 1 回が取り置く $${reserve} に` +
     `${enough ? "足ります" : "足りません"}。増やすと、予算だけを変えた新しい承認が記録されます。` +
     "これまでに使った額は元の承認に残ります。",
+  answerRaisePaused:
+    "この目標に向けた作業は一時停止中のため、ここで予算を増やしてもまた止まります。先に再開してください。",
   newRequestHeading: "新しい依頼",
   requestPlaceholder: "何をしてほしいですか。話すときの言葉のまま書いてください。",
   replyPlaceholder: "返信を書く",

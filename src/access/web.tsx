@@ -108,6 +108,7 @@ import {
   type NonTerminalStatus,
   opensFlowRequest,
   readingReach,
+  requestsGoal,
   reviewedReading,
   type ScopePayload,
   type ScopeSpent,
@@ -2799,6 +2800,15 @@ interface BudgetRaise {
 }
 
 /**
+ * A budget stop whose line's approval is a paused goal scope's (D-0148, rondo#524):
+ * the raise would carry the pause's `laps: 0` and stop again, so the box says
+ * the work is paused and links to where it is resumed, the goal's repository.
+ */
+interface PausedStop {
+  readonly pausedRepository: string | null;
+}
+
+/**
  * The raise each budget stop waiting in `root`'s thread offers, by the ask's
  * id: a `lap-stopped-` ask over a lap that ended `budget`, or a scope's stop
  * on spent review rounds or cost (`stopRaises`) over a lap still at its gate
@@ -2810,8 +2820,8 @@ async function budgetRaises(
   ports: WebPorts,
   threads: Threads,
   root: string,
-): Promise<ReadonlyMap<string, BudgetRaise>> {
-  const raises = new Map<string, BudgetRaise>();
+): Promise<ReadonlyMap<string, BudgetRaise | PausedStop>> {
+  const raises = new Map<string, BudgetRaise | PausedStop>();
   for (const message of threads.messages) {
     const raising = scopeStop(message) ? stopRaises(message.body) : null;
     const stoppedByScope = raising !== null;
@@ -2842,6 +2852,12 @@ async function budgetRaises(
     const stored = await ports.record.readScope(decided.decision.scopeId);
     if (stored.kind !== "read") continue;
     const budgets = stored.scope.payload.budgets;
+    const goalId = requestsGoal(stored.scope.payload.requests);
+    if (goalId !== null && budgets.laps === 0) {
+      const goal = (await ports.record.goals()).find((one) => one.goalId === goalId);
+      raises.set(message.messageId, { pausedRepository: goal?.repository ?? null });
+      continue;
+    }
     const spent = await ports.record.scopeSpent(tip.scopeDecisionId);
     raises.set(message.messageId, {
       iterationId,
@@ -2938,7 +2954,7 @@ function composerView(
    */
   taken: { readonly key: string; readonly text: string } | null = null,
   /** The raise each budget stop offers, by the ask's id (D-0140 rule 3). */
-  raises: ReadonlyMap<string, BudgetRaise> = new Map(),
+  raises: ReadonlyMap<string, BudgetRaise | PausedStop> = new Map(),
   /** The worker's question at its gate this box can answer by revising (D-0142). */
   answerRevise: AnswerRevise | null = null,
 ) {
@@ -2958,8 +2974,10 @@ function composerView(
   }
   const kind = replying === null ? "request" : "reply";
   const answers = replying?.answers === true;
-  const raise =
+  const offered =
     answers && replying !== null ? (raises.get(replying.target.messageId) ?? null) : null;
+  const raise = offered !== null && "budgets" in offered ? offered : null;
+  const paused = offered !== null && "pausedRepository" in offered ? offered : null;
   const revising =
     answers &&
     answerRevise !== null &&
@@ -3075,6 +3093,22 @@ function composerView(
               </p>
             ) : null}
             {raise === null ? null : raiseFields(wording, raise)}
+            {paused === null ? null : (
+              <p class="mx-4 mt-2 text-meta leading-5 text-muted-foreground">
+                {wording.answerRaisePaused}{" "}
+                {paused.pausedRepository === null ? null : (
+                  <a
+                    href={viewHref(
+                      { kind: "goalScope", repository: paused.pausedRepository },
+                      wording.lang,
+                    )}
+                    class="text-link underline-offset-2 hover:underline"
+                  >
+                    {wording.triageGoalScopeResume}
+                  </a>
+                )}
+              </p>
+            )}
             {revising === null ? null : answerReviseFields(wording, revising)}
           </>
         )}

@@ -282,6 +282,8 @@ explanation you pressed on and then answers the gate.`,
     `This approval has $${left} left, which ${enough ? "covers" : "does not cover"} the $${reserve} ` +
     `one more try holds. Raising records a new approval with only its budget changed, and what ` +
     `was spent stays under the old one.`,
+  answerRaisePaused:
+    "Work toward this goal is paused, so raising the budget here would stop again. Resume it first.",
   newRequestHeading: "New request",
   requestPlaceholder: "What do you want done? Write it as you would say it.",
   replyPlaceholder: "Write a reply.",
