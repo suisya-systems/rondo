@@ -57,6 +57,7 @@ function drafterMessage(
   id: string,
   bases: readonly JsonRecord[],
   inReplyTo = "r1",
+  atMs = 9_000,
 ): ThreadMessageDraft {
   return {
     messageId: id,
@@ -64,7 +65,7 @@ function drafterMessage(
     authorKind: "drafter",
     authorId: DRAFTER,
     inReplyTo,
-    atMs: 9_000,
+    atMs,
     bases: [...bases],
     asks: false,
   };
@@ -295,8 +296,18 @@ async function readLands(w: Awaited<ReturnType<typeof world>>, atMs: number) {
  * One run's write, holding the thread its material listed: `held` is the
  * membership `D-0131` rule 1 reckons coverage by, and no time on the row says
  * anything about it.
+ *
+ * A `summary` is the run's own last message, and it is a covering row in its
+ * own right: it cites the operator messages the run answered, so the coverage
+ * read processes it, and its `atMs` is the run's *end*. That is the row whose
+ * write time the first cut compared, and it is later than a read that landed
+ * while the run was working -- which the run never saw.
  */
-function draftedOver(id: string, held: readonly string[], messages: string[] = []): DraftRunWrite {
+function draftedOver(
+  id: string,
+  held: readonly string[],
+  summary: { readonly id: string; readonly atMs: number } | null = null,
+): DraftRunWrite {
   return {
     requestMessageId: "r1",
     operatorMessageIds: ["r1", "r1-plan"],
@@ -309,11 +320,21 @@ function draftedOver(id: string, held: readonly string[], messages: string[] = [
       },
     },
     scope: null,
-    // A summary of the run, written after it: its own time must not cover a
-    // read the run never saw.
-    messages: messages.map((messageId) =>
-      drafterMessage(messageId, [{ form: "proposal", proposalId: id }]),
-    ),
+    messages:
+      summary === null
+        ? []
+        : [
+            drafterMessage(
+              summary.id,
+              [
+                { form: "message", messageId: "r1" },
+                { form: "message", messageId: "r1-plan" },
+                { form: "proposal", proposalId: id },
+              ],
+              "r1",
+              summary.atMs,
+            ),
+          ],
   };
 }
 
@@ -351,14 +372,30 @@ test("a read the covering row's material held changes nothing", async () => {
 
 test("a read that lands while the run is drafting is not covered by the summary written after it", async () => {
   const { w } = await pasted();
-  // The material was assembled without the read; the read lands during the
-  // run; the run's own summary message is written last, later than the read.
-  const write = draftedOver("draft-1", ["r1", "r1-plan"], ["drafter-1"]);
+  // The material was assembled at 9_000 without the read; the read lands at
+  // 12_000 while the run is still working; the run's summary is written last,
+  // at 15_000. Every clock on the row is therefore *after* the read, and the
+  // summary is a covering row the coverage read processes -- so a comparison of
+  // times would call `r1` covered and the redraft would never happen.
+  const write = draftedOver("draft-1", ["r1", "r1-plan"], { id: "drafter-1", atMs: 15_000 });
   await readLands(w, 12_000);
   expect(await w.record.recordDraft(write)).toEqual({ kind: "recorded" });
-  // The summary's write time is 9_000 in the row and later than the read in
-  // recording order, and neither of those covers what the draft never saw.
+  // Membership, not the clock: neither the proposal's material nor the
+  // summary's citations hold `forge-12000`, so `r1` is drafted again.
   expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1-plan"]));
+
+  // And the redraft writes something: a run handed the read covers `r1`, and
+  // the summary of *that* run does not un-cover it.
+  expect(
+    await w.record.recordDraft(
+      draftedOver("draft-2", ["r1", "r1-plan", "forge-12000"], {
+        id: "drafter-2",
+        atMs: 18_000,
+      }),
+    ),
+  ).toEqual({ kind: "recorded" });
+  expect((await w.record.readProposal("draft-2")).kind).toBe("read");
+  expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1", "r1-plan"]));
 });
 
 test("a read stamped before the material but recorded after the draft is still not covered", async () => {
