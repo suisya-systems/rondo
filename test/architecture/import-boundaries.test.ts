@@ -1348,6 +1348,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page-logic/result.ts": [HUMAN],
   "src/access/page-logic/routes.ts": [HUMAN],
   "src/access/page-logic/selection.ts": [HUMAN],
+  "src/access/page-logic/story.ts": [HUMAN],
   "src/access/page-logic/thread-events.ts": [HUMAN],
   "src/access/page-logic/threads.ts": [HUMAN],
   "src/access/page-logic/waits.ts": [HUMAN],

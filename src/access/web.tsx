@@ -1307,8 +1307,11 @@ function storyView(
   current: IterationRecord,
   work: LapWorkInspection | null,
 ) {
+  // **Bounded, so the presses stay in reach on arrival** (D-0106, the Fable
+  // pass on rondo#497): quotes are clamped to three lines, and an earlier
+  // lap's asked words are folded, since its one line already says how it ended.
   const QUOTE =
-    "mt-1 border-l-2 border-border pl-2 text-body leading-5 wrap-anywhere whitespace-pre-wrap";
+    "mt-1 line-clamp-3 border-l-2 border-border pl-2 text-body leading-5 wrap-anywhere whitespace-pre-wrap";
   return (
     <section id="story" class={CARD}>
       <h3 class={CARD_HEADING}>{wording.storyHeading}</h3>
@@ -1321,7 +1324,7 @@ function storyView(
       {story.intended === null ? null : (
         <>
           <p class="mt-2 text-meta leading-5 text-muted-foreground">{wording.storyIntended}</p>
-          <p class={QUOTE} lang="">
+          <p class={QUOTE} lang="" title={story.intended}>
             {story.intended}
           </p>
         </>
@@ -1330,40 +1333,62 @@ function storyView(
         {story.laps.map((lap, index) => {
           const now = lap.record.id === current.id;
           const subjects = now && work?.kind === "read" ? work.commits.slice(0, 3) : [];
+          const told =
+            lap.told.kind === "request"
+              ? wording.storyToldRequest
+              : lap.told.kind === "asked"
+                ? wording.storyToldAsked
+                : wording.storyToldNotRecorded;
+          const words = lap.told.kind === "asked" ? lap.told.words : null;
+          const outcome = [
+            lap.commits === null || lap.files === null
+              ? wording.storyChangedUnread
+              : wording.storyChanged(lap.commits, lap.files),
+            // The lap at the gate's count is the bar's, a few lines below.
+            now || lap.raised === null
+              ? null
+              : wording.modelRaised(lap.raised.blockers, lap.raised.majors),
+            now
+              ? wording.storyNow
+              : wording.storyEnded(lap.record.gateAnswer, endedWhy(wording, lap.record)),
+          ]
+            .filter((part) => part !== null)
+            .join(" ");
           return (
             <li class="text-body leading-5">
-              <span class="font-semibold">{wording.storyLapName(index + 1, now)}</span>{" "}
-              {lap.told.kind === "request"
-                ? wording.storyToldRequest
-                : lap.told.kind === "asked"
-                  ? wording.storyToldAsked
-                  : wording.storyToldNotRecorded}
-              {lap.told.kind === "asked" ? (
-                <p class={QUOTE} lang="">
-                  {lap.told.words}
-                </p>
-              ) : null}
-              <p class="mt-1 text-muted-foreground">
-                {lap.commits === null || lap.files === null
-                  ? wording.storyChangedUnread
-                  : wording.storyChanged(lap.commits, lap.files)}{" "}
-                {lap.raised === null
-                  ? null
-                  : `${wording.modelRaised(lap.raised.blockers, lap.raised.majors)} `}
-                {now
-                  ? wording.storyNow
-                  : wording.storyEnded(lap.record.gateAnswer, endedWhy(wording, lap.record))}
-              </p>
+              {now || words === null ? (
+                <>
+                  <span class="font-semibold">{wording.storyLapName(index + 1, now)}</span> {told}
+                  {words === null ? null : (
+                    <p class={QUOTE} lang="" title={words}>
+                      {words}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <details class="group">
+                  <summary class="cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
+                    <span class="font-semibold">{wording.storyLapName(index + 1, now)}</span> {told}{" "}
+                    <span class="text-meta text-faint underline underline-offset-2">
+                      {wording.storyShowAsked}
+                    </span>
+                  </summary>
+                  <p class={QUOTE} lang="">
+                    {words}
+                  </p>
+                </details>
+              )}
+              <p class="mt-0.5 text-muted-foreground">{outcome}</p>
               {subjects.length === 0 ? null : (
                 <ul class="mt-1 space-y-0.5">
                   {subjects.map((commit) => (
-                    <li class="flex gap-2 text-meta leading-5">
+                    <li class="flex gap-2 text-meta leading-5 text-muted-foreground">
                       <span aria-hidden="true" class="text-faint">
                         &#8226;
                       </span>
-                      <a href="#changed" class="min-w-0 wrap-anywhere hover:underline" lang="">
+                      <span class="min-w-0 wrap-anywhere" lang="">
                         {commit.subject}
-                      </a>
+                      </span>
                     </li>
                   ))}
                 </ul>

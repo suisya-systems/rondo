@@ -442,13 +442,14 @@ explanation you pressed on and then answers the gate.`,
       : `${String(count)} laps have run for this work.`,
   storyPart: (part, parts) =>
     `The request was drafted as ${String(parts)} separate parts, and this gate is part ${String(part)}.`,
-  storyLapName: (n, current) => (current ? `Lap ${String(n)}, this one` : `Lap ${String(n)}`),
-  storyToldRequest: "Asked to do the request.",
+  storyLapName: (n, current) => (current ? `Lap ${String(n)} (this one)` : `Lap ${String(n)}`),
+  storyToldRequest: "Started from the request itself.",
   storyToldAsked: "Asked to change:",
   storyToldNotRecorded:
     "Carried on from the lap before; what it was asked beyond that is not recorded.",
+  storyShowAsked: "what was asked",
   storyChanged: (commits, files) =>
-    `Committed ${String(commits)} change${commits === 1 ? "" : "s"} to ${String(files)} file${files === 1 ? "" : "s"}.`,
+    `${String(commits)} commit${commits === 1 ? "" : "s"}, ${String(files)} file${files === 1 ? "" : "s"} changed.`,
   storyChangedUnread: "What it committed has not been read.",
   storyNow: "It is waiting on you now.",
   storyEnded: (answer, otherwise) =>
@@ -456,7 +457,7 @@ explanation you pressed on and then answers the gate.`,
       ? "Sent back at its gate with a change asked."
       : answer === "approve"
         ? "Approved at its gate."
-        : `Ended: ${otherwise}.`,
+        : `Ended (${otherwise}).`,
   storyIntended: "What the request was drafted to change, in the drafter's words:",
   storyOthers: "The other parts:",
   recordsFold: (count) => `What approve records (${String(count)} fields), and the full text`,

@@ -487,7 +487,8 @@ const finalTransition = await store.transition(
     gateId: waitingGateId,
     // What the worker ran, as continuo reports it with the lap (D-0104,
     // rondo#410): the checks card shows the last test run apart from the
-    // reading's own statement. lap 12's own `npm run verify`, in its shape.
+    // reading's own statement. Lap 18's shape (rondo#497): a deliberate
+    // failing run, then the whole suite again with its output in a file.
     lapCommands: JSON.stringify([
       {
         index: 12,
@@ -497,12 +498,25 @@ const finalTransition = await store.transition(
         is_error: false,
       },
       {
+        index: 30,
+        command: "npx vitest run test/count.test.ts",
+        output:
+          " Test Files  1 failed (1)\n      Tests  1 failed | 6 passed (7)\n   Duration  1.10s",
+        output_omitted_chars: 0,
+        is_error: true,
+      },
+      {
         index: 41,
-        command: "npm run verify",
-        output: " Test Files  98 passed (98)\n      Tests  1844 passed (1844)\n   Duration  42.10s",
+        command: "npm run verify > $TMPDIR/verify.log 2>&1",
+        output: "",
         output_omitted_chars: 0,
         is_error: false,
       },
+    ]),
+    // Two calls the fence stopped, for the execution limits card (rondo#497).
+    permissionDenials: JSON.stringify([
+      { tool_name: "Bash", tool_input: { command: "git push origin HEAD" } },
+      { tool_name: "WebFetch", tool_input: { url: "https://registry.npmjs.org/vitest" } },
     ]),
   },
   now - 18 * MINUTE,

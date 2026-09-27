@@ -336,8 +336,8 @@ export const JA: Chrome = Object.freeze({
   fenceHeading: "実行の制限:",
   fenceMeaning:
     "これらのコマンドは、この周回に許されている範囲の外だったため、実行される前に止められました。何も変えていません。" +
-    "作業者はそれらを使わずに作業を続けました。作業にそれらが必要だったかどうかは rondo には判断できません。" +
-    "どれかが作業の前提になる手順 (チェック、インストール、push など) だった場合は、結果にその手順が欠けている可能性があります。",
+    "作業者はそれらなしで作業を続けました。どれかが作業の前提になる手順 (チェック、インストール、push など) だった場合、" +
+    "結果にその手順が欠けている可能性がありますが、必要だったかどうかは rondo には判断できません。",
   reportHeading: "作業者の報告",
   reportFold: "作業者が書いたとおりの全文",
   reportNotRead: "作業者の報告は読み取れませんでした。読めていれば下のテキストにあります。",
@@ -457,24 +457,25 @@ export const JA: Chrome = Object.freeze({
   modelNotTaken: "チェックだけが読みました。モデルレビューは取れていません。",
   neitherReadingTaken: "チェックもモデルレビューも、この作業を読めませんでした。",
   storyHeading: "これまでの経緯",
-  storyLaps: (count) => `この作業はこれまでに ${String(count)} 周回しました。`,
+  storyLaps: (count) => `この作業はこれで ${String(count)} 周目です。`,
   storyPart: (part, parts) =>
-    `この依頼は ${String(parts)} つの別々の作業として起案されていて、このゲートは作業 ${String(part)} のものです。`,
+    `この依頼は ${String(parts)} つに分けて起案されました。このゲートはその ${String(part)} つ目 (作業 ${String(part)}) のものです。`,
   storyLapName: (n, current) => (current ? `${String(n)} 周目 (今回)` : `${String(n)} 周目`),
   storyToldRequest: "依頼の内容に取り組みました。",
   storyToldAsked: "次の変更を求められました:",
-  storyToldNotRecorded: "前の周回から続けました。それ以上に何を求められたかは記録にありません。",
+  storyToldNotRecorded: "前の周回の続きです。何を求められたかは記録にありません。",
+  storyShowAsked: "求められた内容",
   storyChanged: (commits, files) =>
     `${String(commits)} 件のコミットで ${String(files)} ファイルを変更しました。`,
-  storyChangedUnread: "何をコミットしたかはまだ読み取れていません。",
+  storyChangedUnread: "コミット内容は読み取れていません。",
   storyNow: "いまあなたの回答を待っています。",
   storyEnded: (answer, otherwise) =>
     answer === "revise"
       ? "ゲートで変更を求められ、差し戻されました。"
       : answer === "approve"
         ? "ゲートで承認されました。"
-        : `終わり方: ${otherwise}。`,
-  storyIntended: "この依頼が何を変えるものとして起案されたか (起案者の言葉):",
+        : `終わりました (${otherwise})。`,
+  storyIntended: "起案時の説明 (起案者の言葉のまま):",
   storyOthers: "ほかの作業:",
   recordsFold: (count) => `承認したときに記録される内容 (${String(count)} 項目) と記録全文`,
   denialUnreadable: "どのコマンドだったかを rondo は記録できませんでした。",

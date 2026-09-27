@@ -468,6 +468,8 @@ export interface Chrome extends PageWords {
   /** Leads the words a revise at the gate before the lap asked it to change, quoted below. */
   readonly storyToldAsked: string;
   readonly storyToldNotRecorded: string;
+  /** Opens the fold holding an earlier lap's asked words. */
+  readonly storyShowAsked: string;
   readonly storyChanged: (commits: number, files: number) => string;
   readonly storyChangedUnread: string;
   readonly storyNow: string;
