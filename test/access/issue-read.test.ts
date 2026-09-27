@@ -22,6 +22,7 @@ import {
   ISSUE_BOUND_BYTES,
   ISSUE_READER,
   ISSUES_QUOTE_OPENING,
+  issueForDrafter,
   issueReader,
   issuesQuote,
   namedIssues,
@@ -375,6 +376,48 @@ test("a lap is not admitted while an issue its request names is still to be read
   expect("prompt" in quoted && quoted.prompt).toContain(ISSUE.title);
 });
 
+test("what the drafter is handed of one read is its body and comments, cut from the head (D-0131 rule 2)", () => {
+  const read = (body: string, comments: readonly { author: string; at: string; body: string }[]) =>
+    forgeBody({
+      named: "#237",
+      atMs: 1,
+      read: {
+        url: "https://github.com/o/r/issues/237",
+        number: 237,
+        pullRequest: false,
+        title: ISSUE.title,
+        state: "open",
+        author: "ada",
+        openedAt: "2026-09-01T00:00:00Z",
+        body,
+        comments: [...comments],
+      },
+    });
+  const comment = { author: "bob", at: "2026-09-02T00:00:00Z", body: "The second thing." };
+
+  // Within the bound, nothing is touched: the body and the comments as read.
+  const whole = read("The first thing.", [comment]);
+  expect(issueForDrafter(whole)).toBe(whole);
+  expect(issueForDrafter(whole)).toContain("The second thing.");
+
+  // Over it, the head is kept and the cut is named. A comment past the bound is
+  // cut to nothing rather than dropped, so the reader sees there was one.
+  const cut = issueForDrafter(read(`start 日本語${"y".repeat(60)}end`, [comment]), 18);
+  const parsed = parseForgeRead(cut);
+  if (parsed === null || !("read" in parsed)) throw new Error(cut);
+  // Never inside a character: 'start ' is 6 bytes and each kanji is 3, so the
+  // three that fit are whole and the 18th byte falls on a 'y'.
+  expect(parsed.read.body).toBe("start 日本語yyy");
+  expect(parsed.read.comments).toEqual([{ ...comment, body: "" }]);
+  expect(new TextEncoder().encode(parsed.read.body).length).toBe(18);
+  expect(cut).toContain("rondo cut this issue to its first 18 of");
+
+  // What is not one of rondo's reads, and a read that failed, come back as they are.
+  expect(issueForDrafter("not a read at all", 1)).toBe("not a read at all");
+  const failed = forgeBody({ named: "#237", atMs: 1, failed: { why: "no_repo", detail: "why" } });
+  expect(issueForDrafter(failed, 1)).toBe(failed);
+});
+
 /** A held plan, as `bareIssueRepository` reads one: where it runs, and its slug. */
 const heldIn = (repository: string, forgeRepository: string | null): HeldPlan =>
   ({ repository, forgeRepository }) as unknown as HeldPlan;
@@ -540,13 +583,15 @@ test("a bare #N still in dispute waits for the person: it holds the lap's door a
   const quoted = await withNamedIssues(w.record, "r1", planned.plan);
   expect("prompt" in quoted && quoted.prompt).toContain(ISSUE.title);
 
-  // **The draft that let the read happen is not drafted again over it**: the
-  // store holds a thread every operator message of which a drafter row covers
-  // to be drafted, and writes nothing twice (D-0071 rule 3.2). So the issue
-  // reaches this request at the lap's door, quoted, and not in the drafted
-  // prompt -- the known limit this rule leaves, recorded here so a change to
-  // it is a red test and not a surprise.
+  // **The draft that let the read happen is drafted again over it** (`D-0131`
+  // rule 1): a drafter row covers an operator message only with the reads it
+  // held, so the landed read leaves the request due and the second run has the
+  // issue in its document.
   drafter.kick();
   await drafter.idle();
-  expect(handed).toHaveLength(1);
+  expect(handed).toHaveLength(2);
+  // The first run had only the read that needed no settling; the second has both.
+  expect(handed[0]?.match(/"rondo_issue_read"/g)).toHaveLength(1);
+  expect(handed[1]?.match(/"rondo_issue_read"/g)).toHaveLength(2);
+  expect(handed[1]).toContain('"named":"#237"');
 });

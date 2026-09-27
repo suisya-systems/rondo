@@ -389,10 +389,7 @@ function headOfBytes(text: string, bytes: number): string {
  * drafter's document's, not the read's. Anything that is not one of rondo's
  * issue reads, and any read that failed, comes back unchanged.
  */
-export function issueForDrafter(
-  body: string,
-  bound: number = DRAFTER_ISSUE_BOUND_BYTES,
-): string {
+export function issueForDrafter(body: string, bound: number = DRAFTER_ISSUE_BOUND_BYTES): string {
   const read = parseForgeRead(body);
   if (read === null || !("read" in read)) {
     return body;

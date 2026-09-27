@@ -5669,7 +5669,9 @@ function coveredMessageIds(connection: DatabaseSync, drafterPrefix: string): Set
     .all() as SqlRow[];
   const readAt = new Map(reads.map((row) => [String(row["id"]), Number(row["at_ms"])]));
   return new Set(
-    [...seen].flatMap(([id, at]) => (at >= (readAt.get(id) ?? Number.NEGATIVE_INFINITY) ? [id] : [])),
+    [...seen].flatMap(([id, at]) =>
+      at >= (readAt.get(id) ?? Number.NEGATIVE_INFINITY) ? [id] : [],
+    ),
   );
 }
 
