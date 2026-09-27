@@ -5626,21 +5626,51 @@ function messagesBeforeEpoch(
   return new Set(rows.map((row) => String(row["message_id"])));
 }
 
+/**
+ * Every operator message a drafter row covers (D-0071 rule 3.2 as `D-0131`
+ * narrows it): a row covers a message **only with the issue reads it held**.
+ *
+ * A row is a proposal whose snapshot lists the message under `covers`, or an
+ * unavailable run's drafter message citing it, and what it held is when its
+ * material was assembled (`$.material.draftedAtMs`, the proposal's own write
+ * time for a row from before that was carried; the message's time for an
+ * unavailable run). A `forge` message answering the operator message later than
+ * that is material no covering row read, so the message is **not** covered and
+ * the thread is drafted again over it.
+ */
 function coveredMessageIds(connection: DatabaseSync, drafterPrefix: string): Set<string> {
   const rows = connection
     .prepare(
       // The CASE rather than a WHERE: the planner may run json_each before a
       // filter, and a malformed document must read as empty, not raise.
-      "SELECT j.value AS id FROM proposal p, " +
+      "SELECT j.value AS id, COALESCE(json_extract(CASE WHEN json_valid(p.snapshot) THEN " +
+        "p.snapshot ELSE '{}' END, '$.material.draftedAtMs'), p.created_at_ms) AS seen_at_ms " +
+        "FROM proposal p, " +
         "json_each(CASE WHEN json_valid(p.snapshot) THEN p.snapshot ELSE '{}' END, '$.covers') j " +
         "WHERE substr(p.drafter, 1, length(?)) = ? " +
-        "UNION SELECT json_extract(j.value, '$.messageId') AS id FROM conversation_message m, " +
+        "UNION ALL SELECT json_extract(j.value, '$.messageId') AS id, m.at_ms AS seen_at_ms " +
+        "FROM conversation_message m, " +
         "json_each(CASE WHEN json_valid(m.bases) THEN m.bases ELSE '[]' END) j " +
         "WHERE m.author_kind = 'drafter' AND substr(m.author_id, 1, length(?)) = ? " +
         "AND json_type(j.value) = 'object' AND json_extract(j.value, '$.form') = 'message'",
     )
     .all(drafterPrefix, drafterPrefix, drafterPrefix, drafterPrefix) as SqlRow[];
-  return new Set(rows.map((row) => String(row["id"])));
+  const seen = new Map<string, number>();
+  for (const row of rows) {
+    const id = String(row["id"]);
+    const at = Number(row["seen_at_ms"]);
+    seen.set(id, Math.max(seen.get(id) ?? Number.NEGATIVE_INFINITY, at));
+  }
+  const reads = connection
+    .prepare(
+      "SELECT in_reply_to AS id, MAX(at_ms) AS at_ms FROM conversation_message " +
+        "WHERE author_kind = 'forge' AND in_reply_to IS NOT NULL GROUP BY in_reply_to",
+    )
+    .all() as SqlRow[];
+  const readAt = new Map(reads.map((row) => [String(row["id"]), Number(row["at_ms"])]));
+  return new Set(
+    [...seen].flatMap(([id, at]) => (at >= (readAt.get(id) ?? Number.NEGATIVE_INFINITY) ? [id] : [])),
+  );
 }
 
 /** A flow ask's points read back; a row that will not read asks nothing. */

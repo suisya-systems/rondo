@@ -261,6 +261,83 @@ test("a second host's run over a thread already drafted writes nothing (rule 3.2
   expect((await w.record.readProposal("draft-2")).kind).not.toBe("read");
 });
 
+/** One issue read, as the reader writes it into a request's thread. */
+async function readLands(w: Awaited<ReturnType<typeof world>>, atMs: number) {
+  const outcome = await w.record.recordThreadMessage({
+    messageId: `forge-${String(atMs)}`,
+    body: JSON.stringify({
+      rondo_issue_read: 1,
+      named: "#237",
+      at_ms: atMs,
+      read: {
+        url: "https://github.com/o/r/issues/237",
+        number: 237,
+        pullRequest: false,
+        title: "The flaky test",
+        state: "open",
+        author: "ada",
+        openedAt: "2026-09-01T00:00:00Z",
+        body: "It fails one run in ten.",
+        comments: [],
+      },
+    }),
+    authorKind: "forge",
+    authorId: "rondo/issue-reader",
+    inReplyTo: "r1",
+    atMs,
+    bases: [],
+    asks: false,
+  });
+  if (outcome.kind !== "recorded") throw new Error(JSON.stringify(outcome));
+}
+
+test("an issue read that landed after a drafter row leaves the message it answers uncovered (D-0131 rule 1)", async () => {
+  const { w } = await pasted();
+  const drafted = (id: string, draftedAtMs: number): DraftRunWrite => ({
+    requestMessageId: "r1",
+    operatorMessageIds: ["r1", "r1-plan"],
+    drafterPrefix: "rondo/drafter/",
+    proposal: {
+      ...proposal(id, ["r1", "r1-plan"]),
+      snapshot: { covers: ["r1", "r1-plan"], material: { draftedAtMs } },
+    },
+    scope: null,
+    messages: [],
+  });
+  expect(await w.record.recordDraft(drafted("draft-1", 9_000))).toEqual({ kind: "recorded" });
+  expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1", "r1-plan"]));
+
+  // The read lands afterwards: material the covering row did not have, so the
+  // message it answers is drafted again and a second run is not "covered".
+  await readLands(w, 12_000);
+  expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1-plan"]));
+  expect(await w.record.recordDraft(drafted("draft-2", 13_000))).toEqual({ kind: "recorded" });
+
+  // **And it does not spin**: the second row was drafted over the read, so the
+  // thread is covered again and a third run writes nothing.
+  expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1", "r1-plan"]));
+  expect(await w.record.recordDraft(drafted("draft-3", 14_000))).toEqual({ kind: "covered" });
+});
+
+test("a read older than the row that covers its message changes nothing", async () => {
+  const { w } = await pasted();
+  await readLands(w, 5_000);
+  expect(
+    await w.record.recordDraft({
+      requestMessageId: "r1",
+      operatorMessageIds: ["r1", "r1-plan"],
+      drafterPrefix: "rondo/drafter/",
+      proposal: {
+        ...proposal("draft-1", ["r1", "r1-plan"]),
+        snapshot: { covers: ["r1", "r1-plan"], material: { draftedAtMs: 9_000 } },
+      },
+      scope: null,
+      messages: [],
+    }),
+  ).toEqual({ kind: "recorded" });
+  expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1", "r1-plan"]));
+});
+
 test("a damaged row covers nothing and does not stop the coverage read", async () => {
   const { w } = await pasted();
   w.connection

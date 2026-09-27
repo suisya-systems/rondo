@@ -35,7 +35,7 @@ import {
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
 import type { runDrafter } from "../forge.js";
 import { hostFailure } from "../host-failure.js";
-import { type WorkRepository, workRepository } from "../issue-read.js";
+import { issueForDrafter, type WorkRepository, workRepository } from "../issue-read.js";
 import { agentTypeRecordOf } from "../scope.js";
 import {
   type DraftAgentType,
@@ -216,7 +216,9 @@ export async function gatherDrafterMaterial(
       authorId: m.authorId,
       inReplyTo: m.inReplyTo,
       asks: m.asks,
-      body: m.body,
+      // **An issue read reaches the drafter, cut from the head when it is long**
+      // (`D-0131` rule 2): every other message's bytes are as written.
+      body: m.authorKind === "forge" ? issueForDrafter(m.body) : m.body,
     }));
 
   const records = [

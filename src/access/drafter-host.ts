@@ -9,6 +9,12 @@
  * nothing stays due after a run over it, a restart loses nothing, and a message
  * the command line wrote while the host runs is found by the next scan.
  *
+ * **A row covers a message only with the issue reads it held** (`D-0131` rule
+ * 1): a `forge` message answering the operator message later than the covering
+ * row's material was assembled makes the request due again, so a draft composed
+ * before a bare `#N` could be read is composed once more with the issue in its
+ * document.
+ *
  * **One run at a time, and a stale run writes nothing** (rule 3.3): runs are
  * taken one after another, which is at most one per thread, and the store
  * refuses a write whose thread gained an operator message after its document
