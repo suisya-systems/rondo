@@ -318,3 +318,95 @@ test("an ask left open over a candidate an earlier answer covers is not waited o
     undefined,
   );
 });
+
+test("the card is the candidate the flow asks about, and a candidate put aside leaves it at once (rondo#540)", async () => {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { TriageSection, triageBlocks } = await import("../../src/access/page/triage.js");
+  // Lap 19: the ask over #286 was raised from an older reading; a newer one
+  // ranked #534 first, and the card drew #534 over the form for #286.
+  const one = (number: number) => ({
+    key: `issue:o/r#${String(number)}`,
+    clause: 1,
+    request: `ranked ${String(number)}`,
+    why: "why",
+    openPoints: [{ point: `point ${String(number)}`, recommendation: "r" }],
+    source: { form: "issue" as const, repository: "o/r", number },
+    title: "t",
+    labels: [],
+  });
+  const reads = (putAside: { repository: string; candidate: string }[]) => ({
+    repositories: ["o/r"],
+    goals: [
+      {
+        goalId: "g-1",
+        repository: "o/r",
+        clauses: [{ said: "s", unmetIf: "u" }],
+        writtenBy: "ada",
+        writtenAtMs: 1,
+      },
+    ],
+    latest: [
+      {
+        proposalId: "t-2",
+        drafter: "d",
+        repository: "o/r",
+        payload: {},
+        snapshot: {},
+        createdAtMs: 1,
+      },
+    ],
+    payloads: new Map([
+      [
+        "t-2",
+        {
+          repository: "o/r",
+          goalId: "g-1",
+          ranked: [one(534), one(290), one(286)],
+          withheld: [],
+          read: { issues: 3, stopped: 0 },
+          unavailable: null,
+        },
+      ],
+    ]),
+    goalScopes: new Map([["g-1", { state: "running" as const }]]),
+    flowAsks: [
+      {
+        askId: "ask-286",
+        repository: "o/r",
+        goalId: "g-1",
+        scopeDecisionId: "sd-1",
+        proposalId: "t-1",
+        candidate: "issue:o/r#286",
+        points: [{ point: "asked point", recommendation: "r" }],
+        request: "asked 286",
+        why: "asked why",
+        askedAtMs: 2,
+        answer: null,
+      },
+    ],
+    putAside,
+  });
+  const [block] = triageBlocks(EN, reads([]), 3);
+  if (block?.kind !== "ranked") throw new Error(block?.kind);
+  expect(block.first.key).toBe("issue:o/r#286");
+  // In the ask's words, the ones the form sends.
+  expect(block.first.request).toBe("asked 286");
+  expect(block.first.why).toBe("asked why");
+  expect(block.rest.map((c) => c.key)).toEqual(["issue:o/r#534", "issue:o/r#290"]);
+  const html = renderToStaticMarkup(TriageSection({ wording: EN, token: "t", blocks: [block] }));
+  // The card leads to the ask and does not repeat its points.
+  expect(html).toContain('href="#flow-ask-o-r"');
+  expect(html).not.toContain("point 286");
+
+  // *Not now* on #534 takes it off before the next reading lands.
+  const [after] = triageBlocks(EN, reads([{ repository: "o/r", candidate: "issue:o/r#534" }]), 3);
+  if (after?.kind !== "ranked") throw new Error(after?.kind);
+  expect([after.first, ...after.rest].map((c) => c.key)).toEqual([
+    "issue:o/r#286",
+    "issue:o/r#290",
+  ]);
+  // Put aside in another repository, it stays.
+  const [other] = triageBlocks(EN, reads([{ repository: "o/x", candidate: "issue:o/r#534" }]), 3);
+  if (other?.kind !== "ranked") throw new Error(other?.kind);
+  expect(other.rest).toHaveLength(2);
+});

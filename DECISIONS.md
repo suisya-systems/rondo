@@ -25461,6 +25461,20 @@ the newest goal: an edit would widen an approval nobody re-read.
 > can be told apart. That is not done here and is a known limit: **a decision a re-ranking finds
 > after the answer is not asked**, and is left to the drafter and the lap. Nothing above is edited.
 
+> **Annotation (2026-09-28, from rondo#540).** Added after this entry was accepted, and additive.
+> Found in lap 19: the front's card drew the latest ranking's first candidate (#534), while the ask
+> under it, raised from an older reading, was over #286. A person reading the card answered the
+> form and started #286. *Not now* on #534 then re-drew #534, because the card changed only when the
+> next reading landed (77 s later). **While the flow waits on an ask, the card is the asked
+> candidate**, in the ask's request line and why (the words the form sends). The other candidates
+> the ranking holds fold under it in ranking order. **A candidate put aside leaves the card at
+> once**: the page drops every candidate a *not now* in that repository names, as the picker and the
+> next reading do, without waiting for that reading. Options not taken: keeping ranking order and
+> labelling the first card *not the one asked* (two full cards to tell apart), and re-reading on the
+> press (a model run on every *not now*, and still a race). Known limit: while an answered candidate
+> waits for a slot, the page still reads an open ask over another candidate as the one the flow
+> waits on. Nothing above is edited.
+
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 
 **Status:** accepted (2026-09-27, rondo#452). The issue records `D-0098`'s gate (2026-09-22, point
