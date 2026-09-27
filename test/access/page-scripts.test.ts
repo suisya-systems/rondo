@@ -327,6 +327,7 @@ function composerPage(
       callbacks: {
         beforeAttributeUpdated?: (name: string, element: unknown) => unknown;
         beforeNodeMorphed?: (old: unknown, next: unknown) => unknown;
+        afterNodeMorphed?: (old: unknown) => unknown;
       };
     };
   } = { defaults: { callbacks: {} } };
@@ -426,7 +427,12 @@ test("the morph is told to leave a fold's open and a draft's words to the person
   const next = new HTMLInputElement();
   next.dataset = { keep: "raise:i-0001:sd-2" };
   morphed?.(amount, next);
+  // Asked twice in one morph -- the attribute, then the typed value -- and
+  // taken from the server both times (Codex, round 2); kept again after it.
   expect(leaves("value", amount)).not.toBe(false);
+  expect(leaves("value", amount)).not.toBe(false);
+  Idiomorph.defaults.callbacks.afterNodeMorphed?.(amount);
+  expect(leaves("value", amount)).toBe(false);
 });
 
 test("a draft that landed under the person's words is said after a merged redraw", () => {
@@ -459,7 +465,8 @@ test("a box the morph reuses for a different draft takes the server's words, not
   beforeNodeMorphed(box, { dataset: { draft: "claim:i-0001:gate-2" } });
   box.dataset = { draft: "claim:i-0001:gate-2" };
   expect(beforeAttributeUpdated("value", box)).not.toBe(false);
-  // And after that, it is the person's again.
+  // And once that morph of the node ends, it is the person's again.
+  Idiomorph.defaults.callbacks.afterNodeMorphed?.(box);
   expect(beforeAttributeUpdated("value", box)).toBe(false);
 });
 

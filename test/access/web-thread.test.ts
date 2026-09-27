@@ -481,9 +481,7 @@ test("the composer script keeps a draft and the open folds, and makes no request
   expect(code).toContain("HTMLDetailsElement");
   // A budget stop's typed amount is kept across the redraw, by its key (D-0140).
   expect(code).toContain("element.dataset.keep !== undefined");
-  expect(code).toMatch(
-    /name === "value" && personsValue\(element\) && !renamed\.delete\(element\)/,
-  );
+  expect(code).toMatch(/name === "value" && personsValue\(element\) && !renamed\.has\(element\)/);
   // **Both duties run on every swap and not only on load** (Codex, on D-0083):
   // the boxes are inside the thread now, so the five-second redraw replaces
   // them -- a claim being typed would vanish, and a revise box a person had
