@@ -75,6 +75,7 @@ import {
 import { MAX_REVIEW_ROUNDS, type PageView, viewHref } from "./page-logic/routes.js";
 import { questionRevise } from "./question.js";
 import { TAB_OUTCOMES, type TabOutcome } from "./reach.js";
+import { heldAnchor, pressable } from "./read-in.js";
 import { refusedPage } from "./screens/refused.js";
 import { APPROVE_BODY, operatorPage } from "./web.js";
 import type { Chrome } from "./wording.js";
@@ -1407,6 +1408,41 @@ export class TriagePort {
   }
 }
 
+/** What one *read in my language* press asks (rondo#490). */
+export interface ReadInInput {
+  readonly text: string;
+  /** The page set's tag the reading is written in; never `en`. */
+  readonly language: string;
+}
+
+/** What a *read in my language* press did; `digest` is where the page lands. */
+export type ReadInWritten =
+  | { readonly ok: true; readonly digest: string }
+  | { readonly ok: false; readonly note: string };
+
+/**
+ * The tenth thing this surface may write (rondo#490, D-0144): a reading of
+ * English-held text in the person's language, stored beside the original and
+ * never in its place. **A press, because it spends**: a model run costs money,
+ * and a script on the page must not be able to spend it.
+ */
+export class ReadInPort {
+  readonly #read: (input: ReadInInput) => Promise<ReadInWritten>;
+
+  constructor(read: (input: ReadInInput) => Promise<ReadInWritten>) {
+    this.#read = read;
+  }
+
+  /** Read one text in one language, on one press. */
+  async read(press: Press, input: ReadInInput): Promise<ReadInWritten> {
+    if (!minted.has(press)) {
+      return { ok: false, note: "nothing was read: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#read(input);
+  }
+}
+
 /** The ports the server is handed: the reading half, and the eight writers. */
 export interface ServedPorts extends WebPorts {
   /**
@@ -1454,6 +1490,8 @@ export interface ServedPorts extends WebPorts {
    * {@link say}'s condition. Absent is null.
    */
   readonly notice?: ((waits: readonly string[], outcome: TabOutcome) => Promise<void>) | null;
+  /** Null on {@link triage}'s condition: a reading spends as the person (rondo#490). Absent is null. */
+  readonly readIn?: ReadInPort | null;
 }
 
 /**
@@ -1600,6 +1638,12 @@ export const FIX_CONFLICT_ROUTE = "/fix-conflict";
 const RETAKE_REVIEW_ROUTE = "/retake-review";
 
 /**
+ * *Read in my language* (rondo#490, D-0144): a press beside English-held text.
+ * Its body is the text itself, so it takes the send's size.
+ */
+const READ_IN_ROUTE = "/read-in";
+
+/**
  * Where an open tab reports what its notice did (rondo#414). Not a press: the
  * tab reports on its own, with no person's click behind it, so it is minted
  * as a send is (a same-origin script with the token) and it writes only a
@@ -1632,6 +1676,7 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   FLOW_ANSWER_ROUTE,
   FIX_CONFLICT_ROUTE,
   RETAKE_REVIEW_ROUTE,
+  READ_IN_ROUTE,
 ]);
 
 /** A whole count of at least 0, as a form posts one, or null when it is not one. */
@@ -1939,6 +1984,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     merge = null,
     triage = null,
     notice = null,
+    readIn = null,
     ...reading
   } = ports;
   const app = new Hono<PageEnv>();
@@ -2021,7 +2067,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   app.use(async (c, next) =>
     MESSAGE_ROUTES.has(c.req.path)
       ? await sendLimit(c, next)
-      : c.req.path === FLOW_ANSWER_ROUTE
+      : c.req.path === FLOW_ANSWER_ROUTE || c.req.path === READ_IN_ROUTE
         ? await flowAnswerLimit(c, next)
         : await pressLimit(c, next),
   );
@@ -2969,6 +3015,37 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       return triageRefused(c, 409, "flowAskRefused", null, answered.note);
     }
     return c.redirect(`${viewHref({ kind: "requests" }, tagOf(c))}#triage-heading`, 303);
+  });
+
+  // **Read in my language** (rondo#490, D-0144): the reading is stored by
+  // the original's digest, and the press lands back on the text it was beside.
+  app.post(READ_IN_ROUTE, async (c) => {
+    const form = await c.req.parseBody();
+    const text = typeof form["text"] === "string" ? form["text"] : "";
+    const posted = typeof form["back"] === "string" ? form["back"] : "";
+    const wording = wordingOf(c);
+    // Only a path on this page: never another origin, never a scheme-relative `//`.
+    const back =
+      posted.startsWith("/") && !posted.startsWith("//") && !posted.includes("\\")
+        ? (posted.split("#")[0] ?? posted)
+        : viewHref({ kind: "requests" }, wording.lang);
+    const refuse = (status: 400 | 403 | 409, line: string, note: string | null = null) =>
+      pressRefused(c, status, wording.readInAction, line, back, wording.triageBack, note);
+    if (readIn === null) {
+      return refuse(403, wording.readInRefusedNoApprover);
+    }
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return refuse(minting.status, wording.readInRefusedPress);
+    }
+    if (!pressable(text) || wording.lang === "en") {
+      return refuse(400, wording.readInRefusedForm);
+    }
+    const read = await readIn.read(minting.press, { text, language: wording.lang });
+    if (!read.ok) {
+      return refuse(409, wording.readInRefused, read.note);
+    }
+    return c.redirect(`${back}#${heldAnchor(read.digest)}`, 303);
   });
 
   // **The merge press** (rondo#380, `D-0091`): a lap's pull request merged by

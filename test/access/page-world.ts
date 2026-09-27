@@ -372,7 +372,7 @@ export const REVISE_ANSWER = {
  * escape -- `&lt;`, `&quot;`, `&amp;` -- is still asserted as written.
  */
 export const operatorPage = async (...args: Parameters<typeof renderPage>): Promise<string> =>
-  (await renderPage(...args)).replaceAll("&#39;", "'");
+  (await renderPage(...args)).replaceAll("&#39;", "'").replaceAll("&#x27;", "'");
 
 /** Material that is only its text: no gate question read and no range named. */
 export const asText = (...lines: string[]) => ({ lines, why: null, work: null });

@@ -176,6 +176,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0141 | An answer is its press, a scope stop over a lap at its gate offers raising and carrying on, work approved and not begun outranks a stopped lap, and a resume keeps the paused approval's defaults | accepted |
 | D-0142 | Carrying on at a worker's question is the gate's revise, on the same press; its answer is not drafted again, and a lap that asked is never approved by rondo | accepted |
 | D-0143 | A lap stopped at its time limit keeps what it had not committed, as one unverified commit in rondo's name on its own branch, and a retry of that lap merges it in as its first step; `D-0110` rule 1's option Z is narrowed | accepted |
+| D-0144 | The record's language is not what the reader sees: English-held text is read in the person's language on a press, stored by the original's digest beside it and never in its place, and drawn in place with the original one fold away | accepted |
 
 ---
 
@@ -26419,3 +26420,75 @@ unverified commit the next try has to check. `D-0110` rules 2 to 4 are unchanged
   it, and belongs in continuo).
 - A retry of a stopped lap that starts from the kept commit ends worse than a fresh start more often
   than not.
+
+## D-0144 — The record's language is not what the reader sees: English-held text is read in the person's language on a press, stored by the original's digest beside it and never in its place, and drawn in place with the original one fold away
+
+**Status:** accepted (2026-09-28, rondo#490; the owner asked for it on lap 18 in their own words,
+"there should be a way to casually ask for a translation", and the issue settles the shape). Refines
+`D-0079` section 4 and `D-0055` rule 12 without superseding either. Refs `D-0041` rule 3, `D-0055`
+rule 8, `D-0056`, `D-0071` rule 1.3, `D-0097`, `D-0128`.
+
+### Context
+
+`D-0079` section 4 keeps some text in English so the record has one identity: the flow's open points
+and rondo's suggestions (rondo#487), a model review's findings, a worker's question and report, and
+rondo's own records under a fold (a scope stop, a lap report, a drafter run that drafted nothing).
+On lap 18 the owner read the open-points ask in English on a page set to Japanese and accepted that
+the text stays English, but not that reading it means leaving the page. `D-0055` rule 12 says the
+catalogue is not a translator, and `D-0079` says rondo composes in the language and does not
+translate into it. Both are about rondo's own words. Neither says what the person may do with words
+that are not rondo's to recompose.
+
+### Decision
+
+1. **The original stays the record.** A reading of English-held text in the person's language is a
+   reading aid. It is kept in its own table (`translation`) by the original's digest
+   (`contentDigest({text})`, line ends folded to LF) and the language, written once: the first
+   reading stands. Nothing else names these rows. An answer, a decision, a flow body and a thread
+   message still hold and point at the original.
+2. **Read on a press, never on render.** The press is a native form post minted as every other
+   press is (`D-0041` rule 3, `mintPress`), because a reading spends: a script on the page cannot
+   start one. It is drawn beside held text only on a page whose set is not English and only where
+   an approver the allowlist accepts is set, as the triage presses are. The model is the drafter
+   row (`D-0071` rule 1.3: no tools, one turn), handed the words fenced as material.
+3. **Once read, the reading is drawn in place, for every viewer.** The page draws the stored
+   reading where the text was, with the original under a fold whose summary says it is the record,
+   and one line saying when it was read and what it cost, in the shape `triageRead` says a triage
+   reading's cost. A redraw, a reload and a second viewer pay nothing. The press lands back on the
+   text it was beside.
+4. **What is held is known by who wrote it, not by reading the words** (`D-0055` rule 8): a model
+   review's findings; the worker's report, unless the worker was asked to write in the page's
+   language; a worker's question (`WORKER_QUESTION_AUTHOR`) and the flow's asks (`FLOW_AUTHOR_PREFIX`);
+   the records under a scope stop's, a lap report's and a no-draft run's folds; and the ranking's
+   open points with their suggestion, unless the host's language is the page's, which is the
+   language the ranking was asked to write them in.
+5. **An answer to an English suggestion is kept as the person wrote it** (the issue's point 4). The
+   answer box is filled with the suggestion, the person may overwrite it in their own language, and
+   the flow's request carries their words byte for byte. Composing English where the forge needs it
+   is rondo#290's.
+
+**Options not taken.** Translating every held text on render: it spends on every view and blurs
+which words are the record (the issue's *not in scope*). A press over `hx-post` that swaps the
+reading in: the five-second morph would take it back, and a script could spend. Storing the reading
+as a proposal row: a proposal is an advisory's proposal (`D-0022`), and a reading proposes nothing.
+
+### What it costs
+
+- **A second press of the same words while the first is running spends twice.** The second reading
+  is dropped, since the first write stands. ponytail in `src/access/read-in.ts`: an in-flight map
+  if it is felt.
+- **Once anyone reads a text, everyone sees the reading first.** The original is one fold away and
+  says it is the record. A viewer who wanted the English first opens the fold.
+- **Two identical held texts on one page share one anchor id.** The morph warns about the duplicate
+  and may lose a fold's state inside them. It is rare, because the same words would have to be held
+  twice in one view.
+
+### What would falsify it
+
+- **A reading quoted back as the record**: an answer or a decision that names words only the
+  reading had. The fold's label is then not enough, and the reading needs a stronger mark.
+- **Presses on text already in the page's language**: then who wrote it is the wrong test for
+  rule 4, and the press should follow the language the text was asked for in.
+- **Readings that drop or add content** measured against the original: the drafter row is then the
+  wrong model for this, or the document needs a check.
+

@@ -94,7 +94,9 @@ import { revisionInstruction } from "../refrain/revision.js";
 import {
   approvedForPublication,
   type FindingSeverity,
+  FLOW_AUTHOR_PREFIX,
   findingBasisText,
+  type GradedFinding,
   type IterationRecord,
   isApprovableKind,
   isDeterministicReadingDrafter,
@@ -137,8 +139,9 @@ import type {
 import { EmptyCentre } from "./page/empty.js";
 import { EmptySide, type SideWork } from "./page/empty-side.js";
 import { GovernanceLine } from "./page/governance.js";
+import { type HeldReads, READ_IN_FORM } from "./page/held.js";
 import { RequestsFace } from "./page/list.js";
-import { facesMarkup } from "./page/render.js";
+import { facesMarkup, heldMarkup } from "./page/render.js";
 import { ResultLine } from "./page/result.js";
 import { Raw } from "./page/shell.js";
 import { ThreadFace, type ThreadItem } from "./page/thread.js";
@@ -217,6 +220,7 @@ import {
   questionRevise,
   readWorkerQuestion,
 } from "./question.js";
+import { readingsByDigest } from "./read-in.js";
 import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal, stopRaises } from "./scope.js";
@@ -875,12 +879,35 @@ interface RetakePress {
   readonly requestMessageId: string;
 }
 
+/** A graded finding's severity pill, or nothing for an ungraded one. */
+function severityOf(wording: Chrome, graded: GradedFinding | undefined) {
+  return graded === undefined
+    ? null
+    : pill(SEVERITY_TONE[graded.severity], wording.severityWord(graded.severity), "severity mt-px");
+}
+
+/**
+ * English-held text with its *read in my language* press or its reading
+ * (rondo#490), as markup for this half of the page; `plain` where the page is
+ * English and there is nothing to offer.
+ */
+function held(
+  wording: Chrome,
+  reads: HeldReads | null,
+  text: string,
+  className: string,
+  plain: () => unknown,
+) {
+  return reads === null ? plain() : raw(heldMarkup({ wording, reads, text, className }));
+}
+
 function modelView(
   wording: Chrome,
   reading: LapReading | null,
   due: boolean,
   reload: string,
   retake: RetakePress | null = null,
+  reads: HeldReads | null = null,
 ) {
   const later = (note: string) => (
     <p class="mt-1 text-body leading-5 text-muted-foreground">
@@ -945,18 +972,20 @@ function modelView(
                     const graded = reading.graded?.[index];
                     return (
                       <li class="model-finding py-2 first:pt-1 last:pb-0">
-                        <p class="flex items-start gap-2 text-body leading-5">
-                          {graded === undefined
-                            ? null
-                            : pill(
-                                SEVERITY_TONE[graded.severity],
-                                wording.severityWord(graded.severity),
-                                "severity mt-px",
-                              )}
-                          <span class="min-w-0 wrap-anywhere" lang="">
-                            {text}
-                          </span>
-                        </p>
+                        {/* A `div` where the finding is held: its fold is not phrasing content. */}
+                        {reads === null ? (
+                          <p class="flex items-start gap-2 text-body leading-5">
+                            {severityOf(wording, graded)}
+                            <span class="min-w-0 wrap-anywhere" lang="">
+                              {text}
+                            </span>
+                          </p>
+                        ) : (
+                          <div class="flex items-start gap-2 text-body leading-5">
+                            {severityOf(wording, graded)}
+                            {raw(heldMarkup({ wording, reads, text, className: "wrap-anywhere" }))}
+                          </div>
+                        )}
                         {graded === undefined ? null : (
                           <p class="mt-1 flex flex-wrap items-center gap-1 text-id leading-4">
                             {graded.bases.map((basis) => (
@@ -1169,7 +1198,7 @@ async function closingShown(
  * press stays. Each finding it answers is quoted; the commit the reviewer last
  * read leads to the pull request's copy of it.
  */
-function closingView(wording: Chrome, closing: ClosingShown) {
+function closingView(wording: Chrome, closing: ClosingShown, reads: HeldReads | null = null) {
   const short = closing.readCommit.slice(0, 7);
   return (
     <section id="closing" class={CARD}>
@@ -1180,7 +1209,7 @@ function closingView(wording: Chrome, closing: ClosingShown) {
       {closing.findings.length === 0 ? null : (
         <ul class="mt-1 list-disc pl-5 text-body leading-6" lang="">
           {closing.findings.map((finding) => (
-            <li>{finding}</li>
+            <li>{held(wording, reads, finding, "", () => finding)}</li>
           ))}
         </ul>
       )}
@@ -1229,6 +1258,7 @@ function materialView(
   closing: ClosingShown | null = null,
   /** The token for the *take the review again* press, or null where none may be drawn. */
   retakeToken: string | null = null,
+  reads: HeldReads | null = null,
 ) {
   const model = latestReading(readings, isModelReadingDrafter);
   const modelDue = modelPendingOnPage(readings, model);
@@ -1260,12 +1290,21 @@ function materialView(
                   {chevron()}
                   {wording.reportFold}
                 </summary>
-                <p
-                  class="mt-1 text-body leading-6 wrap-anywhere whitespace-pre-wrap"
-                  lang={materialLanguage(record)}
-                >
-                  {material.why}
-                </p>
+                {held(
+                  wording,
+                  // Only where the worker was not asked to write in this page's language.
+                  materialLanguage(record) === wording.lang ? null : reads,
+                  material.why,
+                  "mt-1 text-body leading-6 wrap-anywhere whitespace-pre-wrap",
+                  () => (
+                    <p
+                      class="mt-1 text-body leading-6 wrap-anywhere whitespace-pre-wrap"
+                      lang={materialLanguage(record)}
+                    >
+                      {material.why}
+                    </p>
+                  ),
+                )}
               </details>
             )}
           </section>
@@ -1281,7 +1320,7 @@ function materialView(
        * to a 720px face, which is rule 8's *cards go one across* met early
        * rather than a second layout.
        */}
-      {closing === null ? null : closingView(wording, closing)}
+      {closing === null ? null : closingView(wording, closing, reads)}
       {checksView(wording, record, checks, workGone)}
       {modelView(
         wording,
@@ -1295,6 +1334,7 @@ function materialView(
               iterationId: record.id,
               requestMessageId: record.requestMessageId,
             },
+        reads,
       )}
       <p class="note text-meta leading-5 text-faint">{wording.readingsNote}</p>
     </div>
@@ -2159,7 +2199,7 @@ function noDraft(message: ThreadMessageDraft): boolean {
  * scope themselves -- is the thread's next step, drawn once at its top
  * (rondo#375) rather than a second time here.
  */
-function noDraftView(wording: Chrome, message: ThreadMessageDraft) {
+function noDraftView(wording: Chrome, message: ThreadMessageDraft, reads: HeldReads | null) {
   return (
     <div class="space-y-2">
       <p class="text-body leading-6">{wording.drafterNoDraft}</p>
@@ -2168,12 +2208,20 @@ function noDraftView(wording: Chrome, message: ThreadMessageDraft) {
           {chevron()}
           {wording.drafterNoDraftWhy}
         </summary>
-        <p
-          class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
-          lang="en"
-        >
-          {message.body}
-        </p>
+        {held(
+          wording,
+          reads,
+          message.body,
+          "body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground",
+          () => (
+            <p
+              class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+              lang="en"
+            >
+              {message.body}
+            </p>
+          ),
+        )}
       </details>
     </div>
   );
@@ -2194,7 +2242,7 @@ function lapReport(message: ThreadMessageDraft): boolean {
  * drawn open, in any language -- no id reaches the screen (D-0076) -- and it is
  * kept, byte for byte, under the fold `evBrokeReason` labels.
  */
-function lapReportView(wording: Chrome, message: ThreadMessageDraft) {
+function lapReportView(wording: Chrome, message: ThreadMessageDraft, reads: HeldReads | null) {
   // **Never an empty card** (rondo#506): one line in the person's language
   // says what the shut record is about, from the kind its id names.
   const named = message.messageId.slice("report-".length).split("-")[0] ?? "";
@@ -2209,14 +2257,36 @@ function lapReportView(wording: Chrome, message: ThreadMessageDraft) {
           {chevron()}
           {wording.evBrokeReason}
         </summary>
-        <p
-          class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
-          lang="en"
-        >
-          {message.body}
-        </p>
+        {held(
+          wording,
+          reads,
+          message.body,
+          "body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground",
+          () => (
+            <p
+              class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+              lang="en"
+            >
+              {message.body}
+            </p>
+          ),
+        )}
       </details>
     </div>
+  );
+}
+
+/**
+ * Whether a message is in English words a worker or the flow wrote for the
+ * person (rondo#490): a worker's question, and the flow's asks. rondo does not
+ * read the words to find their language (D-0055 rule 8); it knows these by who
+ * wrote them.
+ */
+function heldMessage(message: ThreadMessageDraft): boolean {
+  return (
+    message.authorKind === "drafter" &&
+    (message.authorId === WORKER_QUESTION_AUTHOR ||
+      (message.authorId ?? "").startsWith(FLOW_AUTHOR_PREFIX))
   );
 }
 
@@ -2241,7 +2311,7 @@ function scopeStop(message: ThreadMessageDraft): boolean {
  * gives up, in the person's language. The record is kept, byte for byte,
  * under the fold, recommendation included.
  */
-function scopeStopView(wording: Chrome, message: ThreadMessageDraft) {
+function scopeStopView(wording: Chrome, message: ThreadMessageDraft, reads: HeldReads | null) {
   // More room is approved by raising the budget at the lap's gate (D-0074),
   // which the stop does not lift; the other two options are the answering
   // presses below. No link: the request's scope screen holds while a question
@@ -2286,12 +2356,20 @@ function scopeStopView(wording: Chrome, message: ThreadMessageDraft) {
           {chevron()}
           {wording.evBrokeReason}
         </summary>
-        <p
-          class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
-          lang="en"
-        >
-          {message.body}
-        </p>
+        {held(
+          wording,
+          reads,
+          message.body,
+          "body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground",
+          () => (
+            <p
+              class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+              lang="en"
+            >
+              {message.body}
+            </p>
+          ),
+        )}
       </details>
     </div>
   );
@@ -3243,6 +3321,19 @@ export async function operatorPage(
   const threadRead = await ports.record.threadMessages();
   const forms = token !== null && newId !== null;
   /**
+   * **What this page knows about reading English-held text** (rondo#490): the
+   * stored readings in its language, read once, and whether the press may be
+   * drawn. Null on an English page, where there is nothing to read it into.
+   */
+  const reads: HeldReads | null =
+    wording.lang === "en"
+      ? null
+      : {
+          done: readingsByDigest(await ports.record.translations(wording.lang)),
+          press: token !== null && ports.translating === true,
+          nowMs,
+        };
+  /**
    * **A view a person writes in.** Since D-0083 rule 3 the summary is a
    * request's thread with the boxes in it, so it is one of these: a reload
    * would throw a half-written draft away, which is what this decides
@@ -3798,7 +3889,8 @@ export async function operatorPage(
             message.authorKind === "forge" ||
             noDraft(message) ||
             lapReport(message) ||
-            scopeStop(message),
+            scopeStop(message) ||
+            (reads !== null && heldMessage(message)),
         )
         .map(
           async (message) =>
@@ -3807,10 +3899,12 @@ export async function operatorPage(
               await (message.authorKind === "forge"
                 ? forgeView(wording, message)
                 : lapReport(message)
-                  ? lapReportView(wording, message)
+                  ? lapReportView(wording, message, reads)
                   : scopeStop(message)
-                    ? scopeStopView(wording, message)
-                    : noDraftView(wording, message)
+                    ? scopeStopView(wording, message, reads)
+                    : noDraft(message) || reads === null
+                      ? noDraftView(wording, message, reads)
+                      : raw(heldMarkup({ wording, reads, text: message.body, className: "" }))
               ).toString(),
             ] as const,
         ),
@@ -4312,6 +4406,9 @@ export async function operatorPage(
                         nowMs,
                       ),
                       token: ports.triageWritable === true ? token : null,
+                      // The ranking writes in the host's language when one is
+                      // set: nothing to read where the page is in it too.
+                      reads: ports.hostLanguage === wording.lang ? null : reads,
                     }),
             }),
           }
@@ -4524,9 +4621,18 @@ export async function operatorPage(
             sideReadings,
             sideClosing,
             ports.retakesReviews === true ? token : null,
+            reads,
           ).toString()
         : sideReadings.length > 0 || sideClosing !== null
-          ? await materialView(wording, sideLap, null, sideReadings, sideClosing).toString()
+          ? await materialView(
+              wording,
+              sideLap,
+              null,
+              sideReadings,
+              sideClosing,
+              null,
+              reads,
+            ).toString()
           : null;
   const threadSide =
     selectedGovernance === null || sideLap === null
@@ -5136,6 +5242,23 @@ export async function operatorPage(
             </p>
           }
         </main>
+        {
+          // **The one form every *read in my language* press submits**
+          // (rondo#490): outside the ledger and every other form, so a press
+          // inside the flow's ask does not nest a form, and the redraw never
+          // touches it.
+          reads?.press === true && token !== null ? (
+            <form
+              id={READ_IN_FORM}
+              method="post"
+              action={`/read-in?lang=${encodeURIComponent(wording.lang)}`}
+              hidden
+            >
+              <input type="hidden" name="token" value={token} />
+              <input type="hidden" name="back" value={here} />
+            </form>
+          ) : null
+        }
       </body>
     </html>
   );

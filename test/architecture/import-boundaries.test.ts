@@ -1309,6 +1309,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/gate-host.ts": ["Reviewer"],
   "src/access/host-failure.ts": [HUMAN],
   "src/access/inbox.ts": [DIALOGUE],
+  // rondo#490 (D-0144): the record's English read in the person's language, on a press.
+  "src/access/read-in.ts": [DIALOGUE],
   "src/access/issue-read.ts": [SPLITTING],
   "src/access/local.ts": [HUMAN],
   "src/access/markdown.ts": ["Publishing"],
@@ -1330,6 +1332,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page/empty-side.tsx": [HUMAN],
   "src/access/page/empty.tsx": [HUMAN],
   "src/access/page/triage.tsx": [HUMAN, WORK_DISCOVERY],
+  // rondo#490: English-held text and its reading in the person's language.
+  "src/access/page/held.tsx": [HUMAN],
   "src/access/page/events.tsx": [HUMAN],
   "src/access/page/faces.tsx": [HUMAN],
   "src/access/page/governance.tsx": [HUMAN],

@@ -2073,6 +2073,23 @@ export interface FlowStopDraft {
 export type StoredFlowStop = FlowStopDraft;
 
 /**
+ * One reading of English-held text in the person's language (rondo#490,
+ * D-0144): keyed by the digest of the original and the language, written once.
+ * The original stays the record; this row is never read in its place.
+ */
+export interface TranslationDraft {
+  /** `contentDigest({ text })` of the original, line ends folded to LF. */
+  readonly digest: string;
+  readonly language: string;
+  readonly text: string;
+  readonly drafter: string;
+  readonly costUsd: number | null;
+  readonly readAtMs: number;
+}
+
+export type StoredTranslation = TranslationDraft;
+
+/**
  * The flow host's ask over a candidate's open points (rondo#487, D-0128): the
  * points and rondo's suggestion for each, as the ranking wrote them, asked once
  * per approval and candidate before the request is injected.

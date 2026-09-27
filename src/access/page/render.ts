@@ -17,9 +17,18 @@
  * by rendering everything as if it were live.
  */
 import { renderToStaticMarkup } from "react-dom/server";
+import { Held } from "./held.js";
 import { Shell, type ShellProps } from "./shell.js";
 
 /** The three faces as markup, for the document to place. */
 export function facesMarkup(props: ShellProps): string {
   return renderToStaticMarkup(Shell(props));
+}
+
+/**
+ * English-held text as markup (rondo#490), for the server JSX half of the page:
+ * one face for the press and the reading on both halves.
+ */
+export function heldMarkup(props: Parameters<typeof Held>[0]): string {
+  return renderToStaticMarkup(Held(props));
 }

@@ -102,6 +102,7 @@ async function world() {
     ...portsOver({ connection, store, record }),
     triageRepositories: async () => ["o/r"],
     triageWritable: true,
+    translating: true,
   };
   const page = async (view: Parameters<typeof operatorPage>[2], wording = EN) =>
     (await operatorPage(ports, "t", view, wording, mint, () => "scope-drawn")).replaceAll(
@@ -665,6 +666,14 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
   expect(screen).toContain(EN.goalScopeAskingLink);
   expect(screen).not.toContain(EN.goalScopeRunningLead);
   expect(blockOf(await w.page({ kind: "requests" }, JA))).toContain(JA.flowAskAction);
+  // rondo#490: on a page in another language each point, with rondo's
+  // suggestion, can be read in it; the press is never inside a label, so a
+  // click on the point focuses its box and spends nothing.
+  const jaBlock = blockOf(await w.page({ kind: "requests" }, JA));
+  expect(jaBlock.match(/form="read-in"/g)).toHaveLength(2);
+  expect(jaBlock).toContain('value="Where the token is read from\n-&gt; The keychain"');
+  expect(jaBlock).not.toMatch(/<label>(?:(?!<\/label>)[\s\S])*form="read-in"/);
+  expect(jaBlock).toMatch(/<textarea name="answer-1" aria-label="Where the token is read from"/);
   // Put aside, the ask holds nothing and is not drawn, as the picker reads it.
   const aside = await w.record.recordFlowAsk({
     askId: `${askId}-aside`,

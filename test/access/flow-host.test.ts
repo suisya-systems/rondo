@@ -644,6 +644,31 @@ test("open points are asked once before the request, and the answers go into it 
   expect(w.injectedCount()).toBe(1);
 });
 
+test("an English suggestion answered in the person's language goes into the request as written (rondo#490)", async () => {
+  const w = await world({}, [ranked(7, 1)]);
+  await w.pass();
+  const [ask] = await w.record.flowAsks();
+  if (ask === undefined) throw new Error("no ask");
+  const answered = "\u672a\u6c7a\u306e\u307e\u307e\u6b8b\u3059\r\n\u7406\u7531\u306f\u5f8c\u3067";
+  expect(
+    await w.record.recordFlowAnswer({
+      askId: ask.askId,
+      answers: [answered],
+      request: null,
+      why: null,
+      answeredBy: "oidc|operator-1",
+      answeredAtMs: 11_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  await w.pass();
+  const [opener] = (await w.messages()).filter((m) => m.inReplyTo === null);
+  // Kept as the person wrote it: not translated, and the suggestion is not what is sent.
+  const [kept] = (await w.record.flowAsks()).map((one) => one.answer?.answers[0]);
+  expect(opener?.body).toContain(`- p: ${kept ?? ""}`);
+  expect(kept).toContain("\u672a\u6c7a\u306e\u307e\u307e\u6b8b\u3059");
+  expect(opener?.body).not.toContain("- p: r");
+});
+
 test("the request line and why the person fixed in the ask are what the flow sends (rondo#492)", async () => {
   const w = await world({}, [ranked(7, 1)]);
   await w.pass();
