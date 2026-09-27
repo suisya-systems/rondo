@@ -4638,26 +4638,41 @@ export async function answerUnderScope(
     return {
       kind: "notDelegated",
       note: delegated
-        ? "continuo holds rondo's answer and the walk did not finish; answering the gate " +
-          "again finishes it"
-        : "the gate walk did not finish; the lines above have continuo's own diagnosis",
+        ? "continuo holds rondo's answer and the walk did not finish; the approve press " +
+          "finishes it"
+        : "not approved by rondo, left for the person: the gate walk did not finish, and the " +
+          "lines above have continuo's own diagnosis",
     };
   }
   if (!delegated) {
-    return { kind: "notDelegated", note: "the gate was already answered or closed" };
+    return {
+      kind: "notDelegated",
+      note: "not approved by rondo, left for the person: the gate was already answered or closed",
+    };
   }
-  sayReport(
-    await resume(
-      conductorPorts(
-        continuo,
-        store,
-        openAdvisoryRecord(storePath),
-        Date.now,
-        hostWords(environment),
-      ),
-      record.id,
+  const report = await resume(
+    conductorPorts(
+      continuo,
+      store,
+      openAdvisoryRecord(storePath),
+      Date.now,
+      hostWords(environment),
     ),
+    record.id,
   );
+  sayReport(report);
+  // **The answer and the row are two facts** (`answerFromPage`'s reason). A
+  // gate rondo answered whose row did not settle is not reported approved;
+  // the approve press settles it, since its walk finds the gate closed and
+  // `resume` runs again.
+  if (report.status !== "closed") {
+    return {
+      kind: "notDelegated",
+      note:
+        `rondo answered the gate and the row is ${report.status ?? "in an unnamed state"} ` +
+        "rather than closed; the approve press settles it",
+    };
+  }
   return { kind: "delegated" };
 }
 

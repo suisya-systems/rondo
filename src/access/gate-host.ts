@@ -173,9 +173,7 @@ async function answerOne(ports: GateHostPorts, record: IterationRecord): Promise
     authorityRef: tip.scopeDecisionId,
   });
   if (answered.kind !== "delegated") {
-    ports.log(
-      `gate     ${record.id}: not approved by rondo, left for the person: ${answered.note}`,
-    );
+    ports.log(`gate     ${record.id}: ${answered.note}`);
     return;
   }
   ports.log(`gate     ${record.id}: approved by rondo under scope '${scope.decision.scopeId}'`);

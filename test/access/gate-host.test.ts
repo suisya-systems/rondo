@@ -199,7 +199,7 @@ describe("gateHost (D-0125 rule 6)", () => {
 
   test("an answer continuo does not hold as rondo's is not reported, and not tried again", async () => {
     const w = world([lap("i-1", "g-1")]);
-    w.answer = { kind: "notDelegated", note: "the gate was already answered or closed" };
+    w.answer = { kind: "notDelegated", note: "not approved by rondo, left for the person" };
     await pass(w);
     await pass(w);
     expect(w.answered).toHaveLength(1);
