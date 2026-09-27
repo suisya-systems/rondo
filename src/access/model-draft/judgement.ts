@@ -130,7 +130,7 @@ const NAMED_DEPTH = 3;
 
 /**
  * What the drafter is shown of a repository's `paths` (D-0136, rondo#509),
- * within {@link LISTING_BYTES}: every path two levels deep, then everything
+ * within {@link LISTING_BYTES} of UTF-8: every path two levels deep, then everything
  * {@link NAMED_DEPTH} levels under each directory `words` name (a directory,
  * or the directory of a file), then each deeper level whole while it fits. A
  * directory is listed whole or not at all, so one whose files are missing is
@@ -144,7 +144,7 @@ export function drafterListing(paths: readonly string[], words: readonly string[
   let room = LISTING_BYTES;
   const keep = (group: readonly string[]) => {
     const fresh = group.filter((path) => !kept.has(path));
-    const bytes = fresh.reduce((sum, path) => sum + path.length + 1, 0);
+    const bytes = fresh.reduce((sum, path) => sum + Buffer.byteLength(path) + 1, 0);
     if (bytes > room) {
       return false;
     }
@@ -154,10 +154,15 @@ export function drafterListing(paths: readonly string[], words: readonly string[
     room -= bytes;
     return true;
   };
-  for (const path of sorted.filter((p) => depth(p) <= 2)) {
+  // The top level path by path: only a repository with more than the bytes
+  // of top-level names is cut inside it. Its second level per directory.
+  for (const path of sorted.filter((p) => depth(p) === 1)) {
     if (!keep([path])) {
       break;
     }
+  }
+  for (const top of sorted.filter((p) => depth(p) === 1 && kept.has(p) && p.endsWith("/"))) {
+    keep(sorted.filter((p) => depth(p) === 2 && p.startsWith(top)));
   }
   const tracked = new Set(sorted);
   const named = new Set<string>();

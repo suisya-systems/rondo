@@ -640,7 +640,16 @@ test("the listing goes deeper under a directory the words name, and keeps within
   }
   // Tokens naming nothing tracked change nothing.
   expect(drafterListing(big, ["and/or https://github.com/a/d7"])).toEqual(plain);
-  expect(plain.join("\n").length).toBeLessThanOrEqual(16_000);
+  expect(Buffer.byteLength(plain.join("\n"))).toBeLessThanOrEqual(16_000);
+  // Bytes are UTF-8, and a directory's files are listed whole or not at all,
+  // at the second level too: a directory past the room keeps only its name.
+  const wide = ["docs/", "src/", "src/a.ts"];
+  // About 12,000 characters, and about 21,000 bytes.
+  for (let i = 0; i < 500; i++) {
+    wide.push(`docs/${"設計".repeat(5)}-${String(i)}.md`);
+  }
+  const cut = drafterListing(wide, []);
+  expect(cut).toEqual(["docs/", "src/", "src/a.ts"]);
 });
 
 test("one narrowing wins per field, and only the winner is cited: the scope's bases support the value it carries", () => {
