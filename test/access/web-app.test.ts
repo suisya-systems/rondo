@@ -3269,6 +3269,19 @@ test("(triage) a person's press answers the flow's open points, each in order (r
   expect(sent.status).toBe(303);
   expect(sent.location).toBe("/?requests=open&lang=en#triage-heading");
   expect(answered).toEqual([{ askId: "flow-ask-sd-1-issue:o/r#7", answers: ["yes", "no"] }]);
+  // Four long answers in Japanese are past the press's 12 KiB and still taken.
+  const long = "答".repeat(1_500);
+  const big = await send(base, "/flow-answer", "POST", person, {
+    token: TOKEN,
+    ask: "flow-ask-sd-1-issue:o/r#8",
+    "answer-1": long,
+    "answer-2": long,
+    "answer-3": long,
+    "answer-4": long,
+  });
+  expect(big.status).toBe(303);
+  expect(answered).toHaveLength(2);
+  answered.pop();
   // No press, or no answer at all, answers nothing.
   expect(
     (await send(base, "/flow-answer", "POST", { ...person, "sec-fetch-user": undefined }, form))

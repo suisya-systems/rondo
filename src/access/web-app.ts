@@ -1558,7 +1558,8 @@ const EPISODE = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,199}$/;
 
 /**
  * The routes whose body is numbers and minted ids and never prose, and so take
- * {@link MAX_FORM_BYTES} rather than the send limit.
+ * {@link MAX_FORM_BYTES} rather than the send limit -- all but the answers to
+ * the flow's open points, a press of the person's words (rondo#487).
  */
 const PRESS_ROUTES: ReadonlySet<string> = new Set([
   SCOPE_ROUTE,
@@ -1573,7 +1574,7 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   ADD_REPOSITORY_ROUTE,
   MERGE_ROUTE,
   NOT_NOW_ROUTE,
-  // Its answers are a few short lines, under the press's size (rondo#487).
+  // A press whose body is the person's words (rondo#487): the send's size.
   FLOW_ANSWER_ROUTE,
   FIX_CONFLICT_ROUTE,
 ]);
@@ -1955,8 +1956,19 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     // native submit gets the page's language and the way back (#220 S1 review).
     onError: (c) => refused(c, 413, "sendRefusedTooLong", null),
   });
+  // The answers to the flow's open points are a press whose body is the
+  // person's words, up to four fields (rondo#487): the send's size, not the
+  // press's.
+  const flowAnswerLimit = bodyLimit({
+    maxSize: MAX_MESSAGE_BYTES,
+    onError: (c) => said(c, 413, "that is larger than this page's form"),
+  });
   app.use(async (c, next) =>
-    MESSAGE_ROUTES.has(c.req.path) ? await sendLimit(c, next) : await pressLimit(c, next),
+    MESSAGE_ROUTES.has(c.req.path)
+      ? await sendLimit(c, next)
+      : c.req.path === FLOW_ANSWER_ROUTE
+        ? await flowAnswerLimit(c, next)
+        : await pressLimit(c, next),
   );
 
   for (const [path, served] of SERVED) {
