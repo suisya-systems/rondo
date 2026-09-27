@@ -540,6 +540,17 @@ test("nothing eligible before the first request records what it passed over (ron
     },
     atMs: 10_000,
   });
+  // A, B, A: the stop that recurs is the newest again (Codex round 2).
+  await w.triage("t-2", 0, [ranked(9, 1)]);
+  await w.pass();
+  await w.triage("t-3", 0, [ranked(7, 1), ranked(8, 2)]);
+  await w.pass();
+  await w.pass();
+  expect((await w.record.flowStops()).map((one) => one.facts["skipped"])).toEqual([
+    [expect.objectContaining({ key: `issue:${REPO}#7` }), expect.anything()],
+    [expect.objectContaining({ key: `issue:${REPO}#9` })],
+    [expect.objectContaining({ key: `issue:${REPO}#7` }), expect.anything()],
+  ]);
   // Another approval's stop is not this one's.
   expect(await flowStopOf(w.record, await w.messages(), "g-1", "sd-other")).toBeNull();
 });

@@ -69,6 +69,7 @@ export interface FlowHostPorts {
     | "claimScopedAct"
     | "recordThreadMessage"
     | "recordFlowStop"
+    | "flowStops"
   >;
   readonly policy: Pick<HostPolicy, "maxOccupying" | "maxLive">;
   readonly now: () => number;
@@ -443,15 +444,24 @@ async function askStop(
 ): Promise<void> {
   const { reason } = facts;
   if (latest === null) {
-    // **No thread to ask in, so the stop is a row the page reads** (rondo#488),
-    // named by the approval and its facts: each distinct stop is written once.
-    const recorded = await ports.record.recordFlowStop({
-      stopId: `${stopPrefix(flow.scopeDecisionId)}${reason}-${contentDigest(facts as unknown as JsonRecord)}`,
-      scopeDecisionId: flow.scopeDecisionId,
-      repository,
-      facts: facts as unknown as JsonRecord,
-      atMs: ports.now(),
-    });
+    // **No thread to ask in, so the stop is a row the page reads** (rondo#488).
+    // Written when it differs from the approval's newest row, so a stop that
+    // recurs after another (A, B, A) is the newest again (Codex round 2).
+    const named = `${stopPrefix(flow.scopeDecisionId)}${reason}-${contentDigest(facts as unknown as JsonRecord)}-`;
+    const rows = (await ports.record.flowStops()).filter(
+      (one) => one.scopeDecisionId === flow.scopeDecisionId,
+    );
+    const newest = rows.at(-1);
+    const atMs = ports.now();
+    const recorded = newest?.stopId.startsWith(named)
+      ? ({ kind: "recorded" } as const)
+      : await ports.record.recordFlowStop({
+          stopId: `${named}${String(rows.length)}`,
+          scopeDecisionId: flow.scopeDecisionId,
+          repository,
+          facts: facts as unknown as JsonRecord,
+          atMs,
+        });
     return sayOnce(
       recorded.kind === "defect"
         ? `stopped before its first request (${detail}), and the stop was not recorded: ${recorded.reason}`

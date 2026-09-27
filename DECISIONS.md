@@ -25191,9 +25191,9 @@ the newest goal: an edit would widen an approval nobody re-read.
 > start). **Such a stop is now also a row**: `flow_stop` (append-only, the approval's decision id,
 > the repository, the time, and `facts` -- the reason with what a person acts on as fields: the
 > expiry, the laps used, the cost figures, the newer goal, and for *nothing eligible* each ranked
-> candidate with why it was passed over: started, put aside, open points, not an issue). The row
-> is named by the approval, the reason and a digest of the facts, so each distinct stop is written
-> once. **The page draws a goal scope in force as stopped** while its newest row stands and no
+> candidate with why it was passed over: started, put aside, open points, not an issue). A row is
+> written when its facts differ from the approval's newest row, so the same stop seen pass after
+> pass is one row and a stop that recurs after another is the newest again. **The page draws a goal scope in force as stopped** while its newest row stands and no
 > request of the goal is written, or while a stop of this approval stands in the thread of the
 > flow's latest request, **answered or not** (each stop is asked once, so after a *carry on* over a
 > limit still spent the flow stops again without a new question); it says the stop, the reason in
