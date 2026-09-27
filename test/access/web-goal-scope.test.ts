@@ -21,9 +21,11 @@ import { goalScopeMaterial, goalScopeStanding } from "../../src/access/goal-scop
 import { triageHost } from "../../src/access/triage-host.js";
 import type { GoalScopeInput } from "../../src/access/web-app.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
+import { flowMessageId } from "../../src/advisory/flow.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
 import {
+  FLOW_AUTHOR,
   type JsonRecord,
   requestsGoal,
   scopePayloadWithDefaults,
@@ -291,10 +293,11 @@ test("a candidate the flow already started reads started, and is not offered for
   expect(await w.page({ kind: "requests" })).toContain(EN.triagePutInBox);
   expect(
     await w.record.recordThreadMessage({
-      messageId: "flow-scope-decision-x-issue:o/r#7",
+      // As the flow host writes one (`src/access/flow-host.ts`).
+      messageId: flowMessageId("scope-decision-x", "issue:o/r#7"),
       body: "Make setup in o/r finish without a shell",
-      authorKind: "operator",
-      authorId: "rondo/flow/scope-decision-x",
+      authorKind: "drafter",
+      authorId: FLOW_AUTHOR,
       inReplyTo: null,
       atMs: 3_000,
       bases: [{ form: "goal", goalId: "goal-1" }],

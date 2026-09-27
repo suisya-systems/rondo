@@ -94,7 +94,6 @@ import { revisionInstruction } from "../refrain/revision.js";
 import {
   approvedForPublication,
   type FindingSeverity,
-  FLOW_AUTHOR_PREFIX,
   findingBasisText,
   type IterationRecord,
   isApprovableKind,
@@ -105,6 +104,7 @@ import {
   latestReading,
   MODEL_READING_DRAFTER_PREFIX,
   type NonTerminalStatus,
+  opensFlowRequest,
   readingReach,
   reviewedReading,
   type ScopePayload,
@@ -3541,7 +3541,7 @@ export async function operatorPage(
     if (standing.kind !== "none") goalScopes.set(goal.goalId, standing.kind);
   }
   const flowOpeners = threads.messages.flatMap((message) =>
-    message.inReplyTo === null && message.authorId.startsWith(FLOW_AUTHOR_PREFIX)
+    opensFlowRequest(message)
       ? message.bases.flatMap((basis) =>
           basis["form"] === "goal" && typeof basis["goalId"] === "string"
             ? [{ messageId: message.messageId, goalId: basis["goalId"] }]
