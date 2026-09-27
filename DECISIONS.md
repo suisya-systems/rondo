@@ -24768,7 +24768,9 @@ how a take-in is known before its press. Each is recorded here once.
    where it is not the part's own. A part whose earlier part ended unmerged is the one amber step,
    linking rule 1.5's question in the thread. **The other request's thread** that rule 8.2 names is
    this thread: under `D-0103` rule 1.2 an order is a split's `after`, so both parts are one request.
-   The approved scope screen says the same sentence under an ordered plan, still with no press. The
+   Before any part has started there is no lap to read an agreement from, so the right face holds
+   the parts' steps alone. The approved scope screen says the same sentence under an ordered plan,
+   still with no press. The
    step's colour is in `page/thread.css` beside the governance chain's amber; `page/side.css` stays
    the amber-free sheet the empty state's test holds.
 4. **A worker's question puts one event line directly above the answering box** (rule 8.3), while

@@ -135,7 +135,7 @@ import { facesMarkup } from "./page/render.js";
 import { ResultLine } from "./page/result.js";
 import { Raw } from "./page/shell.js";
 import { ThreadFace, type ThreadItem } from "./page/thread.js";
-import { partStepOf, ThreadSide } from "./page/thread-side.js";
+import { PartsSide, partStepOf, ThreadSide } from "./page/thread-side.js";
 import {
   currentGoals,
   GoalScreen,
@@ -4016,7 +4016,16 @@ export async function operatorPage(
           : null;
   const threadSide =
     selectedGovernance === null || sideLap === null
-      ? null
+      ? // **An approved split with nothing started still has its parts' waits**
+        // (D-0098 rule 8.2): no lap to read an agreement from, so the steps alone.
+        selectedRoot === null || partsOfRequest(selectedRoot).length === 0
+        ? null
+        : {
+            react: PartsSide({
+              wording,
+              parts: partsOfRequest(selectedRoot).map((part) => partStepOf(wording, part)),
+            }),
+          }
       : {
           react: ThreadSide({
             wording,

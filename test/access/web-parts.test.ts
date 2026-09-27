@@ -639,3 +639,11 @@ test("two parts at their gates: the step of the one the box is not showing leads
   expect(second).toContain('href="/?thread=r1&amp;gate=lap-one&amp;lang=en"');
   expect(second).not.toContain("before stopping to ask");
 });
+
+test("an approved split with nothing started still shows each part's wait on the right face (D-0098 rule 8.2)", async () => {
+  const w = await split([undefined, 0]);
+  expect(partSteps(await page(w.world))).toEqual([
+    "Part 1not started yet",
+    "Part 2waiting until part 1 is merged; then it starts by itself",
+  ]);
+});

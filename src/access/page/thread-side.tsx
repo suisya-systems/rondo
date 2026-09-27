@@ -363,3 +363,26 @@ export function ThreadSide({
     </div>
   );
 }
+
+/**
+ * The right face of a split no part of which has started yet (D-0098 rule 8.2):
+ * there is no lap to read an agreement or five steps from, and the parts' waits
+ * are still what remains before the request ends.
+ */
+export function PartsSide({
+  wording,
+  parts,
+}: {
+  readonly wording: Chrome;
+  readonly parts: readonly PartStep[];
+}) {
+  return (
+    <div className="side">
+      <section className="side-gov">
+        <h2 className="side-heading">{wording.govStepsLabel}</h2>
+        <h4 className="side-parts-heading">{wording.partsHeading}</h4>
+        <PartSteps parts={parts} />
+      </section>
+    </div>
+  );
+}
