@@ -505,6 +505,9 @@ explanation you pressed on and then answers the gate.`,
   planStartPlain: "Starts one lap on this plan, counted against the scope you approved",
   planStarted: "Started.",
   planStartedLink: "Open the lap",
+  planSibling:
+    "Waiting: another part of this request is still open. This part starts by itself once " +
+    "that one ends.",
   planBusy: (limit) =>
     limit === 1
       ? "No room yet: this host runs one lap at a time, and one is running. The start button " +
