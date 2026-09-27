@@ -11,6 +11,8 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import {
+  commandPublishBody,
+  lapReport,
   publishFromPage,
   publishingForPage,
   publishPlanFor,
@@ -23,13 +25,20 @@ import { inspectLapWork } from "../../src/access/forge.js";
 import type {} from "../../src/access/inbox.js";
 import { resultOf } from "../../src/access/page-logic/result.js";
 import { threadsOf } from "../../src/access/page-logic/threads.js";
+import {
+  COMPOSED_SECTIONS,
+  PUBLISH_BODY_DRAFTER_PREFIX,
+  publishBodyOnce,
+} from "../../src/access/publish-body.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
-import { CLI_PATH_ENV } from "../../src/continuo/invoker.js";
+import { CLI_PATH_ENV, type ShowGateRequest } from "../../src/continuo/invoker.js";
+import type { ContinuoResult, GateDetail } from "../../src/continuo/protocol.js";
+import { drafterRow } from "../../src/continuo/roles.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, runPlan } from "../../src/refrain/plan.js";
 import { APPROVED_OUTCOME } from "../../src/store/records.js";
-import { iterationStore } from "../../src/store/sqlite.js";
+import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
 import { openRequest, REQUEST } from "../request-fixture.js";
 import {
@@ -491,6 +500,12 @@ async function publishableWorld(
   commits = 1,
   /** The remote's URL; the default is a repository nobody has. */
   remoteUrl = "https://github.com/suisya-systems/rondo-not-real.git",
+  /**
+   * The language the lap asked its worker to write in (`material_language`), or
+   * null where it asked for none -- which is the default and the case rondo#290
+   * is about.
+   */
+  materialLanguage: string | null = null,
 ): Promise<{
   readonly store: ReturnType<typeof iterationStore>;
   readonly storePath: string;
@@ -505,7 +520,12 @@ async function publishableWorld(
   await openRequest(connection);
   const iterationId = "lap-00000000-0000-4000-8000-0000000000c1";
   const workspaceRoot = join(dir, "work");
-  const planned = runPlan({ ...PLAN, workspaceRoot, repository: join(dir, "repo") });
+  const planned = runPlan({
+    ...PLAN,
+    workspaceRoot,
+    repository: join(dir, "repo"),
+    materialLanguage,
+  });
   if (planned.kind !== "planned") {
     throw new Error(`the fixture plan is not valid: ${planned.reason}`);
   }
@@ -1005,6 +1025,501 @@ test(
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
 
+test(
+  "a lap that asked its worker for no language still publishes an English account of its report (D-0079 section 4, rondo#290)",
+  async () => {
+    const world = await publishableWorld("clear");
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    // **The plan names no language**, which is the state a body used to be
+    // published in with no English account of the work in it at all: the lap's
+    // recorded language is what was *asked* for, and a lap that asked for none
+    // still reports in whatever language the request was written in.
+    expect(record.record.plan["material_language"] ?? null).toBe(null);
+
+    const asked: (string | null)[] = [];
+    const composed = {
+      summary: "The composing step reads the lap's report and writes this body's English.",
+      grounds: "D-0079 section 4 requires English here and nowhere earlier.",
+      verification: "The repository's own verification was run and passed.",
+    };
+    const planned = await publishPlanFor(
+      record.record,
+      world.asked,
+      {},
+      world.store,
+      null,
+      async (reportLanguage) => {
+        asked.push(reportLanguage);
+        return { kind: "composed", ...composed };
+      },
+    );
+    expect(planned.kind).toBe("ready");
+    if (planned.kind !== "ready") return;
+
+    // Composed once, with no language claimed for the report it read.
+    expect(asked).toEqual([null]);
+
+    const body = planned.plan.pullRequest.body;
+    const headings = COMPOSED_SECTIONS.map((one) => body.indexOf(`## ${one.heading}`));
+    expect(headings.every((at) => at >= 0)).toBe(true);
+    expect([...headings].sort((a, b) => a - b)).toEqual(headings);
+    for (const section of Object.values(composed)) {
+      expect(body).toContain(section);
+    }
+    // **A gate that would not read is a body without an account, not a body
+    // without sections**: the three headings stand and each says what it has.
+    const unread = await publishPlanFor(
+      record.record,
+      world.asked,
+      {},
+      world.store,
+      null,
+      async () => ({
+        kind: "unavailable",
+        reason: "there was no report to compose from",
+      }),
+    );
+    expect(unread.kind).toBe("ready");
+    if (unread.kind !== "ready") return;
+    const without = unread.plan.pullRequest.body;
+    for (const { heading } of COMPOSED_SECTIONS) {
+      expect(without).toContain(`## ${heading}`);
+    }
+    expect(without).toContain("there was no report to compose from");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+/** A report as a lap asked for Japanese leaves it: the worker's own last words. */
+const JAPANESE_REPORT = [
+  "## 変更の要旨",
+  "端末の publish でも、報告から起こした英語の本文が使われるようにしました。",
+  "",
+  "## 確認結果",
+  "npm run verify を通しました。",
+].join("\n");
+
+/** One `gate show` answer carrying a report, as continuo's decoder gives it. */
+function answeredGate(gateId: string, db: string, rationale: string): ContinuoResult<GateDetail> {
+  return {
+    kind: "answered",
+    db,
+    payload: {
+      gateId,
+      gateType: "human_decision",
+      runId: "run-1",
+      stage: "answered",
+      outcome: APPROVED_OUTCOME,
+      rationale,
+      options: '["approve","revise"]',
+    },
+  };
+}
+
+test(
+  "the terminal's publish reads the lap's gate for its report and puts an English account of it in the body (D-0079 section 4, rondo#290)",
+  async () => {
+    // **The route `rondo publish` takes**, leg by leg: the language comes off the
+    // lap's own plan, the report comes off the lap's own gate, and what reaches
+    // the body is the English account composed from it.
+    const world = await publishableWorld("clear", 1, undefined, "ja");
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    expect(record.record.plan["material_language"]).toBe("ja");
+    const advisory = advisoryRecord(new DatabaseSync(world.storePath));
+
+    const asked: ShowGateRequest[] = [];
+    const documents: string[] = [];
+    const composed = {
+      summary: "The terminal's publish now writes an English account of the lap's report.",
+      grounds: "D-0079 section 4 requires English in a pull request body and nowhere earlier.",
+      verification: "The repository's own verification was run and it passed.",
+    };
+    const planned = await publishPlanFor(
+      record.record,
+      world.asked,
+      {},
+      world.store,
+      null,
+      commandPublishBody(advisory, record.record, {
+        report: async () =>
+          await lapReport(async (request) => {
+            asked.push(request);
+            return answeredGate(request.gateId, request.db, JAPANESE_REPORT);
+          }, record.record),
+        runDrafter: async (document) => {
+          documents.push(document);
+          return { kind: "answered", costUsd: null, finalMessage: JSON.stringify(composed) };
+        },
+      }),
+    );
+    if (planned.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(planned)}`);
+    }
+
+    // **The report is fetched from this lap's gate, in this lap's database.**
+    expect(asked).toEqual([
+      { db: String(record.record.plan["db"]), gateId: `gate-${world.iterationId}` },
+    ]);
+    // **The language decides what the ask says and never whether it runs**: the
+    // tag the lap asked for is named, and the report itself is the material.
+    expect(documents).toHaveLength(1);
+    expect(documents[0]).toContain("IETF language tag 'ja'");
+    expect(documents[0]).toContain(JAPANESE_REPORT);
+
+    const body = planned.plan.pullRequest.body;
+    const headings = COMPOSED_SECTIONS.map((one) => body.indexOf(`## ${one.heading}`));
+    expect(headings.every((at) => at >= 0)).toBe(true);
+    expect([...headings].sort((a, b) => a - b)).toEqual(headings);
+    for (const section of Object.values(composed)) {
+      expect(body).toContain(section);
+    }
+    // **The report's own words are on the record and not in the body** (rule 4.2).
+    expect(body).not.toContain("変更の要旨");
+    expect(body).not.toContain("端末の publish");
+
+    // **The row is what a second publish of this lap reads**, whichever route it
+    // comes from: nothing is put to the drafter again, and the body is the same
+    // English account the first publish wrote.
+    const again = await publishPlanFor(
+      record.record,
+      world.asked,
+      {},
+      world.store,
+      null,
+      commandPublishBody(advisory, record.record, {
+        report: async () => {
+          throw new Error("a recorded body is not read from the gate again");
+        },
+        runDrafter: async () => {
+          throw new Error("a recorded body is not composed again");
+        },
+      }),
+    );
+    if (again.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(again)}`);
+    }
+    expect(again.plan.pullRequest.body).toBe(body);
+    expect(documents).toHaveLength(1);
+
+    // **A gate that does not read as answered is no report**, and the body then
+    // keeps its three sections and says it has no account -- it does not fall
+    // back to the report, and it does not go without a heading. A lap of its own,
+    // because a lap whose body is already recorded composes nothing.
+    const other = await publishableWorld("clear", 1, undefined, "ja");
+    const otherRecord = await other.store.read(other.iterationId);
+    if (otherRecord.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const unread = await publishPlanFor(
+      otherRecord.record,
+      other.asked,
+      {},
+      other.store,
+      null,
+      commandPublishBody(advisoryRecord(new DatabaseSync(other.storePath)), otherRecord.record, {
+        report: async () =>
+          await lapReport(
+            async (request) => ({
+              kind: "refused",
+              db: request.db,
+              errorClass: "continuo.gate.unknown",
+              message: "no such gate",
+            }),
+            otherRecord.record,
+          ),
+        runDrafter: async () => {
+          throw new Error("nothing is composed from a gate that would not read");
+        },
+      }),
+    );
+    if (unread.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(unread)}`);
+    }
+    for (const { heading } of COMPOSED_SECTIONS) {
+      expect(unread.plan.pullRequest.body).toContain(`## ${heading}`);
+    }
+    expect(unread.plan.pullRequest.body).toContain("there was no report to compose from");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "the page's publish composes the body through its own wiring, records it, and the press publishes that row (D-0079 section 4, rondo#290)",
+  async () => {
+    // **The page's entry, leg by leg, with nothing seeded**: `publishingForPage`
+    // is handed the record the row goes on and the pair it reaches a report and a
+    // drafter with, and everything between -- the language off the lap's plan, the
+    // `gate show` for the report, the document, the answer's three sections, the
+    // row -- is the code the page runs. Then the press, over the same row, so the
+    // digest the screen was drawn with still stands.
+    const world = await publishableWorld("stale", 1, undefined, "ja");
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const advisory = advisoryRecord(new DatabaseSync(world.storePath));
+    const asked: ShowGateRequest[] = [];
+    const documents: string[] = [];
+    const composed = {
+      summary: "The page's publish composes an English account of this lap's report.",
+      grounds: "D-0079 section 4 puts English in a pull request body and nowhere earlier.",
+      verification: "The repository's own verification was run and it passed.",
+    };
+    const shown = await publishingForPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.asked,
+      record.record,
+      null,
+      advisory,
+      {
+        report: async () =>
+          await lapReport(async (request) => {
+            asked.push(request);
+            return answeredGate(request.gateId, request.db, JAPANESE_REPORT);
+          }, record.record),
+        runDrafter: async (document) => {
+          documents.push(document);
+          return { kind: "answered", costUsd: null, finalMessage: JSON.stringify(composed) };
+        },
+      },
+    );
+    if (shown.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
+    }
+
+    // The report came off this lap's own gate, in this lap's own database.
+    expect(asked).toEqual([
+      { db: String(record.record.plan["db"]), gateId: `gate-${world.iterationId}` },
+    ]);
+    // The language the lap asked its worker for reached the drafter as material,
+    // beside the report itself.
+    expect(documents).toHaveLength(1);
+    expect(documents[0]).toContain("IETF language tag 'ja'");
+    expect(documents[0]).toContain(JAPANESE_REPORT);
+    // The three sections are in the body, in order, and the report is not.
+    const headings = COMPOSED_SECTIONS.map((one) => shown.body.indexOf(`## ${one.heading}`));
+    expect(headings.every((at) => at >= 0)).toBe(true);
+    expect([...headings].sort((a, b) => a - b)).toEqual(headings);
+    for (const section of Object.values(composed)) {
+      expect(shown.body).toContain(section);
+    }
+    expect(shown.body).not.toContain("変更の要旨");
+
+    // **The row is where it went**: a `publish_body` proposal against this lap's
+    // gate, carrying the English sections the drafter answered with.
+    const row = await advisory.publishBodyFor(world.iterationId, `gate-${world.iterationId}`);
+    expect(row?.payload).toEqual({ kind: "composed", ...composed });
+    expect(row?.drafter).toContain(PUBLISH_BODY_DRAFTER_PREFIX);
+
+    // **The press reads that row and composes nothing**: it reaches the reading's
+    // refusal, which is downstream of the digest comparison, so the screen and
+    // the press agreed about the body.
+    const pressed = await publishFromPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.storePath,
+      "ada",
+      world.asked,
+      { iterationId: world.iterationId, shown: shown.shown, despiteReview: false },
+    );
+    expect(pressed.ok).toBe(false);
+    expect(pressed.why).toBe("publishRefusedNotRead");
+    expect(documents).toHaveLength(1);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a lap previewed on the page and published from the terminal carries one and the same body (rondo#290)",
+  async () => {
+    // **The property the two routes exist to have**: a body is of a lap, not of a
+    // surface. The page composes and records; the terminal, publishing the same
+    // lap afterwards, reads that row instead of putting the same question to the
+    // drafter a second time and getting a different English account back.
+    const world = await publishableWorld("clear", 1, undefined, "ja");
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const advisory = advisoryRecord(new DatabaseSync(world.storePath));
+    const composed = {
+      summary: "One lap has one English account of its report, whichever route publishes it.",
+      grounds: "D-0079 section 4 asks for English here; rondo#290 asks for one of it.",
+      verification: "The repository's own verification was run and it passed.",
+    };
+    let runs = 0;
+    const shown = await publishingForPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.asked,
+      record.record,
+      null,
+      advisory,
+      {
+        report: async () => JAPANESE_REPORT,
+        runDrafter: async () => {
+          runs += 1;
+          return { kind: "answered", costUsd: null, finalMessage: JSON.stringify(composed) };
+        },
+      },
+    );
+    if (shown.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
+    }
+    expect(runs).toBe(1);
+
+    // The terminal's publish of the same lap: its own continuo and its own
+    // drafter are in its hand, and it reaches for neither, because the row is
+    // already written.
+    const planned = await publishPlanFor(
+      record.record,
+      world.asked,
+      {},
+      world.store,
+      null,
+      commandPublishBody(advisoryRecord(new DatabaseSync(world.storePath)), record.record, {
+        report: async () => {
+          throw new Error("a recorded body is not read from the gate again");
+        },
+        runDrafter: async () => {
+          throw new Error("a recorded body is not composed again");
+        },
+      }),
+    );
+    if (planned.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(planned)}`);
+    }
+    expect(planned.plan.pullRequest.body).toBe(shown.body);
+    expect(runs).toBe(1);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "the page's preview and its press publish one recorded body, composed once (D-0079 section 4, rondo#290)",
+  async () => {
+    // **The path the page takes, end to end**: the preview reaches the recorded
+    // body ({@link publishBodyOnce}) and the press reads the same row, so the
+    // digest the press compares against what the screen showed still stands.
+    // A stale reading refuses this press *after* that comparison, which is how
+    // this asserts the two bodies agreed without pushing anything.
+    const world = await publishableWorld("stale");
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const advisory = advisoryRecord(new DatabaseSync(world.storePath));
+    const subject = { iterationId: world.iterationId, gateId: `gate-${world.iterationId}` };
+    const composed = {
+      summary: "The page's publish uses the body rondo composed for this lap.",
+      grounds: "D-0079 section 4 asks for English here, composed from the report.",
+      verification: "The repository's own verification was run and it passed.",
+    };
+    let runs = 0;
+    const seeded = await publishBodyOnce(
+      {
+        record: advisory,
+        report: async () => "報告: ページの publish を直しました。verify を通しています。",
+        runDrafter: async () => {
+          runs += 1;
+          return { kind: "answered", costUsd: null, finalMessage: JSON.stringify(composed) };
+        },
+        drafter: drafterRow(),
+        mintId: () => "publish-body-1",
+        now: () => 3_000,
+      },
+      subject,
+      "ja",
+    );
+    expect(seeded).toEqual({ kind: "composed", ...composed });
+    expect(runs).toBe(1);
+
+    // The preview reads that row and composes nothing again -- it starts no
+    // continuo and spends nothing, which is why this runs with no CLI in reach.
+    const shown = await publishingForPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.asked,
+      record.record,
+      null,
+      advisory,
+    );
+    if (shown.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
+    }
+    expect(runs).toBe(1);
+    for (const { heading } of COMPOSED_SECTIONS) {
+      expect(shown.body).toContain(`## ${heading}`);
+    }
+    for (const section of Object.values(composed)) {
+      expect(shown.body).toContain(section);
+    }
+    // The report's own words stay on the gate the person answered.
+    expect(shown.body).not.toContain("ページの publish");
+
+    // The press: the same body, so the digest holds and the refusal it reaches
+    // is the reading's rather than the screen's having drifted.
+    const pressed = await publishFromPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.storePath,
+      "ada",
+      world.asked,
+      { iterationId: world.iterationId, shown: shown.shown, despiteReview: false },
+    );
+    expect(pressed.ok).toBe(false);
+    expect(pressed.why).toBe("publishRefusedNotRead");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a press with no recorded body publishes the body a preview that composed nothing shows (rondo#290)",
+  async () => {
+    // **The other half of the same property**: a row that would not write, and a
+    // publish under a scope with no screen behind it, both leave the press with
+    // no row. What it must not do then is word a body of its own -- a preview
+    // that composed nothing shows the three sections saying they have no
+    // account, and the press has to show exactly that or refuse every press.
+    const world = await publishableWorld("stale");
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const shown = await publishingForPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.asked,
+      record.record,
+    );
+    if (shown.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
+    }
+    for (const { heading } of COMPOSED_SECTIONS) {
+      expect(shown.body).toContain(`## ${heading}`);
+    }
+    expect(shown.body).toContain("no account of it was composed for this body");
+    const pressed = await publishFromPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.storePath,
+      "ada",
+      world.asked,
+      { iterationId: world.iterationId, shown: shown.shown, despiteReview: false },
+    );
+    expect(pressed.ok).toBe(false);
+    expect(pressed.why).toBe("publishRefusedNotRead");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
 /** Close a lap at its gate with an approval, as the gate's press would. */
 async function closeApproved(world: ReturnType<typeof fresh>, id: string): Promise<void> {
   await openGate(world, id);
@@ -1265,6 +1780,66 @@ test(
     expect(published.ok).toBe(false);
     expect(published.why).toBe("publishRefusedNotRead");
     expect(claimed).toEqual([]);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a publish under a scope composes and records its own body, rather than publishing without one (rondo#290)",
+  async () => {
+    // **The third route to a forge, and it draws no screen** (rondo#290). A press
+    // reads the row its preview recorded because its digest is compared against
+    // that screen; a publish under a scope has no screen, so reading only would
+    // leave the route rondo publishes by itself as the one route whose body has
+    // no English account of the lap's report at all.
+    const world = await publishableWorld("stale", 1, undefined, "ja");
+    const { claimed, scoped } = scopedClaims();
+    const advisory = advisoryRecord(new DatabaseSync(world.storePath));
+    const gateId = `gate-${world.iterationId}`;
+    expect(await advisory.publishBodyFor(world.iterationId, gateId)).toBe(null);
+
+    // No continuo in reach, so the report does not read and no model is run: what
+    // is under test is that this route composes at all and writes what it came to.
+    const published = await publishUnderScope(
+      { RONDO_APPROVER: "ada", [CLI_PATH_ENV]: "" },
+      world.store,
+      world.storePath,
+      "ada",
+      world.asked,
+      world.iterationId,
+      scoped,
+    );
+    // The review's refusal still holds, and it is reached after the plan -- and
+    // therefore after the body -- was made.
+    expect(published.ok).toBe(false);
+    expect(published.why).toBe("publishRefusedNotRead");
+    expect(claimed).toEqual([]);
+
+    const row = await advisory.publishBodyFor(world.iterationId, gateId);
+    if (row === null) {
+      throw new Error("the publish under the scope recorded no body");
+    }
+    expect(row.payload["kind"]).toBe("unavailable");
+    // And the page drawn afterwards reads that same row, so the two agree.
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const shown = await publishingForPage(
+      { RONDO_APPROVER: "ada", [CLI_PATH_ENV]: "" },
+      world.store,
+      world.asked,
+      record.record,
+      null,
+      advisory,
+    );
+    if (shown.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
+    }
+    for (const { heading } of COMPOSED_SECTIONS) {
+      expect(shown.body).toContain(`## ${heading}`);
+    }
+    expect(shown.body).toContain("rondo has no English account of this lap's report to put here");
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );

@@ -1168,6 +1168,13 @@ export const PROPOSAL_KINDS = Object.freeze([
   // approved**: the person's press is a gate answer and not a human_decision
   // (D-0032 rule 5), so it is absent from APPROVABLE_PROPOSAL_KINDS below.
   "revise_draft",
+  // D-0079 section 4 (rondo#290). One row per composing of a pull request's
+  // English body from a report written in another language: the sections it
+  // came to, or why it came to none. **Never approved**: a body is what
+  // `publish` renders and what a person reads before they press, and the press
+  // is a publish rather than a human_decision -- so it is absent from
+  // APPROVABLE_PROPOSAL_KINDS below.
+  "publish_body",
   // D-0097. One row per reading of what rondo would ask for next in one
   // repository: the recommendation, its runners-up and what was withheld, or
   // why the reading came to nothing. **Never approved**: a proposal of the

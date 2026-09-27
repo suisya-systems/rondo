@@ -28,6 +28,7 @@ import {
 } from "../store/records.js";
 import { fileCounts, type LapWorkInspection } from "./forge.js";
 import { type NamedIssue, namedIssues } from "./issue-read.js";
+import { COMPOSED_SECTIONS, type ComposedBodyOutcome } from "./publish-body.js";
 import { LIST_LIMIT } from "./review.js";
 
 /**
@@ -136,6 +137,21 @@ export interface PullRequestTextInput {
   readonly plansDrafted?: number;
   /** The forge host and `OWNER/NAME` the pull request is opened in, to tell an issue here from one elsewhere. */
   readonly forge?: { readonly host: string; readonly repo: string };
+  /**
+   * The English sections composed from the lap's report (`D-0079` section 4,
+   * rondo#290), or null where the caller composed nothing at all.
+   *
+   * **The three sections stand either way** (rondo#290): a body carries what
+   * changed, why, and what was verified, in that order, and an outcome that is
+   * `unavailable` or absent changes what a section *says* rather than whether it
+   * is there. A reader who cannot find a heading cannot tell a body rondo wrote
+   * without an account from a body that had nothing to account for.
+   *
+   * **A body is never the report translated, and never the report** (rule 4.2).
+   * The composed shape is the only way the report's meaning reaches this body:
+   * there is no path here that quotes the report's own words.
+   */
+  readonly composedBody?: ComposedBodyOutcome | null;
 }
 
 export interface PullRequestText {
@@ -242,6 +258,15 @@ function labelTitle(input: PullRequestTextInput): string {
  * refuses is refused after the push, which is the one leg `publish` cannot take
  * back. The quoted request is what gives way first, because it is the one part
  * of the body that is not about this change and is recoverable from the row.
+ *
+ * **What gives way second is the composed account, and never a section**
+ * (rondo#290). A model's three accounts are the one part of this body that
+ * nothing else bounds, and cutting the body's tail to fit would take the last
+ * headings with it -- so a body over the bound is composed again with the
+ * accounts fitted inside the room there is, and all three sections stand with
+ * each saying what it left. That is not a length rule on an answer: an account
+ * is cut only where this whole body is past what a forge takes, and it is never
+ * the reason an answer is thrown away.
  */
 function pullRequestBody(input: PullRequestTextInput): string {
   const whole = composeBody(input, true);
@@ -249,13 +274,72 @@ function pullRequestBody(input: PullRequestTextInput): string {
     return whole;
   }
   const withoutRequest = composeBody(input, false);
-  return withoutRequest.length <= BODY_LIMIT ? withoutRequest : withoutRequest.slice(0, BODY_LIMIT);
+  if (withoutRequest.length <= BODY_LIMIT) {
+    return withoutRequest;
+  }
+  // The room the accounts have is measured rather than guessed: the body with
+  // every account cut to nothing already carries each one's note, so what is
+  // left under the bound is what their words may take between them.
+  const bare = composeBody(
+    { ...input, composedBody: accountsWithin(input.composedBody, 0) },
+    false,
+  );
+  const share = Math.max(0, Math.floor((BODY_LIMIT - bare.length) / COMPOSED_SECTIONS.length));
+  const fitted = composeBody(
+    { ...input, composedBody: accountsWithin(input.composedBody, share) },
+    false,
+  );
+  return fitted.length <= BODY_LIMIT ? fitted : fitted.slice(0, BODY_LIMIT);
+}
+
+/**
+ * The same outcome with each composed account inside `share` characters
+ * (rondo#290), or the outcome untouched where there is no account to fit.
+ *
+ * Every section keeps its place and its heading; an account longer than its
+ * share keeps its opening and says how much it left and where the whole of it
+ * is, which is `claimBullet`'s rule for the same asymmetry.
+ */
+function accountsWithin(
+  outcome: ComposedBodyOutcome | null | undefined,
+  share: number,
+): ComposedBodyOutcome | null {
+  const composed = outcome ?? null;
+  if (composed === null || composed.kind !== "composed") {
+    return composed;
+  }
+  return {
+    kind: "composed",
+    summary: within(composed.summary, share),
+    grounds: within(composed.grounds, share),
+    verification: within(composed.verification, share),
+  };
+}
+
+/** One composed account, cut to `share` characters where it is longer than that. */
+function within(account: string, share: number): string {
+  const cut = account.length - share;
+  if (cut <= 0) {
+    return account;
+  }
+  return (
+    `${account.slice(0, share)}\n\n[...${String(cut)} more characters. This body is over the size ` +
+    "a forge takes, so rondo's account of the lap's report is cut here; the whole of it is in " +
+    "rondo's own record of this lap.]"
+  );
 }
 
 /** The body, section by section. */
 function composeBody(input: PullRequestTextInput, withRequest: boolean): string {
   const { record, runId, topicBranch, baseBranch, work } = input;
-  const lines: string[] = ["## What changed", ""];
+  const composed = input.composedBody ?? null;
+  // The first composed section stands under this heading, which is
+  // `COMPOSED_SECTIONS[0]`'s own: the account of the change comes before the
+  // evidence for it, and the commits and files below are that evidence.
+  const lines: string[] = [`## ${COMPOSED_SECTIONS[0].heading}`, ""];
+  if (composed !== null && composed.kind === "composed") {
+    lines.push(composed.summary, "");
+  }
 
   if (work.kind === "read") {
     if (work.commits.length === 0) {
@@ -308,6 +392,8 @@ function composeBody(input: PullRequestTextInput, withRequest: boolean): string 
     );
   }
 
+  lines.push(...composedLines(composed));
+
   lines.push("## How this got here", "");
   lines.push(
     `- rondo walked run \`${listed(runId, "run id")}\` (iteration \`${listed(record.id, "id")}\`) ` +
@@ -343,6 +429,71 @@ function composeBody(input: PullRequestTextInput, withRequest: boolean): string 
     "This pull request was opened by `rondo publish`, which an operator ran. Merging it is not.",
   );
   return lines.join("\n");
+}
+
+/**
+ * The sections after the change's own evidence: why the change was made, and
+ * what was verified (`D-0079` section 4, rondo#290).
+ *
+ * **Every heading is written whether or not there is an account to put under
+ * it.** The order is `COMPOSED_SECTIONS`' and is fixed -- what changed, then
+ * why, then what was verified -- and the first of them is already above, under
+ * the heading it names, so this writes the rest from the same list. What an
+ * outcome decides is what a section *says*: the composed prose, or the sentence
+ * below. A body that dropped the last two sections when nothing could be
+ * composed would read as a pull request with nothing to say about its own
+ * grounds, which is not what happened and is not what a reviewer should conclude.
+ *
+ * **A body with no account still does not quote the report** (rule 4.2). What a
+ * reader loses is rondo's account of it; what they must not be given instead is
+ * the report itself, in a language this pull request is not written in, standing
+ * where the account belongs. So the sentence names where the report is -- the
+ * gate the person answered, which is rondo's record of it -- and this body claims
+ * nothing it did not read.
+ */
+function composedLines(outcome: ComposedBodyOutcome | null): readonly string[] {
+  const composed = outcome !== null && outcome.kind === "composed" ? outcome : null;
+  const unavailable = outcome !== null && outcome.kind === "unavailable" ? outcome : null;
+  const lines: string[] = [];
+  // The first section's heading is written above, over the change's own
+  // evidence; these are the rest, in the same list's order.
+  const [, ...rest] = COMPOSED_SECTIONS;
+  for (const { key, heading } of rest) {
+    lines.push(`## ${heading}`, "");
+    lines.push(composed === null ? withoutAccount(unavailable, key) : composed[key], "");
+  }
+  if (composed !== null) {
+    lines.push(
+      "The sections above are rondo's own English account of this lap's report, composed from " +
+        "what that report says rather than translated from it. The report itself is on the gate " +
+        "the person who approved this lap answered, in rondo's own record of the lap.",
+      "",
+    );
+  }
+  return lines;
+}
+
+/** What one section says where no English account of the report was composed. */
+function withoutAccount(
+  outcome: Extract<ComposedBodyOutcome, { readonly kind: "unavailable" }> | null,
+  key: "grounds" | "verification",
+): string {
+  if (key === "verification") {
+    return (
+      "What this lap ran or checked is in that same report, which this body does not quote. What " +
+      'the operator said they checked before answering the gate is under "How this got here", ' +
+      "where rondo recorded it."
+    );
+  }
+  const why =
+    outcome === null
+      ? "no account of it was composed for this body"
+      : `rondo could not compose one: ${listed(outcome.reason, "reason")}`;
+  return (
+    `rondo has no English account of this lap's report to put here, because ${why}. The report ` +
+    "itself is neither quoted here nor translated: it is on the gate the person who approved " +
+    "this lap answered, in rondo's own record of the lap."
+  );
 }
 
 /**
