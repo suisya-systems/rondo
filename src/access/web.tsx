@@ -111,6 +111,7 @@ import {
   type ScopeSpent,
   type ThreadMessageDraft,
   WAIT_SIDE,
+  WORKER_QUESTION_AUTHOR,
 } from "../store/records.js";
 import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
 import { approvedUnstarted, partsOf } from "./drafted-start.js";
@@ -4122,26 +4123,47 @@ export async function operatorPage(
     nowMs,
     taken,
   )?.toString();
-  // **Carry on, at a worker's question, is the gate's revise** (D-0142): only
-  // where the gate would draw its revise press, and holding what its box holds.
-  const answerRevise = ((): AnswerRevise | null => {
-    const framed = answeringLap === null ? undefined : shown.get(answeringLap);
+  // **Carry on, at a worker's question, is the gate's revise** (D-0142): for
+  // the lap whose question the box answers, which need not be the gate the
+  // centre frames when several wait (Codex); only where that gate would draw
+  // its revise press, and holding what its box holds.
+  const answerRevise = await (async (): Promise<AnswerRevise | null> => {
+    const target =
+      selectedRoot === null || newIterationId === null
+        ? null
+        : replyTarget(
+            threads,
+            { messageId: selectedRoot, to: view.kind === "thread" ? view.to : null },
+            ports.actorId,
+          );
+    const lapId =
+      target?.answers === true && target.target.authorId === WORKER_QUESTION_AUTHOR
+        ? target.target.messageId.replace(/^question-/, "")
+        : null;
+    if (lapId === null || newIterationId === null || !threads.waiting.has(`question-${lapId}`)) {
+      return null;
+    }
+    const found = await ports.store.read(lapId);
     if (
-      answeringLap === null ||
-      framed === undefined ||
-      newIterationId === null ||
-      framed.forked ||
-      framed.scopeDecisionId === null ||
-      framed.closedBy !== null ||
-      framed.workerQuestion === null
+      found.kind !== "read" ||
+      found.record.status !== "awaiting_human" ||
+      found.record.gateId === null
     ) {
       return null;
     }
+    const tip = await approvalTip(ports.record, lapId);
+    if (
+      tip.kind !== "tip" ||
+      (await budgetClosing(ports, tip.scopeDecisionId, ports.now())) !== null
+    ) {
+      return null;
+    }
+    const box = await reviseBox(ports, wording, lapId, await ports.store.readingsFor(lapId));
     return {
-      iterationId: answeringLap,
-      scopeDecisionId: framed.scopeDecisionId,
+      iterationId: lapId,
+      scopeDecisionId: tip.scopeDecisionId,
       successor: newIterationId(),
-      draft: framed.revise.kind === "drafted" ? framed.revise.text : "",
+      draft: box.kind === "drafted" ? box.text : "",
     };
   })();
   const addBox =

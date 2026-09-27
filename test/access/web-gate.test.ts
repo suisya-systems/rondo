@@ -1351,3 +1351,35 @@ test("the answer box at a worker's question carries the gate's revise, with the 
   expect(bare).toContain('action="/answer-ask');
   expect(bare).not.toContain("revise_iteration");
 });
+
+test("with two laps at their gates, carry on revises the lap whose question the box answers (D-0142)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await reserve(world, "i-0002", "add a retry budget", null, "req-1");
+  await openGate(world, "i-0002");
+  // Both ask, so the centre frames the first gate while the box answers the second.
+  await workerAsks(world);
+  const asked = await world.record.recordThreadMessage({
+    messageId: "question-i-0002",
+    body: "Which module?",
+    authorKind: "drafter",
+    authorId: "rondo/worker-question/1",
+    inReplyTo: "req-1",
+    atMs: 3_600,
+    bases: [{ form: "iteration", iterationId: "i-0002" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "thread", messageId: "req-1", to: "question-i-0002" },
+    EN,
+    (kind) => `${kind}-00000000-0000-4000-8000-000000000009`,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000001",
+  );
+  const box = html.slice(html.indexOf('id="composer"'));
+  expect(box).toContain('name="in_reply_to" value="question-i-0002"');
+  expect(box).toContain('name="revise_iteration" value="i-0002"');
+});
