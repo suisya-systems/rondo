@@ -513,12 +513,12 @@ explanation you pressed on and then answers the gate.`,
     `${minutes === null ? "the time it was given" : `${String(minutes)} minutes`}, so it was ` +
     "stopped partway. What it changed is still in its workspace, and anything it had not " +
     "committed is not delivered. What this try " +
-    "cost is not known, because no cost was reported for it. To go on, start again, or " +
-    "set a smaller scope first.",
+    "cost is not known, because no cost was reported for it. To go on, carry on at its stop: " +
+    "rondo starts this work again from its commits. Or set a smaller scope first.",
   lapWorkKept: (branch, commit) =>
     "rondo kept what it had not committed as one commit on its branch, marked unverified " +
-    `(${branch}, ${commit.slice(0, 12)}). It is not delivered. A retry of this work picks ` +
-    "it up and checks it first.",
+    `(${branch}, ${commit.slice(0, 12)}). It is not delivered. Carrying on starts this work ` +
+    "again from it, and checks it first.",
   lapWorkNotKept: (reason) =>
     "rondo could not keep what it had not committed, so it is only in the workspace, and a " +
     `retry does not start from it: ${reason}`,
@@ -1149,10 +1149,10 @@ explanation you pressed on and then answers the gate.`,
     [
       `The work stopped at its budget. ${said ?? "What happened is on the work's line in this thread."}`,
       "Options:",
-      "- Raising the budget and carrying on, then starting again. Gives up: the money you add, " +
-        "and what this try changed and did not commit.",
-      "- Carrying on under the same budget. Gives up: what this try changed and did not commit; " +
-        "a try with too little left stops again.",
+      "- Raising the budget and carrying on: rondo starts this work again from its commits. " +
+        "Gives up: the money you add, and what this try changed and did not commit.",
+      "- Carrying on under the same budget: rondo starts it again the same way. Gives up: what " +
+        "this try changed and did not commit; a try with too little left stops again.",
       "- Stopping this line. Gives up: this request's work.",
       "Recommended: raising the budget and carrying on.",
       "This line stays stopped until this message is answered.",

@@ -175,7 +175,7 @@ import {
   readRecordFloor,
   readRepositoryPaths,
   runDrafter,
-  stoppedAtTimeLimit,
+  stoppedShort,
 } from "./forge.js";
 import { forgeHost, publishesTo, publishPreflight, redactRemoteUrl } from "./forge-preflight.js";
 import {
@@ -197,7 +197,14 @@ import {
   requestOf,
   unreadIssues,
 } from "./issue-read.js";
-import { againId, lostLapHost, pidAlive, thisDriver } from "./lost-laps.js";
+import {
+  againId,
+  lostLapHost,
+  pidAlive,
+  startsAgainOnCarryOn,
+  stoppedLapOf,
+  thisDriver,
+} from "./lost-laps.js";
 import { continuoWorkspaceRemover, mergeOnGreen, mergePress, releasePublished } from "./merge.js";
 import {
   type DrafterPorts,
@@ -1538,6 +1545,9 @@ export async function main(
       // the person to add it from the page.
       awaitsRepository: async (id) =>
         (await requestRepository({ store, record, now: Date.now }, id)).work.kind === "unheld",
+      // **An answer to a stop whose lap is started again is not drafted**
+      // (D-0149, D-0139): the start is its work.
+      startsAgain: async (ask) => (await lapStartedAgainAt(store, record, ask)) !== null,
     });
 
     // **And the revise drafter beside it** (D-0077 rule 2.2): a model reading
@@ -1942,6 +1952,10 @@ export async function main(
                   if (outcome.kind === "recorded") {
                     issues.kick();
                     drafter.kick();
+                    // An answer may carry on at a lost lap's stop (D-0139).
+                    if (answerOutcome !== null) {
+                      lost.kick();
+                    }
                   }
                   return outcome.kind === "recorded"
                     ? { ok: true, note: "" }
@@ -2031,6 +2045,23 @@ export async function main(
                     sender.actorId,
                     iterationId,
                   ),
+                // D-0149: a lap stopped short starts again on the *carry on* that
+                // answered its stop. A lost one is the lost-lap pass's, kicked by
+                // the answer (`SayPort` above).
+                async (ask, note) => {
+                  const lap = await lapStartedAgainAt(store, record, ask);
+                  return lap === null || !stoppedShort(lap)
+                    ? null
+                    : await restartLostFromPage(
+                        environment,
+                        store,
+                        opened.path,
+                        sender.actorId,
+                        chromeFor(selected.tag),
+                        lap,
+                        note,
+                      );
+                },
               ),
         // **The press is checked inside this port too** (rondo#233 S5), and it
         // is now null on exactly `revise`'s own condition: an approver the
@@ -3081,8 +3112,8 @@ async function commandRetry(
   const report = await admit(
     ports,
     advisory,
-    // From where a lap stopped at its time limit left its work (D-0143).
-    stoppedAtTimeLimit(subject.record) ? stoppedRetryPlan(retry.plan, subject.record) : retry.plan,
+    // From where a lap stopped at its time limit or budget left its work (D-0143, D-0149).
+    stoppedShort(subject.record) ? stoppedRetryPlan(retry.plan, subject.record) : retry.plan,
     START_POLICY,
     retry.successorId,
     // The retry supersedes the row it was proposed about (D-0030 rule 1), and
@@ -3455,8 +3486,8 @@ export async function commandScopedRetry(
       kind: "redo",
       iterationId: successorId,
       // A retry reruns the stored plan -- from where a lap stopped at its time
-      // limit left its work, when it was (D-0143).
-      plan: stoppedAtTimeLimit(predecessor.record)
+      // limit or its budget left its work, when it was (D-0143, D-0149).
+      plan: stoppedShort(predecessor.record)
         ? stoppedRetryPlan(decoded.plan, predecessor.record)
         : decoded.plan,
       predecessorId,
@@ -6142,10 +6173,37 @@ async function startsByItself(record: AdvisoryRecord, lap: IterationRecord): Pro
 }
 
 /**
- * Start a lost lap again (D-0139): its stored plan, run once more as
+ * The lap a *carry on* to this ask starts again (D-0139, D-0149): a lap lost,
+ * or stopped at its budget or its time limit, that has an approval in force to
+ * start it again under. The answer's own press starts one stopped short; this
+ * host's lost-lap pass starts a lost one. Null for any other ask, which goes on
+ * as before: a lap with no approval in force is the person's to start, and the
+ * drafter reads their answer.
+ */
+export async function lapStartedAgainAt(
+  store: Pick<IterationStore, "read">,
+  record: Pick<AdvisoryRecord, "scopeDecisionAdmitting" | "scopeTip">,
+  ask: Parameters<typeof stoppedLapOf>[0],
+): Promise<IterationRecord | null> {
+  const lapId = stoppedLapOf(ask);
+  if (lapId === null) {
+    return null;
+  }
+  const row = await store.read(lapId);
+  if (row.kind !== "read" || !startsAgainOnCarryOn(row.record)) {
+    return null;
+  }
+  return (await approvalTip(record, lapId)).kind === "tip" ? row.record : null;
+}
+
+/**
+ * Start a stopped lap again (D-0139, D-0149): its stored plan, run once more as
  * {@link againId}, under the approval it ran under and in the approver's name,
- * as `retry` runs one. Answers once the new row is reserved, so the host's pass
- * does not wait out the lap. A second call finds the row and is the first.
+ * as `retry` runs one. A lap stopped at its budget or its time limit runs it
+ * from where it stopped (`stoppedRetryPlan`), with what the person wrote when
+ * they carried on. Answers once the new row is reserved, so neither the host's
+ * pass nor the answer's press waits out the lap. A second call finds the row
+ * and is the first.
  */
 export async function restartLostFromPage(
   environment: Readonly<Record<string, string | undefined>>,
@@ -6154,6 +6212,7 @@ export async function restartLostFromPage(
   approver: string,
   words: Chrome,
   lost: IterationRecord,
+  note: string | null = null,
 ): Promise<Started> {
   const successorId = againId(lost.id);
   if ((await store.read(successorId)).kind === "read") {
@@ -6163,8 +6222,12 @@ export async function restartLostFromPage(
   if ("refusal" in actor) {
     return { ok: false, why: "startRefusedNotAdmitted", note: actor.refusal };
   }
-  if (lost.status !== "failed" || lost.failureKind !== "lost") {
-    return { ok: false, why: "startRefusedNotAdmitted", note: `lap '${lost.id}' was not lost` };
+  if (!startsAgainOnCarryOn(lost)) {
+    return {
+      ok: false,
+      why: "startRefusedNotAdmitted",
+      note: `lap '${lost.id}' was not lost or stopped at its budget or its time limit`,
+    };
   }
   const decoded = readPlan(lost.plan);
   if (decoded.kind !== "planned") {
@@ -6206,7 +6269,7 @@ export async function restartLostFromPage(
     {
       kind: "redo",
       iterationId: successorId,
-      plan: decoded.plan,
+      plan: stoppedShort(lost) ? stoppedRetryPlan(decoded.plan, lost, note) : decoded.plan,
       predecessorId: lost.id,
       requestMessageId: lost.requestMessageId,
       closing: false,

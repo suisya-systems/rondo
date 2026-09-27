@@ -27,6 +27,7 @@ import {
   approvedActor,
   claimThenWalk,
   type GateVerbs,
+  lapStartedAgainAt,
   operatorLanguage,
   parseBasis,
   publishModelReadingLines,
@@ -2832,4 +2833,37 @@ test("a request that names one issue here closes it, and nothing else does (rond
   expect(body("https://ghe.example.com/suisya-systems/rondo/issues/9")).toContain(
     "Refs https://ghe.example.com/suisya-systems/rondo/issues/9",
   );
+});
+
+test("D-0149: the lap a carry on starts again is a stopped or lost one with an approval in force", async () => {
+  const rows: Record<string, Partial<IterationRecord>> = {
+    "lap-budget": { status: "failed", failureKind: "budget", topicBranch: "rondo/b" },
+    "lap-lost": { status: "failed", failureKind: "lost" },
+    "lap-refused": { status: "failed", failureKind: "refusal", reason: "no" },
+    "lap-unapproved": { status: "failed", failureKind: "budget" },
+    "lap-forked": { status: "failed", failureKind: "budget" },
+  };
+  const store = {
+    read: async (id: string) =>
+      rows[id] === undefined
+        ? { kind: "absent" as const }
+        : { kind: "read" as const, record: { id, reason: null, ...rows[id] } as IterationRecord },
+  };
+  const record = {
+    scopeDecisionAdmitting: async (id: string) => (id === "lap-unapproved" ? null : `d-${id}`),
+    scopeTip: async (decision: string) =>
+      decision === "d-lap-forked"
+        ? { kind: "forked" as const, scopeDecisionIds: ["x", "y"] }
+        : { kind: "tip" as const, scopeDecisionId: `${decision}-raised` },
+  };
+  const at = async (messageId: string) =>
+    (await lapStartedAgainAt(store, record, { messageId, asks: true, bases: [] }))?.id ?? null;
+  expect(await at("lap-stopped-lap-budget")).toBe("lap-budget");
+  expect(await at("lap-stopped-lap-lost")).toBe("lap-lost");
+  expect(await at("lap-stopped-lap-refused")).toBeNull();
+  // No approval in force, or more than one: the person's to start, as before.
+  expect(await at("lap-stopped-lap-unapproved")).toBeNull();
+  expect(await at("lap-stopped-lap-forked")).toBeNull();
+  expect(await at("lap-stopped-lap-gone")).toBeNull();
+  expect(await at("question-lap-budget")).toBeNull();
 });

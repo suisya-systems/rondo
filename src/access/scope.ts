@@ -63,7 +63,7 @@ import {
   type ScopeTip,
 } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
-import { stoppedAtTimeLimit } from "./forge.js";
+import { stoppedShort } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
 import {
   type ReviewScope,
@@ -410,7 +410,8 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
     !act.closing
   ) {
     // D-0139: a lost lap is started again as it was sent; the laps and the
-    // cost above still bound it. D-0143: so is a lap stopped at its time limit.
+    // cost above still bound it. D-0143: so is a lap stopped at its time limit,
+    // and D-0149 one stopped at its budget: neither reached a gate.
     return { kind: "inside" };
   }
   if (readings.latestModelReading === null) {
@@ -742,10 +743,10 @@ async function predecessorLost(ports: ScopeReadPorts, predecessorId: string): Pr
   return row.kind === "read" && row.record.failureKind === "lost";
 }
 
-/** Whether the predecessor was stopped at its time limit (D-0143). */
+/** Whether the predecessor was stopped at its time limit (D-0143) or its budget (D-0149). */
 async function predecessorStopped(ports: ScopeReadPorts, predecessorId: string): Promise<boolean> {
   const row = await ports.store.read(predecessorId);
-  return row.kind === "read" && stoppedAtTimeLimit(row.record);
+  return row.kind === "read" && stoppedShort(row.record);
 }
 
 async function predecessorGrants(

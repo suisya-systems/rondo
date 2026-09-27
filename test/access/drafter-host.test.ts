@@ -20,7 +20,11 @@ import { agentTypeDigestOf, planDocument, world } from "./fixtures/drafter.js";
 
 type World = Awaited<ReturnType<typeof world>>;
 
-function hostOver(w: World, answer: (document: string, run: number) => Promise<DrafterRun>) {
+function hostOver(
+  w: World,
+  answer: (document: string, run: number) => Promise<DrafterRun>,
+  extra: Partial<DrafterHostPorts> = {},
+) {
   const handed: string[] = [];
   const logged: string[] = [];
   let n = 0;
@@ -38,6 +42,7 @@ function hostOver(w: World, answer: (document: string, run: number) => Promise<D
       handed.push(document);
       return await answer(document, handed.length);
     },
+    ...extra,
   };
   return { host: drafterHost(ports), handed, logged };
 }
@@ -151,6 +156,57 @@ test("an answer to a worker's question does not make the request due: it goes on
   await host.idle();
   expect(handed).toHaveLength(2);
   expect(handed[1]).toContain("a.ts");
+});
+
+test("an answer to a stop whose lap is started again does not make the request due (D-0149)", async () => {
+  const { w, templateDigest, typeDigest } = await requestWithPlan();
+  const asked: string[] = [];
+  const { host, handed } = hostOver(w, async () => split(templateDigest, typeDigest), {
+    startsAgain: async (ask) => {
+      asked.push(ask.messageId);
+      return await Promise.resolve(ask.messageId === "lap-stopped-lap-1");
+    },
+  });
+  host.kick();
+  await host.idle();
+  for (const lap of ["lap-1", "lap-2"]) {
+    const stopped = await w.record.recordThreadMessage({
+      messageId: `lap-stopped-${lap}`,
+      body: "The work stopped partway.",
+      authorKind: "drafter",
+      authorId: "rondo/deterministic",
+      inReplyTo: "r1",
+      atMs: 15_000,
+      bases: [{ form: "iteration", iterationId: lap }],
+      asks: true,
+    });
+    expect(stopped.kind).toBe("recorded");
+  }
+  const answer = async (id: string, to: string, outcome: "carry_on" | "stop") => {
+    const answered = await w.record.recordThreadMessage({
+      messageId: id,
+      body: "use the previous lap's commits",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: to,
+      atMs: 16_000,
+      bases: [],
+      asks: false,
+      answerOutcome: outcome,
+    });
+    expect(answered.kind).toBe("recorded");
+  };
+  await answer("a-1", "lap-stopped-lap-1", "carry_on");
+  await answer("a-2", "lap-stopped-lap-1", "stop");
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+  expect(asked).toContain("lap-stopped-lap-1");
+  // A stop this host does not start again is drafted, as every answer was before.
+  await answer("a-3", "lap-stopped-lap-2", "carry_on");
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(2);
 });
 
 test("a run that goes stale is discarded and run again over the new thread (rule 3.3)", async () => {
