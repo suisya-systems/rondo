@@ -568,20 +568,26 @@ test("the words sent with a change are read back off the lap they started", () =
 
 // --- D-0143: a retry of a lap stopped at its time limit starts where it stopped --
 
-test("D-0143: a stopped lap's retry picks its commits onto its own branch and is told to check the kept one", () => {
+test("D-0143: a stopped lap's retry merges its branch in first and is told to check the kept commit", () => {
   const stopped = { ...closedRecord("iter-1", FIRST), status: "failed" as const };
   const retry = stoppedRetryPlan(FIRST, stopped);
-  // Cut from where the stopped lap was, so the picked commits are this lap's
+  // Cut from where the stopped lap was, so the merged commits are this lap's
   // own diff and its reading and review cover them.
   expect(retry.baseBranch).toBe(FIRST.baseBranch);
   expect(retry.pullRequestBaseBranch).toBe(FIRST.pullRequestBaseBranch);
-  expect(retry.prompt).toContain(`git cherry-pick HEAD..${FIRST.topicBranch}`);
+  expect(retry.prompt).toContain(`git merge --no-edit ${FIRST.topicBranch}`);
   expect({ ...retry, prompt: FIRST.prompt }).toEqual({ ...FIRST, prompt: FIRST.prompt });
   expect(retry.prompt.startsWith(`${FIRST.prompt}\n\n--- The previous try was stopped`)).toBe(true);
   expect(retry.prompt).toContain(KEPT_WORK_SUBJECT);
   expect(retry.prompt).toContain("iteration 'iter-1'");
   // ASCII, as everything rondo writes into a prompt (D-0004).
   expect([...retry.prompt].every((c) => c.charCodeAt(0) < 128)).toBe(true);
+  // A retry of that retry replaces the section: one merge, of the newer branch.
+  const again = stoppedRetryPlan(retry, { ...stopped, id: "iter-2", topicBranch: "rondo/iter-2" });
+  expect(again.prompt.split("--- The previous try was stopped").length).toBe(2);
+  expect(again.prompt).toContain("git merge --no-edit rondo/iter-2");
+  expect(again.prompt).not.toContain(`git merge --no-edit ${FIRST.topicBranch}`);
+  expect(again.prompt.startsWith(`${FIRST.prompt}\n\n`)).toBe(true);
   // No branch on the row: nothing to start from, so the plan is as it was.
   expect(stoppedRetryPlan(FIRST, { ...stopped, topicBranch: null })).toBe(FIRST);
 });

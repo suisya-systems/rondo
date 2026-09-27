@@ -174,7 +174,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0139 | A lap is lost when, on this host, the rondo process that sent it and its `lap perform` child are both gone: it ends `failed` with the kind `lost`, holds no budget, and is started again once by itself under a goal scope or an approved split, or asked about | accepted |
 | D-0140 | A person's request starts from the goal scope's outward acts, a first-lap reserve with no history of its own is read from its repository's laps or guessed at a real lap's cost, and a budget stop offers raising the budget and carrying on first, on one press | accepted |
 | D-0141 | An answer is its press, a scope stop over a lap at its gate offers raising and carrying on, work approved and not begun outranks a stopped lap, and a resume keeps the paused approval's defaults | accepted |
-| D-0143 | A lap stopped at its time limit keeps what it had not committed, as one unverified commit in rondo's name on its own branch, and a retry of that lap picks it up as its first step; `D-0110` rule 1's option Z is narrowed | accepted |
+| D-0143 | A lap stopped at its time limit keeps what it had not committed, as one unverified commit in rondo's name on its own branch, and a retry of that lap merges it in as its first step; `D-0110` rule 1's option Z is narrowed | accepted |
 
 ---
 
@@ -26249,7 +26249,7 @@ rule 8), which does not cover a split with one plan. It is left for when that vi
 - **Requests reading *not started* that the person had meant to stop**: then an approval drawn after
   a stop is not the person going on, and the row should say both.
 
-## D-0143 — A lap stopped at its time limit keeps what it had not committed, as one unverified commit in rondo's name on its own branch, and a retry of that lap picks it up as its first step; `D-0110` rule 1's option Z is narrowed
+## D-0143 — A lap stopped at its time limit keeps what it had not committed, as one unverified commit in rondo's name on its own branch, and a retry of that lap merges it in as its first step; `D-0110` rule 1's option Z is narrowed
 
 **Status:** accepted (2026-09-28, rondo#516; option 1 of three, the recommendation, taken through the
 secretary while the owner was away). Refs `D-0010`, `D-0110`, `D-0139`, rondo#432, rondo#516.
@@ -26283,25 +26283,30 @@ unverified work under the worker's name. Here:
 - the commit is **rondo's**, by author and by subject, so nobody reads it as the worker's;
 - it is **not delivered**: it sits on the stopped lap's own branch, which is local and never pushed
   (`D-0010`), and a failed lap has no gate and is never published;
-- it reaches a pull request **only through a later lap** that picks it onto its own branch, whose
+- it reaches a pull request **only through a later lap** that merges it into its own branch, whose
   worker is told the commit is unverified and must check it, and which a person approves at its own
-  gate like any other lap. Because it is picked rather than cut from (rule 2), it is inside that lap's
-  own diff, so the lap's reading and its review read it.
+  gate like any other lap. Because it is merged rather than cut from (rule 2), it is inside that
+  lap's own diff, so the lap's reading and its review read it.
 
-**2. A retry of a stopped lap picks up what it kept** (`stoppedRetryPlan`,
+**2. A retry of a stopped lap merges in what it kept** (`stoppedRetryPlan`,
 `src/refrain/revision.ts`). The stored plan, unchanged but for a section appended to the prompt: the
 previous try was stopped at its time limit, its commits are on its local branch, and the first step
-is `git cherry-pick HEAD..<that branch>`; the commit with that subject is rondo's and unverified, to
-be checked before anything is built on it; and each step is to be committed as soon as it passes.
+is `git merge --no-edit <that branch>`; the commit with that subject is rondo's and unverified, to be
+checked before anything is built on it; and each step is to be committed as soon as it passes. A
+retry of a retry replaces the section instead of adding a second one, since the newer stopped
+branch already holds what the older one was merged from.
 
-- **Picked, not cut from.** Cutting the retry from the stopped branch, as a revision is cut from its
-  predecessor's, was the first version of this rule, and it is wrong here: the branch a lap is cut
-  from is also the base its reading (`readLapWork`) and its review (`base...tip`) are taken against.
-  A revision's predecessor was read at its gate; a stopped lap never reached one, so its kept commit
-  would sit below the retry's base and no reviewer would read it. Picked, it is part of the retry's
-  own diff, and the plan's base and pull-request base stay as they were. The stopped branch is in the
-  repository the workspace is cut from, so nothing is fetched.
-- **It is an instruction, and that is the safe side.** A worker that does not pick the commits starts
+- **Merged in, not cut from.** Cutting the retry from the stopped branch, as a revision is cut from
+  its predecessor's, was the first version of this rule, and it is wrong here: the branch a lap is
+  cut from is also the base its reading (`readLapWork`) and its review (`base...tip`) are taken
+  against. A revision's predecessor was read at its gate; a stopped lap never reached one, so its
+  kept commit would sit below the retry's base and no reviewer would read it. Merged, it is part of
+  the retry's own diff, and the plan's base and pull-request base stay as they were. The stopped
+  branch is in the repository the workspace is cut from, so nothing is fetched.
+- **A merge, not a cherry-pick.** `git merge --no-edit` is the history verb cadenza's command list
+  already grants a worker, for the take-in (`D-0098` rule 2); `git cherry-pick` is not on it. A merge
+  also takes a stopped branch that holds a take-in merge of its own.
+- **It is an instruction, and that is the safe side.** A worker that does not merge the branch starts
   the work over, as every retry did before this; the kept commit is never delivered without a lap
   that took it in and was read. The two retry paths that rerun
 a stored plan take it: `rondo retry` under a scope (`commandScopedRetry`) and under an approved
@@ -26329,7 +26334,7 @@ unverified commit the next try has to check. `D-0110` rules 2 to 4 are unchanged
 
 - **Carry on does not start a stopped lap again by itself.** The stop's *carry on* still releases the
   line and the person starts again (`D-0110` rule 2), and a new start from the request is a new plan
-  that is not told about the kept commit; only a retry of the stopped lap picks it up. Starting
+  that is not told about the kept commit; only a retry of the stopped lap merges it in. Starting
   it again on *carry on*, as `D-0139` does for a lost lap, is a separate change.
 - **Stops before this change keep nothing.** Their work is where it was left, in the workspace.
 
@@ -26338,7 +26343,7 @@ unverified commit the next try has to check. `D-0110` rules 2 to 4 are unchanged
 - A kept commit carries something into a published pull request that its later lap's worker and
   reviewer did not see (then the kept work should not be in the branch's history at all: the
   continuo snapshot above).
-- Retries of stopped laps skip the pick often enough that the work is lost anyway (then rondo, not
+- Retries of stopped laps skip the merge often enough that the work is lost anyway (then rondo, not
   the worker, should bring the commits in, which needs continuo to cut a workspace from more than
   one branch).
 - continuo writes into a workspace after answering its turn-timeout refusal (then the keep is racing
