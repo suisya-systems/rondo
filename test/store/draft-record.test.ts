@@ -291,49 +291,117 @@ async function readLands(w: Awaited<ReturnType<typeof world>>, atMs: number) {
   if (outcome.kind !== "recorded") throw new Error(JSON.stringify(outcome));
 }
 
-test("an issue read that landed after a drafter row leaves the message it answers uncovered (D-0131 rule 1)", async () => {
-  const { w } = await pasted();
-  const drafted = (id: string, draftedAtMs: number): DraftRunWrite => ({
+/**
+ * One run's write, holding the thread its material listed: `held` is the
+ * membership `D-0131` rule 1 reckons coverage by, and no time on the row says
+ * anything about it.
+ */
+function draftedOver(id: string, held: readonly string[], messages: string[] = []): DraftRunWrite {
+  return {
     requestMessageId: "r1",
     operatorMessageIds: ["r1", "r1-plan"],
     drafterPrefix: "rondo/drafter/",
     proposal: {
       ...proposal(id, ["r1", "r1-plan"]),
-      snapshot: { covers: ["r1", "r1-plan"], material: { draftedAtMs } },
+      snapshot: {
+        covers: ["r1", "r1-plan"],
+        material: { thread: held.map((messageId) => ({ messageId })) },
+      },
     },
     scope: null,
-    messages: [],
+    // A summary of the run, written after it: its own time must not cover a
+    // read the run never saw.
+    messages: messages.map((messageId) =>
+      drafterMessage(messageId, [{ form: "proposal", proposalId: id }]),
+    ),
+  };
+}
+
+test("an issue read that landed after a drafter row leaves the message it answers uncovered (D-0131 rule 1)", async () => {
+  const { w } = await pasted();
+  expect(await w.record.recordDraft(draftedOver("draft-1", ["r1", "r1-plan"]))).toEqual({
+    kind: "recorded",
   });
-  expect(await w.record.recordDraft(drafted("draft-1", 9_000))).toEqual({ kind: "recorded" });
   expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1", "r1-plan"]));
 
   // The read lands afterwards: material the covering row did not have, so the
   // message it answers is drafted again and a second run is not "covered".
   await readLands(w, 12_000);
   expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1-plan"]));
-  expect(await w.record.recordDraft(drafted("draft-2", 13_000))).toEqual({ kind: "recorded" });
+  expect(
+    await w.record.recordDraft(draftedOver("draft-2", ["r1", "r1-plan", "forge-12000"])),
+  ).toEqual({ kind: "recorded" });
 
   // **And it does not spin**: the second row was drafted over the read, so the
   // thread is covered again and a third run writes nothing.
   expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1", "r1-plan"]));
-  expect(await w.record.recordDraft(drafted("draft-3", 14_000))).toEqual({ kind: "covered" });
+  expect(await w.record.recordDraft(draftedOver("draft-3", ["r1", "r1-plan"]))).toEqual({
+    kind: "covered",
+  });
 });
 
-test("a read older than the row that covers its message changes nothing", async () => {
+test("a read the covering row's material held changes nothing", async () => {
   const { w } = await pasted();
   await readLands(w, 5_000);
   expect(
-    await w.record.recordDraft({
-      requestMessageId: "r1",
-      operatorMessageIds: ["r1", "r1-plan"],
-      drafterPrefix: "rondo/drafter/",
-      proposal: {
-        ...proposal("draft-1", ["r1", "r1-plan"]),
-        snapshot: { covers: ["r1", "r1-plan"], material: { draftedAtMs: 9_000 } },
-      },
-      scope: null,
-      messages: [],
-    }),
+    await w.record.recordDraft(draftedOver("draft-1", ["r1", "r1-plan", "forge-5000"])),
+  ).toEqual({ kind: "recorded" });
+  expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1", "r1-plan"]));
+});
+
+test("a read that lands while the run is drafting is not covered by the summary written after it", async () => {
+  const { w } = await pasted();
+  // The material was assembled without the read; the read lands during the
+  // run; the run's own summary message is written last, later than the read.
+  const write = draftedOver("draft-1", ["r1", "r1-plan"], ["drafter-1"]);
+  await readLands(w, 12_000);
+  expect(await w.record.recordDraft(write)).toEqual({ kind: "recorded" });
+  // The summary's write time is 9_000 in the row and later than the read in
+  // recording order, and neither of those covers what the draft never saw.
+  expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1-plan"]));
+});
+
+test("a read stamped before the material but recorded after the draft is still not covered", async () => {
+  const { w } = await pasted();
+  expect(await w.record.recordDraft(draftedOver("draft-1", ["r1", "r1-plan"]))).toEqual({
+    kind: "recorded",
+  });
+  // The reader stamps `at_ms` before it resolves the repository and asks the
+  // forge, so the row lands with a time before the draft's material. Coverage
+  // must not read that as "the draft had it".
+  await readLands(w, 1);
+  expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1-plan"]));
+  expect(await w.record.recordDraft(draftedOver("draft-2", ["r1", "r1-plan", "forge-1"]))).toEqual({
+    kind: "recorded",
+  });
+  expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1", "r1-plan"]));
+});
+
+test("an unavailable run's message covers a message with the reads it cites, and does not spin", async () => {
+  const { w } = await pasted();
+  await readLands(w, 12_000);
+  const unavailable = (id: string, cites: readonly string[]): DraftRunWrite => ({
+    requestMessageId: "r1",
+    operatorMessageIds: ["r1", "r1-plan"],
+    drafterPrefix: "rondo/drafter/",
+    proposal: null,
+    scope: null,
+    messages: [
+      drafterMessage(
+        id,
+        cites.map((messageId) => ({ form: "message", messageId })),
+      ),
+    ],
+  });
+  // Citing only the operator messages leaves the read uncovered: the run that
+  // wrote it was handed no issue.
+  expect(await w.record.recordDraft(unavailable("drafter-1", ["r1", "r1-plan"]))).toEqual({
+    kind: "recorded",
+  });
+  expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1-plan"]));
+  // Citing the read it held covers the message, so the next scan finds nothing.
+  expect(
+    await w.record.recordDraft(unavailable("drafter-2", ["r1", "r1-plan", "forge-12000"])),
   ).toEqual({ kind: "recorded" });
   expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(new Set(["r1", "r1-plan"]));
 });

@@ -412,6 +412,24 @@ test("what the drafter is handed of one read is its body and comments, cut from 
   expect(new TextEncoder().encode(parsed.read.body).length).toBe(18);
   expect(cut).toContain("rondo cut this issue to its first 18 of");
 
+  // **A continuous head, with no hole in it.** A multibyte character that will
+  // not fit leaves bytes of the budget unspent, and no later comment may fill
+  // them: body 'あ' under a bound of 2 is cut to nothing, and so is the
+  // comment after it, rather than the comment showing its own first two bytes
+  // with the body missing.
+  const holed = issueForDrafter(read("あ", [{ ...comment, body: "abc" }]), 2);
+  const head = parseForgeRead(holed);
+  if (head === null || !("read" in head)) throw new Error(holed);
+  expect(head.read.body).toBe("");
+  expect(head.read.comments).toEqual([{ ...comment, body: "" }]);
+  // And the same once a comment is the part that is cut: what follows it is
+  // not filled in from the bytes it left.
+  const later = issueForDrafter(read("ab", [{ ...comment, body: "あ" }, comment]), 4);
+  const parts = parseForgeRead(later);
+  if (parts === null || !("read" in parts)) throw new Error(later);
+  expect(parts.read.body).toBe("ab");
+  expect(parts.read.comments.map((one) => one.body)).toEqual(["", ""]);
+
   // What is not one of rondo's reads, and a read that failed, come back as they are.
   expect(issueForDrafter("not a read at all", 1)).toBe("not a read at all");
   const failed = forgeBody({ named: "#237", atMs: 1, failed: { why: "no_repo", detail: "why" } });

@@ -401,10 +401,15 @@ export function issueForDrafter(body: string, bound: number = DRAFTER_ISSUE_BOUN
   if (whole <= bound) {
     return body;
   }
+  // **What is kept is one continuous head, never a head with a hole in it.**
+  // Once a part is cut the rest of the budget is spent, so a multibyte
+  // character that would not fit -- body "あ" under a bound of 2 -- leaves
+  // bytes no later comment may fill: a reader who sees a comment's first bytes
+  // knows everything before them is there too.
   let left = bound;
   const take = (text: string): string => {
     const head = headOfBytes(text, left);
-    left -= size(head);
+    left = head === text ? left - size(head) : 0;
     return head;
   };
   const cutBody = take(issue.body);
