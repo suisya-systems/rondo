@@ -160,6 +160,8 @@ C-NN`, so the spaces can never be read as one.
 | D-0121 | A running lap is held to the scope's budget by the worker CLI's own spend stop: rondo sends each lap with the room the budget leaves it, continuo carries it (continuo#241), and a Codex lap is held only before it starts | accepted |
 | D-0122 | `mechanical` runs on `claude-sonnet-5` through the Claude CLI: the tier table gains a provider column passed as `lap perform --provider`, every row `claude`, and a drafter may name a `mechanical` agent type only with one grounded claim per condition of `D-0044` rule 1 | accepted |
 | D-0123 | The host's worker is the Claude CLI or the Codex CLI: `RONDO_WORKER_PROVIDER` picks the tier table, a `gpt` lap is read by a Claude reviewer, a Codex lap's tokens are priced at OpenAI's public API rate, and Windows refuses `codex` at start | accepted |
+| D-0124 | Two laps at once by default: D-0023 rule 17's condition is met by the pinned continuo, the default `maxOccupying` is 2, host-wide and across repositories, and `maxLive` stays 3 | accepted |
+| D-0127 | Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended | accepted |
 
 ---
 
@@ -1146,6 +1148,12 @@ it authorises. Part 3 means rondo will not be asking for that half for four of t
 ## D-0012 — Single-flight in lap 1, and what parallel admission actually waits on (cadenza `C-7`)
 
 **Status:** accepted (2026-09-05, rondo's human gate)
+
+> **Annotation (2026-09-27, from D-0124).** Added after this entry was accepted, and additive. The
+> "further change" this entry's falsifier waits on has landed: the pinned continuo `f2fb450` carries
+> `continuo D-1104`'s holder-identity half (the outbox delivery lease is per run) and `D-1105`'s
+> per-run state root, and rondo's capacity ledger is `D-0023`'s. `D-0124` raises the default
+> `maxOccupying` to 2. Nothing below is edited.
 
 ### Decision
 
@@ -3758,6 +3766,14 @@ Four laps at roughly $0.17 each is the whole cost of the evidence in this entry.
 > rather than less: a prefix that removes the whole class of reserved device names is checked by
 > a Linux runner asserting the *derivation* (`test/refrain/allocator.test.ts`), so the guarantee
 > does not wait for a night. A denylist would have been the thing now verified only nightly.
+
+> **Annotation (2026-09-27, from D-0124).** Added after this entry was accepted, and additive.
+> **Rule 17's condition is met**: the pinned continuo `f2fb450` carries `continuo D-1104`'s
+> holder-identity half, not merely its column, so a second concurrent lap is no longer refused
+> there, and `D-0124` makes the policy edit rule 17 promised: the default `maxOccupying` is 2.
+> **Rule 18's dependency is met by the same pin**: fence keys are per run (`D-1104` point 5), and
+> each lap's state root is its own (`D-1105`). Rule 13's durable, operator-editable form is still
+> not taken. Nothing below is edited.
 
 `D-0012` decided single-flight for lap 1 and named what a second admission waits on. Two of its
 three conditions are rondo's: **an allocator** for the `(run id, topic branch, workspace)` triple,
@@ -16746,6 +16762,11 @@ human gate, and its answer". Refs `D-0012`, `D-0023`, `D-0027`,
 `D-0030`, `D-0033`, `D-0048`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`, `D-0067`, `D-0068`,
 `D-0070`, `D-0071`, rondo#8, rondo#250.
 
+> **Annotation (2026-09-27, from D-0124).** Added after this entry was accepted, and additive.
+> `D-0124` raises the default `maxOccupying` to 2. That is the policy edit section 3 names. Section
+> 3's "not a bigger capacity number" is kept: the ledger still decides which lines may run
+> together, and the count decides only how many run at once. Nothing below is edited.
+
 **This entry decides and does not build.** Nothing in `src/` changes with it. The annotations it adds
 are listed in "Annotations this entry adds".
 
@@ -22586,6 +22607,13 @@ put to the owner while the build ran; the answers are in "What was put to the ga
 answer". Refs `D-0098`, `D-0100`, `D-0073`, `D-0067`, `D-0065`, `D-0066`, `D-0064`, `D-0015`,
 `D-0009`, `D-0089`, rondo#250, rondo#417, cadenza#74.
 
+> **Annotation (2026-09-27, from D-0127).** Added after this entry was accepted, and **not
+> additive**: `D-0127` amends rule 1.4. The tick now walks every split under an approval in force,
+> and not only the ones a press has admitted a part of. It starts every part that can start, not
+> only parts with `after`, and it answers once the lap's row is reserved. A part with `after` is
+> still released only by its predecessor's landing. The text below is not edited, so read rule 1.4
+> through `D-0127`.
+
 **Why an entry is needed.** `D-0098` "decides and does not build". Building it took choices its
 text does not make: where a release fact is stored, how an order is written into a split, where a
 record is named, how a question is signalled, how a closing lap is chosen. Each is recorded once
@@ -24569,3 +24597,123 @@ figure), a price table the owner supplies (unneeded: the price is public). For 6
 - **The Codex CLI refusing `gpt-6-astra`** under a ChatGPT login. The Codex table is then wrong.
 - **A `gpt` lap read by a `gpt` reviewer**, or a Claude lap by a Claude one: rule 3 has failed.
 - **A Codex lap admitted on Windows.**
+
+## D-0124 — Two laps at once by default: D-0023 rule 17's condition is met by the pinned continuo, the default `maxOccupying` is 2, host-wide and across repositories, and `maxLive` stays 3
+
+**Status:** accepted (2026-09-27, rondo#463; the owner's decision through the secretary: run laps in
+parallel now, at 2). Refs `D-0012`, `D-0023` rules 17 and 18, `D-0073` section 3, `D-0109`,
+`continuo D-1104`, `continuo D-1105`, `D-0127`.
+
+**Why an entry is needed.** `D-0023` rule 17 held `maxOccupying` at one on a named condition, and it
+said that once the condition held, raising the number would be a policy edit. This entry records
+that the condition holds, and it makes the edit.
+
+### What was measured
+
+At rondo `7a038e1` and continuo `f2fb450` on **2026-09-27**:
+
+- **Only the default holds rondo to one lap.** `CONSERVATIVE_HOST_POLICY.maxOccupying` is 1
+  (`src/refrain/policy.ts`). `reserve()` already tests capacity, lane claims and decision numbers
+  in one `BEGIN IMMEDIATE`, and the scope budget already reserves `cost_reserve_usd` for each
+  unread lap. Neither assumes one lap.
+- **Rule 17's condition is met by the pin rondo already has.** continuo `f2fb450` carries
+  `continuo D-1104`'s holder-identity half: the outbox delivery lease is per run (point 5), not
+  merely a column. It also carries `D-1105`'s per-run state root. So continuo no longer refuses a
+  second concurrent lap, and rule 18's fence keys are per run.
+- **The smoke run: two laps at once against this continuo and one store, in two repositories.**
+  Both performed at the same time (`in flight (2)`) and both reached their gate, and continuo
+  refused neither of them. It is recorded in
+  [`docs/operations/parallel-two-smoke.md`](docs/operations/parallel-two-smoke.md).
+
+### Decision
+
+1. **The default `maxOccupying` is 2.** The bound is host-wide and counts laps in every
+   repository. `RONDO_MAX_OCCUPYING` still overrides it, and `RONDO_MAX_OCCUPYING=1` goes back to
+   one lap at a time.
+2. **`maxLive` stays 3.** `maxLive >= maxOccupying` still holds (`D-0023` rule 8).
+3. **A third start is refused as today**: `reserve()` answers `atCapacity`, the press says the host
+   has no room, and the order tick tries again the next minute (`D-0127`).
+4. **`D-0073` section 3 is kept.** The lane ledger decides which lines may run together, and this
+   number decides only how many run at once. Two lines that share a path still take turns.
+5. **The stale comments are corrected** (`policy.ts`, `sqlite.ts`, `cli.ts`'s usage and
+   `hostPolicyOf`, `docs/operations/rondo-cli.md`). `D-0012`, `D-0023` and `D-0073` carry
+   annotations. None of them is superseded.
+
+### What it costs
+
+- **Two laps spend at once.** The scope budget reserves each unread lap's cost, so an approval
+  cannot be overspent by two parts together. A host-wide cap on spend is rondo#398's.
+- **Two parts of one request do not run together yet.** `D-0127` rule 5 keeps them apart until the
+  page can show several lines of one request (rondo#452).
+
+### What would falsify it
+
+- **A second concurrent lap refused by continuo** (`LeaseHeld`, or a shared state root). That would
+  mean the pin does not carry what point 2 of "What was measured" says it does.
+- **Two laps in different repositories that break each other** through something neither claims,
+  such as a shared cache, a port or a global tool install. The number is then too high for this
+  host, whatever the ledger says.
+
+## D-0127 — Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended
+
+**Status:** accepted (2026-09-27, rondo#463; the owner's decision through the secretary: a request
+split into parts runs its parts in parallel. On old approvals the owner chose option B of three,
+with no cutoff). It amends `D-0103` rule 1.4. Refs `D-0098` rule 1, `D-0103`, `D-0109`,
+`D-0066` rule 1.4, `D-0073` rule 7, `D-0124`, rondo#284, rondo#452.
+
+**Why an entry is needed.** `D-0103` rule 1.4 says that only plans with `after` are ever ticked.
+Under that rule every part without `after`, the first one included, waits for a person's press. The
+owner decided that approving the scope is the press.
+
+### Decision
+
+1. **Approving a split's scope is the go.** The order tick walks every split under an approval in
+   force (`approvedSplits`: approved, and not retired by an approved successor, `D-0066` rule 1.4),
+   whether or not a part of it has been started. It is no longer limited to the splits a press
+   admitted.
+2. **It starts each part that can start**: readiness `ready`, or `held` where no holding line is
+   in flight (`D-0073` rule 7). It starts the part through `startSplitFromPage`, in the approver's
+   name. The scope's tests, the lane ledger, the dedup against a simultaneous press and the refusal
+   are the press's own.
+3. **A part with `after` is still released only by its predecessor's landing** (`D-0098` rule 1.2).
+   The unlanded ask and its "drop" (rule 1.5) are unchanged.
+4. **Nothing is queued.** A part that is `busy`, `full`, `held` or `sibling` (rule 5) is tried
+   again on the next minute's pass. There are no queue rows. This covers the waiting half of
+   rondo#284.
+5. **Two parts of one request are not started together until rondo#452 lands.** A part whose
+   request already has an open lap reads `sibling`. The page says why, and the press is refused.
+   The guard is in `src/access/drafted-start.ts`, and rondo#452 removes it. **It is a readiness
+   test, not a lock.** The tick is safe, because it starts parts one after another and each start
+   answers once its row exists. But a person pressing another part of the request while the tick's
+   start has not yet reserved its row can slip past it. The page then has two lines of one request
+   to show. That is the thing rondo#452 builds, and nothing is lost.
+6. **The tick's start answers once the lap's row is reserved** (`answerOnceReserved`, as the
+   press's does since `D-0109`). One pass can start two parts and still read landings while they
+   run. A start that ends badly after that is an ask in the request's thread.
+7. **One scope per split and one pull request per part**, as today. There is no maximum number of
+   parts. `maxOccupying` (`D-0124`) and `maxLive` bound what runs.
+
+**Old approvals are not treated differently** (the owner's choice B). A split that was approved
+under `D-0103` and never pressed starts on the first pass after the upgrade. The store holds no
+released data. **Before upgrading, discard a store that holds an approval whose parts you left
+unpressed.** No verb closes an approval, and an approved successor still covers the same split,
+so discarding is the only way. `docs/operations/rondo-cli.md` says the same.
+
+**Options not taken.** A: walk the splits admitted today, plus approvals decided after an epoch
+recorded on this store's first `D-0127` tick (`drafter_epoch`'s precedent). Old approvals would
+then keep their press. C: a fixed cutoff date in code. Both carry a migration concern for data that
+was never released.
+
+### What it costs
+
+- **The approver's name is on starts nobody pressed.** The approval is the act they took, and each
+  start is tested against it exactly as a press is.
+- **The tick reads every approval every minute.** `startedFrom` scans the iterations for each part.
+  That is cheap at today's size, and it grows with the store.
+
+### What would falsify it
+
+- **A person who approves a scope and expects nothing to run until they press.** The approve
+  screen then has to say that approving starts the work.
+- **An approval whose parts must not all run**, for example a part the person meant to drop before
+  it started. That needs a per-part "not this one" that no rule decides yet.

@@ -70,11 +70,11 @@ export interface HostPolicy {
   /**
    * How many iterations may be executing at once.
    *
-   * **One, until continuo's `D-1104` lands its holder-identity half and not
-   * merely its column.** continuo serialises `lap perform` on a single global
-   * delivery resource, so a second concurrent lap is refused there rather than
-   * here; raising this number before that is a host that admits work continuo
-   * will refuse. Once it lands, this is a policy edit and not a code change.
+   * **Two by default since D-0124**, host-wide and across repositories.
+   * D-0023 rule 17 held it at one until continuo's `D-1104` carried its
+   * holder-identity half; the pinned continuo does (D-1104 point 5, D-1105's
+   * per-run state root), so a second concurrent lap is no longer refused
+   * there, and raising the default was the policy edit rule 17 promised.
    */
   readonly maxOccupying: number;
   /**
@@ -92,8 +92,11 @@ export interface HostPolicy {
 /**
  * The bounds a host runs under when nobody has said otherwise.
  *
+ * `maxOccupying` is two (D-0124): the owner's number for running laps in
+ * parallel once continuo allowed it, and not a measured optimum.
+ *
  * `maxLive` is three rather than one because the default that matches lap 1's
- * measured shape is "one lap at a time, several questions open at once": the
+ * measured shape is "a few laps at a time, several questions open at once": the
  * lock was held for a lap plus an unbounded human wait, and it is the second
  * term this bound releases. It is not a claim that three is the right number
  * for any particular host -- {@link hostPolicy} is how an operator says
@@ -101,7 +104,7 @@ export interface HostPolicy {
  * whether the number was ever binding.
  */
 export const CONSERVATIVE_HOST_POLICY: HostPolicy = Object.freeze({
-  maxOccupying: 1,
+  maxOccupying: 2,
   maxLive: 3,
 });
 

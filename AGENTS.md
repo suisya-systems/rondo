@@ -27,13 +27,13 @@ composition root that wires them.
 is supposed to: it classifies against a contract, admits a run, walks one lap,
 and suspends at a gate a human has yet to answer. It never composes the answer
 (D-0009), never publishes (D-0010) and never closes a gate (D-0013). It now runs
-**one lap at a time and several iterations at once**: an iteration suspended at a
-gate holds no worker, so it stops occupying an execution slot (D-0023). The
+**two laps at a time and several iterations at once** (D-0124): an iteration
+suspended at a gate holds no worker, so it stops occupying an execution slot
+(D-0023). The
 page `rondo web` serves on localhost is where a person works, and its presses
 write (D-0041, D-0083); there is still no MCP surface. rondo **does** have an
-allocator, and single-flight over *executing* laps is what remains of the
-reduction by default — `RONDO_MAX_OCCUPYING` is 1 because continuo's single
-delivery resource holds it there, not rondo's schema (D-0023 rules 8 and 17).
+allocator, and `RONDO_MAX_OCCUPYING` defaults to 2 now that the pinned continuo
+carries `D-1104`'s holder-identity half (D-0023 rules 8 and 17, D-0124).
 Lines that hold disjoint paths may be open at once under the lane ledger
 (D-0073, D-0117).
 
