@@ -1361,6 +1361,9 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page/thread.tsx": [HUMAN],
   "src/access/page/vocabulary.tsx": [HUMAN],
   "src/access/page/words.ts": [HUMAN],
+  // D-0079 section 4 (rondo#290): the body's English, composed from the lap's
+  // own report rather than translated from it.
+  "src/access/publish-body.ts": ["Publishing"],
   "src/access/pull-request.ts": ["Publishing"],
   "src/access/question.ts": ["Secretary: relaying a worker's question"],
   "src/access/reach.ts": ["Dispatcher: patrolling"],
