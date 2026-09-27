@@ -169,6 +169,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0130 | A lap's cap is written when it is sent and held until its cost is read, one reserve is kept for each lane a partner could still run in, and a budget stop ends the lap with what it spent | accepted |
 | D-0131 | A drafter row covers an operator message only with the issue reads it held, so a read that lands after a draft makes its thread due again; and an issue reaches the drafter's document as its body and comments, cut from the head with the cut named | accepted |
 | D-0136 | A drafted claim is drawn from the repository's own paths: the drafter is handed each offered repository's tracked paths at its base branch, two levels deep, and claims `/` only for work that spans the whole repository; `D-0073` rule 5's gate widening is the safety valve | accepted |
+| D-0137 | A bare `#N` is read in the repository its own request would publish to: `publishesTo` is the one rule both sides ask, and a reference the plans in play name two repositories for is not read at all; `D-0081` rule 3.4 is narrowed | accepted |
 
 ---
 
@@ -19553,6 +19554,11 @@ binding to one repository lives in installation and in publishing, which is wher
 4. **A bare `#N` is read in the repository of the plan the request is drafted from** (`D-0078`
    section 2.4). A request whose repository is still in dispute (rule 2.4) is a request whose issue
    read waits for the answer, as it waits today for a host that named no repository.
+   > **Annotation (2026-09-27, from D-0137).** Added after this entry was accepted, and **narrowing**.
+   > "The repository of the plan" is read as **where that plan would publish** -- rule 3.2's own rule,
+   > asked of every plan in play -- so one local repository holding a slug-carrying row and a
+   > slug-less one is a dispute wherever the host's `--repo` names a third thing, and the read stops
+   > instead of taking the newer row (rondo#313 item 2). Nothing below is edited.
 5. **What this does to `D-0080`.** Rule 2.1 has the start command carry "the repository and remote"
    among the host facts. Under rule 3.2 the repository leaves that list and the remote stays; under
    the gate's other options the list widens instead. **Rule 1 is untouched either way** -- starting
@@ -19597,6 +19603,11 @@ binding to one repository lives in installation and in publishing, which is wher
 3. **A store whose host still carries `--repo` keeps working.** Under the gate's answer 2 (a), a lap whose
    plan carries no slug publishes against the host's `--repo` as it does today; the flag stays what
    an installer may type and what a pre-entry store uses.
+   > **Annotation (2026-09-27, from D-0137).** Added after this entry was accepted, and **not
+   > additive**. This rule stands for the publish. What is no longer read as true is the corollary the
+   > issue reader drew from it -- that a slug-less plan says *nothing* about its repository: it says
+   > "the host's flag", which is a naming, and a naming that disagrees with a sibling row's slug stops
+   > a bare `#N` from being read at all. Nothing below is edited.
 
 ### The options, and the clauses each meets
 
@@ -25650,3 +25661,94 @@ a new authority surface, and to help lap 18 it would have had to narrow the hold
   too narrow for the ledger to pay for itself, and the default should move back towards `/`.
 - **Drafted claims that still come back `/` for work the thread localises**: then the listing is not
   what the drafter needs, and the fault is in the instructions or the depth.
+
+## D-0137 — A bare `#N` is read in the repository its own request would publish to: `publishesTo` is the one rule both sides ask, and a reference the plans in play name two repositories for is not read at all; `D-0081` rule 3.4 is narrowed
+
+**Status:** accepted (2026-09-27, rondo#313 item 2; the operator's ask on lap 18). Narrows `D-0081`
+rule 3.4 and annotates its rule 6.3; supersedes nothing. Refs `D-0078`, `D-0081`, `D-0090`,
+rondo#313, rondo#383.
+
+### Context
+
+`D-0081` moved the forge slug off the host and onto the plan, and two readers of that fact were
+built separately. **Measured on 2026-09-27 at `a47b61d`, by reading the tree**:
+
+- `publishRepository` (`src/access/cli.ts`) answers **per lap**: the lap's own plan's
+  `forge_repository`, and the host's `--repo` where the plan carries none (rule 3.2, rule 6.3).
+- `bareIssueRepository` (`src/access/issue-read.ts`) answered **per local repository**: it grouped
+  the plans in play by their `repository` path, took the slugs any plan of that repository named, and
+  fell back to `--repo` only for a repository **no** plan of which named one.
+
+The two disagree wherever one local repository holds both a plan naming a slug and an older one
+naming none -- which is exactly the route `D-0081` rule 6.2 gives for a store set up before that
+entry to acquire its slug, and the route `D-0090` rule 1.4's press gives too. With `--repo o/old` on
+the host and `o/new` on the newer row, a request drafted from the older plan **read `o/new#N` and
+published to `o/old`**, with no refusal anywhere: the reader called the newer row that repository's
+record, and the publish never saw it because it only ever reads its own lap's plan.
+
+rondo#313 recorded this as a design question, because the obvious fix -- resolve the slug from *the
+plan that was chosen* -- needs the drafted proposal's split walked and still misses a plan the person
+picked on the scope screen, which rides on the press and is written to no row. **This entry does not
+take that route.** It takes the cheaper half the issue leaves implicit: the publish is the reference,
+the read is made to agree with it, and where it cannot agree nothing is read.
+
+### Decision
+
+1. **One rule, one function.** `publishesTo(planSlug, hostRepo)` in `src/access/forge-preflight.ts`
+   is where a plan's work publishes: the plan's own slug, and the host's `--repo` only where the plan
+   carries none. `publishRepository` asks it of the lap's own plan and `bareIssueRepository` asks it
+   of **every plan in play**, so the read is anchored to the publish and not to a sibling row. It
+   answers `named` as well as `repo` -- `plan`, `flag` or `nothing` -- because the two sources are
+   two different things for a person to fix.
+2. **Two repositories named for one publish is a dispute, and the read stops.** `D-0081` rule 3.4's
+   dispute was "more than one repository in play"; it is now "more than one repository the plans in
+   play would publish to", which is strictly wider. Nothing is read and nothing is written, so the
+   lap's door keeps refusing (`D-0078` section 2.4) exactly as it does for the older dispute.
+   **A plan nothing names a repository for is the absence of an answer, not a rival one**: where
+   another plan of the *same* local repository names one, that is that repository's record, so rule
+   6.2's migration route under no `--repo` reads as it did. Across repositories an unnamed one stands
+   as its own unknown answer, unchanged.
+3. **The namings travel on the refusal** (AGENTS.md's rule for failure types): each says which local
+   repository it is of and whether the plan or the flag named it, and `bareRepositoryUnsettled`
+   composes the host's line from them. Where every naming is of one local repository the line says
+   that the request would publish two ways, because no draft and no press settles that -- one of the
+   two namings has to change. Where they are of several it stays the older sentence: which repository
+   this request is in.
+4. **The publish is not changed.** It reads its own lap's plan as it did; the reference cannot be the
+   thing that bends to the read.
+5. **Rule 6.3 stands as annotated.** A store whose plans carry no slug still reads and publishes by
+   the flag. What is no longer true is that a slug-less plan says *nothing*: it says "the flag", and
+   the flag is a naming that can disagree.
+
+### What it costs
+
+- **A store that ran setup again for one repository while the host carries a `--repo` naming another
+  repository stops reading bare `#N`** until one of the two is changed: the flag is dropped or
+  corrected, or the scope leaves only plans that agree. That is the point -- before this entry the
+  same store read one repository and published to another -- but it is a stop where there was none,
+  and it is a stop no draft and no approval clears.
+- **A dispute that is about a slug reads like a dispute about work** to anything that only checks
+  `"disputed" in`: the drafter is still not held for it (`unreadUnderway`), so its ask is written and
+  cannot help. The line the host prints is what tells the person, and the page shows only that the
+  reference is unread.
+
+### What this does not do
+
+- **It does not resolve the slug from the plan that was chosen.** The route rondo#313 names -- walk
+  the drafted proposal's split, and find somewhere to record a plan the person picked on the press --
+  is still open, and is still the only thing that would let a read be settled by the choice itself
+  rather than by every plan in play agreeing.
+- **It judges the namings when the reference is read, and never again.** A repository added, or a
+  plan recorded, after a read has landed can publish somewhere the read did not come from. Nothing
+  re-reads a reference a `forge` message already answers (`D-0078` section 2.4), and the read does
+  not record which repository it came from, so no later check could compare them without a new field.
+
+### What would falsify it
+
+- **A store stopped by rule 2 whose person's fix is to delete a `--repo` nobody remembers setting.**
+  Then the flag is the wrong reference in that store, and what is missing is a way for a host to
+  carry no slug at all once every repository records its own.
+- **A read that still lands in a different repository than the publish of the same work.** Then the
+  anchor is not the plans in play, and the chosen-plan route this entry declined is what is needed.
+- **A read recorded from one repository and published to another because the plans changed after
+  it** (the residual above), seen in a real store rather than reasoned about.

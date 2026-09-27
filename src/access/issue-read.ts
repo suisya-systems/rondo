@@ -28,11 +28,19 @@
  * picking one -- which is the same answer the drafter gives that request
  * (D-0081 rule 2.4). `OWNER/NAME#N` and a web address are unchanged: an
  * explicit name is read where it points.
+ *
+ * **Where a bare `#N` is read is where its request would publish** (`D-0137`),
+ * asked of every plan in play through the one function a publish asks
+ * (`publishesTo`). So the read cannot land in one repository while the pull
+ * request for the same work is opened in another, and where the plans in play
+ * would publish to more than one place the read stops and
+ * {@link bareRepositoryUnsettled} says which naming came from where.
  */
 
 import { asksForWork, type ThreadMessageDraft } from "../store/records.js";
 import { type AdvisoryRecord, asRefusal } from "../store/sqlite.js";
 import type { CommandOutcome, IssueReadRequest } from "./forge.js";
+import { type PublishTarget, publishesTo } from "./forge-preflight.js";
 import { hostFailure } from "./host-failure.js";
 import type { HeldPlan } from "./model-draft/host.js";
 
@@ -470,6 +478,16 @@ export type ForgeIssueRead = (request: IssueReadRequest) => Promise<{
 }>;
 
 /**
+ * One plan in play, as where its work would publish plus the local repository
+ * that publish would be of (`D-0137` rule 2).
+ *
+ * The local path is what makes a naming nameable to a person: two namings of
+ * one repository are a record of it that disagrees with itself, and two
+ * namings of two repositories are two pieces of work.
+ */
+export type BareRepositoryNaming = PublishTarget & { readonly repository: string };
+
+/**
  * Where a bare `#N` in one request is read, or that nothing has said yet.
  *
  * `repo` null is "no plan in play names a repository and this host was told
@@ -477,8 +495,13 @@ export type ForgeIssueRead = (request: IssueReadRequest) => Promise<{
  */
 export type BareIssueRepository =
   | { readonly repo: string | null }
-  /** Several repositories are still in play: the read waits (D-0081 rule 2.4). */
-  | { readonly disputed: true };
+  /**
+   * The plans in play would publish to more than one repository, so the read
+   * waits (D-0081 rule 2.4, `D-0137` rule 2) and `namings` is what disagrees:
+   * one per repository still answered for, in the order the plans were held.
+   * Empty where the caller knows of the dispute without having read a naming.
+   */
+  | { readonly disputed: true; readonly namings: readonly BareRepositoryNaming[] };
 
 /** What {@link bareIssueRepository} reads, as values a test replaces. */
 export interface BareRepositoryPorts {
@@ -496,7 +519,9 @@ export interface BareRepositoryPorts {
 
 /**
  * The repository a bare `#N` in `requestMessageId` is read in (D-0081 rule
- * 3.4): the one named by the plan the request is drafted from.
+ * 3.4): **where a publish of this request's work would go** (`D-0137` rule 1),
+ * which is the plan's own slug and the host's `--repo` only where the plan
+ * carries none.
  *
  * **Which plans are in play is read off the rows, never guessed.** The plans
  * rondo holds for the request are what a draft picks among (rule 2.2: with
@@ -509,6 +534,9 @@ export interface BareRepositoryPorts {
  * left, nothing has said which and **the answer is the person's**: the drafter
  * asks back and rondo starts nothing until it is answered (rule 2.4), and this
  * says `disputed` so the read waits for the same answer instead of guessing.
+ * **And more than one publish for one repository is a dispute too** (`D-0137`
+ * rule 2), which no draft answers: the namings travel on the refusal so the
+ * person is told which two disagree rather than which work to pick.
  *
  * `namedAtMs` is when the message naming the reference was written. A scope
  * older than it was written without knowing of that message, so it does not
@@ -542,28 +570,81 @@ export async function bareIssueRepository(
   // re-test of a scope compares them (D-0066 rule 1.2.2).
   const scoped = new Set(inForce?.payload.workspaces.map((workspace) => workspace.repository));
   const inPlay = scoped.size === 0 ? held : held.filter((plan) => scoped.has(plan.repository));
-  // **The answer is per repository, not per plan.** Setup may be run again for
-  // a repository it already recorded -- which is how a store set up before
-  // D-0081 comes to name its slug at all (rule 6.2) -- so one repository can
-  // hold both a plan that names its slug and an older one that names none.
-  // Within a repository, the plan that names one is that repository's record
-  // of it and the one that names none says nothing about it; a repository no
-  // plan of which names one is the host's `--repo` (rule 6.3), and where the
-  // host names none too, its repository is simply not known and counts as
-  // itself -- so standing beside a second repository's it is two answers and
-  // not agreement.
-  const named = new Map<string, Set<string>>();
-  for (const plan of inPlay) {
-    const slugs = named.get(plan.repository) ?? new Set<string>();
-    named.set(plan.repository, slugs);
-    if (plan.forgeRepository !== null) {
-      slugs.add(plan.forgeRepository);
+  // **Each plan is asked where it would publish, by the rule publish itself
+  // uses** (`publishesTo`, `D-0137` rule 1). Asking anything else is how the
+  // two came apart: the reckoning here used to take a repository's newest slug
+  // and let a slug-less plan of that same repository say nothing, while a
+  // publish of that plan fell back to the host's `--repo` -- so one local
+  // repository holding an old row and a newer one read `o/new#N` and published
+  // to `o/old`, silently (rondo#313 item 2).
+  const namings: readonly BareRepositoryNaming[] = inPlay.map((plan) => ({
+    repository: plan.repository,
+    ...publishesTo(plan.forgeRepository, ports.hostRepo),
+  }));
+  // **A plan nothing names a repository for is the absence of an answer, not a
+  // rival one.** Setup may be run again for a repository it already recorded --
+  // which is how a store set up before D-0081 comes to name its slug at all
+  // (rule 6.2) -- so one repository can hold both a plan that names its slug
+  // and an older one that names none. With no `--repo` either, that older plan
+  // says nothing about its repository and the newer row is that repository's
+  // record. Across repositories it is different: a second repository nothing
+  // names is not answered by the first repository's slug, so it stands as its
+  // own unknown answer and the read waits (rule 6.3).
+  const answered = new Set(
+    namings.filter((naming) => naming.named !== "nothing").map((naming) => naming.repository),
+  );
+  const rivals = new Map<string | null, BareRepositoryNaming>();
+  for (const naming of namings) {
+    if (naming.named === "nothing" && answered.has(naming.repository)) {
+      continue;
+    }
+    if (!rivals.has(naming.repo)) {
+      rivals.set(naming.repo, naming);
     }
   }
-  const candidates = new Set<string | null>(
-    [...named.values()].flatMap((slugs) => (slugs.size === 0 ? [ports.hostRepo] : [...slugs])),
-  );
-  return candidates.size > 1 ? { disputed: true } : { repo: [...candidates][0] ?? ports.hostRepo };
+  return rivals.size > 1
+    ? { disputed: true, namings: [...rivals.values()] }
+    : { repo: [...rivals.keys()][0] ?? ports.hostRepo };
+}
+
+/**
+ * Why a bare reference is not read yet, as the clause the host's log puts
+ * after the reference's own name (`D-0137` rule 3).
+ *
+ * **Which naming came from where, never just "in dispute".** A person can only
+ * end this by editing one of the two things that disagree, so the line names
+ * both and says which is a repository's own record and which is the flag this
+ * host was started with. Where every naming is of one local repository the
+ * disagreement is about that repository's slug rather than about which work is
+ * meant, and the sentence says that instead: no draft and no press will settle
+ * it, so pointing the person at their own choice of work would be wrong.
+ */
+export function bareRepositoryUnsettled(namings: readonly BareRepositoryNaming[]): string {
+  const waits = "waits on which repository this request is in";
+  if (namings.length === 0) {
+    return waits;
+  }
+  const said = namings.map(namedAs).join("; ");
+  const places = new Set(namings.map((naming) => naming.repository));
+  return places.size === 1
+    ? `is read where its request would publish, and ${String(namings.length)} repositories are ` +
+        `named for that one publish: ${said}; nothing is read until they agree`
+    : `${waits}: ${said}`;
+}
+
+/** One naming, in the terms the person can act on: the plan, or the flag. */
+function namedAs(naming: BareRepositoryNaming): string {
+  switch (naming.named) {
+    case "plan":
+      return `a plan of ${naming.repository} names ${naming.repo}`;
+    case "flag":
+      return (
+        `a plan of ${naming.repository} names none, so this host's --repo ${naming.repo} ` +
+        "answers for it"
+      );
+    default:
+      return `a plan of ${naming.repository} names none and this host was given no --repo`;
+  }
 }
 
 /**
@@ -1068,8 +1149,8 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
             if (!saidWaiting.has(key)) {
               saidWaiting.add(key);
               ports.log(
-                `issues   ${messageId}: ${reference.named} waits on which repository this ` +
-                  "request is in",
+                `issues   ${messageId}: ${reference.named} ` +
+                  bareRepositoryUnsettled(reads.namings),
               );
             }
             continue;
