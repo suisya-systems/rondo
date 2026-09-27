@@ -46,12 +46,15 @@ import {
   type LapReading,
   latestReading,
   type OpenAsk,
+  type RequestOpener,
+  requestsGoal,
   type ScopePayload,
   type ScopeRefusal,
   type ScopeSpent,
   type ScopeTest,
   type StoredScope,
   type StoredScopeDecision,
+  scopeCoversRequest,
 } from "../store/records.js";
 import {
   type AdvisoryRecord,
@@ -121,6 +124,12 @@ export interface ScopeSnapshot {
   readonly nowMs: number;
   /** The act's request link: the plan's, or the predecessor row's. */
   readonly requestMessageId: string;
+  /**
+   * The message opening the request, read only for a goal scope (D-0128 rule
+   * 1): null when the id opens none. Absent for a named scope, whose test is
+   * the id alone.
+   */
+  readonly requestOpener?: Read<{ readonly opener: RequestOpener | null }>;
   /** Open `asks` in the request's thread. */
   readonly openAsks: Read<{ readonly asks: readonly OpenAsk[] }>;
   /** Every lap in the act's lineage, sharing the predecessor's root: empty for a lineage start (rule 4.4). */
@@ -165,6 +174,22 @@ export function reviewScopeOf(payload: ScopePayload): ReviewScope {
     severityThreshold: payload.severity_threshold,
     ...(payload.below_threshold === undefined ? {} : { belowThreshold: payload.below_threshold }),
   });
+}
+
+/**
+ * Whether a scope covers one request, for a surface that holds only its id:
+ * the id is listed, or its opener is one the goal form matches (D-0128 rule 1).
+ */
+export async function scopeCovers(
+  record: Pick<AdvisoryRecord, "requestOpener">,
+  payload: ScopePayload,
+  requestMessageId: string,
+): Promise<boolean> {
+  if (requestsGoal(payload.requests) === null) {
+    return (payload.requests as readonly string[]).includes(requestMessageId);
+  }
+  const opener = await record.requestOpener(requestMessageId);
+  return opener !== null && scopeCoversRequest(payload.requests, opener);
 }
 
 /**
@@ -216,12 +241,32 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
     );
   }
   // 3. The request (rule 1.2.1). Every act names one since D-0083 tightened
-  // the column, so the only question left is whether the scope lists it.
-  if (!payload.requests.includes(snapshot.requestMessageId)) {
-    return outside(
-      "request",
-      `the request '${snapshot.requestMessageId}' is not in the scope's requests (D-0066 rule 1.2.1)`,
-    );
+  // the column, so the only question left is whether the scope covers it: by
+  // its id, or for a goal scope by its opener (D-0128 rule 1).
+  const goalId = requestsGoal(payload.requests);
+  if (goalId === null) {
+    if (!(payload.requests as readonly string[]).includes(snapshot.requestMessageId)) {
+      return outside(
+        "request",
+        `the request '${snapshot.requestMessageId}' is not in the scope's requests (D-0066 rule 1.2.1)`,
+      );
+    }
+  } else {
+    const opener = snapshot.requestOpener;
+    if (opener === undefined || opener.kind === "unreadable") {
+      return undecidable(
+        "request",
+        `whether the flow injected '${snapshot.requestMessageId}' from goal '${goalId}' cannot ` +
+          `be read${opener === undefined ? "" : `: ${opener.reason}`}`,
+      );
+    }
+    if (opener.opener === null || !scopeCoversRequest(payload.requests, opener.opener)) {
+      return outside(
+        "request",
+        `the request '${snapshot.requestMessageId}' is not one the flow injected from goal ` +
+          `'${goalId}' (D-0128 rule 1)`,
+      );
+    }
   }
   // 4. Open asks over the act's line (rule 4.2, D-0061 rule 2.7), right after the
   // request they are read from: while a stop stands, it is the answer (rule 4.4).
@@ -510,7 +555,8 @@ export interface ScopeReadPorts {
     | "scopeSupersededByApproved"
     | "openAsksIn"
     | "lineageOf"
-  >;
+  > &
+    Partial<Pick<AdvisoryRecord, "requestOpener">>;
 }
 
 export type ScopeGather =
@@ -567,6 +613,17 @@ export async function gatherScopeSnapshot(
       spent: await ports.record.scopeSpent(scopeDecisionId),
       nowMs,
       requestMessageId: act.requestMessageId,
+      ...(requestsGoal(scope.scope.payload.requests) === null
+        ? {}
+        : {
+            requestOpener:
+              ports.record.requestOpener === undefined
+                ? { kind: "unreadable" as const, reason: "nothing here reads a request's opener" }
+                : {
+                    kind: "read" as const,
+                    opener: await ports.record.requestOpener(act.requestMessageId),
+                  },
+          }),
       openAsks: await ports.record.openAsksIn(act.requestMessageId),
       lineageIterationIds:
         lineage === null

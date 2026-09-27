@@ -1295,3 +1295,61 @@ test("D-0121: a lap refused for no room holds nothing, and its negative cap cred
   // i-b sees i-a hold nothing, not -1: only the 4 that is really left.
   expect(await seed.store.sendLapBudget("i-b", 11)).toBe(4);
 });
+
+test("D-0128: a goal scope covers the flow's openers naming its goal, and a newer goal is approved again", async () => {
+  const goalScope: JsonRecord = { ...PAYLOAD, requests: { from_goal: "g-1" } };
+  const seed = await seeded();
+  const { connection, record, store } = seed;
+  // Its goal must be a row, and the form admits nothing beside `from_goal`.
+  expect((await record.recordScope(scope({ payload: goalScope }))).kind).toBe("refused");
+  const goal = (goalId: string, writtenAtMs: number) =>
+    record.recordGoal({
+      goalId,
+      repository: "o/r",
+      clauses: [{ said: "ship it", unmetIf: "it is not shipped" }],
+      writtenBy: "oidc|operator-1",
+      writtenAtMs,
+    });
+  expect(await goal("g-1", 1)).toEqual({ kind: "recorded" });
+  for (const bad of [{ from_goal: "" }, { from_goal: "g-1", also: 1 }, {}]) {
+    expect(readScopePayload({ ...goalScope, requests: bad }).kind).toBe("refused");
+  }
+  expect(await record.recordScope(scope({ payload: goalScope }))).toEqual({ kind: "recorded" });
+  expect(
+    await record.recordScopeDecision(scopeDecision({ scopeDigest: contentDigest(goalScope) })),
+  ).toEqual({ kind: "recorded" });
+
+  // A goal basis locates a goal row, or the message is refused.
+  expect(
+    (
+      await record.recordThreadMessage(
+        message({ messageId: "m-x", bases: [{ form: "goal", goalId: "g-none" }] }),
+      )
+    ).kind,
+  ).toBe("refused");
+  const opener = (messageId: string, authorId: string, goalId: string) =>
+    record.recordThreadMessage(message({ messageId, authorId, bases: [{ form: "goal", goalId }] }));
+  expect(await goal("g-2", 2)).toEqual({ kind: "recorded" });
+  expect(await opener("m-flow", "rondo/flow/sd-0001", "g-1")).toEqual({ kind: "recorded" });
+  expect(await opener("m-person", "oidc|operator-1", "g-1")).toEqual({ kind: "recorded" });
+  expect(await opener("m-newer", "rondo/flow/sd-0001", "g-2")).toEqual({ kind: "recorded" });
+
+  await reserves(store, reserveInput("i-flow", spendOf(), { requestMessageId: "m-flow" }));
+  expect(
+    await refusalOf(store, reserveInput("i-p", spendOf(), { requestMessageId: "m-person" })),
+  ).toContain("not one the flow injected from goal 'g-1'");
+  expect(
+    await refusalOf(store, reserveInput("i-n", spendOf(), { requestMessageId: "m-newer" })),
+  ).toContain("not one the flow injected from goal 'g-1'");
+  // The named form is untouched: m-0001 is no goal scope's.
+  expect(
+    await refusalOf(store, reserveInput("i-m", spendOf(), { requestMessageId: "m-0001" })),
+  ).toContain("not one the flow injected");
+
+  const scopeIds = async (messageId: string) =>
+    (await record.scopesFor(messageId)).map((one) => one.scopeId);
+  expect(await scopeIds("m-flow")).toEqual(["s-0001"]);
+  expect(await scopeIds("m-person")).toEqual([]);
+  expect(await scopeIds("m-newer")).toEqual([]);
+  expect(count(connection, "SELECT COUNT(*) AS n FROM scope_consumption")).toBe(1);
+});

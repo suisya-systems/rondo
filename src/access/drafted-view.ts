@@ -17,7 +17,7 @@ import {
   type ScopeBudgets,
 } from "../advisory/budget.js";
 import { readSplitPayload, type SplitPlan } from "../advisory/proposal.js";
-import type { JsonRecord, StoredScope } from "../store/records.js";
+import { type JsonRecord, namedRequests, type StoredScope } from "../store/records.js";
 import type { AdvisoryRecord, ApprovedSplit } from "../store/sqlite.js";
 import { type DrafterMaterial, isModelDrafterName } from "./model-draft/judgement.js";
 
@@ -172,7 +172,8 @@ export async function approvedSplits(
     if (read.kind !== "read" || drafted === null) {
       continue;
     }
-    for (const requestMessageId of read.scope.payload.requests) {
+    // A goal scope names no split: nothing is drafted for it (D-0128).
+    for (const requestMessageId of namedRequests(read.scope.payload.requests)) {
       splits.push({
         scopeDecisionId: approval.scopeDecisionId,
         proposalId: drafted.proposalId,

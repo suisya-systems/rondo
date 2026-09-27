@@ -23,6 +23,7 @@ import {
   ABSENT,
   type AdvisorySnapshot,
   BASIS_FORMS,
+  type Basis,
   type Claim,
   type ContractSnapshot,
   DERIVATIONS,
@@ -525,6 +526,26 @@ test("a claim list reads back as claims, which is a different shape", () => {
   };
 
   expect(readPayload(payload)).toEqual({ kind: "claims", payload });
+});
+
+test("every basis form reads back as itself", () => {
+  // Keyed by form, so a form added to the union and not to the reader fails here.
+  const examples: { readonly [K in Basis["form"]]: Extract<Basis, { form: K }> } = {
+    snapshot: { form: "snapshot", pointer: "/a" },
+    iteration: { form: "iteration", iterationId: "i-1" },
+    gateTransition: { form: "gateTransition", gateId: "g-1", transitionSeq: 2 },
+    continuoRun: { form: "continuoRun", runId: "r-1" },
+    repository: { form: "repository", path: "a.ts", commit: "c0ffee", firstLine: 1, lastLine: 2 },
+    message: { form: "message", messageId: "m-1" },
+    scope: { form: "scope", scopeId: "s-1" },
+    proposal: { form: "proposal", proposalId: "p-1" },
+    setup: { form: "setup", setupId: "setup-1" },
+    goal: { form: "goal", goalId: "g-1" },
+  };
+  for (const form of BASIS_FORMS) {
+    const payload = { claims: [{ label: "a", value: "b", basis: examples[form] }] };
+    expect(readPayload(payload)).toEqual({ kind: "claims", payload });
+  }
 });
 
 test("a basis form outside the union is refused rather than guessed at", () => {

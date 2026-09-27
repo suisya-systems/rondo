@@ -40,7 +40,7 @@ import {
 import { placeSaid } from "../page-logic/list.js";
 import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "../page-logic/routes.js";
 import { firstLine, requestWords, type Threads, waitingAsk } from "../page-logic/threads.js";
-import { approvalTip, heldAgentTypeLines, scopeBudgetsFromStore } from "../scope.js";
+import { approvalTip, heldAgentTypeLines, scopeBudgetsFromStore, scopeCovers } from "../scope.js";
 import type { Chrome } from "../wording.js";
 
 /** A locator drawn as a chip: quiet, one line, the whole of it in `title`. */
@@ -1006,7 +1006,7 @@ async function raiseForm(
   if (
     stored === null ||
     stored.kind !== "read" ||
-    !stored.scope.payload.requests.includes(view.messageId)
+    !(await scopeCovers(ports.record, stored.scope.payload, view.messageId))
   ) {
     return note(wording.scopeNotThisRequest);
   }
@@ -1609,7 +1609,7 @@ async function scopeApproved(
   // is the kind of thing that stays true until the day it does not.
   if (
     stored.kind !== "read" ||
-    !stored.scope.payload.requests.includes(view.messageId) ||
+    !(await scopeCovers(ports.record, stored.scope.payload, view.messageId)) ||
     decided.decision.scopeDigest !== stored.scope.scopeDigest
   ) {
     return notThis;

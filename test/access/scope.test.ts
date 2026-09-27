@@ -862,3 +862,45 @@ test("D-0098 rule 5.3: a closing redo carries what the reviewer last read into t
     closing: { readTipCommit: "e".repeat(40), readingReadAtMs: 7, findings: [0, 1, 2] },
   });
 });
+
+test("a goal scope covers exactly the flow's openers naming its goal (D-0128 rule 1), read from the opener", () => {
+  const goal = { requests: { from_goal: "g-1" } } as const;
+  const opener = (authorId: string, goalId: string) =>
+    ({
+      kind: "read",
+      opener: { messageId: "m-1", authorId, bases: [{ form: "goal", goalId }] },
+    }) as const;
+  expect(
+    scopeVerdict(REDO, snapshot({ requestOpener: opener("rondo/flow/sd-1", "g-1") }, goal)),
+  ).toEqual(INSIDE);
+  // Not the flow's, a newer goal (rule 3), no opener, and nothing read: each refuses at the request.
+  for (const [parts, kind] of [
+    [{ requestOpener: opener("oidc|operator-1", "g-1") }, "outside"],
+    [{ requestOpener: opener("rondo/flow/sd-1", "g-2") }, "outside"],
+    [{ requestOpener: { kind: "read", opener: null } }, "outside"],
+    [{}, "undecidable"],
+    [{ requestOpener: { kind: "unreadable", reason: "gone" } }, "undecidable"],
+  ] as const) {
+    expect(scopeVerdict(REDO, snapshot(parts as Partial<ScopeSnapshot>, goal))).toMatchObject({
+      kind,
+      test: "request",
+    });
+  }
+});
+
+test("the gatherer reads the opener for a goal scope only (D-0128 rule 1)", async () => {
+  const opener = { messageId: "m-1", authorId: "rondo/flow/sd-1", bases: [] };
+  const read = async (payload: Partial<ScopePayload>) => {
+    const base = ports(snapshot({}, payload), []);
+    const gathered = await gatherScopeSnapshot(
+      { ...base, record: { ...base.record, requestOpener: async () => opener } },
+      "sd-1",
+      REDO,
+      500,
+    );
+    if (gathered.kind !== "gathered") throw new Error(gathered.reason);
+    return gathered.snapshot.requestOpener;
+  };
+  expect(await read({ requests: { from_goal: "g-1" } })).toEqual({ kind: "read", opener });
+  expect(await read({})).toBeUndefined();
+});

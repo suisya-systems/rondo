@@ -76,6 +76,8 @@ export interface WebPorts extends InboxReadPorts {
       | "scopeDecisionOf"
       | "scopeSpent"
       | "scopeSupersededByApproved"
+      // D-0128: a goal scope covers a request by the message that opened it.
+      | "requestOpener"
       // rondo#233 S4: the gate's revise offers the approval this lap was
       // admitted under, so nobody copies a decision id (D-0070 section 1.2).
       | "scopeDecisionAdmitting"
