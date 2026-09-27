@@ -109,7 +109,8 @@ export function gateAuto(input: GateAutoInput): GateAuto {
   const runs = input.runs;
   if (runs.kind !== "ran") {
     reasons.push({ kind: "tests_unread" });
-  } else {
+  } else if (runs.supersededBy === null) {
+    // A failure a later clean test command superseded is not the lap's (rondo#497).
     if (runs.last.failed > 0) {
       reasons.push({ kind: "tests_failed", failed: runs.last.failed });
     }

@@ -384,6 +384,10 @@ explanation you pressed on and then answers the gate.`,
   workerCount: (kind, count) => `${String(count)} ${kind}`,
   workerRanErrored: "The command itself ended in error.",
   workerRanEarlier: (runs) => `and ${String(runs)} earlier run${runs === 1 ? "" : "s"}`,
+  workerRanSuperseded: (line) =>
+    `The worker ran the tests again after this (transcript line ${String(line)}) and that run ` +
+    "finished without error, so this failure is not the lap's result. A worker often breaks the " +
+    "code on purpose to see a test fail, then puts it back.",
   workerRanSource: (line) =>
     `Read by rondo from the commands continuo recorded for this lap (transcript line ${String(line)}); ` +
     "rondo did not run it.",

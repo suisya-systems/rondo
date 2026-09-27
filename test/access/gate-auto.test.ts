@@ -41,6 +41,7 @@ const green: WorkerRuns = {
   kind: "ran",
   last: { index: 4, command: "npm test", passed: 10, failed: 0, skipped: 1, isError: false },
   earlier: 0,
+  supersededBy: null,
 };
 
 // Only the fields the evaluator reads: the expiry and the review threshold.
@@ -101,6 +102,16 @@ describe("gateAuto (D-0125)", () => {
     expect(reasons({ runs: { ...green, last: { ...green.last, isError: true } } })).toEqual([
       "tests_errored",
     ]);
+    // A failure a later clean test command superseded is not the lap's (rondo#497).
+    expect(
+      reasons({
+        runs: {
+          ...green,
+          last: { ...green.last, failed: 2, isError: true },
+          supersededBy: { index: 9, command: "npm run verify > log 2>&1" },
+        },
+      }),
+    ).toEqual([]);
     expect(reasons({ questionOpen: true })).toEqual(["question_open"]);
     expect(reasons({ closing: true })).toEqual(["closing_lap"]);
   });

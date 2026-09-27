@@ -385,6 +385,9 @@ export const JA: Chrome = Object.freeze({
     `${{ passed: "成功", failed: "失敗", skipped: "スキップ" }[kind]} ${String(count)}`,
   workerRanErrored: "コマンド自体はエラーで終わっています。",
   workerRanEarlier: (runs) => `これより前にも ${String(runs)} 回実行しています`,
+  workerRanSuperseded: (line) =>
+    `作業者はこの後にもう一度テストを実行し (作業記録 ${String(line)} 行目)、それはエラーなく終わっています。` +
+    "そのため、この失敗はこの周回の結果ではありません。テストが失敗することを確かめるために、作業者がわざとコードを壊してから元に戻すことはよくあります。",
   workerRanSource: (line) =>
     `continuo がこの周回について記録したコマンド (作業記録 ${String(line)} 行目) を rondo が読み取ったものです。` +
     "rondo が実行したのではありません。",

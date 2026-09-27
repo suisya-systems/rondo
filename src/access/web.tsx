@@ -772,7 +772,7 @@ function workerRanView(wording: Chrome, record: IterationRecord) {
           <p class="mt-1 text-body leading-5">
             {wording.workerCount("passed", runs.last.passed)}
             <span class="text-faint"> · </span>
-            <span class={runs.last.failed > 0 ? "text-fail" : ""}>
+            <span class={runs.last.failed > 0 && runs.supersededBy === null ? "text-fail" : ""}>
               {wording.workerCount("failed", runs.last.failed)}
             </span>
             <span class="text-faint"> · </span>
@@ -782,8 +782,22 @@ function workerRanView(wording: Chrome, record: IterationRecord) {
             ) : null}
           </p>
           {runs.last.isError ? (
-            <p class="mt-1 text-body leading-5 text-fail">{wording.workerRanErrored}</p>
+            <p
+              class={`mt-1 text-body leading-5 ${runs.supersededBy === null ? "text-fail" : "text-muted-foreground"}`}
+            >
+              {wording.workerRanErrored}
+            </p>
           ) : null}
+          {runs.supersededBy === null ? null : (
+            <>
+              <p class="mt-1 text-body leading-5">
+                {wording.workerRanSuperseded(runs.supersededBy.index)}
+              </p>
+              <p class="mt-1 font-mono text-id leading-5 wrap-anywhere" lang="">
+                {runs.supersededBy.command}
+              </p>
+            </>
+          )}
           <p class="mt-1 text-meta leading-5 text-muted-foreground">
             {wording.workerRanSource(runs.last.index)}
           </p>

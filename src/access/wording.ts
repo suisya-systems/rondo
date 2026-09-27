@@ -380,6 +380,11 @@ export interface Chrome extends PageWords {
   /** Where the figure came from: continuo's record of the lap's commands, at that transcript line. */
   readonly workerRanSource: (line: number) => string;
   /**
+   * The failing run above is not the lap's result: a later test command
+   * finished without error, and that is what the gate reads (rondo#497).
+   */
+  readonly workerRanSuperseded: (line: number) => string;
+  /**
    * What a reader reached and what it did not (rondo#69), from the store's
    * {@link ReadingReach}. The `en` set is the terminal's own lines, joined, so
    * the page and the terminal still say one thing about one drafter.

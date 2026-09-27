@@ -194,13 +194,26 @@ export interface WorkerTestRun {
  *   knows. That is not "no tests ran": a runner rondo cannot read is the same
  *   row.
  * - `ran`: the last run the worker made, and how many it made before it.
+ *   Where that run failed or ended in error, `supersededBy` names a later
+ *   test command of the same lap that finished without error (rondo#497).
  *
  * rondo reads this; it runs nothing (D-0029 rule 9 is unchanged).
  */
 export type WorkerRuns =
   | { readonly kind: "unrecorded" }
   | { readonly kind: "none"; readonly commandCount: number }
-  | { readonly kind: "ran"; readonly last: WorkerTestRun; readonly earlier: number };
+  | {
+      readonly kind: "ran";
+      readonly last: WorkerTestRun;
+      readonly earlier: number;
+      readonly supersededBy: LaterCleanRun | null;
+    };
+
+/** A test command after the last readable run that exited 0 and printed no summary rondo reads. */
+export interface LaterCleanRun {
+  readonly index: number;
+  readonly command: string;
+}
 
 export function workerRuns(lapCommands: string | null): WorkerRuns {
   const decoded = lapCommands === null ? null : decodeLapCommands(lapCommands);
@@ -214,9 +227,47 @@ export function workerRuns(lapCommands: string | null): WorkerRuns {
       : [{ index: c.index, command: c.command, ...counts, isError: c.isError }];
   });
   const last = runs.at(-1);
-  return last === undefined
-    ? { kind: "none", commandCount: decoded.commands.length }
-    : { kind: "ran", last, earlier: runs.length - 1 };
+  if (last === undefined) {
+    return { kind: "none", commandCount: decoded.commands.length };
+  }
+  const later =
+    last.failed > 0 || last.isError
+      ? decoded.commands.findLast(
+          (c) => c.index > last.index && !c.isError && cleanTestCommand(c.command),
+        )
+      : undefined;
+  return {
+    kind: "ran",
+    last,
+    earlier: runs.length - 1,
+    supersededBy: later === undefined ? null : { index: later.index, command: later.command },
+  };
+}
+
+/**
+ * A command that runs a test suite and whose exit status is the suite's own
+ * (rondo#497). The case it is for: a worker breaks the code on purpose to see
+ * a test fail, puts it back, and runs `npm run verify > log 2>&1`, whose
+ * output holds no summary. A clean exit of that command is the lap's last
+ * verification, and the deliberate failure before it no longer speaks for the
+ * lap.
+ *
+ * **Only where nothing can hide the exit status**: a pipe, `;`, `||` or a
+ * backgrounding `&` would let a failed suite end the command at 0, so a
+ * command with any of them is not read. Redirections (`> log 2>&1`) and `&&`
+ * chains keep the suite's status and are read.
+ *
+ * ponytail: the runners by name, as {@link SUMMARY_LINE} is; another runner's
+ * clean exit supersedes nothing, and the upgrade is its name added here.
+ */
+function cleanTestCommand(command: string): boolean {
+  const bare = command.replace(/\d?>&\d/g, "").replace(/&&/g, "");
+  return (
+    !/[|;&\n]/.test(bare) &&
+    /(?:^|\s)(?:(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:test|verify)|vitest|jest|pytest|(?:cargo|go)\s+test|make\s+(?:test|check|verify))\b/.test(
+      bare,
+    )
+  );
 }
 
 // vitest `Tests  1 failed | 1842 passed (1843)`, jest `Tests: 1 failed, 40

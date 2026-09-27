@@ -4000,6 +4000,9 @@ export function workerRanLines(wording: Chrome, record: IterationRecord): readon
               ...(runs.earlier > 0 ? [wording.workerRanEarlier(runs.earlier)] : []),
             ].join("  "),
             ...(runs.last.isError ? [wording.workerRanErrored] : []),
+            ...(runs.supersededBy === null
+              ? []
+              : [wording.workerRanSuperseded(runs.supersededBy.index), runs.supersededBy.command]),
             wording.workerRanSource(runs.last.index),
           ];
   return said.map((line, index) => (index === 0 ? `worker  ${line}` : `        ${line}`));
