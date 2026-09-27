@@ -10461,6 +10461,18 @@ the properties rules 2, 3, 6 and 7 assert.
 > every element the swap rebuilt (idiomorph rebuilds for its own reasons, and the person's question
 > is what is different, not what was re-made). **This does not touch rondo#494 items 2 and 3**: an
 > ask being answered can still be replaced under a person, and keeping their form is its own work.
+>
+> **And every script this page loads shares one top-level scope** (found at this item's own gate,
+> 2026-09-27). `page/changed.js` shipped declaring `ledger` and `read`, which `page/chime.js`
+> declares too; a browser gives classic `<script src>` files a single global lexical scope, so the
+> second file is a `SyntaxError` refused whole, before its first line. The wash and the
+> reduced-motion mark therefore did nothing at all, and every suite was green, because each script
+> was run in a context of its own. Two things follow for anyone adding a file to `page/`: **shut its
+> bindings inside it** -- `page/changed.js` is an IIFE now -- and know that
+> `test/access/page-scripts.test.ts` loads all of them into **one** context in the document's order
+> and then redraws, so a collision is a red test rather than a page that quietly stopped working.
+> The walk of `page/*.js` is asserted against that list, so a script added later is not silently
+> left out of it.
 
 ---
 
