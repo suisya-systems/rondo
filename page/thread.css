@@ -862,6 +862,51 @@
   text-underline-offset: 2px;
 }
 
+/*
+ * The flow's ask over a candidate's open points (rondo#487): above the goal
+ * scope row. It is the one thing in the block that waits on the person, so
+ * it carries the waiting edge and wash the list uses (D-0082 rule 2).
+ */
+.triage-flow-ask {
+  margin-top: 14px;
+  padding: 12px 12px 12px 14px;
+  border-left: 3px solid var(--color-wait);
+  border-radius: 0 6px 6px 0;
+  background: var(--color-wait-wash);
+}
+
+.triage-flow-ask-lead {
+  margin-top: 2px;
+  font-size: var(--text-meta);
+  line-height: 1.5;
+  color: var(--color-muted-foreground);
+}
+
+.triage-flow-ask .triage-acts {
+  margin-top: 12px;
+}
+
+.triage-flow-ask-points {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding-left: 0;
+  list-style: none;
+  max-width: 45em;
+}
+
+.triage-flow-ask-points label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--text-meta);
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+}
+
+.triage-flow-ask + .triage-goal-scope {
+  margin-top: 10px;
+}
+
 /* A candidate the flow already started: said, and not offered for the box. */
 .triage-started {
   display: inline-flex;

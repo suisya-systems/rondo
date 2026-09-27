@@ -25,9 +25,15 @@
  * flow's own voice, so it holds no part of that request (`holdsNothing`); with no
  * request yet there is no thread, and the stop is said on the terminal. A pause
  * is the person's own answer (`laps: 0`, D-0128 rule 4) and is not asked about.
+ *
+ * **Open points are asked first** (rondo#487): when the candidate it would
+ * inject has open points nobody answered, it records one ask with rondo's
+ * suggestion for each (`flow_ask`), which the page draws beside the goal scope,
+ * and injects nothing. The person's answers go into the request's body once
+ * given. While the ask is open the flow waits, and the wait is not a failure.
  */
 
-import { type Injection, type InjectionState, pickNext } from "../advisory/flow.js";
+import { type Answered, type Injection, type InjectionState, pickNext } from "../advisory/flow.js";
 import { readSplitPayload } from "../advisory/proposal.js";
 import { type Ranked, readTriagePayload } from "../advisory/triage.js";
 import type { HostPolicy } from "../refrain/policy.js";
@@ -63,6 +69,8 @@ export interface FlowHostPorts {
     | "readProposal"
     | "claimScopedAct"
     | "recordThreadMessage"
+    | "flowAsks"
+    | "recordFlowAsk"
   >;
   readonly policy: Pick<HostPolicy, "maxOccupying" | "maxLive">;
   readonly now: () => number;
@@ -277,6 +285,7 @@ async function flowOne(
 
   const triage = (await ports.record.latestTriage()).find((one) => one.repository === repository);
   const payload = triage === undefined ? null : readTriagePayload(triage.payload);
+  const asks = (await ports.record.flowAsks()).filter((ask) => ask.goalId === goal.goalId);
   const pick = pickNext({
     scopeDecisionId,
     goal: newest === undefined ? null : { goalId: newest.goalId },
@@ -288,6 +297,11 @@ async function flowOne(
     occupancy: await ports.store.occupancy(),
     bounds: ports.policy,
     ownOpenAsk,
+    asks: asks.map((ask) => ({
+      candidateKey: ask.candidate,
+      points: ask.points.map((one) => one.point),
+      answers: ask.answer?.answers ?? null,
+    })),
   });
   if (pick.kind === "wait") {
     if (pick.reason === "failed_twice") {
@@ -300,12 +314,36 @@ async function flowOne(
       return await stop(
         "nothing_eligible",
         "the latest ranking holds no candidate it may start: each one is started already, " +
-          "put aside, still has open points, or is not an issue",
+          "put aside, or is not an issue",
       );
     }
     return sayOnce(`waiting (${pick.reason})`);
   }
   if (triage === undefined) {
+    return;
+  }
+  if (pick.kind === "ask") {
+    // Asking spends nothing: the triage reading is claimed when the answered
+    // request is injected.
+    const asked = await ports.record.recordFlowAsk({
+      askId: pick.askId,
+      repository,
+      goalId: goal.goalId,
+      scopeDecisionId,
+      proposalId: triage.proposalId,
+      candidate: pick.candidate.key,
+      points: pick.candidate.openPoints,
+      askedAtMs: nowMs,
+    });
+    if (asked.kind === "recorded") {
+      said.delete(repository);
+      ports.log(
+        `flow     ${repository}: asked the person ${String(pick.candidate.openPoints.length)} ` +
+          `open point(s) of ${pick.candidate.key} before it starts it`,
+      );
+    } else if (asked.kind !== "duplicate") {
+      sayOnce(`the open points of ${pick.candidate.key} were not asked: ${asked.reason}`);
+    }
     return;
   }
   // Claimed before the opener, so the reading is counted whatever happens
@@ -326,7 +364,7 @@ async function flowOne(
   }
   const written = await ports.record.recordThreadMessage({
     messageId: pick.messageId,
-    body: flowBody(pick.candidate, goal),
+    body: flowBody(pick.candidate, goal, pick.answers),
     authorKind: "drafter",
     authorId: FLOW_AUTHOR,
     inReplyTo: null,
@@ -412,9 +450,14 @@ async function injectionState(
 /**
  * The injected request's words: the ranked request, then rondo's report of why
  * it started it (rondo#469), citing the clause by its number and its words,
- * and the issue. ASCII, as rondo's own lines are (D-0004).
+ * and the issue, then the open points as the person answered them (rondo#487).
+ * ASCII, as rondo's own lines are (D-0004); the answers are the person's words.
  */
-export function flowBody(candidate: Ranked, goal: StoredGoal): string {
+export function flowBody(
+  candidate: Ranked,
+  goal: StoredGoal,
+  answers: readonly Answered[] = [],
+): string {
   const clause = goal.clauses[candidate.clause - 1];
   const source = candidate.source;
   return [
@@ -424,6 +467,13 @@ export function flowBody(candidate: Ranked, goal: StoredGoal): string {
       `${clause === undefined ? "" : `: "${clause.said}"`}.`,
     `Why: ${candidate.why}`,
     ...(source.form === "issue" ? [`Issue: ${source.repository}#${String(source.number)}`] : []),
+    ...(answers.length === 0
+      ? []
+      : [
+          "",
+          "Open points, as the person answered them:",
+          ...answers.map((one) => `- ${one.point}: ${one.answer}`),
+        ]),
   ].join("\n");
 }
 

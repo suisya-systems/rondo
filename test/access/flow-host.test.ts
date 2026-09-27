@@ -528,7 +528,7 @@ test("a newer goal stops the flow: an edited goal is approved again", async () =
 });
 
 test("nothing eligible stops the flow once, and the ask holds it", async () => {
-  const w = await world({}, [ranked(7), ranked(8, 1)]);
+  const w = await world({}, [ranked(7)]);
   await w.pass();
   await w.drafted("split-1", first, 1);
   w.lap("lap-1", first, "closed", 1);
@@ -541,4 +541,62 @@ test("nothing eligible stops the flow once, and the ask holds it", async () => {
   const open = await w.record.openAsksIn(first);
   if (open.kind !== "read") throw new Error(open.reason);
   expect(open.asks.map((ask) => askStandsOver(ask, [], true))).toEqual([false]);
+});
+
+test("open points are asked once before the request, and the answers go into it (rondo#487)", async () => {
+  const w = await world({}, [ranked(7, 2), ranked(8)]);
+  await w.pass();
+  await w.pass();
+  // Asked, once, and nothing injected or counted: the wait is on the person.
+  expect((await w.messages()).filter((m) => m.inReplyTo === null)).toEqual([]);
+  expect(w.injectedCount()).toBe(0);
+  expect((await w.record.scopeSpent("sd-goal")).readCostUsd).toBe(0);
+  const asks = await w.record.flowAsks();
+  expect(asks.map((ask) => [ask.askId, ask.candidate, ask.answer])).toEqual([
+    [`flow-ask-sd-goal-issue:${REPO}#7-1`, `issue:${REPO}#7`, null],
+  ]);
+  expect(asks[0]?.points).toEqual([
+    { point: "p", recommendation: "r" },
+    { point: "p", recommendation: "r" },
+  ]);
+  expect(w.log.join("\n")).toContain("asked the person 2 open point(s)");
+  expect(w.log.join("\n")).toContain("waiting (points_asked)");
+  expect(w.log.join("\n")).not.toContain("stopped");
+  // An answer that leaves a point out is refused; a whole one is kept once.
+  const answer = (answers: string[]) =>
+    w.record.recordFlowAnswer({
+      askId: `flow-ask-sd-goal-issue:${REPO}#7-1`,
+      answers,
+      answeredBy: "oidc|operator-1",
+      answeredAtMs: 11_000,
+    });
+  expect((await answer(["yes", " "])).kind).toBe("refused");
+  expect(await answer(["yes", "as rondo suggests"])).toEqual({ kind: "recorded" });
+  expect((await answer(["again", "again"])).kind).toBe("refused");
+  await w.pass();
+  const openers = (await w.messages()).filter((m) => m.inReplyTo === null);
+  expect(openers.map((m) => m.messageId)).toEqual([first]);
+  expect(openers[0]?.body).toContain(
+    "Open points, as the person answered them:\n- p: yes\n- p: as rondo suggests",
+  );
+  expect(w.injectedCount()).toBe(1);
+});
+
+test("a put-aside ask holds nothing: the flow moves on to the next candidate", async () => {
+  const w = await world({}, [ranked(7, 1), ranked(8)]);
+  await w.pass();
+  expect(await w.record.flowAsks()).toHaveLength(1);
+  expect(
+    await w.record.recordTriageDecline({
+      declineId: "d-1",
+      proposalId: "t-1",
+      candidate: `issue:${REPO}#7`,
+      declinedBy: "oidc|operator-1",
+      declinedAtMs: 11_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  await w.pass();
+  expect((await w.messages()).filter((m) => m.inReplyTo === null).map((m) => m.messageId)).toEqual([
+    second,
+  ]);
 });

@@ -25185,6 +25185,29 @@ the newest goal: an edit would widen an approval nobody re-read.
 > yet. **A pause is not asked about**: `laps: 0` is already the person's answer. Nothing above is
 > edited.
 
+> **Annotation (2026-09-27, from rondo#487).** Added after this entry was accepted, and additive:
+> **a candidate's open points are asked first, then it is injected** (the owner's decision of
+> 2026-09-27, found in lap 18: triage writes open points on almost every candidate, and the picker
+> skipped every one that had any, so the flow injected nothing). The picker no longer skips a
+> candidate with open points. When the candidate it would inject has open points nobody answered,
+> it returns `ask`, and the flow host records **one** `flow_ask` row -- id
+> `flow-ask-<scopeDecisionId>-<candidateKey>-<round>`, the points and rondo's suggestion for each as
+> the ranking wrote them -- and injects nothing; an answer counts only while it answered every point
+> the ranking now holds, so a point a re-ranking added is asked in the next round; asking spends nothing, and the triage reading is
+> claimed when the answered request is injected. The page draws the ask above the goal scope's row
+> under the repository's triage block, each point a field that starts as rondo's suggestion, and one
+> press (`POST /flow-answer`, the person's press) records a `flow_answer` row beside the ask with one
+> answer per point; each field is kept across the page's redraw as a draft is. The next pass injects the request under the same claim and budget tests, its
+> body carrying "Open points, as the person answered them:" and each point with its answer. **One
+> ask at a time**: while an unanswered ask over a candidate the latest ranking still holds, and that
+> no *not now* put aside, stands for the goal (under any approval of it), the flow waits
+> (`points_asked`) and raises no second one; the wait is neither a stop nor a failure. *Not now* on
+> the asked candidate is the way to decline it, and the flow moves on. Options not taken: adopting
+> rondo's suggestions without asking (design choices made where the person cannot see them), and
+> skipping as before (nothing flows). The ask is a row of its own and not a thread message: an
+> answer written into a thread would make that thread a request the drafter drafts. Nothing above is
+> edited.
+
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 
 **Status:** accepted (2026-09-27, rondo#452). The issue records `D-0098`'s gate (2026-09-22, point

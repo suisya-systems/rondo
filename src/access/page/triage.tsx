@@ -19,7 +19,7 @@
  * triage from one that is not running.
  */
 import type { Ranked, TriagePayload } from "../../advisory/triage.js";
-import type { GoalClause, StoredGoal, StoredTriage } from "../../store/records.js";
+import type { GoalClause, StoredFlowAsk, StoredGoal, StoredTriage } from "../../store/records.js";
 import { ago } from "../inbox.js";
 import { viewHref } from "../page-logic/routes.js";
 import type { Chrome } from "../wording.js";
@@ -58,6 +58,17 @@ export interface CandidateView {
 export interface GoalScopeLine {
   readonly state: "none" | "running" | "paused";
   readonly href: string;
+  /** The flow's open ask over a candidate's open points (rondo#487), or null. */
+  readonly ask: PointsAsk | null;
+}
+
+/** The open points the flow asks before it starts a candidate (rondo#487). */
+export interface PointsAsk {
+  readonly askId: string;
+  /** The candidate asked about: its card does not list the same points again. */
+  readonly candidate: string;
+  readonly request: string;
+  readonly points: readonly { readonly point: string; readonly recommendation: string }[];
 }
 
 /** One repository's block. */
@@ -104,6 +115,10 @@ export interface TriageReads {
   readonly goalScopes?: ReadonlyMap<string, "running" | "paused">;
   /** The request openers the flow wrote, each with the goal it names (D-0128). */
   readonly flowOpeners?: readonly { readonly messageId: string; readonly goalId: string }[];
+  /** The flow's asks over open points (rondo#487), oldest first. */
+  readonly flowAsks?: readonly StoredFlowAsk[];
+  /** Every *not now*: an ask over a candidate put aside holds nothing (`pickNext`). */
+  readonly putAside?: readonly { readonly repository: string; readonly candidate: string }[];
 }
 
 /** The newest goal of each repository. */
@@ -122,12 +137,38 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
     if (goal === undefined) {
       return { kind: "noGoal", repository, goalHref };
     }
-    const goalScope: GoalScopeLine = {
-      state: reads.goalScopes?.get(goal.goalId) ?? "none",
-      href: viewHref({ kind: "goalScope", repository }, wording.lang),
-    };
     const row = latest.get(repository);
     const payload = row === undefined ? undefined : reads.payloads.get(row.proposalId);
+    const state = reads.goalScopes?.get(goal.goalId) ?? "none";
+    // The ask the flow waits on: unanswered, of this goal, over a candidate
+    // the ranking still holds -- the picker's own reading (`pickNext`).
+    const asked =
+      state === "none" || payload?.goalId !== goal.goalId
+        ? undefined
+        : reads.flowAsks?.find(
+            (ask) =>
+              ask.goalId === goal.goalId &&
+              ask.answer === null &&
+              payload.ranked.some((one) => one.key === ask.candidate) &&
+              !(reads.putAside ?? []).some(
+                (one) => one.repository === repository && one.candidate === ask.candidate,
+              ),
+          );
+    const goalScope: GoalScopeLine = {
+      state,
+      href: viewHref({ kind: "goalScope", repository }, wording.lang),
+      ask:
+        asked === undefined
+          ? null
+          : {
+              askId: asked.askId,
+              candidate: asked.candidate,
+              request:
+                payload?.ranked.find((one) => one.key === asked.candidate)?.request ??
+                asked.candidate,
+              points: asked.points,
+            },
+    };
     // A reading against a goal the person has since changed is not drawn: its
     // clause numbers name the old goal's clauses.
     if (row === undefined || payload === undefined || payload.goalId !== goal.goalId) {
@@ -277,7 +318,12 @@ export function TriageSection({ wording, blocks, token }: TriageSectionProps) {
           <span className="list-repo">{block.repository}</span>
           <Block wording={wording} block={block} token={token} />
           {block.kind === "noGoal" ? null : (
-            <GoalScopeRow wording={wording} line={block.goalScope} />
+            <>
+              {block.goalScope.ask === null ? null : (
+                <PointsAskForm wording={wording} ask={block.goalScope.ask} token={token} />
+              )}
+              <GoalScopeRow wording={wording} line={block.goalScope} />
+            </>
           )}
         </div>
       ))}
@@ -354,7 +400,8 @@ function Block({
                   </a>
                 </p>
               </dd>
-              {block.first.openPoints.length === 0 ? null : (
+              {block.first.openPoints.length === 0 ||
+              block.goalScope.ask?.candidate === block.first.key ? null : (
                 <>
                   <dt>{wording.triageOpenPoints}</dt>
                   <dd>
@@ -438,6 +485,76 @@ function GoalScopeRow({
       </a>
     </div>
   );
+}
+
+/**
+ * The flow's ask over a candidate's open points (rondo#487): each point with
+ * a field that starts as rondo's suggestion, and one press that sends them.
+ * Beside the goal scope, because it is the flow under that approval that asks.
+ */
+function PointsAskForm({
+  wording,
+  ask,
+  token,
+}: {
+  readonly wording: Chrome;
+  readonly ask: PointsAsk;
+  readonly token: string | null;
+}) {
+  return (
+    <form
+      className="triage-flow-ask"
+      aria-label={wording.flowAskLead}
+      method="post"
+      action={`/flow-answer?lang=${encodeURIComponent(wording.lang)}`}
+    >
+      {token === null ? null : <input type="hidden" name="token" value={token} />}
+      <input type="hidden" name="ask" value={ask.askId} />
+      <p className="triage-ask" lang="">
+        {ask.request}
+      </p>
+      <p className="triage-flow-ask-lead">{wording.flowAskLead}</p>
+      <ol className="triage-flow-ask-points">
+        {ask.points.map((point, at) => (
+          <li key={String(at)}>
+            <label>
+              <span lang="">{point.point}</span>
+              <textarea
+                name={`answer-${String(at + 1)}`}
+                // Kept across the page's redraw as the composer's words are
+                // (`page/composer.js`), so an edited answer is what is sent.
+                data-draft={`flow-ask:${ask.askId}:${String(at + 1)}`}
+                rows={1}
+                required
+                className={FIELD}
+                defaultValue={point.recommendation}
+              />
+            </label>
+          </li>
+        ))}
+      </ol>
+      {token === null ? null : (
+        <div className="triage-acts">
+          <button type="submit" className={`${PRIMARY} ${PRESS}`}>
+            {wording.flowAskAction}
+          </button>
+        </div>
+      )}
+    </form>
+  );
+}
+
+/** The answers a flow ask's form posted, in the order of its points. */
+export function postedAnswers(form: Readonly<Record<string, unknown>>): string[] {
+  const answers: string[] = [];
+  for (let at = 1; ; at++) {
+    const key = `answer-${String(at)}`;
+    const answer = form[key];
+    if (typeof answer !== "string") {
+      return answers;
+    }
+    answers.push(answer);
+  }
 }
 
 function Acts({

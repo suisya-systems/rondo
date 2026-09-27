@@ -2038,6 +2038,20 @@ export async function main(
                   }
                   return put.kind === "recorded" ? { ok: true } : { ok: false, note: put.reason };
                 },
+                async (input) => {
+                  const answered = await record.recordFlowAnswer({
+                    askId: input.askId,
+                    answers: input.answers,
+                    answeredBy: sender.actorId,
+                    answeredAtMs: Date.now(),
+                  });
+                  if (answered.kind === "recorded") {
+                    flow?.kick();
+                  }
+                  return answered.kind === "recorded"
+                    ? { ok: true }
+                    : { ok: false, note: answered.reason };
+                },
               ),
         mergeable: sender !== null && !("refusal" in sender),
         fixesConflicts: sender !== null && !("refusal" in sender),

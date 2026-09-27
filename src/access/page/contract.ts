@@ -92,6 +92,10 @@ export interface WebPorts extends InboxReadPorts {
       | "latestTriage"
       // D-0128: the goal scope in force over a goal, and whether it is paused.
       | "approvalsInForce"
+      // rondo#487: the flow's asks over a candidate's open points, and the
+      // *not now* that makes one hold nothing.
+      | "flowAsks"
+      | "triageDeclines"
     >;
   readonly policy: HostPolicy;
   readonly actorId: string | null;
