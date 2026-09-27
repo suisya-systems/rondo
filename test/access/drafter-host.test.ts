@@ -109,6 +109,50 @@ test("the person's next message makes the request due again, and the run is hand
   expect(handed[1]).toContain("Keep it under $3.");
 });
 
+test("an answer to a worker's question does not make the request due: it goes on by the revise (D-0142)", async () => {
+  const { w, templateDigest, typeDigest } = await requestWithPlan();
+  const { host, handed } = hostOver(w, async () => split(templateDigest, typeDigest));
+  host.kick();
+  await host.idle();
+  const asked = await w.record.recordThreadMessage({
+    messageId: "question-lap-1",
+    body: "Which file?",
+    authorKind: "drafter",
+    authorId: "rondo/worker-question/1",
+    inReplyTo: "r1",
+    atMs: 15_000,
+    bases: [{ form: "iteration", iterationId: "lap-1" }],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  for (const [id, outcome] of [
+    ["a-1", "stop"],
+    ["a-2", "carry_on"],
+  ] as const) {
+    const answered = await w.record.recordThreadMessage({
+      messageId: id,
+      body: "a.ts",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: "question-lap-1",
+      atMs: 16_000,
+      bases: [],
+      asks: false,
+      answerOutcome: outcome,
+    });
+    expect(answered.kind).toBe("recorded");
+  }
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+  // A message of the person's own still makes it due, and the run reads the answer too.
+  await w.say("r1-more", "Keep it under $3.", "r1", 20_000);
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(2);
+  expect(handed[1]).toContain("a.ts");
+});
+
 test("a run that goes stale is discarded and run again over the new thread (rule 3.3)", async () => {
   const { w, templateDigest, typeDigest } = await requestWithPlan();
   const { host, handed } = hostOver(w, async (_document, run) => {

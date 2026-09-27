@@ -3593,3 +3593,70 @@ test("(answer) a budget stop's raise-and-carry-on press raises the approval, the
   expect(refused.raised).toHaveLength(1);
   expect(refused.waiting).toEqual(["ask"]);
 });
+
+test("(answer) carry on at a worker's question is the gate's revise on the same press, and a refused revise says so (D-0142, rondo#514)", async () => {
+  const pressWith = async (
+    outcome: { ok: boolean; why?: "reviseRefusedGateClosed" },
+    started: boolean,
+  ) => {
+    const { record, ports } = await askWaiting();
+    const asked = await record.recordThreadMessage({
+      messageId: "question-lap-1",
+      body: "Which file?\n\n1. a.ts\n   less\n\n→ 1: a.ts\n\nthe parser\n\nabc123",
+      authorKind: "drafter",
+      authorId: "rondo/worker-question/1",
+      inReplyTo: "req",
+      atMs: 1,
+      bases: [{ form: "iteration", iterationId: "lap-1" }],
+      asks: true,
+    });
+    expect(asked.kind).toBe("recorded");
+    const revised: ReviseInput[] = [];
+    const withRevise = {
+      ...ports,
+      store: { read: async () => ({ kind: started ? "read" : "absent" }) },
+      revise: new RevisePort(async (input) => {
+        revised.push(input);
+        return await Promise.resolve({ note: "", ...outcome });
+      }),
+    } as unknown as ServedPorts;
+    const { base, stop, closed } = await served(createApp(withRevise, TOKEN));
+    const successor = "lap-00000000-0000-4000-8000-000000000002";
+    const pressed = await send(base, "/answer-ask", "POST", pressHeaders(base), {
+      token: TOKEN,
+      message_id: newMessageId("reply"),
+      in_reply_to: "question-lap-1",
+      body: "use a.ts",
+      outcome: "carry_on",
+      revise_iteration: "lap-1",
+      revise_decision: "decision-1",
+      revise_successor: successor,
+      revise_draft: "Also rename the helper.",
+    });
+    stop.abort();
+    expect(await closed).toBe(0);
+    return { pressed, revised, successor };
+  };
+
+  const done = await pressWith({ ok: true }, true);
+  expect(done.pressed.status).toBe(303);
+  expect(done.revised).toHaveLength(1);
+  expect(done.revised[0]).toMatchObject({
+    iterationId: "lap-1",
+    successorId: done.successor,
+    scopeDecisionId: "decision-1",
+  });
+  // The question and the answer byte for byte, then the change the box showed.
+  expect(done.revised[0]?.body).toContain("Which file?\n\n1. a.ts");
+  expect(done.revised[0]?.body).toContain("---\nuse a.ts\n---");
+  expect(done.revised[0]?.body.endsWith("\n\nAlso rename the helper.")).toBe(true);
+
+  // A second submit whose first already started the successor is that press, done.
+  const again = await pressWith({ ok: false, why: "reviseRefusedGateClosed" }, true);
+  expect(again.pressed.status).toBe(303);
+
+  // Refused with nothing started: the answer stands and the refusal is said.
+  const refused = await pressWith({ ok: false, why: "reviseRefusedGateClosed" }, false);
+  expect(refused.pressed.status).toBe(409);
+  expect(refused.pressed.body).toContain(EN.reviseRefusedGateClosed);
+});

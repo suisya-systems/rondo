@@ -73,6 +73,7 @@ import {
   resolveLanguage,
 } from "./page-logic/language.js";
 import { MAX_REVIEW_ROUNDS, type PageView, viewHref } from "./page-logic/routes.js";
+import { questionRevise } from "./question.js";
 import { TAB_OUTCOMES, type TabOutcome } from "./reach.js";
 import { refusedPage } from "./screens/refused.js";
 import { APPROVE_BODY, operatorPage } from "./web.js";
@@ -2276,6 +2277,55 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     const answered = await say.answerAsk(press, message, outcome);
     if (!answered.ok && !(await alreadyThere(message, outcome))) {
       return refused(c, 409, "sendRefusedNotTaken", back);
+    }
+    // **A worker's question answered *carry on* is the gate's revise, on the
+    // same press** (D-0142, rondo#514): the box was drawn with the lap, its
+    // approval and a successor minted at render, and with any change the
+    // reading drafted shown above the buttons, so what goes to the next lap is
+    // the question, the answer and what the person saw -- the text the gate's
+    // revise box held. A second submit of the form names the same successor,
+    // and finding it started is the press already done.
+    const reviseLap = typeof form["revise_iteration"] === "string" ? form["revise_iteration"] : "";
+    if (
+      revise !== null &&
+      posted === "carry_on" &&
+      reviseLap !== "" &&
+      back === `question-${reviseLap}`
+    ) {
+      const decision = typeof form["revise_decision"] === "string" ? form["revise_decision"] : "";
+      const successorId = form["revise_successor"];
+      const draft = typeof form["revise_draft"] === "string" ? form["revise_draft"] : "";
+      const thread = await reading.record.threadMessages();
+      const asked =
+        thread.kind === "read" ? thread.messages.find((m) => m.messageId === back) : undefined;
+      const request = asked?.inReplyTo ?? "";
+      if (
+        asked === undefined ||
+        decision === "" ||
+        typeof successorId !== "string" ||
+        !PAGE_ITERATION_ID.test(successorId)
+      ) {
+        return reviseRefused(c, 400, "reviseRefusedForm", request);
+      }
+      const quoted = questionRevise({ question: asked.body, answer: body });
+      const revisePress = Object.freeze({}) as Press;
+      minted.add(revisePress);
+      const revised = await revise.revise(revisePress, {
+        iterationId: reviseLap,
+        successorId,
+        scopeDecisionId: decision,
+        body: draft.trim() === "" ? quoted : `${quoted}\n\n${draft}`,
+      });
+      if (!revised.ok && (await reading.store.read(successorId)).kind !== "read") {
+        return reviseRefused(
+          c,
+          409,
+          revised.why ?? "reviseRefusedNotStarted",
+          request,
+          revised.test ?? null,
+          revised.note,
+        );
+      }
     }
     return c.redirect(
       `${viewHref({ kind: "thread", messageId, to: null }, tagOf(c))}#${encodeURIComponent(messageId)}`,

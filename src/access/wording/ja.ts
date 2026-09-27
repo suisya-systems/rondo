@@ -262,6 +262,8 @@ export const JA: Chrome = Object.freeze({
     "書いたとおりに送られます。「続ける」は仕事をもう一度試させ、「この線を止める」は止めたままにします。" +
     "あとから「続ける」こともできます。",
   answerRaiseAction: "予算を増やして続ける",
+  answerReviseNote: "「続ける」を押すと、この回答を持たせて次の試行をすぐに始めます。",
+  answerReviseDraftLead: "次の試行には、次の変更依頼も一緒に渡します:",
   answerRaiseLabel: "これからの予算（USD）",
   answerRaiseRoundsLabel: "この線のレビュー回数",
   answerRaiseLeft: (left, reserve, enough) =>

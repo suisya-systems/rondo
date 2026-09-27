@@ -201,7 +201,12 @@ async function answerOne(ports: GateHostPorts, record: IterationRecord): Promise
   }
 }
 
-/** Whether a question waits on the person over this lap's line, as the gate card reads it. */
+/**
+ * Whether a question waits on the person over this lap's line, as the gate card
+ * reads it -- or the lap put a worker's question at all (D-0142): its answer
+ * goes on by the revise the answer press makes, so approving the lap would drop
+ * the work that waited on it, answered or not.
+ */
 async function questionOpen(ports: GateHostPorts, record: IterationRecord): Promise<boolean> {
   if (record.requestMessageId === null) {
     return false;
@@ -209,6 +214,9 @@ async function questionOpen(ports: GateHostPorts, record: IterationRecord): Prom
   const read = await ports.record.threadMessages();
   if (read.kind !== "read") {
     // Unreadable is not "no question": send the gate to the person.
+    return true;
+  }
+  if (read.messages.some((m) => m.messageId === `question-${record.id}` && m.asks)) {
     return true;
   }
   const line = (await ports.store.laneLedger()).find((held) => held.lapIds.includes(record.id));

@@ -1315,3 +1315,39 @@ test("the gate card says whether rondo would approve it automatically, and why n
   );
   expect(approving.indexOf('id="gate-auto"')).toBeLessThan(approving.indexOf('type="submit"'));
 });
+
+test("the answer box at a worker's question carries the gate's revise, with the drafted change shown (D-0142, rondo#514)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await workerAsks(world);
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "thread", messageId: "req-1", to: null },
+    EN,
+    (kind) => `${kind}-00000000-0000-4000-8000-000000000009`,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000001",
+  );
+  const box = html.slice(html.indexOf('id="composer"'));
+  expect(box).toContain('action="/answer-ask');
+  expect(box).toContain('name="in_reply_to" value="question-i-0001"');
+  expect(box).toContain('name="revise_iteration" value="i-0001"');
+  expect(box).toContain('name="revise_decision" value="decision-1"');
+  expect(box).toContain('name="revise_successor" value="lap-00000000-0000-4000-8000-000000000001"');
+  expect(box).toContain(EN.answerReviseNote);
+
+  // Stopped by its approval: no revise rides on the answer, which stays an answer.
+  const unscoped = await operatorPage(
+    { ...portsOver(world, "ada", []), material: structured },
+    "t",
+    { kind: "thread", messageId: "req-1", to: null },
+    EN,
+    (kind) => `${kind}-00000000-0000-4000-8000-000000000009`,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000001",
+  );
+  const bare = unscoped.slice(unscoped.indexOf('id="composer"'));
+  expect(bare).toContain('action="/answer-ask');
+  expect(bare).not.toContain("revise_iteration");
+});
