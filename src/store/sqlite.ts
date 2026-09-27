@@ -6339,7 +6339,9 @@ function admittedUnder(connection: DatabaseSync, iterationId: string): string | 
  * {@link lapBudgetCap} for one admitted lap, read from rows under the write
  * lock, or null where no single approval admitted it or the approval's scope
  * will not read. A lap whose cost is read counts that; an unread one holds its
- * cap when it was sent with one and its reserve otherwise (D-0121 rule 7).
+ * cap when it was sent with one and its reserve otherwise (D-0121 rule 7),
+ * except one continuo refused (D-0152): its turn is over, so it holds the
+ * reserve the page counts for it rather than a cap it can no longer spend.
  */
 function lapBudgetCapFor(
   connection: DatabaseSync,
@@ -6373,7 +6375,8 @@ function lapBudgetCapFor(
   }
   const others = connection
     .prepare(
-      "SELECT i.lap_cost_usd AS cost, i.lap_budget_cap_usd AS cap, i.status AS status " +
+      "SELECT i.lap_cost_usd AS cost, i.lap_budget_cap_usd AS cap, i.status AS status, " +
+        "i.failure_kind AS failure_kind " +
         "FROM scope_consumption c LEFT JOIN iteration i ON i.id = c.subject_id " +
         "WHERE c.scope_decision_id = ? AND c.act_kind = 'admission' AND c.subject_id <> ? " +
         // D-0139: a lost lap holds nothing; what it spent was never read.
@@ -6386,7 +6389,12 @@ function lapBudgetCapFor(
     const cap = row["cap"];
     if (typeof cost === "number") {
       basis.readCostUsd += cost;
-    } else if (typeof cap === "number") {
+    } else if (
+      typeof cap === "number" &&
+      // D-0152: continuo stops a session it owns before it answers a refusal
+      // (its turn ceiling included), so a refused lap spends no more.
+      !(row["status"] === "failed" && row["failure_kind"] === "refusal")
+    ) {
       // Never below zero: a lap refused for no room holds nothing, and credits nothing back.
       basis.heldCapsUsd += Math.max(0, cap);
     } else {

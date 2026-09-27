@@ -1347,6 +1347,39 @@ test("D-0139: a lost lap holds no cap and is not unread, so its room comes back"
   expect(await store.sendLapBudget("i-b", 13)).toBe(5);
 });
 
+test("D-0152: a lap continuo refused unread holds its reserve, as the page counts it, and not its cap", async () => {
+  const payload = withBudgets({ cost_usd: 50, cost_reserve_usd: 5 });
+  const seed = await seeded({ maxOccupying: 2, maxLive: 100 });
+  expect(await seed.record.recordScope(scope({ payload }))).toEqual({ kind: "recorded" });
+  expect(
+    await seed.record.recordScopeDecision(scopeDecision({ scopeDigest: contentDigest(payload) })),
+  ).toEqual({ kind: "recorded" });
+  const { connection, record, store } = seed;
+  admitted(connection, "i-timed-out", null);
+  connection.prepare("UPDATE iteration SET status = 'performing' WHERE id = 'i-timed-out'").run();
+  expect(await store.sendLapBudget("i-timed-out", 10)).toBe(45);
+  // continuo's turn ceiling: refused, its cost never read (rondo#530's lap-0734b1ca).
+  connection
+    .prepare(
+      "UPDATE iteration SET status = 'failed', failure_kind = 'refusal' WHERE id = 'i-timed-out'",
+    )
+    .run();
+  admitted(connection, "i-b", null);
+  // 50 - 5 held for the refused lap, less 5 kept for a partner: not 50 - 45 - 0.
+  expect(await store.sendLapBudget("i-b", 11)).toBe(40);
+  expect((await record.scopeSpent("sd-0001")).unreadLaps).toBe(2);
+  // Control: a lap that failed as rondo's defect may not have stopped its worker; it keeps its cap.
+  connection.prepare("UPDATE iteration SET failure_kind = 'defect' WHERE id = 'i-timed-out'").run();
+  expect(await store.sendLapBudget("i-b", 12)).toBe(5);
+  // Control: a running lap keeps its cap (D-0130 rule 2).
+  connection
+    .prepare(
+      "UPDATE iteration SET status = 'performing', failure_kind = NULL WHERE id = 'i-timed-out'",
+    )
+    .run();
+  expect(await store.sendLapBudget("i-b", 13)).toBe(5);
+});
+
 test("D-0139: which processes drive a lap are written only while it performs, and listed", async () => {
   const seed = await seeded();
   const { connection, store } = seed;
