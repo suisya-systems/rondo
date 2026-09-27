@@ -124,7 +124,7 @@ async function split(after: readonly (number | undefined)[]) {
     });
     expect(outcome.kind, JSON.stringify(outcome)).toBe("reserved");
   };
-  return { world, proposalId, start };
+  return { world, proposalId, decision, start };
 }
 
 function admittedPayload(plan: RunPlan, id: string): JsonRecord {
@@ -239,4 +239,17 @@ test("a wait on another repository names it and its pull request", () => {
     yours: false,
     links: [{ href: "https://github.com/o/cadenza/pull/131", said: "#131" }],
   });
+});
+
+test("the scope screen says what an ordered part waits on, and draws no press for it", async () => {
+  const w = await split([undefined, 0]);
+  const html = await operatorPage(
+    portsOver(w.world, "ada", []),
+    "t",
+    { kind: "scope", messageId: "r1", rounds: null, decisionId: w.decision, plan: null },
+    EN,
+    mint,
+  );
+  expect(html).toContain("waiting until part 1 is merged; then it starts by itself");
+  expect(html).not.toContain('name="plan_index" value="1"');
 });
