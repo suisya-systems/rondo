@@ -1114,6 +1114,11 @@ export interface Chrome extends PageWords {
   readonly planHeld: (paths: readonly string[]) => string;
   /** The label before the request of the work that holds them. */
   readonly planHeldBy: string;
+  /**
+   * Why that work holds so wide a claim, in its drafter's words (rondo#509):
+   * `paths` are the directories it holds, `why` the sentence it gave.
+   */
+  readonly planHeldWhy: (paths: readonly string[], why: string) => string;
   /** {@link planHeld} where every work holding them has finished. */
   readonly planHeldFinished: (paths: readonly string[]) => string;
   /** Where that work has finished: starting reads whether it landed first. */

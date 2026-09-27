@@ -30,6 +30,7 @@ import { AGENT_TYPE_INPUT, agentTypeDigestOf, planDocument } from "./fixtures/dr
 const PROMPTS = ["Fix the scope screen's cost box.", "Title-case the approve button."];
 /** What each plan claims (D-0073 rule 2.3): two paths no other plan shares. */
 const CLAIMS = [["src/access/scope.ts"], ["src/access/web.tsx", "test/access/"]];
+const WHY = "every test of the page may change";
 
 /**
  * The two seams a start press needs past its own reads: continuo, which is not
@@ -106,6 +107,8 @@ async function drafted() {
           prompt,
           bases: ["r1"],
           claim: CLAIMS[i],
+          // rondo#509: a claim naming a directory says why.
+          ...(i === 1 ? { claim_why: WHY } : {}),
         })),
       }),
     }),
@@ -172,12 +175,14 @@ test(
     expect(run.claim).toEqual({
       paths: ["src/access/web.tsx", "test/access/"],
       authorKind: "drafter",
-      authorId: expect.stringMatching(/^rondo\/drafter\/8\//),
+      authorId: expect.stringMatching(/^rondo\/drafter\/9\//),
       bases: [
         { form: "proposal", proposalId: w.proposalId },
         { form: "message", messageId: "r1" },
       ],
+      why: WHY,
     });
+    expect(run.split.claim_why).toBe(WHY);
     // Everything else is the template's.
     expect(run.plan.repository).toBe((w.document as JsonRecord)["repository"]);
 
@@ -441,11 +446,12 @@ test(
       expect(claim).toEqual({
         paths: ["src/access/scope.ts"],
         authorKind: "drafter",
-        authorId: expect.stringMatching(/^rondo\/drafter\/8\//),
+        authorId: expect.stringMatching(/^rondo\/drafter\/9\//),
         bases: [
           { form: "proposal", proposalId: w.proposalId },
           { form: "message", messageId: "r1" },
         ],
+        why: null,
       });
     } finally {
       vi.useRealTimers();

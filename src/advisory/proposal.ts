@@ -1269,6 +1269,13 @@ export interface SplitPlan {
   readonly bases: readonly Basis[];
   readonly claim?: readonly string[];
   /**
+   * Why `claim` names a directory or `/` rather than files (rondo#509), in the
+   * person's words: the lane ledger keeps it beside the claim, and the scope
+   * screen says it where the claim holds another plan off. **Beside the plan,
+   * like `claim`**; absent on a claim of files and on a split from before.
+   */
+  readonly claim_why?: string;
+  /**
    * The index of an earlier plan of the same split this one waits on
    * (D-0067 rule 3, D-0098 rule 1.3): this plan is not admitted until that
    * one's line has landed (`first_landed`, rule 1.1). **Beside the plan, like
@@ -1330,6 +1337,7 @@ const SPLIT_PLAN_KEYS: readonly string[] = [
   "agent_type_digest",
   "bases",
   "claim",
+  "claim_why",
   "after",
   "entries",
   "grounds",
@@ -1392,6 +1400,7 @@ export function readSplitPayload(document: JsonRecord): SplitPayloadReading {
         ...(after === undefined ? {} : { after }),
         ...(entries === undefined ? {} : { entries }),
         ...(plan.grounds === undefined ? {} : { grounds: readGrounds(plan.grounds, what) }),
+        ...(plan.claim_why === undefined ? {} : { claim_why: text(plan, "claim_why", what) }),
       };
       if (plan.claim === undefined) {
         return read;
