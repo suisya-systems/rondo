@@ -439,6 +439,37 @@ test("a flow stopped before its first request is said on the front and the scree
   expect(answered).toContain(quoted(EN.flowStopNext("cost")));
   expect(answered).not.toContain(EN.flowStopAskedLink);
   expect(await front()).toContain('data-state="stopped"');
+
+  // Answered *stop*: the ask stays open to hold the work, and is answered all
+  // the same, so it does not lead back to the question (Codex round 4).
+  const stopAsk = `flow-stop-${standing.scopeDecisionId}-laps-${opener}`;
+  for (const message of [
+    {
+      messageId: stopAsk,
+      authorKind: "drafter" as const,
+      authorId: FLOW_AUTHOR,
+      inReplyTo: opener,
+      asks: true,
+      bases: [{ form: "message", messageId: opener }],
+    },
+    {
+      messageId: "answer-stop",
+      authorKind: "operator" as const,
+      authorId: "ada",
+      inReplyTo: stopAsk,
+      asks: false,
+      bases: [],
+      answerOutcome: "stop" as const,
+    },
+  ]) {
+    expect(await w.record.recordThreadMessage({ ...message, body: "b", atMs: 8_000 })).toEqual({
+      kind: "recorded",
+    });
+  }
+  const stoppedByAnswer = await w.page({ kind: "goalScope", repository: "o/r" });
+  expect(stoppedByAnswer).toContain(EN.flowStopReason("laps"));
+  expect(stoppedByAnswer).not.toContain(EN.flowStopAskedLink);
+  expect(stoppedByAnswer).toContain(quoted(EN.flowStopNext("laps")));
 });
 
 test("a scope stop shows its three options, in the page's language, with rondo's record folded", async () => {

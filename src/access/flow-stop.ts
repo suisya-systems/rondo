@@ -172,7 +172,11 @@ export async function flowStopOf(
       return null;
     }
     const asks = await record.openAsksIn(latest.messageId);
-    const open = asks.kind === "read" && asks.asks.some((one) => one.messageId === stop.messageId);
+    // Waiting on an answer, not answered `stop`: that one stays open to hold
+    // the work, and has been answered (Codex round 4).
+    const open =
+      asks.kind === "read" &&
+      asks.asks.some((one) => one.messageId === stop.messageId && !one.answeredStop);
     return { kind: "asked", reason, askedIn: latest.messageId, open };
   }
   // ponytail: the newest row stands until a request is written, so a stop the
