@@ -635,6 +635,7 @@ export const JA: Chrome = Object.freeze({
     ({
       push_branch: "ブランチを push する",
       open_pull_request: "プルリクエストを開く",
+      merge_default_branch: "チェックが通ればデフォルトブランチにマージする",
     })[act] ?? act,
   scopeOutwardNone: "なし",
   scopeIrreversibleNone: "取り返しのつかない行為の一覧には何も足しません。",
@@ -1213,6 +1214,9 @@ export const JA: Chrome = Object.freeze({
     "GitHub はマージを受け付けましたが、マージされたことを rondo は確かめられませんでした" +
     "（リポジトリがマージキューを使っているか、GitHub から返事がありませんでした）。" +
     "もう一度押す前に、GitHub でプルリクエストを確かめてください。",
+  mergeRefusedInFlight:
+    "この押下ではマージしていません。このプルリクエストのマージがすでに進んでいます。少し待って" +
+    "から依頼に戻り、結果を確かめてください。",
   publishRefusedNotStarted:
     "何も公開していません。ここで見た内容は失われていません。" +
     "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",

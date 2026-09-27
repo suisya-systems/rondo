@@ -28,7 +28,7 @@
  * carries the whole of it and the line draws the part that fits on a line.
  */
 import type { IterationRecord, ScopePayload, ScopeSpent } from "../../store/records.js";
-import { type IterationStatus, reachedBudgetCap, SCOPE_OUTWARD_ACTS } from "../../store/records.js";
+import { type IterationStatus, reachedBudgetCap } from "../../store/records.js";
 import type { Allowance } from "./week.js";
 
 /** One try's cost, as the right face lists it. */
@@ -171,11 +171,10 @@ export function allowanceOf(approval: {
  *   abandoned, or closed and still waiting for the separate publish press, and
  *   a chain that marked those *done* would say a pull request exists when none
  *   does.
- * - *merge* is always `yours` here. `merge_default_branch` is not a member of
- *   {@link SCOPE_OUTWARD_ACTS} and the writer refuses it by name, so no scope
- *   can put rondo on this step. Drawing it as *ahead* would suggest rondo were
- *   going to do it. The page marks it `done` once the thread says it was
- *   merged (rondo#413), which is a row this module does not read.
+ * - *merge* is `ahead` where the approval includes `merge_default_branch`
+ *   (D-0126: rondo merges on green) and `yours` otherwise. The page marks it
+ *   `done` once the thread says it was merged (rondo#413), which is a row this
+ *   module does not read.
  */
 export function governanceOf(
   record: IterationRecord,
@@ -225,7 +224,13 @@ export function governanceOf(
     chain: [
       { step: "answer", state: answered ? "done" : atGate ? "waiting" : "ahead" },
       { step: "proposal", state: proposed ? "done" : mayPropose ? "ahead" : "yours" },
-      { step: "merge", state: "yours" },
+      {
+        step: "merge",
+        state:
+          approval !== null && approval.payload.outward_acts.includes("merge_default_branch")
+            ? "ahead"
+            : "yours",
+      },
     ],
     touches:
       approval === null
