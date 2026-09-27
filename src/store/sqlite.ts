@@ -3587,6 +3587,20 @@ export interface AdvisoryRecord {
    */
   reviseDraftFor(iterationId: string, reading: LapReading): Promise<StoredReviseDraft | null>;
   /**
+   * What one composing of a pull request's English body writes (`D-0079`
+   * section 4, rondo#290): its one `publish_body` proposal row, **or nothing**.
+   * Under one lock with the write: `stale` when the lap is no longer closed at
+   * `gateId`, and `covered` when a row already holds that gate, so the body a
+   * screen showed is the body a press publishes however many times either runs.
+   */
+  recordPublishBody(proposal: ProposalDraft, gateId: string): Promise<DraftWriteOutcome>;
+  /**
+   * The newest composed body of `iterationId` at `gateId`, or null when none is
+   * recorded: this lap's body has not been composed. Read by the preview and by
+   * the press, which is what makes them one body (rondo#290).
+   */
+  publishBodyFor(iterationId: string, gateId: string): Promise<StoredReviseDraft | null>;
+  /**
    * The operator messages written before a model drafter host first ran on
    * this store, recording that moment on the first call. A host never drafts a
    * thread for these alone: starting one must not spend on the past unasked.
@@ -4889,6 +4903,41 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return reviseDraftHolding(connection, iterationId, reading);
     },
 
+    async recordPublishBody(proposal: ProposalDraft, gateId: string): Promise<DraftWriteOutcome> {
+      if (proposal.kind !== "publish_body" || proposal.iterationId === null) {
+        return {
+          kind: "defect",
+          reason:
+            "a composed body is a 'publish_body' proposal naming its lap, and " +
+            `'${proposal.proposalId}' is not`,
+        };
+      }
+      const iterationId = proposal.iterationId;
+      try {
+        return immediateTransaction<DraftWriteOutcome>(connection, () => {
+          const lap = connection
+            .prepare("SELECT status, gate_id FROM iteration WHERE id = ?")
+            .get(iterationId) as SqlRow | undefined;
+          // **Closed at this gate, which is the only lap a publish is of.** A
+          // lap that moved on is a body composed from a report that is no
+          // longer the last word on this work.
+          if (lap === undefined || lap["status"] !== "closed" || lap["gate_id"] !== gateId) {
+            return { kind: "stale" };
+          }
+          if (publishBodyHolding(connection, iterationId, gateId) !== null) {
+            return { kind: "covered" };
+          }
+          return insertProposal(proposal);
+        });
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async publishBodyFor(iterationId: string, gateId: string): Promise<StoredReviseDraft | null> {
+      return publishBodyHolding(connection, iterationId, gateId);
+    },
+
     async releaseDraft(requestMessageId: string, holder: string): Promise<void> {
       connection
         .prepare("DELETE FROM drafter_lease WHERE request_message_id = ? AND holder = ?")
@@ -5658,6 +5707,51 @@ function reviseDraftHolding(
       }
     } catch {
       // Unreadable bytes hold no reading; the next row may.
+    }
+  }
+  return null;
+}
+
+/**
+ * The newest `publish_body` row of one lap's gate (rondo#290), or null when the
+ * body of that lap has not been composed.
+ *
+ * **Found by the lap and its gate, and not by the report's own bytes.** The
+ * report is continuo's, read across a process boundary, and a reader that had
+ * to hold it to find this row could not find it without spawning; the gate is
+ * on the lap's row, and a lap has one. A row whose payload will not parse holds
+ * no body, and the next row may.
+ */
+function publishBodyHolding(
+  connection: DatabaseSync,
+  iterationId: string,
+  gateId: string,
+): StoredReviseDraft | null {
+  const rows = connection
+    .prepare(
+      "SELECT proposal_id, drafter, payload, snapshot, created_at_ms FROM proposal " +
+        "WHERE kind = 'publish_body' AND iteration_id = ? ORDER BY created_at_ms DESC, rowid DESC",
+    )
+    .all(iterationId) as SqlRow[];
+  for (const row of rows) {
+    try {
+      const snapshot = JSON.parse(String(row["snapshot"])) as JsonRecord;
+      const payload = JSON.parse(String(row["payload"])) as unknown;
+      if (
+        snapshot["gate_id"] === gateId &&
+        typeof payload === "object" &&
+        payload !== null &&
+        !Array.isArray(payload)
+      ) {
+        return {
+          proposalId: String(row["proposal_id"]),
+          drafter: String(row["drafter"]),
+          payload: payload as JsonRecord,
+          createdAtMs: Number(row["created_at_ms"]),
+        };
+      }
+    } catch {
+      // Unreadable bytes hold no body; the next row may.
     }
   }
   return null;
