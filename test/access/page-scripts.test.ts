@@ -292,6 +292,10 @@ class HTMLTextAreaElement {
   value = "";
   defaultValue = "";
 }
+class HTMLInputElement {
+  dataset: Record<string, string> = {};
+  value = "";
+}
 
 /**
  * A page running `page/composer.js` over one draft box and its note; or, with
@@ -323,6 +327,7 @@ function composerPage(
       callbacks: {
         beforeAttributeUpdated?: (name: string, element: unknown) => unknown;
         beforeNodeMorphed?: (old: unknown, next: unknown) => unknown;
+        afterNodeMorphed?: (old: unknown) => unknown;
       };
     };
   } = { defaults: { callbacks: {} } };
@@ -330,6 +335,7 @@ function composerPage(
     Idiomorph,
     HTMLDetailsElement,
     HTMLTextAreaElement,
+    HTMLInputElement,
     HTMLFormElement,
     HTMLButtonElement,
     addEventListener: () => {},
@@ -410,6 +416,23 @@ test("the morph is told to leave a fold's open and a draft's words to the person
   expect(leaves("class", new HTMLDetailsElement())).not.toBe(false);
   expect(leaves("value", new HTMLTextAreaElement())).not.toBe(false);
   expect(leaves("open", new HTMLTextAreaElement())).not.toBe(false);
+  // **A budget stop's typed amount stays the person's too** (D-0140, Codex),
+  // until its key changes: another question's or approval's box takes the
+  // server's value. A number box with no key is the server's.
+  const amount = new HTMLInputElement();
+  amount.dataset = { keep: "raise:i-0001:sd-1" };
+  expect(leaves("value", amount)).toBe(false);
+  expect(leaves("value", new HTMLInputElement())).not.toBe(false);
+  const morphed = Idiomorph.defaults.callbacks.beforeNodeMorphed;
+  const next = new HTMLInputElement();
+  next.dataset = { keep: "raise:i-0001:sd-2" };
+  morphed?.(amount, next);
+  // Asked twice in one morph -- the attribute, then the typed value -- and
+  // taken from the server both times (Codex, round 2); kept again after it.
+  expect(leaves("value", amount)).not.toBe(false);
+  expect(leaves("value", amount)).not.toBe(false);
+  Idiomorph.defaults.callbacks.afterNodeMorphed?.(amount);
+  expect(leaves("value", amount)).toBe(false);
 });
 
 test("a draft that landed under the person's words is said after a merged redraw", () => {
@@ -442,7 +465,8 @@ test("a box the morph reuses for a different draft takes the server's words, not
   beforeNodeMorphed(box, { dataset: { draft: "claim:i-0001:gate-2" } });
   box.dataset = { draft: "claim:i-0001:gate-2" };
   expect(beforeAttributeUpdated("value", box)).not.toBe(false);
-  // And after that, it is the person's again.
+  // And once that morph of the node ends, it is the person's again.
+  Idiomorph.defaults.callbacks.afterNodeMorphed?.(box);
   expect(beforeAttributeUpdated("value", box)).toBe(false);
 });
 
@@ -884,6 +908,7 @@ function onePage() {
     Element: Painted,
     HTMLDetailsElement: class {},
     HTMLTextAreaElement: class {},
+    HTMLInputElement: class {},
     HTMLFormElement: class {},
     HTMLButtonElement: class {},
   });

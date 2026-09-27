@@ -1235,6 +1235,27 @@ test("D-0110: a lap that stops writes one ask in the person's words, and each an
   expect(await turns()).toEqual([]);
 });
 
+test("D-0140: a lap the budget stopped asks with raising the budget first, and recommended", async () => {
+  const h = await harness();
+  const ja = chromeFor("ja");
+  const capped: ReportingPorts = {
+    ...h.reporting,
+    thread: { record: h.record, store: h.store, words: ja },
+    performLap: async () => ({
+      kind: "refused",
+      message: "LapBudgetExhausted: the turn hit its cap",
+      sessionId: "s-1",
+      budgetStop: { totalCostUsd: 2.52 },
+    }),
+  };
+  const report = await admit(capped, h.advisory, PLAN, POLICY, "i-cap", null, null, ROOT);
+  expect(report.status).toBe("failed");
+  const body = String(h.stops().find((row) => row["message_id"] === "lap-stopped-i-cap")?.["body"]);
+  expect(body).toContain("- 予算を増やして続ける。");
+  expect(body).toContain("おすすめ: 予算を増やして続ける。");
+  expect(body.indexOf("予算を増やして続ける")).toBeLessThan(body.indexOf("同じ予算のまま続ける"));
+});
+
 test("D-0110: a thread with no words writes no ask, and a lap that reaches its gate writes none", async () => {
   const h = await harness();
   const cut: ReportingPorts = {

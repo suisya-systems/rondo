@@ -334,3 +334,23 @@ test(
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
+
+test(
+  "D-0140: a lap the budget stopped can have its approval raised, from its question; a lap failed otherwise cannot",
+  async () => {
+    const w = await world();
+    const fail = (kind: string) =>
+      w.connection
+        .prepare("UPDATE iteration SET status = 'failed', failure_kind = ? WHERE id = 'lap-ended'")
+        .run(kind);
+    fail("defect");
+    expect(await w.raise({ iterationId: "lap-ended" })).toMatchObject({
+      ok: false,
+      why: "raiseRefusedNotAtGate",
+    });
+    fail("budget");
+    expect(await w.raise({ iterationId: "lap-ended" })).toMatchObject({ ok: true });
+    expect(w.count("SELECT count(*) AS n FROM scope")).toBe(2);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);

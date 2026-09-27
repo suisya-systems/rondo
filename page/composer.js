@@ -314,7 +314,18 @@ document.addEventListener("htmx:afterSwap", redrawn);
 // `data-draft` is about to change is noted, and its value is taken from the
 // server like any other; the redraw's `restore` then puts back what was kept
 // under the new key, if anything was.
+//
+// **A budget stop's amount is the person's too** (D-0140 rule 3, Codex): the
+// raise box is an `input[data-keep]`, keyed by its question and approval, and
+// a typed amount stays across the redraw on the same terms, until its key
+// changes. The mark lasts the whole of the node's morph and not one call
+// (Codex, round 2): idiomorph asks about an input's `value` twice, once for
+// the attribute and once for the live value a person typed into.
 const renamed = new WeakSet();
+const personsValue = (element) =>
+  (element instanceof HTMLTextAreaElement && element.dataset.draft !== undefined) ||
+  (element instanceof HTMLInputElement && element.dataset.keep !== undefined);
+const valueKey = (element) => element.dataset?.draft ?? element.dataset?.keep;
 if (typeof Idiomorph !== "undefined") {
   Idiomorph.defaults.callbacks.beforeNodeMorphed = (old, next) => {
     // Duty 3: a pressed form is on its way to another page, and redrawing it
@@ -322,22 +333,18 @@ if (typeof Idiomorph !== "undefined") {
     if (old instanceof HTMLFormElement && old.dataset.pressed !== undefined) {
       return false;
     }
-    if (
-      old instanceof HTMLTextAreaElement &&
-      old.dataset.draft !== undefined &&
-      next.dataset?.draft !== old.dataset.draft
-    ) {
+    if (personsValue(old) && valueKey(next) !== valueKey(old)) {
       renamed.add(old);
     }
   };
   Idiomorph.defaults.callbacks.beforeAttributeUpdated = (name, element) =>
     !(
       (name === "open" && element instanceof HTMLDetailsElement) ||
-      (name === "value" &&
-        element instanceof HTMLTextAreaElement &&
-        element.dataset.draft !== undefined &&
-        !renamed.delete(element))
+      (name === "value" && personsValue(element) && !renamed.has(element))
     );
+  Idiomorph.defaults.callbacks.afterNodeMorphed = (old) => {
+    renamed.delete(old);
+  };
 }
 
 // -- 3. The press --

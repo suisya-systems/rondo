@@ -261,6 +261,12 @@ export const JA: Chrome = Object.freeze({
   answerOutcomeNote:
     "書いたとおりに送られます。「続ける」は仕事をもう一度試させ、「この線を止める」は止めたままにします。" +
     "あとから「続ける」こともできます。",
+  answerRaiseAction: "予算を増やして続ける",
+  answerRaiseLabel: "これからの予算（USD）",
+  answerRaiseLeft: (left, reserve, enough) =>
+    `この承認に残っているのは $${left} で、次の 1 回が取り置く $${reserve} に` +
+    `${enough ? "足ります" : "足りません"}。増やすと、予算だけを変えた新しい承認が記録されます。` +
+    "これまでに使った額は元の承認に残ります。",
   newRequestHeading: "新しい依頼",
   requestPlaceholder: "何をしてほしいですか。話すときの言葉のまま書いてください。",
   replyPlaceholder: "返信を書く",
@@ -295,6 +301,9 @@ export const JA: Chrome = Object.freeze({
     "rondo はこのメッセージを受け取りませんでした。ページを読み込み直してから、もう一度送信してください。",
   answerRefusedPress:
     "回答は「回答する」ボタンを押したときだけ受け付けます。スレッドを読み込み直して、もう一度「回答する」を押してください。",
+  answerRefusedRaise:
+    "予算は増えておらず、質問にもまだ答えていません。承認がすでに増やされたか、置き換えられた" +
+    "可能性があります。スレッドを読み込み直して、もう一度答えてください。",
   replyNotAnswer: "返信しただけでは、このスレッドで待っている質問に答えたことになりません。",
   sendBack: "スレッドに戻る",
   sendBackNote: "ブラウザの「戻る」で、書いた文に戻れます。",
@@ -636,16 +645,24 @@ export const JA: Chrome = Object.freeze({
     `下書き時刻 + 周回数 x 最長の周回 + 返信のための 1 日 = 下書き時刻 + ` +
     `${String(laps)} x ${String(seconds)} 秒 + 24 時間`,
   scopeBasesFold: (count) => `この数の出どころ (${String(count)})`,
-  scopeBasisRows: (measurement, laps, tier) =>
-    `${tier === null ? "このエージェント種別" : `tier ${tier}`}の直近 ${String(laps)} 周回のうち、` +
+  scopeBasisRows: (measurement, laps, level, tier) =>
+    `${
+      level === "agent_type"
+        ? "このエージェント種別"
+        : level === "model_tier"
+          ? `tier ${String(tier)}`
+          : "このリポジトリ"
+    }の直近 ${String(laps)} 周回のうち、` +
     `${JA_MEASURE[measurement] ?? measurement}が最も高かったもの`,
   scopeBasisColdStart: (measurement) =>
     `${JA_MEASURE[measurement] ?? measurement}: このストアでは一度も測っていないので、rondo の` +
     `初期値を使いました`,
   scopeColdStartNote: (whole) =>
     whole
-      ? "ここではまだ周回が記録されていないため、この値は rondo の既定値で、測った値ではありません。"
-      : "一部は rondo の既定値です。挙げたエージェント種別のうち、ここでまだ周回が記録されていないものがあります。",
+      ? "ここではまだ周回が記録されていないため、この値は rondo の見込みで、測った値ではありません。" +
+        "大きな作業なら上げてください。"
+      : "一部は rondo の見込みです。挙げたエージェント種別のうち、ここでまだ周回が記録されていない" +
+        "ものがあります。大きな作業なら上げてください。",
   scopeBasisPlans: (plans) => `プラン数: ${String(plans)}`,
   scopeBasisRounds: (rounds, byDefault) =>
     byDefault
@@ -654,11 +671,13 @@ export const JA: Chrome = Object.freeze({
   scopeBasisReplyAllowance: "あなたの返信のための 1 日。測った値ではなく、見込みの余裕です",
   scopeBasisLap: (iterationId) => `周回 ${iterationId}`,
   scopeSampleHeading: "依頼の大きさが過去の周回と同じくらいだと見て、予算を出しています",
-  scopeSampleRows: (laps, tier, lowest, highest) =>
+  scopeSampleRows: (laps, level, tier, lowest, highest) =>
     `${
-      tier === null
+      level === "agent_type"
         ? "このエージェント種別"
-        : `まだ記録のないエージェント種別なので、同じ tier ${tier} の別のエージェント種別`
+        : level === "model_tier"
+          ? `まだ記録のないエージェント種別なので、同じ tier ${String(tier)} の別のエージェント種別`
+          : "このエージェント種別にもその tier にも記録がないので、このリポジトリの別のエージェント種別"
     }の初回周回 ${String(laps)} 件をもとに下書きしました。費用は ` +
     `${lowest === highest ? highest : `${lowest}〜${highest}`} USD で、引当にはその最高値を` +
     `使っています。rondo が記録しているのは周回にかかった費用だけで、どれだけの作業をしたかは` +
@@ -666,14 +685,18 @@ export const JA: Chrome = Object.freeze({
     `大きいと思うなら、ここで費用を上げてください。初回の作業で使い切っても、作業があなたの` +
     `確認に戻ってきたときに引き上げられます。`,
   scopeSampleColdStart: (reserve) =>
-    `このエージェント種別にも、その tier にも、記録された周回がありません。そのため引当は ` +
-    `rondo の初期値 ${reserve} USD で、誰かが測った値ではありません。依頼がどれだけの大きさ` +
-    `かも分かりません。小さな変更では済まないと思うなら、ここで費用を上げてください。作業が` +
-    `あなたの確認に戻ってきたときに引き上げることもできます。`,
+    `このエージェント種別にも、その tier にも、このリポジトリにも、記録された周回がありません。` +
+    `そのため引当は rondo の見込み ${reserve} USD で、rondo が測れた場所での初回周回の費用に` +
+    `合わせた値です。ここで誰かが測った値ではなく、依頼がどれだけの大きさかも分かりません。` +
+    `大きな作業なら、ここで費用を上げてください。予算の上限で止まったときは、その質問から` +
+    `予算を増やして続けることもできます。`,
   scopeDefaultsHeading: "rondo が埋めたもの",
   scopeDefaultNote: "既定値で、依頼から導いたものではありません。",
   scopeSeverityLabel: "この重大度以上の指摘が出たら 1 ラウンド終了",
   scopeOutwardLabel: "この範囲で許す外向きの行為",
+  scopeOutwardFromGoal:
+    "このリポジトリの目標の範囲で許しているものに、チェックを入れてあります。この依頼も同じ目標に" +
+    "向けた作業だからです。自分でしたいものは外してください。",
   scopeOutwardAct: (act) =>
     ({
       push_branch: "ブランチを push する",
@@ -1116,6 +1139,18 @@ export const JA: Chrome = Object.freeze({
       "- 続ける。そのあと、もう一度始めます。あきらめるもの: 今回の試行でコミットされなかった変更。",
       "- この線を止める。あきらめるもの: この依頼の作業。",
       "おすすめ: 続ける。",
+      "この流れは、このメッセージに答えるまで止まったままです。",
+    ].join("\n"),
+  lapBudgetStoppedSaid: (said) =>
+    [
+      `作業が予算の上限で止まりました。${said ?? "何が起きたかは、このスレッドの作業の行に出ています。"}`,
+      "選べること:",
+      "- 予算を増やして続ける。そのあと、もう一度始めます。あきらめるもの: 増やした分のお金と、" +
+        "今回の試行でコミットされなかった変更。",
+      "- 同じ予算のまま続ける。あきらめるもの: 今回の試行でコミットされなかった変更。残りが少ないと" +
+        "また止まります。",
+      "- この線を止める。あきらめるもの: この依頼の作業。",
+      "おすすめ: 予算を増やして続ける。",
       "この流れは、このメッセージに答えるまで止まったままです。",
     ].join("\n"),
   lapLostAsk: [

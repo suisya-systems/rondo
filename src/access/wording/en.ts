@@ -273,6 +273,12 @@ explanation you pressed on and then answers the gate.`,
   answerOutcomeNote:
     "Sent as written. Carry on lets the work be tried again; Stop this line keeps it stopped, " +
     "and you can carry on later.",
+  answerRaiseAction: "Raise the budget and carry on",
+  answerRaiseLabel: "Budget from here on (USD)",
+  answerRaiseLeft: (left, reserve, enough) =>
+    `This approval has $${left} left, which ${enough ? "covers" : "does not cover"} the $${reserve} ` +
+    `one more try holds. Raising records a new approval with only its budget changed, and what ` +
+    `was spent stays under the old one.`,
   newRequestHeading: "New request",
   requestPlaceholder: "What do you want done? Write it as you would say it.",
   replyPlaceholder: "Write a reply.",
@@ -305,6 +311,9 @@ explanation you pressed on and then answers the gate.`,
   sendRefusedUnknown: "rondo did not take this message. Reload the page and send again.",
   answerRefusedPress:
     "An answer is taken only from a press of the Answer button. Reload the thread and press Answer again.",
+  answerRefusedRaise:
+    "The budget was not raised, and the question is not answered yet: the approval may have " +
+    "been raised or replaced already. Reload the thread and answer again.",
   replyNotAnswer: "This reply does not answer the question waiting in this thread.",
   sendBack: "Back to the thread",
   sendBackNote: "Your browser's Back button returns to what you wrote.",
@@ -614,17 +623,25 @@ explanation you pressed on and then answers the gate.`,
     `draft time + laps x the longest lap + a day for your replies = draft time + ` +
     `${String(laps)} x ${String(seconds)}s + 24h`,
   scopeBasesFold: (count) => `where this came from (${String(count)})`,
-  scopeBasisRows: (measurement, laps, tier) =>
+  scopeBasisRows: (measurement, laps, level, tier) =>
     `the highest ${EN_MEASURE[measurement] ?? measurement} of the ${String(laps)} most recent ` +
-    `recorded lap${laps === 1 ? "" : "s"} of ` +
-    `${tier === null ? "this agent type" : `tier ${tier}`}`,
+    `recorded lap${laps === 1 ? "" : "s"} ` +
+    `${
+      level === "agent_type"
+        ? "of this agent type"
+        : level === "model_tier"
+          ? `of tier ${String(tier)}`
+          : "in this repository"
+    }`,
   scopeBasisColdStart: (measurement) =>
     `${EN_MEASURE[measurement] ?? measurement}: nothing in this store has measured it, so rondo ` +
     `used its own starting figure`,
   scopeColdStartNote: (whole) =>
     whole
-      ? "No lap has been recorded here yet, so this is rondo's default, not a measurement."
-      : "Part of this is rondo's default: one of the listed agent types has no lap recorded here yet.",
+      ? "No lap has been recorded here yet, so this is rondo's guess, not a measurement. Raise it " +
+        "if the work is large."
+      : "Part of this is rondo's guess: one of the listed agent types has no lap recorded here " +
+        "yet. Raise it if the work is large.",
   scopeBasisPlans: (plans) => `plans: ${String(plans)}`,
   scopeBasisRounds: (rounds, byDefault) =>
     byDefault
@@ -634,22 +651,32 @@ explanation you pressed on and then answers the gate.`,
     "a day for your own replies, which is an allowance and not a measurement",
   scopeBasisLap: (iterationId) => `lap ${iterationId}`,
   scopeSampleHeading: "This draft assumes your request is the size of past laps",
-  scopeSampleRows: (laps, tier, lowest, highest) =>
-    `Drafted from ${String(laps)} recorded first lap${laps === 1 ? "" : "s"} of ` +
-    `${tier === null ? "this agent type" : `other agent types on tier ${tier}, as none of this one's is recorded`}` +
+  scopeSampleRows: (laps, level, tier, lowest, highest) =>
+    `Drafted from ${String(laps)} recorded first lap${laps === 1 ? "" : "s"} ` +
+    `${
+      level === "agent_type"
+        ? "of this agent type"
+        : level === "model_tier"
+          ? `of other agent types on tier ${String(tier)}, as none of this one's is recorded`
+          : "of other agent types in this repository, as none of this one's or its tier's is recorded"
+    }` +
     `, which cost ${lowest === highest ? highest : `${lowest} to ${highest}`} USD; the reserve ` +
     `is the highest. rondo records what a lap cost, not how much work it did, so it cannot tell ` +
     `whether your request is as large as theirs. If it is larger, raise the cost here; if the ` +
     `first attempt uses it all, you can still raise it when the work comes back to you.`,
   scopeSampleColdStart: (reserve) =>
-    `No lap of this agent type or its tier is recorded, so the reserve is rondo's starting ` +
-    `figure, ${reserve} USD, which nobody measured, and nothing here knows how large your ` +
-    `request is. If it is more than a small change, raise the cost here, or raise it later when ` +
-    `the work comes back to you.`,
+    `No lap of this agent type, its tier or this repository is recorded, so the reserve is ` +
+    `rondo's guess, ${reserve} USD: about what a first lap has cost where rondo has measured one. ` +
+    `Nobody measured it here, and nothing here knows how large your request is. If the work is ` +
+    `large, raise the cost here; if a lap stops at the budget, you can raise it and carry on ` +
+    `from its question.`,
   scopeDefaultsHeading: "What rondo filled in for you",
   scopeDefaultNote: "A default, not derived from your request.",
   scopeSeverityLabel: "Findings this severe or worse end a round",
   scopeOutwardLabel: "Outward acts this scope allows",
+  scopeOutwardFromGoal:
+    "Checked as the goal's scope for this repository allows them, since this request works " +
+    "toward the same goal. Uncheck any you want to do yourself.",
   scopeOutwardAct: (act) =>
     ({
       push_branch: "push a branch",
@@ -1103,6 +1130,18 @@ explanation you pressed on and then answers the gate.`,
       "- Carrying on, then starting again. Gives up: what this try changed and did not commit.",
       "- Stopping this line. Gives up: this request's work.",
       "Recommended: carrying on.",
+      "This line stays stopped until this message is answered.",
+    ].join("\n"),
+  lapBudgetStoppedSaid: (said) =>
+    [
+      `The work stopped at its budget. ${said ?? "What happened is on the work's line in this thread."}`,
+      "Options:",
+      "- Raising the budget and carrying on, then starting again. Gives up: the money you add, " +
+        "and what this try changed and did not commit.",
+      "- Carrying on under the same budget. Gives up: what this try changed and did not commit; " +
+        "a try with too little left stops again.",
+      "- Stopping this line. Gives up: this request's work.",
+      "Recommended: raising the budget and carrying on.",
       "This line stays stopped until this message is answered.",
     ].join("\n"),
   lapLostAsk: [

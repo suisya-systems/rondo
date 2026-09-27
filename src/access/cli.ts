@@ -5173,10 +5173,13 @@ async function raiseScope(
   const found = await store.read(input.iterationId);
   // At its gate, or approved and closed: the conflict fix of rondo#417 starts
   // one more attempt of an approved lap, and its card offers this raise where
-  // the budget would refuse that attempt (D-0105, Codex round 1).
+  // the budget would refuse that attempt (D-0105, Codex round 1). Or stopped
+  // by the budget, whose question offers this raise with carrying on (D-0140
+  // rule 3).
   if (
     found.kind !== "read" ||
     (!approvedForPublication(found.record) &&
+      !(found.record.status === "failed" && found.record.failureKind === "budget") &&
       (isTerminal(found.record.status) || found.record.gateId === null))
   ) {
     return {

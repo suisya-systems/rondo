@@ -925,6 +925,82 @@ test("a question answered *stop this line* leaves your turn, the count and the t
   expect(after).toContain("<title>rondo</title>");
 });
 
+test("a budget stop's answering box offers raising the budget first, prefilled, with what the approval has left (D-0140)", async () => {
+  const world = fresh();
+  await openRequest(world, "req-a", "have a look at this");
+  await reserve(world, "i-0001", "do the thing", null, "req-a");
+  world.connection
+    .prepare("UPDATE iteration SET status = 'failed', failure_kind = ? WHERE id = 'i-0001'")
+    .run("budget");
+  const asked = await world.record.recordThreadMessage({
+    messageId: "lap-stopped-i-0001",
+    body: "the work stopped at its budget",
+    authorKind: "drafter",
+    authorId: "rondo/advisory/deterministic",
+    inReplyTo: "req-a",
+    atMs: 600,
+    bases: [
+      { form: "message", messageId: "req-a" },
+      { form: "iteration", iterationId: "i-0001" },
+    ],
+    asks: true,
+  });
+  expect(asked.kind).toBe("recorded");
+  const budgets = {
+    laps: 6,
+    review_rounds: 3,
+    cost_usd: 15,
+    cost_reserve_usd: 2.5,
+    expires_at_ms: Date.parse("2026-10-01T00:00Z"),
+  };
+  const draw = async (failureKind: string) => {
+    world.connection
+      .prepare("UPDATE iteration SET failure_kind = ? WHERE id = 'i-0001'")
+      .run(failureKind);
+    const ports = portsOver(world, "ada", []);
+    const record = {
+      ...world.record,
+      scopeDecisionAdmitting: async () => "sd-1",
+      scopeTip: async () => ({ kind: "absent" }),
+      readScopeDecision: async () => ({ kind: "read", decision: { scopeId: "s-1" } }),
+      readScope: async () => ({
+        kind: "read",
+        scope: {
+          scopeId: "s-1",
+          payload: {
+            requests: ["req-a"],
+            workspaces: [],
+            agent_types: [],
+            budgets,
+            severity_threshold: "major",
+            outward_acts: [],
+            irreversible_additions: [],
+          },
+        },
+      }),
+      scopeSpent: async () => ({ admissions: 3, readCostUsd: 13.54, unreadLaps: 0 }),
+    } as unknown as typeof ports.record;
+    return await operatorPage(
+      { ...ports, record },
+      "t",
+      { kind: "thread", messageId: "req-a", to: null },
+      EN,
+      mint,
+    );
+  };
+  const html = await draw("budget");
+  expect(html).toContain('value="raise_carry_on"');
+  expect(html).toContain(EN.answerRaiseAction);
+  expect(html).toMatch(/name="cost_usd" data-keep="raise:i-0001:sd-1"[^>]*value="15.00"/);
+  expect(html).toContain('name="raise" value="sd-1"');
+  expect(html).toContain('name="expires_at_ms" value="2026-10-01T00:00"');
+  expect(html).toContain(EN.answerRaiseLeft("1.46", "2.50", false));
+  // Any other stop keeps its two answers.
+  const other = await draw("defect");
+  expect(other).toContain('value="carry_on"');
+  expect(other).not.toContain('value="raise_carry_on"');
+});
+
 test("the header offers three text sizes, script only, outside what the redraw swaps, in the page's language", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");

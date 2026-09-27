@@ -172,6 +172,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0137 | A bare `#N` is read in the repository its own request would publish to: `publishesTo` is the one rule both sides ask, and a reference the plans in play name two repositories for is not read at all; `D-0081` rule 3.4 is narrowed | accepted |
 | D-0138 | Over-bound review material leaves out, by name, what only read before it is refused; `D-0105` rule 3.1 is withheld only by the conflicting lap's own line; and a model reading a second run could change can be taken again, once, as one more review round | accepted |
 | D-0139 | A lap is lost when, on this host, the rondo process that sent it and its `lap perform` child are both gone: it ends `failed` with the kind `lost`, holds no budget, and is started again once by itself under a goal scope or an approved split, or asked about | accepted |
+| D-0140 | A person's request starts from the goal scope's outward acts, a first-lap reserve with no history of its own is read from its repository's laps or guessed at a real lap's cost, and a budget stop offers raising the budget and carrying on first, on one press | accepted |
 
 ---
 
@@ -17511,6 +17512,9 @@ approval it was not admitted under, and a press.
    (`D-0072` rule 3). The raise screen says this when an open ask stands over the line, and links to
    it; it does not answer it for them, because a raise and a decision to go on are two answers.
 
+> **Annotation (2026-09-27, from rondo#508).** Amended by `D-0140` rule 3 for one question: a lap the
+> budget stopped offers raising the budget and carrying on as one press, raise first.
+
 ### 4. What the person presses
 
 1. **On the gate view, when the change path is closed by a budget.** The revise verdict is computed
@@ -26078,3 +26082,97 @@ safe, but it frees nothing, and freeing the room is what rondo#506 asks for.
   budget is not small, and a lost lap should hold its cap until someone reads what it spent.
 - **A restart that leaves a lap `performing` with its driver recorded**: then the pids were not
   written before the lap could run.
+
+## D-0140 — A person's request starts from the goal scope's outward acts, a first-lap reserve with no history of its own is read from its repository's laps or guessed at a real lap's cost, and a budget stop offers raising the budget and carrying on first, on one press
+
+**Status:** accepted (2026-09-27, rondo#508; the design put to the owner through the secretary, with
+a recommendation on each point, and built as recommended). Amends `D-0071` rule 4.2.1 (a third level)
+and rule 4.2.2 (the cold start), `D-0074` rule 3.4 (for a budget stop's question only) and rule 4.4
+(a budget-stopped lap may be raised), and `D-0130` rule 5's closing sentence. Refs `D-0066` rule
+3.4.2, `D-0072`, `D-0079`, `D-0110` rule 2, `D-0126`, `D-0128`.
+
+### Context
+
+**Measured on 2026-09-27 from a copy of the lap 18 store** (the live store was only read):
+
+- Every request scope a person set drafted `outward_acts` empty (`D-0071` rule 4.1: a drafter only
+  narrows), so #494's first part stopped at "merge is yours", while the requests the flow injected
+  under the goal scope (`D-0128`) pushed, opened and merged by themselves. Both worked toward the
+  same goal.
+- The approval #494 ran under was drafted before any lap of its agent type had a cost, so its
+  reserve was the cold start, $2.50, and its cost $15 (two plans, three rounds). The first laps
+  measured afterwards cost $7.21 to $8.12, and redos $1.97 to $3.91.
+- #494's second part, started again after a restart (`D-0139`), was sent with a cap of $2.50: $15
+  less $11.01 read, less one partner reserve (`D-0130` rule 3). It stopped after six minutes at
+  "$2.52 of $2.50". Its question offered only *carry on* and *stop this line*, while its own event
+  line said to ask again with a larger budget. *Carry on* under the same cap stops again.
+
+### Decision
+
+1. **A person's request starts from the goal scope's outward acts.** Where a goal scope is in force
+   (`D-0128`) whose workspaces name the repository of the request's plan, the request's scope form
+   draws its outward acts checked, and says why beside them (`goalOutwardActs`,
+   `scopeOutwardFromGoal`). Both the person's own form and the drafted one do. Otherwise the default
+   stays none. **The drafter's row is not changed**: the draft still allows nothing, and a press with
+   the boxes checked records the person's version, as any edited field does (`D-0071` rule 4.1
+   holds). The goal scope's own form keeps its empty default.
+2. **The first-lap reserve.**
+   1. **A third level**: after the agent type and its tier, rule 4.2.1 reads the ten most recent
+      laps in the scope's repositories (the plan's `repository`), whatever their agent type
+      (`BudgetLevel` `repository`). The basis and the caveat say so in both catalogues. A template's
+      own laps are not a level: each lap's plan digest is its own, so no digest joins a template to
+      its laps, and the template's repository is what they share.
+   2. **The cold start is $10.00** (`COLD_START_RESERVE_USD`), above every first lap lap 18
+      measured. It is still a default, and the screen says so beside the value as a guess to raise
+      (`scopeColdStartNote`, `scopeSampleColdStart`). A redo with no rows still falls back to the
+      reserve (rule 4.2.3), so a cold plan is budgeted $30 for three rounds.
+3. **A budget stop offers raising the budget and carrying on, first and recommended.**
+   1. **The question** of a lap that ended with failure kind `budget` lists three options: raise the
+      budget and carry on (recommended), carry on under the same budget, stop this line
+      (`lapBudgetStoppedSaid`). Any other stop keeps `D-0110`'s two. The event line points at the
+      question instead of at asking again (`evBudgetStopped`).
+   2. **The answering box** draws a third press, the primary one, with an amount box prefilled with
+      the approval's own `cost_usd`, and says what the approval has left by the admission arithmetic
+      (`cost_usd` less what was read, less a reserve per unread lap, `D-0066` rule 3.4.2) beside the
+      reserve one more try holds (`answerRaiseLeft`). The approval's other budgets are carried as
+      drawn.
+   3. **One press, two answers, raise first.** The press records a budgets-only successor of the
+      lap's approved tip and approves it, by `D-0074` section 4's own writes (`raiseScopeFromPage`),
+      and then answers *carry on*. **This amends `D-0074` rule 3.4 for this question only**: there a
+      raise and going on were two answers, and here the person gives both on one press. A raise
+      that is refused (not the tip, a forked line) answers nothing, and the box says so
+      (`answerRefusedRaise`). A replayed press whose answer already landed is taken as done.
+   4. **`D-0074` rule 4.4's "the lap is no longer at a gate" does not refuse a lap the budget
+      stopped**: its approval may be raised from its question.
+   5. **The amount is from here on** (`D-0074` rule 1.2, per-row budgets): what the old approval
+      spent stays under it, and the words say so.
+
+**Options not taken.** For 1: writing the goal scope's acts into the drafted row. The drafter would
+then widen, which `D-0071` rule 4.1 forbids, and the person's press would no longer be what allows
+the acts. For 2: a separate cold start for redos. It would be a second guess beside the first, and
+the repository level already gives most stores real redo rows. For 3: a link from the question to the
+raise screen. It keeps two presses for what the person means as one, and the raise screen refuses a
+lap that is not at a gate.
+
+### What it costs
+
+- **A drafted request under a goal scope can merge on green unless the person unchecks it.** That is
+  what the goal scope already allows the flow; the note under the boxes says where the checks came
+  from.
+- **A cold store drafts larger budgets**: $10 a first lap and $30 a plan, where it drafted $2.50 and
+  $7.50. The approval is still the person's, and they see the guess marked as one.
+- **A repository's laps of another agent type** may be of another size of work. The caveat names the
+  level and the spread, as it does for the tier.
+- **The raise and the answer are two writes.** If the answer fails after the raise landed, the
+  successor stands and the question still waits; *carry on* then answers it under the raised
+  budget.
+
+### What would falsify it
+
+- **Goal-scoped repositories whose people uncheck the inherited acts on most requests**: then the
+  default is the goal's and not theirs, and it should go back to none.
+- **First laps in a cold store that cost past $10 more often than not**, or well under it: then the
+  guess is not a real lap's, and it should move to what the stores measure.
+- **Budget stops whose raise-and-carry-on is followed by another budget stop at the prefilled
+  amount**: then the approval's own `cost_usd` is not a fitting prefill, and it should be drawn from
+  the lap's measured costs instead.

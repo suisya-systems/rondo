@@ -31,7 +31,7 @@ function row(fields: Partial<BudgetRow>): BudgetRow {
   };
 }
 
-test("a fresh store gets the cold start on every field, and 5.00 for one plan and two rounds", () => {
+test("a fresh store gets the cold start on every field, and 20.00 for one plan and two rounds", () => {
   const b = computeScopeBudgets({
     agentTypes: [{ digest: A, modelTier: "standard" }],
     plans: 1,
@@ -39,8 +39,9 @@ test("a fresh store gets the cold start on every field, and 5.00 for one plan an
     rows: [],
     draftedAtMs: T0,
   });
-  expect(b.cost_reserve_usd.value).toBe(2.5);
-  expect(b.cost_usd.value).toBe(5);
+  // D-0140 rule 2: above every first lap lap 18 measured ($7.21 to $8.12).
+  expect(b.cost_reserve_usd.value).toBe(10);
+  expect(b.cost_usd.value).toBe(20);
   expect(b.laps.value).toBe(2);
   expect(b.review_rounds.value).toBe(2);
   expect(b.expires_at_ms.value).toBe(T0 + 2 * 30 * MIN + REPLY_ALLOWANCE_MS);
@@ -53,6 +54,42 @@ test("a fresh store gets the cold start on every field, and 5.00 for one plan an
   expect(b.laps.bases).toEqual([
     { kind: "given", given: "plans", value: 1, byDefault: false },
     { kind: "given", given: "review_rounds", value: 2, byDefault: false },
+  ]);
+});
+
+test("with no lap of the agent type or its tier, the scope's repository's laps set the reserve (D-0140)", () => {
+  const here = row({
+    agentTypeDigest: B,
+    modelTier: "large",
+    lapCostUsd: 8.12,
+    repository: "/r/one",
+  });
+  const there = row({
+    agentTypeDigest: B,
+    modelTier: "large",
+    lapCostUsd: 20,
+    repository: "/r/two",
+  });
+  const b = computeScopeBudgets({
+    agentTypes: [{ digest: A, modelTier: "standard" }],
+    plans: 1,
+    rows: [here, there],
+    repositories: ["/r/one"],
+    draftedAtMs: T0,
+  });
+  expect(b.cost_reserve_usd.value).toBe(8.2);
+  expect(b.cost_reserve_usd.bases).toEqual([
+    expect.objectContaining({ kind: "rows", level: "repository", iterationIds: [here.id] }),
+  ]);
+  // Another repository's laps are not this one's: with none named, the cold start.
+  const none = computeScopeBudgets({
+    agentTypes: [{ digest: A, modelTier: "standard" }],
+    plans: 1,
+    rows: [here, there],
+    draftedAtMs: T0,
+  });
+  expect(none.cost_reserve_usd.bases).toEqual([
+    expect.objectContaining({ kind: "cold_start", value: COLD_START_RESERVE_USD }),
   ]);
 });
 
@@ -137,7 +174,7 @@ test("the reserve is the highest over the listed agent types; a type with no tie
     rows: [row({ lapCostUsd: 0.891 })],
     draftedAtMs: T0,
   });
-  expect(b.cost_reserve_usd.value).toBe(2.5);
+  expect(b.cost_reserve_usd.value).toBe(COLD_START_RESERVE_USD);
   expect(b.cost_reserve_usd.bases.map((basis) => basis.kind)).toEqual(["rows", "cold_start"]);
 });
 
@@ -148,8 +185,8 @@ test("a count that is not a whole number is refused", () => {
 });
 
 test("the store reader reads live and terminal rows, skips an unreadable one, and treats an absent record as tierless", async () => {
-  const live = row({ lapCostUsd: 1.5 }) as unknown as Record<string, unknown>;
-  const ended = row({ lapCostUsd: 0.3 }) as unknown as Record<string, unknown>;
+  const live = { ...row({ lapCostUsd: 1.5 }), plan: { repository: "/r/one" } };
+  const ended = { ...row({ lapCostUsd: 0.3 }), plan: {} };
   const b = await scopeBudgetsFromStore(
     {
       store: {

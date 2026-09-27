@@ -16,6 +16,7 @@ import { contentDigest } from "../store/plan.js";
 import type {
   JsonRecord,
   JsonValue,
+  ScopeOutwardAct,
   ScopeWorkspace,
   StoredGoal,
   StoredScope,
@@ -121,4 +122,28 @@ export async function goalScopeStanding(
     }
   }
   return { kind: "none" };
+}
+
+/**
+ * The outward acts a person's request starts from (D-0140 rule 1): those of the
+ * newest goal scope in force whose workspaces name one of `repositories`, or
+ * none where no goal scope stands there. Both kinds of request work toward the
+ * same goal, so the acts the person already allowed the flow are the form's
+ * default; the person's press is still what records them.
+ */
+export async function goalOutwardActs(
+  record: Pick<AdvisoryRecord, "approvalsInForce" | "readScope">,
+  repositories: readonly string[],
+): Promise<readonly ScopeOutwardAct[]> {
+  for (const approval of (await record.approvalsInForce()).toReversed()) {
+    const read = await record.readScope(approval.scopeId);
+    if (
+      read.kind === "read" &&
+      requestsGoal(read.scope.payload.requests) !== null &&
+      read.scope.payload.workspaces.some((w) => repositories.includes(w.repository))
+    ) {
+      return read.scope.payload.outward_acts;
+    }
+  }
+  return [];
 }

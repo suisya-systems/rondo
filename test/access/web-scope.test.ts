@@ -265,7 +265,9 @@ test("with no lap recorded, the scope screen says in Japanese that the reserve w
     () => "MINT-LAP-1",
   );
   expect(html).toContain("依頼の大きさが過去の周回と同じくらいだと見て、予算を出しています");
-  expect(html).toContain("rondo の初期値 2.50 USD で、誰かが測った値ではありません");
+  expect(html).toContain(
+    "rondo の見込み 10.00 USD で、rondo が測れた場所での初回周回の費用に合わせた値です",
+  );
   // **And next to each value that rests on it, not only in its formula**
   // (rondo#378): lap 11's owner read $7.50 as a measured figure. The cost, the
   // reserve and the expiry each say so; the laps and rounds are given, not
@@ -274,12 +276,74 @@ test("with no lap recorded, the scope screen says in Japanese that the reserve w
   expect(html.split(cold).length - 1).toBe(3);
   expect(html.indexOf(cold)).toBeGreaterThan(html.indexOf('name="cost_usd"'));
   // A tier-level sample says it is other agent types' laps, in both languages.
-  expect(EN.scopeSampleRows(3, "standard", "0.22", "1.88")).toContain(
+  expect(EN.scopeSampleRows(3, "model_tier", "standard", "0.22", "1.88")).toContain(
     "3 recorded first laps of other agent types on tier standard, as none of this one's is recorded, which cost 0.22 to 1.88 USD",
   );
-  expect(chromeFor("ja").scopeSampleRows(1, "standard", "1.04", "1.04")).toContain(
+  expect(chromeFor("ja").scopeSampleRows(1, "model_tier", "standard", "1.04", "1.04")).toContain(
     "同じ tier standard の別のエージェント種別の初回周回 1 件をもとに下書きしました。費用は 1.04 USD",
   );
+  // A repository-level sample says so too (D-0140 rule 2).
+  expect(EN.scopeSampleRows(2, "repository", "standard", "7.21", "8.12")).toContain(
+    "of other agent types in this repository",
+  );
+  expect(chromeFor("ja").scopeSampleRows(2, "repository", null, "7.21", "8.12")).toContain(
+    "このリポジトリの別のエージェント種別の初回周回 2 件",
+  );
+});
+
+test("a goal scope in force over the plan's repository checks its outward acts on a person's request, and says why (D-0140)", async () => {
+  const world = fresh();
+  await seedScopeRequest(world, "request-scope-goal", "Fix the layout.");
+  await seedScopePlan(world.record, "request-scope-goal");
+  const goalScope = (repository: string) => ({
+    kind: "read" as const,
+    scope: {
+      scopeId: "goal-scope",
+      payload: scopePayloadWithDefaults({
+        requests: { from_goal: "g-1" },
+        workspaces: [{ repository, workspace_root: "/srv/work" }],
+        agent_types: [],
+        budgets: { laps: 1, review_rounds: 1, cost_usd: 1, cost_reserve_usd: 1, expires_at_ms: 1 },
+        severity_threshold: "major",
+        outward_acts: ["push_branch", "open_pull_request", "merge_default_branch"],
+      } as unknown as JsonRecord),
+    },
+  });
+  const draw = async (repository: string) => {
+    const ports = portsOver(world, "ada", []);
+    const record = {
+      ...world.record,
+      approvalsInForce: async () => [{ scopeDecisionId: "goal-decision", scopeId: "goal-scope" }],
+      readScope: async (scopeId: string) =>
+        scopeId === "goal-scope" ? goalScope(repository) : world.record.readScope(scopeId),
+    } as unknown as typeof ports.record;
+    return await operatorPage(
+      { ...ports, record },
+      "t",
+      {
+        kind: "scope",
+        messageId: "request-scope-goal",
+        rounds: null,
+        decisionId: null,
+        plan: null,
+      },
+      EN,
+      mint,
+      () => "MINT-SCOPE-1",
+      () => "MINT-LAP-1",
+    );
+  };
+  const checked = (html: string, act: string) =>
+    new RegExp(`value="${act}" class="size-3.5" checked=""`).test(html);
+  const here = await draw(SCOPE_PLAN.repository);
+  for (const act of ["push_branch", "open_pull_request", "merge_default_branch"]) {
+    expect(checked(here, act)).toBe(true);
+  }
+  expect(here).toContain(EN.scopeOutwardFromGoal);
+  // Another repository's goal is not this request's: today's default stands.
+  const there = await draw("/srv/other");
+  expect(checked(there, "push_branch")).toBe(false);
+  expect(there).not.toContain(EN.scopeOutwardFromGoal);
 });
 
 test("choosing review rounds redraws the budgets from the plan, with script off", async () => {

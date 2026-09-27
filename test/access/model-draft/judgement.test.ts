@@ -142,7 +142,7 @@ test("the document carries the thread, the templates, the agent types and the me
   expect(document).toContain(`--- template ${TEMPLATE}`);
   expect(document).toContain(`agent type ${UNPRICED}: tier frugal (not priced`);
   expect(document).toContain(`recorded from message r1 if a scope lists it`);
-  expect(document).toContain("first_lap_cost: 2.5 USD (cold start: not measured in this store)");
+  expect(document).toContain("first_lap_cost: 10 USD (cold start: not measured in this store)");
   expect(document).toContain("@@RONDO-0@@ BEGIN STANDING POLICIES\n(none)\n");
   expect(document).toContain("the language the request is written in");
   // Section 2.1.6: the formulas and the measurements, not the values they give.
@@ -281,7 +281,7 @@ test("a split: the model's plan and words, and a scope whose lists and budgets r
     { body: "One plan: fix the flaky test.", bases: ["r1"], asks: false },
   ]);
   const scope = outcome.scope;
-  // Cold start, one plan, three rounds: 2.50 + 2 x 2.50 (rule 4.2.5).
+  // Cold start, one plan, three rounds: 10.00 + 2 x 10.00 (rule 4.2.5).
   expect(scope?.payload).toEqual({
     requests: ["r1"],
     workspaces: [{ repository: "/srv/repo", workspace_root: "/srv/work" }],
@@ -289,8 +289,8 @@ test("a split: the model's plan and words, and a scope whose lists and budgets r
     budgets: {
       laps: 3,
       review_rounds: 3,
-      cost_usd: 7.5,
-      cost_reserve_usd: 2.5,
+      cost_usd: 30,
+      cost_reserve_usd: 10,
       expires_at_ms: T0 + 3 * COLD_START_LAP_DURATION_MS + REPLY_ALLOWANCE_MS,
     },
     severity_threshold: "major",
@@ -333,7 +333,7 @@ test("a narrowing moves a computed value down, with the person's words as its ba
     cost_usd: 3,
     laps: 3,
     expires_at_ms: T0 + 60 * 60 * 1000,
-    cost_reserve_usd: 2.5,
+    cost_reserve_usd: 10,
   });
   expect(payload["severity_threshold"]).toBe("minor");
   expect(payload["irreversible_additions"]).toEqual(["force_push"]);
@@ -345,7 +345,7 @@ test("a narrowing moves a computed value down, with the person's words as its ba
     "irreversible_additions",
   ]);
   // The computed values stay beside the narrowed ones, for a screen to show both.
-  expect(outcome.scope?.computed.cost_usd.value).toBe(7.5);
+  expect(outcome.scope?.computed.cost_usd.value).toBe(30);
 });
 
 test("the reserve is never narrowed: a lower reserve admits more laps at once (rule 4.1's table)", () => {
@@ -707,7 +707,7 @@ test("a narrowed round budget is R in every formula that reads it (rule 4.2.4)",
   expect(outcome.scope?.payload["budgets"]).toMatchObject({
     review_rounds: 1,
     laps: 1,
-    cost_usd: 2.5,
+    cost_usd: 10,
     expires_at_ms: T0 + COLD_START_LAP_DURATION_MS + REPLY_ALLOWANCE_MS,
   });
 });
