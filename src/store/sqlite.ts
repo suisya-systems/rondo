@@ -1527,13 +1527,14 @@ CREATE TABLE IF NOT EXISTS scope_decision (
 -- two writable members: admission, whose subject_id is the iteration id and
 -- whose row lands in reserve()'s BEGIN IMMEDIATE beside the iteration row
 -- (rule 3.2), merge_default_branch, a merge on green claimed before the
--- forge is asked, once per iteration (D-0126), and gate_answer, the
+-- forge is asked, once per iteration (D-0126), gate_answer, the
 -- organisation's answer claimed before the gate is walked, once per gate
--- (D-0125 rule 5), and triage_reading, a triage proposal whose ranking the flow
--- host injected from, claimed before the injection so its model spend counts
--- toward the goal scope's cost (rondo#469). **No CHECK spells the union**: proposal.kind's precedent, so that
--- the entries that make push_branch and open_pull_request writable change a
--- constant and not a table.
+-- (D-0125 rule 5), push_branch and open_pull_request, a scoped publish's
+-- two legs, each claimed before it runs, once per iteration (rondo#470), and
+-- triage_reading, a triage proposal whose ranking the flow host injected from,
+-- claimed before the injection so its model spend counts toward the goal
+-- scope's cost (rondo#469). **No CHECK spells the union**: proposal.kind's
+-- precedent, so that a new writable act kind changes a constant and not a table.
 --
 -- **Budgets are counted from these rows and never kept as counters** (rule 3.4,
 -- D-0022 rule 8): laps is a COUNT, cost is a join to iteration.lap_cost_usd.
@@ -3508,15 +3509,16 @@ export interface AdvisoryRecord {
   /**
    * Claim an act under an approved scope before taking it -- claim, then act,
    * as `D-0042` -- so a second attempt is refused: a merge on green
-   * (`merge_default_branch`, D-0126 rule 3, subject the iteration id) or the
+   * (`merge_default_branch`, D-0126 rule 3, subject the iteration id), the
    * organisation's gate answer (`gate_answer`, D-0125 rule 5, subject the gate
-   * id), or a triage reading the flow host injects from (`triage_reading`,
-   * rondo#469, subject the triage proposal id). **One per subject, whichever
-   * approval claims it**: the key alone would let a successor approval claim
-   * the same subject again.
+   * id), a scoped publish's push and pull request (`push_branch`,
+   * `open_pull_request`, rondo#470, subject the iteration id), or a triage
+   * reading the flow host injects from (`triage_reading`, rondo#469, subject
+   * the triage proposal id). **One per subject, whichever approval claims it**:
+   * the key alone would let a successor approval claim the same subject again.
    */
   claimScopedAct(claim: {
-    readonly actKind: "merge_default_branch" | "gate_answer" | "triage_reading";
+    readonly actKind: Exclude<(typeof WRITABLE_SCOPE_ACT_KINDS)[number], "admission">;
     readonly scopeDecisionId: string;
     readonly subjectId: string;
     readonly nowMs: number;
@@ -5109,7 +5111,7 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
               kind: "refused",
               reason:
                 `'${actKind}' of '${claim.subjectId}' is already claimed under a scope, and ` +
-                "it is taken once (D-0126 rule 3, D-0125 rule 5)",
+                "it is taken once (D-0126 rule 3, D-0125 rule 5, rondo#470)",
             };
       } catch (error) {
         return { kind: "defect", reason: describe(error) };

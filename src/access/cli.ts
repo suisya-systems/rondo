@@ -98,6 +98,7 @@ import {
   openAdvisoryRecord,
   openIterationStore,
   type ReadOutcome,
+  type RecordOutcome,
 } from "../store/sqlite.js";
 import {
   approvedRetry,
@@ -206,6 +207,7 @@ import type {
 import { workerRuns } from "./page-logic/laps.js";
 import { asksOverLine, conflictFixBlock, resultOf } from "./page-logic/result.js";
 import { requestWords, threadsOf } from "./page-logic/threads.js";
+import { publishHost } from "./publish-host.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
 import { notifierAt, reachThePerson, recordTabNotice } from "./reach.js";
 import { nextNumbers, numbersSection } from "./record-numbers.js";
@@ -1669,11 +1671,40 @@ export async function main(
     // **And the organisation's answer at a gate** (D-0125 rule 6, rondo#467):
     // a lap whose gate would be approved automatically is approved under its
     // scope, on the tick and right after a model reading lands here.
+    // **And publish inside a scope** (rondo#470, D-0126 part 2): an approved
+    // lap whose scope includes the push and the pull request is published
+    // through the press's own path, in the approver's name -- so only where
+    // there is one the allowlist accepts, the press's own condition.
+    const publisher =
+      sender === null || "refusal" in sender
+        ? null
+        : publishHost({
+            store,
+            record,
+            publish: async (iterationId, scoped) =>
+              await publishUnderScope(
+                environment,
+                store,
+                opened.path,
+                sender.actorId,
+                asked,
+                iterationId,
+                scoped,
+              ),
+            published: () => checks.kick(),
+            now: Date.now,
+            log: say,
+          });
     const gates = gateHost({
       store,
       record,
-      answer: async (lap, delegation) =>
-        await answerUnderScope(environment, store, opened.path, lap, delegation),
+      answer: async (lap, delegation) => {
+        const answered = await answerUnderScope(environment, store, opened.path, lap, delegation);
+        if (answered.kind === "delegated") {
+          publisher?.kick();
+        }
+        return answered;
+      },
       now: Date.now,
       log: say,
     });
@@ -1711,6 +1742,7 @@ export async function main(
         triage.kick();
         order?.kick();
         gates.kick();
+        publisher?.kick();
         flow?.kick();
         // **Reaching starts a minute in, and not in the burst above.** The
         // person who has just started rondo is looking at it this second, and
@@ -1725,6 +1757,7 @@ export async function main(
           triage.kick();
           order?.kick();
           gates.kick();
+          publisher?.kick();
           flow?.kick();
           // **Order on the tick buys nothing, and nothing here depends on
           // it**: every kick above returns before its own pass finishes, so
@@ -7912,6 +7945,51 @@ const publishing = new Map<
   { running: Promise<Published>; shown: string; despiteReview: boolean }
 >();
 
+/** A publish rondo makes under a scope, and no person's press (rondo#470). */
+export interface ScopedPublish {
+  readonly scopeId: string;
+  /**
+   * The consumption row of one leg, written right before it runs -- claim,
+   * then act (D-0042) -- and asking the scope again first: one that expired
+   * or was replaced while git and the forge were read authorises nothing.
+   */
+  readonly claim: (actKind: "push_branch" | "open_pull_request") => Promise<RecordOutcome>;
+}
+
+/**
+ * **Publish inside a scope** (rondo#470, D-0126 part 2): the press's own
+ * {@link publishPage}, in the approver's name, with nothing shown and nothing
+ * overruled. Every refusal of the press holds -- uncommitted work (D-0060),
+ * an unreadable `git status` (D-0099) and the review's verdict, which only a
+ * person's `--despite-review` or second press passes.
+ */
+export async function publishUnderScope(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  asked: PublishAsked,
+  iterationId: string,
+  scoped: ScopedPublish,
+): Promise<Published> {
+  if (publishing.has(iterationId)) {
+    return {
+      ok: false,
+      why: "publishRefusedStillRunning",
+      note: `a publish of '${iterationId}' is already running`,
+    };
+  }
+  // No digest is this sentinel, so a press never joins it and is refused as running.
+  const input = { iterationId, shown: "(under scope)", despiteReview: false };
+  const running = publishPage(environment, store, storePath, approver, asked, input, scoped);
+  publishing.set(iterationId, { running, shown: input.shown, despiteReview: false });
+  try {
+    return await running;
+  } finally {
+    publishing.delete(iterationId);
+  }
+}
+
 async function publishPage(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
@@ -7919,6 +7997,7 @@ async function publishPage(
   approver: string,
   asked: PublishAsked,
   input: PublishInput,
+  scoped: ScopedPublish | null = null,
 ): Promise<Published> {
   const actor = approvedActor(approver, environment);
   if ("refusal" in actor) {
@@ -7957,7 +8036,8 @@ async function publishPage(
     };
   }
   const plan = planned.plan;
-  if (publishShownDigest(plan) !== input.shown) {
+  // Under a scope no screen was shown: what is published is what is read now.
+  if (scoped === null && publishShownDigest(plan) !== input.shown) {
     return {
       ok: false,
       why: "publishRefusedChanged",
@@ -7995,6 +8075,10 @@ async function publishPage(
   if (closedSince !== null) {
     return { ok: false, why: "publishRefusedTarget", note: closedSince, detail: closedSince };
   }
+  const unclaimed = await claimLeg(scoped, "push_branch");
+  if (unclaimed !== null) {
+    return unclaimed;
+  }
   const pushed = await pushTopicBranch({
     workspace: plan.workspace,
     remote: plan.remote,
@@ -8012,6 +8096,10 @@ async function publishPage(
   }
   // A conflict fix opens nothing: the pull request it fixes is already open
   // (rondo#417, D-0105), and the push above moved its head.
+  const openUnclaimed = plan.updates === null ? await claimLeg(scoped, "open_pull_request") : null;
+  if (openUnclaimed !== null) {
+    return openUnclaimed;
+  }
   const opened =
     plan.updates === null
       ? await openPullRequest({
@@ -8082,19 +8170,39 @@ async function publishPage(
       kind: "published",
       pullRequestUrl,
       ...(plan.updates === null ? {} : { onto: plan.updates.onto }),
+      ...(scoped === null ? {} : { underScope: scoped.scopeId }),
     },
     Date.now(),
   );
   return { ok: true, note: "" };
 }
 
+/** A scoped publish's claim of one leg: null where it is claimed, or where no scope is involved. */
+async function claimLeg(
+  scoped: ScopedPublish | null,
+  actKind: "push_branch" | "open_pull_request",
+): Promise<Published | null> {
+  if (scoped === null) {
+    return null;
+  }
+  const claimed = await scoped.claim(actKind);
+  return claimed.kind === "recorded"
+    ? null
+    : {
+        ok: false,
+        why: "publishRefusedChanged",
+        note: `rondo did not ${actKind === "push_branch" ? "push" : "open the pull request"}: ${claimed.reason}`,
+      };
+}
+
 /**
  * Door three: push the branch, open the pull request, close the run.
  *
- * **Every leg is the operator's, and the operator is who typed this.** Nothing
- * else in rondo reaches `./forge.ts`, no other command calls this function, and
- * there is no flag, environment variable or code path that makes any of it
- * happen without the word `publish` on a command line. Merging is not here.
+ * **Every leg is the operator's, and the operator is who typed this.** No
+ * other command calls this function, and there is no flag or environment
+ * variable that makes any of it happen without the word `publish` on a
+ * command line. The page's press and a publish under a scope (rondo#470) reach
+ * the same legs through `publishPage`, not through here. Merging is not here.
  *
  * The three legs run in order and stop at the first failure, because each one
  * is the precondition of the next: there is no pull request to open for a

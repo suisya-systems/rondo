@@ -164,8 +164,9 @@ export function allowanceOf(approval: {
  *
  * - *your answer* is `waiting` at a gate, `done` once the lap has left one with
  *   an outcome, and `ahead` before it reaches one.
- * - *proposal* is `yours` where the approval does not permit
- *   `open_pull_request` -- rondo may not open one, so somebody has to -- `done`
+ * - *proposal* is `yours` where the approval does not permit both
+ *   `push_branch` and `open_pull_request` -- rondo publishes only under both
+ *   (rondo#470), so otherwise somebody has to -- `done`
  *   only where a proposal was **recorded as made**, and `ahead` otherwise.
  *   Permission plus an ended lap is not evidence: a lap can end failed,
  *   abandoned, or closed and still waiting for the separate publish press, and
@@ -201,7 +202,9 @@ export function governanceOf(
   const answered = record.gateOutcome !== null;
   const atGate = record.status === "awaiting_human";
   const mayPropose =
-    approval !== null && approval.payload.outward_acts.includes("open_pull_request");
+    approval !== null &&
+    approval.payload.outward_acts.includes("push_branch") &&
+    approval.payload.outward_acts.includes("open_pull_request");
   const byTry = laps.map((lap) => ({
     costUsd: lap.lapCostUsd,
     running: lap.lapCostUsd === null && COST_TO_COME.includes(lap.status),

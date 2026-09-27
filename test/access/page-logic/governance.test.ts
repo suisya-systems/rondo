@@ -161,11 +161,21 @@ test("the chain reads the lap's status, and its last step is rondo's only under 
     lap({ status: "closed", gateOutcome: "approve" }),
     null,
     1,
-    approval({ outward_acts: ["open_pull_request"] }),
+    approval({ outward_acts: ["push_branch", "open_pull_request"] }),
     false,
     [],
   );
   expect(ended.chain[1]).toEqual({ step: "proposal", state: "ahead" });
+  // rondo publishes only under both acts (rondo#470): one alone is still the person's.
+  const openOnly = governanceOf(
+    lap({ status: "closed", gateOutcome: "approve" }),
+    null,
+    1,
+    approval({ outward_acts: ["open_pull_request"] }),
+    false,
+    [],
+  );
+  expect(openOnly.chain[1]).toEqual({ step: "proposal", state: "yours" });
 
   // Before a gate, the answer is ahead rather than waiting: nothing is asking.
   expect(governanceOf(lap({ status: "planned" }), null, 1, approval(), false, []).chain[0]).toEqual(

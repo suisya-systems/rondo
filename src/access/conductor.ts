@@ -1144,6 +1144,8 @@ export type LapEvent =
       readonly kind: "published";
       readonly pullRequestUrl: string | null;
       readonly onto?: string;
+      /** rondo published it under this scope, and no person pressed (rondo#470). */
+      readonly underScope?: string;
     }
   /**
    * A person pressed merge on the page and the forge merged it (rondo#380,
@@ -1460,12 +1462,13 @@ export async function writeReport(
       modelReadingLines(reading).join("\n");
   } else if (event.kind === "published") {
     messageId = `report-published-${iterationId}`;
+    const by = event.underScope === undefined ? "" : ` by rondo under scope '${event.underScope}'`;
     body =
       event.onto === undefined
-        ? `Lap '${iterationId}' was published: its branch was pushed, pull request ` +
+        ? `Lap '${iterationId}' was published${by}: its branch was pushed, pull request ` +
           `${event.pullRequestUrl ?? "(no URL printed)"} was opened, ` +
           `and run '${row.runId ?? "(none recorded)"}' was closed completed.`
-        : `Lap '${iterationId}' was published: its commits were pushed onto '${event.onto}', ` +
+        : `Lap '${iterationId}' was published${by}: its commits were pushed onto '${event.onto}', ` +
           // The address is followed by a space: the page reads it up to one.
           `the branch of pull request ${event.pullRequestUrl ?? "(no URL printed)"} which ` +
           `stays open, and run '${row.runId ?? "(none recorded)"}' was closed completed.`;

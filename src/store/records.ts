@@ -1882,8 +1882,8 @@ export const IRREVERSIBLE_ACTS = Object.freeze([
 /**
  * What an act under a scope can be recorded as (D-0066 rule 3.2).
  *
- * `push_branch` and `open_pull_request` are **named and not writable** until
- * the entry that supersedes D-0025 rule 6 lets the organisation publish;
+ * `push_branch` and `open_pull_request` are a scoped publish (D-0126, part 2,
+ * rondo#470), each claimed before its leg runs, subject the iteration id;
  * `revise` is not named at all. `merge_default_branch` is a merge on green
  * (D-0126), whose `subject_id` is the iteration id; `gate_answer` is the
  * organisation's answer at a gate (D-0125 rule 5), whose `subject_id` is the
@@ -1906,12 +1906,16 @@ export type ScopeActKind = (typeof SCOPE_ACT_KINDS)[number];
  * `reserve()`'s own transaction; a merge on green's is the iteration id too,
  * written before the merge is asked of the forge (D-0126); a gate answer's is
  * the gate id, written before the gate is walked (D-0125 rule 5, rondo#467); a
+ * scoped publish's two are the iteration id, `push_branch` written before the
+ * push and `open_pull_request` before the pull request is opened (rondo#470); a
  * triage reading's is the triage proposal id, written by the flow host before
  * it injects a request that reading ranked, so the reading's model spend counts
  * toward the goal scope's cost (rondo#469).
  */
 export const WRITABLE_SCOPE_ACT_KINDS = Object.freeze([
   "admission",
+  "push_branch",
+  "open_pull_request",
   "merge_default_branch",
   "gate_answer",
   "triage_reading",

@@ -14,10 +14,15 @@ import {
   publishFromPage,
   publishingForPage,
   publishPlanFor,
+  publishUnderScope,
   releaseFromPage,
+  type ScopedPublish,
 } from "../../src/access/cli.js";
+import { reportToRequest } from "../../src/access/conductor.js";
 import { inspectLapWork } from "../../src/access/forge.js";
 import type {} from "../../src/access/inbox.js";
+import { resultOf } from "../../src/access/page-logic/result.js";
+import { threadsOf } from "../../src/access/page-logic/threads.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import { CLI_PATH_ENV } from "../../src/continuo/invoker.js";
@@ -1226,3 +1231,109 @@ test.skipIf(!canPublish)(
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
+
+/** A scope's claims, recorded in order, each answered as `answer` says (rondo#470). */
+function scopedClaims(answer: "recorded" | "refused" = "recorded") {
+  const claimed: string[] = [];
+  const scoped: ScopedPublish = {
+    scopeId: "scope-1",
+    claim: async (actKind) => {
+      claimed.push(actKind);
+      return answer === "recorded"
+        ? { kind: "recorded" }
+        : { kind: "refused", reason: "the scope no longer allows it" };
+    },
+  };
+  return { claimed, scoped };
+}
+
+test(
+  "rondo#470: a publish under a scope keeps the review's refusal, and claims nothing before it",
+  async () => {
+    // Passing the review is a person's act: only --despite-review or the second press.
+    const world = await publishableWorld("stale");
+    const { claimed, scoped } = scopedClaims();
+    const published = await publishUnderScope(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.storePath,
+      "ada",
+      world.asked,
+      world.iterationId,
+      scoped,
+    );
+    expect(published.ok).toBe(false);
+    expect(published.why).toBe("publishRefusedNotRead");
+    expect(claimed).toEqual([]);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "rondo#470: a publish under a scope claims nothing where continuo is not there to close the run",
+  async () => {
+    const world = await publishableWorld("clear");
+    const { claimed, scoped } = scopedClaims();
+    const published = await publishUnderScope(
+      { RONDO_APPROVER: "ada", [CLI_PATH_ENV]: "" },
+      world.store,
+      world.storePath,
+      "ada",
+      world.asked,
+      world.iterationId,
+      scoped,
+    );
+    expect(published.ok).toBe(false);
+    expect(published.why).toBe("publishRefusedNoContinuo");
+    expect(claimed).toEqual([]);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test.skipIf(!canPublish)(
+  "rondo#470: a publish under a scope pushes only once the push is claimed" +
+    (canPublish ? "" : ` [skipped: ${CLI_PATH_ENV} is unset]`),
+  async () => {
+    const forge = mkdtempSync(join(tmpdir(), "rondo-scoped-forge-"));
+    const bare = join(forge, "throwaway.git");
+    execFileSync("git", ["init", "--quiet", "--bare", "--initial-branch", "main", bare]);
+    const world = await publishableWorld("clear", 1, bare);
+    const asked = { ...world.asked, allowRemoteMismatch: true };
+    const environment = { RONDO_APPROVER: "ada", [CLI_PATH_ENV]: publishCli ?? "" };
+    const { claimed, scoped } = scopedClaims("refused");
+    const published = await publishUnderScope(
+      environment,
+      world.store,
+      world.storePath,
+      "ada",
+      asked,
+      world.iterationId,
+      scoped,
+    );
+    expect(published.ok).toBe(false);
+    expect(published.note).toContain("rondo did not push");
+    expect(claimed).toEqual(["push_branch"]);
+    // Nothing reached the remote.
+    expect(execFileSync("git", ["-C", bare, "branch", "--list"], { encoding: "utf8" })).toBe("");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test("rondo#470: the thread says rondo published it under the scope, and the page still reads the pull request", async () => {
+  const world = fresh();
+  await approvedLap(world);
+  const url = "https://github.com/suisya-systems/rondo/pull/9";
+  await reportToRequest(
+    world,
+    "i-0001",
+    { kind: "published", pullRequestUrl: url, underScope: "scope-1" },
+    6_000,
+  );
+  const read = await world.record.threadMessages();
+  if (read.kind !== "read") {
+    throw new Error("the thread would not read");
+  }
+  const said = read.messages.find((message) => message.messageId === "report-published-i-0001");
+  expect(said?.body).toContain("Lap 'i-0001' was published by rondo under scope 'scope-1': ");
+  expect(resultOf(threadsOf(read.messages, new Set(), new Map()).byId, "i-0001")?.url).toBe(url);
+});
