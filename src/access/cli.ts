@@ -8134,15 +8134,15 @@ export type PublishPlanned =
  * How one caller comes by the body's English, given what is known about the
  * language the lap's report is written in (`D-0079` section 4, rondo#290).
  *
- * **A function rather than the legs it needs**, because the two surfaces come by
- * it differently and only the language is common. The terminal's `publish` reads
- * the report through its own continuo and composes there and then: it runs once
- * per publish, and nothing compares its body against an earlier read of it. The
- * page's preview composes **once** and records the row ({@link publishBodyOnce}),
- * and the page's press reads that row and composes nothing
- * ({@link recordedPublishBody}) -- because the body is inside the digest the
- * press compares against what the screen showed, and a second model answer to
- * one question would refuse every press.
+ * **A function rather than the legs it needs**, because the callers reach a
+ * report and a drafter differently and only the language is common. What they do
+ * with them is the same on every route: the row this lap's body is recorded on is
+ * read first, and a composing happens only where nothing has composed yet
+ * ({@link publishBodyOnce}). That is why a lap previewed on the page and
+ * published from a terminal carries one body rather than two -- and why the
+ * page's press reads the row and composes nothing at all
+ * ({@link recordedPublishBody}), the body being inside the digest it compares
+ * against what the screen showed.
  */
 export type PublishBodyComposing = (
   reportLanguage: string | null,

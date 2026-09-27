@@ -18951,8 +18951,16 @@ put to the human gate, and its answer". Refs `D-0053`,
 > **What the two surfaces read is the row and never a run's own answer**, which is how they are kept
 > from disagreeing: `publishBodyOnce` answers with the row it read back, so a row that would not write
 > leaves the preview with no body -- exactly what a press with no row has -- and the two render one
-> body without an account rather than two different bodies. The terminal's `publish` composes once per
-> publish and compares its body against nothing, so it needs no row.
+> body without an account rather than two different bodies.
+>
+> **One row for every route, so one lap has one body.** The terminal's `publish` reads and writes that
+> same row (`commandPublishBody`), and does not compose what is already recorded. Composing afresh
+> there would have left the difference this issue exists to remove in the one place hardest to see it:
+> a lap previewed on the page and then published from a terminal would have reached the forge with a
+> second English account of the same report, a model's answer to one question taken twice, replacing
+> the account a person had read on the screen. So the row is read first on every route, and a
+> composing happens only where nothing has composed yet; what a route supplies is how it reaches a
+> report and a drafter, and everything from that row to the row it writes is one function.
 >
 > **Both routes read the report the same way, as a value and not as a continuo handle.** The report is
 > the answered gate's `rationale`, found by the lap's own `gate_id` in the lap's own database
