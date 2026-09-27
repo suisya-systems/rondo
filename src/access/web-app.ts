@@ -974,6 +974,21 @@ export interface ConflictFixed {
 /** Start the attempt that settles a published pull request's conflict. */
 export type ConflictFixFromWeb = (input: ConflictFixInput) => Promise<ConflictFixed>;
 
+/** Why a *take the review again* press took nothing, as the wording key the page says it in. */
+export type RetakeRefusal = "retakeRefusedGone" | "retakeRefusedBudget" | "retakeRefusedNoContinuo";
+
+/** What one *take the review again* press came to (D-0138 rule 3). */
+export interface Retaken {
+  readonly ok: boolean;
+  readonly note: string;
+  readonly why?: RetakeRefusal;
+  /** The rounds taken and the scope's budget, where the budget refused it. */
+  readonly rounds?: { readonly taken: number; readonly budget: number };
+}
+
+/** Take a gated lap's model reading again, once, on the person's press. */
+export type RetakeReviewFromWeb = (iterationId: string) => Promise<Retaken>;
+
 /**
  * The fourth thing this surface may write (D-0059 section 5a, the rondo#233 S4
  * row): a gate answered with what to change, and the second lap it starts under
@@ -990,15 +1005,39 @@ export type ConflictFixFromWeb = (input: ConflictFixInput) => Promise<ConflictFi
 export class RevisePort {
   readonly #revise: ReviseFromWeb;
   readonly #fixConflict: ConflictFixFromWeb | null;
+  readonly #retakeReview: RetakeReviewFromWeb | null;
 
   /**
    * `fixConflict` rides on this capability (rondo#417, D-0105): the attempt it
    * starts is a revise of an approved lap, counted against the same approval,
    * and the holder that may start one may start the other.
    */
-  constructor(revise: ReviseFromWeb, fixConflict: ConflictFixFromWeb | null = null) {
+  constructor(
+    revise: ReviseFromWeb,
+    fixConflict: ConflictFixFromWeb | null = null,
+    /**
+     * Rides here too (D-0138 rule 3): a model reading taken again is a review
+     * round of the approval the lap ran under, as a revise is.
+     */
+    retakeReview: RetakeReviewFromWeb | null = null,
+  ) {
     this.#revise = revise;
     this.#fixConflict = fixConflict;
+    this.#retakeReview = retakeReview;
+  }
+
+  /** Whether this port can take a model reading again, so the gate draws the press only then. */
+  get retakesReviews(): boolean {
+    return this.#retakeReview !== null;
+  }
+
+  /** Take a gated lap's model reading again, on one press. */
+  async retakeReview(press: Press, iterationId: string): Promise<Retaken> {
+    if (!minted.has(press) || this.#retakeReview === null) {
+      return { ok: false, note: "nothing was taken: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#retakeReview(iterationId);
   }
 
   /** Whether this port can start a conflict fix, so the page draws the card only then. */
@@ -1549,6 +1588,13 @@ const FLOW_ANSWER_ROUTE = "/flow-answer";
 export const FIX_CONFLICT_ROUTE = "/fix-conflict";
 
 /**
+ * *Take the review again* (rondo#500, D-0138 rule 3): a press on the gate's
+ * model review card, drawn only where its one reading could not be taken for
+ * a reason a second run could change.
+ */
+const RETAKE_REVIEW_ROUTE = "/retake-review";
+
+/**
  * Where an open tab reports what its notice did (rondo#414). Not a press: the
  * tab reports on its own, with no person's click behind it, so it is minted
  * as a send is (a same-origin script with the token) and it writes only a
@@ -1580,6 +1626,7 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   // A press whose body is the person's words (rondo#487): the send's size.
   FLOW_ANSWER_ROUTE,
   FIX_CONFLICT_ROUTE,
+  RETAKE_REVIEW_ROUTE,
 ]);
 
 /** A whole count of at least 0, as a form posts one, or null when it is not one. */
@@ -2835,6 +2882,42 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // lap whose pull request conflicts, under the approval it ran under. Three
   // ids and none typed, as the revise press's: the lap, the approval, and the
   // attempt minted when the card was drawn, so a double press is one attempt.
+  // **Take the review again** (rondo#500, D-0138 rule 3): the lap is the one
+  // id, and everything the card was drawn on is asked again in the port.
+  app.post(RETAKE_REVIEW_ROUTE, async (c) => {
+    const form = await c.req.parseBody();
+    const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+    const request = typeof form["request"] === "string" ? form["request"] : "";
+    if (revise === null || !revise.retakesReviews) {
+      return retakeRefused(c, 403, "retakeRefusedNoApprover", request);
+    }
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return retakeRefused(c, minting.status, "retakeRefusedPress", request);
+    }
+    if (iterationId === "") {
+      return retakeRefused(c, 400, "retakeRefusedForm", request);
+    }
+    const retaken = await revise.retakeReview(minting.press, iterationId);
+    if (!retaken.ok) {
+      return retakeRefused(
+        c,
+        409,
+        retaken.why ?? "retakeRefusedGone",
+        request,
+        retaken.rounds ?? null,
+        retaken.note,
+      );
+    }
+    return c.redirect(
+      viewHref(
+        request === "" ? { kind: "summary" } : { kind: "thread", messageId: request, to: null },
+        tagOf(c),
+      ),
+      303,
+    );
+  });
+
   app.post(FIX_CONFLICT_ROUTE, async (c) => {
     const form = await c.req.parseBody();
     const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
@@ -3072,6 +3155,34 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
    * person may have edited only exists in the browser's own history: a refusal
    * that landed them on the summary would lose words they wrote.
    */
+  /** A *take the review again* press's refusal, with the way back to the thread. */
+  function retakeRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why: "retakeRefusedNoApprover" | "retakeRefusedPress" | "retakeRefusedForm" | RetakeRefusal,
+    requestMessageId: string,
+    rounds: { readonly taken: number; readonly budget: number } | null = null,
+    note: string | null = null,
+  ) {
+    const wording = wordingOf(c);
+    return pressRefused(
+      c,
+      status,
+      wording.retakeReviewAction,
+      why === "retakeRefusedBudget"
+        ? wording.retakeRefusedBudget(rounds?.taken ?? 0, rounds?.budget ?? 0)
+        : wording[why],
+      viewHref(
+        requestMessageId === ""
+          ? { kind: "summary" }
+          : { kind: "thread", messageId: requestMessageId, to: null },
+        wording.lang,
+      ),
+      wording.retakeReviewBack,
+      note,
+    );
+  }
+
   /** A conflict-fix press's refusal, with the way back to the thread it was pressed in. */
   function conflictFixRefused(
     c: Context<PageEnv>,

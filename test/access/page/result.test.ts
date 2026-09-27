@@ -726,7 +726,7 @@ test("while the fix's attempt runs, no press is drawn and the band says rondo is
   expect(head(japanese)).not.toContain("push してください");
 });
 
-test("another part at its gate is not the fix: the band says why nothing started and whose move it is (rondo#500)", async () => {
+test("another part at its gate is not the fix, and does not withhold it (rondo#500, D-0138 rule 2)", async () => {
   const world = await conflicting();
   // A second part of the same request, later and still at its gate, that does
   // not descend from the published lap.
@@ -748,13 +748,32 @@ test("another part at its gate is not the fix: the band says why nothing started
   expect(part.kind).toBe("reserved");
   await openGate(world, "i-p2");
   const japanese = await fixing(world);
-  expect(japanese).not.toContain("/fix-conflict?");
   expect(head(japanese)).not.toContain("競合を解消しています");
-  expect(head(japanese)).toContain("rondo はまだ解消を始めていません。");
+  expect(japanese).toContain('action="/fix-conflict?lang=ja"');
+  expect(head(japanese)).toContain("すぐ下の「次にやること」のボタンで rondo に解消させるか");
   const english = await fixing(world, "en");
   expect(head(english)).not.toContain("rondo is settling the conflict");
+});
+
+test("a question about this line withholds the fix, and the band says why and whose move it is (rondo#500)", async () => {
+  const world = await conflicting();
+  const asked = await world.record.recordThreadMessage({
+    messageId: "ask-line",
+    body: "Which file did you mean?",
+    authorKind: "drafter",
+    authorId: "the drafter",
+    inReplyTo: "req-r",
+    atMs: 8_000,
+    bases: [{ form: "iteration", iterationId: "i-r" }],
+    asks: true,
+  });
+  expect(asked).toMatchObject({ kind: "recorded" });
+  const japanese = await fixing(world);
+  expect(japanese).not.toContain("/fix-conflict?");
+  expect(head(japanese)).toContain("rondo はまだ解消を始めていません。");
+  const english = await fixing(world, "en");
   expect(head(english)).toContain(
-    "rondo has not started resolving it: another gate or question of this request is waiting on you.",
+    "rondo has not started resolving it: a question about this work is waiting on you.",
   );
 });
 

@@ -894,7 +894,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   resultConflictFixing: (base) =>
     `rondo is settling the conflict in a new attempt that brings ${base} in. Its result is yours to check here before anything is pushed.`,
   resultConflictWaits: (base) =>
-    `rondo has not started resolving it: another gate or question of this request is waiting on you. Once you answer it, rondo can resolve it here; or resolve it yourself on the pull request's branch (merge ${base} in, or rebase) and push.`,
+    `rondo has not started resolving it: a question about this work is waiting on you. Once you answer it, rondo can resolve it here; or resolve it yourself on the pull request's branch (merge ${base} in, or rebase) and push.`,
   resultMoved: (from, to, count) =>
     `The branch moved after rondo read it: ${from} is now ${to}, with ${String(count)} commit${count === 1 ? "" : "s"} this work did not make:`,
   resultMovedNone: (from, to) =>
@@ -1382,7 +1382,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   resultConflictFixing: (base) =>
     `rondo が ${base} を取り込む新しい回で、競合を解消しています。その結果は、push の前にここで確認してもらいます。`,
   resultConflictWaits: (base) =>
-    `rondo はまだ解消を始めていません。この依頼の別の確認か質問が、あなたの答えを待っているためです。それに答えれば、rondo がここで解消できます。自分で解消する場合は、プルリクエストのブランチ側で ${base} を取り込むかリベースして、push してください。`,
+    `rondo はまだ解消を始めていません。この作業についての質問が、あなたの答えを待っているためです。それに答えれば、rondo がここで解消できます。自分で解消する場合は、プルリクエストのブランチ側で ${base} を取り込むかリベースして、push してください。`,
   resultMoved: (from, to, count) =>
     `rondo が読んだあとにブランチが進みました。${from} → ${to} で、この作業のものではないコミットが ${String(count)} 件:`,
   resultMovedNone: (from, to) =>

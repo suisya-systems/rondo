@@ -1341,6 +1341,15 @@ export interface Chrome extends PageWords {
   readonly conflictFixRefusedNotSetUp: string;
   readonly conflictFixRefusedOutside: (test: string) => string;
   readonly conflictFixRefusedNotStarted: string;
+  readonly retakeReviewAction: string;
+  readonly retakeReviewBusy: string;
+  readonly retakeReviewBack: string;
+  readonly retakeRefusedNoApprover: string;
+  readonly retakeRefusedPress: string;
+  readonly retakeRefusedForm: string;
+  readonly retakeRefusedGone: string;
+  readonly retakeRefusedBudget: (taken: number, budget: number) => string;
+  readonly retakeRefusedNoContinuo: string;
   /**
    * The approved fix's publish (rondo#417, D-0105): it pushes onto the pull
    * request that is already open and opens none, so every sentence that says

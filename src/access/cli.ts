@@ -198,7 +198,7 @@ import {
 } from "./model-draft/host.js";
 import { isModelDrafterName } from "./model-draft/judgement.js";
 import { modelReviewPorts, takeModelReading } from "./model-review/host.js";
-import { modelReadingLines } from "./model-review/judgement.js";
+import { modelReadingLines, retakeOffered, reviewRoundsAlong } from "./model-review/judgement.js";
 import { orderHost } from "./order-host.js";
 import type {
   ClaimReach,
@@ -253,6 +253,7 @@ import {
   type Released,
   type ReleaseInput,
   ReleasePort,
+  type Retaken,
   type Revised,
   type ReviseInput,
   RevisePort,
@@ -1960,6 +1961,14 @@ export async function main(
                   await reviseFromPage(environment, store, opened.path, sender.actorId, input),
                 async (input) =>
                   await conflictFixFromPage(environment, store, opened.path, sender.actorId, input),
+                async (iterationId) =>
+                  await retakeReviewFromPage(
+                    environment,
+                    store,
+                    opened.path,
+                    sender.actorId,
+                    iterationId,
+                  ),
               ),
         // **The press is checked inside this port too** (rondo#233 S5), and it
         // is now null on exactly `revise`'s own condition: an approver the
@@ -2061,6 +2070,7 @@ export async function main(
               ),
         mergeable: sender !== null && !("refusal" in sender),
         fixesConflicts: sender !== null && !("refusal" in sender),
+        retakesReviews: sender !== null && !("refusal" in sender),
         merge:
           sender === null || "refusal" in sender
             ? null
@@ -5986,24 +5996,20 @@ async function conflictFixPage(
   }
   const threads = threadsOf(read.messages, new Set(), new Map());
   const line = await store.laneLine(record.id);
+  const lineIds = line.kind === "read" ? line.line.laps.map((lap) => lap.id) : [record.id];
+  // A gate of this line only (D-0138 rule 2): another part's gate is its own.
   const gated = (await store.readLive()).some(
     (live) =>
       live.kind === "read" &&
       live.record.status === "awaiting_human" &&
-      live.record.requestMessageId === record.requestMessageId,
+      lineIds.includes(live.record.id),
   );
   const block = !approvedForPublication(record)
     ? "notConflicting"
     : conflictFixBlock(resultOf(threads.byId, record.id), {
         // A gate waiting, or a question about this line (D-0105); a question
         // about the request as a whole does not withhold the fix.
-        asksWaiting:
-          gated ||
-          asksOverLine(
-            threads,
-            record.requestMessageId,
-            line.kind === "read" ? line.line.laps.map((lap) => lap.id) : [record.id],
-          ),
+        asksWaiting: gated || asksOverLine(threads, record.requestMessageId, lineIds),
         holding: (await store.laneLedger()).some(
           (one) => one.releasedBy === null && one.lapIds.includes(record.id),
         ),
@@ -6140,6 +6146,115 @@ async function conflictFixPage(
     );
   }
   return { ok: true, note: `iteration '${input.successorId}' was admitted` };
+}
+
+/**
+ * One press of the gate's *take the review again* (rondo#500, D-0138 rule 3):
+ * the lap's one model reading could not be taken for a reason a second run
+ * could change, so it is taken once more, as the gate opening took it.
+ *
+ * **What was drawn is asked again here** over fresh rows (`retakeOffered`),
+ * and the round is counted before anything runs: under an approval, the
+ * lineage's rounds with this one added must fit the scope's review rounds
+ * (D-0065 section 5, rule 5.5: outside a scope nothing is counted). A double
+ * press of one card finds the first in flight and is the first.
+ */
+export async function retakeReviewFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  iterationId: string,
+): Promise<Retaken> {
+  const already = retaking.get(iterationId);
+  if (already !== undefined) {
+    return await already;
+  }
+  const running = retakeReviewPage(environment, store, storePath, approver, iterationId);
+  retaking.set(iterationId, running);
+  try {
+    return await running;
+  } finally {
+    retaking.delete(iterationId);
+  }
+}
+
+/** Every retake press this process has in flight, by the lap's id. */
+const retaking = new Map<string, Promise<Retaken>>();
+
+async function retakeReviewPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  iterationId: string,
+): Promise<Retaken> {
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return { ok: false, why: "retakeRefusedGone", note: actor.refusal };
+  }
+  const found = await store.read(iterationId);
+  if (found.kind !== "read" || found.record.status !== "awaiting_human") {
+    return {
+      ok: false,
+      why: "retakeRefusedGone",
+      note: `iteration '${iterationId}' is not waiting at its gate`,
+    };
+  }
+  const record = found.record;
+  if (!retakeOffered(await store.readingsFor(record.id))) {
+    return {
+      ok: false,
+      why: "retakeRefusedGone",
+      note: `taking the review again is not offered on '${record.id}'`,
+    };
+  }
+  const advisory = openAdvisoryRecord(storePath);
+  const tip = await approvalTip(advisory, record.id);
+  if (tip.kind === "tip") {
+    const decided = await advisory.readScopeDecision(tip.scopeDecisionId);
+    const scope =
+      decided.kind === "read" ? await advisory.readScope(decided.decision.scopeId) : null;
+    const lineage = await advisory.lineageOf(record.id);
+    if (scope?.kind !== "read" || lineage === null) {
+      return {
+        ok: false,
+        why: "retakeRefusedGone",
+        note: `the approval '${tip.scopeDecisionId}' or the lap's lineage did not read`,
+      };
+    }
+    const links = [];
+    for (const id of lineage) {
+      links.push({ readings: await store.readingsFor(id) });
+    }
+    const taken = reviewRoundsAlong(links);
+    const budget = scope.scope.payload.budgets.review_rounds;
+    if (taken + 1 > budget) {
+      return {
+        ok: false,
+        why: "retakeRefusedBudget",
+        rounds: { taken, budget },
+        note: `${String(taken)} of ${String(budget)} review round(s) are taken`,
+      };
+    }
+  }
+  const startup = await startContinuo(environment);
+  if (startup.kind === "refused") {
+    return {
+      ok: false,
+      why: "retakeRefusedNoContinuo",
+      note: `continuo is not usable: ${startup.reason}`,
+    };
+  }
+  const ports = conductorPorts(startup.continuo, store, advisory, Date.now, hostWords(environment));
+  const lines = await takeModelReading(
+    modelReviewPorts(startup.continuo, store, ports.thread ?? null),
+    record.id,
+  );
+  for (const line of lines) {
+    say(line);
+  }
+  return { ok: true, note: `the model reading of '${record.id}' was taken again` };
 }
 
 /**

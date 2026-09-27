@@ -38,8 +38,8 @@ export function ResultLine({
   readonly result: LapResult | null;
   /**
    * Where rondo's fix of a conflict stands (rondo#417, D-0105): offered by the
-   * card above, an attempt at it running, or withheld while another gate or
-   * question of the request waits on the person (rondo#500); null for none.
+   * card above, an attempt at it running, or withheld while a question of its
+   * line waits on the person (rondo#500); null for none.
    */
   readonly conflictFix?: "offered" | "running" | "waits" | null;
 }) {

@@ -11,12 +11,14 @@ import {
   DEFAULT_REVIEW_ROUND_BUDGET,
   DEFAULT_REVIEW_THRESHOLD,
   findingsLanguageSentence,
+  isReadOnlyCommand,
   MODEL_REVIEW_INPUT_BOUND_BYTES,
   modelReadingLines,
   modelReadingOf,
   prepareReview,
   type ReviewMaterial,
   type ReviewPreparation,
+  retakeOffered,
   reviewDocument,
   reviewPolicyOf,
   reviewRoundDecision,
@@ -452,6 +454,49 @@ test("rounds are counted one per link holding a model reading", () => {
   ).toBe(2);
 });
 
+// --- D-0138 rule 3: taking the review again -----------------------------------
+
+const notTaken = (reason: string): LapReading =>
+  stored({
+    drafter: "rondo/model/1/gpt-6-astra",
+    verdict: "unavailable",
+    findings: [],
+    evidence: null,
+    unavailableReason: reason,
+  });
+const BEFORE_OMISSIONS =
+  "the review material is 407894 bytes, over the reviewer's bound of 400000; it is not " +
+  "truncated (D-0065 1.4).";
+
+test("taking the review again is offered once, only where a second run could change it", () => {
+  for (const reason of [
+    BEFORE_OMISSIONS,
+    "the reviewer did not answer: timed out after 600000 ms",
+    "the reviewer's answer did not parse as the output contract (D-0065 2.4).",
+  ]) {
+    expect(retakeOffered([notTaken(reason)]), reason).toBe(true);
+    // Once: a second reading, whatever it came to, is not offered a third.
+    expect(retakeOffered([notTaken(reason), notTaken(reason)]), reason).toBe(false);
+  }
+  for (const reason of [
+    // Over the bound with rule 1 already applied: the same on a second run.
+    "the review material is 500000 bytes, over the reviewer's bound of 400000 even without " +
+      "the outputs of 3 read-only commands (24300 characters); it is not truncated (D-0065 1.4, D-0138).",
+    "the plan names no review criterion, so there is nothing to grade against (D-0029 rule 13).",
+  ]) {
+    expect(retakeOffered([notTaken(reason)]), reason).toBe(false);
+  }
+  expect(retakeOffered([stored(GRADED)])).toBe(false);
+  expect(retakeOffered([])).toBe(false);
+});
+
+test("a reading taken again is one more round of its lap", () => {
+  const again = [notTaken(BEFORE_OMISSIONS), stored(GRADED)];
+  expect(reviewRoundsAlong([{ readings: again }])).toBe(2);
+  // Two readings of one lap that are not a retake stay one round (D-0065 4.1).
+  expect(reviewRoundsAlong([{ readings: [stored(GRADED), stored(GRADED)] }])).toBe(1);
+});
+
 test("a hunk's post-image range ends at start + count - 1, a count of 0 holds no line", () => {
   // DIFF's hunk is `+10,3`: lines 10 to 12.
   expect(resolvesAlone({ kind: "file", path: "src/auth.ts", line: 10 })).toBe(true);
@@ -549,6 +594,95 @@ test("the input bound is in UTF-8 bytes: at the bound is ready, one byte over is
     expect(over.draft.unavailableReason).toContain(
       `is ${String(MODEL_REVIEW_INPUT_BOUND_BYTES + 1)} bytes`,
     );
+  }
+});
+
+// --- D-0138 rule 1: what is left out before over-bound material is refused ----
+
+const run = (index: number, command: string, output: string, outputOmittedChars = 0) => ({
+  index,
+  command,
+  output,
+  outputOmittedChars,
+  isError: false,
+});
+const withCommands = (commands: ReturnType<typeof run>[]): ReviewPreparation =>
+  prepareReview({
+    reviewer: reviewerRow(),
+    lapModel: LAP_MODEL,
+    criterion: CRITERION,
+    material: material({ transcript: { kind: "read", commands } }),
+  });
+const page = "y".repeat(8_000);
+const reads = (from: number, count: number) =>
+  Array.from({ length: count }, (_, i) =>
+    run(from + i, `Read {"file_path":"/w/src/f${String(i)}.ts"}`, page, 100),
+  );
+
+test("over the bound, reads' outputs are left out first, each named, and what acted is kept", () => {
+  const prepared = withCommands([
+    ...reads(1, 60),
+    run(61, 'Agent {"description":"look around"}', "the subagent's summary"),
+    run(62, "npm run verify", "EXIT=0 all green"),
+  ]);
+  expect(prepared.kind).toBe("ready");
+  if (prepared.kind !== "ready") return;
+  expect(prepared.document).not.toContain(page);
+  expect(prepared.document).toContain(
+    "[rondo omitted this output (8100 characters, one of the read-only commands)",
+  );
+  expect(prepared.document).toContain("Do not base a finding on it or on its absence.");
+  // The call stays, so an event basis still resolves; the act and the subagent are kept.
+  expect(prepared.document).toContain('--- event 1\n$ Read {"file_path":"/w/src/f0.ts"}');
+  expect(prepared.document).toContain("EXIT=0 all green");
+  expect(prepared.document).toContain("the subagent's summary");
+  // Under the bound nothing is left out.
+  const small = withCommands([run(1, 'Read {"file_path":"a"}', page)]);
+  expect(small.kind === "ready" && small.document).toContain(page);
+});
+
+test("subagents' outputs go next, and what still does not fit is refused naming what was left out", () => {
+  const agents = (from: number, count: number) =>
+    Array.from({ length: count }, (_, i) => run(from + i, 'Agent {"prompt":"p"}', page));
+  const second = withCommands([...reads(1, 3), ...agents(4, 55)]);
+  expect(second.kind).toBe("ready");
+  expect(second.kind === "ready" && second.document).toContain("one of the subagents");
+  const acts = Array.from({ length: 60 }, (_, i) => run(100 + i, "npm test", page));
+  const over = withCommands([...reads(1, 3), ...acts]);
+  expect(over.kind).toBe("refused");
+  if (over.kind === "refused") {
+    expect(over.draft.unavailableReason).toContain(
+      "even without the outputs of 3 read-only commands (24300 characters)",
+    );
+    expect(over.draft.unavailableReason).toContain("it is not truncated (D-0065 1.4, D-0138)");
+  }
+});
+
+test("a read is a read tool or a pipeline of reading programs, never anything that could write", () => {
+  for (const read of [
+    'Read {"file_path":"a"}',
+    'Grep {"pattern":"x"}',
+    'Glob {"pattern":"*"}',
+    "grep -rn foo src",
+    "cat a.ts | head -20",
+    "sed -n 1,40p a.ts",
+    "ls -la",
+  ]) {
+    expect(isReadOnlyCommand(read), read).toBe(true);
+  }
+  for (const act of [
+    'Edit {"file_path":"a"}',
+    'Agent {"prompt":"p"}',
+    "npm run verify",
+    "cat a > b",
+    "grep x a && rm a",
+    "sed -i s/a/b/ f",
+    "sed -n -i 1p f",
+    "ls; rm -f x",
+    "cat $(echo a)",
+    "grep x a || true",
+  ]) {
+    expect(isReadOnlyCommand(act), act).toBe(false);
   }
 });
 

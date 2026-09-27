@@ -170,6 +170,104 @@ export function transcriptEntry(c: LapCommand): string {
   return `--- event ${String(c.index)}${c.isError ? " (error)" : ""}\n$ ${c.command}\n${output}`;
 }
 
+const READ_TOOLS = new Set(["Read", "Grep", "Glob"]);
+const READ_SHELL = new Set(["grep", "rg", "cat", "head", "tail", "ls", "wc"]);
+
+/**
+ * A command that only read the repository (D-0138 rule 1): a Read, Grep or Glob
+ * tool call, or a shell pipeline of reading programs with nothing that could
+ * write, chain or substitute. Anything else is an act, and its output is kept.
+ *
+ * ponytail: judged from the command text alone, so `sed -n 'w f'` counts as a
+ * read; a finer reading needs continuo to report which calls wrote.
+ */
+export function isReadOnlyCommand(command: string): boolean {
+  const tool = /^([A-Z][A-Za-z]*) \{/.exec(command)?.[1];
+  if (tool !== undefined) {
+    return READ_TOOLS.has(tool);
+  }
+  if (/[;&<>`\n]|\$\(/.test(command)) {
+    return false;
+  }
+  return command.split("|").every((part) => {
+    const words = part.trim().split(/\s+/);
+    const head = words[0] ?? "";
+    return (
+      READ_SHELL.has(head) ||
+      (head === "sed" && words.includes("-n") && !words.some((w) => /^-(-in-place|\w*i)/.test(w)))
+    );
+  });
+}
+
+/** A subagent's call, whose output is its own summary of what it read (D-0138 rule 1). */
+function isSubagentCall(command: string): boolean {
+  return command.startsWith("Agent {");
+}
+
+/**
+ * What rondo leaves out, in order, when the document is over the bound
+ * (D-0138 rule 1): outputs of reads first, then subagents' outputs. Never the
+ * diff, the commits, the prompt, the criterion, the rule files, or the output
+ * of a command that acted.
+ */
+const OMISSIONS = [
+  { what: "read-only commands", omits: isReadOnlyCommand },
+  { what: "subagents", omits: isSubagentCall },
+] as const;
+
+/** A command's output as it was before continuo cut it, in code points. */
+function outputChars(c: LapCommand): number {
+  return Array.from(c.output).length + c.outputOmittedChars;
+}
+
+function omitted(c: LapCommand, what: string): LapCommand {
+  return {
+    ...c,
+    output:
+      `[rondo omitted this output (${String(outputChars(c))} characters, one of the ${what}) ` +
+      "so the material fits the reviewer's bound (D-0138). Do not base a finding on it or on " +
+      "its absence. ...]",
+    outputOmittedChars: 0,
+  };
+}
+
+/** The document within the bound, or what was left out and still did not fit. */
+function fittedDocument(
+  material: ReviewMaterial,
+  commands: readonly LapCommand[],
+):
+  | { readonly kind: "fits"; readonly document: string }
+  | { readonly kind: "over"; readonly bytes: number; readonly left: readonly string[] } {
+  let current = material;
+  let kept = commands;
+  let document = reviewDocument(current);
+  const left: string[] = [];
+  for (const step of OMISSIONS) {
+    if (byteLength(document) <= MODEL_REVIEW_INPUT_BOUND_BYTES) {
+      break;
+    }
+    const hit = kept.filter((c) => step.omits(c.command) && c.output !== "");
+    if (hit.length === 0) {
+      continue;
+    }
+    kept = kept.map((c) => (hit.includes(c) ? omitted(c, step.what) : c));
+    current = { ...current, transcript: { kind: "read", commands: kept } };
+    document = reviewDocument(current);
+    left.push(
+      `the outputs of ${String(hit.length)} ${step.what} ` +
+        `(${String(hit.reduce((sum, c) => sum + outputChars(c), 0))} characters)`,
+    );
+  }
+  const bytes = byteLength(document);
+  return bytes <= MODEL_REVIEW_INPUT_BOUND_BYTES
+    ? { kind: "fits", document }
+    : { kind: "over", bytes, left };
+}
+
+function byteLength(text: string): number {
+  return new TextEncoder().encode(text).length;
+}
+
 /** A rule file's lines, a trailing newline not counted as a line. */
 function linesOf(content: string): readonly string[] {
   const lines = content.split("\n");
@@ -437,18 +535,20 @@ export function prepareReview(input: {
       ),
     };
   }
-  const document = reviewDocument(input.material);
-  const bytes = new TextEncoder().encode(document).length;
-  if (bytes > MODEL_REVIEW_INPUT_BOUND_BYTES) {
+  const fitted = fittedDocument(input.material, input.material.transcript.commands);
+  if (fitted.kind === "over") {
     return {
       kind: "refused",
       draft: unavailable(
         reviewer,
-        `the review material is ${String(bytes)} bytes, over the reviewer's bound of ` +
-          `${String(MODEL_REVIEW_INPUT_BOUND_BYTES)}; it is not truncated (D-0065 1.4).`,
+        `the review material is ${String(fitted.bytes)} bytes, over the reviewer's bound of ` +
+          `${String(MODEL_REVIEW_INPUT_BOUND_BYTES)}` +
+          (fitted.left.length === 0 ? "" : ` even without ${fitted.left.join(" and ")}`) +
+          "; it is not truncated (D-0065 1.4, D-0138).",
       ),
     };
   }
+  const { document } = fitted;
   return { kind: "ready", document, deliveredDigest: contentDigest({ delivered: document }) };
 }
 
@@ -601,7 +701,7 @@ export function modelReadingOf(input: {
 }): LapReadingDraft {
   const { reviewer, prepared, material, run } = input;
   if (run.kind === "failed") {
-    return unavailable(reviewer, `the reviewer did not answer: ${run.reason}`);
+    return unavailable(reviewer, `${NO_ANSWER}${run.reason}`);
   }
   if (run.deliveredDigest !== prepared.deliveredDigest) {
     return unavailable(
@@ -612,10 +712,7 @@ export function modelReadingOf(input: {
   }
   const findings = parseAnswer(run.finalMessage);
   if (findings === null) {
-    return unavailable(
-      reviewer,
-      "the reviewer's answer did not parse as the output contract (D-0065 2.4).",
-    );
+    return unavailable(reviewer, UNPARSED);
   }
   const ranges = postImageRanges(material.diff);
   const graded: GradedFinding[] = findings.map((f) =>
@@ -699,7 +796,56 @@ export function reviewRoundDecision(input: {
 export function reviewRoundsAlong(
   chain: readonly { readonly readings: readonly LapReading[] }[],
 ): number {
-  return chain.filter((link) => link.readings.some((r) => isModelReadingDrafter(r.drafter))).length;
+  return chain.reduce((rounds, link) => {
+    const models = link.readings.filter((r) => isModelReadingDrafter(r.drafter));
+    // A reading the person took again is a round of its own (D-0138 rule 3).
+    return rounds + (models.length === 0 ? 0 : 1) + (retaken(models) ? 1 : 0);
+  }, 0);
+}
+
+const NO_ANSWER = "the reviewer did not answer: ";
+const UNPARSED = "the reviewer's answer did not parse as the output contract (D-0065 2.4).";
+/** How an over-bound refusal ended before D-0138 rule 1 left anything out. */
+const OVER_BOUND_BEFORE_OMISSIONS = "; it is not truncated (D-0065 1.4).";
+
+/**
+ * An unavailable reading that a second run could change (D-0138 rule 3): the
+ * reviewer did not answer (a timeout among them), its answer did not parse, or
+ * the material was over the bound before rule 1 could leave anything out.
+ * Every other reason -- the family, the criterion, unreadable material, a
+ * digest that does not match -- is the same on a second run.
+ */
+function retakeable(reading: LapReading): boolean {
+  const reason = reading.unavailableReason ?? "";
+  return (
+    reading.verdict === "unavailable" &&
+    (reason.startsWith(NO_ANSWER) ||
+      reason === UNPARSED ||
+      (reason.startsWith("the review material is ") &&
+        reason.endsWith(OVER_BOUND_BEFORE_OMISSIONS)))
+  );
+}
+
+/** A lap's model readings, in order, hold one the person took again. */
+function retaken(models: readonly LapReading[]): boolean {
+  const first = models[0];
+  return models.length > 1 && first !== undefined && retakeable(first);
+}
+
+/**
+ * Whether the gate offers *take the review again* (D-0138 rule 3): the lap's
+ * one model reading could not be taken, for a reason a second run could
+ * change. Once per lap, so once per tip: after the second reading nothing is
+ * offered, whatever it came to. The round budget is asked at the press.
+ *
+ * ponytail: once per lap, not per tip. A lap that resumed into a second gate
+ * on new commits already holds two readings and is not offered one; a tip on
+ * unavailable rows would need their evidence, which they do not carry.
+ */
+export function retakeOffered(readings: readonly LapReading[]): boolean {
+  const models = readings.filter((r) => isModelReadingDrafter(r.drafter));
+  const only = models[0];
+  return models.length === 1 && only !== undefined && retakeable(only);
 }
 
 /**

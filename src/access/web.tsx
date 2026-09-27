@@ -123,6 +123,7 @@ import { goalScopeStanding } from "./goal-scope.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
 import { type IssueComment, parseForgeRead } from "./issue-read.js";
 import { isModelDrafterName } from "./model-draft/judgement.js";
+import { retakeOffered } from "./model-review/judgement.js";
 import { unlandedPrefix } from "./order-host.js";
 import type {
   ClaimReach,
@@ -865,7 +866,20 @@ function modelPendingOnPage(readings: readonly LapReading[], model: LapReading |
   return modelTip !== undefined && checksTip !== undefined && modelTip !== checksTip;
 }
 
-function modelView(wording: Chrome, reading: LapReading | null, due: boolean, reload: string) {
+/** What a *take the review again* press posts (rondo#500, D-0138 rule 3). */
+interface RetakePress {
+  readonly token: string;
+  readonly iterationId: string;
+  readonly requestMessageId: string;
+}
+
+function modelView(
+  wording: Chrome,
+  reading: LapReading | null,
+  due: boolean,
+  reload: string,
+  retake: RetakePress | null = null,
+) {
   const later = (note: string) => (
     <p class="mt-1 text-body leading-5 text-muted-foreground">
       {note}{" "}
@@ -899,7 +913,28 @@ function modelView(wording: Chrome, reading: LapReading | null, due: boolean, re
         <>
           {due ? later(wording.modelOlder) : null}
           {reading.verdict === "unavailable" ? (
-            notTakenView(wording, "model-not-taken-why", reading.unavailableReason)
+            <>
+              {notTakenView(wording, "model-not-taken-why", reading.unavailableReason)}
+              {retake === null ? null : (
+                <form
+                  id={`retake-review-${retake.iterationId}`}
+                  method="post"
+                  action={`/retake-review?lang=${encodeURIComponent(wording.lang)}`}
+                  class="mt-2"
+                >
+                  <input type="hidden" name="token" value={retake.token} />
+                  <input type="hidden" name="iteration" value={retake.iterationId} />
+                  <input type="hidden" name="request" value={retake.requestMessageId} />
+                  <button
+                    type="submit"
+                    data-busy={wording.retakeReviewBusy}
+                    class={`${SECONDARY} h-8 px-3 text-meta`}
+                  >
+                    {wording.retakeReviewAction}
+                  </button>
+                </form>
+              )}
+            </>
           ) : (
             <>
               {reading.findings.length === 0 ? null : (
@@ -1190,6 +1225,8 @@ function materialView(
   readings: readonly LapReading[],
   /** The closing fix this lap is, or null (D-0098 rule 8.6). */
   closing: ClosingShown | null = null,
+  /** The token for the *take the review again* press, or null where none may be drawn. */
+  retakeToken: string | null = null,
 ) {
   const model = latestReading(readings, isModelReadingDrafter);
   const modelDue = modelPendingOnPage(readings, model);
@@ -1244,7 +1281,19 @@ function materialView(
        */}
       {closing === null ? null : closingView(wording, closing)}
       {checksView(wording, record, checks, workGone)}
-      {modelView(wording, model, modelDue, reload)}
+      {modelView(
+        wording,
+        model,
+        modelDue,
+        reload,
+        retakeToken === null || record.status !== "awaiting_human" || !retakeOffered(readings)
+          ? null
+          : {
+              token: retakeToken,
+              iterationId: record.id,
+              requestMessageId: record.requestMessageId,
+            },
+      )}
       <p class="note text-meta leading-5 text-faint">{wording.readingsNote}</p>
     </div>
   );
@@ -2361,16 +2410,19 @@ async function threadActs(
   // card here as it refuses the press there (Codex).
   const lineOfResult = async (id: string): Promise<readonly string[]> =>
     (await ports.store.laneLedger()).find((line) => line.lapIds.includes(id))?.lapIds ?? [id];
+  const fixLine = resultRecord === null ? [] : await lineOfResult(resultRecord.id);
+  const onFixLine = laps.filter((lap) => fixLine.includes(lap.record.id));
   const fixBlock =
     ports.fixesConflicts !== true || newIterationId === null || resultRecord === null
       ? "off"
       : conflictFixBlock(result, {
-          // A gate waiting, or a question about this line (D-0105): a question
-          // about the request as a whole is answered in its own box below.
+          // A gate or a question of this line (D-0105 rule 3.1 as D-0138 rule 2
+          // narrows it): another part of the request, at its own gate, is
+          // answered there and does not decide this one's fix.
           asksWaiting:
-            laps.some((lap) => lap.record.status === "awaiting_human") ||
-            laps.some((lap) => lap.question === "waiting") ||
-            asksOverLine(threads, requestMessageId, await lineOfResult(resultRecord.id)),
+            onFixLine.some((lap) => lap.record.status === "awaiting_human") ||
+            onFixLine.some((lap) => lap.question === "waiting") ||
+            asksOverLine(threads, requestMessageId, fixLine),
           holding: (await ports.store.laneLedger()).some(
             (line) => line.releasedBy === null && line.lapIds.includes(resultRecord.id),
           ),
@@ -2584,8 +2636,8 @@ async function threadActs(
   return {
     next,
     fixOffered: nextFix !== null && nextFix.closed === null,
-    // Withheld by a gate or question the person owes (rondo#500): the band
-    // says so rather than leaving only "resolve it by hand".
+    // Withheld by a question of this line the person owes (rondo#500): the
+    // band says so rather than leaving only "resolve it by hand".
     fixWaits: fixBlock === "asked",
     acts: empty ? null : (
       <p class="thread-acts">
@@ -4169,6 +4221,7 @@ export async function operatorPage(
             gateFraming.material,
             sideReadings,
             sideClosing,
+            ports.retakesReviews === true ? token : null,
           ).toString()
         : sideReadings.length > 0 || sideClosing !== null
           ? await materialView(wording, sideLap, null, sideReadings, sideClosing).toString()

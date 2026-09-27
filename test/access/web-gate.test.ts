@@ -698,6 +698,68 @@ test("an unavailable model reading of these commits is its outcome, not a pendin
   expect(neither).not.toContain("Only the checks read this");
 });
 
+test("a model reading a second run could change offers taking it again, once (rondo#500, D-0138 rule 3)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const notTaken = async (reason: string, atMs: number) => {
+    const appended = await world.store.appendReading(
+      "i-0001",
+      {
+        drafter: "rondo/model/1/gpt-6-astra",
+        verdict: "unavailable",
+        findings: [],
+        evidence: null,
+        unavailableReason: reason,
+      },
+      atMs,
+    );
+    expect(appended.kind).toBe("appended");
+  };
+  const page = async (retakesReviews: boolean) =>
+    await operatorPage(
+      { ...portsOver(world, "ada", []), material: structured, retakesReviews },
+      "t",
+      { kind: "summary" },
+    );
+  await notTaken(
+    "the review material is 407894 bytes, over the reviewer's bound of 400000; it is not " +
+      "truncated (D-0065 1.4).",
+    4_000,
+  );
+  const offered = await page(true);
+  expect(offered).toContain('action="/retake-review?lang=en"');
+  expect(offered).toContain('name="iteration" value="i-0001"');
+  expect(offered).toContain("Take the review again");
+  // No press where the host holds none.
+  expect(await page(false)).not.toContain("/retake-review?");
+  // Taken again, whatever it came to, it is not offered a third time.
+  await notTaken("the reviewer did not answer: timed out", 5_000);
+  expect(await page(true)).not.toContain("/retake-review?");
+});
+
+test("a model reading a second run would not change offers nothing to take again (rondo#500)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const appended = await world.store.appendReading(
+    "i-0001",
+    {
+      drafter: "rondo/model/1/gpt-6-astra",
+      verdict: "unavailable",
+      findings: [],
+      evidence: null,
+      unavailableReason: "the plan names no review criterion",
+    },
+    4_000,
+  );
+  expect(appended.kind).toBe("appended");
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", []), material: structured, retakesReviews: true },
+    "t",
+    { kind: "summary" },
+  );
+  expect(html).not.toContain("/retake-review?");
+});
+
 // -- The three residues S2 left on the gate screen (rondo#237) --
 
 test("approve says which of the two approvals it is when a blocker is open (#237)", async () => {
