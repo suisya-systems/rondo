@@ -26293,8 +26293,8 @@ unverified work under the worker's name. Here:
 previous try was stopped at its time limit, its commits are on its local branch, and the first step
 is `git merge --no-edit <that branch>`; the commit with that subject is rondo's and unverified, to be
 checked before anything is built on it; and each step is to be committed as soon as it passes. A
-retry of a retry replaces the section instead of adding a second one, since the newer stopped
-branch already holds what the older one was merged from.
+retry of a retry adds its section after the earlier one, which stays, with whatever a person asked
+after it: merging a branch the newer one already holds changes nothing.
 
 - **Merged in, not cut from.** Cutting the retry from the stopped branch, as a revision is cut from
   its predecessor's, was the first version of this rule, and it is wrong here: the branch a lap is

@@ -582,12 +582,18 @@ test("D-0143: a stopped lap's retry merges its branch in first and is told to ch
   expect(retry.prompt).toContain("iteration 'iter-1'");
   // ASCII, as everything rondo writes into a prompt (D-0004).
   expect([...retry.prompt].every((c) => c.charCodeAt(0) < 128)).toBe(true);
-  // A retry of that retry replaces the section: one merge, of the newer branch.
-  const again = stoppedRetryPlan(retry, { ...stopped, id: "iter-2", topicBranch: "rondo/iter-2" });
-  expect(again.prompt.split("--- The previous try was stopped").length).toBe(2);
+  // A retry of a revised retry keeps everything before it -- the person's
+  // words after the first section included -- and adds its own merge.
+  const revised = { ...retry, prompt: `${retry.prompt}\n\nfix the tests too` };
+  const again = stoppedRetryPlan(revised, {
+    ...stopped,
+    id: "iter-2",
+    topicBranch: "rondo/iter-2",
+  });
+  expect(again.prompt.startsWith(`${revised.prompt}\n\n--- The previous try was stopped`)).toBe(
+    true,
+  );
   expect(again.prompt).toContain("git merge --no-edit rondo/iter-2");
-  expect(again.prompt).not.toContain(`git merge --no-edit ${FIRST.topicBranch}`);
-  expect(again.prompt.startsWith(`${FIRST.prompt}\n\n`)).toBe(true);
   // No branch on the row: nothing to start from, so the plan is as it was.
   expect(stoppedRetryPlan(FIRST, { ...stopped, topicBranch: null })).toBe(FIRST);
 });

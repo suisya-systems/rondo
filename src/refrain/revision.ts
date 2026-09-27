@@ -186,9 +186,6 @@ export function revisionPlan(input: RevisionRequest): PlanOutcome {
 export const KEPT_WORK_SUBJECT =
   "rondo: unverified work left uncommitted when this lap was stopped at its time limit";
 
-/** The line that opens a stopped lap's retry section, so a second retry replaces it. */
-const STOPPED_HEAD = "\n\n--- The previous try was stopped at its time limit ---\n\n";
-
 /**
  * **A retry of a lap stopped at its time limit starts where it stopped**
  * (D-0143, rondo#516): the stored plan, with the first step of its prompt
@@ -206,21 +203,19 @@ const STOPPED_HEAD = "\n\n--- The previous try was stopped at its time limit ---
  * stopped branch that holds a merge of its own. The stopped branch is in the
  * repository this workspace is cut from, so nothing is fetched.
  *
- * A retry of a retry replaces the earlier section rather than adding one: the
- * newer stopped branch already holds whatever the earlier one was merged from.
- * The caller says the predecessor was stopped at its time limit; this layer
+ * A retry of a retry adds a section after the earlier one, which stays with
+ * whatever the person asked after it: merging a branch the newer one already
+ * holds changes nothing, and one it does not hold brings in work. The caller says the predecessor was stopped at its time limit; this layer
  * reads no continuo sentence.
  */
 export function stoppedRetryPlan(plan: RunPlan, predecessor: IterationRecord): RunPlan {
   if (predecessor.topicBranch === null) {
     return plan;
   }
-  const earlier = plan.prompt.indexOf(STOPPED_HEAD);
   return {
     ...plan,
     prompt:
-      (earlier < 0 ? plan.prompt : plan.prompt.slice(0, earlier)) +
-      STOPPED_HEAD +
+      `${plan.prompt}\n\n--- The previous try was stopped at its time limit ---\n\n` +
       `A previous try of this work (iteration '${predecessor.id}') was stopped at its time` +
       " limit before it finished, and its commits are on the local branch" +
       ` '${predecessor.topicBranch}'. Before anything else, bring them into this branch with` +
