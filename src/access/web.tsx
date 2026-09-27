@@ -2176,35 +2176,12 @@ function scopeStop(message: ThreadMessageDraft): boolean {
  * under the fold, recommendation included.
  */
 function scopeStopView(wording: Chrome, message: ThreadMessageDraft) {
-  // The stop replies to its request, whose scope screen is where more room is
-  // approved; the other two options are the answering presses below.
-  const scopeHref =
-    message.inReplyTo === null
-      ? null
-      : viewHref(
-          {
-            kind: "scope",
-            messageId: message.inReplyTo,
-            rounds: null,
-            decisionId: null,
-            plan: null,
-          },
-          wording.lang,
-        );
+  // More room is approved by raising the budget at the lap's gate (D-0074),
+  // which the stop does not lift; the other two options are the answering
+  // presses below. No link: the request's scope screen holds while a question
+  // waits (rondo#431), so it cannot approve a successor now.
   const options = [
-    [
-      wording.scopeStopWider,
-      <>
-        {scopeHref === null ? (
-          wording.scopeStopWiderLink
-        ) : (
-          <a href={scopeHref} class="text-link underline-offset-2 hover:underline">
-            {wording.scopeStopWiderLink}
-          </a>
-        )}
-        {wording.scopeStopWiderDoes}
-      </>,
-    ],
+    [wording.scopeStopWider, wording.scopeStopWiderDoes],
     [wording.scopeStopChange, wording.scopeStopChangeDoes],
     [wording.scopeStopStop, wording.scopeStopStopDoes],
   ] as const;

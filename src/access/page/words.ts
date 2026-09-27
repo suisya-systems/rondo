@@ -242,7 +242,6 @@ export interface PageWords extends DayWords {
   readonly scopeStopOptions: string;
   readonly goalScopeSampleHeading: string;
   readonly scopeStopWider: string;
-  readonly scopeStopWiderLink: string;
   readonly scopeStopWiderDoes: string;
   readonly scopeStopChange: string;
   readonly scopeStopChangeDoes: string;
@@ -663,10 +662,9 @@ export const PAGE_EN: PageWords = Object.freeze({
   scopeStopOptions: "What you can do",
   goalScopeSampleHeading: "This draft assumes each request is the size of past laps",
   scopeStopWider: "Approve more room",
-  scopeStopWiderLink: "Open the request's scope",
   scopeStopWiderDoes:
-    ', raise the approval or approve a new one, then press "Carry on". The old approval is ' +
-    "retired once the new one is approved.",
+    'At the waiting lap, press "Raise the budget", then press "Carry on". The old approval is ' +
+    "retired once the raised one is approved.",
   scopeStopChange: "Change the work",
   scopeStopChangeDoes:
     'Write below what to change, then press "Carry on". The changed work runs, not the planned one.',
@@ -1077,9 +1075,8 @@ export const PAGE_JA: PageWords = Object.freeze({
   scopeStopOptions: "選べること",
   goalScopeSampleHeading: "どの依頼も過去の周回と同じくらいの大きさだと見て、予算を出しています",
   scopeStopWider: "範囲を広げて承認する",
-  scopeStopWiderLink: "依頼の範囲を開き",
   scopeStopWiderDoes:
-    "、承認を引き上げるか新しく承認してから「続ける」を押します。新しい承認が通ると、前の承認は使われなくなります。",
+    "待っている周回で「予算を引き上げる」を押してから「続ける」を押します。引き上げた承認が通ると、前の承認は使われなくなります。",
   scopeStopChange: "作業を変える",
   scopeStopChangeDoes:
     "下に変えてほしいことを書いてから「続ける」を押します。予定していた作業ではなく、変えた作業が動きます。",
