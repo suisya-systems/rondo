@@ -16,6 +16,8 @@ import {
   lostAskId,
   lostLapHost,
   pidAlive,
+  startsAgainOnCarryOn,
+  stoppedLapOf,
 } from "../../src/access/lost-laps.js";
 import { EN } from "../../src/access/wording.js";
 import { planDigest } from "../../src/store/plan.js";
@@ -52,6 +54,48 @@ test("a lap is lost only when, on this host, its driver and its child are both g
   expect(lapLost(unmarked, CEILING, CEILING, HOST, dead)).toBe(false);
   expect(lapLost(unmarked, CEILING, CEILING + 1, HOST, dead)).toBe(true);
   expect(lapLost(unmarked, null, 10 * CEILING, HOST, dead)).toBe(false);
+});
+
+test("D-0149: carry on starts a lap again when it was lost or stopped at its budget or its time limit", () => {
+  const row = (over: Partial<IterationRecord>) =>
+    ({
+      status: "failed",
+      failureKind: "refusal",
+      reason: "no",
+      workspace: "/w",
+      topicBranch: "rondo/lap-1",
+      ...over,
+    }) as IterationRecord;
+  const timedOut =
+    "session s did not finish its turn within 1800000 ms. The workspace and the fence are left " +
+    "exactly as they are -- the refusal is about the turn";
+  expect(startsAgainOnCarryOn(row({ failureKind: "lost" }))).toBe(true);
+  expect(startsAgainOnCarryOn(row({ failureKind: "budget" }))).toBe(true);
+  expect(startsAgainOnCarryOn(row({ reason: timedOut }))).toBe(true);
+  // Any other refusal, a defect, or a lap not ended failed is the person's to start.
+  expect(startsAgainOnCarryOn(row({}))).toBe(false);
+  expect(startsAgainOnCarryOn(row({ failureKind: "defect" }))).toBe(false);
+  expect(startsAgainOnCarryOn(row({ status: "abandoned", failureKind: "budget" }))).toBe(false);
+
+  const ask = (messageId: string, bases: Record<string, unknown>[] = [], asks = true) => ({
+    messageId,
+    asks,
+    bases,
+  });
+  expect(stoppedLapOf(ask("lap-stopped-lap-1"))).toBe("lap-1");
+  // A scope's stop over a redo names the lap it redoes.
+  expect(
+    stoppedLapOf(
+      ask("scope-stop-lap-2-5", [
+        { form: "message", messageId: "req" },
+        { form: "iteration", iterationId: "lap-1" },
+      ]),
+    ),
+  ).toBe("lap-1");
+  expect(stoppedLapOf(ask("scope-stop-lap-2-5"))).toBeNull();
+  expect(stoppedLapOf(ask("question-lap-1", [{ form: "iteration", iterationId: "lap-1" }]))).toBe(
+    null,
+  );
 });
 
 test("pidAlive: this process lives", () => {

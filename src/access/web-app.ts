@@ -61,6 +61,7 @@ import {
   SCOPE_OUTWARD_ACTS,
   type ScopeBudgets,
   type ScopeOutwardAct,
+  type ThreadMessageDraft,
 } from "../store/records.js";
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
 import type { WebPorts } from "./page/contract.js";
@@ -996,6 +997,16 @@ export interface Retaken {
 export type RetakeReviewFromWeb = (iterationId: string) => Promise<Retaken>;
 
 /**
+ * Start again the lap a stop was asked about, once the person carried on at it
+ * (D-0149), with what they wrote, or null where they wrote nothing. Null where
+ * the ask is not a stop this press starts again.
+ */
+export type StartAgainFromWeb = (
+  ask: ThreadMessageDraft,
+  note: string | null,
+) => Promise<Started | null>;
+
+/**
  * The fourth thing this surface may write (D-0059 section 5a, the rondo#233 S4
  * row): a gate answered with what to change, and the second lap it starts under
  * the approval the first was admitted under (D-0070).
@@ -1012,6 +1023,7 @@ export class RevisePort {
   readonly #revise: ReviseFromWeb;
   readonly #fixConflict: ConflictFixFromWeb | null;
   readonly #retakeReview: RetakeReviewFromWeb | null;
+  readonly #startAgain: StartAgainFromWeb | null;
 
   /**
    * `fixConflict` rides on this capability (rondo#417, D-0105): the attempt it
@@ -1026,10 +1038,29 @@ export class RevisePort {
      * round of the approval the lap ran under, as a revise is.
      */
     retakeReview: RetakeReviewFromWeb | null = null,
+    /**
+     * Rides here too (D-0149): a stopped lap started again is a redo under the
+     * approval it ran under, as a revise is.
+     */
+    startAgain: StartAgainFromWeb | null = null,
   ) {
     this.#revise = revise;
     this.#fixConflict = fixConflict;
     this.#retakeReview = retakeReview;
+    this.#startAgain = startAgain;
+  }
+
+  /** Start a stopped lap again on the *carry on* that answered its stop, or null. */
+  async startAgain(
+    press: Press,
+    ask: ThreadMessageDraft,
+    note: string | null,
+  ): Promise<Started | null> {
+    if (!minted.has(press) || this.#startAgain === null) {
+      return null;
+    }
+    minted.delete(press);
+    return await this.#startAgain(ask, note);
   }
 
   /** Whether this port can take a model reading again, so the gate draws the press only then. */
@@ -2371,6 +2402,37 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
           revised.test ?? null,
           revised.note,
         );
+      }
+    }
+    // **Carrying on at a stop starts the stopped lap again, on the same press**
+    // (D-0149, rondo#527): a lap stopped at its budget or its time limit runs
+    // again from its branch, under the approval it ran under -- after a raise,
+    // the raised one -- with what the person wrote. Its answer is not drafted
+    // (`startsAgain` in the drafter host), so this is the one start it makes. A
+    // second submit finds the lap already started, and a refusal leaves the
+    // answer recorded, as a revise's does.
+    if (revise !== null && outcome === "carry_on") {
+      const thread = await reading.record.threadMessages();
+      const asked =
+        thread.kind === "read" ? thread.messages.find((m) => m.messageId === back) : undefined;
+      if (asked !== undefined) {
+        const againPress = Object.freeze({}) as Press;
+        minted.add(againPress);
+        const started = await revise.startAgain(
+          againPress,
+          asked,
+          typed.trim() === "" ? null : typed,
+        );
+        if (started !== null && !started.ok) {
+          return reviseRefused(
+            c,
+            409,
+            "reviseRefusedNotStarted",
+            asked.inReplyTo,
+            null,
+            started.note,
+          );
+        }
       }
     }
     return c.redirect(

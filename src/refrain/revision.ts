@@ -205,25 +205,38 @@ export const KEPT_WORK_SUBJECT =
  *
  * A retry of a retry adds a section after the earlier one, which stays with
  * whatever the person asked after it: merging a branch the newer one already
- * holds changes nothing, and one it does not hold brings in work. The caller says the predecessor was stopped at its time limit; this layer
- * reads no continuo sentence.
+ * holds changes nothing, and one it does not hold brings in work. The caller says the predecessor was stopped at its time limit
+ * or at its budget (D-0149: its commits are on its branch just the same, and
+ * only a time-limit stop has a kept commit); this layer reads no continuo
+ * sentence. `note` is what the person wrote when they carried on at the stop
+ * (D-0149), appended as written, or null where they wrote nothing.
  */
-export function stoppedRetryPlan(plan: RunPlan, predecessor: IterationRecord): RunPlan {
+export function stoppedRetryPlan(
+  plan: RunPlan,
+  predecessor: IterationRecord,
+  note: string | null = null,
+): RunPlan {
+  const said =
+    note === null || note.trim() === "" ? "" : `\n\n--- The person, carrying on ---\n\n${note}`;
   if (predecessor.topicBranch === null) {
-    return plan;
+    return said === "" ? plan : { ...plan, prompt: `${plan.prompt}${said}` };
   }
+  const budget = predecessor.failureKind === "budget";
   return {
     ...plan,
     prompt:
-      `${plan.prompt}\n\n--- The previous try was stopped at its time limit ---\n\n` +
-      `A previous try of this work (iteration '${predecessor.id}') was stopped at its time` +
-      " limit before it finished, and its commits are on the local branch" +
+      `${plan.prompt}\n\n--- The previous try was stopped at its ${budget ? "budget" : "time limit"} ---\n\n` +
+      `A previous try of this work (iteration '${predecessor.id}') was stopped at its` +
+      ` ${budget ? "budget" : "time limit"} before it finished, and its commits are on the local branch` +
       ` '${predecessor.topicBranch}'. Before anything else, bring them into this branch with` +
-      ` \`git merge --no-edit ${predecessor.topicBranch}\`. A commit titled` +
-      ` '${KEPT_WORK_SUBJECT}' is rondo's, not a worker's: it holds what that try had not` +
-      " committed, and nobody has verified it. Check it before you build on it; keep what is" +
-      " right and change or remove the rest. Then continue the work rather than starting it" +
-      " over, and commit each step as soon as it passes.",
+      ` \`git merge --no-edit ${predecessor.topicBranch}\`.` +
+      (budget
+        ? ""
+        : ` A commit titled '${KEPT_WORK_SUBJECT}' is rondo's, not a worker's: it holds what that` +
+          " try had not committed, and nobody has verified it. Check it before you build on it;" +
+          " keep what is right and change or remove the rest.") +
+      " Then continue the work rather than starting it over, and commit each step as soon as it" +
+      ` passes.${said}`,
   };
 }
 

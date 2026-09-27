@@ -481,6 +481,15 @@ export function stoppedAtTimeLimit(row: IterationRecord): boolean {
 }
 
 /**
+ * Whether a row is a lap stopped short of its gate whose retry starts from its
+ * branch: at its time limit (D-0143) or at its budget (D-0149). Its commits are
+ * on its branch either way; only a time-limit stop has a kept commit.
+ */
+export function stoppedShort(row: IterationRecord): boolean {
+  return stoppedAtTimeLimit(row) || (row.status === "failed" && row.failureKind === "budget");
+}
+
+/**
  * **Keep what a lap stopped at its time limit had not committed** (D-0143,
  * rondo#516): one commit on the lap's own topic branch, in rondo's name and
  * marked unverified. continuo has stopped the session before it answers the

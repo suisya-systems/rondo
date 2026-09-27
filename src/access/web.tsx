@@ -2813,7 +2813,8 @@ interface PausedStop {
  * id: a `lap-stopped-` ask over a lap that ended `budget`, or a scope's stop
  * on spent review rounds or cost (`stopRaises`) over a lap still at its gate
  * (rondo#512: the stop's words name this press, and the gate's raise link is
- * drawn only for a spent budget), whose line has one approved tip that reads.
+ * drawn only for a spent budget) or over the start again of a lap the budget
+ * stopped (D-0149), whose line has one approved tip that reads.
  * Anything else offers none, and its box is the two answers it always had.
  */
 async function budgetRaises(
@@ -2839,9 +2840,15 @@ async function budgetRaises(
     const found = await ports.store.read(iterationId);
     if (
       found.kind !== "read" ||
-      !(stoppedByScope
-        ? found.record.status === "awaiting_human" && found.record.gateId !== null
-        : found.record.failureKind === "budget")
+      !(
+        (stoppedByScope &&
+          found.record.status === "awaiting_human" &&
+          found.record.gateId !== null) ||
+        // A budget-stopped lap, whose own stop or whose start again's scope
+        // stop (D-0149: carried on under the same budget and refused at the
+        // cost test) is answered by raising.
+        (found.record.status === "failed" && found.record.failureKind === "budget")
+      )
     ) {
       continue;
     }

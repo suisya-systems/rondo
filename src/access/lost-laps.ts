@@ -25,6 +25,7 @@ import { hostname } from "node:os";
 import type { IterationRecord, PerformingLap } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
+import { stoppedShort } from "./forge.js";
 import type { Chrome } from "./wording.js";
 
 /** Who drives a lap sent from this process (D-0139). */
@@ -81,6 +82,35 @@ export function againId(iterationId: string): string {
 /** The ask a lost lap stops on, under the stop ask's own id (`lap-stopped-`). */
 export function lostAskId(iterationId: string): string {
   return `lap-stopped-${iterationId}`;
+}
+
+/**
+ * Whether a person's *carry on* at this lap's stop starts it again (D-0139,
+ * D-0149): it was lost, or stopped at its budget or its time limit. A lost lap
+ * is started again by this host; the others by the answer's own press.
+ */
+export function startsAgainOnCarryOn(lap: IterationRecord): boolean {
+  return (lap.status === "failed" && lap.failureKind === "lost") || stoppedShort(lap);
+}
+
+/**
+ * The lap a stop is about, or null for any other ask: its own stop
+ * (`lap-stopped-<lap>`), or a scope's stop over a redo of it, which names it as
+ * the redo's predecessor (`stopTheLine`).
+ */
+export function stoppedLapOf(ask: {
+  readonly messageId: string;
+  readonly asks: boolean;
+  readonly bases: readonly Readonly<Record<string, unknown>>[];
+}): string | null {
+  if (ask.messageId.startsWith("lap-stopped-")) {
+    return ask.messageId.slice("lap-stopped-".length);
+  }
+  if (!ask.asks || !ask.messageId.startsWith("scope-stop-")) {
+    return null;
+  }
+  const basis = ask.bases.find((one) => one["form"] === "iteration");
+  return typeof basis?.["iterationId"] === "string" ? basis["iterationId"] : null;
 }
 
 export interface LostLapPorts {

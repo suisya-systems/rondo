@@ -181,6 +181,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0146 | A part of a split request is told it is a part, and its model review judges that part; a later split starts from the request's earlier line that has not landed, or says why it does not | accepted |
 | D-0147 | The goal flow's open question is in the person's turn: its block stays on the empty centre while another request waits on them | accepted |
 | D-0148 | A budget stop under a paused goal scope offers no raise; its box says the work is paused and links to resuming it | accepted |
+| D-0149 | Carrying on at a lap's stop starts that lap again: a lap stopped at its budget or its time limit runs again from its branch on the answer's own press, with the person's words, and an answer to a stop rondo starts again is not drafted | accepted |
 
 ---
 
@@ -26765,3 +26766,85 @@ longer carries the raise.
 
 - **A paused goal scope's stop that the person resumes and still cannot carry on from**: then the
   resume does not reach the lap's approval tip, and the link sends them to the wrong press.
+
+## D-0149 — Carrying on at a lap's stop starts that lap again: a lap stopped at its budget or its time limit runs again from its branch on the answer's own press, with the person's words, and an answer to a stop rondo starts again is not drafted
+
+**Status:** accepted (2026-09-28, rondo#527; read from the lap 19 store, lap-0734b1ca then lap-f37dfb77,
+and taken through the secretary while the owner was away, as #516's follow-up proposed). Amends
+`D-0110` rule 2 (*carry on* releases the line and the person starts again), `D-0143` "What is not
+done" (carry on does not start a stopped lap again) and `D-0071` rule 3.2 (which messages make a
+request due). Refs `D-0139`, `D-0140` rule 3, `D-0142` rule 3.
+
+### Context
+
+**Read on 2026-09-28 from the lap 19 store and the service's log**:
+
+- **lap-0734b1ca, #290's revise, hit the thirty-minute limit** having committed everything as it
+  went, two take-in merges and two fixes included (`D-0143` kept nothing: nothing was uncommitted).
+- **The person answered its stop *carry on*, with the words "use the previous lap's commits".**
+  The answer is an operator message, so it made the request due; the drafter wrote a split from it
+  (`$0.40`), the goal scope approved it, and the order tick started **lap-f37dfb77**: a new line
+  (`supersedes_iteration_id` null), cut from `main`, whose prompt told it to build on commits its
+  workspace did not have and did not name the branch they were on.
+- So *carry on* threw the line away and started over, and an answer to a stop still started work
+  through the drafter: the double-start path `D-0142` rule 3 closed for a worker's question.
+
+### Decision
+
+1. **Carry on at the stop of a lap stopped at its budget or its time limit starts that lap again, on
+   the answer's own press** (`stoppedShort`, `src/access/forge.ts`; the answer route in
+   `src/access/web-app.ts`; `restartLostFromPage`, `src/access/cli.ts`). Both *carry on* and *raise
+   the budget and carry on* do it. The lap runs as `<id>-again-1`, as a lost lap does (`D-0139`
+   rule 3): its stored plan, superseding it, under the approval it ran under (after a raise, the
+   raised one) and in the approver's name, through `admitUnderScope`. The plan is
+   `stoppedRetryPlan`'s: it merges the stopped lap's branch in first (`D-0143` rule 2), and ends with
+   what the person wrote in the answer box, verbatim, where they wrote anything. The stop is the
+   lap's own (`lap-stopped-<lap>`) or a scope's stop over a start again of it, which names it as the
+   redo's predecessor (`stoppedLapOf`).
+   1. **A second submit is the press it repeats**: the successor's id is fixed, and finding it is
+      the start already made.
+   2. **A start refused leaves the answer recorded** and says the refusal, as `D-0142` rule 2's
+      revise does. A refusal under the scope also writes the scope's own stop, and a *carry on* to
+      that one starts the lap again the same way. Where that stop is on cost over a lap the budget
+      stopped (carried on under the same budget), its box offers *raise the budget and carry on*,
+      as `D-0141` rule 2's does over a lap at its gate: the raise route already takes a
+      budget-stopped lap (`D-0140` rule 3.4).
+   3. **Only a lap with one approval in force.** A lap with none (an approved proposal's, a forked
+      line) goes on as before: *carry on* releases the line, the drafter reads the answer, and the
+      person starts again.
+2. **A lap stopped at its budget is retried as one stopped at its time limit.** Its commits are on
+   its branch just the same, so its retry merges the branch in (without the kept-commit sentence,
+   since a budget stop keeps no commit), and the scope's readings test lets it in as `D-0143` lets a
+   time-limit stop in: it never reached a gate, so there is no reading to test; the laps, the cost
+   and the grants still bound it, and a closing lap is still refused. `rondo retry` takes the same
+   plan for either.
+3. **An answer to a stop that rondo starts again is not drafted**, whichever button it was
+   (`startsAgain`, `src/access/drafter-host.ts`): a *carry on* starts the lap, and a *stop* ends the
+   line. That covers a lost lap's stop (`D-0139`), whose start again is the lost-lap pass's; an
+   answer now kicks that pass rather than waiting for its minute. Every other answer and every other
+   message of the person's still makes the request due.
+4. **The stop's words say so.** The time-limit stop and the kept commit say that carrying on starts
+   the work again from its commits; the budget stop's two carry-on options say rondo starts it again.
+
+**Options not taken.** Starting the lap again from the lost-lap host's minute tick, reading every
+answered stop (the first design): an answer given before this change, which only released the line,
+would start work on the first tick after the upgrade, and any later lap of the request would have to
+be read as the person having started again, which a split's other part is not. The press is where the
+person asks for it. Cutting the retry from the stopped branch: `D-0143` rule 2 says why a merge.
+Starting a refused or faulted lap again on *carry on*: a refusal that recurs would ask again on
+every press, and those stops still ask the person to look first.
+
+### What it costs
+
+- **A lap under an approved proposal is still started over by the drafter** on *carry on*;
+  `rondo retry --proposal-id` is its route.
+- **The answer's words go to the lap unedited**, including a sentence meant for rondo rather than the
+  worker. They are what the person wrote in the box they answered.
+- **The answer is still two writes on one press**, as `D-0142`'s is.
+
+### What would falsify it
+
+- **A carry on at a budget or time-limit stop whose lap does not start**, with no refusal said.
+- **A split drafted from an answer to such a stop**: rule 3 is not holding.
+- **A retry started from such a stop that is not cut from where the line was** (supersedes null, or
+  its branch not merged): rule 1's plan is not the one run.

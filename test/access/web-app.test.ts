@@ -3751,3 +3751,76 @@ test("(answer) carry on at a worker's question is the gate's revise on the same 
   expect(refused.pressed.status).toBe(409);
   expect(refused.pressed.body).toContain(EN.reviseRefusedGateClosed);
 });
+
+test("(answer) carry on at a lap's stop starts that lap again on the same press, with what the person wrote (D-0149, rondo#527)", async () => {
+  const pressWith = async (
+    answer: { outcome: "carry_on" | "stop"; body: string },
+    started: { ok: boolean; note: string } | null,
+  ) => {
+    const { record, ports } = await askWaiting();
+    const asked = await record.recordThreadMessage({
+      messageId: "lap-stopped-lap-1",
+      body: "The work stopped partway.",
+      authorKind: "drafter",
+      authorId: "rondo/deterministic",
+      inReplyTo: "req",
+      atMs: 1,
+      bases: [{ form: "iteration", iterationId: "lap-1" }],
+      asks: true,
+    });
+    expect(asked.kind).toBe("recorded");
+    const calls: { ask: string; note: string | null }[] = [];
+    const withAgain = {
+      ...ports,
+      revise: new RevisePort(
+        async () => await Promise.resolve({ ok: false, note: "" }),
+        null,
+        null,
+        async (ask, note) => {
+          calls.push({ ask: ask.messageId, note });
+          return await Promise.resolve(started);
+        },
+      ),
+    } as unknown as ServedPorts;
+    const { base, stop, closed } = await served(createApp(withAgain, TOKEN));
+    const pressed = await send(base, "/answer-ask", "POST", pressHeaders(base), {
+      token: TOKEN,
+      message_id: newMessageId("reply"),
+      in_reply_to: "lap-stopped-lap-1",
+      ...answer,
+    });
+    stop.abort();
+    expect(await closed).toBe(0);
+    return { pressed, calls };
+  };
+
+  const done = await pressWith(
+    { outcome: "carry_on", body: "use the previous lap's commits" },
+    { ok: true, note: "" },
+  );
+  expect(done.pressed.status).toBe(303);
+  expect(done.calls).toEqual([
+    { ask: "lap-stopped-lap-1", note: "use the previous lap's commits" },
+  ]);
+
+  // A bare press is the button's label in the thread, and no words for the lap.
+  const bare = await pressWith({ outcome: "carry_on", body: "" }, { ok: true, note: "" });
+  expect(bare.calls).toEqual([{ ask: "lap-stopped-lap-1", note: null }]);
+
+  // Not a stop this press starts again: the answer is all it was.
+  const other = await pressWith({ outcome: "carry_on", body: "go" }, null);
+  expect(other.pressed.status).toBe(303);
+
+  // *Stop this line* starts nothing.
+  const stopped = await pressWith({ outcome: "stop", body: "" }, { ok: true, note: "" });
+  expect(stopped.calls).toEqual([]);
+
+  // Refused: the answer stands, and the refusal is said with the port's reason.
+  const refused = await pressWith(
+    { outcome: "carry_on", body: "" },
+    { ok: false, note: "the laps are spent" },
+  );
+  expect(refused.pressed.status).toBe(409);
+  expect(refused.pressed.body).toContain(EN.reviseRefusedNotStarted);
+  expect(refused.pressed.body).toContain("the laps are spent");
+});

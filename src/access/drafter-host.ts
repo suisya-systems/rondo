@@ -82,6 +82,12 @@ export interface DrafterHostPorts extends DrafterPorts {
    * Absent where nothing asks, and then nothing waits.
    */
   readonly awaitsRepository?: (requestMessageId: string) => Promise<boolean>;
+  /**
+   * Whether a *carry on* to this ask starts the lap it stopped again (D-0149,
+   * D-0139): then an answer to it is not drafted, since the start is its work.
+   * Absent where nothing starts a lap again, and then every answer is drafted.
+   */
+  readonly startsAgain?: (ask: ThreadMessageDraft) => Promise<boolean>;
 }
 
 export interface DrafterHost {
@@ -235,7 +241,11 @@ async function scan(
   for (const m of read.messages) {
     // The flow host's opener is due as a person's message is (rondo#469): a
     // goal scope a person approved stands behind it (D-0128 rule 5).
-    if (!asksForWork(m) || answersWorkerQuestion(m, read.messages)) {
+    if (
+      !asksForWork(m) ||
+      answersWorkerQuestion(m, read.messages) ||
+      (await answersStartAgain(ports, m, read.messages))
+    ) {
       continue;
     }
     const root = rootOf(m.messageId);
@@ -282,6 +292,24 @@ function answersWorkerQuestion(
       (asked) => asked.messageId === m.inReplyTo && asked.authorId === WORKER_QUESTION_AUTHOR,
     )
   );
+}
+
+/**
+ * Whether `m` answers a stop whose lap a *carry on* starts again (D-0149):
+ * either outcome, as for a worker's question. A *carry on* starts the lap with
+ * the person's words, and a *stop* ends the line; drafting either would start
+ * work nobody asked for. It is still in the thread a later run reads.
+ */
+async function answersStartAgain(
+  ports: DrafterHostPorts,
+  m: ThreadMessageDraft,
+  messages: readonly ThreadMessageDraft[],
+): Promise<boolean> {
+  if (m.answerOutcome === undefined || ports.startsAgain === undefined) {
+    return false;
+  }
+  const asked = messages.find((one) => one.messageId === m.inReplyTo);
+  return asked !== undefined && (await ports.startsAgain(asked));
 }
 
 /**

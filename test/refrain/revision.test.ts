@@ -597,3 +597,25 @@ test("D-0143: a stopped lap's retry merges its branch in first and is told to ch
   // No branch on the row: nothing to start from, so the plan is as it was.
   expect(stoppedRetryPlan(FIRST, { ...stopped, topicBranch: null })).toBe(FIRST);
 });
+
+test("D-0149: a lap stopped at its budget is retried from its branch, with the person's words last", () => {
+  const stopped = {
+    ...closedRecord("iter-1", FIRST),
+    status: "failed" as const,
+    failureKind: "budget" as const,
+  };
+  const retry = stoppedRetryPlan(FIRST, stopped, "use the previous lap's commits");
+  expect(retry.prompt).toContain("--- The previous try was stopped at its budget ---");
+  expect(retry.prompt).toContain(`git merge --no-edit ${FIRST.topicBranch}`);
+  // A budget stop keeps no commit of rondo's, so the worker is not told of one.
+  expect(retry.prompt).not.toContain(KEPT_WORK_SUBJECT);
+  expect(
+    retry.prompt.endsWith("\n\n--- The person, carrying on ---\n\nuse the previous lap's commits"),
+  ).toBe(true);
+  expect({ ...retry, prompt: FIRST.prompt }).toEqual({ ...FIRST, prompt: FIRST.prompt });
+  // Words with no branch still reach the lap; no words add nothing.
+  expect(stoppedRetryPlan(FIRST, { ...stopped, topicBranch: null }, "go").prompt).toBe(
+    `${FIRST.prompt}\n\n--- The person, carrying on ---\n\ngo`,
+  );
+  expect(stoppedRetryPlan(FIRST, stopped, "  ").prompt).not.toContain("carrying on ---");
+});
