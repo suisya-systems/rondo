@@ -1346,11 +1346,15 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/revise-draft/host.ts": [SPLITTING],
   "src/access/revise-draft/judgement.ts": [SPLITTING],
   "src/access/scope.ts": [SPLITTING],
+  // D-0128 (rondo#471): a goal scope is drafted from the goal and the held
+  // plans, and it is the one approval over the requests work discovery draws.
+  "src/access/goal-scope.ts": [SPLITTING, WORK_DISCOVERY],
   "src/access/screens/merge.tsx": [HUMAN],
   "src/access/screens/publish.tsx": [HUMAN],
   "src/access/screens/refused.tsx": [HUMAN],
   "src/access/screens/release.tsx": [HUMAN],
   "src/access/screens/scope.tsx": [HUMAN],
+  "src/access/screens/goal-scope.tsx": [HUMAN],
   "src/access/web-app.ts": [HUMAN],
   "src/access/web.tsx": [HUMAN],
   "src/access/wording/en.ts": [HUMAN],

@@ -43,28 +43,51 @@ export interface CandidateView {
   readonly from: { readonly said: string; readonly href: string };
   readonly openPoints: readonly { readonly point: string; readonly recommendation: string }[];
   readonly takeHref: string;
+  /**
+   * The thread of the request the flow already started from this candidate
+   * (D-0128), or null: a started one is not offered for the box again.
+   */
+  readonly startedHref: string | null;
+}
+
+/**
+ * Whether rondo works toward the goal on its own (D-0128): no goal scope, one
+ * in force, or one paused -- and the way to the screen that approves, pauses
+ * or resumes it.
+ */
+export interface GoalScopeLine {
+  readonly state: "none" | "running" | "paused";
+  readonly href: string;
 }
 
 /** One repository's block. */
 export type TriageBlock =
   | { readonly kind: "noGoal"; readonly repository: string; readonly goalHref: string }
-  | { readonly kind: "notRead"; readonly repository: string; readonly goalHref: string }
+  | {
+      readonly kind: "notRead";
+      readonly repository: string;
+      readonly goalHref: string;
+      readonly goalScope: GoalScopeLine;
+    }
   | {
       readonly kind: "unavailable";
       readonly repository: string;
       readonly goalHref: string;
+      readonly goalScope: GoalScopeLine;
       readonly readSaid: string;
     }
   | {
       readonly kind: "nothing";
       readonly repository: string;
       readonly goalHref: string;
+      readonly goalScope: GoalScopeLine;
       readonly readSaid: string;
     }
   | {
       readonly kind: "ranked";
       readonly repository: string;
       readonly goalHref: string;
+      readonly goalScope: GoalScopeLine;
       readonly readSaid: string;
       readonly first: CandidateView;
       readonly rest: readonly CandidateView[];
@@ -77,6 +100,10 @@ export interface TriageReads {
   readonly latest: readonly StoredTriage[];
   /** The payload of each latest row, read back; a row that will not read is absent. */
   readonly payloads: ReadonlyMap<string, TriagePayload>;
+  /** The goal scope in force over each goal, by goal id (D-0128); absent where none is. */
+  readonly goalScopes?: ReadonlyMap<string, "running" | "paused">;
+  /** The request openers the flow wrote, each with the goal it names (D-0128). */
+  readonly flowOpeners?: readonly { readonly messageId: string; readonly goalId: string }[];
 }
 
 /** The newest goal of each repository. */
@@ -91,33 +118,43 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
   const latest = new Map(reads.latest.map((row) => [row.repository, row]));
   const blocks = reads.repositories.map((repository): TriageBlock => {
     const goalHref = viewHref({ kind: "goal", repository }, wording.lang);
-    if (!current.has(repository)) {
+    const goal = current.get(repository);
+    if (goal === undefined) {
       return { kind: "noGoal", repository, goalHref };
     }
+    const goalScope: GoalScopeLine = {
+      state: reads.goalScopes?.get(goal.goalId) ?? "none",
+      href: viewHref({ kind: "goalScope", repository }, wording.lang),
+    };
     const row = latest.get(repository);
     const payload = row === undefined ? undefined : reads.payloads.get(row.proposalId);
     // A reading against a goal the person has since changed is not drawn: its
     // clause numbers name the old goal's clauses.
-    if (
-      row === undefined ||
-      payload === undefined ||
-      payload.goalId !== current.get(repository)?.goalId
-    ) {
-      return { kind: "notRead", repository, goalHref };
+    if (row === undefined || payload === undefined || payload.goalId !== goal.goalId) {
+      return { kind: "notRead", repository, goalHref, goalScope };
     }
     const readSaid = readLine(wording, payload, row, nowMs);
     if (payload.unavailable !== null) {
       // The reason stays on the row and in the host's log: it is rondo's
       // words about a model's answer, not a page sentence (D-0076).
-      return { kind: "unavailable", repository, goalHref, readSaid };
+      return { kind: "unavailable", repository, goalHref, goalScope, readSaid };
     }
     const clauses = byId.get(payload.goalId)?.clauses ?? [];
+    // An opener the flow wrote names its candidate at the end of its id
+    // (`flowMessageId`), under whichever approval it was started.
+    const started = (key: string) =>
+      reads.flowOpeners?.find(
+        (opener) =>
+          opener.goalId === goal.goalId &&
+          opener.messageId.startsWith("flow-") &&
+          opener.messageId.endsWith(`-${key}`),
+      )?.messageId ?? null;
     const [first, ...rest] = payload.ranked.map((ranked) =>
-      candidateView(wording, row.proposalId, repository, ranked, clauses),
+      candidateView(wording, row.proposalId, repository, ranked, clauses, started(ranked.key)),
     );
     return first === undefined
-      ? { kind: "nothing", repository, goalHref, readSaid }
-      : { kind: "ranked", repository, goalHref, readSaid, first, rest };
+      ? { kind: "nothing", repository, goalHref, goalScope, readSaid }
+      : { kind: "ranked", repository, goalHref, goalScope, readSaid, first, rest };
   });
   return [
     ...blocks.filter((block) => block.kind === "ranked"),
@@ -149,6 +186,7 @@ function candidateView(
   repository: string,
   ranked: Ranked,
   clauses: readonly GoalClause[],
+  started: string | null,
 ): CandidateView {
   return {
     proposalId,
@@ -177,6 +215,10 @@ function candidateView(
       { kind: "requests", take: { proposalId, candidate: ranked.key } },
       wording.lang,
     )}#composer`,
+    startedHref:
+      started === null
+        ? null
+        : viewHref({ kind: "thread", messageId: started, to: null }, wording.lang),
   };
 }
 
@@ -234,6 +276,9 @@ export function TriageSection({ wording, blocks, token }: TriageSectionProps) {
         <div className="triage-repo" key={block.repository}>
           <span className="list-repo">{block.repository}</span>
           <Block wording={wording} block={block} token={token} />
+          {block.kind === "noGoal" ? null : (
+            <GoalScopeRow wording={wording} line={block.goalScope} />
+          )}
         </div>
       ))}
     </section>
@@ -359,6 +404,42 @@ function Block({
   }
 }
 
+/**
+ * The goal scope under a repository's block (D-0128): the way to let rondo
+ * work toward the goal, or that it is doing so, or that it is paused. A link
+ * to the screen where the approval is read and pressed, never a press itself:
+ * approving is the person's P1, and it is made over what the screen shows.
+ */
+function GoalScopeRow({
+  wording,
+  line,
+}: {
+  readonly wording: Chrome;
+  readonly line: GoalScopeLine;
+}) {
+  if (line.state === "none") {
+    return (
+      <div className="triage-goal-scope">
+        <p>{wording.triageGoalScopeOffer}</p>
+        <a className={`${SECONDARY} ${SMALL_PRESS}`} href={line.href}>
+          {wording.triageGoalScopeAction}
+        </a>
+      </div>
+    );
+  }
+  return (
+    <div className="triage-goal-scope" data-state={line.state}>
+      <p>
+        <span className="triage-goal-dot" aria-hidden="true" />
+        {line.state === "running" ? wording.triageGoalScopeRunning : wording.triageGoalScopePaused}
+      </p>
+      <a className="triage-goal-link" href={line.href}>
+        {line.state === "running" ? wording.triageGoalScopePause : wording.triageGoalScopeResume}
+      </a>
+    </div>
+  );
+}
+
 function Acts({
   wording,
   candidate,
@@ -370,6 +451,18 @@ function Acts({
   readonly token: string | null;
   readonly size: string;
 }) {
+  // **Started is said, and nothing is offered for the box** (D-0128): the
+  // flow already sent it, and a second request would be the same work twice.
+  if (candidate.startedHref !== null) {
+    return (
+      <div className="triage-acts">
+        <span className="triage-started">{wording.triageStarted}</span>
+        <a className="triage-goal-link" href={candidate.startedHref}>
+          {wording.triageStartedLink}
+        </a>
+      </div>
+    );
+  }
   return (
     <div className="triage-acts">
       <a className={`${PRIMARY} ${size}`} href={candidate.takeHref}>

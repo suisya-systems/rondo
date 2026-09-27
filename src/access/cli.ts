@@ -85,6 +85,7 @@ import {
   requestsGoal,
   reviewedReading,
   type ScopeBudgets,
+  type ScopeDraft,
   type ScopeOutwardAct,
   type StoredScope,
   scopePayloadWithDefaults,
@@ -168,6 +169,7 @@ import {
   runDrafter,
 } from "./forge.js";
 import { forgeHost, publishPreflight, redactRemoteUrl } from "./forge-preflight.js";
+import { goalScopeMaterial, goalScopeStanding } from "./goal-scope.js";
 import { hostFailure } from "./host-failure.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
 import {
@@ -230,6 +232,8 @@ import {
   type ClaimRefusal,
   type ConflictFixed,
   type ConflictFixInput,
+  type GoalPauseInput,
+  type GoalScopeInput,
   MergePort,
   newDraftId,
   newIterationId,
@@ -1817,6 +1821,19 @@ export async function main(
                 // The raise press (D-0074 section 4).
                 async (input) =>
                   await raiseScopeFromPage(environment, store, opened.path, sender.actorId, input),
+                // The goal scope's approve and pause (D-0128, rondo#471).
+                {
+                  record: async (input) =>
+                    await recordGoalScopeFromPage(
+                      environment,
+                      store,
+                      opened.path,
+                      sender.actorId,
+                      input,
+                    ),
+                  pause: async (input) =>
+                    await pauseGoalScopeFromPage(environment, opened.path, sender.actorId, input),
+                },
               ),
         // **The press is checked inside this port too** (rondo#233 S4): a gate
         // answered with a change and the lap it starts are one act, and nothing
@@ -4981,6 +4998,212 @@ async function raiseScope(
     return { ok: false, why: "scopeRefusedEdited", note: "this form was recorded as it was drawn" };
   }
   return await approveStoredScope(record, actor.actorId, stored.scope, createdAtMs);
+}
+
+/**
+ * Every goal scope press this process is recording, one at a time: the check
+ * that no other approval stands over the goal and the write are then one step,
+ * as `raising` makes a raise's (Codex round 1 there).
+ *
+ * ponytail: one chain for every goal; per goal if presses ever queue.
+ */
+let goalPressing: Promise<unknown> = Promise.resolve();
+
+function inGoalLine<T>(run: () => Promise<T>): Promise<T> {
+  const running = goalPressing.catch(() => undefined).then(run);
+  goalPressing = running;
+  return running;
+}
+
+/**
+ * One press of the goal scope's approve button (D-0128, rondo#471): a scope
+ * whose `requests` is `{"from_goal": ...}`, recorded and approved on one press,
+ * which is the person's P1 over every request the flow injects from the goal.
+ *
+ * **The lists are read again, never posted**: the goal must still be the
+ * repository's newest (rule 3: an edited goal is another id, and approving it
+ * is approving again), and the workspaces and agent types re-read from the
+ * held plans must be the ones the screen drew (`drawn`).
+ *
+ * **One approval in force per goal.** A first press is refused while one
+ * stands; a resume names the paused one and is its successor, so the pause is
+ * retired by the approval that ends it (D-0066 rule 1.4).
+ */
+export async function recordGoalScopeFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  input: GoalScopeInput,
+): Promise<ScopeRecorded> {
+  return await inGoalLine(async () => {
+    const actor = approvedActor(approver, environment);
+    if ("refusal" in actor) {
+      return { ok: false, why: "scopeRefusedNotTaken", note: actor.refusal };
+    }
+    const record = openAdvisoryRecord(storePath);
+    const read = await goalScopeMaterial({ store, record, now: Date.now }, input.repository);
+    if (read.kind !== "read" || read.material.goal.goalId !== input.goalId) {
+      return {
+        ok: false,
+        why: "goalScopeRefusedGoalChanged",
+        note: `goal '${input.goalId}' is not the newest goal of ${input.repository}`,
+      };
+    }
+    const material = read.material;
+    if (material.drawn !== input.drawn) {
+      return {
+        ok: false,
+        why: "scopeRefusedPlanChanged",
+        note: "the plans held for this repository are not the ones drawn",
+      };
+    }
+    const standing = await goalScopeStanding(record, material.goal.goalId);
+    const replay = await record.readScope(input.scopeId);
+    const replayed = replay.kind === "read" && replay.scope.authorId === actor.actorId;
+    const resumes = standing.kind === "paused" ? standing.scopeDecisionId : null;
+    if (!replayed && (standing.kind === "running" || resumes !== input.resumes)) {
+      return {
+        ok: false,
+        why: "goalScopeRefusedMoved",
+        note: `the goal's approval is ${standing.kind} and the screen was drawn over another state`,
+      };
+    }
+    // The paused approval's row, read by the id the form carried, so a replay
+    // after the resume went through supersedes what the first press did.
+    const paused = input.resumes === null ? null : await record.readScopeDecision(input.resumes);
+    if (paused !== null && paused.kind !== "read") {
+      return { ok: false, why: "goalScopeRefusedMoved", note: `'${input.resumes}' will not read` };
+    }
+    const payload = scopePayloadWithDefaults({
+      requests: { from_goal: material.goal.goalId },
+      workspaces: material.workspaces,
+      agent_types: material.agentTypes.map((one) => one.agentTypeDigest),
+      budgets: { ...input.budgets },
+      severity_threshold: input.severityThreshold,
+      outward_acts: [...input.outwardActs],
+      irreversible_additions: [],
+    } as unknown as JsonRecord);
+    return await recordOperatorScope(record, actor.actorId, {
+      scopeId: input.scopeId,
+      payload,
+      supersedes: paused === null ? null : paused.decision.scopeId,
+      agentTypeRecords: material.agentTypes,
+    });
+  });
+}
+
+/**
+ * One press of the goal scope's pause button (D-0128 rule 4): a successor of
+ * the approval in force, **differing only in `laps`, which is 0**, recorded
+ * and approved as a raise is. A lap already running is not stopped; the flow
+ * starts nothing more, because no lap is left to admit.
+ */
+export async function pauseGoalScopeFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  storePath: string,
+  approver: string,
+  input: GoalPauseInput,
+): Promise<ScopeRecorded> {
+  return await inGoalLine(async () => {
+    const notTaken = (note: string): ScopeRecorded => ({
+      ok: false,
+      why: "scopeRefusedNotTaken",
+      note,
+    });
+    const actor = approvedActor(approver, environment);
+    if ("refusal" in actor) {
+      return notTaken(actor.refusal);
+    }
+    const record = openAdvisoryRecord(storePath);
+    const decided = await record.readScopeDecision(input.scopeDecisionId);
+    if (decided.kind !== "read" || decided.decision.outcome !== "approved") {
+      return notTaken(`'${input.scopeDecisionId}' is not an approval in this store`);
+    }
+    const read = await record.readScope(decided.decision.scopeId);
+    if (read.kind !== "read" || requestsGoal(read.scope.payload.requests) === null) {
+      return notTaken(`'${input.scopeDecisionId}' is not a goal scope's approval`);
+    }
+    const predecessor = read.scope;
+    const replay = await record.readScope(input.scopeId);
+    const replayed =
+      replay.kind === "read" &&
+      replay.scope.authorId === actor.actorId &&
+      replay.scope.supersedesScopeId === predecessor.scopeId;
+    if (
+      !replayed &&
+      (predecessor.payload.budgets.laps === 0 ||
+        (await record.scopeSupersededByApproved(predecessor.scopeId)))
+    ) {
+      return {
+        ok: false,
+        why: "goalScopeRefusedMoved",
+        note: `'${input.scopeDecisionId}' is paused or no longer in force`,
+      };
+    }
+    const payload = scopePayloadWithDefaults({
+      ...(predecessor.payload as unknown as JsonRecord),
+      budgets: { ...predecessor.payload.budgets, laps: 0 },
+    } as unknown as JsonRecord);
+    return await recordOperatorScope(record, actor.actorId, {
+      scopeId: input.scopeId,
+      payload,
+      supersedes: predecessor.scopeId,
+      agentTypeRecords: [],
+    });
+  });
+}
+
+/**
+ * Write a person's scope row, read it back, and approve it -- the tail the
+ * goal scope's two presses share. A second press of one form is the write it
+ * repeats, and has to be the same scope (`recordScopeFromPage`'s reading).
+ */
+async function recordOperatorScope(
+  record: AdvisoryRecord,
+  actorId: string,
+  draft: {
+    readonly scopeId: string;
+    readonly payload: ReturnType<typeof scopePayloadWithDefaults>;
+    readonly supersedes: string | null;
+    readonly agentTypeRecords: ScopeDraft["agentTypeRecords"];
+  },
+): Promise<ScopeRecorded> {
+  const createdAtMs = Date.now();
+  const written = await record.recordScope({
+    scopeId: draft.scopeId,
+    payload: draft.payload,
+    supersedesScopeId: draft.supersedes,
+    authorKind: "operator",
+    authorId: actorId,
+    bases: draft.supersedes === null ? [] : [{ form: "scope", scopeId: draft.supersedes }],
+    createdAtMs,
+    agentTypeRecords: draft.agentTypeRecords,
+  });
+  const stored = await record.readScope(draft.scopeId);
+  const ours =
+    stored.kind === "read" &&
+    stored.scope.authorKind === "operator" &&
+    stored.scope.authorId === actorId &&
+    stored.scope.supersedesScopeId === draft.supersedes;
+  if (written.kind !== "recorded" && !ours) {
+    return { ok: false, why: "scopeRefusedNotTaken", note: written.reason };
+  }
+  if (stored.kind !== "read") {
+    return {
+      ok: false,
+      why: "scopeRefusedNotRead",
+      note: `scope '${draft.scopeId}' was recorded and will not read back`,
+    };
+  }
+  if (
+    written.kind !== "recorded" &&
+    canonicalJson(stored.scope.payload as unknown as JsonValue) !==
+      canonicalJson(draft.payload as unknown as JsonValue)
+  ) {
+    return { ok: false, why: "scopeRefusedEdited", note: "this form was recorded as it was drawn" };
+  }
+  return await approveStoredScope(record, actorId, stored.scope, createdAtMs);
 }
 
 /** One press of a drafted plan's start button: which approval, which split, which plan. */

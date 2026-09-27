@@ -94,6 +94,7 @@ import { revisionInstruction } from "../refrain/revision.js";
 import {
   approvedForPublication,
   type FindingSeverity,
+  FLOW_AUTHOR_PREFIX,
   findingBasisText,
   type IterationRecord,
   isApprovableKind,
@@ -114,6 +115,7 @@ import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
 import { draftedStanding } from "./drafted-view.js";
 import type { LapWorkInspection } from "./forge.js";
 import { type GateAuto, type GateScope, gateAuto } from "./gate-auto.js";
+import { goalScopeStanding } from "./goal-scope.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
 import { type IssueComment, parseForgeRead } from "./issue-read.js";
 import { isModelDrafterName } from "./model-draft/judgement.js";
@@ -195,6 +197,7 @@ import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./pag
 import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal } from "./scope.js";
+import { goalScopeView } from "./screens/goal-scope.js";
 import { mergeView } from "./screens/merge.js";
 import { publishView } from "./screens/publish.js";
 import { releaseView } from "./screens/release.js";
@@ -1986,6 +1989,66 @@ function lapReportView(wording: Chrome, message: ThreadMessageDraft) {
   );
 }
 
+/**
+ * Whether a message is the stop a scope's verdict wrote into a request's
+ * thread (`stopTheLine` in `scope.ts`): the deterministic drafter's voice, a
+ * `scope-stop-` id and `asks` set.
+ */
+function scopeStop(message: ThreadMessageDraft): boolean {
+  return (
+    message.authorId === DETERMINISTIC_DRAFTER &&
+    message.messageId.startsWith("scope-stop-") &&
+    message.asks
+  );
+}
+
+/**
+ * **A scope stop, as its three options** (D-0072, D-0128 rondo#471): the row
+ * is rondo's record in English with ids and a digest, so what is drawn open
+ * is what happened and what the person can do -- a successor scope, a change
+ * to the work, or stopping -- each with the press it comes to and what it
+ * gives up, in the person's language. The record is kept, byte for byte,
+ * under the fold, recommendation included.
+ */
+function scopeStopView(wording: Chrome, message: ThreadMessageDraft) {
+  const options = [
+    [wording.scopeStopWider, wording.scopeStopWiderDoes],
+    [wording.scopeStopChange, wording.scopeStopChangeDoes],
+    [wording.scopeStopStop, wording.scopeStopStopDoes],
+  ] as const;
+  return (
+    <div class="space-y-2">
+      <p class="text-body leading-6">{wording.scopeStopLead}</p>
+      <p class="text-meta leading-5 font-medium text-muted-foreground">
+        {wording.scopeStopOptions}
+      </p>
+      <ol class="space-y-1.5">
+        {options.map(([option, does], at) => (
+          <li class="flex gap-2 text-body leading-6">
+            <span class="w-4 shrink-0 text-right text-faint tabular-nums">{`${String(at + 1)}.`}</span>
+            <span class="min-w-0">
+              <b class="font-semibold">{option}</b>
+              <span class="block text-meta leading-5 text-muted-foreground">{does}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <details class="group">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+          {chevron()}
+          {wording.evBrokeReason}
+        </summary>
+        <p
+          class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+          lang="en"
+        >
+          {message.body}
+        </p>
+      </details>
+    </div>
+  );
+}
+
 /** The newest approval in force over a scope the person wrote, if any. */
 async function ownApproval(
   ports: WebPorts,
@@ -2846,7 +2909,9 @@ export async function operatorPage(
   const scoping =
     view.kind === "scope"
       ? await scopeView(ports, wording, view, threads, token, newScopeId, newIterationId, nowMs)
-      : null;
+      : view.kind === "goalScope"
+        ? await goalScopeView(ports, wording, view, token, newScopeId, nowMs)
+        : null;
   /** The link onto the scope screen, drawn on a request wherever one is listed. */
   // **Which request each lap is under** (rondo#244), off the rows already
   // read: a lap names the request it was started from, so the requests list
@@ -3029,6 +3094,7 @@ export async function operatorPage(
   /** The screens the page's rebuild does not touch, which keep their own centre. */
   const onOwnScreen =
     view.kind === "scope" ||
+    view.kind === "goalScope" ||
     view.kind === "publish" ||
     view.kind === "merge" ||
     view.kind === "release";
@@ -3165,7 +3231,11 @@ export async function operatorPage(
     await Promise.all(
       selectedMessages
         .filter(
-          (message) => message.authorKind === "forge" || noDraft(message) || lapReport(message),
+          (message) =>
+            message.authorKind === "forge" ||
+            noDraft(message) ||
+            lapReport(message) ||
+            scopeStop(message),
         )
         .map(
           async (message) =>
@@ -3175,7 +3245,9 @@ export async function operatorPage(
                 ? forgeView(wording, message)
                 : lapReport(message)
                   ? lapReportView(wording, message)
-                  : noDraftView(wording, message)
+                  : scopeStop(message)
+                    ? scopeStopView(wording, message)
+                    : noDraftView(wording, message)
               ).toString(),
             ] as const,
         ),
@@ -3214,6 +3286,25 @@ export async function operatorPage(
    */
   const triageRepositories = (await ports.triageRepositories?.()) ?? [];
   const goals = triageRepositories.length === 0 ? [] : await ports.record.goals();
+  /*
+   * **Whether rondo works toward each goal on its own** (D-0128): the goal
+   * scope in force over the newest goal of each repository, and the requests
+   * the flow already started, so a candidate it started reads *started*.
+   */
+  const goalScopes = new Map<string, "running" | "paused">();
+  for (const goal of currentGoals(goals).values()) {
+    const standing = await goalScopeStanding(ports.record, goal.goalId);
+    if (standing.kind !== "none") goalScopes.set(goal.goalId, standing.kind);
+  }
+  const flowOpeners = threads.messages.flatMap((message) =>
+    message.inReplyTo === null && message.authorId.startsWith(FLOW_AUTHOR_PREFIX)
+      ? message.bases.flatMap((basis) =>
+          basis["form"] === "goal" && typeof basis["goalId"] === "string"
+            ? [{ messageId: message.messageId, goalId: basis["goalId"] }]
+            : [],
+        )
+      : [],
+  );
   const latestTriage = triageRepositories.length === 0 ? [] : await ports.record.latestTriage();
   const triagePayloads = new Map(
     latestTriage.flatMap((row): [string, TriagePayload][] => {
@@ -3532,6 +3623,8 @@ export async function operatorPage(
                           goals,
                           latest: latestTriage,
                           payloads: triagePayloads,
+                          goalScopes,
+                          flowOpeners,
                         },
                         nowMs,
                       ),
@@ -4228,7 +4321,7 @@ export async function operatorPage(
                   ? {
                       rendered: await (
                         <div class="mx-auto max-w-5xl space-y-6 px-4 pt-6 pb-12 sm:px-6">
-                          {view.kind === "scope"
+                          {view.kind === "scope" || view.kind === "goalScope"
                             ? scoping
                             : view.kind === "publish"
                               ? publishing

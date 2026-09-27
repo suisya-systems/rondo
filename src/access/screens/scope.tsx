@@ -7,8 +7,10 @@ import {
 } from "../../advisory/budget.js";
 import {
   FINDING_SEVERITIES,
+  type FindingSeverity,
   type JsonRecord,
   SCOPE_OUTWARD_ACTS,
+  type ScopeOutwardAct,
   type StoredScope,
 } from "../../store/records.js";
 import { definitionOfDone, planRuleFiles, planTurnTimeoutMs } from "../done.js";
@@ -238,7 +240,7 @@ function budgetField(
  * do about it now, before the first lap spends it (D-0074 lets it be raised
  * later, from the gate).
  */
-function sampleCaveat(wording: Chrome, bases: readonly BudgetBasis[]) {
+export function sampleCaveat(wording: Chrome, bases: readonly BudgetBasis[]) {
   return (
     <section class={`rounded-md border px-3 py-2 ${TONE.wait} space-y-1`}>
       <h3 class="text-body leading-5 font-semibold">{wording.scopeSampleHeading}</h3>
@@ -263,7 +265,7 @@ function sampleCaveat(wording: Chrome, bases: readonly BudgetBasis[]) {
 }
 
 /** The class every budget box carries: one box, one number, no decoration. */
-const BOX =
+export const BOX =
   "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-body leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /**
@@ -803,44 +805,7 @@ async function scopeForm(
         </div>
         {sampleCaveat(wording, budgets.cost_reserve_usd.bases)}
         {budgetBoxes(wording, budgets, true)}
-        <section class={`${CARD} space-y-3`}>
-          <h3 class={CARD_HEADING}>{wording.scopeDefaultsHeading}</h3>
-          <label class="flex flex-col gap-1">
-            <span class="text-meta leading-5 font-medium text-muted-foreground">
-              {wording.scopeSeverityLabel}
-            </span>
-            {/* The word, with the enum value it records beside it: the value is
-                what `rondo scope` prints and a scope holds (D-0055 rule 3), and
-                `blocker` alone was the whole option in both languages. */}
-            <select name="severity_threshold" class={BOX}>
-              {FINDING_SEVERITIES.map((severity) => (
-                <option value={severity} {...(severity === "major" ? { selected: true } : {})}>
-                  {`${wording.severityWord(severity)} (${severity})`}
-                </option>
-              ))}
-            </select>
-          </label>
-          <fieldset class="space-y-1">
-            <legend class="text-meta leading-5 font-medium text-muted-foreground">
-              {wording.scopeOutwardLabel}
-            </legend>
-            {SCOPE_OUTWARD_ACTS.map((act) => (
-              <label class="flex items-center gap-2 text-body leading-6">
-                <input type="checkbox" name="outward_acts" value={act} class="size-3.5" />
-                <span>{wording.scopeOutwardAct(act)}</span>
-                <span class="font-mono text-id text-faint">{act}</span>
-              </label>
-            ))}
-          </fieldset>
-          {/*
-           * **Not a box** (rondo#233 S3): `irreversible_additions` adds
-           * free-text names to a closed list, and a text field that widens what
-           * counts as irreversible by typo is exactly what the screen's own
-           * axis forbids. Always empty, and said so rather than hidden.
-           */}
-          <p class="text-body leading-6">{wording.scopeIrreversibleNone}</p>
-          <p class="note text-meta leading-5 text-faint">{wording.scopeDefaultNote}</p>
-        </section>
+        {defaultsSection(wording, "major", [])}
         {/* D-0066's first gate answer, on the screen and not only in a terminal. */}
         <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
         {/* **The same press again under the last box** (D-0106, the owner's answer
@@ -889,7 +854,7 @@ async function scopeForm(
  * from: the person's own form and the raise form (D-0074 rule 4.2) draw the
  * same boxes, so a budget is drawn one way whichever screen posts it.
  */
-function budgetBoxes(wording: Chrome, budgets: ScopeBudgets, roundsFixed: boolean) {
+export function budgetBoxes(wording: Chrome, budgets: ScopeBudgets, roundsFixed: boolean) {
   return (
     <div class={`${CARD} grid gap-4 sm:grid-cols-2`}>
       {budgetField(
@@ -969,6 +934,64 @@ function budgetBoxes(wording: Chrome, budgets: ScopeBudgets, roundsFixed: boolea
         budgets.expires_at_ms,
       )}
     </div>
+  );
+}
+
+/**
+ * The threshold, the outward acts and the irreversible list, as a person's
+ * own form posts them: the request's scope and the goal scope (D-0128) draw
+ * the same controls.
+ */
+export function defaultsSection(
+  wording: Chrome,
+  threshold: FindingSeverity,
+  outward: readonly ScopeOutwardAct[],
+) {
+  return (
+    <section class={`${CARD} space-y-3`}>
+      <h3 class={CARD_HEADING}>{wording.scopeDefaultsHeading}</h3>
+      <label class="flex flex-col gap-1">
+        <span class="text-meta leading-5 font-medium text-muted-foreground">
+          {wording.scopeSeverityLabel}
+        </span>
+        {/* The word, with the enum value it records beside it: the value is
+            what `rondo scope` prints and a scope holds (D-0055 rule 3), and
+            `blocker` alone was the whole option in both languages. */}
+        <select name="severity_threshold" class={BOX}>
+          {FINDING_SEVERITIES.map((severity) => (
+            <option value={severity} {...(severity === threshold ? { selected: true } : {})}>
+              {`${wording.severityWord(severity)} (${severity})`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <fieldset class="space-y-1">
+        <legend class="text-meta leading-5 font-medium text-muted-foreground">
+          {wording.scopeOutwardLabel}
+        </legend>
+        {SCOPE_OUTWARD_ACTS.map((act) => (
+          <label class="flex items-center gap-2 text-body leading-6">
+            <input
+              type="checkbox"
+              name="outward_acts"
+              value={act}
+              class="size-3.5"
+              {...(outward.includes(act) ? { checked: true } : {})}
+            />
+            <span>{wording.scopeOutwardAct(act)}</span>
+            <span class="font-mono text-id text-faint">{act}</span>
+          </label>
+        ))}
+      </fieldset>
+      {/*
+       * **Not a box** (rondo#233 S3): `irreversible_additions` adds
+       * free-text names to a closed list, and a text field that widens what
+       * counts as irreversible by typo is exactly what the screen's own
+       * axis forbids. Always empty, and said so rather than hidden.
+       */}
+      <p class="text-body leading-6">{wording.scopeIrreversibleNone}</p>
+      <p class="note text-meta leading-5 text-faint">{wording.scopeDefaultNote}</p>
+    </section>
   );
 }
 

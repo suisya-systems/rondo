@@ -202,6 +202,49 @@ export interface PageWords extends DayWords {
   readonly triageNotNowRefusedPress: string;
   readonly triageNotNowRefused: string;
   readonly triageBack: string;
+  /**
+   * The goal scope (D-0128, rondo#471): under a repository's block, the way
+   * to let rondo work toward its goal under one approval, or that it does, or
+   * that it is paused; a candidate the flow already started; the screen that
+   * approves, pauses and resumes it; and a scope stop's three options.
+   */
+  readonly triageGoalScopeOffer: string;
+  readonly triageGoalScopeAction: string;
+  readonly triageGoalScopeRunning: string;
+  readonly triageGoalScopePaused: string;
+  readonly triageGoalScopePause: string;
+  readonly triageGoalScopeResume: string;
+  readonly triageStarted: string;
+  readonly triageStartedLink: string;
+  readonly goalScopeHeading: string;
+  readonly goalScopeRunningHeading: string;
+  readonly goalScopePausedHeading: string;
+  readonly goalScopeBack: string;
+  readonly goalScopeNoGoal: string;
+  readonly goalScopeNoPlan: string;
+  readonly goalScopeLead: string;
+  readonly goalScopePlansNote: (requests: number) => string;
+  readonly goalScopePressNote: string;
+  readonly goalScopeAction: string;
+  readonly goalScopeResumeAction: string;
+  readonly goalScopePlain: string;
+  readonly goalScopeWhereHeading: string;
+  readonly goalScopeGoalHeading: string;
+  readonly goalScopeGoalNote: (when: string) => string;
+  readonly goalScopeRunningLead: string;
+  readonly goalScopePauseNote: string;
+  readonly goalScopePauseAction: string;
+  readonly goalScopePausedLead: string;
+  readonly goalScopeRefusedGoalChanged: string;
+  readonly goalScopeRefusedMoved: string;
+  readonly scopeStopLead: string;
+  readonly scopeStopOptions: string;
+  readonly scopeStopWider: string;
+  readonly scopeStopWiderDoes: string;
+  readonly scopeStopChange: string;
+  readonly scopeStopChangeDoes: string;
+  readonly scopeStopStop: string;
+  readonly scopeStopStopDoes: string;
   readonly evProposal: string;
   readonly evProposalLink: string;
   /**
@@ -508,6 +551,70 @@ export const PAGE_EN: PageWords = Object.freeze({
   triageNotNowRefusedPress: "Nothing was put aside: this did not come from a press on this page.",
   triageNotNowRefused: "Nothing was put aside: the proposal has moved on since the page was drawn.",
   triageBack: "Back to the front",
+  triageGoalScopeOffer: "Or let rondo send these itself, one at a time, under one approval.",
+  triageGoalScopeAction: "Let rondo work toward this goal",
+  triageGoalScopeRunning: "rondo is working toward this goal on its own.",
+  triageGoalScopePaused: "Work toward this goal is paused.",
+  triageGoalScopePause: "See the approval, or pause",
+  triageGoalScopeResume: "See the approval, or resume",
+  triageStarted: "Started",
+  triageStartedLink: "Go to the request",
+  goalScopeHeading: "Let rondo work toward this goal",
+  goalScopeRunningHeading: "rondo is working toward this goal",
+  goalScopePausedHeading: "Work toward this goal is paused",
+  goalScopeBack: "Back to the goal's approval",
+  goalScopeNoGoal:
+    "This repository has no goal yet. Write one first: the approval covers the requests rondo draws from it.",
+  goalScopeNoPlan:
+    "rondo has not worked in this repository yet, so it cannot say where the work would run. " +
+    "Send one request for it yourself first; after that, this can be drafted.",
+  goalScopeLead:
+    "rondo sends the goal's next request itself, one at a time and in the order it ranked them, " +
+    "and plans, runs and checks each one within the limits below. You approve once, here, instead " +
+    "of once per request. It still comes back to you when something is in dispute or a limit is " +
+    "reached.",
+  goalScopePlansNote: (requests) =>
+    `Drafted for ${String(requests)} ${requests === 1 ? "request" : "requests"}, one per clause ` +
+    "of the goal, from the work rondo has run before. Change any number.",
+  goalScopePressNote:
+    "This covers only the requests rondo draws from the goal as it is written now. If you edit " +
+    "the goal, you approve again.",
+  goalScopeAction: "Approve and let rondo work",
+  goalScopeResumeAction: "Approve and resume",
+  goalScopePlain: "Approve the limits below for every request rondo draws from this goal.",
+  goalScopeWhereHeading: "Where the work runs",
+  goalScopeGoalHeading: "The goal",
+  goalScopeGoalNote: (when) => `Kept ${when}. This approval is for this version of it.`,
+  goalScopeRunningLead:
+    "rondo sends the goal's next request itself when there is room and nothing it started is " +
+    "waiting on you. It asks you when something is in dispute or a limit is reached.",
+  goalScopePauseNote:
+    "Pausing sends nothing more toward this goal. Work already under way carries on to its end.",
+  goalScopePauseAction: "Pause",
+  goalScopePausedLead:
+    "rondo sends nothing more toward this goal. To resume, approve again below; the limits count " +
+    "from then.",
+  goalScopeRefusedGoalChanged:
+    "Nothing was approved: the goal was changed after this screen was drawn. Read the goal as it " +
+    "is now, then approve again.",
+  goalScopeRefusedMoved:
+    "Nothing was recorded: the goal's approval changed after this screen was drawn. It was " +
+    "approved, paused or resumed in the meantime.",
+  scopeStopLead:
+    "rondo stopped this line: going on would have been outside what you approved. It waits for you.",
+  scopeStopOptions: "What you can do",
+  scopeStopWider: "Approve more room",
+  scopeStopWiderDoes:
+    "Raise the approval, or approve a new one, then answer with Carry on. The old approval is " +
+    "retired when the new one is approved.",
+  scopeStopChange: "Change the work",
+  scopeStopChangeDoes:
+    "Say below what to change, then press Carry on. What runs is the changed work, not the " +
+    "planned one.",
+  scopeStopStop: "Stop this line",
+  scopeStopStopDoes:
+    "Press Stop this line. This line's work ends; the request's other lines carry on, and you " +
+    "can carry on later.",
   evProposal: "rondo has a proposal for what to ask next.",
   evProposalLink: "See it",
   sevenDays: "The last seven days",
@@ -787,6 +894,60 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageNotNowRefusedPress: "見送っていません。この画面のボタンから送られたものではありません。",
   triageNotNowRefused: "見送っていません。画面を開いたあとで、提案が新しくなっています。",
   triageBack: "最初の画面へ戻る",
+  triageGoalScopeOffer: "1 回の承認で、rondo にこれらを 1 件ずつ自分で依頼させることもできます。",
+  triageGoalScopeAction: "この目標に向けて rondo に進めてもらう",
+  triageGoalScopeRunning: "rondo がこの目標に向けて自分で進めています。",
+  triageGoalScopePaused: "この目標に向けた作業は一時停止中です。",
+  triageGoalScopePause: "承認を見る・一時停止する",
+  triageGoalScopeResume: "承認を見る・再開する",
+  triageStarted: "開始済み",
+  triageStartedLink: "依頼を見る",
+  goalScopeHeading: "この目標に向けて rondo に進めてもらう",
+  goalScopeRunningHeading: "rondo がこの目標に向けて進めています",
+  goalScopePausedHeading: "この目標に向けた作業は一時停止中です",
+  goalScopeBack: "目標の承認に戻る",
+  goalScopeNoGoal:
+    "このリポジトリにはまだ目標がありません。先に目標を書いてください。承認の対象は、rondo がその目標から立てる依頼です。",
+  goalScopeNoPlan:
+    "rondo はまだこのリポジトリで作業したことがないので、どこで作業するかを示せません。" +
+    "まず 1 件、ご自分で依頼を送ってください。そのあとで下書きできるようになります。",
+  goalScopeLead:
+    "rondo が目標の次の依頼を自分で送ります。順位の高いものから 1 件ずつ、下の上限の中で計画・実行・確認まで進めます。" +
+    "承認は依頼ごとではなく、ここでの 1 回だけです。異論があるときや上限に達したときは、あなたに戻ってきます。",
+  goalScopePlansNote: (requests) =>
+    `目標の項目 1 つにつき 1 件、計 ${String(requests)} 件の依頼として、これまでの作業の実績から下書きしました。数字はどれも変えられます。`,
+  goalScopePressNote:
+    "対象は、いま書かれている目標から rondo が立てる依頼だけです。目標を書き換えたら、承認し直してください。",
+  goalScopeAction: "承認して rondo に進めてもらう",
+  goalScopeResumeAction: "承認して再開する",
+  goalScopePlain: "この目標から rondo が立てる依頼すべてについて、下の上限を承認します。",
+  goalScopeWhereHeading: "作業する場所",
+  goalScopeGoalHeading: "目標",
+  goalScopeGoalNote: (when) => `${when}に保存した版です。この承認はこの版に対するものです。`,
+  goalScopeRunningLead:
+    "空きがあり、rondo が始めた依頼であなたを待っているものがなければ、rondo は目標の次の依頼を自分で送ります。" +
+    "異論があるときや上限に達したときは、あなたに聞きます。",
+  goalScopePauseNote:
+    "一時停止すると、この目標に向けた新しい依頼は送りません。いま進んでいる作業は最後まで続きます。",
+  goalScopePauseAction: "一時停止する",
+  goalScopePausedLead:
+    "この目標に向けた新しい依頼は送りません。再開するには、下でもう一度承認してください。上限はそこから数え直します。",
+  goalScopeRefusedGoalChanged:
+    "承認していません。画面を開いたあとで目標が書き換えられました。いまの目標を読んでから、もう一度承認してください。",
+  goalScopeRefusedMoved:
+    "何も記録していません。画面を開いたあとで、この目標の承認が変わりました（承認・一時停止・再開のいずれかが先に行われています）。",
+  scopeStopLead:
+    "rondo はこの線を止めました。このまま進めると、承認した範囲の外に出るためです。あなたの判断を待っています。",
+  scopeStopOptions: "選べること",
+  scopeStopWider: "範囲を広げて承認する",
+  scopeStopWiderDoes:
+    "承認を引き上げるか新しく承認してから、「続ける」で答えます。新しい承認が通ると、前の承認は使われなくなります。",
+  scopeStopChange: "作業を変える",
+  scopeStopChangeDoes:
+    "下に変えてほしいことを書いてから「続ける」を押します。予定していた作業ではなく、変えた作業が動きます。",
+  scopeStopStop: "この線を止める",
+  scopeStopStopDoes:
+    "「この線を止める」を押します。この線の作業は終わり、依頼のほかの線は続きます。あとから続けることもできます。",
   evProposal: "次に頼むことについて、rondo に提案があります。",
   evProposalLink: "見る",
   sevenDays: "この 7 日間",
