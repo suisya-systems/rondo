@@ -216,6 +216,6 @@ test("D-0121: a try the budget stopped says what it spent of what it had, in bot
     // continuo's own class name never reaches the person.
     expect(stopped?.said).not.toContain("LapBudgetExhausted");
   }
-  expect(EN.evBudgetStopped("1.00", "2.00")).toContain("larger budget");
+  expect(EN.evBudgetStopped("1.00", "2.00")).toContain("raise the budget from the question");
   expect(chromeFor("ja").evBudgetStopped(null, "2.00")).toContain("報告されていません");
 });

@@ -204,6 +204,15 @@ export interface Chrome extends PageWords {
   readonly answerStopAction: string;
   /** What each of the two presses does, said where the words are typed. */
   readonly answerOutcomeNote: string;
+  /**
+   * A budget stop's first answer (D-0140 rule 3): a budgets-only successor of
+   * the lap's approval, then *carry on*, on one press. `answerRaiseLabel` is
+   * its amount's box; `answerRaiseLeft` what the rest of the approval allows,
+   * in dollars, beside the reserve one more lap needs.
+   */
+  readonly answerRaiseAction: string;
+  readonly answerRaiseLabel: string;
+  readonly answerRaiseLeft: (left: string, reserve: string, enough: boolean) => string;
   readonly newRequestHeading: string;
   readonly requestPlaceholder: string;
   readonly replyPlaceholder: string;
@@ -254,6 +263,8 @@ export interface Chrome extends PageWords {
   readonly sendRefusedUnknown: string;
   /** An answer to a question that did not arrive as a person's press of its button. */
   readonly answerRefusedPress: string;
+  /** A budget stop's *raise and carry on* whose raise recorded nothing (D-0140 rule 3). */
+  readonly answerRefusedRaise: string;
   /** Said in the reply box while its thread holds a question still waiting: the box does not answer it. */
   readonly replyNotAnswer: string;
   /** Script off, a refused send lands on its own page: the way back, and where the words are. */
@@ -1271,6 +1282,12 @@ export interface Chrome extends PageWords {
    * box's two presses.
    */
   readonly lapStoppedSaid: (said: string | null) => string;
+  /**
+   * The same stop when the budget stopped the lap (D-0140 rule 3): raising the
+   * budget and carrying on is the first option and the recommended one, since
+   * carrying on under the same cap stops again.
+   */
+  readonly lapBudgetStoppedSaid: (said: string | null) => string;
   /**
    * The stop rondo asks in the thread when a lap was lost to a restart of
    * rondo (D-0139): nothing of it is running, its held money is back, and

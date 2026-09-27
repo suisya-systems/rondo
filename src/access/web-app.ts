@@ -2224,12 +2224,47 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     // this field; a press naming neither is the form refusal the rest of this
     // route uses, because rondo guessing here would put a word in the person's
     // mouth on the one press whose content is that word.
-    const outcome = form["outcome"];
-    if (outcome !== "carry_on" && outcome !== "stop") {
+    const posted = form["outcome"];
+    if (posted !== "carry_on" && posted !== "stop" && posted !== "raise_carry_on") {
       return refused(c, 400, "sendRefusedForm", back);
     }
+    const outcome = posted === "stop" ? "stop" : "carry_on";
+    let press = minting.press;
+    // **Raise the budget and carry on** (D-0140 rule 3): a budget stop's first
+    // option is two answers on one press -- a budgets-only successor of the
+    // lap's approval, recorded and approved as the raise screen's press is
+    // (D-0074 section 4), and then *carry on*. The raise comes first: carrying
+    // on under the same cap would only stop again, so a refused raise answers
+    // nothing.
+    if (posted === "raise_carry_on") {
+      const decision = typeof form["raise"] === "string" ? form["raise"] : "";
+      const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+      const request = typeof form["request"] === "string" ? form["request"] : "";
+      const budgets = budgetsOf(form);
+      if (scope === null) {
+        return refused(c, 403, "sendRefusedNoApprover", back);
+      }
+      if (decision === "" || iterationId === "" || request === "" || budgets === null) {
+        return refused(c, 400, "sendRefusedForm", back);
+      }
+      const raised = await scope.raise(press, {
+        scopeId: newScopeId(),
+        requestMessageId: request,
+        scopeDecisionId: decision,
+        iterationId,
+        budgets,
+      });
+      // A second press of a form whose raise and answer both landed: the tip
+      // has moved, and the answer is already there.
+      if (!raised.ok && !(await alreadyThere({ messageId, body, inReplyTo: back }, outcome))) {
+        return refused(c, 409, "answerRefusedRaise", back);
+      }
+      // The one press the person made carries its second write, the answer.
+      press = Object.freeze({}) as Press;
+      minted.add(press);
+    }
     const message = { messageId, body, inReplyTo: back };
-    const answered = await say.answerAsk(minting.press, message, outcome);
+    const answered = await say.answerAsk(press, message, outcome);
     if (!answered.ok && !(await alreadyThere(message, outcome))) {
       return refused(c, 409, "sendRefusedNotTaken", back);
     }
@@ -3054,7 +3089,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       | "sendRefusedNotTaken"
       | "sendRefusedAsk"
       | "sendRefusedTooLong"
-      | "answerRefusedPress",
+      | "answerRefusedPress"
+      | "answerRefusedRaise",
     back: string | null,
   ) {
     const wording = wordingOf(c);

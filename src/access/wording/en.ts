@@ -273,6 +273,12 @@ explanation you pressed on and then answers the gate.`,
   answerOutcomeNote:
     "Sent as written. Carry on lets the work be tried again; Stop this line keeps it stopped, " +
     "and you can carry on later.",
+  answerRaiseAction: "Raise the budget and carry on",
+  answerRaiseLabel: "Budget from here on (USD)",
+  answerRaiseLeft: (left, reserve, enough) =>
+    `This approval has $${left} left, which ${enough ? "covers" : "does not cover"} the $${reserve} ` +
+    `one more try holds. Raising records a new approval with only its budget changed, and what ` +
+    `was spent stays under the old one.`,
   newRequestHeading: "New request",
   requestPlaceholder: "What do you want done? Write it as you would say it.",
   replyPlaceholder: "Write a reply.",
@@ -305,6 +311,9 @@ explanation you pressed on and then answers the gate.`,
   sendRefusedUnknown: "rondo did not take this message. Reload the page and send again.",
   answerRefusedPress:
     "An answer is taken only from a press of the Answer button. Reload the thread and press Answer again.",
+  answerRefusedRaise:
+    "The budget was not raised, and the question is not answered yet: the approval may have " +
+    "been raised or replaced already. Reload the thread and answer again.",
   replyNotAnswer: "This reply does not answer the question waiting in this thread.",
   sendBack: "Back to the thread",
   sendBackNote: "Your browser's Back button returns to what you wrote.",
@@ -1120,6 +1129,18 @@ explanation you pressed on and then answers the gate.`,
       "- Carrying on, then starting again. Gives up: what this try changed and did not commit.",
       "- Stopping this line. Gives up: this request's work.",
       "Recommended: carrying on.",
+      "This line stays stopped until this message is answered.",
+    ].join("\n"),
+  lapBudgetStoppedSaid: (said) =>
+    [
+      `The work stopped at its budget. ${said ?? "What happened is on the work's line in this thread."}`,
+      "Options:",
+      "- Raising the budget and carrying on, then starting again. Gives up: the money you add, " +
+        "and what this try changed and did not commit.",
+      "- Carrying on under the same budget. Gives up: what this try changed and did not commit; " +
+        "a try with too little left stops again.",
+      "- Stopping this line. Gives up: this request's work.",
+      "Recommended: raising the budget and carrying on.",
       "This line stays stopped until this message is answered.",
     ].join("\n"),
   lapLostAsk: [

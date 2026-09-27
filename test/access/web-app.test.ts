@@ -3515,3 +3515,50 @@ test("an open tab's report of its notice is written once per wait and outcome, a
   stop.abort();
   expect(await closed).toBe(0);
 });
+
+test("(answer) a budget stop's raise-and-carry-on press raises the approval, then carries on; a refused raise answers nothing (D-0140)", async () => {
+  const answerWith = async (answer: ScopeRecorded) => {
+    const { ports, waitingAsks } = await askWaiting();
+    const raised: RaiseInput[] = [];
+    const notThis = async () => await Promise.resolve({ ok: false, note: "not this route" });
+    const withRaise = {
+      ...ports,
+      scope: new ScopePort(notThis, notThis, null, null, async (input) => {
+        raised.push(input);
+        return await Promise.resolve(answer);
+      }),
+    } as ServedPorts;
+    const { base, stop, closed } = await served(createApp(withRaise, TOKEN));
+    const { scope_id: _minted, ...drawn } = raiseForm({ iteration: "lap-stopped", cost_usd: "20" });
+    const pressed = await send(base, "/answer-ask", "POST", pressHeaders(base), {
+      ...drawn,
+      message_id: newMessageId("reply"),
+      in_reply_to: "ask",
+      body: "raise it",
+      outcome: "raise_carry_on",
+    });
+    const waiting = await waitingAsks();
+    stop.abort();
+    expect(await closed).toBe(0);
+    return { pressed, raised, waiting };
+  };
+
+  const done = await answerWith({ ok: true, note: "", scopeDecisionId: "decision-2" });
+  expect(done.pressed.status).toBe(303);
+  expect(done.raised).toMatchObject([
+    {
+      requestMessageId: "req-1",
+      scopeDecisionId: "decision-1",
+      iterationId: "lap-stopped",
+      budgets: { laps: 3, cost_usd: 20, cost_reserve_usd: 2.5 },
+    },
+  ]);
+  // Minted by the route: the answer box has no scope id of its own.
+  expect(done.raised[0]?.scopeId).toMatch(/^scope-/);
+  expect(done.waiting).toEqual([]);
+
+  const refused = await answerWith({ ok: false, note: "not the tip", why: "raiseRefusedNotTip" });
+  expect(refused.pressed.status).toBe(409);
+  expect(refused.raised).toHaveLength(1);
+  expect(refused.waiting).toEqual(["ask"]);
+});

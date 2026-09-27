@@ -1312,7 +1312,9 @@ async function withStopAsk(
   const row = found.record;
   const outcome = await thread.record.recordThreadMessage({
     messageId: `lap-stopped-${row.id}`,
-    body: thread.words.lapStoppedSaid(
+    body: (row.failureKind === "budget"
+      ? thread.words.lapBudgetStoppedSaid
+      : thread.words.lapStoppedSaid)(
       row.reason === null ? null : refusalSaid(thread.words, row, row.reason),
     ),
     authorKind: "drafter",

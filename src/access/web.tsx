@@ -2690,6 +2690,107 @@ async function threadActs(
 /** A pull request body split around the request fold it carries. */
 
 /**
+ * The raise's fields in a budget stop's answering box (D-0140 rule 3): the
+ * amount, prefilled with what the approval allowed, and the approval's other
+ * budgets carried as drawn, so the press posts what the raise screen's form
+ * would. What is left, beside the reserve one more try holds, is said above it.
+ */
+function raiseFields(wording: Chrome, raise: BudgetRaise) {
+  const b = raise.budgets;
+  return (
+    <div class="mx-4 mt-2 space-y-1">
+      <input type="hidden" name="raise" value={raise.scopeDecisionId} />
+      <input type="hidden" name="iteration" value={raise.iterationId} />
+      <input type="hidden" name="request" value={raise.requestMessageId} />
+      <input type="hidden" name="laps" value={String(b.laps)} />
+      <input type="hidden" name="review_rounds" value={String(b.review_rounds)} />
+      <input type="hidden" name="cost_reserve_usd" value={money(b.cost_reserve_usd)} />
+      <input type="hidden" name="expires_at_ms" value={localTime(b.expires_at_ms)} />
+      <p class="text-meta leading-5 text-muted-foreground">
+        {wording.answerRaiseLeft(
+          money(raise.leftUsd),
+          money(b.cost_reserve_usd),
+          raise.leftUsd >= b.cost_reserve_usd,
+        )}
+      </p>
+      <label class="flex items-center gap-2 text-meta leading-5 text-muted-foreground">
+        <span>{wording.answerRaiseLabel}</span>
+        <input
+          type="number"
+          name="cost_usd"
+          min="0.01"
+          step="0.01"
+          value={money(b.cost_usd)}
+          class="w-28 rounded-md border border-border bg-background px-2 py-1 text-body leading-5"
+        />
+      </label>
+    </div>
+  );
+}
+
+/**
+ * A budget stop's raise, drawn in its answering box (D-0140 rule 3): the lap,
+ * the approval its next try would spend, that approval's budgets for the
+ * successor to start from, and what is left of it by the admission arithmetic
+ * (D-0066 rule 3.4.2).
+ */
+interface BudgetRaise {
+  readonly iterationId: string;
+  readonly requestMessageId: string;
+  readonly scopeDecisionId: string;
+  readonly budgets: ScopePayload["budgets"];
+  readonly leftUsd: number;
+}
+
+/**
+ * The raise each budget stop waiting in `root`'s thread offers, by the ask's
+ * id: a `lap-stopped-` ask over a lap that ended `budget`, whose line has one
+ * approved tip that reads. Anything else offers none, and its box is the two
+ * answers it always had.
+ */
+async function budgetRaises(
+  ports: WebPorts,
+  threads: Threads,
+  root: string,
+): Promise<ReadonlyMap<string, BudgetRaise>> {
+  const raises = new Map<string, BudgetRaise>();
+  for (const message of threads.messages) {
+    if (
+      !message.messageId.startsWith("lap-stopped-") ||
+      !threads.waiting.has(message.messageId) ||
+      threads.rootOf(message.messageId) !== root
+    ) {
+      continue;
+    }
+    const iterationId = message.bases.find((basis) => basis["form"] === "iteration")?.[
+      "iterationId"
+    ];
+    if (typeof iterationId !== "string") continue;
+    const found = await ports.store.read(iterationId);
+    if (found.kind !== "read" || found.record.failureKind !== "budget") continue;
+    const tip = await approvalTip(ports.record, iterationId);
+    if (tip.kind !== "tip") continue;
+    const decided = await ports.record.readScopeDecision(tip.scopeDecisionId);
+    if (decided.kind !== "read") continue;
+    const stored = await ports.record.readScope(decided.decision.scopeId);
+    if (stored.kind !== "read") continue;
+    const budgets = stored.scope.payload.budgets;
+    const spent = await ports.record.scopeSpent(tip.scopeDecisionId);
+    raises.set(message.messageId, {
+      iterationId,
+      requestMessageId: found.record.requestMessageId,
+      scopeDecisionId: tip.scopeDecisionId,
+      budgets,
+      leftUsd: Math.max(
+        0,
+        budgets.cost_usd - spent.readCostUsd - spent.unreadLaps * budgets.cost_reserve_usd,
+      ),
+    });
+  }
+  return raises;
+}
+
+/**
  * The box a person writes into: a new request on `requests`, a reply on
  * `thread` (D-0061 rule 4, D-0059 section 5a's send).
  *
@@ -2730,6 +2831,8 @@ function composerView(
    * `page/composer.js` lets it win over a kept unsent draft once.
    */
   taken: { readonly key: string; readonly text: string } | null = null,
+  /** The raise each budget stop offers, by the ask's id (D-0140 rule 3). */
+  raises: ReadonlyMap<string, BudgetRaise> = new Map(),
 ) {
   if (view.kind !== "requests" && view.kind !== "thread") {
     return null;
@@ -2747,6 +2850,8 @@ function composerView(
   }
   const kind = replying === null ? "request" : "reply";
   const answers = replying?.answers === true;
+  const raise =
+    answers && replying !== null ? (raises.get(replying.target.messageId) ?? null) : null;
   const action = `/${answers ? "answer-ask" : kind}?lang=${encodeURIComponent(wording.lang)}`;
   return (
     <form
@@ -2855,6 +2960,7 @@ function composerView(
                 {wording.replyNotAnswer}
               </p>
             ) : null}
+            {raise === null ? null : raiseFields(wording, raise)}
           </>
         )}
         {/* Where htmx puts a refusal (the page's `responseHandling`); the draft stays. */}
@@ -2929,10 +3035,22 @@ function composerView(
                   type="submit"
                   name="outcome"
                   value="carry_on"
-                  class={`${PRIMARY} h-9 px-4 text-sm`}
+                  class={`${raise === null ? PRIMARY : SECONDARY} h-9 px-4 text-sm`}
                 >
                   {wording.answerCarryOnAction}
                 </button>
+                {/* A budget stop's recommended answer (D-0140 rule 3): the
+                    same cap again only stops again. */}
+                {raise === null ? null : (
+                  <button
+                    type="submit"
+                    name="outcome"
+                    value="raise_carry_on"
+                    class={`${PRIMARY} h-9 px-4 text-sm`}
+                  >
+                    {wording.answerRaiseAction}
+                  </button>
+                )}
               </>
             ) : (
               <button
@@ -3906,6 +4024,8 @@ export async function operatorPage(
           newId,
           ports.actorId,
           nowMs,
+          null,
+          await budgetRaises(ports, threads, selectedRoot),
         )?.toString();
   /*
    * **The box to answer in** (D-0083 rule 9): the gate, whole, inside the

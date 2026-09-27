@@ -591,7 +591,7 @@ export const PAGE_EN: PageWords = Object.freeze({
         : spent === null
           ? `Stopped at the approved budget, which had $${left} left for this try. What it spent was not reported.`
           : `Stopped at the approved budget: this try spent $${spent} of the $${left} left for it.`
-    } To go on, ask again with a larger budget.`,
+    } To go on, raise the budget from the question below.`,
   evBroke: "Stopped by a fault in rondo itself. Nothing you asked for was wrong.",
   evLost:
     "Lost when rondo was restarted. Nothing of it is running, and the money held for it is back.",
@@ -1123,7 +1123,7 @@ export const PAGE_JA: PageWords = Object.freeze({
         : spent === null
           ? `承認した予算の上限で止まりました（この回に残っていたのは $${left}）。使った額は報告されていません。`
           : `承認した予算の上限で止まりました。この回に残っていた $${left} のうち $${spent} を使いました。`
-    }続けるには、予算を増やして依頼し直してください。`,
+    }続けるには、下の質問から予算を増やしてください。`,
   evBroke: "rondo 自身の不具合で止まりました。依頼のしかたに問題があったわけではありません。",
   evLost: "rondo の再起動で失われました。動いているものはなく、取り置いていた金額は戻しました。",
   evBrokeReason: "rondo が記録した内容（rondo を保守する人向け）",
