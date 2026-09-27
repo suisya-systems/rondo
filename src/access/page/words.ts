@@ -219,6 +219,15 @@ export interface PageWords extends DayWords {
   readonly triageGoalScopeResume: string;
   readonly triageStarted: string;
   readonly triageStartedLink: string;
+  /**
+   * The flow's ask over a candidate's open points (rondo#487): what it asks
+   * before it starts the request, the press that answers, and its refusals.
+   */
+  readonly flowAskLead: string;
+  readonly flowAskAction: string;
+  readonly flowAskRefusedNoApprover: string;
+  readonly flowAskRefusedPress: string;
+  readonly flowAskRefused: string;
   readonly goalScopeHeading: string;
   readonly goalScopeRunningHeading: string;
   readonly goalScopePausedHeading: string;
@@ -259,6 +268,10 @@ export interface PageWords extends DayWords {
    * the ranking could start, and the next step.
    */
   readonly triageGoalScopeStopped: string;
+  /** A points ask is open (rondo#487): the flow waits on the answers, not on its own work. */
+  readonly triageGoalScopeAsking: string;
+  readonly goalScopeAskingLead: string;
+  readonly goalScopeAskingLink: string;
   readonly triageGoalScopeStoppedLink: string;
   readonly goalScopeStoppedHeading: string;
   readonly flowStopReason: (reason: FlowStop) => string;
@@ -641,6 +654,12 @@ export const PAGE_EN: PageWords = Object.freeze({
   triageGoalScopeResume: "See the approval, or resume",
   triageStarted: "Started",
   triageStartedLink: "Go to the request",
+  flowAskLead: "rondo asks before it starts this. Answer each point, or keep the suggestion.",
+  flowAskAction: "Start with these answers",
+  flowAskRefusedNoApprover:
+    "Nothing was answered: no approver is set for this rondo, so it writes nothing from the page.",
+  flowAskRefusedPress: "Nothing was answered: this did not come from a press on this page.",
+  flowAskRefused: "Nothing was answered: the question has moved on since the page was drawn.",
   goalScopeHeading: "Let rondo work toward this goal",
   goalScopeRunningHeading: "rondo is working toward this goal",
   goalScopePausedHeading: "Work toward this goal is paused",
@@ -702,6 +721,12 @@ export const PAGE_EN: PageWords = Object.freeze({
   scopeStopStopDoes:
     "This line's work ends here. The request's other lines go on, and you can start it again later.",
   triageGoalScopeStopped: "rondo has stopped working toward this goal.",
+  triageGoalScopeAsking:
+    "rondo is waiting for your answers above before it sends the next request.",
+  goalScopeAskingLead:
+    "rondo is waiting for your answers to the open points of the next request before it sends it. " +
+    "The questions are on the front page, under what rondo would ask for next.",
+  goalScopeAskingLink: "Go to the questions",
   triageGoalScopeStoppedLink: "See the approval",
   goalScopeStoppedHeading: "rondo has stopped working toward this goal",
   flowStopReason: (reason) => {
@@ -733,8 +758,6 @@ export const PAGE_EN: PageWords = Object.freeze({
         return "rondo already sent this one.";
       case "put_aside":
         return 'You put it aside with "Not now".';
-      case "open_points":
-        return "It has open points to settle first, which rondo does not decide for you.";
       case "not_issue":
         return "It picks up a stopped request, which you send yourself.";
     }
@@ -1133,6 +1156,13 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageGoalScopeResume: "承認を見る・再開する",
   triageStarted: "開始済み",
   triageStartedLink: "依頼を見る",
+  flowAskLead:
+    "始める前に rondo が聞いています。決めることに一つずつ答えるか、案のままにしてください。",
+  flowAskAction: "この答えで始める",
+  flowAskRefusedNoApprover:
+    "回答していません。この rondo には承認者が設定されていないので、画面からは何も書き込みません。",
+  flowAskRefusedPress: "回答していません。この画面のボタンから送られたものではありません。",
+  flowAskRefused: "回答していません。画面を開いたあとで、この質問は新しくなっています。",
   goalScopeHeading: "この目標に向けて rondo に進めてもらう",
   goalScopeRunningHeading: "rondo がこの目標に向けて進めています",
   goalScopePausedHeading: "この目標に向けた作業は一時停止中です",
@@ -1185,6 +1215,10 @@ export const PAGE_JA: PageWords = Object.freeze({
   scopeStopStopDoes:
     "「この線を止める」を押します。この線の作業は終わり、依頼のほかの線は続きます。あとから続けることもできます。",
   triageGoalScopeStopped: "rondo はこの目標に向けた作業を止めています。",
+  triageGoalScopeAsking: "rondo は、上の質問への答えを待ってから次の依頼を送ります。",
+  goalScopeAskingLead:
+    "次の依頼には先に決めることがあり、rondo はあなたの答えを待っています。質問は最初の画面の「rondo が次に勧める依頼」の下にあります。",
+  goalScopeAskingLink: "質問を見る",
   triageGoalScopeStoppedLink: "承認を見る",
   goalScopeStoppedHeading: "rondo はこの目標に向けた作業を止めています",
   flowStopReason: (reason) => {
@@ -1215,8 +1249,6 @@ export const PAGE_JA: PageWords = Object.freeze({
         return "rondo がもう送っています。";
       case "put_aside":
         return "あなたが「今はやらない」で見送りました。";
-      case "open_points":
-        return "先に決めることが残っています（rondo は代わりに決めません）。";
       case "not_issue":
         return "止まった依頼の続きです。続けるかどうかはあなたが決めて送ります。";
     }

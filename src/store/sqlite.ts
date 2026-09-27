@@ -73,6 +73,8 @@ import {
   type FindingSeverity,
   FLOW_AUTHOR,
   FLOW_AUTHOR_PREFIX,
+  type FlowAnswerDraft,
+  type FlowAskDraft,
   type FlowStopDraft,
   type GateAnswer,
   type GoalDraft,
@@ -113,6 +115,7 @@ import {
   type ScopeTest,
   type SetupPlanDraft,
   type StoredDecision,
+  type StoredFlowAsk,
   type StoredFlowStop,
   type StoredGoal,
   type StoredProposal,
@@ -1677,6 +1680,29 @@ CREATE TABLE IF NOT EXISTS flow_stop (
   repository                  TEXT    NOT NULL,
   facts                       TEXT    NOT NULL,
   at_ms                       INTEGER NOT NULL
+);
+
+-- rondo#487 (D-0128). The flow host's ask over a candidate's open points, and
+-- the person's answer: two append-only rows, the answer beside the ask and not
+-- a column on it, for triage_decline's reason. One answer per ask (its key).
+-- points and answers are canonical JSON: [{point, recommendation}, ...] and
+-- the answers in the same order.
+CREATE TABLE IF NOT EXISTS flow_ask (
+  ask_id                      TEXT    PRIMARY KEY,
+  repository                  TEXT    NOT NULL,
+  goal_id                     TEXT    NOT NULL,
+  scope_decision_id           TEXT    NOT NULL,
+  proposal_id                 TEXT    NOT NULL,
+  candidate                   TEXT    NOT NULL,
+  points                      TEXT    NOT NULL,
+  asked_at_ms                 INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS flow_answer (
+  ask_id                      TEXT    PRIMARY KEY,
+  answers                     TEXT    NOT NULL,
+  answered_by                 TEXT    NOT NULL,
+  answered_at_ms              INTEGER NOT NULL
 );
 
 -- D-0098 rule 3.2. A decision-record number a line was handed at admission.
@@ -3420,6 +3446,18 @@ export interface AdvisoryRecord {
   recordFlowStop(draft: FlowStopDraft): Promise<RecordOutcome>;
   /** Every flow stop, oldest first. */
   flowStops(): Promise<readonly StoredFlowStop[]>;
+  /**
+   * Record the flow host's ask over a candidate's open points (rondo#487). A
+   * second write under the same id is `duplicate`: the ask is asked once.
+   */
+  recordFlowAsk(draft: FlowAskDraft): Promise<RecordOutcome | { readonly kind: "duplicate" }>;
+  /**
+   * Record a person's answer to a flow ask. Refused when the ask is not
+   * there, is answered already, or the answers do not match its points.
+   */
+  recordFlowAnswer(draft: FlowAnswerDraft): Promise<RecordOutcome>;
+  /** Every flow ask with its answer, oldest first. */
+  flowAsks(): Promise<readonly StoredFlowAsk[]>;
   /** The newest triage proposal of each repository, oldest repository first. */
   latestTriage(): Promise<readonly StoredTriage[]>;
   /**
@@ -4940,6 +4978,114 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       });
     },
 
+    async recordFlowAsk(
+      draft: FlowAskDraft,
+    ): Promise<RecordOutcome | { readonly kind: "duplicate" }> {
+      return immediateTransaction(connection, () => {
+        if (
+          connection.prepare("SELECT 1 FROM flow_ask WHERE ask_id = ?").get(draft.askId) !==
+          undefined
+        ) {
+          return { kind: "duplicate" as const };
+        }
+        if (draft.points.length === 0) {
+          return { kind: "refused" as const, reason: `'${draft.askId}' asks no point` };
+        }
+        connection
+          .prepare(
+            "INSERT INTO flow_ask (ask_id, repository, goal_id, scope_decision_id, proposal_id, " +
+              "candidate, points, asked_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          )
+          .run(
+            draft.askId,
+            draft.repository,
+            draft.goalId,
+            draft.scopeDecisionId,
+            draft.proposalId,
+            draft.candidate,
+            canonicalJson(
+              draft.points.map((one) => ({ point: one.point, recommendation: one.recommendation })),
+            ),
+            draft.askedAtMs,
+          );
+        return { kind: "recorded" as const };
+      });
+    },
+
+    async recordFlowAnswer(draft: FlowAnswerDraft): Promise<RecordOutcome> {
+      return immediateTransaction(connection, () => {
+        const ask = connection
+          .prepare("SELECT points FROM flow_ask WHERE ask_id = ?")
+          .get(draft.askId) as SqlRow | undefined;
+        if (ask === undefined) {
+          return { kind: "refused", reason: `'${draft.askId}' is no question rondo asked` };
+        }
+        if (
+          connection.prepare("SELECT 1 FROM flow_answer WHERE ask_id = ?").get(draft.askId) !==
+          undefined
+        ) {
+          return { kind: "refused", reason: `'${draft.askId}' is answered already` };
+        }
+        const points = flowPoints(String(ask["points"]));
+        if (
+          draft.answers.length !== points.length ||
+          draft.answers.some((answer) => answer.trim() === "")
+        ) {
+          return {
+            kind: "refused",
+            reason: `'${draft.askId}' asks ${String(points.length)} points, and each needs an answer`,
+          };
+        }
+        connection
+          .prepare(
+            "INSERT INTO flow_answer (ask_id, answers, answered_by, answered_at_ms) " +
+              "VALUES (?, ?, ?, ?)",
+          )
+          .run(
+            draft.askId,
+            canonicalJson(draft.answers.map((answer) => answer.trim())),
+            draft.answeredBy,
+            draft.answeredAtMs,
+          );
+        return { kind: "recorded" };
+      });
+    },
+
+    async flowAsks(): Promise<readonly StoredFlowAsk[]> {
+      return (
+        connection
+          .prepare(
+            "SELECT k.*, a.answers, a.answered_by, a.answered_at_ms FROM flow_ask k " +
+              "LEFT JOIN flow_answer a ON a.ask_id = k.ask_id ORDER BY k.asked_at_ms, k.rowid",
+          )
+          .all() as SqlRow[]
+      ).map((row) => {
+        let answers: unknown = null;
+        try {
+          answers = row["answers"] === null ? null : JSON.parse(String(row["answers"]));
+        } catch {
+          answers = null;
+        }
+        return {
+          askId: String(row["ask_id"]),
+          repository: String(row["repository"]),
+          goalId: String(row["goal_id"]),
+          scopeDecisionId: String(row["scope_decision_id"]),
+          proposalId: String(row["proposal_id"]),
+          candidate: String(row["candidate"]),
+          points: flowPoints(String(row["points"])),
+          askedAtMs: Number(row["asked_at_ms"]),
+          answer: Array.isArray(answers)
+            ? {
+                answers: answers.map(String),
+                answeredBy: String(row["answered_by"]),
+                answeredAtMs: Number(row["answered_at_ms"]),
+              }
+            : null,
+        };
+      });
+    },
+
     async triageDeclines(): Promise<readonly StoredTriageDecline[]> {
       return (
         connection
@@ -5461,6 +5607,25 @@ function coveredMessageIds(connection: DatabaseSync, drafterPrefix: string): Set
     )
     .all(drafterPrefix, drafterPrefix, drafterPrefix, drafterPrefix) as SqlRow[];
   return new Set(rows.map((row) => String(row["id"])));
+}
+
+/** A flow ask's points read back; a row that will not read asks nothing. */
+function flowPoints(json: string): { readonly point: string; readonly recommendation: string }[] {
+  let points: unknown;
+  try {
+    points = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  return Array.isArray(points)
+    ? points.flatMap((one: unknown) =>
+        isRecord(one) &&
+        typeof one["point"] === "string" &&
+        typeof one["recommendation"] === "string"
+          ? [{ point: one["point"], recommendation: one["recommendation"] }]
+          : [],
+      )
+    : [];
 }
 
 /**

@@ -94,6 +94,10 @@ export interface WebPorts extends InboxReadPorts {
       | "approvalsInForce"
       // rondo#488: a stop the flow met before its first request.
       | "flowStops"
+      // rondo#487: the flow's asks over a candidate's open points, and the
+      // *not now* that makes one hold nothing.
+      | "flowAsks"
+      | "triageDeclines"
     >;
   readonly policy: HostPolicy;
   readonly actorId: string | null;

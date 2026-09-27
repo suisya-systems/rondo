@@ -18,12 +18,13 @@
  * **It writes nothing on a `GET`** and holds still ({@link isLive}), as the
  * scope screen does: it is a form being filled in.
  */
+import { readTriagePayload } from "../../advisory/triage.js";
 import type { StoredGoal, StoredScope } from "../../store/records.js";
 import { flowStopOf } from "../flow-stop.js";
 import { goalScopeMaterial, goalScopeStanding } from "../goal-scope.js";
 import { ago } from "../inbox.js";
 import type { MintScopeId, WebPorts } from "../page/contract.js";
-import { type FlowStopSaid, flowStopSaid } from "../page/triage.js";
+import { type FlowStopSaid, flowStopSaid, waitingPointsAsk } from "../page/triage.js";
 import {
   CARD,
   CARD_HEADING,
@@ -65,6 +66,22 @@ export async function goalScopeView(
       ? null
       : await flowStopOf(ports.record, messages.messages, goal.goalId, standing.scopeDecisionId);
   const stop = stopRead === null ? null : flowStopSaid(wording, stopRead);
+  // Waiting on answers to open points is not working on its own either
+  // (rondo#487): the picker's own reading of the open ask.
+  const triage =
+    goal === null || standing.kind !== "running" || stop !== null
+      ? undefined
+      : (await ports.record.latestTriage()).find((one) => one.repository === view.repository);
+  const triagePayload = triage === undefined ? null : readTriagePayload(triage.payload);
+  const asking =
+    goal !== null &&
+    triagePayload !== null &&
+    waitingPointsAsk(
+      await ports.record.flowAsks(),
+      goal.goalId,
+      triagePayload,
+      await ports.record.triageDeclines(),
+    ) !== undefined;
   const head = (
     <header class="space-y-2">
       <div class="flex min-w-0 items-center gap-2">
@@ -124,6 +141,7 @@ export async function goalScopeView(
         token,
         newScopeId,
         stop,
+        asking,
       )
     ) : material === null ? (
       note(wording.goalScopeNoPlan)
@@ -202,15 +220,26 @@ async function running(
   token: string | null,
   newScopeId: MintScopeId | null,
   stop: FlowStopSaid | null,
+  asking: boolean,
 ): Promise<unknown> {
   const budgets = scope.payload.budgets;
   const spent = await ports.record.scopeSpent(scopeDecisionId);
   return (
     <>
-      {stop === null ? (
-        <p class="text-body leading-6">{wording.goalScopeRunningLead}</p>
-      ) : (
+      {stop !== null ? (
         stopCard(wording, stop)
+      ) : asking ? (
+        <section class="flex flex-col gap-2 rounded-lg border border-wait/40 bg-wait-wash px-4 py-3">
+          <p class="text-body leading-6">{wording.goalScopeAskingLead}</p>
+          <a
+            href={`${viewHref({ kind: "requests" }, wording.lang)}#triage-heading`}
+            class={`${PRIMARY} h-10 justify-center self-start px-6 text-sm`}
+          >
+            {wording.goalScopeAskingLink}
+          </a>
+        </section>
+      ) : (
+        <p class="text-body leading-6">{wording.goalScopeRunningLead}</p>
       )}
       <section class={`${CARD} space-y-1`}>
         <h3 class={CARD_HEADING}>{wording.raiseWasHeading}</h3>

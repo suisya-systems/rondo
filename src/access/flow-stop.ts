@@ -63,7 +63,7 @@ export function stopPrefix(scopeDecisionId: string): string {
   return `flow-stop-${scopeDecisionId}-`;
 }
 
-const SKIPS: readonly SkipReason[] = ["started", "put_aside", "open_points", "not_issue"];
+const SKIPS: readonly SkipReason[] = ["started", "put_aside", "not_issue"];
 
 /** A `flow_stop` row's facts, read back; null for bytes this build does not read. */
 export function readFlowStopFacts(facts: JsonRecord): FlowStopFacts | null {
