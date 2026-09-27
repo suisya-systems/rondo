@@ -21,7 +21,8 @@
  * **A stop is asked, once** (D-0066 rule 4.4's layout): the scope run out
  * (expiry, laps or cost), a newer goal, two injected lines that ended failed,
  * or nothing left the ranking would start. The ask sits in the thread of the
- * flow's latest request, so the flow waits on it (`ownOpenAsk`); with no
+ * flow's latest request, so the flow waits on it (`ownOpenAsk`), and in the
+ * flow's own voice, so it holds no part of that request (`holdsNothing`); with no
  * request yet there is no thread, and the stop is said on the terminal. A pause
  * is the person's own answer (`laps: 0`, D-0128 rule 4) and is not asked about.
  */
@@ -42,7 +43,6 @@ import {
   type ThreadMessageDraft,
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
-import { DETERMINISTIC_DRAFTER } from "./advisory.js";
 import { hostFailure } from "./host-failure.js";
 import { MODEL_DRAFTER_PREFIX } from "./model-draft/judgement.js";
 
@@ -440,7 +440,9 @@ async function askStop(
     messageId,
     body: flowStopBody(flow, repository, reason, detail),
     authorKind: "drafter",
-    authorId: DETERMINISTIC_DRAFTER,
+    // The flow's own voice, so the ask holds the flow and no part of the
+    // request it is asked in (`holdsNothing`).
+    authorId: FLOW_AUTHOR,
     inReplyTo: latest.messageId,
     atMs: ports.now(),
     bases: [

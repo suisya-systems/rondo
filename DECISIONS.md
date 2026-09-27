@@ -25131,7 +25131,9 @@ the newest goal: an edit would widen an approval nobody re-read.
 > no longer holds. The flow host starts nothing. A stop -- the scope past its expiry, laps or cost, a
 > newer goal, two injected requests ended `failed` or `abandoned`, nothing left it may start -- is
 > one ask in the thread of the flow's latest request (widen, a new goal scope, or stop), named by
-> the approval, the reason and that request, and said on the terminal where there is no request
+> the approval, the reason and that request, written as `rondo/flow/1` so that it holds the flow and
+> no part of that request (`D-0066` rule 4.4's hold does not apply to it), and said on the terminal
+> where there is no request
 > yet. **A pause is not asked about**: `laps: 0` is already the person's answer. Nothing above is
 > edited.
 

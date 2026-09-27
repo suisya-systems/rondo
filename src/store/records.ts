@@ -2124,6 +2124,12 @@ export interface OpenAsk {
    * unproposed start of the request does not apply to it. Absent otherwise.
    */
   readonly lineOnly?: true;
+  /**
+   * The flow host's stop (rondo#469, author {@link FLOW_AUTHOR}): it holds the
+   * flow's next request and no act of the request it is asked in, whose parts
+   * carry on. Absent otherwise.
+   */
+  readonly holdsNothing?: true;
 }
 
 /**
@@ -2187,6 +2193,9 @@ export function askStandsOver(
   lineageIds: readonly string[],
   unproposedStart: boolean,
 ): boolean {
+  if (ask.holdsNothing === true) {
+    return false;
+  }
   if (unproposedStart && ask.lineOnly !== true) {
     return true;
   }

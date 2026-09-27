@@ -19,6 +19,7 @@ import { flowMessageId } from "../../src/advisory/flow.js";
 import { type TriagePayload, triagePayloadDocument } from "../../src/advisory/triage.js";
 import { contentDigest } from "../../src/store/plan.js";
 import {
+  askStandsOver,
   FLOW_AUTHOR,
   type IterationRecord,
   type JsonRecord,
@@ -496,4 +497,8 @@ test("nothing eligible stops the flow once, and the ask holds it", async () => {
   const asks = (await w.messages()).filter((m) => m.asks);
   expect(asks.map((m) => m.messageId)).toEqual([`flow-stop-sd-goal-nothing_eligible-${first}`]);
   expect(w.log.join("\n")).toContain("waiting (open_ask)");
+  // It holds the flow, and no part of the request it is asked in.
+  const open = await w.record.openAsksIn(first);
+  if (open.kind !== "read") throw new Error(open.reason);
+  expect(open.asks.map((ask) => askStandsOver(ask, [], true))).toEqual([false]);
 });
