@@ -25,7 +25,7 @@ import {
   type VerifiedContinuo,
 } from "../../continuo/invoker.js";
 import { decodeLapCommands } from "../../continuo/protocol.js";
-import { reviewerFamilyCheck, reviewerRow } from "../../continuo/roles.js";
+import { reviewerFamilyCheck, reviewerFor } from "../../continuo/roles.js";
 import { readPlan } from "../../refrain/plan.js";
 import {
   type IterationRecord,
@@ -157,7 +157,7 @@ async function take(ports: ModelReviewPorts, iterationId: string): Promise<reado
   if (closing !== null) {
     return await closingLap(ports, record, closing);
   }
-  const reviewer = reviewerRow();
+  const reviewer = reviewerFor(record.model);
 
   const append = async (
     draft: Parameters<IterationStore["appendReading"]>[1],

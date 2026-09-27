@@ -605,6 +605,25 @@ describe("measure report, the one verb whose success is unwrapped", () => {
  * twelve fields are read together and the interesting failures are about a
  * single key being wrong while the other eleven are right.
  */
+/** The six keys continuo D-1114 adds to `spend`, as a Claude lap carries them. */
+const CLAUDE_TOKENS = {
+  model: null,
+  input_tokens: null,
+  cached_input_tokens: null,
+  cache_write_input_tokens: null,
+  output_tokens: null,
+  reasoning_output_tokens: null,
+};
+
+/** The same keys read, as a Claude lap's. */
+const CLAUDE_TOKENS_READ = {
+  model: null,
+  inputTokens: null,
+  cachedInputTokens: null,
+  cacheWriteInputTokens: null,
+  outputTokens: null,
+};
+
 function lapPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     run_id: "r1",
@@ -620,7 +639,7 @@ function lapPayload(overrides: Record<string, unknown> = {}): Record<string, unk
     elapsed_deadline_at_ms: null,
     model: "claude-opus-5",
     permission_denials: [],
-    spend: { total_cost_usd: 1.542, num_turns: 38, duration_ms: 203_324 },
+    spend: { total_cost_usd: 1.542, num_turns: 38, duration_ms: 203_324, ...CLAUDE_TOKENS },
     commands: [
       {
         index: 2,
@@ -663,7 +682,7 @@ describe("lap perform, the verb whose document is the only record of a lap", () 
         // continuo saying the fence refused nothing.
         permissionDenials: "[]",
         // continuo D-1112: what the turn cost and what it ran.
-        spend: { totalCostUsd: 1.542, numTurns: 38, durationMs: 203_324 },
+        spend: { totalCostUsd: 1.542, numTurns: 38, durationMs: 203_324, ...CLAUDE_TOKENS_READ },
         commands:
           '[{"index":2,"command":"npm run verify","output":"ok","output_omitted_chars":0,"is_error":false}]',
       },
@@ -680,11 +699,46 @@ describe("lap perform, the verb whose document is the only record of a lap", () 
     });
     // A spend whose event carried no number under a key keeps that key null.
     expect(
-      read({ spend: { total_cost_usd: null, num_turns: 3, duration_ms: null } }),
+      read({ spend: { total_cost_usd: null, num_turns: 3, duration_ms: null, ...CLAUDE_TOKENS } }),
     ).toMatchObject({
       kind: "answered",
       payload: { spend: { totalCostUsd: null, numTurns: 3, durationMs: null } },
     });
+    // continuo D-1114: a Codex lap's spend is its model and token counts, and
+    // no dollars.
+    expect(
+      read({
+        spend: {
+          total_cost_usd: null,
+          num_turns: null,
+          duration_ms: 5_000,
+          model: "gpt-6-astra",
+          input_tokens: 1_000,
+          cached_input_tokens: 600,
+          cache_write_input_tokens: 100,
+          output_tokens: 50,
+          reasoning_output_tokens: 20,
+        },
+      }),
+    ).toMatchObject({
+      kind: "answered",
+      payload: {
+        spend: {
+          totalCostUsd: null,
+          model: "gpt-6-astra",
+          inputTokens: 1_000,
+          cachedInputTokens: 600,
+          cacheWriteInputTokens: 100,
+          outputTokens: 50,
+        },
+      },
+    });
+    // The six keys are always present (continuo D-1114 rule 7); one absent is a
+    // document rondo will not read.
+    const { output_tokens: _dropped, ...withoutOutput } = CLAUDE_TOKENS;
+    expect(
+      read({ spend: { total_cost_usd: 1, num_turns: 1, duration_ms: 1, ...withoutOutput } }),
+    ).toMatchObject({ kind: "invokerDefect" });
     expect(read({ commands: [] })).toMatchObject({ kind: "answered", payload: { commands: "[]" } });
 
     // Absent keys, a number that is not one, and a command missing a key are

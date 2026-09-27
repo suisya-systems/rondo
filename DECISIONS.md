@@ -159,6 +159,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0120 | The close-out after a merge closes a superseded lap's run as `cancelled` before asking for its worktree, in both merge paths; this reads `D-0010` narrowly and does not supersede it | accepted |
 | D-0121 | A running lap is held to the scope's budget by the worker CLI's own spend stop: rondo sends each lap with the room the budget leaves it, continuo carries it (continuo#241), and a Codex lap is held only before it starts | accepted |
 | D-0122 | `mechanical` runs on `claude-sonnet-5` through the Claude CLI: the tier table gains a provider column passed as `lap perform --provider`, every row `claude`, and a drafter may name a `mechanical` agent type only with one grounded claim per condition of `D-0044` rule 1 | accepted |
+| D-0123 | The host's worker is the Claude CLI or the Codex CLI: `RONDO_WORKER_PROVIDER` picks the tier table, a `gpt` lap is read by a Claude reviewer, a Codex lap's tokens are priced at OpenAI's public API rate, and Windows refuses `codex` at start | accepted |
 | D-0124 | Two laps at once by default: D-0023 rule 17's condition is met by the pinned continuo, the default `maxOccupying` is 2, host-wide and across repositories, and `maxLive` stays 3 | accepted |
 | D-0127 | Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended | accepted |
 
@@ -24473,6 +24474,129 @@ comparable in dollars until the pricing question is answered. (c) Both tiers at 
   entry replaces it.
 - **rondo#460 landing.** The provider column then carries its first `codex` row, and rule 2's
   "every row `claude`" stops being true.
+
+## D-0123 — The host's worker is the Claude CLI or the Codex CLI: `RONDO_WORKER_PROVIDER` picks the tier table, a `gpt` lap is read by a Claude reviewer, a Codex lap's tokens are priced at OpenAI's public API rate, and Windows refuses `codex` at start
+
+**Status:** accepted (2026-09-27, rondo#460; the owner's answers through the secretary). Refs
+`D-0021`, `D-0044`, `D-0046`, `D-0065` (rule 3), `D-0066` (rule 3.4), `D-0071`, `D-0121`, `D-0122`, rondo#398,
+rondo#462, `continuo D-1114`, `continuo D-1120`.
+
+**Why an entry is needed.** `D-0122` left a `codex` row to rondo#460 behind three things: a reviewer
+of another family for a `gpt` worker, a dollar figure (or a decision to do without one) for a lap
+that reports tokens, and the Codex home as a host fact with the Windows refusal said before the
+spawn. A changed tier pair and a changed reviewer row are each a new entry (`D-0021`, `D-0065` rule
+3.2). The owner answered each through the secretary on 2026-09-27; the answers are the decision.
+
+### What was put to the owner, and the answers
+
+1. *Price table or null with tokens.* **Price at the public API rate**, with the source and the date
+   recorded, and a price change a new entry. The owner asked first whether `gpt-6-astra` had a public
+   API price at all; it has (below).
+2. *Which Claude model reads a `gpt` lap.* **`claude-opus-5`**, the model the drafter and `standard`
+   already run on, over `claude-sonnet-5`: the reading feeds automatic gate approval, so it is not
+   the place to save.
+3. *Which work goes to Codex.* **The question was reframed by the owner**: Codex is not a cheaper
+   tier for some kind of work. It is either the reviewer (as today) or the main worker in place of
+   the Claude CLI. So the switch is the worker's provider, and the reviewer follows it to the other
+   family. Asked for the unit of the switch (host, request, scope, agent type), the owner chose **the
+   host**, with a per-request choice filed as rondo#462. Asked what `mechanical` runs on under Codex,
+   **`gpt-6-astra` too**: it is the one current model a ChatGPT login runs, so there is no cheaper
+   `gpt` model to give it.
+4. *Windows.* **Refused before the spawn, with the reason.**
+
+### What was measured
+
+At rondo `e537068` and continuo `f2fb450` (the pin) on **2026-09-27**:
+
+- **`gpt-6-astra` has a public API price.** https://developers.openai.com/api/docs/pricing and
+  https://developers.openai.com/api/docs/models/gpt-6-astra, read on 2026-09-27: standard tier,
+  per million tokens, input **$10**, cached input **$1**, cache writes **$12.50**, output **$50**. A
+  prompt over 272K input tokens is priced at 2x the input and cache rates and 1.5x output for the
+  whole request; Batch and Flex are half, Fast mode double. Neither page says how reasoning tokens
+  are billed.
+- **The pinned continuo already runs Codex laps.** `lap perform --provider codex --codex-home DIR`,
+  with the worker command given as `--claude-command` (or `--worker-command`) and never defaulted;
+  `--codex-home` must be absolute. A Codex lap's `spend` carries `model` and five token counts and
+  leaves `total_cost_usd` and `num_turns` null; a Claude lap carries the six new keys as nulls
+  (`continuo D-1114` rule 7). The Windows refusal is `continuo D-1120`, which is past the pin.
+- **One real Codex turn's usage** (`codex exec --json`, codex-cli 0.153.4, `gpt-6-astra`, a one-word
+  prompt): `input_tokens` 19830, `cached_input_tokens` 11520, `cache_write_input_tokens` 0,
+  `output_tokens` 5, `reasoning_output_tokens` 0. The cached count is part of the input, not beside
+  it. Reasoning and cache writes were zero, so rule 5's nesting of those two is the CLI's usage
+  semantics as read, not observed.
+- **Every path that drives continuo starts with `startContinuo(environment)`**, which already reads
+  the host's other facts (`RONDO_CONTINUO_CLI`), and every lap's `spend` reaches the row through one
+  function (`lapSpendFields`).
+- **The reviewer's spawn is one of two already in `forge.ts`.** `runDrafter` runs `claude -p` over
+  one document with no tools and refuses an answer that reports a tool call (`D-0071` rule 1.3),
+  which is what a reviewer needs (`D-0065` rule 1.1).
+
+### Decision
+
+1. **The host names its worker.** `RONDO_WORKER_PROVIDER` is `claude` (unset or empty is `claude`,
+   so every host today is unchanged) or `codex`. With `codex`, `RONDO_CODEX_HOME` and
+   `RONDO_CODEX_COMMAND` are required and absolute. `startContinuo` reads the three with
+   `RONDO_CONTINUO_CLI` and **refuses to start** on anything else. `scripts/start-command.sh` takes
+   them as `--worker-provider`, `--codex-home` and `--codex-command` and writes them into the
+   service. Switching is a restart; a choice per request is rondo#462.
+2. **One tier table per provider.** The Claude table is `D-0122`'s. The Codex table has the same
+   tiers, each `gpt-6-astra`, family `gpt`, provider `codex`. `performLap` looks the tier up in the
+   host's table; on a Codex host it passes `--provider codex --codex-home <home>` and the Codex CLI as
+   the worker command, in place of the plan's Claude command. The tier vocabulary, and so
+   `PRICED_MODEL_TIERS` and a drafter's grounds (`D-0122` rule 3), are the same on either host.
+3. **The reviewer is the first row of another family than the lap's.** The reviewer table gains
+   `claude-opus-5`, family `claude`, run through `claude`. A Claude lap is still read by
+   `gpt-6-astra`; a Codex lap by `claude-opus-5`. A lap whose model rondo files under no family, or
+   no model, gets the first row, and `D-0065` rule 3.3's check refuses it as before: choosing a
+   reviewer is not a way around the check. A `claude`-family reviewer runs through `runDrafter`'s
+   spawn, so it holds `D-0065` rule 1.1 the way the drafter holds `D-0071` rule 1.3.
+4. **A Codex lap's cost is its tokens at the public API rate.** When `lap perform` reports no
+   `total_cost_usd`, `lapSpendFields` prices the token counts with the table in `roles.ts`
+   (`gpt-6-astra` at the rates above, standard, short context) and records the result as
+   `lap_cost_usd`, with the source `priced`, which the gate report says ("priced from its token
+   counts at the public API rate"). A reported cost is never replaced. Counts that are missing, a
+   model with no price, or counts that do not add up leave the column null (`D-0046`: not read, not
+   zero), and the scope's budget charges it the reserve as it charges any unread lap (`D-0066` rule
+   3.4). The figure is what the tokens would cost through the API, which is what the Claude CLI's
+   `total_cost_usd` is too, so the providers compare in one unit; the lap itself runs under a
+   ChatGPT login. **A changed price is a new entry.**
+5. **The counts nest.** Cached input and cache writes are parts of `input_tokens`, and reasoning is
+   part of `output_tokens`, as the Codex CLI's usage counts them, so the uncached input is what is
+   left and reasoning is not priced twice.
+6. **Windows refuses `codex` at start.** `startContinuo` refuses a host whose worker is `codex` on
+   win32, naming `continuo D-1120`, before any run is admitted. A Claude host on Windows is unchanged.
+
+**Options not taken.** For 1: the provider per request (rondo#462: the request form, the store and the
+thread all change), per scope (a new field on `D-0066`'s approval), per agent type (the reading the
+owner set aside: Codex as a kind of work). For 4: null with the token counts kept (the owner chose a
+figure), a price table the owner supplies (unneeded: the price is public). For 6: a refusal at
+`performLap` only (a run would be admitted before it).
+
+### What it costs
+
+- **Two known limits of the price.** The usage is the turn's total, so a request inside it that went
+  past 272K input tokens is priced at the short-context rate and the lap is **undercounted**. And
+  the price pages do not say how reasoning is billed; it is priced as the output it is counted in.
+- **The token counts are not kept.** Only the priced figure reaches the row. A lap priced wrongly by
+  a later price change cannot be re-priced from the row.
+- **A Codex lap is held to the budget only before it starts.** This is `D-0121` rule 6, which this
+  entry makes live: `D-0121` wrote it for the day rondo drives a Codex lap. When `D-0121`'s cap is
+  sent, it goes on Claude laps only, because continuo's Codex provider refuses the flag. A Codex
+  lap's priced cost is what `D-0121` rule 2 counts against the room of the laps after it, and what
+  the report compares with the cap it was sent with (rule 4).
+- **A host runs one worker.** Comparing the two on the same work means two hosts, or a restart
+  between laps, until rondo#462.
+- **A Claude reviewer's failure speaks the drafter's words.** A tool call it reports is refused with
+  `D-0071` rule 1.3's sentence, since the spawn is shared.
+
+### What would falsify it
+
+- **OpenAI changing the price, or the Codex CLI's usage not nesting** (a cached count above the
+  input count, or a total that adds reasoning to output). The first is a new entry; the second makes
+  rule 5 wrong, and such counts already price nothing.
+- **The Codex CLI refusing `gpt-6-astra`** under a ChatGPT login. The Codex table is then wrong.
+- **A `gpt` lap read by a `gpt` reviewer**, or a Claude lap by a Claude one: rule 3 has failed.
+- **A Codex lap admitted on Windows.**
 
 ## D-0124 — Two laps at once by default: D-0023 rule 17's condition is met by the pinned continuo, the default `maxOccupying` is 2, host-wide and across repositories, and `maxLive` stays 3
 

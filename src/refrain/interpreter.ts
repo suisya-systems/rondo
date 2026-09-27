@@ -1927,7 +1927,10 @@ function spendLine(lap: LapPerformance): string {
   }
   return (
     `The lap cost ${spelledNumber(lap.costUsd)} USD over ${spelledNumber(lap.turns)} turn(s) in ` +
-    `${spelledNumber(lap.durationMs)} ms, read from its terminal 'result' event.` +
+    `${spelledNumber(lap.durationMs)} ms, ` +
+    (lap.spendSource === "priced"
+      ? "priced from its token counts at the public API rate (D-0123)."
+      : "read from its terminal 'result' event.") +
     (reachedBudgetCap(lap.costUsd, lap.budgetCapUsd)
       ? ` It reached the ${String(lap.budgetCapUsd)} USD the scope's budget left it when it was ` +
         "sent (D-0121)."
@@ -1941,6 +1944,7 @@ function unreadSpendReason(source: LapPerformance["spendSource"]): string {
     case "notReported":
       return "continuo's lap perform reported no spend for it (the backend cannot say).";
     case "resultEvent":
+    case "priced":
       return "its terminal 'result' event was read and carried none of the three numbers.";
   }
 }
