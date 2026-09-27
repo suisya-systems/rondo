@@ -10428,6 +10428,40 @@ the properties rules 2, 3, 6 and 7 assert.
   `D-0041` rule 2's refusal to invent the distinction is the reason, unchanged by the client having
   gained the ability to lie about it.
 
+> **Annotation (2026-09-27, from rondo#494 item 1).** Added after this entry was accepted, and
+> additive: **a redraw that changes an element the person can act on says so, in colour, for about
+> three seconds.** Rule 2's merge in place is what made this necessary. A morph keeps the nodes a
+> person is standing on, which is what saves a caret and a scroll offset -- and it also means an ask
+> of four points can become an ask of three with nothing on the screen moving. Lap 18 measured the
+> cost: the owner was answering the flow's open-points ask, triage re-read the same candidate, the
+> ask became a new round, and the owner could tell that something had changed but not what, or that
+> it mattered (the owner's words are on rondo#494).
+>
+> **What is marked, and by whom.** The server marks each element a person can act on with
+> `data-can-act` -- the ask in the thread, the flow's open-points ask, a candidate card and each
+> runner-up, a stop on the triage row and on the goal scope screen, and each step on the right face
+> including a part's. `page/changed.js` compares the words such an element shows across the swap and
+> puts `data-just-changed` on the ones that are not what they were; `page/app.css` draws the fade.
+> The script decides nothing about what changed and nothing about the words: the elements are the
+> server's, and the mark's word is resolved on `#ledger` as the chime's sentence is, in the language
+> the request resolved (`D-0079`).
+>
+> **Three constraints this holds itself to.** It is **the touch family and not a sixth colour**
+> (`D-0082` rule 3): every element it can reach is one the person can act on, and amber would say
+> *you must act* about a step that merely moved. It **leaves the page exactly as it found it** -- no
+> scroll, no focus, no draft touched -- so the wash cannot take from a person what rule 2 gives
+> them. And **it is about the words, not the clock**: text that moves on its own carries
+> `data-ticks` and is left out of the comparison, since a card that washed itself once a minute
+> would teach a person to ignore the wash.
+>
+> **With `prefers-reduced-motion` the fade is not drawn and the change is still said**: the wash
+> holds still and carries a static *updated* mark, which stands until a later redraw changes
+> something. Options not taken: a count or a banner of what changed (it is the elements themselves
+> that changed, and a second account of them is the reading `D-0041` rule 2 refuses), and washing
+> every element the swap rebuilt (idiomorph rebuilds for its own reasons, and the person's question
+> is what is different, not what was re-made). **This does not touch rondo#494 items 2 and 3**: an
+> ask being answered can still be replaced under a person, and keeping their form is its own work.
+
 ---
 
 ## D-0055 — The chrome is prose the operator reads, and its language comes from the host's one operator: the line drawn at the span rather than at the string, recorded words left in English, and `<html lang>` naming what rondo actually wrote

@@ -554,9 +554,9 @@ function Block({
               `page/changed.js`): this line moves with the clock, and a card
               that washed itself once a minute would teach a person to ignore
               the wash. */}
-          <p className="triage-read" data-ticks="">
-            {block.readSaid}
-          </p>
+            <p className="triage-read" data-ticks="">
+              {block.readSaid}
+            </p>
             <Acts
               wording={wording}
               candidate={block.first}

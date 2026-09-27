@@ -189,7 +189,7 @@ test("a request run as one line keeps its one sentence of state", async () => {
 
 /** The right face's steps, one per part, as text: name, then what it says. */
 function partSteps(html: string): string[] {
-  return [...html.matchAll(/<li class="side-part( side-part-yours)?">([\s\S]*?)<\/li>/g)].map(
+  return [...html.matchAll(/<li class="side-part( side-part-yours)?"[^>]*>([\s\S]*?)<\/li>/g)].map(
     (m) => `${m[1] === undefined ? "" : "[yours] "}${(m[2] ?? "").replace(/<[^>]+>/g, "")}`,
   );
 }
