@@ -1010,6 +1010,9 @@ test("what the fence blocked is on the gate, each call in words, not only in the
   expect(card).toContain("The fence:");
   expect(card).toContain("blocked 1 command");
   expect(card).toContain("Bash  &quot;rm -rf /srv&quot;");
+  // What the stop means for the result is said, and the calls are open (rondo#497).
+  expect(card).toContain(EN.fenceMeaning);
+  expect(card).toContain('<details id="fence-calls" class="group" open');
   expect(html).toContain("The full record as text, including what is not shown above");
 });
 

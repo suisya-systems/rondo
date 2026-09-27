@@ -335,6 +335,11 @@ explanation you pressed on and then answers the gate.`,
   blockedNothing: "blocked nothing",
   blockedUnknown: "not known what was blocked",
   fenceHeading: "The fence:",
+  fenceMeaning:
+    "These commands were stopped before they ran, because this lap's limits do not allow them. " +
+    "They changed nothing: the worker went on without them, and the changes above are the whole " +
+    "result. If the work needed one of them, the checks and the worker's test runs below are where " +
+    "a missing step would show.",
   reportHeading: "The worker's report",
   reportFold: "In full, as the worker wrote it",
   reportNotRead: "The worker's report could not be read; it is in the text below if it was.",

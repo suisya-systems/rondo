@@ -311,6 +311,11 @@ export interface Chrome extends PageWords {
   /** rondo#248 item 3: the way from a running row into its log, and the log's screen. */
   readonly fenceHeading: string;
   /**
+   * What the stopped commands mean for the result (rondo#497): why they were
+   * stopped, that they changed nothing, and where a missing step would show.
+   */
+  readonly fenceMeaning: string;
+  /**
    * The gate's card of the worker's own report (rondo#444): every gate is the
    * worker's turn ending, finished or stopped to ask, so the card is named for
    * what it holds and the report is shut under `reportFold`.

@@ -334,6 +334,10 @@ export const JA: Chrome = Object.freeze({
   blockedNothing: "止めたコマンドなし",
   blockedUnknown: "止めたコマンドは不明",
   fenceHeading: "実行の制限:",
+  fenceMeaning:
+    "これらのコマンドは、この周回に許されている範囲の外だったため、実行される前に止められました。" +
+    "何も変えていません。作業者はそれらを使わずに作業を続けており、上の変更が結果のすべてです。" +
+    "作業にどれかが必要だった場合は、下のチェックと作業者のテスト実行にその欠けが表れます。",
   reportHeading: "作業者の報告",
   reportFold: "作業者が書いたとおりの全文",
   reportNotRead: "作業者の報告は読み取れませんでした。読めていれば下のテキストにあります。",

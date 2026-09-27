@@ -421,12 +421,15 @@ function fenceView(wording: Chrome, record: IterationRecord) {
           <span class="text-muted-foreground">{count}</span>
         </p>
       ) : (
-        <details id="fence-calls" class="group">
+        // **Open, with what it means for the result** (rondo#497): a count
+        // alone told a person nothing about whether it mattered.
+        <details id="fence-calls" class="group" open>
           <summary class="flex cursor-pointer list-none flex-wrap items-center gap-x-2 text-body leading-6 select-none [&::-webkit-details-marker]:hidden">
             {chevron()}
             <span class="font-semibold">{wording.fenceHeading}</span>
             <span class="text-muted-foreground">{count}</span>
           </summary>
+          <p class="mt-1 text-body leading-5 text-muted-foreground">{wording.fenceMeaning}</p>
           <ul class="mt-2 divide-y divide-border/70 rounded-md border border-border/70">
             {denials.slice(0, LIST_LIMIT).map((denial) =>
               typeof denial === "object" && denial !== null && !Array.isArray(denial) ? (
