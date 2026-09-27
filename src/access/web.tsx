@@ -111,11 +111,13 @@ import {
   WAIT_SIDE,
 } from "../store/records.js";
 import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
+import { partsOf } from "./drafted-start.js";
 import { draftedStanding } from "./drafted-view.js";
 import type { LapWorkInspection } from "./forge.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
 import { type IssueComment, parseForgeRead } from "./issue-read.js";
 import { isModelDrafterName } from "./model-draft/judgement.js";
+import { unlandedPrefix } from "./order-host.js";
 import type {
   ClaimReach,
   LapMaterialRead,
@@ -170,7 +172,8 @@ import {
   saysMore,
   workerRuns,
 } from "./page-logic/laps.js";
-import { placeSaid, repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
+import { placeName, placeSaid, repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
+import { type PartView, partCounts, partViews } from "./page-logic/parts.js";
 import {
   askOverLine,
   asksOverLine,
@@ -2879,6 +2882,46 @@ export async function operatorPage(
         );
 
   /*
+   * **A request run as several lines** (D-0098 rule 8, D-0129): the parts of
+   * its approved split, each with its laps, read once for the list's row, the
+   * line under the title and the right face's steps.
+   */
+  const lapById = new Map(
+    [...allLapsByRequest.values()].flat().map((lap) => [lap.record.id, lap.record] as const),
+  );
+  const lapsOfLine = (lineageId: string): readonly IterationRecord[] =>
+    (ledger.find((line) => line.lineageId === lineageId)?.lapIds ?? [lineageId])
+      .flatMap((id) => lapById.get(id) ?? [])
+      .toSorted((left, right) => left.createdAtMs - right.createdAtMs);
+  const partsByRequest = new Map<string, readonly PartView[]>(
+    await Promise.all(
+      threads.messages
+        .filter((message) => message.inReplyTo === null)
+        .map(async (root) => {
+          const parts = await partsOf(ports, root.messageId);
+          const proposalId = parts[0]?.proposalId ?? "";
+          return [
+            root.messageId,
+            partViews(parts, {
+              lapsOf: lapsOfLine,
+              resultOf: (id) => resultOf(threads.byId, id),
+              placeOf: placeName,
+              // Rule 1.5's question about the part, while it stands unanswered.
+              askOf: (index) =>
+                [...threads.waiting].find(
+                  (id) =>
+                    !threads.stopped.has(id) &&
+                    threads.rootOf(id) === root.messageId &&
+                    id.startsWith(unlandedPrefix({ proposalId }, index)),
+                ) ?? null,
+            }),
+          ] as const;
+        }),
+    ),
+  );
+  const partsOfRequest = (messageId: string) => partsByRequest.get(messageId) ?? [];
+
+  /*
    * **The left face's rows** (D-0083 rules 2, 5 and 7). Every request the
    * store holds, named by the person's own words, with the repository its
    * work is in and one sentence of state. What waits on the person is lifted
@@ -2901,6 +2944,10 @@ export async function operatorPage(
         // What an approved row goes on to say: published or not, and its
         // checks (rondo#376). Read for every row, since it is a map lookup.
         published: lap === null ? null : resultOf(threads.byId, lap.record.id),
+        parts: (() => {
+          const parts = partsOfRequest(root.messageId);
+          return parts.length === 0 ? null : partCounts(parts);
+        })(),
         atMs: Math.max(...members.map((message) => message.atMs)),
       };
     });

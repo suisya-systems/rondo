@@ -40,6 +40,11 @@ function headingFor(wording: Chrome, cut: DayCut): string {
 
 /** A row's one sentence of state, from the set in force. */
 function stateFor(wording: Chrome, row: RequestRow): string {
+  // One row for a request run as several lines, its sentence counting them
+  // (D-0098 rule 8.1); the amber is still the row's *your turn* alone.
+  if (row.parts != null) {
+    return wording.partsSaid(row.parts, false);
+  }
   const state: RowState = row.state;
   switch (state) {
     case "waitingOnYou":

@@ -483,7 +483,7 @@ explanation you pressed on and then answers the gate.`,
     "laps this store has recorded. Approve it as it is, or change a value first -- your version " +
     "is then recorded in place of rondo's draft.",
   scopeDraftedPlansHeading: "What rondo proposes to run",
-  scopeDraftedPlan: (n) => `Plan ${String(n)}`,
+  scopeDraftedPlan: (n) => `Part ${String(n)}`,
   scopeDraftedTemplateGone: "The plan this was drafted from is no longer one rondo holds.",
   scopeNarrowed: (computed) =>
     `rondo lowered this from ${computed} because of what you wrote here:`,
