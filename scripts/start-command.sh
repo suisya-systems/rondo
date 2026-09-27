@@ -45,7 +45,8 @@ usage: scripts/start-command.sh --node PATH --checkout DIR --port N
                                 --path VALUE [--remote NAME]
                                 [--language TAG] [--max-live N]
                                 [--max-occupying N] [--opener PATH]
-                                [--notifier PATH]
+                                [--notifier PATH] [--worker-provider NAME]
+                                [--codex-home DIR] [--codex-command PATH]
                                 [--bin-dir DIR] [--unit-dir DIR]
 
 Write the start command (the one word) and the user service it starts.
@@ -70,6 +71,13 @@ options:
                        when they are not looking at the page. Unlike --opener,
                        the host runs this one, so it is given to the service
                        and not to the word
+  --worker-provider NAME
+                       RONDO_WORKER_PROVIDER: claude (the default) or codex,
+                       the worker CLI every lap on this host runs on
+  --codex-home DIR     RONDO_CODEX_HOME, the Codex home whose login a Codex
+                       lap uses. Required with --worker-provider codex
+  --codex-command PATH RONDO_CODEX_COMMAND, the Codex CLI, absolute.
+                       Required with --worker-provider codex
   --bin-dir DIR        where the word goes. Default: $HOME/.local/bin, a
                        directory the shell already searches
   --unit-dir DIR       where the unit goes.
@@ -100,6 +108,9 @@ max_live=
 max_occupying=
 opener=
 notifier=
+worker_provider=
+codex_home=
+codex_command=
 bin_dir=$HOME/.local/bin
 unit_dir=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
 
@@ -118,6 +129,9 @@ while [ $# -gt 0 ]; do
     --max-occupying) [ $# -ge 2 ] || die "--max-occupying needs a value"; max_occupying=$2; shift 2 ;;
     --opener) [ $# -ge 2 ] || die "--opener needs a value"; opener=$2; shift 2 ;;
     --notifier) [ $# -ge 2 ] || die "--notifier needs a value"; notifier=$2; shift 2 ;;
+    --worker-provider) [ $# -ge 2 ] || die "--worker-provider needs a value"; worker_provider=$2; shift 2 ;;
+    --codex-home) [ $# -ge 2 ] || die "--codex-home needs a value"; codex_home=$2; shift 2 ;;
+    --codex-command) [ $# -ge 2 ] || die "--codex-command needs a value"; codex_command=$2; shift 2 ;;
     --bin-dir) [ $# -ge 2 ] || die "--bin-dir needs a value"; bin_dir=$2; shift 2 ;;
     --unit-dir) [ $# -ge 2 ] || die "--unit-dir needs a value"; unit_dir=$2; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -369,6 +383,18 @@ mv -f "$command_tmp" "$command_path"
   # means.
   if [ -n "$notifier" ]; then
     printf 'Environment=%s\n' "$(sd_quote "RONDO_NOTIFIER=$notifier")"
+  fi
+  # The host's worker (D-0123). Passed through as given: the host checks all
+  # three when it starts and refuses to start on a combination it cannot run,
+  # which is one check rather than a second copy of it here.
+  if [ -n "$worker_provider" ]; then
+    printf 'Environment=%s\n' "$(sd_quote "RONDO_WORKER_PROVIDER=$worker_provider")"
+  fi
+  if [ -n "$codex_home" ]; then
+    printf 'Environment=%s\n' "$(sd_quote "RONDO_CODEX_HOME=$codex_home")"
+  fi
+  if [ -n "$codex_command" ]; then
+    printf 'Environment=%s\n' "$(sd_quote "RONDO_CODEX_COMMAND=$codex_command")"
   fi
   printf '%s\n' 'Restart=always'
   printf '%s\n' 'RestartSec=2'

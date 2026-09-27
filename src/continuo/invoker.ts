@@ -63,7 +63,7 @@ import {
   WORKSPACE_REMOVE,
   type WorkspaceRemoved,
 } from "./protocol.js";
-import { mapModelTier, mapNeutralRole } from "./roles.js";
+import { mapModelTier, mapNeutralRole, WORKER_PROVIDERS, type WorkerProvider } from "./roles.js";
 
 /**
  * The flag that turns a continuo verb into a document rondo can decode.
@@ -93,6 +93,85 @@ export const CLI_PATH_ENV = "RONDO_CONTINUO_CLI";
 export interface VerifiedContinuo {
   readonly cliPath: string;
   readonly revision: string;
+  /**
+   * The worker every lap on this host runs on (D-0123), read by
+   * {@link startContinuo} with the rest of the host's facts. Absent is the
+   * Claude CLI, which is what every lap ran on before the host could say.
+   */
+  readonly worker?: WorkerHost;
+}
+
+/** The host's worker CLI (D-0123): the provider, and what Codex needs besides. */
+export type WorkerHost =
+  | { readonly provider: "claude" }
+  | { readonly provider: "codex"; readonly codexHome: string; readonly codexCommand: string };
+
+/** Which worker CLI runs the laps on this host: `claude` (the default) or `codex`. */
+export const WORKER_PROVIDER_ENV = "RONDO_WORKER_PROVIDER";
+/** The operator's Codex home, whose `auth.json` a Codex lap links to (continuo D-1114 rule 1). */
+export const CODEX_HOME_ENV = "RONDO_CODEX_HOME";
+/** The Codex CLI, absolute: `lap perform` never defaults its worker command. */
+export const CODEX_COMMAND_ENV = "RONDO_CODEX_COMMAND";
+
+/**
+ * The host's worker, or why this host cannot run the one it names (D-0123).
+ *
+ * **A host setting, read where the host's other settings are read**, so every
+ * lap on the host runs on one worker CLI and switching is a restart; a choice
+ * per request is rondo#462. `RONDO_CODEX_HOME` and `RONDO_CODEX_COMMAND` are
+ * required with `codex` and absolute, and **win32 refuses `codex` here**,
+ * before anything is admitted or spawned: continuo refuses a Codex lap on
+ * Windows (continuo D-1120), and a host that says so at start is one no lap
+ * finds out about after its run was admitted.
+ */
+export function resolveWorker(
+  environment: Readonly<Record<string, string | undefined>>,
+  platform: string = process.platform,
+):
+  | { readonly kind: "resolved"; readonly worker: WorkerHost }
+  | { readonly kind: "refused"; readonly reason: string } {
+  const named = environment[WORKER_PROVIDER_ENV]?.trim() ?? "";
+  const provider = named === "" ? "claude" : named;
+  if (!(WORKER_PROVIDERS as readonly string[]).includes(provider)) {
+    return {
+      kind: "refused",
+      reason: `${WORKER_PROVIDER_ENV} is '${provider}', and the worker CLIs rondo runs are ${WORKER_PROVIDERS.join(", ")}.`,
+    };
+  }
+  if ((provider as WorkerProvider) === "claude") {
+    return { kind: "resolved", worker: { provider: "claude" } };
+  }
+  if (platform === "win32") {
+    return {
+      kind: "refused",
+      reason:
+        `${WORKER_PROVIDER_ENV} is 'codex', and continuo refuses a Codex lap on Windows ` +
+        "(continuo D-1120), so no lap on this host could run. Unset it to run laps on the " +
+        "Claude CLI, or run rondo under WSL or Linux.",
+    };
+  }
+  const paths: Record<string, string> = {};
+  for (const name of [CODEX_HOME_ENV, CODEX_COMMAND_ENV]) {
+    const value = environment[name]?.trim() ?? "";
+    if (!isAbsolutePath(value)) {
+      return {
+        kind: "refused",
+        reason:
+          value === ""
+            ? `${WORKER_PROVIDER_ENV} is 'codex', and ${name} is not set; a Codex lap needs it as an absolute path.`
+            : `${name} is '${value}', which is not an absolute path.`,
+      };
+    }
+    paths[name] = value;
+  }
+  return {
+    kind: "resolved",
+    worker: {
+      provider: "codex",
+      codexHome: paths[CODEX_HOME_ENV] as string,
+      codexCommand: paths[CODEX_COMMAND_ENV] as string,
+    },
+  };
 }
 
 /**
@@ -220,6 +299,10 @@ export async function startContinuo(
   if (located.path === null) {
     return { kind: "refused", reason: located.reason };
   }
+  const worker = resolveWorker(environment);
+  if (worker.kind === "refused") {
+    return { kind: "refused", reason: worker.reason };
+  }
   const output = await runProcess(located.path, ["--version"], VERSION_TIMEOUT_MS);
   if (output.kind === "failed" || output.kind === "timedOut") {
     // The two are one answer here, and only here: `--version` starts no child
@@ -240,7 +323,11 @@ export async function startContinuo(
   if (verdict.kind === "refused") {
     return { kind: "refused", reason: verdict.reason };
   }
-  const continuo: VerifiedContinuo = { cliPath: located.path, revision: verdict.revision };
+  const continuo: VerifiedContinuo = {
+    cliPath: located.path,
+    revision: verdict.revision,
+    worker: worker.worker,
+  };
   verifiedHandles.add(continuo);
   return { kind: "ready", continuo };
 }
@@ -962,7 +1049,8 @@ export async function performLap(
   continuo: VerifiedContinuo,
   request: PerformLapRequest,
 ): Promise<PerformLapOutcome> {
-  const selection = mapModelTier(request.modelTier);
+  const worker: WorkerHost = continuo.worker ?? { provider: "claude" };
+  const selection = mapModelTier(request.modelTier, worker.provider);
   if (selection.kind === "unknown") {
     // Before the argv and before the spawn: the reason names the tier and the
     // tiers rondo prices, because the person who can fix it is looking for both.
@@ -994,7 +1082,14 @@ export async function performLap(
       // D-1114 decision 2), so continuo's default is never what picks the CLI.
       "--provider",
       selection.provider,
-      ...claudeCommandFlags(request.claudeCommand),
+      // The Codex home and the Codex CLI are the host's (D-0123), so a Codex
+      // lap takes both from there rather than the plan's Claude command.
+      ...(worker.provider === "codex"
+        ? ["--codex-home", requireAbsolute("codexHome", worker.codexHome)]
+        : []),
+      ...claudeCommandFlags(
+        worker.provider === "codex" ? [worker.codexCommand] : request.claudeCommand,
+      ),
       // Two tokens and never `--model=<id>`, which is continuo's own rule for
       // this flag: the value is appended to the fenced child's command line as
       // its own argument, and it has been checked as an id on that assumption.
