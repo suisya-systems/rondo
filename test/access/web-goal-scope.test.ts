@@ -381,6 +381,8 @@ test("a flow stopped before its first request is said on the front and the scree
     expect(html).toContain(EN.flowStopSkipped("not_issue"));
     expect(html).toContain(quoted(EN.flowStopSkipped("put_aside")));
     expect(html).toContain(quoted(EN.flowStopNext("nothing_eligible")));
+    // A stop is washed when a redraw brings it (rondo#494 item 1).
+    expect(html).toContain('data-can-act="stop"');
   }
 
   // Once a request is written the stop is asked in its thread: the front's
@@ -628,6 +630,9 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
   expect(block).toContain('action="/flow-answer?lang=en"');
   expect(hidden(block, "ask")).toBe(askId);
   expect(block).toContain(EN.flowAskLead);
+  // The ask lap 18 saw replaced under a person mid-answer is washed when a
+  // redraw changes it (rondo#494 item 1).
+  expect(block).toContain('data-can-act="ask"');
   // The card above does not list the same points a second time.
   expect(block).not.toContain(EN.triageOpenPoints);
   expect(block).toContain(EN.flowAskAction);

@@ -13,7 +13,7 @@ import { expect, test } from "vitest";
 import type { CommandOutcome } from "../../src/access/forge.js";
 import { triageHost } from "../../src/access/triage-host.js";
 import { EN } from "../../src/access/wording.js";
-import { fresh, operatorPage, portsOver } from "./page-world.js";
+import { bytesOf, fresh, operatorPage, portsOver } from "./page-world.js";
 
 const listed: CommandOutcome = {
   commandLine: "gh api repos/o/r/issues",
@@ -89,6 +89,30 @@ test("under the request box: the candidate in full with both presses, and a bloc
   expect(section).toContain("/?goal=o%2Frondo&amp;lang=en");
   // D-0082 rule 2: nothing here waits on the person.
   expect(section.slice(0, section.indexOf("</section>"))).not.toMatch(/amber|warn/);
+});
+
+test("what a redraw could change under a person is marked for the wash, and the clock's own line is not (rondo#494)", async () => {
+  const { ports } = await proposed();
+  const html = await operatorPage(ports, "t", { kind: "requests" });
+  const section = html.slice(html.indexOf('class="triage"'));
+  // The card the flow could re-read out from under a person.
+  expect(section).toContain('class="triage-card" data-can-act="candidate"');
+  // **And its read line is left out of what is compared**: it moves with the
+  // clock, so a card carrying it would wash itself once a minute.
+  expect(section).toContain('class="triage-read" data-ticks=""');
+  // The word the mark wears where a browser was asked for no motion, resolved
+  // by the server in this request's language.
+  expect(html).toContain(`data-changed-word="${EN.changedMark}"`);
+  expect(html).toContain('<script src="/changed.js" defer="">');
+  // Both halves of what is drawn for it: the fade, and the static mark instead
+  // of the fade.
+  const styles = bytesOf("page/app.css").toString("utf8");
+  expect(styles).toContain("@keyframes just-changed");
+  expect(styles).toContain("animation: just-changed 3s ease-out");
+  expect(styles).toMatch(
+    /@media \(prefers-reduced-motion: reduce\) \{\s*\[data-just-changed\] \{\s*animation: none;/,
+  );
+  expect(styles).toContain("content: attr(data-just-changed)");
 });
 
 test("put it in the box draws the box holding the drafted request, open points written out", async () => {

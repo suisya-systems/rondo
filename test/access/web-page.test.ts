@@ -530,6 +530,9 @@ test("liveness is per view: two views poll and swap, and the answer view updates
       '<script src="/keys.js" defer="">',
       '<script src="/composer.js" defer="">',
       '<script src="/chime.js" defer="">',
+      // What the redraw changed, said in colour (rondo#494 item 1): loaded
+      // where the page keeps itself current, since that is what it listens to.
+      '<script src="/changed.js" defer="">',
     ]);
     expect(html).not.toContain("//cdn");
     // **The count and the badge in the tab strip** (rondo#414), before any
@@ -544,7 +547,10 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     // because `hx-get` and `hx-select` have to agree with each other.
     expect(html).toContain(
       '<div id="ledger" data-waits="[&quot;gate:i-0001:awaiting_human&quot;]" ' +
-        `data-chime="${EN.reachYourTurn}" data-title="(1) rondo" ` +
+        `data-chime="${EN.reachYourTurn}" ` +
+        // The word a changed element wears where a browser was asked for no
+        // motion (rondo#494 item 1), resolved here as the chime's sentence is.
+        `data-changed-word="${EN.changedMark}" data-title="(1) rondo" ` +
         `data-title-turn="${EN.tabTitleTurn}" data-icon="/icon-wait.svg" ` +
         // Where the tab reports what its notice did, and only with a writer's
         // token (rondo#414).

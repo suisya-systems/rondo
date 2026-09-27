@@ -293,6 +293,9 @@ function stopCard(wording: Chrome, stop: FlowStopSaid) {
     <section
       id="goal-scope-stop"
       class="space-y-3 rounded-lg border border-wait/40 bg-wait-wash px-4 py-3"
+      // **Washed when a redraw brings it or changes it** (rondo#494 item 1):
+      // this card arrives while a person is reading the screen it arrives on.
+      data-can-act="stop"
     >
       <div class="space-y-1">
         <p class="text-body leading-6 font-medium text-wait-ink">{stop.reason}</p>

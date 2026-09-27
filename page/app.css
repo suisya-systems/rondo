@@ -214,6 +214,64 @@ html:not(.js) details > summary svg {
 }
 
 /*
+ * **What a redraw changed, washed in colour for a moment** (rondo#494 item 1). `page/changed.js`
+ * compares the words of every element the server marked `data-can-act` across the five-second
+ * swap and puts `data-just-changed` on the ones that are not what they were; this is the whole of
+ * what is drawn for it.
+ *
+ * **The touch family, and it is not a state** (`D-0082` rule 3). Blue means *you can touch this*,
+ * and every element this can reach is one the person can act on, so the wash is that family rather
+ * than a sixth colour: amber stays *a person must act* and would say the wrong thing about a step
+ * that merely moved, and `--fail` would say something worse. It is the only animation on this
+ * page, it lasts three seconds, and it leaves the element exactly as it found it -- one wash and a
+ * ring, both fading to nothing, over a background this rule never owns.
+ *
+ * **With `prefers-reduced-motion` there is no fade and the change is still said** (rondo#494 item
+ * 1): the wash holds still and the mark is drawn from the attribute's own value, which the script
+ * fills with the word the server resolved in the person's language. No animation means no
+ * `animationend`, which is what leaves that mark standing until the next redraw changes something
+ * (`page/changed.js`).
+ *
+ * Unlayered, so a utility on the same element does not take the wash off it.
+ */
+@keyframes just-changed {
+  from {
+    background-color: color-mix(in oklab, var(--ring) 20%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 55%, transparent);
+  }
+  to {
+    background-color: transparent;
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+[data-just-changed] {
+  animation: just-changed 3s ease-out;
+  border-radius: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-just-changed] {
+    animation: none;
+    background-color: color-mix(in oklab, var(--ring) 14%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 45%, transparent);
+  }
+  [data-just-changed]::after {
+    content: attr(data-just-changed);
+    display: inline-block;
+    margin-left: 0.5em;
+    border-radius: 4px;
+    background-color: color-mix(in oklab, var(--ring) 22%, transparent);
+    padding: 0 0.4em;
+    color: var(--foreground);
+    font-size: var(--text-id);
+    line-height: var(--leading-4);
+  }
+  /* An element the script marked before the server's word arrived says nothing extra. */
+  [data-just-changed=""]::after {
+    content: none;
+  }
+}
+
+/*
  * A pressed form's buttons (rondo#375): `page/composer.js` marks them `aria-disabled` the moment
  * the form posts, and this is what makes that visible -- faded, a waiting cursor, and no second
  * click. Unlayered for the reason above, so it wins over the button's own hover utilities.

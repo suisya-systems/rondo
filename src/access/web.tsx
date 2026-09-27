@@ -1316,7 +1316,10 @@ function approveView(
     // already keeps the send box's, off the `data-draft` key on the field.
     // `hx-preserve` would have been the other answer and is the wrong one
     // here: the send's own out-of-band swap of `#composer` has to land.
-    <div id="answering" class="mt-3 space-y-3">
+    // **And it is washed when a redraw changes it** (rondo#494 item 1): this
+    // is the ask, and a new round of findings or a different question
+    // arriving here is the change lap 18 found a person could not see.
+    <div id="answering" class="mt-3 space-y-3" data-can-act="ask">
       {/*
        * **The findings themselves, quoted here and unfolded** (D-0083 rule
        * 9.4, `D-0082` rule 7). The cards they come from are the right face's
@@ -4393,6 +4396,13 @@ export async function operatorPage(
         <script src="/keys.js" defer />
         <script src="/composer.js" defer />
         <script src="/chime.js" defer />
+        {
+          // **What the redraw changed, said in colour** (rondo#494 item 1). It
+          // listens for the swap htmx makes, so it is loaded where the page
+          // keeps itself current and nowhere else: a view that holds still
+          // changes nothing under anybody.
+          keepsCurrent ? <script src="/changed.js" defer /> : null
+        }
       </head>
       <body class="min-h-screen bg-background font-sans text-foreground antialiased">
         <header class="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-sm">
@@ -4666,6 +4676,11 @@ export async function operatorPage(
             id="ledger"
             data-waits={JSON.stringify(waits.map((wait) => wait.episode))}
             data-chime={wording.reachYourTurn}
+            // **The word a changed element wears where there is no motion to
+            // read** (rondo#494 item 1), beside the chime's sentence and for
+            // its reason: the language is this request's, and
+            // `page/changed.js` must not pick a word of its own.
+            data-changed-word={wording.changedMark}
             data-title={wording.tabTitle(waitingCount)}
             data-title-turn={wording.tabTitleTurn}
             data-icon={tabIcon(waitingCount)}

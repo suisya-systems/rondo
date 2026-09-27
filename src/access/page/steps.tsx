@@ -57,10 +57,13 @@ export function SideSteps({
   readonly wording: Chrome;
   readonly steps: readonly WorkStep[];
 }) {
+  // **Each step is washed when a redraw moves it** (rondo#494 item 1): the
+  // step a lap is on is the one figure on this face that turns over while a
+  // person is reading it, and `data-can-act` is what `page/changed.js` watches.
   return (
     <ol className="side-steps">
       {steps.map((step) => (
-        <li className={`side-step side-step-${step.state}`} key={step.name}>
+        <li className={`side-step side-step-${step.state}`} key={step.name} data-can-act="step">
           <span>{stepSaid(wording, step.name)}</span>
           <b>{stateSaid(wording, step)}</b>
         </li>

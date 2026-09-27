@@ -172,7 +172,12 @@ function PartSteps({ parts }: { readonly parts: readonly PartStep[] }) {
   return (
     <ol className="side-parts">
       {parts.map((part) => (
-        <li className={`side-part${part.yours ? " side-part-yours" : ""}`} key={part.name}>
+        <li
+          className={`side-part${part.yours ? " side-part-yours" : ""}`}
+          key={part.name}
+          // A step on this face too (rondo#494 item 1), washed when it moves.
+          data-can-act="step"
+        >
           <span>{part.name}</span>
           <p>
             {part.said}

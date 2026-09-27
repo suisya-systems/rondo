@@ -479,7 +479,13 @@ function Block({
           <p className="triage-note">
             {wording.triageUnavailable} <a href={block.goalHref}>{wording.triageEditGoal}</a>
           </p>
-          <p className="triage-read">{block.readSaid}</p>
+          {/* **Left out of what a redraw compares** (rondo#494 item 1,
+              `page/changed.js`): this line moves with the clock, and a card
+              that washed itself once a minute would teach a person to ignore
+              the wash. */}
+          <p className="triage-read" data-ticks="">
+            {block.readSaid}
+          </p>
         </>
       );
     case "nothing":
@@ -488,13 +494,22 @@ function Block({
           <p className="triage-note">
             {wording.triageNothingAgainst} <a href={block.goalHref}>{wording.triageEditGoal}</a>
           </p>
-          <p className="triage-read">{block.readSaid}</p>
+          {/* **Left out of what a redraw compares** (rondo#494 item 1,
+              `page/changed.js`): this line moves with the clock, and a card
+              that washed itself once a minute would teach a person to ignore
+              the wash. */}
+          <p className="triage-read" data-ticks="">
+            {block.readSaid}
+          </p>
         </>
       );
     case "ranked":
       return (
         <>
-          <article className="triage-card">
+          {/* **The card is washed when a redraw changes it** (rondo#494 item
+              1): a re-read that moves the request, its points or what it goes
+              against is a different thing to press on. */}
+          <article className="triage-card" data-can-act="candidate">
             <p className="triage-ask" lang="">
               {block.first.request}
             </p>
@@ -535,7 +550,13 @@ function Block({
             {block.first.mixedScript ? (
               <p className="triage-mixed">{wording.triageMixedScript}</p>
             ) : null}
-            <p className="triage-read">{block.readSaid}</p>
+            {/* **Left out of what a redraw compares** (rondo#494 item 1,
+              `page/changed.js`): this line moves with the clock, and a card
+              that washed itself once a minute would teach a person to ignore
+              the wash. */}
+            <p className="triage-read" data-ticks="">
+              {block.readSaid}
+            </p>
             <Acts
               wording={wording}
               candidate={block.first}
@@ -552,7 +573,7 @@ function Block({
               </summary>
               <ol className="triage-runners">
                 {block.rest.map((candidate) => (
-                  <li key={candidate.key}>
+                  <li key={candidate.key} data-can-act="candidate">
                     <p className="triage-ask" lang="">
                       {candidate.request}
                     </p>
@@ -607,7 +628,7 @@ function GoalScopeRow({
   if (line.stop !== null) {
     const stop = line.stop;
     return (
-      <div className="triage-goal-scope" data-state="stopped">
+      <div className="triage-goal-scope" data-state="stopped" data-can-act="stop">
         <div className="triage-goal-stop">
           <p>
             <span className="triage-goal-dot" aria-hidden="true" />
@@ -673,6 +694,10 @@ function PointsAskForm({
     <form
       id={ask.anchor}
       className="triage-flow-ask"
+      // **Washed when a redraw changes it** (rondo#494 item 1): a second
+      // reading of the same candidate replaces this ask with another round,
+      // and lap 18 found a person answering one who could not see that.
+      data-can-act="ask"
       aria-label={wording.flowAskLead}
       method="post"
       action={`/flow-answer?lang=${encodeURIComponent(wording.lang)}`}
