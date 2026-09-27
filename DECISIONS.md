@@ -26805,7 +26805,10 @@ request due). Refs `D-0139`, `D-0140` rule 3, `D-0142` rule 3.
       the start already made.
    2. **A start refused leaves the answer recorded** and says the refusal, as `D-0142` rule 2's
       revise does. A refusal under the scope also writes the scope's own stop, and a *carry on* to
-      that one starts the lap again the same way.
+      that one starts the lap again the same way. Where that stop is on cost over a lap the budget
+      stopped (carried on under the same budget), its box offers *raise the budget and carry on*,
+      as `D-0141` rule 2's does over a lap at its gate: the raise route already takes a
+      budget-stopped lap (`D-0140` rule 3.4).
    3. **Only a lap with one approval in force.** A lap with none (an approved proposal's, a forked
       line) goes on as before: *carry on* releases the line, the drafter reads the answer, and the
       person starts again.

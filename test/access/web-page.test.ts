@@ -1027,10 +1027,16 @@ test("a scope stop over a lap at its gate offers raising and carrying on, with t
     "Options:",
     `Recommended: ${recommended}.`,
   ];
-  const draw = async (status: string, body: readonly string[]) => {
+  const draw = async (
+    status: string,
+    body: readonly string[],
+    failureKind: string | null = null,
+  ) => {
     world.connection
-      .prepare("UPDATE iteration SET status = ?, gate_id = 'gate/g/0' WHERE id = 'i-0001'")
-      .run(status);
+      .prepare(
+        "UPDATE iteration SET status = ?, gate_id = 'gate/g/0', failure_kind = ? WHERE id = 'i-0001'",
+      )
+      .run(status, failureKind);
     world.connection.prepare("DELETE FROM conversation_message WHERE asks = 1").run();
     const asked = await world.record.recordThreadMessage({
       messageId: "scope-stop-i-0002-600",
@@ -1115,6 +1121,17 @@ test("a scope stop over a lap at its gate offers raising and carrying on, with t
   expect(cost).toContain('value="raise_carry_on"');
   expect(cost).toContain('type="hidden" name="review_rounds" value="3"');
   expect(cost).not.toContain(EN.answerRaiseRoundsLabel);
+  // D-0149: a budget-stopped lap carried on under the same budget and refused
+  // at the cost test is raised from the scope's stop over its start again.
+  const again = await draw(
+    "failed",
+    stopAsk("$46.19 would pass $45.00", successor, "cost"),
+    "budget",
+  );
+  expect(again).toContain('value="raise_carry_on"');
+  expect(
+    await draw("failed", stopAsk("$46.19 would pass $45.00", successor, "cost"), "refusal"),
+  ).not.toContain('value="raise_carry_on"');
   const expired = await draw("awaiting_human", stopAsk("the scope expired", successor, "expiry"));
   expect(expired).not.toContain('value="raise_carry_on"');
   // Its raise is the gate's own screen, and the option says so.
