@@ -1235,6 +1235,55 @@ test("D-0110: a lap that stops writes one ask in the person's words, and each an
   expect(await turns()).toEqual([]);
 });
 
+test("D-0143: a lap stopped at its time limit keeps its uncommitted work, and its ask says where", async () => {
+  const h = await harness();
+  const ja = chromeFor("ja");
+  const asked: { workspace: string; topicBranch: string }[] = [];
+  const cut: ReportingPorts = {
+    ...h.reporting,
+    thread: { record: h.record, store: h.store, words: ja },
+    performLap: async () => ({ kind: "refused", message: TURN_TIMEOUT }),
+    keepWork: async (request) => {
+      asked.push({ ...request });
+      return { kind: "kept", commit: "0123456789abcdef0123" };
+    },
+  };
+  const report = await admit(cut, h.advisory, PLAN, POLICY, "i-kept", null, null, ROOT);
+  expect(report.status).toBe("failed");
+  const row = await h.store.read("i-kept");
+  if (row.kind !== "read") throw new Error("no row");
+  // The row's own workspace and branch, and nothing else.
+  expect(asked).toEqual([
+    { workspace: String(row.record.workspace), topicBranch: String(row.record.topicBranch) },
+  ]);
+  expect(report.lines.at(-1)).toContain("was kept as 0123456789abcdef0123");
+  const body = String(h.stops().find((m) => m["message_id"] === "lap-stopped-i-kept")?.["body"]);
+  expect(body).toContain(ja.lapTurnTimedOut(15));
+  expect(body).toContain(ja.lapWorkKept(String(row.record.topicBranch), "0123456789abcdef0123"));
+
+  // A keep that fails is said, and so is a throw; the stop is still asked.
+  const failing: ReportingPorts = {
+    ...cut,
+    keepWork: async () => {
+      throw new Error("git is gone");
+    },
+  };
+  await admit(failing, h.advisory, PLAN, POLICY, "i-unkept", null, null, ROOT);
+  const unkept = String(
+    h.stops().find((m) => m["message_id"] === "lap-stopped-i-unkept")?.["body"],
+  );
+  expect(unkept).toContain(ja.lapWorkNotKept("git is gone"));
+
+  // Any other stop keeps nothing.
+  const other: ReportingPorts = {
+    ...cut,
+    performLap: async () => ({ kind: "refused", message: "LapRefused: something else" }),
+  };
+  asked.length = 0;
+  await admit(other, h.advisory, PLAN, POLICY, "i-other", null, null, ROOT);
+  expect(asked).toEqual([]);
+});
+
 test("D-0140: a lap the budget stopped asks with raising the budget first, and recommended", async () => {
   const h = await harness();
   const ja = chromeFor("ja");

@@ -425,6 +425,26 @@ test("D-0139: a lost predecessor has no reading to test, so its start again is i
   ).toBe("outside");
 });
 
+test("D-0143: a predecessor stopped at its time limit is retried as a lost one is started again", () => {
+  const stopped = (isStopped: boolean) =>
+    snapshot({
+      predecessor: {
+        ...PREDECESSOR,
+        stopped: isStopped,
+        readings: { kind: "read", latestModelReading: null, roundsTaken: 1 },
+      },
+    });
+  expect(scopeVerdict(REDO, stopped(true))).toEqual(INSIDE);
+  expect(scopeVerdict(REDO, stopped(false))).toMatchObject({
+    kind: "undecidable",
+    test: "readings",
+  });
+  expect(scopeVerdict({ ...REDO, closing: true }, stopped(true))).toMatchObject({
+    kind: "undecidable",
+    test: "readings",
+  });
+});
+
 test("D-0098 rule 5.2: a closing redo is inside only under fix_unread, after an exit, with something below", () => {
   const CLOSING: ScopeAct = { ...REDO, closing: true };
   const withReading = (

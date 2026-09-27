@@ -51,7 +51,14 @@
 import { type IterationRecord, planField } from "../store/records.js";
 
 import { allocate } from "./allocator.js";
-import { type AdmittedPlan, type PlanOutcome, readPlan, runPlan, type TakeIn } from "./plan.js";
+import {
+  type AdmittedPlan,
+  type PlanOutcome,
+  type RunPlan,
+  readPlan,
+  runPlan,
+  type TakeIn,
+} from "./plan.js";
 
 /**
  * Everything a second lap needs that the first lap's row does not already hold.
@@ -173,6 +180,49 @@ export function revisionPlan(input: RevisionRequest): PlanOutcome {
     // agree. The predecessor's grantee rides along in the spread above and is
     // overwritten there, which is why it does not have to be cleared here.
   });
+}
+
+/** The subject of the commit rondo keeps a stopped lap's work in (D-0143). */
+export const KEPT_WORK_SUBJECT =
+  "rondo: unverified work left uncommitted when this lap was stopped at its time limit";
+
+/**
+ * **A retry of a lap stopped at its time limit starts where it stopped**
+ * (D-0143, rondo#516): the stored plan, with the first step of its prompt
+ * bringing the stopped lap's commits -- its own, and the one rondo kept its
+ * uncommitted work in -- onto this lap's branch.
+ *
+ * **Picked, not cut from.** The branch a lap is cut from is also the base its
+ * reading and its review are taken against (`readLapWork`, the review's
+ * `base...tip`), so a lap cut from the stopped branch would reach its gate with
+ * the kept commit below its base, where no reviewer reads it. Picked onto this
+ * lap's branch, it is part of this lap's own diff, read and reviewed like the
+ * rest, and the plan's base and pull-request base stay what they were. The
+ * stopped branch is in the same repository this workspace is cut from, so the
+ * pick needs nothing fetched. The caller says the predecessor was stopped at
+ * its time limit; this layer reads no continuo sentence.
+ */
+export function stoppedRetryPlan(plan: RunPlan, predecessor: IterationRecord): RunPlan {
+  if (predecessor.topicBranch === null) {
+    return plan;
+  }
+  return {
+    ...plan,
+    prompt: [
+      plan.prompt,
+      "",
+      "--- The previous try was stopped at its time limit ---",
+      "",
+      `A previous try of this work (iteration '${predecessor.id}') was stopped at its time` +
+        ` limit before it finished, and its commits are on the local branch` +
+        ` '${predecessor.topicBranch}'. Before anything else, bring them onto this branch with` +
+        ` \`git cherry-pick HEAD..${predecessor.topicBranch}\`. A commit titled` +
+        ` '${KEPT_WORK_SUBJECT}' is rondo's, not a worker's: it holds what that try had not` +
+        " committed, and nobody has verified it. Check it before you build on it; keep what is" +
+        " right and change or remove the rest. Then continue the work rather than starting it" +
+        " over, and commit each step as soon as it passes.",
+    ].join("\n"),
+  };
 }
 
 /**

@@ -507,10 +507,17 @@ explanation you pressed on and then answers the gate.`,
   lapTurnTimedOut: (minutes) =>
     "Stopped because the time ran out: the worker did not finish within " +
     `${minutes === null ? "the time it was given" : `${String(minutes)} minutes`}, so it was ` +
-    "stopped partway. What it changed is still in its workspace, but anything it had not " +
-    "committed is not delivered and will not carry over to the next try. What this try " +
+    "stopped partway. What it changed is still in its workspace, and anything it had not " +
+    "committed is not delivered. What this try " +
     "cost is not known, because no cost was reported for it. To go on, start again, or " +
     "set a smaller scope first.",
+  lapWorkKept: (branch, commit) =>
+    "rondo kept what it had not committed as one commit on its branch, marked unverified " +
+    `(${branch}, ${commit.slice(0, 12)}). It is not delivered. A retry of this work picks ` +
+    "it up and checks it first.",
+  lapWorkNotKept: (reason) =>
+    "rondo could not keep what it had not committed, so it is only in the workspace, and a " +
+    `retry does not start from it: ${reason}`,
 
   scopeAction: "Set the scope",
   scopeHeading: "The scope for this request",

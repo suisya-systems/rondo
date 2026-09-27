@@ -63,6 +63,7 @@ import {
   type ScopeTip,
 } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
+import { stoppedAtTimeLimit } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
 import {
   type ReviewScope,
@@ -148,6 +149,12 @@ export interface ScopeSnapshot {
      * not a review round. Absent where a caller did not gather it.
      */
     readonly lost?: boolean;
+    /**
+     * Whether the predecessor was stopped at its time limit (D-0143): it never
+     * reached a gate either, so its retry is tested as a lost lap's start
+     * again is. Absent where a caller did not gather it.
+     */
+    readonly stopped?: boolean;
     readonly grants: Read<{
       readonly granted: readonly string[];
       readonly contractDigestMatches: boolean;
@@ -397,9 +404,13 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
   if (readings.kind === "unreadable") {
     return undecidable("readings", `the predecessor's readings cannot be read: ${readings.reason}`);
   }
-  if (readings.latestModelReading === null && predecessor.lost === true && !act.closing) {
+  if (
+    readings.latestModelReading === null &&
+    (predecessor.lost === true || predecessor.stopped === true) &&
+    !act.closing
+  ) {
     // D-0139: a lost lap is started again as it was sent; the laps and the
-    // cost above still bound it.
+    // cost above still bound it. D-0143: so is a lap stopped at its time limit.
     return { kind: "inside" };
   }
   if (readings.latestModelReading === null) {
@@ -647,6 +658,7 @@ export async function gatherScopeSnapshot(
         act.kind === "redo" && lineage !== null
           ? {
               lost: await predecessorLost(ports, act.predecessorId),
+              stopped: await predecessorStopped(ports, act.predecessorId),
               grants: await predecessorGrants(ports, act.predecessorId),
               readings:
                 lineage.kind === "read"
@@ -728,6 +740,12 @@ function classifyAs(plan: RunPlan, iterationId: string): ScopeSnapshot["classifi
 async function predecessorLost(ports: ScopeReadPorts, predecessorId: string): Promise<boolean> {
   const row = await ports.store.read(predecessorId);
   return row.kind === "read" && row.record.failureKind === "lost";
+}
+
+/** Whether the predecessor was stopped at its time limit (D-0143). */
+async function predecessorStopped(ports: ScopeReadPorts, predecessorId: string): Promise<boolean> {
+  const row = await ports.store.read(predecessorId);
+  return row.kind === "read" && stoppedAtTimeLimit(row.record);
 }
 
 async function predecessorGrants(

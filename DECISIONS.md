@@ -174,6 +174,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0139 | A lap is lost when, on this host, the rondo process that sent it and its `lap perform` child are both gone: it ends `failed` with the kind `lost`, holds no budget, and is started again once by itself under a goal scope or an approved split, or asked about | accepted |
 | D-0140 | A person's request starts from the goal scope's outward acts, a first-lap reserve with no history of its own is read from its repository's laps or guessed at a real lap's cost, and a budget stop offers raising the budget and carrying on first, on one press | accepted |
 | D-0141 | An answer is its press, a scope stop over a lap at its gate offers raising and carrying on, work approved and not begun outranks a stopped lap, and a resume keeps the paused approval's defaults | accepted |
+| D-0143 | A lap stopped at its time limit keeps what it had not committed, as one unverified commit in rondo's name on its own branch, and a retry of that lap picks it up as its first step; `D-0110` rule 1's option Z is narrowed | accepted |
 
 ---
 
@@ -26247,3 +26248,100 @@ rule 8), which does not cover a split with one plan. It is left for when that vi
   more round is not what these findings take, and the prefill should come from the findings.
 - **Requests reading *not started* that the person had meant to stop**: then an approval drawn after
   a stop is not the person going on, and the row should say both.
+
+## D-0143 — A lap stopped at its time limit keeps what it had not committed, as one unverified commit in rondo's name on its own branch, and a retry of that lap picks it up as its first step; `D-0110` rule 1's option Z is narrowed
+
+**Status:** accepted (2026-09-28, rondo#516; option 1 of three, the recommendation, taken through the
+secretary while the owner was away). Refs `D-0010`, `D-0110`, `D-0139`, rondo#432, rondo#516.
+
+**Numbering.** `D-0143` was given to this lane; a parallel lane may renumber at merge.
+
+**Why an entry is needed.** On lap 19 (2026-09-28) a revision fixing four review findings
+(`lap-9c0887f1`) hit the thirty-minute turn budget. Its prompt already carried `D-0110` rule 1's line
+(*"Commit each working step as you go: a stop keeps only what is committed"*), and the worker still
+made no commit in thirty minutes: eight files, +649 -120, were left in the workspace, and the stop
+said they would not carry over to the next try. The prompt alone did not keep the work. `D-0110`
+rule 1 had declined the other way, rondo committing what a cut try left (option Z), because it
+*"would deliver unverified work under the worker's name"*.
+
+### The decision
+
+**1. A lap stopped at its time limit keeps its uncommitted work** (`keepStoppedWork`,
+`src/access/forge.ts`; called by `keptWork` in `src/access/conductor.ts` before the stop's ask). A
+lap is *stopped at its time limit* when it ended `failed` on continuo's turn-timeout refusal
+(`stoppedAtTimeLimit`, reading `isTurnTimeoutRefusal`) and its row names a workspace and a branch.
+continuo stops the session before it answers that refusal and leaves the workspace as it was, so
+nothing else is writing there. rondo checks that the workspace's top level is the row's workspace
+and that its branch is the row's topic branch, and only then stages everything `.gitignore` lets in
+and commits it once, as `rondo`, with the subject `KEPT_WORK_SUBJECT` (*"rondo: unverified work left
+uncommitted when this lap was stopped at its time limit"*). The repository's own commit hooks run,
+as for any commit. A workspace with nothing uncommitted is left alone.
+
+**This is the answer to option Z's reason, not a reversal of it.** What Z would have done is deliver
+unverified work under the worker's name. Here:
+
+- the commit is **rondo's**, by author and by subject, so nobody reads it as the worker's;
+- it is **not delivered**: it sits on the stopped lap's own branch, which is local and never pushed
+  (`D-0010`), and a failed lap has no gate and is never published;
+- it reaches a pull request **only through a later lap** that picks it onto its own branch, whose
+  worker is told the commit is unverified and must check it, and which a person approves at its own
+  gate like any other lap. Because it is picked rather than cut from (rule 2), it is inside that lap's
+  own diff, so the lap's reading and its review read it.
+
+**2. A retry of a stopped lap picks up what it kept** (`stoppedRetryPlan`,
+`src/refrain/revision.ts`). The stored plan, unchanged but for a section appended to the prompt: the
+previous try was stopped at its time limit, its commits are on its local branch, and the first step
+is `git cherry-pick HEAD..<that branch>`; the commit with that subject is rondo's and unverified, to
+be checked before anything is built on it; and each step is to be committed as soon as it passes.
+
+- **Picked, not cut from.** Cutting the retry from the stopped branch, as a revision is cut from its
+  predecessor's, was the first version of this rule, and it is wrong here: the branch a lap is cut
+  from is also the base its reading (`readLapWork`) and its review (`base...tip`) are taken against.
+  A revision's predecessor was read at its gate; a stopped lap never reached one, so its kept commit
+  would sit below the retry's base and no reviewer would read it. Picked, it is part of the retry's
+  own diff, and the plan's base and pull-request base stay as they were. The stopped branch is in the
+  repository the workspace is cut from, so nothing is fetched.
+- **It is an instruction, and that is the safe side.** A worker that does not pick the commits starts
+  the work over, as every retry did before this; the kept commit is never delivered without a lap
+  that took it in and was read. The two retry paths that rerun
+a stored plan take it: `rondo retry` under a scope (`commandScopedRetry`) and under an approved
+proposal. The scope's readings test lets a stopped predecessor's retry in as it does a lost one's
+start again (`D-0139`): it never reached a gate, so there is no reading to test; the laps, cost and
+grants above still bound it, and a closing lap is still refused.
+
+**3. The stop says what was kept.** The stop's ask adds `lapWorkKept` (the branch and the commit's
+first twelve characters) or `lapWorkNotKept` (why not) after `lapTurnTimedOut`, in the person's
+language. `lapTurnTimedOut` no longer says the work will not carry over, since for a lap stopped from
+now on it can; it still says the uncommitted work is not delivered. The definition of done now says
+that after a stop only the worker's commits count as done work, and that rondo keeps the rest as one
+unverified commit the next try has to check. `D-0110` rules 2 to 4 are unchanged.
+
+### Options not taken
+
+- **The prompt alone** (the issue's first option). It is already there and lap 19 is what it did.
+- **Splitting revise laps that carry several blocker findings** (the third). It changes how a review
+  is answered and does nothing for a first lap that runs long.
+- **continuo keeps a private snapshot outside the branch's history**, restored as uncommitted work
+  by a retry (the design review's alternative). It keeps the ownership of the workspace entirely in
+  continuo, and is the upgrade if a host-side commit proves wrong; it needs a continuo change first.
+
+### What is not done
+
+- **Carry on does not start a stopped lap again by itself.** The stop's *carry on* still releases the
+  line and the person starts again (`D-0110` rule 2), and a new start from the request is a new plan
+  that is not told about the kept commit; only a retry of the stopped lap picks it up. Starting
+  it again on *carry on*, as `D-0139` does for a lost lap, is a separate change.
+- **Stops before this change keep nothing.** Their work is where it was left, in the workspace.
+
+### What would falsify it
+
+- A kept commit carries something into a published pull request that its later lap's worker and
+  reviewer did not see (then the kept work should not be in the branch's history at all: the
+  continuo snapshot above).
+- Retries of stopped laps skip the pick often enough that the work is lost anyway (then rondo, not
+  the worker, should bring the commits in, which needs continuo to cut a workspace from more than
+  one branch).
+- continuo writes into a workspace after answering its turn-timeout refusal (then the keep is racing
+  it, and belongs in continuo).
+- A retry of a stopped lap that starts from the kept commit ends worse than a fresh start more often
+  than not.

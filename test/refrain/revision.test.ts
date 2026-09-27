@@ -42,7 +42,13 @@ import {
   type RunPlan,
   runPlan,
 } from "../../src/refrain/plan.js";
-import { revisionInstruction, revisionPlan, takeInSection } from "../../src/refrain/revision.js";
+import {
+  KEPT_WORK_SUBJECT,
+  revisionInstruction,
+  revisionPlan,
+  stoppedRetryPlan,
+  takeInSection,
+} from "../../src/refrain/revision.js";
 import type { IterationRecord, JsonRecord } from "../../src/store/records.js";
 import { REQUEST } from "../request-fixture.js";
 
@@ -558,4 +564,24 @@ test("the words sent with a change are read back off the lap they started", () =
     revisionInstruction(PREDECESSOR, successor(revised({ instruction: null, takeIn }).prompt)),
   ).toBeNull();
   expect(revisionInstruction(PREDECESSOR, PREDECESSOR)).toBeNull();
+});
+
+// --- D-0143: a retry of a lap stopped at its time limit starts where it stopped --
+
+test("D-0143: a stopped lap's retry picks its commits onto its own branch and is told to check the kept one", () => {
+  const stopped = { ...closedRecord("iter-1", FIRST), status: "failed" as const };
+  const retry = stoppedRetryPlan(FIRST, stopped);
+  // Cut from where the stopped lap was, so the picked commits are this lap's
+  // own diff and its reading and review cover them.
+  expect(retry.baseBranch).toBe(FIRST.baseBranch);
+  expect(retry.pullRequestBaseBranch).toBe(FIRST.pullRequestBaseBranch);
+  expect(retry.prompt).toContain(`git cherry-pick HEAD..${FIRST.topicBranch}`);
+  expect({ ...retry, prompt: FIRST.prompt }).toEqual({ ...FIRST, prompt: FIRST.prompt });
+  expect(retry.prompt.startsWith(`${FIRST.prompt}\n\n--- The previous try was stopped`)).toBe(true);
+  expect(retry.prompt).toContain(KEPT_WORK_SUBJECT);
+  expect(retry.prompt).toContain("iteration 'iter-1'");
+  // ASCII, as everything rondo writes into a prompt (D-0004).
+  expect([...retry.prompt].every((c) => c.charCodeAt(0) < 128)).toBe(true);
+  // No branch on the row: nothing to start from, so the plan is as it was.
+  expect(stoppedRetryPlan(FIRST, { ...stopped, topicBranch: null })).toBe(FIRST);
 });

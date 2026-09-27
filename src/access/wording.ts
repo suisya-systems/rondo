@@ -647,6 +647,15 @@ export interface Chrome extends PageWords {
    * to be unknown because continuo reports no spend with a refusal.
    */
   readonly lapTurnTimedOut: (minutes: number | null) => string;
+  /**
+   * What rondo kept of a lap stopped at its time limit (D-0143, rondo#516):
+   * the work it had not committed, now one unverified commit on the lap's
+   * branch, which a retry of the lap starts from. Said after
+   * {@link lapTurnTimedOut} in the stop's ask.
+   */
+  readonly lapWorkKept: (branch: string, commit: string) => string;
+  /** rondo tried to keep that work and could not; it is still in the workspace. */
+  readonly lapWorkNotKept: (reason: string) => string;
 
   // -- The scope screen (rondo#233 S3, D-0066 rule 1) --
   /**
