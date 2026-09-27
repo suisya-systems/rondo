@@ -1355,6 +1355,9 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/wording/ja.ts": [HUMAN],
   "src/access/wording.ts": [HUMAN],
   "src/advisory/budget.ts": [SPLITTING],
+  // D-0128 (rondo#466): the flow picks what to ask for next from the goal's
+  // ranking, which is triage's row, and says whether it may start now.
+  "src/advisory/flow.ts": [WORK_DISCOVERY, DISPATCHER],
   "src/advisory/proposal.ts": [DIALOGUE, SPLITTING],
   "src/advisory/triage.ts": [WORK_DISCOVERY],
   "src/cadenza/facade.ts": ["Seam to cadenza"],

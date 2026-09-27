@@ -336,6 +336,9 @@ export interface PageWords extends DayWords {
   readonly govByTryLabel: string;
   readonly govByTry: (total: string, tries: readonly string[]) => string;
   readonly govTryCost: (at: number, cost: string | null, running: boolean) => string;
+  /** A lap that spent all the room the budget left it when it was sent (D-0121). */
+  readonly govAtCapLabel: string;
+  readonly govAtCap: (cost: string, cap: string) => string;
   readonly govTouchLabel: string;
   readonly govStepsLabel: string;
   /**
@@ -632,6 +635,9 @@ export const PAGE_EN: PageWords = Object.freeze({
   govByTry: (total, tries) => `$${total} (${tries.join(", ")})`,
   govTryCost: (at, cost, running) =>
     `try ${String(at)} ${cost === null ? (running ? "in progress" : "cost not reported") : `$${cost}`}`,
+  govAtCapLabel: "Budget reached",
+  govAtCap: (cost, cap) =>
+    `This try cost $${cost}, all of the $${cap} the approved budget had left for it when it started`,
   govTouchLabel: "Where it may touch",
   govStepsLabel: "What remains before this ends",
   govAct: (act) => (act === "open_pull_request" ? "open a pull request" : "push a branch"),
@@ -897,6 +903,9 @@ export const PAGE_JA: PageWords = Object.freeze({
   govByTry: (total, tries) => `$${total}（${tries.join(" ・ ")}）`,
   govTryCost: (at, cost, running) =>
     `${String(at)} 回目 ${cost === null ? (running ? "実行中" : "費用の報告なし") : `$${cost}`}`,
+  govAtCapLabel: "予算の上限に到達",
+  govAtCap: (cost, cap) =>
+    `この回は $${cost} を使い、始めた時点で承認した予算に残っていた $${cap} をすべて使い切りました`,
   govTouchLabel: "触れてよい範囲",
   govStepsLabel: "終わるまでの手順",
   govAct: (act) => (act === "open_pull_request" ? "プルリクエストを開く" : "ブランチを送る"),

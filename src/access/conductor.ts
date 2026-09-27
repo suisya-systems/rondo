@@ -107,6 +107,7 @@ import { modelReadingLines } from "./model-review/judgement.js";
 import { refusalSaid } from "./page-logic/laps.js";
 import { relayQuestion } from "./question.js";
 import { LIST_LIMIT, READING_REMOTE, type ReadingOptions, readingOf } from "./review.js";
+import { type LapBudgetRecord, lapBudgetCapOf } from "./scope.js";
 import type { Chrome } from "./wording.js";
 
 export type { ConductorReport };
@@ -277,7 +278,7 @@ export function lapSpendFields(
 export function conductorPorts(
   continuo: VerifiedContinuo,
   store: IterationStore,
-  record: Pick<AdvisoryRecord, "recordThreadMessage"> | null,
+  record: (Pick<AdvisoryRecord, "recordThreadMessage"> & LapBudgetRecord) | null,
   now: () => number = Date.now,
   /** The person's words for a stopped lap's ask (D-0110 rule 2); null writes none. */
   words: Chrome | null = null,
@@ -387,7 +388,21 @@ export function conductorPorts(
         discard(written.record);
       }
     },
-    performLap: async (plan, modelTier): Promise<EffectOutcome<LapPerformance>> => {
+    performLap: async (plan, modelTier, iterationId): Promise<EffectOutcome<LapPerformance>> => {
+      // D-0121: the room the scope's budget leaves this lap, read the moment it
+      // is sent so that the costs read since its admission count. A lap with no
+      // room left is not sent: a turn it started would only spend past the
+      // budget the person approved.
+      const budgetCapUsd = record === null ? null : await lapBudgetCapOf(record, iterationId);
+      if (budgetCapUsd !== null && budgetCapUsd <= 0) {
+        return {
+          kind: "refused",
+          message:
+            `the scope's budget has ${String(budgetCapUsd)} USD left for this lap once what its ` +
+            "laps were read to cost and the other unread laps' reserves are taken off, so the " +
+            "lap is not sent (D-0121)",
+        };
+      }
       const outcome = await performLap(continuo, lapRequestOf(plan, modelTier));
       return asEffect(outcome.result, (payload) => ({
         // Kept rather than dropped: it is the only identity a lap's answer
@@ -413,6 +428,7 @@ export function conductorPorts(
         // so rondo no longer computes its state-root layout to find them.
         commands: payload.commands,
         ...lapSpendFields(payload.spend),
+        budgetCapUsd,
       }));
     },
     showGate: async (plan, gateId): Promise<EffectOutcome<GateObservation>> =>
@@ -505,7 +521,7 @@ export async function openConductor(
   store: IterationStore,
   environment: Readonly<Record<string, string | undefined>> = process.env,
   now: () => number = Date.now,
-  record: Pick<AdvisoryRecord, "recordThreadMessage"> | null = null,
+  record: (Pick<AdvisoryRecord, "recordThreadMessage"> & LapBudgetRecord) | null = null,
 ): Promise<
   | { readonly kind: "ready"; readonly ports: ReportingPorts; readonly revision: string }
   | { readonly kind: "refused"; readonly reason: string }

@@ -157,6 +157,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0118 | A relayed approval is outside rondo's boundary: `actor_id` is the approver's claim, a relay is the operator's to write in `--verified`, and no column is added for it | accepted |
 | D-0119 | A merge is closed out: rondo deletes the `rondo/base/` branches it made for the line, keeps the topic branch, and leaves the worktree to a continuo verb (continuo#230); a close without a merge closes nothing out | accepted |
 | D-0120 | The close-out after a merge closes a superseded lap's run as `cancelled` before asking for its worktree, in both merge paths; this reads `D-0010` narrowly and does not supersede it | accepted |
+| D-0121 | A running lap is held to the scope's budget by the worker CLI's own spend stop: rondo sends each lap with the room the budget leaves it, continuo carries it (continuo#241), and a Codex lap is held only before it starts | accepted |
 | D-0122 | `mechanical` runs on `claude-sonnet-5` through the Claude CLI: the tier table gains a provider column passed as `lap perform --provider`, every row `claude`, and a drafter may name a `mechanical` agent type only with one grounded claim per condition of `D-0044` rule 1 | accepted |
 | D-0123 | The host's worker is the Claude CLI or the Codex CLI: `RONDO_WORKER_PROVIDER` picks the tier table, a `gpt` lap is read by a Claude reviewer, a Codex lap's tokens are priced at OpenAI's public API rate, and Windows refuses `codex` at start | accepted |
 
@@ -14526,6 +14527,13 @@ number.
 > --scope-decision-id` admits is an `admission`, written like an in-scope `retry`'s, with `subject_id`
 > the successor's iteration id and `proposal_id` null (`D-0070` section 1 (a)). No act kind is added. Nothing above is edited.
 
+> **Annotation (2026-09-27, from D-0121).** Added after this entry was accepted, and additive. Rule
+> 3.4.2 holds a lap to the budget at its admission. `D-0121` adds a cap on what the lap may spend
+> while it runs: the room the budget leaves it, sent with the lap. The count here is unchanged: the
+> cap is computed from it, and the cost a lap is read to have spent is still what rule 3.4.2 counts.
+> The cap's column on the iteration row is a number the lap was sent with, not the link rule 3.5
+> keeps on the consumption row. Nothing above is edited.
+
 ### 4. The one point where the organisation stops
 
 > **Annotation (2026-09-13, from D-0067).** Added after this entry was accepted, and additive. A
@@ -24270,6 +24278,91 @@ types the commands.
 - **A `pr_merged` consumer in continuo** (`continuo D-0084`) that closes runs itself. Then two
   writers close one line's runs, and this rule should move to it.
 
+## D-0121 — A running lap is held to the scope's budget by the worker CLI's own spend stop: rondo sends each lap with the room the budget leaves it, continuo carries it (continuo#241), and a Codex lap is held only before it starts
+
+**Status:** accepted (2026-09-27, rondo#398; the owner's answer through the secretary, option A of
+three, with the cap as the room left in the scope). Refs `D-0066` rule 3.4.2 and its annotation from
+this entry, `D-0046`, `D-0019` rule 12, `continuo D-1112`, `continuo D-1114`, continuo#241 and
+`continuo D-1122` (continuo#242).
+
+**Why an entry is needed.** `D-0066` holds a lap to the budget once, at its admission. Nothing stops
+a lap that spends past it while it runs. Lap 10 was admitted under $7.50 with a $2.50 reserve and
+its first try cost $8.46 (`docs/operations/lap-10-dogfood.md`, rondo#378). A lap that runs
+sub-agents or a multi-agent workflow can spend far more than its reserve (rondo#398, the owner's
+note of 2026-09-22).
+
+### What was measured
+
+At rondo `ee290f0` and continuo `f2fb450` on **2026-09-27**:
+
+- **rondo cannot stop a running lap itself.** `lap perform` answers once, when the turn has ended
+  (`continuo D-1112`). The one limit rondo sets on a running lap is time, `invocationCeilingMs`.
+- **The Claude CLI has a spend stop.** `claude --help` (2.1.283) lists `--max-budget-usd <amount>`,
+  "Maximum dollar amount to spend on API calls (only works with --print)". continuo runs its worker
+  with `-p`, so the flag applies to a lap.
+- **continuo has no way to pass it.** The worker's command line is continuo's: rondo adds only
+  `--model`, and `--claude-command` takes absolute paths only.
+- **The Codex CLI has no such stop.** It reports tokens, at `turn.completed` (`continuo D-1114`).
+
+### Decision
+
+1. **The stop is the worker CLI's own.** continuo gains `lap perform --max-budget-usd <n>` and
+   passes it to the Claude CLI (continuo#241, `continuo D-1122`). The Codex provider refuses the
+   flag, as `continuo D-1114` refuses a layer it cannot enforce. A lap the CLI stops is refused as
+   `LapBudgetExhausted` (exit 2), with its `total_cost_usd` and `session_id`, and no gate is opened.
+2. **rondo sets the cap: the room the scope's budget leaves the lap.** It is `cost_usd`, less the
+   cost its laps were read to spend, less `cost_reserve_usd` for every **other** lap still unread.
+   It is read when the lap is sent, not at its admission, so costs read in between count. A lap
+   admitted under no approval, or under one that will not read, is sent with no cap, as before.
+3. **A lap with no room left is not sent.** When the cap is at or below zero, the conductor refuses
+   the lap before continuo is driven. This happens only when a lap running beside it was read to
+   cost more than its reserve after this lap was admitted.
+4. **The cap is recorded.** The iteration row gains `lap_budget_cap_usd`, written with
+   `lap_cost_usd` at the suspend. A lap whose cost reached its cap spent all the room it had. The
+   report says so, and so does the right face of the request's page, beside the cost. The cost is
+   still what `D-0066` rule 3.4.2 counts; a stopped lap's cost is read from its `result` event like
+   any other (`continuo D-1112`).
+5. **A stopped lap opens no gate, and its cost is still counted.** rondo reads the refusal's
+   `total_cost_usd` into `lap_cost_usd`, so the stop is counted as what it spent and holds no
+   reserve. The lap ends with the reason that it was stopped at the scope's budget, and its commits
+   stay on its topic branch. Nothing starts another lap for it. The person decides: close it, or try
+   again under a larger budget.
+6. **A Codex lap is held only before it starts.** This is a known limit: rondo drives no Codex lap
+   today, and when it does, `D-0066` rule 3.4.2 is its only check until a Codex stop exists.
+
+### Order
+
+Items 2 to 4 land first, with no flag sent. The page and the report then say when a lap *reached*
+its cap, which is true whether or not it was stopped. Once `continuo D-1122` is merged, rondo moves
+its pin, sends the cap on every Claude lap, and reads a budget stop as item 5 says. Only then does a
+lap stop at it.
+
+**Options not taken.** B: rondo watches the running transcript, prices its tokens and kills `lap
+perform` when the cap is passed. That puts the `stream-json` shape and the pricing back in rondo,
+which `continuo D-1112` moved out. It also leaves a killed run's lease to recovery, and the stop
+comes later than the CLI's own. C: record the decision and build nothing until continuo moves.
+**The per-lap reserve as the cap** was also not taken, because the owner's question is about the
+scope's budget, and a reserve is an estimate, not an approved amount.
+
+### What it costs
+
+- **Two laps running at once can each spend the same room.** Each lap's cap takes the other's
+  *reserve* off, not what the other will spend. So together they can pass the budget by as much as
+  each passes its reserve. Two parallel laps is the owner's current setting.
+- **The CLI checks between API calls.** A lap stops after the call that crosses the cap, so it can
+  pass the cap by one call (`continuo D-1122` measured a $0.01 cap stopping at $0.021).
+- **The cap is only as good as the CLI's own count.** It is the CLI's `total_cost_usd`, the same
+  number rondo records.
+
+### What would falsify it
+
+- **A budget stop whose refusal carries no `total_cost_usd`.** Then its cost reads as null, it
+  keeps its reserve, and the accounting in item 5 needs a second source.
+- **A person who wants a stopped lap's work at a gate.** Then item 5's end without a gate is the
+  wrong shape, and the stop needs a gate of its own.
+- **Parallel laps that together pass the budget often.** Then the cap needs the other laps' caps,
+  not their reserves.
+
 ## D-0122 — `mechanical` runs on `claude-sonnet-5` through the Claude CLI: the tier table gains a provider column passed as `lap perform --provider`, every row `claude`, and a drafter may name a `mechanical` agent type only with one grounded claim per condition of `D-0044` rule 1
 
 **Status:** accepted (2026-09-27, rondo#89; the owner's answer through the secretary, option (a) of
@@ -24357,7 +24450,7 @@ comparable in dollars until the pricing question is answered. (c) Both tiers at 
 ## D-0123 — The host's worker is the Claude CLI or the Codex CLI: `RONDO_WORKER_PROVIDER` picks the tier table, a `gpt` lap is read by a Claude reviewer, a Codex lap's tokens are priced at OpenAI's public API rate, and Windows refuses `codex` at start
 
 **Status:** accepted (2026-09-27, rondo#460; the owner's answers through the secretary). Refs
-`D-0021`, `D-0044`, `D-0046`, `D-0065` (rule 3), `D-0066` (rule 3.4), `D-0071`, `D-0122`, rondo#398,
+`D-0021`, `D-0044`, `D-0046`, `D-0065` (rule 3), `D-0066` (rule 3.4), `D-0071`, `D-0121`, `D-0122`, rondo#398,
 rondo#462, `continuo D-1114`, `continuo D-1120`.
 
 **Why an entry is needed.** `D-0122` left a `codex` row to rondo#460 behind three things: a reviewer
@@ -24458,8 +24551,11 @@ figure), a price table the owner supplies (unneeded: the price is public). For 6
   the price pages do not say how reasoning is billed; it is priced as the output it is counted in.
 - **The token counts are not kept.** Only the priced figure reaches the row. A lap priced wrongly by
   a later price change cannot be re-priced from the row.
-- **The budget still stops a lap only before it starts** (rondo#398). Codex has no
-  `--max-budget-usd`, and rondo passes none to Claude either; nothing here changes that.
+- **A Codex lap is held to the budget only before it starts.** This is `D-0121` rule 6, which this
+  entry makes live: `D-0121` wrote it for the day rondo drives a Codex lap. When `D-0121`'s cap is
+  sent, it goes on Claude laps only, because continuo's Codex provider refuses the flag. A Codex
+  lap's priced cost is what `D-0121` rule 2 counts against the room of the laps after it, and what
+  the report compares with the cap it was sent with (rule 4).
 - **A host runs one worker.** Comparing the two on the same work means two hosts, or a restart
   between laps, until rondo#462.
 - **A Claude reviewer's failure speaks the drafter's words.** A tool call it reports is refused with

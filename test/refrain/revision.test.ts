@@ -185,6 +185,7 @@ function closedRecord(id: string, plan: AdmittedPlan): IterationRecord {
     lapCostUsd: null,
     lapTurns: null,
     lapDurationMs: null,
+    lapBudgetCapUsd: null,
     reason: null,
     failureKind: null,
     gateAnswer: null,

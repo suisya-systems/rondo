@@ -175,6 +175,13 @@ export interface LapPerformance {
    * names the mapping where it names the other three.
    */
   readonly spendSource: "notReported" | "resultEvent" | "priced";
+  /**
+   * The room the scope's budget left the lap when it was sent (D-0121), or
+   * null where it was admitted under no approval or the approval did not read.
+   * Written to the row beside {@link costUsd}, so a gate can say the lap spent
+   * all the room it had.
+   */
+  readonly budgetCapUsd: number | null;
 }
 
 /** What `gate show` hands back. `outcome` is null exactly while the gate is open. */
@@ -491,6 +498,8 @@ export interface ConductorPorts {
   readonly performLap: (
     plan: AdmittedPlan,
     modelTier: string,
+    /** The iteration the lap is for: its approval is where the lap's cap is read (D-0121). */
+    iterationId: string,
   ) => Promise<EffectOutcome<LapPerformance>>;
   readonly showGate: (
     plan: AdmittedPlan,
