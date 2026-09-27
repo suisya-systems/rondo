@@ -189,6 +189,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0154 | A drafted scope ready for approval is the person's turn: the list, the header's count, the tab and the notification count it once rondo's draft is ready | accepted |
 | D-0155 | A merge waits only on the questions that hold its line: a question over another line the person answered with a stop no longer withholds the merge, on the page or on green | accepted |
 | D-0156 | Only a judgment call at or above the scope's threshold keeps rondo from sending the drafted change; one below it is left out of what is sent, and the note names it | accepted |
+| D-0157 | A typed `revise` spends the approval the lap it revises was admitted under: `--scope-decision-id` overrides it, nothing to draw refuses, and no `revise` runs outside every approval | accepted |
 
 ---
 
@@ -16159,6 +16160,14 @@ of the successor's lap** (`D-0027` rules 1 and 6).
 > admission is still an `admission` through the `redo` arm, written under the tip and tested against
 > the tip's budgets. Nothing else in section 1 moves, and the text above is not edited.
 
+> **Annotation (2026-09-28, from D-0157).** Added after this entry was accepted, by the answer of
+> rondo's human gate to rondo#228. **Section 1.4's flag is an override, not the way in.** A typed
+> `revise` that omits `--scope-decision-id` spends the approval the lap it revises was admitted
+> under -- section 1.2's approved tip, drawn from that lap's `admission` consumption row and said in
+> one line before the walk -- and refuses when there is none to draw, rather than admitting the
+> second lap unscoped as it did when this entry was built. An explicit `--scope-decision-id` still
+> wins. Sections 2 and 3 are unmoved, and the text above is not edited.
+
 ### 2. When the verdict is computed: before the gate is walked, at the one call site
 
 1. **The verdict is computed before the gate is walked, and a refusal walks nothing.** A walked gate
@@ -27376,3 +27385,106 @@ answers to disputed points) was not met.
 
 - **A left-out finding the person wanted in the sent change** often enough that they press again
   after rondo's send: then the below-threshold judgment call should be asked, not dropped.
+
+---
+
+## D-0157 — A typed `revise` spends the approval the lap it revises was admitted under: `--scope-decision-id` overrides it, nothing to draw refuses, and no `revise` runs outside every approval
+
+**Status:** accepted (2026-09-28, rondo#228; the issue's proposal, with its three open points
+answered at rondo's human gate). Amends `D-0070` section 1.4. Refs `D-0065` rules 4.1-4.3 and 4.5,
+`D-0066` rule 4.4, `D-0074` section 2, `D-0098` rule 5.2, rondo#233 S4,
+`docs/operations/lap-9-dogfood.md` N-33.
+
+### Context
+
+`D-0070` built `revise --scope-decision-id ID`: the second lap is the scope's `admission` through the
+`redo` arm while the gate answer stays the person's. It left the flag as **the** way in, so a
+`revise` with the flag omitted admitted its lap **unscoped** -- even when the lap being revised had
+itself been admitted under an approval. Lap 9 (N-33) is that path walked: the correction of a review
+finding ran on no budget, and the round `review_rounds` exists to count was not counted. The flag's
+value is not something a person can remember either: it is an id they copy off an earlier screen at
+the moment they are answering a gate.
+
+The page side was settled first (rondo#233 S4): it reads the approval the lap was admitted under back
+from the `admission` consumption row and passes it itself, and draws no revise press for a lap with
+none. So what was left, and what this entry decides, is the terminal.
+
+### Decision
+
+1. **An explicit `--scope-decision-id` always wins**, unchanged and unquestioned. A person who names
+   an approval has said which budget the correction belongs to; the value is passed through and the
+   verdict tests it, as `D-0070` section 1.4 has it. Nothing is said back to them about it.
+2. **Omitted, the approval is drawn from the record.** It is the **approved tip of the chain** that
+   starts at the approval the predecessor's `admission` consumption row names -- `approvalTip`,
+   `D-0074` section 2, the same read and the same function the page's revise press uses, so the two
+   surfaces cannot disagree about which approval a correction of one lap belongs to. **One line says
+   so before the gate is walked**: which approval, and that it is the one that lap was admitted
+   under; where the tip is not the admitting approval, the line names both.
+3. **Nothing to draw refuses, and never falls back to a lap outside every approval.** Two cases: a
+   predecessor with no `admission` row against any scope, and a chain with two approved tips, which
+   rondo does not pick between (`D-0074` rule 2.1). Both stop before the seam is read, cost nothing,
+   and name `--scope-decision-id` as what answers them. This departs from the issue's own proposal,
+   which kept today's unscoped behaviour for a predecessor with no consumption row: the unscoped lap
+   is the fault N-33 records, so it is not kept as a fallback.
+4. **An approval drawn but no longer usable is the verdict's answer, not a second copy of its
+   tests.** Expired, superseded, out of laps, out of rounds, or held by an open ask is computed by
+   `scopeVerdict` before the gate is walked, refuses with its own test and reason, writes `D-0066`
+   rule 4.4's stop, and leaves the gate untouched (`D-0070` section 2.1). Drawing an approval reads
+   only; it judges nothing.
+5. **There is no opt-out.** No `--unscoped`, and no flag that keeps a correction off the approval's
+   budget. A person who wants a correction counted elsewhere names that approval.
+6. **It is the terminal only.** Nothing on the page moves, and `D-0070` sections 2 and 3 are
+   untouched: the order is still verdict, walk, admit, and the text `revise` adds is still carried
+   and never tested.
+7. **`--closing-fix` stands on its own.** It was refused without `--scope-decision-id` because with
+   no scope there is no `below_threshold` to allow the closing lap; since a `revise` now names an
+   approval either way, the pairing rule is gone from the parser. `D-0098` rule 5.2's "under a
+   scope" is unchanged and is met by the drawn approval; what a scope without
+   `below_threshold fix_unread` allows is still the verdict's answer.
+
+### The issue's open points, and their answers
+
+| Open point | Answer |
+|---|---|
+| Is an opt-out needed (for example `--unscoped`)? | No (rule 5). Drawing the approval is the whole of it. |
+| What happens when the predecessor's approval is superseded or expired? | The chain's approved tip is what is spent (rule 2); anything the verdict then refuses is a refusal with its reason and its stop, never a fallback to unscoped (rules 3 and 4). |
+| Is it CLI-only? | Yes (rule 6), answered on the issue once rondo#233 settled the page. |
+
+### Options not taken
+
+- **The issue's own fallback: no consumption row keeps today's unscoped behaviour.** It is the
+  smaller change and it keeps a `revise` available for a lap nobody approved. *Not taken* because
+  the unscoped correction of a lap is exactly N-33, and a fallback that fires on a row rondo could
+  not read is indistinguishable, at the keyboard, from one that fires because there was nothing to
+  read.
+- **An `--unscoped` opt-out.** *Not taken*: a flag that puts a correction outside the budget is the
+  way back to N-33 that a person reaches for when a budget is in the way, which is the moment the
+  budget is doing its job.
+- **Refusing a bare `revise` and telling the person the id to type.** *Not taken*: the id is in the
+  store, and asking a person to copy what rondo can read is what the issue is about.
+
+### What it costs
+
+- **A lap admitted under no approval can no longer be revised without naming one.** That is a path
+  that worked before and does not now, and there is no `--unscoped` out of it: an unapproved lap's
+  gate is answered with `rondo answer`, and the work continues with `rondo start`.
+- **A chain with two approved tips refuses a bare `revise`** where it used to run one unscoped.
+- **The drawn approval is the one the lap ran under, not the one the person had in mind.** The line
+  before the walk is what makes that visible, and it is a line, not a confirmation: a person who
+  meant another approval names it.
+
+### What would falsify it
+
+- **Operators routinely naming `--scope-decision-id` to override the drawn approval**: the drawn one
+  is then the wrong default, and what the record should offer is a different read.
+- **Refusals under rule 3 arriving often for laps a person legitimately wants to correct outside a
+  budget**: the opt-out rule 5 declines is then the entry to write.
+- **A revise whose drawn approval was spent while the person was typing**, often enough to matter:
+  `D-0070` section 2.4's race, already named, is then the reservation residual.
+
+### Annotations this entry adds
+
+- **`D-0070` section 1.4** gains a dated annotation: the flag is an override rather than the way in,
+  and a `revise` that omits it spends the approval the lap it revises was admitted under, or refuses.
+- **`docs/operations/lap-9-dogfood.md` N-33's remaining half** -- the unscoped `revise` -- is
+  answered by this entry once built.
