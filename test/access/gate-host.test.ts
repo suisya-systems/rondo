@@ -87,6 +87,8 @@ interface World {
   readonly sent: { id: string; input: ScopedReviseInput; recheck: boolean }[];
   sendAs: ScopedRevise;
   beforeRecheck?: () => void;
+  /** The approval the line's tip is, as `scopeDecisionAdmitting` and `scopeTip` read it. */
+  tip: string;
 }
 
 const world = (laps: IterationRecord[]): World => ({
@@ -103,6 +105,7 @@ const world = (laps: IterationRecord[]): World => ({
   room: true,
   sent: [],
   sendAs: { kind: "sent" },
+  tip: "sd-1",
 });
 
 /** One host over the world; two hosts over one world are two processes sharing a store. */
@@ -116,7 +119,8 @@ function host(w: World) {
     } as never,
     record: {
       scopeDecisionAdmitting: async () => "sd-1",
-      scopeTip: async () => ({ kind: "absent" }),
+      scopeTip: async () =>
+        w.tip === "sd-1" ? { kind: "absent" } : { kind: "tip", scopeDecisionId: w.tip },
       readScopeDecision: async () => ({
         kind: "read",
         decision: {
@@ -377,6 +381,15 @@ describe("rondo sends the drafted change under a goal scope (D-0145)", () => {
     };
     await pass(w);
     expect(w.sent).toHaveLength(1);
+    expect(w.sent[0]?.recheck).toBe(false);
+  });
+
+  test("the re-test before the walk fails once another approval is the tip", async () => {
+    const w = blocked();
+    w.beforeRecheck = () => {
+      w.tip = "sd-2";
+    };
+    await pass(w);
     expect(w.sent[0]?.recheck).toBe(false);
   });
 

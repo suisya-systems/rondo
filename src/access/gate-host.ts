@@ -378,9 +378,16 @@ async function sendOne(
     scopeDecisionId: send.scopeDecisionId,
     body: send.body,
     delegation: { onBehalfOf: send.decision.actorId, authorityRef: send.scopeDecisionId },
-    recheck: async () =>
-      (await reviseToSend(ports, revise.words, record))?.body === send.body &&
-      (await revise.hasRoom()),
+    // The same words under the same approval: a raise approved since spends
+    // another tip, and the successor under this one would be refused.
+    recheck: async () => {
+      const again = await reviseToSend(ports, revise.words, record);
+      return (
+        again?.body === send.body &&
+        again.scopeDecisionId === send.scopeDecisionId &&
+        (await revise.hasRoom())
+      );
+    },
   });
   if (sent.kind === "notSent") {
     ports.log(`gate     ${record.id}: the drafted change was not sent by rondo: ${sent.note}`);
