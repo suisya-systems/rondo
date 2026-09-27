@@ -1682,11 +1682,16 @@ test.skipIf(!canPublish)(
     const bare = join(forge, "throwaway.git");
     execFileSync("git", ["init", "--quiet", "--bare", "--initial-branch", "main", bare]);
 
-    const world = await publishableWorld("clear", 1, bare);
+    const world = await publishableWorld("clear");
+    // **The push goes somewhere that is not `origin`** (rondo#286): the
+    // workspace keeps its `origin`, which is a repository nobody has, and the
+    // press is given `--remote elsewhere` -- the case the landing reading used
+    // to read against the wrong forge.
+    execFileSync("git", ["-C", world.workspace, "remote", "add", "elsewhere", bare]);
     // The remote is a path and `asked.repo` is a forge name, so they cannot
     // agree; the mismatch is overruled here rather than hidden, which is the
     // flag's own purpose.
-    const asked = { ...world.asked, allowRemoteMismatch: true };
+    const asked = { ...world.asked, remote: "elsewhere", allowRemoteMismatch: true };
     const environment = { RONDO_APPROVER: "ada", [CLI_PATH_ENV]: publishCli ?? "" };
     const row = await world.store.read(world.iterationId);
     if (row.kind !== "read") {
@@ -1736,6 +1741,13 @@ test.skipIf(!canPublish)(
       { encoding: "utf8" },
     ).trim();
     expect(pushed).toBe(tip);
+
+    // **And where it pushed is on the row** (rondo#286, D-0153 rule 1): the
+    // remote the press was given, not the `origin` the workspace also has. It
+    // is written at the push, so a publish that stops at the forge leg below
+    // has recorded it all the same.
+    const after = await world.store.read(world.iterationId);
+    expect(after.kind === "read" ? after.record.publishedRemote : null).toBe("elsewhere");
 
     // **And the press stopped where the forge begins.** Not a pass dressed as
     // one: the pull request leg needs a forge this machine does not have, and

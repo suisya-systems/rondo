@@ -1596,6 +1596,19 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
   expect((await h.store.transition("i-land", "awaiting_human", "closed", {}, 2)).kind).toBe(
     "transitioned",
   );
+  // **A closed line rondo never recorded a push for is read as neither
+  // landed nor not landed** (rondo#286, D-0153 rule 3): no git is run, and the
+  // line keeps its paths until a person presses release.
+  const unpushed = await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST);
+  expect(unpushed.iterationId).toBeNull();
+  expect(unpushed.lines.join("\n")).toContain(
+    "undetermined: rondo holds no record of the remote a publish pushed it to",
+  );
+  expect(asked).toEqual([]);
+
+  // What `publish` writes at the push (D-0153 rule 1), here to the remote this
+  // host reads landings from.
+  await h.store.markPublishedRemote("i-land", "origin", 3);
   const unmerged = await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST);
   expect(unmerged.iterationId).toBeNull();
   expect(unmerged.lines.join("\n")).toContain("'x.ts' differ");
@@ -1629,6 +1642,58 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
   // D-0098 rule 1.1: only the landed release carries `first_landed`, with the
   // default-branch commit the landing was read at.
   expect(await h.store.landingOf("i-land")).toMatchObject({ branch: "main", commit: "h" });
+});
+
+test("rondo#286 (D-0153): the landing is read from the remote the publish recorded, and a disagreement with this host's is left to a person", async () => {
+  const h = await harness();
+  expect(
+    (await admit(h.reporting, h.advisory, PLAN, POLICY, "i-fork", null, null, REQUEST)).status,
+  ).toBe("awaiting_human");
+  expect((await h.store.transition("i-fork", "awaiting_human", "closed", {}, 2)).kind).toBe(
+    "transitioned",
+  );
+  // `rondo publish --remote fork`: the work is on a forge that is not origin.
+  await h.store.markPublishedRemote("i-fork", "fork", 3);
+
+  const asked: LandingRequest[] = [];
+  const lanes = (remote: string) => ({
+    store: h.store,
+    remote,
+    readChangedPaths: async () => ({ kind: "read" as const, paths: [] }),
+    readLanding: async (request: LandingRequest): Promise<LandingReading> => {
+      asked.push(request);
+      return { kind: "landed", branch: "main", headCommit: "h", paths: ["x.ts"] };
+    },
+  });
+  const attempt = async (remote: string) =>
+    await admit(
+      { ...h.reporting, lanes: lanes(remote) },
+      h.advisory,
+      PLAN,
+      POLICY,
+      "i-next",
+      null,
+      null,
+      REQUEST,
+    );
+
+  // **Rule 4**: this host reads landings from origin and the publish pushed
+  // to fork. rondo picks neither, fetches neither, and releases nothing.
+  const disputed = await attempt("origin");
+  expect(disputed.iterationId).toBeNull();
+  expect(disputed.lines.join("\n")).toContain(
+    "its publish pushed to 'fork' and this host reads landings from 'origin'",
+  );
+  expect(asked).toEqual([]);
+  expect(await h.store.landingOf("i-fork")).toBeNull();
+
+  // **Rule 2**: pointed at the remote the publish used, the reading is taken
+  // over that remote -- `origin` is nowhere in the request or in the sentence.
+  const through = await attempt("fork");
+  expect(through.iterationId).toBe("i-next");
+  expect(asked.map((request) => request.remote)).toEqual(["fork"]);
+  expect(through.lines[0]).toContain("work is on fork/main");
+  expect(through.lines[0]).not.toContain("origin");
 });
 
 test("D-0073 rule 2.3: a drafted claim reaches reserve(), so two lines on different paths of one repository run together", async () => {

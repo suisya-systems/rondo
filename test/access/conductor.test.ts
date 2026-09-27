@@ -16,7 +16,7 @@
  */
 import { expect, test } from "vitest";
 
-import { asEffect, lapSpendFields } from "../../src/access/conductor.js";
+import { asEffect, landingRemoteOf, lapSpendFields } from "../../src/access/conductor.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
 
 /** The reader is never reached on a failure path, and says so if it is. */
@@ -127,4 +127,37 @@ test("a Codex lap's tokens are priced, and a reported cost is never replaced (D-
     model: null,
   });
   expect(unpriced).toMatchObject({ costUsd: null, spendSource: "resultEvent" });
+});
+
+test("rondo#286 (D-0153): where a landing is read from is what the publish recorded, and nothing is guessed", () => {
+  const lap = (publishedRemote: string | null) => ({ publishedRemote });
+
+  // Rule 2: the record is the basis, whatever it names.
+  expect(landingRemoteOf([lap("origin"), lap(null)], "origin")).toEqual({ remote: "origin" });
+
+  // Rule 3: no record at all is undetermined, and says a press is what ends it.
+  const unrecorded = landingRemoteOf([lap(null)], "origin");
+  expect(unrecorded).toMatchObject({
+    undetermined: expect.stringContaining("holds no record of the remote a publish pushed it to"),
+  });
+  expect(unrecorded).toMatchObject({
+    undetermined: expect.stringContaining("release press"),
+  });
+
+  // Rule 4: a record this host disagrees with is a person's to settle, and
+  // rondo names both sides rather than choosing one.
+  expect(landingRemoteOf([lap("fork")], "origin")).toEqual({
+    undetermined:
+      "its publish pushed to 'fork' and this host reads landings from 'origin'. rondo does " +
+      "not settle that disagreement by itself: point the host at the remote the publish " +
+      "used, or release the line by hand",
+  });
+
+  // Two laps of one line published to two remotes is the same refusal to
+  // choose: neither is read, whichever one this host is pointed at.
+  for (const wired of ["origin", "fork"]) {
+    expect(landingRemoteOf([lap("origin"), lap("fork")], wired)).toMatchObject({
+      undetermined: expect.stringContaining("published to more than one remote ('fork', 'origin')"),
+    });
+  }
 });
