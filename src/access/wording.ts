@@ -430,6 +430,20 @@ export interface Chrome extends PageWords {
    * by it: the automatic answer waits on continuo#240.
    */
   readonly gateAuto: (auto: GateAuto) => string;
+  /**
+   * The approval rondo answered a gate under, named in plain words rather than
+   * by its scope id (rondo#533): toward a goal or for the request, and its
+   * dollar budget, already formatted.
+   */
+  readonly approvalNamed: (goal: boolean, costUsd: string) => string;
+  /**
+   * rondo's own note in the thread when it answered a gate by itself (D-0125,
+   * D-0145, rondo#533), with the conditions it rests on. `approval` is
+   * {@link approvalNamed}'s; `line` the review's severity threshold; `notSent`
+   * why the next lap did not start after the change was sent, or null.
+   */
+  readonly gateAutoSaid: (approval: string, approver: string, line: string) => string;
+  readonly gateReviseSaid: (approval: string, approver: string, notSent: string | null) => string;
   /** The line by the button when the model review raised a blocker or a major. */
   readonly modelRaised: (blockers: number, majors: number) => string;
   /** A model finding's severity (`blocker`, `major`, `minor`, `nit`) as a word, and counted. */

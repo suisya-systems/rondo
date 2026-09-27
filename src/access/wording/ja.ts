@@ -445,6 +445,35 @@ export const JA: Chrome = Object.freeze({
   answerNotDone: "回答されませんでした",
   gateBack: "ゲートに戻る",
   gateAuto: gateAutoJa,
+  approvalNamed: (goal, costUsd) =>
+    `${goal ? "目標に向けた承認" : "この依頼の承認"}（$${costUsd} まで）`,
+  gateAutoSaid: (approval, approver, line) =>
+    [
+      `${approver} による${approval}のもとで、rondo がこの周回を自動で承認しました。`,
+      "自動で承認する条件をすべて満たしていました:",
+      "- チェックが通っている",
+      `- 同じコミットのモデルレビューに、${severityJa(line)}以上の指摘がない`,
+      "- ワーカーの最後のテスト実行が通っている",
+      "- この線に開いている質問がない",
+      "- 締めの周回ではない",
+    ].join("\n"),
+  gateReviseSaid: (approval, approver, notSent) =>
+    [
+      `${approver} による${approval}のもとで、rondo が下書きした変更依頼を自分で送りました。`,
+      "ボタンを押さずに送る条件をすべて満たしていました:",
+      "- 承認を止めていたのはレビューの指摘だけで、下書きはそのすべてを引いている",
+      "- 下書きは、どの指摘も判断が要るものとしていない",
+      "- レビューの回数と予算が残っている",
+      "- この線に開いている質問がない",
+      ...(notSent === null
+        ? []
+        : [
+            "",
+            "ゲートには変更依頼が届いているかもしれませんが、次の周回は始まっていません:",
+            notSent,
+            "目標の承認を一時停止するか予算を増やすか、依頼から作業をもう一度始めてください。",
+          ]),
+    ].join("\n"),
   modelRaised: (blockers, majors) => `モデルレビューの指摘: ${raisedJa(blockers, majors)}。`,
   modelRaisedLink: "読む",
   severityWord: severityJa,

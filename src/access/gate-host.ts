@@ -82,8 +82,6 @@ export interface GateRevisePorts {
   readonly send: (record: IterationRecord, input: ScopedReviseInput) => Promise<ScopedRevise>;
   /** Whether one more lap would fit the host's bound now. */
   readonly hasRoom: () => Promise<boolean>;
-  /** The box's words, in the host operator's language (what the page draws). */
-  readonly words: Chrome;
   readonly mintId: () => string;
 }
 
@@ -107,6 +105,11 @@ export interface GateHostPorts {
   readonly answer: (record: IterationRecord, delegation: GateDelegation) => Promise<ScopedAnswer>;
   /** Null where no approver the allowlist accepts is set: then the host only approves. */
   readonly revise: GateRevisePorts | null;
+  /**
+   * The host operator's words (what the page draws): the revise box's, and
+   * rondo's own notes in the thread (rondo#533).
+   */
+  readonly words: Chrome;
   readonly now: () => number;
   readonly log: (line: string) => void;
 }
@@ -238,7 +241,11 @@ async function answerOne(ports: GateHostPorts, record: IterationRecord): Promise
   const line = autoThreshold(reviewPolicyOf(reviewScopeOf(scope.payload)).threshold);
   const written = await ports.record.recordThreadMessage({
     messageId: `gate-auto-${gateId}`,
-    body: approvedBody(scope.decision.scopeId, scope.decision.actorId, line),
+    body: ports.words.gateAutoSaid(
+      approvalOf(ports.words, scope.payload),
+      scope.decision.actorId,
+      line,
+    ),
     authorKind: "drafter",
     authorId: DETERMINISTIC_DRAFTER,
     inReplyTo: record.requestMessageId,
@@ -269,14 +276,16 @@ async function answerOne(ports: GateHostPorts, record: IterationRecord): Promise
  *   and marks none a judgment call; its text is what is sent.
  */
 export async function reviseToSend(
-  ports: Pick<GateHostPorts, "store" | "record" | "now">,
-  words: Chrome,
+  ports: Pick<GateHostPorts, "store" | "record" | "now" | "words">,
   record: IterationRecord,
 ): Promise<{
   readonly body: string;
   readonly scopeDecisionId: string;
   readonly decision: StoredScopeDecision;
+  /** The approval in plain words, for the note (rondo#533). */
+  readonly approval: string;
 } | null> {
+  const { words } = ports;
   if (
     record.status !== "awaiting_human" ||
     record.gateId === null ||
@@ -342,7 +351,12 @@ export async function reviseToSend(
     reviseLabels(words),
   );
   return box.kind === "drafted" && box.plain === true
-    ? { body: box.text, scopeDecisionId: tip.scopeDecisionId, decision: scope.decision }
+    ? {
+        body: box.text,
+        scopeDecisionId: tip.scopeDecisionId,
+        decision: scope.decision,
+        approval: approvalOf(words, scope.payload),
+      }
     : null;
 }
 
@@ -354,7 +368,7 @@ async function sendOne(
 ): Promise<void> {
   const gateId = record.gateId;
   const request = record.requestMessageId;
-  const send = await reviseToSend(ports, revise.words, record);
+  const send = await reviseToSend(ports, record);
   // A host at its bound leaves the claim unspent: the next pass sends it.
   if (gateId === null || request === null || send === null || !(await revise.hasRoom())) {
     return;
@@ -381,7 +395,7 @@ async function sendOne(
     // The same words under the same approval: a raise approved since spends
     // another tip, and the successor under this one would be refused.
     recheck: async () => {
-      const again = await reviseToSend(ports, revise.words, record);
+      const again = await reviseToSend(ports, record);
       return (
         again?.body === send.body &&
         again.scopeDecisionId === send.scopeDecisionId &&
@@ -401,7 +415,11 @@ async function sendOne(
   }
   const written = await ports.record.recordThreadMessage({
     messageId: `gate-revise-${gateId}`,
-    body: sentBody(send.decision.scopeId, send.decision.actorId, sent),
+    body: ports.words.gateReviseSaid(
+      send.approval,
+      send.decision.actorId,
+      sent.kind === "sent" ? null : sent.note,
+    ),
     authorKind: "drafter",
     authorId: DETERMINISTIC_DRAFTER,
     inReplyTo: request,
@@ -416,26 +434,6 @@ async function sendOne(
   if (written.kind !== "recorded" && written.kind !== "duplicate") {
     ports.log(`gate     ${record.id}: the report was not written: ${written.reason}`);
   }
-}
-
-/** The send's report: rondo's own words, ASCII (D-0004), with the conditions it rests on. */
-export function sentBody(scopeId: string, approver: string, sent: ScopedRevise): string {
-  return [
-    `Rondo sent the drafted change request under scope '${scopeId}', on ${approver}'s approval of it.`,
-    "It met every condition for sending it without a press:",
-    "- only the review's findings withheld the approval, and the draft quotes every one;",
-    "- the drafter marked none of them a judgment call;",
-    "- a review round and the budget were left;",
-    "- no question was open over this line.",
-    ...(sent.kind === "sent"
-      ? []
-      : [
-          "",
-          "The gate may hold the change, but the next lap did not start:",
-          sent.note,
-          "Pause or raise the goal scope, or start the work again from the request.",
-        ]),
-  ].join("\n");
 }
 
 /**
@@ -469,17 +467,12 @@ async function questionOpen(
   );
 }
 
-/** The report's words: rondo's own, ASCII (D-0004), with the conditions it rests on. */
-export function approvedBody(scopeId: string, approver: string, line: string): string {
-  return [
-    `Approved by rondo under scope '${scopeId}', on ${approver}'s approval of it.`,
-    "It met every condition for an automatic approval:",
-    "- the checks were clear;",
-    `- the model review of the same commit found nothing at or above ${line};`,
-    "- the worker's last test run passed;",
-    "- no question was open over this line;",
-    "- it is not a closing lap.",
-  ].join("\n");
+/** The approval a gate was answered under, in plain words rather than its scope id (rondo#533). */
+function approvalOf(words: Chrome, payload: GateScope["payload"]): string {
+  return words.approvalNamed(
+    requestsGoal(payload.requests) !== null,
+    payload.budgets.cost_usd.toFixed(2),
+  );
 }
 
 function describe(error: unknown): string {
