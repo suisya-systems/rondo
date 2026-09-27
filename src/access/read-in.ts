@@ -41,6 +41,27 @@ export function heldDigest(text: string): string {
   return contentDigest({ text: text.replace(/\r\n?/g, "\n") });
 }
 
+/**
+ * Whether a press may carry this text: within {@link READ_IN_MAX_CHARS} once
+ * its line ends are folded, and small enough, encoded as a form encodes it, to
+ * pass the route's body limit. **One test for the page and the route** (Codex,
+ * round 1), so the page never draws a press the route will refuse.
+ */
+export function pressable(text: string): boolean {
+  const folded = text.replace(/\r\n?/g, "\n");
+  return (
+    folded.trim() !== "" &&
+    folded.length <= READ_IN_MAX_CHARS &&
+    encodeURIComponent(folded.replace(/\n/g, "\r\n")).length <= READ_IN_MAX_FORM_BYTES
+  );
+}
+
+/**
+ * The most a press's text may take in its form body, under the route's 64 KiB
+ * limit with room for the token and the way back.
+ */
+const READ_IN_MAX_FORM_BYTES = 60 * 1024;
+
 /** The id the drawn text carries, so the press lands back on it. */
 export function heldAnchor(digest: string): string {
   return `read-${digest.slice("sha256:".length, "sha256:".length + 16)}`;

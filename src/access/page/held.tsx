@@ -21,7 +21,7 @@
  */
 import type { StoredTranslation } from "../../store/records.js";
 import { ago } from "../inbox.js";
-import { heldAnchor, heldDigest } from "../read-in.js";
+import { heldAnchor, heldDigest, pressable } from "../read-in.js";
 import type { Chrome } from "../wording.js";
 import { money } from "./vocabulary.js";
 
@@ -77,7 +77,7 @@ export function Held({
       <div className={className} lang="">
         {text}
       </div>
-      {reads.press ? (
+      {reads.press && pressable(text) ? (
         <button
           type="submit"
           form={READ_IN_FORM}

@@ -75,7 +75,7 @@ import {
 import { MAX_REVIEW_ROUNDS, type PageView, viewHref } from "./page-logic/routes.js";
 import { questionRevise } from "./question.js";
 import { TAB_OUTCOMES, type TabOutcome } from "./reach.js";
-import { heldAnchor, READ_IN_MAX_CHARS } from "./read-in.js";
+import { heldAnchor, pressable } from "./read-in.js";
 import { refusedPage } from "./screens/refused.js";
 import { APPROVE_BODY, operatorPage } from "./web.js";
 import type { Chrome } from "./wording.js";
@@ -3038,7 +3038,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (!("press" in minting)) {
       return refuse(minting.status, wording.readInRefusedPress);
     }
-    if (text.trim() === "" || text.length > READ_IN_MAX_CHARS || wording.lang === "en") {
+    if (!pressable(text) || wording.lang === "en") {
       return refuse(400, wording.readInRefusedForm);
     }
     const read = await readIn.read(minting.press, { text, language: wording.lang });

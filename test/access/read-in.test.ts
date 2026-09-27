@@ -9,7 +9,9 @@ import type { runDrafter } from "../../src/access/forge.js";
 import {
   heldAnchor,
   heldDigest,
+  pressable,
   READ_IN_DRAFTER_PREFIX,
+  READ_IN_MAX_CHARS,
   readIn,
   translationDocument,
 } from "../../src/access/read-in.js";
@@ -38,6 +40,16 @@ test("a digest folds line ends, so the words a form posts are the words the page
   expect(heldDigest("a\rb")).toBe(heldDigest("a\nb"));
   expect(heldDigest("a\nb")).not.toBe(heldDigest("a b"));
   expect(heldAnchor(heldDigest("a"))).toMatch(/^read-[0-9a-f]{16}$/);
+});
+
+test("a press carries only what the route takes: not empty, not over the length once folded", () => {
+  expect(pressable(" \n ")).toBe(false);
+  expect(pressable("x".repeat(READ_IN_MAX_CHARS))).toBe(true);
+  expect(pressable("x".repeat(READ_IN_MAX_CHARS + 1))).toBe(false);
+  // A form posts each line end as CRLF; the length is the text's, not the form's.
+  expect(pressable(`${"x\r\n".repeat(READ_IN_MAX_CHARS / 2 - 1)}x`)).toBe(true);
+  // Or the body limit: every character a nine-byte escape.
+  expect(pressable("\u3042".repeat(7_000))).toBe(false);
 });
 
 test("the model is handed the words as material, fenced, and asked for the language", () => {
