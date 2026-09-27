@@ -25194,10 +25194,12 @@ the newest goal: an edit would widen an approval nobody re-read.
 > candidate with why it was passed over: started, put aside, open points, not an issue). The row
 > is named by the approval, the reason and a digest of the facts, so each distinct stop is written
 > once. **The page draws a goal scope in force as stopped** while its newest row stands and no
-> request of the goal is written, or while a stop of this approval is an open ask in the thread of
-> the flow's latest request; it says the stop, the reason in plain words, what was passed over and
-> the next step (pause, or pause and approve again for new limits; a stop asked in a thread leads
-> to the question), in place of *working on its own*, on the front's triage block and on the goal
+> request of the goal is written, or while a stop of this approval stands in the thread of the
+> flow's latest request, **answered or not** (each stop is asked once, so after a *carry on* over a
+> limit still spent the flow stops again without a new question); it says the stop, the reason in
+> plain words, what was passed over and the next step (pause, or pause and approve again for new
+> limits; a stop still waiting on its answer leads to the question), in place of *working on its
+> own*, on the front's triage block and on the goal
 > scope screen. **Green is drawn only while neither holds.** A newest row outlives a stop the flow
 > gets past without writing a request (a later ranking with room only later); it reads stopped
 > until the request is written. Nothing above is edited.

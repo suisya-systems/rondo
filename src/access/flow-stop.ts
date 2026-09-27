@@ -124,12 +124,23 @@ export function readFlowStopFacts(facts: JsonRecord): FlowStopFacts | null {
 }
 
 /**
- * Where a goal scope in force stands against its stop: asked in a request's
- * thread (`askedIn`, the request the question sits under), recorded before
- * the first request (`facts`), or null while the flow can start or runs.
+ * Where a goal scope in force stands against its stop: asked in the thread of
+ * the flow's latest request (`askedIn`; `open` while it waits on an answer),
+ * recorded before the first request (`facts`), or null while the flow can
+ * start or runs.
+ *
+ * **An answered stop still stands** (Codex round 1): the flow asks each stop
+ * once, so after a *carry on* over a limit that is still spent it stops again
+ * without a new question. It stands until the flow writes a request, whose
+ * thread is then the one read.
  */
 export type FlowStopRead =
-  | { readonly kind: "asked"; readonly reason: FlowStop; readonly askedIn: string }
+  | {
+      readonly kind: "asked";
+      readonly reason: FlowStop;
+      readonly askedIn: string;
+      readonly open: boolean;
+    }
   | { readonly kind: "recorded"; readonly facts: FlowStopFacts; readonly atMs: number };
 
 export async function flowStopOf(
@@ -146,12 +157,23 @@ export async function flowStopOf(
     )
     .at(-1);
   if (latest !== undefined) {
-    const asks = await record.openAsksIn(latest.messageId);
-    const ask =
-      asks.kind === "read" ? asks.asks.find((one) => one.messageId.startsWith(prefix)) : undefined;
-    const rest = ask?.messageId.slice(prefix.length);
+    // The flow's stops in that thread, newest last, as `askStop` names them.
+    const stop = messages
+      .filter(
+        (message) =>
+          message.inReplyTo === latest.messageId &&
+          message.asks &&
+          message.messageId.startsWith(prefix),
+      )
+      .at(-1);
+    const rest = stop?.messageId.slice(prefix.length);
     const reason = FLOW_STOPS.find((one) => rest?.startsWith(`${one}-`));
-    return reason === undefined ? null : { kind: "asked", reason, askedIn: latest.messageId };
+    if (stop === undefined || reason === undefined) {
+      return null;
+    }
+    const asks = await record.openAsksIn(latest.messageId);
+    const open = asks.kind === "read" && asks.asks.some((one) => one.messageId === stop.messageId);
+    return { kind: "asked", reason, askedIn: latest.messageId, open };
   }
   // ponytail: the newest row stands until a request is written, so a stop the
   // flow has since got past without writing one (a newer ranking with room

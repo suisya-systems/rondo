@@ -476,6 +476,7 @@ test("a successor approval's stop in an inherited thread holds it too", async ()
     kind: "asked",
     reason: "nothing_eligible",
     askedIn: first,
+    open: true,
   });
   // A new candidate is ranked; the stop still stands unanswered.
   await w.triage("t-2", 0, [ranked(7), ranked(8)]);

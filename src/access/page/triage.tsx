@@ -83,12 +83,15 @@ export interface FlowStopSaid {
 
 export function flowStopSaid(wording: Chrome, stop: FlowStopRead): FlowStopSaid {
   if (stop.kind === "asked") {
+    // Answered and still stopped: the question is closed, the next step stands.
     return {
       reason: wording.flowStopReason(stop.reason),
       facts: null,
       skipped: null,
-      next: wording.flowStopAsked,
-      askedHref: viewHref({ kind: "thread", messageId: stop.askedIn, to: null }, wording.lang),
+      next: stop.open ? wording.flowStopAsked : wording.flowStopNext(stop.reason),
+      askedHref: stop.open
+        ? viewHref({ kind: "thread", messageId: stop.askedIn, to: null }, wording.lang)
+        : null,
     };
   }
   const facts = stop.facts;

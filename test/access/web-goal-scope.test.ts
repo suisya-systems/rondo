@@ -413,6 +413,28 @@ test("a flow stopped before its first request is said on the front and the scree
   expect(asked).toContain(EN.flowStopAsked);
   expect(asked).toContain(EN.flowStopAskedLink);
   expect(asked).not.toContain(EN.flowStopReason("nothing_eligible"));
+
+  // Answered with *carry on* and the approval not replaced: the limit is still
+  // spent, so the flow stays stopped and asks nothing new (Codex round 1).
+  expect(
+    await w.record.recordThreadMessage({
+      messageId: "answer-carry-on",
+      body: "carry on",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: `flow-stop-${standing.scopeDecisionId}-cost-${opener}`,
+      atMs: 7_000,
+      bases: [],
+      asks: false,
+      answerOutcome: "carry_on",
+    }),
+  ).toEqual({ kind: "recorded" });
+  const answered = await w.page({ kind: "goalScope", repository: "o/r" });
+  expect(answered).toContain(EN.goalScopeStoppedHeading);
+  expect(answered).toContain(EN.flowStopReason("cost"));
+  expect(answered).toContain(quoted(EN.flowStopNext("cost")));
+  expect(answered).not.toContain(EN.flowStopAskedLink);
+  expect(await front()).toContain('data-state="stopped"');
 });
 
 test("a scope stop shows its three options, in the page's language, with rondo's record folded", async () => {
