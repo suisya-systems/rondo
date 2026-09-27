@@ -1,4 +1,7 @@
 /**
+ * D-0127: every part of an approved split starts by itself once it can, and
+ * one pass starts as many as the host has room for.
+ *
  * D-0098 rule 1: a drafted plan that waits on an earlier plan of its split is
  * not admitted until that plan's line has landed (`first_landed`), and then
  * starts by itself on the resident host's tick, with the landing as a basis and
@@ -22,6 +25,7 @@ import {
   onLanding,
   planOrder,
 } from "../../src/access/drafted-start.js";
+import { approvedSplits } from "../../src/access/drafted-view.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { draftedPlanRun } from "../../src/access/model-draft/host.js";
 import { type OrderHostPorts, orderHost } from "../../src/access/order-host.js";
@@ -31,7 +35,7 @@ import { admittedPlan, planPayload, type RunPlan } from "../../src/refrain/plan.
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import {
-  type AdmittedSplit,
+  type ApprovedSplit,
   advisoryRecord,
   iterationStore,
   LANE_LEDGER_AUTHOR,
@@ -61,7 +65,7 @@ vi.mock("../../src/access/conductor.js", async (original) => {
   };
 });
 
-const SPLIT: AdmittedSplit = { scopeDecisionId: "sd-1", proposalId: "p-1", requestMessageId: "r1" };
+const SPLIT: ApprovedSplit = { scopeDecisionId: "sd-1", proposalId: "p-1", requestMessageId: "r1" };
 const COMMIT = "c".repeat(40);
 
 /** The tick's ports over a proposal of `plans`, each plan's readiness a queue the test fills. */
@@ -84,8 +88,8 @@ function tick(after: readonly (number | undefined)[], answers: DraftedStartReadi
     holes: [],
   };
   const ports: OrderHostPorts = {
+    splits: async () => [SPLIT],
     record: {
-      admittedSplits: async () => [SPLIT],
       readProposal: async () =>
         ({
           kind: "read",
@@ -147,7 +151,7 @@ const waiting = (
   first: state === null ? null : { lineageId: "lap-first", state, lastLapId },
 });
 
-test("the tick starts a waiting plan only once its first has landed, and never a plan with no order", async () => {
+test("the tick starts a plan with no order at once, and a waiting plan only once its first has landed", async () => {
   const run = { kind: "runnable" } as never;
   const t = tick(
     [undefined, 0],
@@ -157,18 +161,21 @@ test("the tick starts a waiting plan only once its first has landed, and never a
     ],
   );
   const host = orderHost(t.ports);
-  // Not started, running: nothing is read and nothing starts. Plan 0 is the person's press.
+  // Plan 0 has no order: approving the scope was the go (D-0127), so it starts
+  // on the first pass. Plan 1's first is not started, then running: nothing is
+  // read and plan 1 does not start.
   for (let n = 0; n < 2; n += 1) {
     host.kick();
     await host.settled();
   }
-  expect(t.started).toEqual([]);
+  expect(t.started).toEqual([0]);
+  expect(t.log).toEqual(["order    p-1 plan 0: started under its approved scope"]);
   expect(t.read).toEqual([]);
   // Ended and unread: its landing is read, and not landed starts nothing.
   host.kick();
   await host.settled();
   expect(t.read).toEqual(["lap-first"]);
-  expect(t.started).toEqual([]);
+  expect(t.started).toEqual([0]);
   // Landed: the release is written by the reading, readiness is asked again, and it starts.
   t.land();
   const ready = t.ports.readiness;
@@ -182,8 +189,71 @@ test("the tick starts a waiting plan only once its first has landed, and never a
   });
   host2.kick();
   await host2.settled();
-  expect(t.started).toEqual([1]);
+  expect(t.started).toEqual([0, 1]);
   expect(t.log.at(-1)).toContain("started on its dependency's landing");
+});
+
+test("one pass starts every independent part it has room for, and a part with no room is tried again the next minute (D-0127)", async () => {
+  const run = { kind: "runnable" } as never;
+  const t = tick(
+    [undefined, undefined, undefined],
+    [
+      [{ kind: "ready", run }],
+      [{ kind: "ready", run }],
+      [
+        { kind: "busy", occupying: 2, limit: 2 },
+        { kind: "full", live: 3, limit: 3 },
+        { kind: "sibling", iterationId: "lap-other" },
+        { kind: "ready", run },
+      ],
+    ],
+  );
+  const host = orderHost(t.ports);
+  host.kick();
+  await host.settled();
+  expect(t.started).toEqual([0, 1]);
+  // No room, no queue row and nothing said: the next pass asks again.
+  for (let n = 0; n < 2; n += 1) {
+    host.kick();
+    await host.settled();
+  }
+  expect(t.started).toEqual([0, 1]);
+  host.kick();
+  await host.settled();
+  expect(t.started).toEqual([0, 1, 2]);
+  expect(t.log).toHaveLength(3);
+});
+
+test("a start the press refuses is said, and the part is tried again the next pass", async () => {
+  const run = { kind: "runnable" } as never;
+  const t = tick(
+    [undefined],
+    [
+      [
+        { kind: "ready", run },
+        { kind: "ready", run },
+      ],
+    ],
+  );
+  let refuse = true;
+  const host = orderHost({
+    ...t.ports,
+    start: async (split, index) => {
+      if (refuse) {
+        refuse = false;
+        return { ok: false, note: "this host has no room for another lap (busy)" };
+      }
+      return await t.ports.start(split, index);
+    },
+  });
+  host.kick();
+  await host.settled();
+  expect(t.log).toEqual([
+    "order    p-1 plan 0: not started: this host has no room for another lap (busy)",
+  ]);
+  host.kick();
+  await host.settled();
+  expect(t.started).toEqual([0]);
 });
 
 test("a first that ended without landing holds its then, and the person is asked once, with no start-anyway (D-0098 rule 1.5)", async () => {
@@ -492,8 +562,8 @@ test(
         workspace: `/srv/work/${id}`,
       });
     expect((await reserve("lap-first", null)).kind).toBe("reserved");
-    // Where the tick looks: the split an approval admitted a plan of.
-    expect(await w.record.admittedSplits()).toEqual([
+    // Where the tick looks: the split an approval in force covers (D-0127).
+    expect(await approvedSplits({ record: w.record })).toEqual([
       { scopeDecisionId: w.decision, proposalId: w.proposalId, requestMessageId: "r1" },
     ]);
     const state = async () => {
@@ -508,6 +578,7 @@ test(
     // The tick over the real rows: nothing starts, and one question is asked.
     const tickPorts: OrderHostPorts = {
       record: w.record,
+      splits: async () => await approvedSplits({ record: w.record }),
       readiness: async (split, index) =>
         await draftedStartReadiness(
           { ...ports, nowMs: 20_000 },

@@ -52,7 +52,13 @@ export type DraftedStartReadiness =
       readonly after: number;
       readonly first: Extract<PlanOrder, { kind: "waiting" }>["first"];
     }
-  /** Another lap holds the one execution slot this host allows (D-0012). */
+  /**
+   * Another lap of the same request is open (rondo#463 point 5): until the
+   * page can show several lines of one request (rondo#452), its parts run one
+   * after another. rondo#452 removes this.
+   */
+  | { readonly kind: "sibling"; readonly iterationId: string }
+  /** Other laps hold every execution slot this host allows (D-0012, D-0124). */
   | { readonly kind: "busy"; readonly occupying: number; readonly limit: number }
   /** As many laps are open as this host allows (D-0023). */
   | { readonly kind: "full"; readonly live: number; readonly limit: number }
@@ -151,6 +157,14 @@ export async function draftedStartReadiness(
   );
   if (verdict.kind !== "inside") {
     return { kind: verdict.kind, test: verdict.test, reason: verdict.reason };
+  }
+  // ponytail: one open line per request until rondo#452 draws several; that change deletes this.
+  // A readiness test, not a lock: a press racing the tick before its row is reserved can pass it.
+  const sibling = (await ports.store.readLive()).find(
+    (outcome) => outcome.kind === "read" && outcome.record.requestMessageId === requestMessageId,
+  );
+  if (sibling?.kind === "read") {
+    return { kind: "sibling", iterationId: sibling.record.id };
   }
   const holders = heldBy(await ports.store.laneLedger(), run);
   return holders.length === 0 ? { kind: "ready", run } : { kind: "held", run, holders };

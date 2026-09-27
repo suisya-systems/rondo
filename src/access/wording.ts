@@ -665,6 +665,8 @@ export interface Chrome extends PageWords {
   readonly planStartPlain: string;
   readonly planStarted: string;
   readonly planStartedLink: string;
+  /** Another part of the request is open (rondo#463 point 5, until rondo#452). */
+  readonly planSibling: string;
   readonly planBusy: (limit: number) => string;
   readonly planFull: (live: number, limit: number) => string;
   /** Why the scope's own test says no, in plain words: one per test (D-0066 rule 4.2). */
