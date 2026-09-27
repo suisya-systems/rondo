@@ -185,6 +185,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0150 | The gate says what happened on the way to it: the laps of its line, what each was asked and committed, and the request's other parts; the execution limits say what was stopped and that its impact is unknown; and a failing test run the latest clean whole-suite run supersedes does not withhold automatic approval | accepted |
 | D-0151 | The scope card waits for rondo's draft: while the drafter still owes a request its draft, the thread, the right face and the list all say it is rondo's turn, and no scope is offered | accepted |
 | D-0152 | A lap continuo refused before its cost was read holds its reserve at a lap's send, the number the page counts, and not its cap; reading a timed-out lap's cost is continuo's | accepted |
+| D-0154 | A drafted scope ready for approval is the person's turn: the list, the header's count, the tab and the notification count it once rondo's draft is ready | accepted |
 
 ---
 
@@ -27060,3 +27061,49 @@ scope, which is what the issue is about.
 - **A refused lap whose worker kept spending** after continuo answered.
 - **Scopes passed by more than their reserves because of timed-out laps.** Then continuo's report of
   a stopped turn's spend is needed before this rule is safe.
+
+## D-0154 — A drafted scope ready for approval is the person's turn: the list, the header's count, the tab and the notification count it once rondo's draft is ready
+
+**Status:** accepted (2026-09-28, rondo#534). Follows `D-0151` (its option not taken, *lifting a
+drafted scope into the list's your turn*, left for its own issue). Refs `D-0036` rule 5, `D-0083`
+rule 2, rondo#311 (reaching the person), `D-0090` (a repository to add first).
+
+### Context
+
+After `D-0151` the thread shows the amber *approve the drafted scope* card once rondo's draft is
+ready, but `waitsOnYou` read only gates and questions. The request was missing from the list's
+*your turn* group, from the header's waiting count and the tab's badge, and from the host's
+notification: the person could find it only by opening the thread, while approving it was the one
+thing that moved the request.
+
+### Decision
+
+1. **A request is waited on by its drafted scope exactly when the thread's card offers it**: a
+   root request with no lap (live or ended), no question standing in its thread, no draft still
+   owed (`D-0151`'s `owed`), no repository to add first (`D-0090`), and whose standing is a draft
+   nobody has decided (`draftedStanding` kind `drafted`). `scopesAwaitingYou` in
+   `page-logic/waits.ts` is that reading, and the page and the host's tick both call it beside
+   `waitsOnYou`.
+2. **Its episode is the draft's scope id** (`scope:<scopeId>`). A redraft over a newer message is a
+   new scope and a new wait, so a person told about the old draft is told about the new one; the
+   same draft is told once (`D-0068` rule 3.1).
+3. **The header's count adds one per such request**, beside gates, questions and approvable
+   proposals. The drafter's split proposal is not an approvable kind, so it is not counted twice.
+4. **What is owed is read once per pass by one function** (`draftsOwedNow`, moved beside
+   `waitsOnYou`): a read that fails owes everything, so it withholds the wait as it withholds the
+   card.
+
+**Options not taken.** Counting a request with no draft (no drafter host, or a run that drafted
+nothing) as the person's turn: nothing rondo holds waits on them, and with no drafter host every
+new request would ring. Making `waitsOnYou` itself async: its synchronous reading is what the tests
+and the tab pin, and the scope reading needs the record; the two are concatenated at the two callers.
+
+### What it costs
+
+- **The page and the tick read the scope standing of every lapless request** each pass. Bounded by
+  the requests with no lap, no question and nothing owed.
+
+### What would falsify it
+
+- **A notification or a *your turn* row for a request whose thread shows no approve card**: then
+  the conditions in rule 1 have drifted from `threadActs`.

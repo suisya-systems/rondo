@@ -52,7 +52,12 @@ import { spawn } from "node:child_process";
 import type { IterationRecord } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { threadsOf } from "./page-logic/threads.js";
-import { lapsPastTheirCeiling, waitsOnYou } from "./page-logic/waits.js";
+import {
+  draftsOwedNow,
+  lapsPastTheirCeiling,
+  scopesAwaitingYou,
+  waitsOnYou,
+} from "./page-logic/waits.js";
 import type { Chrome } from "./wording.js";
 
 /**
@@ -111,8 +116,23 @@ export type NotifyOutcome =
 
 /** Everything the tick reads, and the one thing it does. */
 export interface ReachPorts {
-  readonly store: Pick<IterationStore, "readLive">;
-  readonly record: Pick<AdvisoryRecord, "threadMessages" | "claimAttention">;
+  readonly store: Pick<IterationStore, "readLive" | "terminalIterations">;
+  readonly record: Pick<
+    AdvisoryRecord,
+    | "threadMessages"
+    | "claimAttention"
+    | "scopesFor"
+    | "scopeDecisionOf"
+    | "readProposal"
+    | "scopeSupersededByApproved"
+  >;
+  /**
+   * The drafts rondo still owes and the requests waiting on a repository, as
+   * the page reads them, so a drafted scope is a turn here exactly when the
+   * thread offers it (rondo#534). Absent: nothing owed, nothing unheld.
+   */
+  readonly draftsOwed?: () => Promise<ReadonlySet<string>>;
+  readonly unheld?: (requestMessageId: string) => Promise<boolean>;
   readonly now: () => number;
   /**
    * The person's own words, as the page resolved them for this host
@@ -185,7 +205,20 @@ export async function reachThePerson(ports: ReachPorts): Promise<void> {
   // question -- and the gate a lap reaches once the first one is answered --
   // would be filtered out for ever as a repeat of a wait that had in fact been
   // settled, which is a person never told about the rest of their own request.
-  const turns = waitsOnYou(threads, laps).map((wait) => wait.episode);
+  const ended = (await ports.store.terminalIterations()).flatMap((outcome): IterationRecord[] =>
+    outcome.kind === "read" ? [outcome.record] : [],
+  );
+  const unheld = ports.unheld;
+  const scopes = await scopesAwaitingYou(
+    {
+      record: ports.record,
+      unheld: async (id) => (unheld === undefined ? false : await unheld(id).catch(() => false)),
+    },
+    threads,
+    [...laps, ...ended],
+    await draftsOwedNow(ports),
+  );
+  const turns = [...waitsOnYou(threads, laps), ...scopes].map((wait) => wait.episode);
   const late = lapsPastTheirCeiling(laps, atMs).map((episode) => `late:${episode}`);
 
   // **The claim is the test, and there is no reading before it** (Codex,

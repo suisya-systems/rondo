@@ -10,9 +10,13 @@
  */
 import { expect, test } from "vitest";
 
+import { drafterHost } from "../../src/access/drafter-host.js";
 import type { WebPorts } from "../../src/access/page/contract.js";
 import { PAGE_EN } from "../../src/access/page/words.js";
+import { REACH_SUBJECT, reachThePerson } from "../../src/access/reach.js";
 import { EN } from "../../src/access/wording.js";
+import { planDigest } from "../../src/store/plan.js";
+import { agentTypeDigestOf, world as drafterWorld, planDocument } from "./fixtures/drafter.js";
 import { fresh, openRequest, operatorPage, portsOver } from "./page-world.js";
 
 const threadOf = (messageId: string) => ({ kind: "thread" as const, messageId, to: null });
@@ -116,4 +120,108 @@ test("with no drafter host, nothing is owed and the page is as it was", async ()
   const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
   expect(nextCard(html)).toContain(EN.nextStepScope);
   expect(html).not.toContain(EN.nextStepDrafting);
+});
+
+/** A request rondo's drafter has drafted a scope for, waiting on the person's approval. */
+async function drafted() {
+  const w = await drafterWorld();
+  const document = planDocument();
+  await w.say("r1", "Fix the cost box.", null, 1_000);
+  await w.say("r1-plan", JSON.stringify(document), "r1", 1_100);
+  let n = 0;
+  const host = drafterHost({
+    store: w.store,
+    record: w.record,
+    now: () => 1_500,
+    language: null,
+    log: () => undefined,
+    mintId: (kind) => {
+      n += 1;
+      return `${kind}-${String(n)}`;
+    },
+    runDrafter: async () => ({
+      kind: "answered",
+      costUsd: 0.05,
+      finalMessage: JSON.stringify({
+        act: "split",
+        summary: { text: "One plan.", bases: ["r1"] },
+        plans: [
+          {
+            template_plan_digest: planDigest(document),
+            agent_type_digest: agentTypeDigestOf(document),
+            prompt: "Fix the cost box.",
+            bases: ["r1"],
+            claim: ["/"],
+          },
+        ],
+        narrowings: [],
+      }),
+    }),
+  });
+  host.kick();
+  await host.idle();
+  const { scope_id: scopeId } = w.connection
+    .prepare("SELECT scope_id FROM scope WHERE author_kind = 'drafter'")
+    .get() as { scope_id: string };
+  return { ...w, scopeId };
+}
+
+test("a drafted scope ready to approve is the person's turn: the list, the header and the tab (rondo#534)", async () => {
+  const w = await drafted();
+  const html = await operatorPage(
+    { ...portsOver(w), draftsOwed: async () => new Set() },
+    "t",
+    threadOf("r1"),
+  );
+  expect(nextCard(html)).toContain(EN.nextStepDrafted);
+  expect(html).toContain("list-row-mine");
+  expect(html).toContain(EN.waitingCount(1));
+  expect(html).toContain(`data-waits="[&quot;scope:${w.scopeId}&quot;]"`);
+});
+
+test("while rondo still owes a newer draft, the scope waiting on it is not the person's turn (D-0151)", async () => {
+  const w = await drafted();
+  const html = await operatorPage(
+    {
+      ...portsOver(w),
+      draftsOwed: async () => new Set(["r1"]),
+    },
+    "t",
+    threadOf("r1"),
+  );
+  expect(html).not.toContain("list-row-mine");
+  expect(html).toContain('data-waits="[]"');
+});
+
+test("the host reaches the person once for a drafted scope, and not while a draft is owed or a repository is to add", async () => {
+  const w = await drafted();
+  const sent: string[] = [];
+  const tick = (over: {
+    readonly draftsOwed?: () => Promise<ReadonlySet<string>>;
+    readonly unheld?: (id: string) => Promise<boolean>;
+  }) =>
+    reachThePerson({
+      store: w.store,
+      record: w.record,
+      now: () => 50_000,
+      words: EN,
+      notify: async (sentence) => {
+        sent.push(sentence);
+        return { kind: "reached" };
+      },
+      say: () => undefined,
+      ...over,
+    });
+  await tick({ draftsOwed: async () => new Set(["r1"]) });
+  await tick({ unheld: async () => true });
+  expect(sent).toEqual([]);
+  await tick({});
+  await tick({});
+  expect(sent).toEqual([EN.reachYourTurn]);
+  expect(
+    w.connection
+      .prepare("SELECT subject_id FROM operator_attention WHERE subject_kind = ?")
+      .all(REACH_SUBJECT)
+      .map((row) => (row as { subject_id: string }).subject_id),
+  ).toEqual([`scope:${w.scopeId}`]);
 });
