@@ -4,6 +4,7 @@
  */
 
 import { APPROVED_OUTCOME } from "../../store/records.js";
+import type { GateAuto, GateAutoReason } from "../gate-auto.js";
 import { PAGE_JA } from "../page/words.js";
 import type { AgentTypeSource, Chrome } from "../wording.js";
 
@@ -22,6 +23,48 @@ function agentTypeSourceJa(from: AgentTypeSource): string {
 /** A finding's severity as the {@link JA} set names it, wherever it names one. */
 function severityJa(severity: string): string {
   return { blocker: "阻害", major: "重大", minor: "軽微", nit: "細部" }[severity] ?? severity;
+}
+
+/** One reason a gate goes to the person, as the {@link JA} set says it (D-0125). */
+function gateAutoReasonJa(reason: GateAutoReason): string {
+  switch (reason.kind) {
+    case "no_scope":
+      return "この作業を含む承認済みの範囲がありません";
+    case "scope_declined":
+      return "範囲が承認されていません";
+    case "scope_superseded":
+      return "範囲が新しい範囲に置き換えられています";
+    case "scope_expired":
+      return "範囲の期限が切れています";
+    case "checks_not_clear":
+      return "チェックが通っていません";
+    case "model_pending":
+      return "モデルレビューがまだ読んでいません";
+    case "model_unavailable":
+      return "モデルレビューを取れませんでした";
+    case "model_ungraded":
+      return "モデルレビューの重大度が読み取れません";
+    case "model_raised":
+      return `${reason.counts
+        .map(({ severity, count }) => `${severityJa(severity)} ${String(count)} 件`)
+        .join("と")}の指摘`;
+    case "tests_unread":
+      return "rondo が読み取れるテスト実行がありません";
+    case "tests_failed":
+      return `テストが ${String(reason.failed)} 件失敗しています`;
+    case "tests_errored":
+      return "テストのコマンドがエラーで終わっています";
+    case "question_open":
+      return "質問が開いています";
+    case "closing_lap":
+      return "締めの周回です";
+  }
+}
+
+function gateAutoJa(auto: GateAuto): string {
+  return auto.kind === "would_not_approve"
+    ? `自動では承認しません: ${auto.reasons.map(gateAutoReasonJa).join("、")}。`
+    : "rondo ならこれを自動で承認します。";
 }
 
 function scopeTestJa(test: string): string {
@@ -380,6 +423,7 @@ export const JA: Chrome = Object.freeze({
     "もう一度 approve を押しても同じです。この環境の rondo を用意した人なら、理由を見られます。",
   answerNotDone: "回答されませんでした",
   gateBack: "ゲートに戻る",
+  gateAuto: gateAutoJa,
   modelRaised: (blockers, majors) => `モデルレビューの指摘: ${raisedJa(blockers, majors)}。`,
   modelRaisedLink: "読む",
   severityWord: severityJa,
@@ -633,6 +677,7 @@ export const JA: Chrome = Object.freeze({
     ({
       push_branch: "ブランチを push する",
       open_pull_request: "プルリクエストを開く",
+      merge_default_branch: "チェックが通ればデフォルトブランチにマージする",
     })[act] ?? act,
   scopeOutwardNone: "なし",
   scopeIrreversibleNone: "取り返しのつかない行為の一覧には何も足しません。",
@@ -1211,6 +1256,9 @@ export const JA: Chrome = Object.freeze({
     "GitHub はマージを受け付けましたが、マージされたことを rondo は確かめられませんでした" +
     "（リポジトリがマージキューを使っているか、GitHub から返事がありませんでした）。" +
     "もう一度押す前に、GitHub でプルリクエストを確かめてください。",
+  mergeRefusedInFlight:
+    "この押下ではマージしていません。このプルリクエストのマージがすでに進んでいます。少し待って" +
+    "から依頼に戻り、結果を確かめてください。",
   publishRefusedNotStarted:
     "何も公開していません。ここで見た内容は失われていません。" +
     "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",

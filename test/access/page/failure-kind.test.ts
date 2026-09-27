@@ -187,3 +187,35 @@ test("continuo's turn-timeout refusal is said as running out of time, with the p
   expect(chromeFor("ja").lapTurnTimedOut(15)).toContain("費用");
   expect(EN.lapTurnTimedOut(null)).toContain("the time it was given");
 });
+
+test("D-0121: a try the budget stopped says what it spent of what it had, in both languages, and is the person's", () => {
+  const ended = (wording: typeof EN, lapCostUsd: number | null, lapBudgetCapUsd: number | null) =>
+    lapEvents(
+      wording,
+      {
+        id: "i-cap",
+        status: "failed",
+        reason: "LapBudgetExhausted",
+        failureKind: "budget",
+        lapCostUsd,
+        lapBudgetCapUsd,
+        createdAtMs: 1_000,
+        updatedAtMs: 3_000,
+      } as unknown as IterationRecord,
+      [],
+      (status) => status === "failed",
+      () => "1h",
+      null,
+    ).find((event) => event.id === "i-cap:ended");
+  for (const wording of [EN, chromeFor("ja")]) {
+    const stopped = ended(wording, 45.3, 45);
+    expect(stopped?.said, wording.lang).toBe(wording.evBudgetStopped("45.30", "45.00"));
+    expect(stopped?.yours).toBe(true);
+    // No room at all: it was never started, and says so rather than a $0 spend.
+    expect(ended(wording, 0, -1)?.said).toBe(wording.evBudgetStopped("0.00", null));
+    // continuo's own class name never reaches the person.
+    expect(stopped?.said).not.toContain("LapBudgetExhausted");
+  }
+  expect(EN.evBudgetStopped("1.00", "2.00")).toContain("larger budget");
+  expect(chromeFor("ja").evBudgetStopped(null, "2.00")).toContain("報告されていません");
+});

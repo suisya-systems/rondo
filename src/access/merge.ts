@@ -27,12 +27,18 @@ import {
 import type { ContinuoResult } from "../continuo/protocol.js";
 import { lineShape } from "../store/lanes.js";
 import {
+  approvedForPublication,
   isDeterministicReadingDrafter,
   type JsonValue,
   latestReading,
   planField,
 } from "../store/records.js";
-import { type AdvisoryRecord, type IterationStore, LANE_LEDGER_AUTHOR } from "../store/sqlite.js";
+import {
+  type AdvisoryRecord,
+  type IterationStore,
+  LANE_LEDGER_AUTHOR,
+  type RecordOutcome,
+} from "../store/sqlite.js";
 import { reportToRequest, type WorktreeOutcome } from "./conductor.js";
 import {
   type CommandOutcome,
@@ -45,6 +51,7 @@ import {
 } from "./forge.js";
 import { type MergeBlock, mergeBlock, resultOf } from "./page-logic/result.js";
 import { threadsOf } from "./page-logic/threads.js";
+import { approvalTip } from "./scope.js";
 import type { Merged, MergeInput, MergeRefusal } from "./web-app.js";
 
 /** What a merge press reads and writes, as values a test can replace. */
@@ -57,7 +64,8 @@ export interface MergePorts {
   readonly now: () => number;
   /**
    * Shared with the checks host, which leaves a lap alone while its press is
-   * in flight (rondo#413): the lap ids a press is working on now.
+   * in flight (rondo#413): the lap ids a press, or a merge on green (D-0126),
+   * is working on now.
    */
   readonly pressing?: Set<string>;
   /**
@@ -98,6 +106,10 @@ export function mergePress(ports: MergePorts): (input: MergeInput) => Promise<Me
     if (already !== undefined) {
       return await already;
     }
+    // A merge on green (D-0126), or a press from another page, holds the lap.
+    if (ports.pressing?.has(input.iterationId) === true) {
+      return refused("mergeRefusedInFlight", "a merge of this lap is in flight");
+    }
     const merging = mergeOnce(ports, input);
     running.set(input.iterationId, merging);
     ports.pressing?.add(input.iterationId);
@@ -116,7 +128,120 @@ export function mergePress(ports: MergePorts): (input: MergeInput) => Promise<Me
   };
 }
 
-async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> {
+/** What a merge on green reads and writes beyond a press (D-0126). */
+export interface MergeOnGreenPorts extends MergePorts {
+  readonly record: MergePorts["record"] &
+    Pick<
+      AdvisoryRecord,
+      "scopeDecisionAdmitting" | "scopeTip" | "readScopeDecision" | "readScope" | "claimScopedMerge"
+    >;
+}
+
+/**
+ * **Merge on green, where the lap's scope includes the merge** (rondo#465,
+ * D-0126): run by the checks host right after it writes a `green` answer on
+ * `head`. The press's own {@link mergeOnce}, holding the lap in the shared
+ * `pressing` set, once all of these hold: the approved tip of the lap's scope
+ * chain includes `merge_default_branch` and has not expired; the gate was
+ * answered `approve`; `head` is the lap's own tip (a moved head is the
+ * person's, D-0102); and `mergeBlock` is null, which `mergeOnce` asks again.
+ * The approval over findings is the person's judgement, so the auto-approval
+ * conditions are not asked again.
+ *
+ * Returns a line for the terminal, or null where it is not rondo's to merge.
+ * A refusal after that -- a queue, a retarget, the forge -- is left for the
+ * person's press, which is unchanged.
+ */
+export async function mergeOnGreen(
+  ports: MergeOnGreenPorts,
+  iterationId: string,
+  head: string,
+): Promise<string | null> {
+  if (ports.pressing?.has(iterationId) === true) {
+    return null;
+  }
+  const authority = await mergeAuthority(ports, iterationId);
+  if (authority === null) {
+    return null;
+  }
+  ports.pressing?.add(iterationId);
+  try {
+    const merged = await mergeOnce(
+      ports,
+      { iterationId, head },
+      {
+        scopeId: authority.scopeId,
+        // **Asked again at the claim** (Codex round 1): the forge's reads
+        // take time, and a scope that expired or an approved successor
+        // without the merge in between authorises nothing.
+        claim: async () => {
+          const now = await mergeAuthority(ports, iterationId);
+          if (now?.scopeDecisionId !== authority.scopeDecisionId) {
+            return {
+              kind: "refused",
+              reason: "the scope that allowed the merge no longer does, or has been replaced",
+            };
+          }
+          return await ports.record.claimScopedMerge({
+            scopeDecisionId: authority.scopeDecisionId,
+            iterationId,
+            nowMs: ports.now(),
+          });
+        },
+      },
+    );
+    return merged.ok ? merged.note : `not merged on green, left for the press: ${merged.note}`;
+  } finally {
+    ports.pressing?.delete(iterationId);
+  }
+}
+
+/**
+ * The approval a merge on green is made under, or null where there is none:
+ * the lap's gate answered `approve`, and the approved tip of its scope chain
+ * including the merge and not expired (D-0126 rules 2.1 and 2.2).
+ *
+ * ponytail: read in steps and not in the claim's own statement, so an
+ * approval written between the last read and the claim is not seen; the
+ * window is one tick of the event loop. One query in the claim is the upgrade.
+ */
+async function mergeAuthority(
+  ports: MergeOnGreenPorts,
+  iterationId: string,
+): Promise<{ readonly scopeDecisionId: string; readonly scopeId: string } | null> {
+  const found = await ports.store.read(iterationId);
+  if (found.kind !== "read" || !approvedForPublication(found.record)) {
+    return null;
+  }
+  const tip = await approvalTip(ports.record, iterationId);
+  if (tip.kind !== "tip") {
+    return null;
+  }
+  const decided = await ports.record.readScopeDecision(tip.scopeDecisionId);
+  if (decided.kind !== "read" || decided.decision.outcome !== "approved") {
+    return null;
+  }
+  const stored = await ports.record.readScope(decided.decision.scopeId);
+  return stored.kind !== "read" ||
+    !stored.scope.payload.outward_acts.includes("merge_default_branch") ||
+    // D-0066 rule 1.2.4: an expired scope authorises nothing.
+    stored.scope.payload.budgets.expires_at_ms <= ports.now()
+    ? null
+    : { scopeDecisionId: tip.scopeDecisionId, scopeId: decided.decision.scopeId };
+}
+
+/** The scope a merge on green is made under (D-0126). */
+interface ScopedMerge {
+  readonly scopeId: string;
+  /** The consumption row, written before the forge is asked. */
+  readonly claim: () => Promise<RecordOutcome>;
+}
+
+async function mergeOnce(
+  ports: MergePorts,
+  input: MergeInput,
+  scoped: ScopedMerge | null = null,
+): Promise<Merged> {
   const forge = ports.forge ?? { readPullRequest, readMergeMethod, mergePullRequest };
   const found = await ports.store.read(input.iterationId);
   if (found.kind !== "read") {
@@ -155,11 +280,13 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
   // one the page showed as moved, with what it carries, and read green there.
   const tip = tipOf(await ports.store.readingsFor(record.id));
   const head = result.checksCommit;
+  // A merge on green takes the lap's own head only (D-0126): a moved one is
+  // the person's.
   if (
     tip === null ||
     head === null ||
     input.head !== head ||
-    (tip !== head && result.moved?.to !== head)
+    (tip !== head && (scoped !== null || result.moved?.to !== head))
   ) {
     return refused(
       "mergeRefusedMoved",
@@ -212,6 +339,14 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
       method.kind === "none" ? "the repository allows no merge method" : method.reason,
     );
   }
+  // **Claim, then act** (D-0126 rule 3, as D-0042): the consumption row goes
+  // in before the forge is asked, so a second attempt is refused by it.
+  if (scoped !== null) {
+    const claimed = await scoped.claim();
+    if (claimed.kind !== "recorded") {
+      return { ok: false, note: `nothing was merged: ${claimed.reason}` };
+    }
+  }
   const merged = await forge.mergePullRequest({
     url,
     method: method.method,
@@ -247,6 +382,7 @@ async function mergeOnce(ports: MergePorts, input: MergeInput): Promise<Merged> 
       method: method.method,
       mergeCommit: after.mergeCommit,
       notReread: closing,
+      ...(scoped === null ? {} : { underScope: scoped.scopeId }),
     },
     ports.now(),
   );

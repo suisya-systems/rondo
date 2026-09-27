@@ -115,6 +115,7 @@ import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
 import { partsOf } from "./drafted-start.js";
 import { draftedStanding } from "./drafted-view.js";
 import type { LapWorkInspection } from "./forge.js";
+import { type GateAuto, type GateScope, gateAuto } from "./gate-auto.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
 import { type IssueComment, parseForgeRead } from "./issue-read.js";
 import { isModelDrafterName } from "./model-draft/judgement.js";
@@ -1426,6 +1427,14 @@ function approveView(
             </span>
           ) : null}
         </p>
+        {/*
+         * **Whether rondo would approve this without the person, and why not**
+         * (D-0125): one line in the person's words, under the readings it is
+         * read from. It answers nothing; the press below is the person's.
+         */}
+        <p id="gate-auto" class="text-meta leading-5 text-muted-foreground">
+          {wording.gateAuto(framing.auto)}
+        </p>
         <form
           id="approve-form"
           method="post"
@@ -1819,6 +1828,8 @@ interface Shown {
    * first (D-0098 rule 8.5, `takeInFrom`), or absent where none.
    */
   readonly takeIn?: PullRequestLink | null;
+  /** Whether rondo would approve this gate automatically, and why not (D-0125). */
+  readonly auto: GateAuto;
 }
 
 /** What the revise box says about a worker's question (D-0098 rule 8.4). */
@@ -1884,6 +1895,23 @@ interface BudgetClosed {
   readonly test: string;
   readonly budgets: ScopePayload["budgets"];
   readonly spent: ScopeSpent;
+}
+
+/** The approval a lap spends, as {@link gateAuto} reads it, or null where it will not read. */
+async function gateScope(ports: WebPorts, scopeDecisionId: string): Promise<GateScope | null> {
+  const decided = await ports.record.readScopeDecision(scopeDecisionId);
+  if (decided.kind !== "read") {
+    return null;
+  }
+  const stored = await ports.record.readScope(decided.decision.scopeId);
+  if (stored.kind !== "read") {
+    return null;
+  }
+  return {
+    outcome: decided.decision.outcome,
+    payload: stored.scope.payload,
+    supersededByApproved: await ports.record.scopeSupersededByApproved(decided.decision.scopeId),
+  };
 }
 
 /** Whether one approval's budgets would refuse one more attempt now, and which. */
@@ -1964,6 +1992,7 @@ async function shownBeforePress(
     // the fence block's standing sentences are inside these lines.
     const material = ports.material === null ? null : await ports.material(wording, record);
     const tip = await approvalTip(ports.record, record.id);
+    const questionOpen = await questionOver(record);
     const workerQuestion = workerQuestionOf(record);
     shown.set(record.id, {
       claims: propose(snapshot).payload.claims,
@@ -1978,8 +2007,16 @@ async function shownBeforePress(
         await reviseBox(ports, wording, record.id, readings),
         workerQuestion?.answered ?? null,
       ),
-      questionOpen: await questionOver(record),
+      questionOpen,
       workerQuestion,
+      auto: gateAuto({
+        readings,
+        runs: workerRuns(record.lapCommands),
+        questionOpen: questionOpen !== null,
+        closing: (await ports.store.closingLapOf(record.id)) !== null,
+        scope: tip.kind === "tip" ? await gateScope(ports, tip.scopeDecisionId) : null,
+        nowMs: ports.now(),
+      }),
     });
   }
   return shown;

@@ -4,8 +4,53 @@
  */
 
 import { APPROVED_OUTCOME, READING_COVERAGE } from "../../store/records.js";
+import type { GateAuto, GateAutoReason } from "../gate-auto.js";
 import { PAGE_EN } from "../page/words.js";
 import type { AgentTypeSource, Chrome } from "../wording.js";
+
+/** One reason a gate goes to the person, as the {@link EN} set says it (D-0125). */
+function gateAutoReasonEn(reason: GateAutoReason): string {
+  switch (reason.kind) {
+    case "no_scope":
+      return "no approved scope covers this work";
+    case "scope_declined":
+      return "its scope was not approved";
+    case "scope_superseded":
+      return "its scope was replaced by a newer one";
+    case "scope_expired":
+      return "its scope has expired";
+    case "checks_not_clear":
+      return "the checks are not clear";
+    case "model_pending":
+      return "the model review has not read this yet";
+    case "model_unavailable":
+      return "the model review could not be taken";
+    case "model_ungraded":
+      return "the model review's severities could not be read";
+    case "model_raised":
+      return reason.counts
+        .map(
+          ({ severity, count }) => `${String(count)} ${severity} finding${count === 1 ? "" : "s"}`,
+        )
+        .join(" and ");
+    case "tests_unread":
+      return "no test run rondo can read";
+    case "tests_failed":
+      return `${String(reason.failed)} test${reason.failed === 1 ? "" : "s"} failed`;
+    case "tests_errored":
+      return "the test command ended in error";
+    case "question_open":
+      return "a question is open";
+    case "closing_lap":
+      return "this is a closing lap";
+  }
+}
+
+function gateAutoEn(auto: GateAuto): string {
+  return auto.kind === "would_not_approve"
+    ? `Not approved automatically: ${auto.reasons.map(gateAutoReasonEn).join("; ")}.`
+    : "rondo would approve this automatically.";
+}
 
 /** The three sources as English, for the {@link EN} set's three lines about them. */
 function agentTypeSourceEn(from: AgentTypeSource): string {
@@ -355,6 +400,7 @@ explanation you pressed on and then answers the gate.`,
     "again will answer nothing either; whoever set rondo up on this machine can see why.",
   answerNotDone: "Nothing was answered",
   gateBack: "Back to the gate",
+  gateAuto: gateAutoEn,
   modelRaised: (blockers, majors) => `The model review raised ${raisedEn(blockers, majors)}.`,
   modelRaisedLink: "Read it",
   severityWord: (severity) => severity,
@@ -607,6 +653,7 @@ explanation you pressed on and then answers the gate.`,
     ({
       push_branch: "push a branch",
       open_pull_request: "open a pull request",
+      merge_default_branch: "merge into the default branch once the checks pass",
     })[act] ?? act,
   scopeOutwardNone: "none",
   scopeIrreversibleNone: "No act is added to the irreversible list.",
@@ -1196,6 +1243,9 @@ explanation you pressed on and then answers the gate.`,
     "The forge accepted the merge, and rondo could not see it made -- the repository may merge " +
     "through a queue, or the forge did not answer. Look at the pull request on the forge before " +
     "pressing again.",
+  mergeRefusedInFlight:
+    "Nothing was merged by this press: a merge of this pull request is already under way. Go " +
+    "back to the request in a moment to see how it went.",
   nextStepConflictFix: (pullRequest, base) =>
     `${pullRequest} conflicts with ${base}, so the forge runs no checks on it. rondo can bring ` +
     `${base} into the branch and settle the conflict, changing nothing else; the result comes ` +

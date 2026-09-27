@@ -86,6 +86,7 @@ import {
   type LaneHolder,
   type LapReading,
   type LapReadingDraft,
+  lapBudgetCap,
   latestReading,
   MODEL_READING_DRAFTER_PREFIX,
   type Occupancy,
@@ -100,6 +101,7 @@ import {
   readScopePayload,
   type ScopeDecisionDraft,
   type ScopeDraft,
+  type ScopePayload,
   type ScopeRefusal,
   type ScopeSpent,
   type ScopeTest,
@@ -676,6 +678,13 @@ export interface IterationStore {
    * a line that reserved none or is not in this store. Writes nothing.
    */
   numberReservations(iterationId: string): Promise<readonly NumberReservation[]>;
+  /**
+   * The cap `iterationId` is sent with, computed and written onto its row in
+   * one transaction (D-0121 rules 2 and 7), or null where it was admitted under
+   * no approval or the approval will not read -- and then nothing is written.
+   * One transaction, so two laps sent at once each see the other's cap.
+   */
+  sendLapBudget(iterationId: string, nowMs: number): Promise<number | null>;
   /**
    * The highest number ever reserved in `record` of `repository` (as
    * `repositoryKey` spells it), released ones included, or 0 (D-0098 rule
@@ -1509,9 +1518,10 @@ CREATE TABLE IF NOT EXISTS scope_decision (
 -- scope_decision authorises many acts, each once (rule 5.2).
 --
 -- act_kind is a closed union the writer refuses outside of, and today it has
--- one writable member, admission, whose subject_id is the iteration id and
+-- two writable members: admission, whose subject_id is the iteration id and
 -- whose row lands in reserve()'s BEGIN IMMEDIATE beside the iteration row
--- (rule 3.2). **No CHECK spells the union**: proposal.kind's precedent, so that
+-- (rule 3.2), and merge_default_branch, a merge on green claimed before the
+-- forge is asked, once per iteration (D-0126). **No CHECK spells the union**: proposal.kind's precedent, so that
 -- the entries that make push_branch and open_pull_request writable change a
 -- constant and not a table.
 --
@@ -2674,6 +2684,18 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       return ledgerLines(connection);
     },
 
+    async sendLapBudget(iterationId: string, nowMs: number): Promise<number | null> {
+      return immediateTransaction(connection, () => {
+        const cap = lapBudgetCapFor(connection, iterationId, policy.maxOccupying);
+        if (cap !== null) {
+          connection
+            .prepare("UPDATE iteration SET lap_budget_cap_usd = ?, updated_at_ms = ? WHERE id = ?")
+            .run(cap, nowMs, iterationId);
+        }
+        return cap;
+      });
+    },
+
     async numberReservations(iterationId: string): Promise<readonly NumberReservation[]> {
       const root = lineageOf(connection, iterationId)?.[0];
       if (root === undefined) {
@@ -3465,6 +3487,18 @@ export interface AdvisoryRecord {
    * keeps from being written and this reader does not choose between.
    */
   scopeTip(scopeDecisionId: string): Promise<ScopeTip>;
+  /**
+   * Claim a merge on green under an approved scope (D-0126 rule 3): the
+   * `merge_default_branch` consumption row, written before the merge is asked
+   * of the forge -- claim, then act, as `D-0042` -- so a second attempt is
+   * refused. **One per lap, whichever approval claims it**: the key alone
+   * would let a successor approval claim the same lap again.
+   */
+  claimScopedMerge(claim: {
+    readonly scopeDecisionId: string;
+    readonly iterationId: string;
+    readonly nowMs: number;
+  }): Promise<RecordOutcome>;
   /**
    * The messages with `asks` set and no reply in the thread `requestMessageId`
    * opens, each with the iterations its bases name (D-0061 rule 2.7, D-0066
@@ -4992,6 +5026,36 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return tipOf(connection, scopeDecisionId);
     },
 
+    async claimScopedMerge(claim): Promise<RecordOutcome> {
+      const actKind: (typeof WRITABLE_SCOPE_ACT_KINDS)[number] = "merge_default_branch";
+      try {
+        const written = connection
+          .prepare(
+            "INSERT INTO scope_consumption (scope_decision_id, act_kind, subject_id, proposal_id, " +
+              "consumed_at_ms) SELECT ?, ?, ?, NULL, ? WHERE NOT EXISTS (SELECT 1 FROM " +
+              "scope_consumption WHERE act_kind = ? AND subject_id = ?)",
+          )
+          .run(
+            claim.scopeDecisionId,
+            actKind,
+            claim.iterationId,
+            claim.nowMs,
+            actKind,
+            claim.iterationId,
+          );
+        return Number(written.changes) === 1
+          ? { kind: "recorded" }
+          : {
+              kind: "refused",
+              reason:
+                `a merge of '${claim.iterationId}' is already claimed under a scope, and a lap ` +
+                "is merged on green once (D-0126 rule 3)",
+            };
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
     async openAsksIn(requestMessageId: string): Promise<OpenAsksReadOutcome> {
       return openAsksIn(connection, requestMessageId);
     },
@@ -5710,6 +5774,68 @@ function admittedUnder(connection: DatabaseSync, iterationId: string): string | 
   return typeof decision === "string" && decision !== "" ? decision : null;
 }
 
+/**
+ * {@link lapBudgetCap} for one admitted lap, read from rows under the write
+ * lock, or null where no single approval admitted it or the approval's scope
+ * will not read. A lap whose cost is read counts that; an unread one holds its
+ * cap when it was sent with one and its reserve otherwise (D-0121 rule 7).
+ */
+function lapBudgetCapFor(
+  connection: DatabaseSync,
+  iterationId: string,
+  maxOccupying: number,
+): number | null {
+  const decisionId = admittedUnder(connection, iterationId);
+  if (decisionId === null) {
+    return null;
+  }
+  const decision = connection
+    .prepare("SELECT scope_id FROM scope_decision WHERE scope_decision_id = ?")
+    .get(decisionId) as SqlRow | undefined;
+  const scopeRow =
+    decision === undefined
+      ? undefined
+      : (connection
+          .prepare(`${SELECT_SCOPE} WHERE scope_id = ?`)
+          .get(String(decision["scope_id"])) as SqlRow | undefined);
+  if (scopeRow === undefined) {
+    return null;
+  }
+  let budgets: ScopePayload["budgets"];
+  try {
+    budgets = toScope(scopeRow).payload.budgets;
+  } catch (error) {
+    if (error instanceof StoreDefect) {
+      return null;
+    }
+    throw error;
+  }
+  const others = connection
+    .prepare(
+      "SELECT i.lap_cost_usd AS cost, i.lap_budget_cap_usd AS cap, i.status AS status " +
+        "FROM scope_consumption c LEFT JOIN iteration i ON i.id = c.subject_id " +
+        "WHERE c.scope_decision_id = ? AND c.act_kind = 'admission' AND c.subject_id <> ?",
+    )
+    .all(decisionId, iterationId) as SqlRow[];
+  const basis = { readCostUsd: 0, heldCapsUsd: 0, unreadUncappedLaps: 0, runningLaps: 0 };
+  for (const row of others) {
+    const cost = row["cost"];
+    const cap = row["cap"];
+    if (typeof cost === "number") {
+      basis.readCostUsd += cost;
+    } else if (typeof cap === "number") {
+      // Never below zero: a lap refused for no room holds nothing, and credits nothing back.
+      basis.heldCapsUsd += Math.max(0, cap);
+    } else {
+      basis.unreadUncappedLaps += 1;
+    }
+    if (row["status"] === "performing") {
+      basis.runningLaps += 1;
+    }
+  }
+  return lapBudgetCap(budgets, basis, maxOccupying);
+}
+
 function spentUnder(connection: DatabaseSync, scopeDecisionId: string): ScopeSpent {
   const row = connection
     .prepare(
@@ -5880,8 +6006,8 @@ function spendScope(
   if (refusal !== null) {
     return { kind: "scopeRefused", ...refusal };
   }
-  // The one act kind a writer may record today (D-0066 rule 3.2).
-  const actKind: (typeof WRITABLE_SCOPE_ACT_KINDS)[number] = WRITABLE_SCOPE_ACT_KINDS[0];
+  // An admission's act kind (D-0066 rule 3.2).
+  const actKind: (typeof WRITABLE_SCOPE_ACT_KINDS)[number] = "admission";
   try {
     connection
       .prepare(
@@ -7518,7 +7644,7 @@ function optionalText(row: SqlRow, column: string, subject = "iteration"): strin
  */
 function optionalFailureKind(row: SqlRow): FailureKind | null {
   const value = optionalText(row, "failure_kind");
-  return value === "refusal" || value === "defect" ? value : null;
+  return value === "refusal" || value === "defect" || value === "budget" ? value : null;
 }
 
 /** D-0092's answer, or null where rondo holds none; the table's CHECK already narrows it. */

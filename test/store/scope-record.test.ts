@@ -273,11 +273,6 @@ const PAYLOAD_REFUSALS: readonly (readonly [string, JsonRecord, string])[] = [
   ],
   ["a fractional expiry", withBudgets({ expires_at_ms: 1.5 }), "'expires_at_ms' must be a whole"],
   ["an unknown threshold", { ...PAYLOAD, severity_threshold: "p1" }, "severity_threshold must be"],
-  [
-    "merge_default_branch",
-    { ...PAYLOAD, outward_acts: ["merge_default_branch"] },
-    "CI observation",
-  ],
   ["an unknown outward act", { ...PAYLOAD, outward_acts: ["tag"] }, "'tag', which is not one of"],
   ["an empty irreversible name", { ...PAYLOAD, irreversible_additions: [""] }, "an empty name"],
   ["a non-string irreversible name", { ...PAYLOAD, irreversible_additions: [1] }, "only strings"],
@@ -291,11 +286,12 @@ test.each(PAYLOAD_REFUSALS)("the scope writer refuses %s", async (_name, payload
   expect(count(connection, "SELECT COUNT(*) AS n FROM scope")).toBe(0);
 });
 
-test("the payload refusals' control: zeros, both outward acts and an addition record", async () => {
+test("the payload refusals' control: zeros, every outward act and an addition record", async () => {
   const { record } = await seeded();
   const payload = {
     ...withBudgets({ laps: 0, review_rounds: 0, cost_usd: 0, cost_reserve_usd: 0 }),
-    outward_acts: ["push_branch", "open_pull_request"],
+    // D-0126: the merge is admitted, where it used to be refused by name.
+    outward_acts: ["push_branch", "open_pull_request", "merge_default_branch"],
     irreversible_additions: ["rotate_secret"],
   };
   expect(await record.recordScope(scope({ payload }))).toEqual({ kind: "recorded" });
@@ -754,6 +750,39 @@ test("the approval a lap was admitted under is read back off its admission row (
   expect(await record.scopeDecisionAdmitting("i-a")).toBe(null);
 });
 
+test("D-0126: a merge on green is claimed once per lap, whichever approval claims it", async () => {
+  const { connection, record } = await approved();
+  admitted(connection, "i-a", null);
+  const claim = { scopeDecisionId: "sd-0001", iterationId: "i-a", nowMs: 9 };
+  expect(await record.claimScopedMerge(claim)).toEqual({ kind: "recorded" });
+  // The second attempt is refused, and so is a successor approval's: the key
+  // alone would take it, so the writer asks after the lap and not the pair.
+  expect((await record.claimScopedMerge(claim)).kind).toBe("refused");
+  expect((await record.claimScopedMerge({ ...claim, scopeDecisionId: "sd-0002" })).kind).toBe(
+    "refused",
+  );
+  expect(
+    connection
+      .prepare("SELECT * FROM scope_consumption WHERE act_kind = 'merge_default_branch'")
+      .all(),
+  ).toEqual([
+    {
+      scope_decision_id: "sd-0001",
+      act_kind: "merge_default_branch",
+      subject_id: "i-a",
+      proposal_id: null,
+      consumed_at_ms: 9,
+    },
+  ]);
+  // A merge is not a lap: the approval's spend and the lap's admission read as before.
+  expect((await record.scopeSpent("sd-0001")).admissions).toBe(1);
+  expect(await record.scopeDecisionAdmitting("i-a")).toBe("sd-0001");
+  // Another lap is claimed on its own.
+  expect(
+    await record.claimScopedMerge({ scopeDecisionId: "sd-0001", iterationId: "i-b", nowMs: 9 }),
+  ).toEqual({ kind: "recorded" });
+});
+
 // --- The spend inside reserve() (D-0066 rule 4.3) ---------------------------
 
 const refusalOf = async (
@@ -1199,4 +1228,70 @@ test("D-0098 rule 5.5: a line that already had a closing lap is refused a second
     ),
   ).toContain("'i-close' of this line was already its closing lap");
   expect(count(connection, "SELECT COUNT(*) AS n FROM closing_lap")).toBe(1);
+});
+
+// --- The cap a lap is sent with (D-0121) ---------------------------------------
+
+test("D-0121: laps sent under one approval hold their caps, and the caps never add up past the budget", async () => {
+  const payload = withBudgets({ cost_usd: 50, cost_reserve_usd: 5 });
+  const seed = await seeded({ maxOccupying: 2, maxLive: 100 });
+  expect(await seed.record.recordScope(scope({ payload }))).toEqual({ kind: "recorded" });
+  expect(
+    await seed.record.recordScopeDecision(scopeDecision({ scopeDigest: contentDigest(payload) })),
+  ).toEqual({ kind: "recorded" });
+  const { connection, store } = seed;
+  const running = (id: string) =>
+    connection.prepare("UPDATE iteration SET status = 'performing' WHERE id = ?").run(id);
+  const capOf = (id: string) =>
+    (
+      connection.prepare("SELECT lap_budget_cap_usd AS c FROM iteration WHERE id = ?").get(id) as {
+        c: number | null;
+      }
+    ).c;
+
+  // Sent alone, with a second lane free: the room less one reserve for a partner.
+  admitted(connection, "i-a", null);
+  running("i-a");
+  expect(await store.sendLapBudget("i-a", 10)).toBe(45);
+  expect(capOf("i-a")).toBe(45);
+  // Sent beside it: what is left, which is the reserve its admission counted.
+  admitted(connection, "i-b", null);
+  running("i-b");
+  expect(await store.sendLapBudget("i-b", 11)).toBe(5);
+  // The first is read at 12: the next lap gets what the budget still holds,
+  // less the second's cap, with no lane left for a partner.
+  connection
+    .prepare("UPDATE iteration SET lap_cost_usd = 12, status = 'closed' WHERE id = 'i-a'")
+    .run();
+  admitted(connection, "i-c", null);
+  running("i-c");
+  expect(await store.sendLapBudget("i-c", 12)).toBe(33);
+});
+
+test("D-0121: a budget that holds one lap gives it all, and a lap under no approval has no cap", async () => {
+  const payload = withBudgets({ cost_usd: 5, cost_reserve_usd: 5 });
+  const seed = await seeded({ maxOccupying: 2, maxLive: 100 });
+  expect(await seed.record.recordScope(scope({ payload }))).toEqual({ kind: "recorded" });
+  expect(
+    await seed.record.recordScopeDecision(scopeDecision({ scopeDigest: contentDigest(payload) })),
+  ).toEqual({ kind: "recorded" });
+  admitted(seed.connection, "i-a", null);
+  expect(await seed.store.sendLapBudget("i-a", 10)).toBe(5);
+  expect(await seed.store.sendLapBudget("i-held", 10)).toBeNull();
+});
+
+test("D-0121: a lap refused for no room holds nothing, and its negative cap credits nothing back", async () => {
+  const payload = withBudgets({ cost_usd: 50, cost_reserve_usd: 5 });
+  const seed = await seeded({ maxOccupying: 2, maxLive: 100 });
+  expect(await seed.record.recordScope(scope({ payload }))).toEqual({ kind: "recorded" });
+  expect(
+    await seed.record.recordScopeDecision(scopeDecision({ scopeDigest: contentDigest(payload) })),
+  ).toEqual({ kind: "recorded" });
+  admitted(seed.connection, "i-spent", 46);
+  admitted(seed.connection, "i-a", null);
+  admitted(seed.connection, "i-b", null);
+  // 50 - 46 - 5 held for i-b: -1, no room.
+  expect(await seed.store.sendLapBudget("i-a", 10)).toBe(-1);
+  // i-b sees i-a hold nothing, not -1: only the 4 that is really left.
+  expect(await seed.store.sendLapBudget("i-b", 11)).toBe(4);
 });

@@ -80,7 +80,13 @@ export type FailureKind =
   /** Something upstream said no. The person has a next move, and it is theirs. */
   | "refusal"
   /** rondo broke. The person can do nothing about it and should not be made to read it. */
-  | "defect";
+  | "defect"
+  /**
+   * The approved budget stopped it (D-0121 rule 5): its spend cap stopped the
+   * turn, or no room was left to send it. The person's next move is a larger
+   * budget.
+   */
+  | "budget";
 
 export type IterationStatus =
   /** Reserved, with the plan and its digest committed and nothing sent. */
@@ -527,6 +533,47 @@ export type GateAnswer = "approve" | "revise";
  * them is a person saying yes.
  */
 export const APPROVED_OUTCOME = "answered_and_forwarded";
+
+/**
+ * What the other laps admitted under one approval hold, read when a lap is sent
+ * (D-0121 rule 2). Every count leaves out the lap being sent.
+ */
+export interface LapBudgetBasis {
+  /** The sum of `lap_cost_usd` over the laps whose cost was read. */
+  readonly readCostUsd: number;
+  /** The sum of the caps of the unread laps that were sent with one: each holds its cap. */
+  readonly heldCapsUsd: number;
+  /** Unread laps sent with no cap, or not sent yet: each holds `cost_reserve_usd`. */
+  readonly unreadUncappedLaps: number;
+  /** Laps running now (`performing`). */
+  readonly runningLaps: number;
+}
+
+/**
+ * The cap a lap is sent with (D-0121 rules 2 and 7): the room the approval's
+ * budget leaves it, less a reserve for every lane a partner could still run in.
+ *
+ * - **The room** is `cost_usd`, less what was read, less each unread lap's
+ *   hold: its cap when it was sent with one, its reserve otherwise. So the caps
+ *   of laps running at once never add up past the budget.
+ * - **A reserve per free lane**: `maxOccupying - 1 - runningLaps` partners
+ *   could still start beside this lap, and each is left the reserve its
+ *   admission counted. It is taken only from what is above this lap's own
+ *   reserve, so a budget that holds one lap gives that lap all of it.
+ *
+ * At or below zero means no room: a lap beside it spent past its reserve.
+ */
+export function lapBudgetCap(
+  budgets: { readonly cost_usd: number; readonly cost_reserve_usd: number },
+  basis: LapBudgetBasis,
+  maxOccupying: number,
+): number {
+  const reserve = budgets.cost_reserve_usd;
+  const room =
+    budgets.cost_usd - basis.readCostUsd - basis.heldCapsUsd - basis.unreadUncappedLaps * reserve;
+  const partners = Math.max(0, maxOccupying - 1 - basis.runningLaps);
+  return room - Math.min(partners * reserve, Math.max(0, room - reserve));
+}
 
 /**
  * Whether a lap spent all the room the scope's budget left it when it was sent
@@ -1719,12 +1766,16 @@ export interface ScopeBudgets {
 }
 
 /**
- * The closed vocabulary of reversible outward acts a scope may include
- * (rule 1.2.6, D-0064 O7). `merge_default_branch` is not a member: the writer
- * refuses it by name until the entry that builds CI observation takes D-0064
- * rule 3.4's transition.
+ * The closed vocabulary of outward acts a scope may include (rule 1.2.6,
+ * D-0064 O7). `merge_default_branch` joined it with D-0126, which takes D-0064
+ * rule 3.4's transition: absent by default, and a scope that holds it lets the
+ * checks host merge a lap of it on green (`mergeOnGreen`, `src/access/merge.ts`).
  */
-export const SCOPE_OUTWARD_ACTS = Object.freeze(["push_branch", "open_pull_request"] as const);
+export const SCOPE_OUTWARD_ACTS = Object.freeze([
+  "push_branch",
+  "open_pull_request",
+  "merge_default_branch",
+] as const);
 
 export type ScopeOutwardAct = (typeof SCOPE_OUTWARD_ACTS)[number];
 
@@ -1737,6 +1788,10 @@ export type ScopeOutwardAct = (typeof SCOPE_OUTWARD_ACTS)[number];
  * request; and spending past a budget." **The list grows only by an entry**, so
  * it is a frozen constant here and never a column: the effective list for a
  * scope is this plus its `irreversible_additions` (D-0066 rule 1.2.7).
+ *
+ * `merge_default_branch` stays listed: D-0126 takes rule 3.4's transition for
+ * a merge on green only, where the lap's scope includes the act and continuo
+ * read the lap's own head green. Every other merge is a person's press.
  */
 export const IRREVERSIBLE_ACTS = Object.freeze([
   "merge_default_branch",
@@ -1752,23 +1807,27 @@ export const IRREVERSIBLE_ACTS = Object.freeze([
  * `push_branch` and `open_pull_request` are **named and not writable** until
  * the entry that supersedes D-0025 rule 6 lets the organisation publish; a gate
  * answer and `revise` get their kinds from the entry that opens O6, so they are
- * not named at all.
+ * not named at all. `merge_default_branch` is a merge on green (D-0126), whose
+ * `subject_id` is the iteration id.
  */
 export const SCOPE_ACT_KINDS = Object.freeze([
   "admission",
   "push_branch",
   "open_pull_request",
+  "merge_default_branch",
 ] as const);
 
 export type ScopeActKind = (typeof SCOPE_ACT_KINDS)[number];
 
 /**
- * The act kinds a `scope_consumption` row may be written with today: one
- * (D-0066 rule 3.2). An admission's `subject_id` is the iteration id, written
- * in `reserve()`'s own transaction.
+ * The act kinds a `scope_consumption` row may be written with today (D-0066
+ * rule 3.2). An admission's `subject_id` is the iteration id, written in
+ * `reserve()`'s own transaction; a merge on green's is the iteration id too,
+ * written before the merge is asked of the forge (D-0126).
  */
 export const WRITABLE_SCOPE_ACT_KINDS = Object.freeze([
   "admission",
+  "merge_default_branch",
 ] as const satisfies readonly ScopeActKind[]);
 
 /** Who wrote a scope row (D-0066 rule 1.5, D-0061 rule 2.3's voice column). */
@@ -2218,13 +2277,6 @@ export function readScopePayload(json: JsonValue): ScopePayloadReading {
     return refused(outward);
   }
   for (const act of outward) {
-    if (act === "merge_default_branch") {
-      return refused(
-        "outward_acts holds 'merge_default_branch', which the scope writer refuses: merging stays " +
-          "on D-0064 rule 3.4's irreversible list until the entry that builds CI observation takes " +
-          "that rule's transition (D-0066 rule 1.2.6)",
-      );
-    }
     if (!(SCOPE_OUTWARD_ACTS as readonly string[]).includes(act)) {
       return refused(
         `outward_acts holds '${act}', which is not one of ${SCOPE_OUTWARD_ACTS.join(", ")} ` +

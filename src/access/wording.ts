@@ -43,6 +43,7 @@
 
 import { isLanguageTag } from "../refrain/plan.js";
 import type { ReadingReach } from "../store/records.js";
+import type { GateAuto } from "./gate-auto.js";
 import type { IssueReadFailure } from "./issue-read.js";
 import type { PageWords } from "./page/words.js";
 import { EN } from "./wording/en.js";
@@ -390,6 +391,12 @@ export interface Chrome extends PageWords {
   readonly claimHostSetup: string;
   readonly answerNotDone: string;
   readonly gateBack: string;
+  /**
+   * The gate card's one line on whether rondo would approve this gate
+   * automatically, and every reason it would not (D-0125). Nothing is answered
+   * by it: the automatic answer waits on continuo#240.
+   */
+  readonly gateAuto: (auto: GateAuto) => string;
   /** The line by the button when the model review raised a blocker or a major. */
   readonly modelRaised: (blockers: number, majors: number) => string;
   /** A model finding's severity (`blocker`, `major`, `minor`, `nit`) as a word, and counted. */
@@ -1311,6 +1318,8 @@ export interface Chrome extends PageWords {
   readonly mergeRefusedFailed: (detail: string) => string;
   readonly mergeRefusedQueue: string;
   readonly mergeRefusedUnconfirmed: string;
+  /** A merge of the lap is already in flight: rondo's on green (D-0126), or another press. */
+  readonly mergeRefusedInFlight: string;
 
   /**
    * rondo#417 (D-0105): the next-step card that offers to settle a published

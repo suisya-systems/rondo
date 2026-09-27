@@ -161,8 +161,11 @@ C-NN`, so the spaces can never be read as one.
 | D-0122 | `mechanical` runs on `claude-sonnet-5` through the Claude CLI: the tier table gains a provider column passed as `lap perform --provider`, every row `claude`, and a drafter may name a `mechanical` agent type only with one grounded claim per condition of `D-0044` rule 1 | accepted |
 | D-0123 | The host's worker is the Claude CLI or the Codex CLI: `RONDO_WORKER_PROVIDER` picks the tier table, a `gpt` lap is read by a Claude reviewer, a Codex lap's tokens are priced at OpenAI's public API rate, and Windows refuses `codex` at start | accepted |
 | D-0124 | Two laps at once by default: D-0023 rule 17's condition is met by the pinned continuo, the default `maxOccupying` is 2, host-wide and across repositories, and `maxLive` stays 3 | accepted |
+| D-0125 | rondo decides whether a lap's gate would be approved automatically, and says why on the gate card: clear checks, no model finding at or above `major` on the same tip, a green test run read off the lap, no open question and no closing lap; the organisation's answer itself waits on continuo#240 | accepted |
+| D-0126 | Merge on green, opted into per scope: a scope may include `merge_default_branch`, and the checks host then merges a lap of it through the press's own path right after continuo reads the lap's own head green; `D-0064` rule 3.4's merge transition is taken, and `D-0025` rule 6's "never merges" gives way for such a merge | accepted |
 | D-0127 | Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended | accepted |
 | D-0129 | How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed | accepted |
+| D-0130 | A lap's cap is written when it is sent and held until its cost is read, one reserve is kept for each lane a partner could still run in, and a budget stop ends the lap with what it spent | accepted |
 
 ---
 
@@ -874,6 +877,12 @@ rather than by drift.
 ## D-0009 — The conductor carries a human's answer and never composes one (cadenza `C-4`)
 
 **Status:** accepted (2026-09-05, rondo's human gate)
+
+> **Annotation (2026-09-27, from D-0125).** Added after this entry was accepted, and additive. The
+> organisation's gate answer that `D-0125` decides is recorded as delegated, naming the scope
+> approval (`D-0064` rule 3.6, continuo#240), so it is not a carried human answer and rondo still
+> composes none. Until the change that wires continuo#240, every gate is a person's press. Nothing
+> below is edited.
 
 > **Annotation (2026-09-13, from D-0064).** Added after this entry was accepted, and additive. This
 > entry is kept as `D-0064` section 6 says. `D-0064` rule 3.6 bounds how it is read against O6 (the
@@ -2545,6 +2554,12 @@ test, which is where the question "should this layer reach cadenza?" is asked.
 
 **Status:** accepted (2026-09-06, rondo's human gate)
 
+> **Annotation (2026-09-27, from D-0125).** Added after this entry was accepted, and additive. Rule
+> 7's first reason is superseded by `D-0125` for the organisation's gate answer only, from the
+> change that wires continuo#240: a model reading is then one of that answer's conditions. Wherever
+> a person answers, the reason holds as written, and the other reasons are untouched. Nothing below
+> is edited.
+
 > **Annotation (2026-09-11, from D-0035).** Added after this entry was accepted, and additive: no
 > claim, measurement or date below is edited. **Rule 11's table stands exactly as written; the
 > sentence under it that says why does not.** The rule releases the lock on a refusal because "an
@@ -3359,6 +3374,10 @@ surface that replaces all of that, and it is deliberately the smallest one that 
    > merge, where rondo's own reading is green on the head and nothing in the request's thread waits
    > on them, through the operator's own `gh`. The command line still never merges. Nothing below is
    > edited.
+   > **Annotation (2026-09-27, from D-0126).** Added after this entry was accepted, and **not
+   > additive**. **"Never merges" no longer holds for a merge on green under a scope that includes
+   > `merge_default_branch`**: the checks host merges such a lap through the press's own path. The
+   > command line still never merges. Nothing below is edited.
 
    **A closed iteration is not an approved one, and `publish` checks which it has.** `withdrawn`,
    `expired` and `unanswerable` each close a gate and therefore close the iteration, and none of
@@ -4209,6 +4228,11 @@ next field would have faced the same choice with no rule to appeal to.
 
 **Status:** superseded by D-0063 (2026-09-13). Accepted 2026-09-07 (rondo's human gate).
 
+> **Annotation (2026-09-27, from D-0125).** Added after this entry was accepted, and additive. Rule
+> 13's "never reaches a gate as anything but material" (carried by `D-0063` rule 8) is superseded by
+> `D-0125` for the organisation's gate answer only, from the change that wires continuo#240.
+> Wherever a person answers, a model reading stays material. Nothing below is edited.
+
 > **Supersession note (2026-09-13, from D-0063).** `D-0063` makes the advisory the drafting half of
 > the secretary's role, admits a model drafter, and lets a split propose plans no iteration has run.
 > That changes what four rules below asserted: rule 1 (the advisory is one layer), rule 3 (what it
@@ -4604,6 +4628,11 @@ next reader has no way to tell a citation that was verified from one that merely
 ## D-0029 — An independent reading of what a lap produced: material for the person at the gate, one refusal at `publish`, and a verdict that cannot certify what it never read
 
 **Status:** accepted (2026-09-07, rondo's human gate)
+
+> **Annotation (2026-09-27, from D-0125).** Added after this entry was accepted, and additive. Rule
+> 6's "anything that decides would be a supersession" is that supersession in `D-0125`, for the
+> organisation's gate answer only and from the change that wires continuo#240. Wherever a person
+> answers, the model reader stays material. Nothing below is edited.
 
 > **Annotation (2026-09-13, from D-0065).** Added after this entry was accepted, and additive.
 > **Rule 14 (`V-14`) is superseded by `D-0065` rule 4.2**, as `D-0064` section 6 said the model
@@ -6136,6 +6165,11 @@ makes the state unreachable in the first place.
 ## D-0036 — The operator's inbox, decided as three open questions and not as a fourth record design: a presentation counted once per subject, the conversation only as far as elevation reaches, and a two-way wait that admits it is not three
 
 **Status:** accepted (2026-09-11, rondo's human gate). Refs rondo#39, rondo#40, rondo#41.
+
+> **Annotation (2026-09-27, from D-0125).** Added after this entry was accepted, and additive. Rule
+> 5 is read with `D-0125`: a gate the card says would be approved automatically still waits on the
+> person until the change that wires continuo#240, and after it leaves the person's list once the
+> organisation has answered it. Nothing below is edited.
 
 **The scope was proposed and approved before the entry was drafted**, which is why this entry is
 short where `D-0032` is long. rondo#41 states five requirements on the operator's surface. Four of
@@ -12554,6 +12588,11 @@ are recorded in section "What was put to the human gate, and its answer". Refs `
 `D-0029`, `D-0032`, `D-0034`, `D-0036`, `D-0041`, `D-0043`, `D-0047`, `D-0054`, `D-0061`, `D-0062`,
 and the proposed `D-0059` and `D-0063`.
 
+> **Annotation (2026-09-27, from D-0125).** Added after this entry was accepted, and additive. Rule
+> 3.6's condition is `D-0125` rule 1, and its answer is a `gate_answer` act under rule 3.5. The seam
+> is still continuo#240; until it lands the gate card only says whether a gate would be approved
+> automatically. Nothing below is edited.
+
 **This entry decides and does not build.** Nothing in `src/` changes with it, and **no earlier entry
 is edited by it**. Section 6 lists the entries that have to move and says how each should move; each
 move is its own later change.
@@ -12738,6 +12777,10 @@ but does not put them to the person:
    > waiting -- a reading on no record anybody can audit -- is answered. **The transition is still not
    > taken**: taking it is a gate decision, and so is whether a merge reads `ci show` itself. Nothing
    > above is edited.
+   > **Annotation (2026-09-27, from D-0126).** Added after this entry was accepted, and additive.
+   > **The transition is taken, per scope**: a scope may include `merge_default_branch`, and rondo
+   > merges a lap of it once continuo has read the lap's own head green, with no P2 to P4 item open.
+   > Every other merge stays a person's act. Nothing above is edited.
 
 5. **Every act taken inside a scope names the scope.** An admission, a redo, an agent-type choice, a
    gate answer, a push: each records the scope it was taken under, so "which scope authorised this"
@@ -14428,6 +14471,9 @@ number.
    6. **`outward_acts`**: a subset of a closed vocabulary, empty by default. It holds
       `push_branch` and `open_pull_request` (`D-0064` O7). **`merge_default_branch` is refused by
       the writer** until the entry that builds CI observation takes `D-0064` rule 3.4's transition.
+      > **Annotation (2026-09-27, from D-0126).** Added after this entry was accepted, and
+      > additive. `D-0126` takes that transition: `outward_acts` admits `merge_default_branch`, and
+      > the writer no longer refuses it. Nothing above is edited.
    7. **`irreversible_additions`**: names added to `D-0064` rule 3.4's list. The list itself is
       not stored on the row, so **a scope cannot shorten it by construction**; the effective list is
       rule 3.4's plus this field.
@@ -21277,6 +21323,9 @@ still open.
    > item asks about now stands on continuo's evidence, and "Why it is not taken now" below is answered.
    > **The transition is still not taken**: taking it is a gate decision, as is whether the merge button
    > reads `ci show` directly. Nothing below is edited.
+   > **Annotation (2026-09-27, from D-0126).** Added after this entry was accepted, and additive.
+   > **The transition is taken**, per scope: a lap whose scope includes `merge_default_branch` is
+   > merged on green by the checks host through the press's own path. The press is unchanged.
 
 **Why it is not taken now.** The judgement and its evidence are moving to continuo's
 `ci_observation`, and that work is under way. Until it lands, rondo's own reading is not on a record
@@ -24396,6 +24445,16 @@ scope's budget, and a reserve is an estimate, not an approved amount.
 - **Parallel laps that together pass the budget often.** Then the cap needs the other laps' caps,
   not their reserves.
 
+
+> **Annotation (2026-09-27, from D-0130).** Added after this entry was accepted, and additive. The
+> "Order" section's second step is carried out: the pin moved to continuo `24f1e00` (`continuo
+> D-1122`), every Claude lap is sent with its cap, and a budget stop is read as item 5 says, with
+> failure kind `budget`. **Rule 2's formula and rule 4's "written at the suspend" are superseded by
+> `D-0130`**: an unread lap holds its cap rather than its reserve once it was sent with one, one
+> reserve is kept for each free lane, and the cap is written when the lap is sent. The first bullet
+> of "What it costs" (two laps spending the same room) is what `D-0130` answers. Nothing above is
+> edited.
+
 ## D-0122 — `mechanical` runs on `claude-sonnet-5` through the Claude CLI: the tier table gains a provider column passed as `lap perform --provider`, every row `claude`, and a drafter may name a `mechanical` agent type only with one grounded claim per condition of `D-0044` rule 1
 
 **Status:** accepted (2026-09-27, rondo#89; the owner's answer through the secretary, option (a) of
@@ -24662,6 +24721,203 @@ At rondo `7a038e1` and continuo `f2fb450` on **2026-09-27**:
   such as a shared cache, a port or a global tool install. The number is then too high for this
   host, whatever the ledger says.
 
+## D-0125 — rondo decides whether a lap's gate would be approved automatically, and says why on the gate card: clear checks, no model finding at or above `major` on the same tip, a green test run read off the lap, no open question and no closing lap; the organisation's answer itself waits on continuo#240
+
+**Status:** accepted (2026-09-27, rondo#464; the owner's decision of 2026-09-27, relayed by the
+secretary). Refs `D-0009`, `D-0019` (rule 7), `D-0022` (rule 13, carried by `D-0063` rule 8),
+`D-0029` (rule 6), `D-0036` (rule 5), `D-0064` (rules 3.5 and 3.6, O6), `D-0065` (section 5 and its
+gate answer), `D-0066`, `D-0098` (rule 5), `D-0104`, continuo#240.
+
+**Why an entry is needed.** `D-0064` rule 3.6 lets the organisation answer a lap's end gate inside a
+scope, and waits on a continuo seam that records the answer as delegated. `D-0065` said that the
+entry opening that answer supersedes or annotates the three rules that keep a model reading to
+material (its gate answer (a)). The owner has now decided what the answer turns on. This entry
+writes that rule down, builds the part that needs no seam (the decision, shown to the person), and
+says what the change that wires continuo#240 will do.
+
+### What was measured
+
+At rondo `a8181d1` on **2026-09-27**, by reading:
+
+- **The inputs already exist on the gate.** The gate view reads the lap's readings, its approval tip
+  (`approvalTip`, `src/access/scope.ts`), the question over its line (rondo#448) and the worker's
+  last test run (`workerRuns`, `src/access/page-logic/laps.ts`, `D-0104`). The review threshold is
+  `reviewPolicyOf` (`src/access/model-review/judgement.ts`), and a closing lap is
+  `closingLapOf` in the store (`D-0098` rule 5).
+- **Nothing answers a gate but a person.** continuo records whoever moves a gate
+  `presented -> answered` as a human; continuo#240 is the delegated actor that `D-0064` rule 3.6
+  asks for, and it is not in the pinned continuo.
+- **`scope_consumption.act_kind` has one writable member, `admission`** (`src/store/sqlite.ts`).
+
+### Decision
+
+1. **A gate would be approved automatically only if all of these hold**, for a lap at
+   `awaiting_human` whose approval tip names an approved scope that is not superseded and not
+   expired:
+   1. the deterministic reading is `clear` (`D-0065` rule 5.7);
+   2. the latest model reading is of the same tip, is not `unavailable`, its severities decoded, and
+      it holds no finding at or above **`min(scope threshold, major)`**. A reading that is
+      unavailable, failed, not yet taken or of an earlier tip sends the gate to the person, and so
+      does a reading out of rounds, since that is a finding at or above the threshold;
+   3. **a verification record exists**: the worker's last test run read off the lap's commands is
+      `ran`, with no failure and no error on the command (`D-0104`). `unrecorded` and `none` are not
+      a record;
+   4. no question is open over the line (`D-0066` rule 4.4, `D-0064` P2 and P3);
+   5. it is not a closing lap (`D-0098` rule 5).
+
+   **`min(threshold, major)` means a scope may be stricter than `major` and never looser.** A scope
+   whose threshold is `blocker` lets a major finding through its rounds (`D-0065` section 4), and the
+   gate still goes to the person over it.
+2. **The decision is a pure function, `gateAuto` in `src/access/gate-auto.ts`**, over the readings,
+   `workerRuns`, the open question, the closing-lap mark and the approval as the store holds it. It
+   answers `would approve`, or `would not approve` with every reason that holds, not only the first.
+3. **The gate card says it in one line, in the person's language**, under the two readings in the
+   answer bar: "rondo would approve this automatically", or "Not approved automatically:" and the
+   reasons ("1 major finding", "no test run rondo can read", ...). No identifier reaches the line
+   (`D-0076`). It is not a recommendation (`D-0065`'s annotation from rondo#220): it says what the
+   rule would do, and both presses are drawn and weighted as before.
+4. **Nothing is answered automatically by this entry.** The approve press is the person's, as it was.
+5. **The organisation's answer is a `gate_answer` act under the scope** (`D-0064` rule 3.5). It is
+   the second member of `scope_consumption.act_kind`, its subject the gate id, written in the same
+   transaction as the answer. It spends no lap and no cost: `laps` counts `admission` rows and cost
+   joins the iteration's own figure. It has no writer until rule 6.
+6. **Enabling sentence.** The change that wires continuo#240 answers a gate on `would approve`
+   with the delegated actor naming the scope approval, writes the `gate_answer` row, and from that
+   change on the moves marked *on the follow-up* below take effect. Until then every gate stays a
+   person's press, and this entry changes only what the card says.
+
+### How the earlier entries move
+
+| Entry, rule | Move |
+|---|---|
+| **`D-0022`** rule 13 (carried by `D-0063` rule 8): a model draft "never reaches a gate as anything but material" | **Annotate now**; **supersede on the follow-up** for the organisation's answer only: a model reading is then one of rule 1's conditions. Wherever a person answers, it stays material |
+| **`D-0029`** rule 6: admitting a model reader "as anything that decides would be a supersession" | The same: **annotate now, supersede on the follow-up**, for the organisation's answer only |
+| **`D-0019`** rule 7's first reason: no non-deterministic verdict on the path to the one human contact | The same. Its other reasons are untouched |
+| **`D-0009`**: rondo carries a human's answer and never composes one | **Annotate**: the organisation's answer is not a carried human answer and is recorded as delegated (`D-0064` rule 3.6), so rondo still composes no human's answer |
+| **`D-0036`** rule 5: "waiting on you" is `awaiting_human`, ... | **Annotate**: a gate that would be approved automatically still waits on the person until the follow-up, and after it leaves the person's list when it is answered |
+| **`D-0064`** rule 3.6 | **Opened** by rule 1 as its condition; the seam is still continuo#240 |
+
+### What it costs
+
+- **The test run may predate the last commit.** `workerRuns` reads the last run the worker made, and
+  a commit after it is not re-tested. A later change compares the run's position with the last
+  commit's.
+- **A runner rondo does not read is no record.** A lap that tests with an unknown runner goes to the
+  person every time (`D-0104`'s `none`).
+- **The line is one more sentence on the gate**, beside the two readings it is read from.
+
+### What would falsify it
+
+- **A gate the line calls approvable that a person, reading the same material, would not approve**:
+  a defect the checks, the model review and the worker's tests all missed. That is the class
+  `D-0064` section 7 gave up, and it is to be recorded as P3 material when it happens.
+- **continuo#240 landing in a shape that cannot name the scope approval.** Rule 6 then needs a new
+  entry.
+
+## D-0126 — Merge on green, opted into per scope: a scope may include `merge_default_branch`, and the checks host then merges a lap of it through the press's own path right after continuo reads the lap's own head green; `D-0064` rule 3.4's merge transition is taken, and `D-0025` rule 6's "never merges" gives way for such a merge
+
+**Status:** accepted (2026-09-27, rondo#465; the owner's decision of 2026-09-27, written in the
+issue). This is part 1; scoped publish, which completes the chain from approval to merge, is a
+follow-up. Takes `D-0064` rule 3.4's merge transition. Supersedes `D-0025` rule 6's "never merges"
+for a scoped merge. Annotates `D-0066` rule 1.2.6 and `D-0091` section 2. Refs `D-0042`, `D-0066`,
+`D-0091`, `D-0095`, `D-0102`, `D-0113`, `D-0119`, `D-0120`.
+
+**Why an entry is needed.** `D-0064` rule 3.4 keeps merging on the irreversible list until its
+transition is taken by an entry, and `D-0091` section 2 left that for a gate decision after `D-0095`
+moved the green reading onto continuo's evidence. The owner has taken it: merge on green, opted into
+per scope.
+
+### What was measured
+
+At rondo `7a038e1` on **2026-09-27**, by reading. Line numbers drift; re-measure the claim.
+
+- **A merge from the page is `mergeOnce`** (`src/access/merge.ts`): it reads the lap, its thread and
+  its ledger line again through `mergeBlock`, requires the head read green to be the lap's own tip
+  (or a moved head the page showed, `D-0102`), refuses a closed, retargeted or queued pull request,
+  merges with `--match-head-commit`, confirms the merge on the forge, and then releases the line and
+  closes it out (`D-0113`, `D-0119`, `D-0120`).
+- **Green is continuo's `ci show` verdict** on the pull request's head, read by the checks host on
+  the one-minute tick and written as one line in the request's thread (`D-0095`).
+- **The scope writer refused `merge_default_branch` by name** (`validateScopePayload`,
+  `src/store/records.ts`), and `scope_consumption` had one writable act kind, `admission`.
+
+### Decision
+
+1. **A scope may include `merge_default_branch` in `outward_acts`.** It is absent by default. Opting
+   in is a new scope row with a new digest, approved as P1 like any scope (`D-0066` rules 1.4 and
+   2). No field is added.
+2. **The checks host merges on green where all of these hold**, right after it writes a `green`
+   answer (`mergeOnGreen`, `src/access/merge.ts`):
+   1. the approved tip of the lap's scope chain (`D-0074` rule 2.1) includes the act, and has not
+      expired (`D-0066` rule 1.2.4);
+   2. the gate was answered `approve` (`approvedForPublication`, `D-0092`);
+   3. the head read green is the lap's own tip. A moved head (`D-0102`) goes to the person's press;
+   4. `mergeBlock` is null, asked again inside the press's path.
+
+   The auto-approval conditions are not asked again: a person's approval over findings is their
+   judgement. The merge is `mergeOnce`, holding the lap in the `pressing` set the page's press and
+   the checks host share, so a press on the page while it runs is refused as in flight
+   (`mergeRefusedInFlight`) and the checks host does not read the lap meanwhile.
+3. **Claim, then act** (`D-0042`). After every read and before the forge is asked to merge, a
+   `scope_consumption(act_kind='merge_default_branch', subject_id=<iteration id>)` row is written,
+   and rule 2.1 and 2.2 are asked again first: a scope that expired, or an approved successor
+   without the act, while the forge was read authorises nothing.
+   **Once per lap, whichever approval claims it**: the writer refuses a second row for the same lap
+   even under a successor approval, which the table's key alone would allow. A second attempt is
+   refused before the forge is asked, and a merge the forge then refused stays claimed, so the lap is
+   the person's.
+4. **The thread says who merged it.** The merge line reads "merged by rondo under scope `<scope
+   id>`, on checks read green", with where it went, how and the merge commit, as a press's does.
+   The checks line no longer says rondo merges only on a press. The page's chain draws *merge* as
+   *ahead* under a scope that includes it.
+5. **Refusals are left for the person's press, which is unchanged**: a merge queue, a retarget, a
+   forge failure or a merge the forge did not confirm writes no merge line, and the press is drawn as
+   before. Only the terminal says why.
+
+### What was put to the human gate, and its answer
+
+The owner decided on 2026-09-27 and wrote the decision in rondo#465: merge on green can be opted
+into per scope, on the four conditions of rule 2, with the claim of rule 3 and the report of rule 4.
+The expiry test in rule 2.1 is `D-0066` rule 1.2.4's, read as it is for every act under a scope.
+
+### What this gives up
+
+- **`D-0025` rule 6's "never merges", for a scoped merge.** rondo merges without a person's press
+  where a person approved a scope that includes merging. The command line still never merges.
+- **A merge on green is tried once.** A refusal or a forge failure is not retried automatically;
+  the press is how it is merged after that.
+- **A merge is not undone by rondo.** It is the one irreversible act rondo now takes under a scope;
+  the scope's approval is where the person agrees to it.
+
+### What this does not do
+
+- **Scoped publish**, the rest of the chain from approval to merge, is a follow-up.
+- **It does not merge a moved head**, through a merge queue, with `--admin` or `--auto`, or by
+  deleting the branch; `D-0091` rule 1.3 is unchanged for both paths.
+- **It does not move any other act off `D-0064` rule 3.4's list.** `merge_default_branch` stays in
+  `IRREVERSIBLE_ACTS`: the transition covers a merge on green under a scope that includes it, and
+  every other merge is a person's.
+
+### Annotations this entry adds
+
+| Entry | What the annotation says | Additive? |
+|---|---|---|
+| `D-0064` rule 3.4 | The merge transition is taken, per scope (this entry) | additive |
+| `D-0025` rule 6 | "Never merges" no longer holds for a scoped merge on green (this entry); the command line still never merges | **not additive** |
+| `D-0066` rule 1.2.6 | `outward_acts` admits `merge_default_branch`, and the writer no longer refuses it | additive |
+| `D-0091` section 2 | The transition is taken by this entry; the press is unchanged | additive |
+
+### What would falsify it
+
+- **A merge on green of a commit continuo had not read green**, or of a moved head: rule 2.3 is not
+  holding.
+- **Two merges attempted for one lap**, by the host twice or by the host and a press at once: rule 3
+  or the shared `pressing` set is not holding.
+- **A merge on green where the approved tip of the lap's scope did not include the act**, or had
+  expired, or the gate was answered `revise`.
+- **A person who opted in and then went to the forge to merge anyway**, for a reason rondo could have
+  met: rule 2 is drawn on the wrong conditions.
+
 ## D-0127 — Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended
 
 **Status:** accepted (2026-09-27, rondo#463; the owner's decision through the secretary: a request
@@ -24837,3 +25093,73 @@ how a take-in is known before its press. Each is recorded here once.
 - **A take-in sentence where no part of the request was merged**, or an attempt whose line says it
   merged the other part in while its ancestry finding stands: rule 6 is not holding.
 - **A closing fix merged from a screen that did not say *not re-read***: rule 7 is not holding.
+
+## D-0130 — A lap's cap is written when it is sent and held until its cost is read, one reserve is kept for each lane a partner could still run in, and a budget stop ends the lap with what it spent
+
+**Status:** accepted (2026-09-27, rondo#398 stage 2; the owner's answer through the secretary, option
+A of three). Partly supersedes `D-0121` rules 2 and 4, and carries out its "Order" section. Refs
+`D-0066` rule 3.4.2, `D-0023` (`maxOccupying`, 2 by default since `D-0124`), `D-0123`, `continuo D-1122`.
+
+**Why an entry is needed.** `D-0121` recorded as a known limit that two laps running at once could
+each spend the same room: a lap's cap took off the other unread laps' *reserves*, not what they were
+allowed to spend. With a budget of $50, a reserve of $5 and two lanes, a lap sent alone got $50 and
+one sent beside it $45, so together they could spend $95. The owner asked for it to be fixed with
+the cap's own sending (2026-09-27).
+
+### What was measured
+
+At rondo `a8181d1` and continuo `24f1e00` on **2026-09-27**:
+
+- **continuo enforces the cap and refuses a stopped turn** (`continuo D-1122`): `lap perform
+  --max-budget-usd <n>` takes a plain decimal (`^[0-9]{1,9}(\.[0-9]{1,9})?$`, above zero), and a
+  turn the cap stopped exits 2 as `LapBudgetExhausted` with `total_cost_usd` beside `session_id` in
+  the envelope, no gate opened. `total_cost_usd` is on that refusal and no other.
+- **The store knows the host's lanes**: it is opened with the host policy, and `maxOccupying` is
+  what `reserve()` already checks (`D-0023`).
+
+### Decision
+
+1. **A lap's cap is computed and written when it is sent, in one store transaction**
+   (`sendLapBudget`), after the lap's row is `performing`. Two laps sent together are serialised by
+   the write lock, so each sees the other's cap.
+2. **An unread lap holds its cap once it was sent with one**, and its reserve otherwise (not sent
+   yet, or sent before this entry). A read lap counts what was read. So the room a lap is sent with
+   is `cost_usd`, less what was read, less every other unread lap's hold.
+3. **One reserve is kept for each lane a partner could still run in**: `maxOccupying - 1 -` the
+   other laps of the approval running now. It is taken only from what is above this lap's own
+   reserve, so a budget that holds one lap gives that lap all of it. With $50, $5 and two lanes: the
+   first lap sent alone gets $45; one sent beside it gets $5; once the first is read at $12, the
+   next one sent gets $33.
+4. **The cap is passed to continuo on every Claude lap**, rounded down to the micro dollar, so
+   continuo never enforces more than rondo computed. A Codex lap is sent with none (`D-0121` rule 6,
+   `D-0123`); its cap is still written and still held.
+5. **A budget stop ends the lap with what it spent.** rondo reads the refusal's `total_cost_usd`
+   key, not its class, into `lap_cost_usd`, so the budget counts the spend and the lap holds nothing
+   more; the lap ends `failed` with failure kind `budget` and no gate. A lap with no room left when
+   it is sent is refused the same way, as a stop that spent nothing. The thread says what the try
+   spent of what it had and that going on means asking again with a larger budget, in the person's
+   language; continuo's class name does not reach them.
+
+**Options not taken.** B: split the room evenly across the free lanes. Fair, but a lap running alone
+always gets half. C: hold the cap and keep nothing for a partner. The first lap takes all the room
+and a lap beside it is refused, so parallel work under one approval stops.
+
+### What it costs
+
+- **A lap running alone gets one reserve less** than the room, while a second lane is free.
+- **First come, first served.** The lap sent first gets the larger cap; a partner gets what is
+  left, which is at least the reserve its admission counted.
+- **The admission rule is unchanged** (`D-0066` rule 3.4.2 counts reserves), and so is the page's
+  "held" figure. A lap admitted while another holds a large cap can find no room when it is sent,
+  and is refused then.
+- **An admitted lap not yet sent holds a reserve and does not fill a free lane** until it
+  is sent: the cap is conservative by one reserve in that case.
+- **The CLI checks between API calls**, so a lap can still pass its cap by one call (`continuo
+  D-1122`).
+
+### What would falsify it
+
+- **A turn that spends past its cap by more than one call**: then the hold does not bound what a
+  lap spends, and the sum can pass the budget.
+- **An approval whose laps are usually run one at a time on a host with a second lane**: then the
+  reserve kept for a partner is room nobody uses, and the free-lane count should read the queue.
