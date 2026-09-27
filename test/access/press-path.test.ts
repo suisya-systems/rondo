@@ -30,9 +30,18 @@
  * `dist/cli.js`, which is what makes it reachable here rather than only
  * locally.
  *
- * So the line this file draws is: **only the worker's turn is stood in for.**
- * Nothing rondo does is faked, and no press is given a seam it does not have in
- * `rondo web`.
+ * **Not real either, and only for the publish press: `gh pr create`.** #239's
+ * remaining leg needs a forge that can take a pull request, and no runner has
+ * one; the credential-less refusal `test/access/web-publish.test.ts` asserts is
+ * the boundary, not the leg. So the publish cases below stand in for that one
+ * command and nothing else (see {@link forgeSeam}): the push ahead of it is a
+ * real `git push` to a real bare repository, the plan is the shared
+ * `publishPlanFor`, and the run close behind it is the pinned continuo's own
+ * `run close`.
+ *
+ * So the line this file draws is: **only the worker's turn, and the one forge
+ * command, are stood in for.** Nothing rondo does is faked, and no press is
+ * given a seam it does not have in `rondo web`.
  *
  * ## Mandatory in CI, capability-gated locally
  *
@@ -61,11 +70,13 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import {
   answerFromPage,
   answerUnderScope,
+  publishFromPage,
+  publishingForPage,
   recordScopeFromPage,
   reviseFromPage,
   reviseUnderScope,
@@ -75,9 +86,9 @@ import { GATE_ACTOR } from "../../src/access/gate-host.js";
 import { agentTypeRecordOf } from "../../src/access/scope.js";
 import { newIterationId, newScopeId, type ScopeFormDraft } from "../../src/access/web-app.js";
 import { EN } from "../../src/access/wording.js";
-import { CLI_PATH_ENV, run, startContinuo } from "../../src/continuo/invoker.js";
+import { CLI_PATH_ENV, closeRun, run, startContinuo } from "../../src/continuo/invoker.js";
 import { CONTINUO_REVISION } from "../../src/continuo/pin.js";
-import { DB_CREATE, GATE_SHOW } from "../../src/continuo/protocol.js";
+import { DB_CREATE, GATE_SHOW, RUN_SHOW } from "../../src/continuo/protocol.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import {
   admittedPlan,
@@ -90,6 +101,50 @@ import { planDigest } from "../../src/store/plan.js";
 import { approvedForPublication, type JsonRecord } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { EVIDENCE, PLAN } from "./page-world.js";
+
+/**
+ * The forge, real except for the one command no runner can run: `gh pr create`.
+ *
+ * **One export of one module, and armed per test** (the shape
+ * `test/access/drafted-start.test.ts` uses for continuo). Unarmed it is the real
+ * command, so every other press in this file reaches the real `./forge.ts` --
+ * the git queries the publish plan is read with, and the `git push` ahead of the
+ * pull request leg, included. Armed it records what it was handed and answers
+ * what the test says, which is how the two legs behind a forge get a success
+ * path at all: what a stub must not do is stand in for the route *to* it, and
+ * that route is `publishFromPage` -> `publishPlanFor` -> `pushTopicBranch`, all
+ * of it real here.
+ */
+const forgeSeam = vi.hoisted(() => ({
+  pullRequest: null as {
+    readonly answers: {
+      readonly status: number;
+      readonly stdout: string;
+      readonly stderr: string;
+    };
+    /** Every request the leg was handed, in order, unedited. */
+    readonly asked: unknown[];
+  } | null,
+}));
+vi.mock("../../src/access/forge.js", async (original) => {
+  const real = await original<typeof import("../../src/access/forge.js")>();
+  return {
+    ...real,
+    openPullRequest: async (request: Parameters<typeof real.openPullRequest>[0]) => {
+      const stood = forgeSeam.pullRequest;
+      if (stood === null) {
+        return await real.openPullRequest(request);
+      }
+      stood.asked.push(request);
+      return {
+        commandLine: "gh pr create [stood in for by test/access/press-path.test.ts]",
+        signal: null,
+        spawnError: null,
+        ...stood.answers,
+      };
+    },
+  };
+});
 
 /** Whether this is a CI run, spelled as `vitest.config.ts` spells it (D-0003). */
 function inContinuousIntegration(): boolean {
@@ -743,6 +798,303 @@ test.skipIf(!available)(
     expect(sent).toMatchObject({ kind: "notSent", answered: false });
     expect((await gateOf(world, gateId)).outcome).toBeNull();
     expect((await world.store.read(successorId)).kind).toBe("absent");
+  },
+  PRESS_TIMEOUT_MS,
+);
+
+/** One git command in `directory`, with an identity, as `seedRepository` runs one. */
+function git(directory: string, ...args: string[]): string {
+  return execFileSync("git", ["-C", directory, ...args], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: "rondo test",
+      GIT_AUTHOR_EMAIL: "test@example.invalid",
+      GIT_COMMITTER_NAME: "rondo test",
+      GIT_COMMITTER_EMAIL: "test@example.invalid",
+    },
+  });
+}
+
+/** What the stood-in forge answers with where it opens one. */
+const PULL_REQUEST_URL = "https://github.com/suisya-systems/rondo/pull/4242";
+
+/**
+ * A lap the publish press can be pressed on: started, answered *approve*, with
+ * a commit on its topic branch and the screen already drawn.
+ *
+ * Every step is a press: the lap is `startScopedFromPage`'s real one and the
+ * approval is `answerFromPage`'s real gate walk, so what is published here is
+ * an approval continuo recorded rather than a row a fixture wrote.
+ *
+ * **The commit is the worker's turn, which is this file's one stood-in** (see
+ * the header): continuo's fake worker reports words and writes nothing, so the
+ * test commits on the branch the lap is checked out on. Without it the topic
+ * branch would be the base commit and "the ref moved" would say nothing about
+ * the push.
+ */
+async function publishableLap(label: string) {
+  const world = await pressWorld(label);
+  const { iterationId } = await startOnePress(world);
+  const answered = await answerFromPage(
+    environmentFor(),
+    world.store,
+    world.storePath,
+    "ada",
+    iterationId,
+    "Go on.",
+    null,
+  );
+  expect(answered.ok, answered.note).toBe(true);
+  const read = await world.store.read(iterationId);
+  if (read.kind !== "read") {
+    throw new Error(`the approved lap would not read: ${JSON.stringify(read)}`);
+  }
+  const record = read.record;
+  const workspace = record.workspace ?? "";
+  writeFileSync(join(workspace, "RETRY.md"), "# a retry budget, and it ends\n", "utf8");
+  git(workspace, "add", "RETRY.md");
+  git(workspace, "commit", "--quiet", "-m", "feat: a retry budget");
+  const tip = git(workspace, "rev-parse", "HEAD").trim();
+
+  // The remote is the bare repository `seedRepository` pushed `main` to, which
+  // the lap's worktree inherits as `origin`; `--repo` is a forge name, so the
+  // two cannot agree and the mismatch is overruled rather than hidden, as
+  // `test/access/web-publish.test.ts` overrules it for the same pair.
+  const asked = { repo: "suisya-systems/rondo", remote: "origin", allowRemoteMismatch: true };
+  // **The screen the press is pressed from** (D-0059 section 5a Q1), drawn by
+  // the page's own reader over the page's own thread. No body is composed on
+  // either side -- the press reads the row a preview would have recorded and
+  // finds none -- so the two agree and no model is run (see the header).
+  const preview = await publishingForPage(
+    environmentFor(),
+    world.store,
+    asked,
+    record,
+    world.record,
+  );
+  if (preview.kind !== "ready") {
+    throw new Error(`the approved lap draws no publish screen: ${JSON.stringify(preview)}`);
+  }
+  return {
+    world,
+    iterationId,
+    runId: record.runId ?? "",
+    /** The forge `seedRepository` made: a real remote, and where the push lands. */
+    bare: join(world.dir, "repo.git"),
+    tip,
+    asked,
+    preview,
+    /**
+     * Whether the screen carries a reading to overrule. A lap whose reader had
+     * nothing to say about work committed after it read is exactly the screen
+     * that offers the override, so the press answers the question the screen
+     * asked rather than a fixed `false` that would refuse for the wrong reason.
+     */
+    despiteReview: preview.review !== null,
+  };
+}
+
+/** One publish press, with the forge leg standing in for the length of it. */
+async function pressPublish(
+  lap: Awaited<ReturnType<typeof publishableLap>>,
+  answers: { readonly status: number; readonly stdout: string; readonly stderr: string },
+) {
+  const asked: unknown[] = [];
+  forgeSeam.pullRequest = { answers, asked };
+  try {
+    const pressed = await publishFromPage(
+      environmentFor(),
+      lap.world.store,
+      lap.world.storePath,
+      "ada",
+      lap.asked,
+      {
+        iterationId: lap.iterationId,
+        shown: lap.preview.shown,
+        despiteReview: lap.despiteReview,
+      },
+    );
+    return { pressed, asked };
+  } finally {
+    forgeSeam.pullRequest = null;
+  }
+}
+
+/** The run's status, as the pinned continuo holds it: `completed` once closed. */
+async function runStatus(lap: Awaited<ReturnType<typeof publishableLap>>): Promise<string> {
+  const started = await startContinuo(environmentFor());
+  if (started.kind !== "ready") {
+    throw new Error(`continuo did not verify: ${started.reason}`);
+  }
+  const observed = await run(started.continuo, RUN_SHOW, [
+    "--db",
+    lap.world.db,
+    "--run-id",
+    lap.runId,
+  ]);
+  if (observed.kind !== "answered") {
+    throw new Error(`run show did not answer: ${JSON.stringify(observed)}`);
+  }
+  return observed.payload.status;
+}
+
+/** The line the thread carries where a lap was published, or undefined for none. */
+async function publishedLine(
+  lap: Awaited<ReturnType<typeof publishableLap>>,
+): Promise<string | undefined> {
+  const read = await lap.world.record.threadMessages();
+  if (read.kind !== "read") {
+    throw new Error(`the thread would not read: ${JSON.stringify(read)}`);
+  }
+  return read.messages.find(
+    (message) => message.messageId === `report-published-${lap.iterationId}`,
+  )?.body;
+}
+
+test.skipIf(!available)(
+  `the publish press opens the pull request the screen showed, over a real push (#233 S5, #239)${skipNote}`,
+  async () => {
+    const lap = await publishableLap("publish-open");
+    const { pressed, asked } = await pressPublish(lap, {
+      status: 0,
+      stdout: `${PULL_REQUEST_URL}\n`,
+      stderr: "",
+    });
+    expect(pressed.ok, `${pressed.why ?? ""}: ${pressed.note}`).toBe(true);
+
+    // **The leg ran on the act the screen described, field for field.** The
+    // press re-plans and re-digests before it runs anything (D-0042 rules 2 and
+    // 3), so this is the one assertion that says the screen and the act are the
+    // same publish rather than two computations that happened to agree.
+    expect(asked).toEqual([
+      {
+        repo: lap.preview.target.repo,
+        baseBranch: lap.preview.target.baseBranch,
+        headRef: lap.preview.target.headRef,
+        title: lap.preview.title,
+        body: lap.preview.body,
+      },
+    ]);
+
+    // **And the push it stands on was a real push.** The bare repository holds
+    // the topic branch at the commit the worktree is on -- a ref that was not
+    // there before this press, and that no refusal path could have made.
+    expect(git(lap.bare, "rev-parse", `refs/heads/${lap.preview.target.topicBranch}`).trim()).toBe(
+      lap.tip,
+    );
+
+    // **What stays readable afterwards** (D-0153 rule 1, rondo#286): the remote
+    // the work went to, on the row, and the pull request's address in the
+    // request's own thread, which is where a person goes looking for it.
+    const after = await lap.world.store.read(lap.iterationId);
+    expect(after.kind === "read" ? after.record.publishedRemote : null).toBe("origin");
+    expect(await publishedLine(lap)).toContain(PULL_REQUEST_URL);
+  },
+  PRESS_TIMEOUT_MS,
+);
+
+test.skipIf(!available)(
+  `the publish press whose pull request is refused stops before continuo's close (#233 S5, #239)${skipNote}`,
+  async () => {
+    const lap = await publishableLap("publish-refused");
+    const { pressed, asked } = await pressPublish(lap, {
+      status: 1,
+      stdout: "",
+      stderr: "GraphQL: A pull request already exists for suisya-systems:rondo/press-path.\n",
+    });
+
+    // The refusal the screen shows, carrying the forge's own words.
+    expect(pressed.ok).toBe(false);
+    expect(pressed.why).toBe("publishRefusedPullRequestFailed");
+    expect(pressed.note).toContain("the branch is pushed");
+    expect(pressed.detail).toContain("A pull request already exists");
+    expect(asked).toHaveLength(1);
+
+    // **The push ahead of it happened all the same, and is recorded**: the leg
+    // that cannot be taken back is the one before this, and the row says where
+    // it went so the landing reading has a basis for a publish that stopped
+    // half way (rondo#286, D-0153 rule 1).
+    expect(git(lap.bare, "rev-parse", `refs/heads/${lap.preview.target.topicBranch}`).trim()).toBe(
+      lap.tip,
+    );
+    const after = await lap.world.store.read(lap.iterationId);
+    expect(after.kind === "read" ? after.record.publishedRemote : null).toBe("origin");
+
+    // **And it stopped before the close, which cannot be taken back either**:
+    // continuo refuses a second `run close`, so a press that closed the run on
+    // its way past a failed pull request would leave the one state the screen
+    // exists to avoid. The run is still open in continuo's own row, and nothing
+    // in the thread says this lap was published.
+    expect(await runStatus(lap)).not.toBe("completed");
+    expect(await publishedLine(lap)).toBeUndefined();
+  },
+  PRESS_TIMEOUT_MS,
+);
+
+test.skipIf(!available)(
+  `the publish press closes the real run behind the pull request and reports it (#233 S5, #239)${skipNote}`,
+  async () => {
+    const lap = await publishableLap("publish-close");
+    expect(await runStatus(lap)).not.toBe("completed");
+    const { pressed } = await pressPublish(lap, {
+      status: 0,
+      stdout: `${PULL_REQUEST_URL}\n`,
+      stderr: "",
+    });
+    expect(pressed.ok, `${pressed.why ?? ""}: ${pressed.note}`).toBe(true);
+
+    // **continuo's own row, read back through the pinned build**: the close is
+    // the operator's observation that the work landed, and `completed` is the
+    // terminal status it recorded. Nothing here wrote that row but the press.
+    expect(await runStatus(lap)).toBe("completed");
+
+    // **And the record a person reads afterwards**: the lap is reported as
+    // published, in the request's thread, with the pull request's address.
+    expect(await publishedLine(lap)).toContain(PULL_REQUEST_URL);
+  },
+  PRESS_TIMEOUT_MS,
+);
+
+test.skipIf(!available)(
+  `a publish whose run continuo has already closed reports nothing as published (#233 S5, #239)${skipNote}`,
+  async () => {
+    const lap = await publishableLap("publish-closed-already");
+    // The close-out's refusal, made to happen for continuo's own reason: a run
+    // closes once, on purpose (`run close` refuses a run that is already
+    // closed), so closing it here is the one way to reach that refusal without
+    // standing in for continuo.
+    const started = await startContinuo(environmentFor());
+    if (started.kind !== "ready") {
+      expect.unreachable(`continuo did not verify: ${started.reason}`);
+    }
+    const closed = await closeRun(started.continuo, {
+      db: lap.world.db,
+      runId: lap.runId,
+      outcome: "completed",
+      actorId: "ada",
+    });
+    expect(closed.kind).toBe("answered");
+
+    const { pressed, asked } = await pressPublish(lap, {
+      status: 0,
+      stdout: `${PULL_REQUEST_URL}\n`,
+      stderr: "",
+    });
+    expect(pressed.ok).toBe(false);
+    expect(pressed.why).toBe("publishRefusedRunNotClosed");
+    expect(pressed.note).toContain("the run did not close");
+    // The two legs ahead of it did run: this is the close-out's own refusal and
+    // not a refusal that stopped the press earlier.
+    expect(asked).toHaveLength(1);
+    expect(git(lap.bare, "rev-parse", `refs/heads/${lap.preview.target.topicBranch}`).trim()).toBe(
+      lap.tip,
+    );
+
+    // **And rondo says nothing it cannot stand behind**: the thread carries no
+    // published line, because the close-out did not finish. A person is sent to
+    // the terminal `rondo web` runs in, where the refusal was relayed.
+    expect(await publishedLine(lap)).toBeUndefined();
   },
   PRESS_TIMEOUT_MS,
 );
