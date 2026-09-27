@@ -1176,3 +1176,80 @@ test("the words a change was asked with are in the thread, under the person's na
   });
   expect(other.slice(other.indexOf('id="revise-i-0001"'))).toContain('class="msg-who">ada<');
 });
+
+test("the gate card says whether rondo would approve it automatically, and why not (D-0125, #464)", async () => {
+  // A lap under no scope, with concerns from the checks and no model reading
+  // or test record: every reason is on the line, and nothing is answered.
+  const bare = fresh();
+  await gateWithChecks(bare);
+  const pressed: { iterationId: string; body: string }[] = [];
+  const refused = barOf(
+    await operatorPage({ ...portsOver(bare, "ada", pressed), material: structured }, "t", {
+      kind: "summary",
+    }),
+  );
+  expect(refused).toContain(
+    '<p id="gate-auto" class="text-meta leading-5 text-muted-foreground">Not approved ' +
+      "automatically: no approved scope covers this work; the checks are not clear; the model " +
+      "review has not read this yet; no test run rondo can read.</p>",
+  );
+  expect(pressed).toHaveLength(0);
+
+  // Admitted under an approved scope, clear checks and a clear model reading
+  // of the same tip, a green run, nothing open.
+  const world = fresh();
+  await spentGate(world);
+  expect(
+    (
+      await world.store.appendReading(
+        "i-0001",
+        {
+          drafter: "rondo/model/1/gpt-6-astra",
+          verdict: "concerns",
+          findings: ["a typo"],
+          graded: [{ severity: "nit", bases: [], basisResolved: false }],
+          evidence: EVIDENCE,
+          unavailableReason: null,
+        },
+        4_200,
+      )
+    ).kind,
+  ).toBe("appended");
+  const carried = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "awaiting_human",
+    {
+      lapCommands: JSON.stringify([
+        {
+          index: 9,
+          command: "npm test",
+          output: "      Tests  40 passed (40)\n",
+          output_omitted_chars: 0,
+          is_error: false,
+        },
+      ]),
+    },
+    4_300,
+    // The checks read again, clear, as a gate's transition carries them.
+    {
+      drafter: "rondo/deterministic/2",
+      verdict: "clear",
+      findings: [],
+      evidence: EVIDENCE,
+      unavailableReason: null,
+    },
+  );
+  expect(carried.kind).toBe("transitioned");
+  const approving = barOf(
+    await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+      kind: "summary",
+    }),
+  );
+  expect(approving).toContain(">rondo would approve this automatically.</p>");
+  // Under the readings it is read from, and above the press it does not make.
+  expect(approving.indexOf('id="gate-auto"')).toBeGreaterThan(
+    approving.indexOf('id="bar-readings"'),
+  );
+  expect(approving.indexOf('id="gate-auto"')).toBeLessThan(approving.indexOf('type="submit"'));
+});
