@@ -424,6 +424,35 @@ explanation you pressed on and then answers the gate.`,
   answerNotDone: "Nothing was answered",
   gateBack: "Back to the gate",
   gateAuto: gateAutoEn,
+  approvalNamed: (goal, costUsd) =>
+    `the approval ${goal ? "toward the goal" : "for this request"} (up to $${costUsd})`,
+  gateAutoSaid: (approval, approver, line) =>
+    [
+      `Rondo approved this lap itself, under ${approval} that ${approver} gave.`,
+      "It met every condition for an automatic approval:",
+      "- the checks were clear;",
+      `- the model review of the same commit found nothing at or above ${line};`,
+      "- the worker's last test run passed;",
+      "- no question was open over this line;",
+      "- it is not a closing lap.",
+    ].join("\n"),
+  gateReviseSaid: (approval, approver, notSent) =>
+    [
+      `Rondo sent the drafted change request itself, under ${approval} that ${approver} gave.`,
+      "It met every condition for sending it without a press:",
+      "- only the review's findings withheld the approval, and the draft quotes every one;",
+      "- the drafter marked none of them a judgment call;",
+      "- a review round and the budget were left;",
+      "- no question was open over this line.",
+      ...(notSent === null
+        ? []
+        : [
+            "",
+            "The gate may hold the change, but the next lap did not start:",
+            notSent,
+            "Pause or raise the goal's approval, or start the work again from the request.",
+          ]),
+    ].join("\n"),
   modelRaised: (blockers, majors) => `The model review raised ${raisedEn(blockers, majors)}.`,
   modelRaisedLink: "Read it",
   severityWord: (severity) => severity,

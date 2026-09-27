@@ -5,15 +5,14 @@
 import { describe, expect, test } from "vitest";
 
 import {
-  approvedBody,
   GATE_ACTOR,
   gateHost,
   type ScopedAnswer,
   type ScopedRevise,
   type ScopedReviseInput,
-  sentBody,
 } from "../../src/access/gate-host.js";
-import { EN } from "../../src/access/wording.js";
+import { JA } from "../../src/access/wording/ja.js";
+import { type Chrome, EN } from "../../src/access/wording.js";
 import type { GateDelegation } from "../../src/continuo/invoker.js";
 import type {
   FindingSeverity,
@@ -109,7 +108,7 @@ const world = (laps: IterationRecord[]): World => ({
 });
 
 /** One host over the world; two hosts over one world are two processes sharing a store. */
-function host(w: World) {
+function host(w: World, words: Chrome = EN) {
   return gateHost({
     store: {
       readLive: async () => w.laps.map((record) => ({ kind: "read", record }) as const),
@@ -183,16 +182,16 @@ function host(w: World) {
         return w.sendAs;
       },
       hasRoom: async () => w.room,
-      words: EN,
       mintId: () => "i-next",
     },
+    words,
     now: () => 5_000,
     log: (line) => w.lines.push(line),
   });
 }
 
-async function pass(w: World): Promise<void> {
-  const h = host(w);
+async function pass(w: World, words: Chrome = EN): Promise<void> {
+  const h = host(w, words);
   h.kick();
   await h.settled();
 }
@@ -210,9 +209,12 @@ describe("gateHost (D-0125 rule 6)", () => {
       messageId: "gate-auto-g-1",
       inReplyTo: "msg-1",
       asks: false,
-      body: approvedBody("scope-1", "happy_ryo", "major"),
+      body: EN.gateAutoSaid(EN.approvalNamed(true, "100.00"), "happy_ryo", "major"),
     });
-    expect(w.messages[0]?.body).toContain("Approved by rondo under scope 'scope-1'");
+    expect(w.messages[0]?.body).toContain(
+      "under the approval toward the goal (up to $100.00) that happy_ryo gave",
+    );
+    expect(w.messages[0]?.body).not.toContain("scope-1");
     expect(GATE_ACTOR).toBe("rondo/gate/1");
   });
 
@@ -315,7 +317,7 @@ describe("rondo sends the drafted change under a goal scope (D-0145)", () => {
       messageId: "gate-revise-g-1",
       inReplyTo: "msg-1",
       asks: false,
-      body: sentBody("scope-1", "happy_ryo", { kind: "sent" }),
+      body: EN.gateReviseSaid(EN.approvalNamed(true, "100.00"), "happy_ryo", null),
     });
     // Sent once: the claim is spent.
     await pass(w);
@@ -403,5 +405,21 @@ describe("rondo sends the drafted change under a goal scope (D-0145)", () => {
     await pass(quiet);
     expect(quiet.messages).toEqual([]);
     expect(quiet.lines.join("\n")).toContain("a person answered first");
+  });
+
+  test("rondo's notes are in the operator's language and name the approval, not its scope id (rondo#533)", async () => {
+    const sent = blocked();
+    await pass(sent, JA);
+    const approved = world([lap("i-1", "g-1")]);
+    approved.requests = ["msg-1"];
+    await pass(approved, JA);
+    const [revise, auto] = [sent.messages[0]?.body ?? "", approved.messages[0]?.body ?? ""];
+    expect(revise).toContain("happy_ryo による目標に向けた承認（$100.00 まで）のもとで");
+    expect(auto).toContain("happy_ryo によるこの依頼の承認（$100.00 まで）のもとで");
+    expect(auto).toContain("重大以上の指摘がない");
+    for (const body of [revise, auto]) {
+      expect(body).not.toContain("scope-1");
+      expect(body).not.toMatch(/Rondo|approval|scope/);
+    }
   });
 });

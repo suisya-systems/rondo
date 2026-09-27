@@ -1781,9 +1781,9 @@ export async function main(
                   input,
                 ),
               hasRoom: async () => (await store.occupancy()).occupying < bounds.policy.maxOccupying,
-              words: chromeFor(selected.tag),
               mintId: newIterationId,
             },
+      words: chromeFor(selected.tag),
       now: Date.now,
       log: say,
     });
