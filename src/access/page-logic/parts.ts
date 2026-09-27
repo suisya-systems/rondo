@@ -81,8 +81,12 @@ export interface PartReads {
   readonly resultOf: (iterationId: string) => LapResult | null;
   /** The person's name for a repository (`placeName` in `list.ts`), or null. */
   readonly placeOf: (repository: string) => string | null;
-  /** The open question about part `index` whose id starts so, or null. */
-  readonly askOf: (index: number) => string | null;
+  /**
+   * Rule 1.5's question about part `index`: standing open (its id), answered
+   * *stop* -- the part is dropped -- or neither (none written, or answered
+   * *carry on*, when the earlier part is tried again).
+   */
+  readonly askOf: (index: number) => { readonly open: string } | "dropped" | null;
 }
 
 function linkOf(result: LapResult | null): PullRequestLink | null {
@@ -108,7 +112,11 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
           ? "running"
           : result?.merged != null
             ? "merged"
-            : laps.at(-1)?.status === "closed"
+            : // Finished only where its gate was approved and its pull request
+              // was not closed unmerged; any other ending is a stop.
+              laps.at(-1) !== undefined &&
+                approvedForPublication(laps.at(-1) as IterationRecord) &&
+                result?.closedAtMs == null
               ? "finished"
               : "stopped";
       return {
@@ -136,21 +144,22 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
     const earlier = parts.find((other) => other.index === after);
     const earlierLaps = earlier?.lineageId == null ? [] : reads.lapsOf(earlier.lineageId);
     const first = part.order.first?.state ?? "notStarted";
-    const askId = first === "endedUnlanded" ? reads.askOf(part.index) : null;
+    const asked = first === "endedUnlanded" ? reads.askOf(part.index) : null;
     const place =
       earlier?.repository == null || earlier.repository === part.repository
         ? null
         : reads.placeOf(earlier.repository);
     return {
       index: part.index,
-      // Rule 1.5 put a question in the thread: this part is the person's now.
-      standing: first === "endedUnlanded" ? "yours" : "waiting",
+      // Rule 1.5's question standing is the person's turn; answered *stop*, the
+      // part is dropped; otherwise it still waits, as rondo asked or will ask.
+      standing: asked === "dropped" ? "stopped" : asked === null ? "waiting" : "yours",
       wait: {
         after,
         first,
         place,
         pullRequest: linkOf(publishedOf(earlierLaps, reads)),
-        askId,
+        askId: asked === null || asked === "dropped" ? null : asked.open,
       },
       pullRequest,
       laps,

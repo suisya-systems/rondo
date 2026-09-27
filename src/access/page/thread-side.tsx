@@ -119,11 +119,16 @@ function partStepAlone(wording: Chrome, view: PartView): PartStep {
   const pullRequest = (pr: PartView["pullRequest"]): PartLink[] =>
     pr?.url == null ? [] : [{ href: pr.url, said: wording.pullRequest(pr.number) }];
   const wait = view.wait;
+  // Dropped by the person's *stop* to rule 1.5's question (D-0103 rule 1.6).
+  if (wait !== null && view.standing === "stopped") {
+    return { name, said: wording.partStopped, yours: false, links: [] };
+  }
   if (wait !== null && wait.first === "endedUnlanded") {
     return {
       name,
       said: wording.partUnlanded(wait.after),
-      yours: true,
+      // The person's only while the question stands.
+      yours: view.standing === "yours",
       links:
         wait.askId === null
           ? []

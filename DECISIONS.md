@@ -24755,8 +24755,10 @@ how a take-in is known before its press. Each is recorded here once.
    rule 1.5's question already uses. The scope screen's English "Plan N" becomes "Part N" to match;
    the Japanese already said 作業 N.
 2. **Each part has one standing, and only the person's is amber** (rule 8.1). The standings are yours
-   (a lap at its gate, or an earlier part that ended unmerged, about which rule 1.5 asked), running,
-   waiting on an earlier part's merge, not started, merged or finished, and stopped. The row's
+   (a lap at its gate, or an earlier part that ended unmerged while rule 1.5's question stands),
+   running, waiting on an earlier part's merge, not started, merged, finished, and stopped. Finished
+   is an approved gate whose pull request was not closed unmerged; any other ending is stopped, and
+   so is a part the person dropped by answering rule 1.5's question *stop*. The row's
    sentence counts them in place of the one state: *2 of 3 parts running, 1 waiting for another part
    to be merged*. A wait names the other repository only where every waiting part waits on the same
    one (*waiting for cadenza's change to land*). The row is amber only where the list already lifts it

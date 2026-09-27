@@ -3084,14 +3084,16 @@ export async function operatorPage(
               lapsOf: lapsOfLine,
               resultOf: (id) => resultOf(threads.byId, id),
               placeOf: placeName,
-              // Rule 1.5's question about the part, while it stands unanswered.
-              askOf: (index) =>
-                [...threads.waiting].find(
+              // Rule 1.5's question about the part: standing, or answered *stop*.
+              askOf: (index) => {
+                const asks = [...threads.waiting].filter(
                   (id) =>
-                    !threads.stopped.has(id) &&
                     threads.rootOf(id) === root.messageId &&
                     id.startsWith(unlandedPrefix({ proposalId }, index)),
-                ) ?? null,
+                );
+                const open = asks.find((id) => !threads.stopped.has(id));
+                return open !== undefined ? { open } : asks.length > 0 ? "dropped" : null;
+              },
             }),
           ] as const;
         }),

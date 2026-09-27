@@ -647,3 +647,74 @@ test("an approved split with nothing started still shows each part's wait on the
     "Part 2waiting until part 1 is merged; then it starts by itself",
   ]);
 });
+
+test("a part the person dropped by answering stop is stopped, not the person's turn (D-0103 rule 1.6)", async () => {
+  const w = await split([undefined, 0]);
+  await w.start(0, "lap-one");
+  expect((await w.world.store.transition("lap-one", "planned", "abandoned", {}, 3_600)).kind).toBe(
+    "transitioned",
+  );
+  const askId = `${unlandedPrefix({ proposalId: w.proposalId }, 1)}lap-one`;
+  for (const draft of [
+    {
+      messageId: askId,
+      body: unlandedBody(1, 0, "lap-one"),
+      authorKind: "drafter" as const,
+      authorId: "rondo/deterministic/1",
+      inReplyTo: "r1",
+      atMs: 3_700,
+      bases: [{ form: "message", messageId: "r1" }],
+      asks: true,
+    },
+    {
+      messageId: "m-stop",
+      body: "Drop it.",
+      authorKind: "operator" as const,
+      authorId: "ada",
+      inReplyTo: askId,
+      atMs: 3_800,
+      bases: [],
+      asks: false,
+      answerOutcome: "stop" as const,
+    },
+  ]) {
+    const said = await w.world.record.recordThreadMessage(draft);
+    expect(said.kind, JSON.stringify(said)).toBe("recorded");
+  }
+  const html = await page(w.world);
+  expect(partSteps(html)).toEqual(["Part 1stopped", "Part 2stopped"]);
+  expect(html).not.toContain("list-row-mine");
+  expect(rowSaid(html)).toBe("2 parts: 2 stopped");
+});
+
+test("a part closed without an approval, or whose pull request was closed unmerged, is stopped and not finished", async () => {
+  const w = await split([undefined, undefined]);
+  await w.start(0, "lap-one");
+  await openGate(w.world as never, "lap-one");
+  await recordAnswer(w.world as never, "lap-one", "revise");
+  expect(
+    (
+      await w.world.store.transition(
+        "lap-one",
+        "awaiting_human",
+        "closed",
+        { gateOutcome: "answered_and_forwarded" },
+        3_650,
+      )
+    ).kind,
+  ).toBe("transitioned");
+  await w.start(1, "lap-two");
+  await approve(w, "lap-two");
+  await report(
+    w,
+    "report-published-lap-two",
+    "Lap 'lap-two' was published: https://github.com/o/r/pull/8",
+  );
+  expect(partSteps(await page(w.world))).toEqual(["Part 1stopped", "Part 2finished #8"]);
+  await report(
+    w,
+    "report-closed-lap-two",
+    "Lap 'lap-two' was closed on the forge without a merge.",
+  );
+  expect(partSteps(await page(w.world))).toEqual(["Part 1stopped", "Part 2stopped"]);
+});
