@@ -1019,3 +1019,23 @@ test("D-0143: new files are kept even where git is set not to show them", async 
   expect(kept.kind).toBe("kept");
   expect(gitOut(work, "show", "--name-only", "--format=", "HEAD")).toBe("only-new.txt");
 });
+
+test("D-0143: the kept commit is rondo's even where the host's environment names another author", async () => {
+  const work = workspace();
+  writeFileSync(join(work, "a.txt"), "changed\n");
+  const before = { name: process.env["GIT_AUTHOR_NAME"], email: process.env["GIT_AUTHOR_EMAIL"] };
+  process.env["GIT_AUTHOR_NAME"] = "someone";
+  process.env["GIT_AUTHOR_EMAIL"] = "someone@example.invalid";
+  try {
+    expect((await keepStoppedWork({ workspace: work, topicBranch: "topic" })).kind).toBe("kept");
+  } finally {
+    for (const [key, value] of [
+      ["GIT_AUTHOR_NAME", before.name],
+      ["GIT_AUTHOR_EMAIL", before.email],
+    ] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+  expect(gitOut(work, "log", "-1", "--format=%an <%ae>")).toBe("rondo <rondo@localhost>");
+});

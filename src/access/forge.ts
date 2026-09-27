@@ -544,6 +544,8 @@ export async function keepStoppedWork(request: {
     "commit.gpgsign=false",
     "commit",
     "--quiet",
+    // The author said on the command line, which an inherited GIT_AUTHOR_* does not override.
+    "--author=rondo <rondo@localhost>",
     "-m",
     KEPT_WORK_SUBJECT,
   );
