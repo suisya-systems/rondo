@@ -457,14 +457,22 @@ export const JA: Chrome = Object.freeze({
       "- この線に開いている質問がない",
       "- 締めの周回ではない",
     ].join("\n"),
-  gateReviseSaid: (approval, approver, notSent) =>
+  gateReviseSaid: (approval, approver, notSent, line, left) =>
     [
       `${approver} による${approval}のもとで、rondo が下書きした変更依頼を自分で送りました。`,
       "ボタンを押さずに送る条件をすべて満たしていました:",
       "- 承認を止めていたのはレビューの指摘だけで、下書きはそのすべてを引いている",
-      "- 下書きは、どの指摘も判断が要るものとしていない",
+      `- 下書きは、${severityJa(line)}以上のどの指摘も判断が要るものとしていない`,
       "- レビューの回数と予算が残っている",
       "- この線に開いている質問がない",
+      ...(left.length === 0
+        ? []
+        : [
+            "",
+            `${severityJa(line)}未満で、下書きが判断をあなたに任せた次の指摘は、送った依頼から外しました。`,
+            "必要なら、あなた自身の変更依頼で頼んでください:",
+            ...left,
+          ]),
       ...(notSent === null
         ? []
         : [

@@ -436,14 +436,22 @@ explanation you pressed on and then answers the gate.`,
       "- no question was open over this line;",
       "- it is not a closing lap.",
     ].join("\n"),
-  gateReviseSaid: (approval, approver, notSent) =>
+  gateReviseSaid: (approval, approver, notSent, line, left) =>
     [
       `Rondo sent the drafted change request itself, under ${approval} that ${approver} gave.`,
       "It met every condition for sending it without a press:",
       "- only the review's findings withheld the approval, and the draft quotes every one;",
-      "- the drafter marked none of them a judgment call;",
+      `- the drafter marked none of them at or above ${line} a judgment call;`,
       "- a review round and the budget were left;",
       "- no question was open over this line.",
+      ...(left.length === 0
+        ? []
+        : [
+            "",
+            `It left out these findings below ${line}, which the drafter marked as your call.`,
+            "Ask for them in a change of your own if you want them:",
+            ...left,
+          ]),
       ...(notSent === null
         ? []
         : [

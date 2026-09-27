@@ -187,6 +187,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0152 | A lap continuo refused before its cost was read holds its reserve at a lap's send, the number the page counts, and not its cap; reading a timed-out lap's cost is continuo's | accepted |
 | D-0154 | A drafted scope ready for approval is the person's turn: the list, the header's count, the tab and the notification count it once rondo's draft is ready | accepted |
 | D-0155 | A merge waits only on the questions that hold its line: a question over another line the person answered with a stop no longer withholds the merge, on the page or on green | accepted |
+| D-0156 | Only a judgment call at or above the scope's threshold keeps rondo from sending the drafted change; one below it is left out of what is sent, and the note names it | accepted |
 
 ---
 
@@ -26603,6 +26604,10 @@ are version 2). Refs `D-0070`, `D-0098` rule 2.3, `D-0128`, `D-0142` rule 4.
 
 **Numbering.** `D-0145` was given to this lane; a parallel lane may renumber at merge.
 
+> **Annotation (2026-09-28, from rondo#543).** Amended by `D-0156`: rule 1's "marked none a judgment
+> call" counts only the findings at or above the scope's threshold, and rule 2's "the box's text" is
+> that text less the findings below it the drafter marked a judgment call.
+
 ### Context
 
 **Read on 2026-09-28 from lap 19** (#290 under a goal scope, 3 review rounds, later 18 laps, outward
@@ -27242,3 +27247,56 @@ merging past it is not what they were asked.
 
 - **A person who stopped one line and still expected a sibling line's merge to wait for them.**
   Then a stop over one line has to ask whether the request's other lines may still merge.
+
+## D-0156 — Only a judgment call at or above the scope's threshold keeps rondo from sending the drafted change; one below it is left out of what is sent, and the note names it
+
+**Status:** accepted (2026-09-28, rondo#543; the issue's recommendation, taken through the secretary
+while the owner was away). Amends `D-0145` rules 1, 2 and 5. Refs `D-0065` rules 4 and 5,
+`D-0066` 1.2.5, `D-0077`.
+
+### Context
+
+On lap-19 (2026-09-28, host at `1742c80`), the #286 flow request's lap-609be10c was read with one
+**major** finding and one **nit**, under a goal scope whose threshold is `major`. The revise drafter
+marked the nit a judgment call ("判断が要る点のため、送るかどうかはあなたに任せます") and the major a
+plain defect. `D-0145` rule 1 asks that the draft mark **none** a judgment call, so rondo did not send
+it, and the person pressed *ask for a change* with nothing to decide on the major. The nit alone
+would not have withheld approval. Goal clause 6 (the only presses are the scope approval and
+answers to disputed points) was not met.
+
+### Decision
+
+1. **Only a finding at or above the scope's threshold counts for "none a judgment call".** The
+   positions are the round decision's `atOrAbove` (`reviewRoundDecision`, the same one `D-0145`
+   rule 1 already asks for `revise`). Every finding there is graded, since an ungraded reading is a
+   stop and never a `revise`. A judgment call at or above the threshold keeps the press, as before.
+2. **A finding below the threshold that the drafter marked a judgment call is left out of what is
+   sent.** Its quote and the drafter's words are not in the body (`reviseText` and `reviseBoxOf`
+   take the positions left out, `src/access/revise-draft/judgement.ts`); the rest of the box is the
+   page's text, byte for byte. A finding below the threshold marked plain stays in, and the worker
+   fixes it as before. The page passes nothing left out, so the gate's box is unchanged. What rondo
+   sends is still nothing the gate did not show: a part of it.
+3. **The note says what was left out.** `gateReviseSaid` names the threshold in the judgment
+   condition and, where something was left out, quotes each left-out finding with its severity and
+   says the person can ask for it in a change of their own.
+4. **A draft with no mark stays unsendable.** A row without `judgment` is not plain whatever is
+   left out (`plainDraft`), as `D-0145` rule 4 has it.
+
+### Options not taken
+
+- **Sending the finding marked optional.** The worker would then choose on a point the drafter
+  said was the person's; leaving it out keeps that choice with the person, and the next review
+  reads the work again.
+- **Leaving out every finding below the threshold.** A plain one is cheap to fix and the drafter
+  already wrote its fix, so it stays in what is sent.
+
+### What it costs
+
+- **The lead is sent as written.** It may mention a finding that was left out; the drafter's
+  instructions say the lead must not introduce a choice, and the note names what was left.
+- **A left-out point is asked for only by the person**: rondo does not carry it into a later lap.
+
+### What would falsify it
+
+- **A left-out finding the person wanted in the sent change** often enough that they press again
+  after rondo's send: then the below-threshold judgment call should be asked, not dropped.

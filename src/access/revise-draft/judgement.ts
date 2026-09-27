@@ -341,12 +341,19 @@ function checked(reading: LapReading, answer: unknown): ReviseDrafted {
 }
 
 /**
- * Whether a stored draft marks no finding as a judgment call (D-0145 rule 4).
- * A row written before the mark existed carries none, and is not sendable.
+ * Whether a stored draft marks no finding as a judgment call (D-0145 rule 4)
+ * but those at `left`, the positions a send leaves out (D-0156). A row written
+ * before the mark existed carries none, and is not sendable.
  */
-export function plainDraft(drafted: JsonRecord): boolean {
+export function plainDraft(drafted: JsonRecord, left: readonly number[] = []): boolean {
   const judgment = drafted["judgment"];
-  return Array.isArray(judgment) && judgment.length === 0;
+  return Array.isArray(judgment) && judgment.every((i) => left.includes(i as number));
+}
+
+/** The positions a stored draft marks as judgment calls; none where the row carries no mark. */
+export function judgmentOf(drafted: JsonRecord): readonly number[] {
+  const judgment = drafted["judgment"];
+  return Array.isArray(judgment) ? judgment.filter((i): i is number => typeof i === "number") : [];
 }
 
 /** How the box labels what rondo renders, in the page's language. */
@@ -364,11 +371,14 @@ export interface ReviseLabels {
  * bases, then the drafter's words for it. **Null when the stored draft is not
  * one of this reading's**: `changes` must be exactly parallel to the findings,
  * so a row that does not decode draws no draft at all rather than a partial one.
+ * The findings at `left` are not in the text (D-0156): rondo's own send leaves
+ * them out, and the page passes none.
  */
 export function reviseText(
   reading: LapReading,
   drafted: JsonRecord,
   labels: ReviseLabels,
+  left: readonly number[] = [],
 ): string | null {
   const lead = drafted["lead"];
   const changes = drafted["changes"];
@@ -383,7 +393,10 @@ export function reviseText(
     return null;
   }
   const judgment = drafted["judgment"];
-  const blocks = reading.findings.map((text, i) => {
+  const blocks = reading.findings.flatMap((text, i) => {
+    if (left.includes(i)) {
+      return [];
+    }
     const graded = reading.graded?.[i];
     const bases = (graded?.bases ?? []).map(findingBasisText);
     return [
@@ -448,12 +461,15 @@ export type ReviseBox =
  * The revise box over one lap's readings and the revise draft stored for its
  * latest model reading (`reviseDraftFor`, or null where none is). One function
  * for the page and for rondo's own send (D-0145 rule 5), so what rondo sends is
- * what the gate would have shown.
+ * what the gate would have shown. `left` is the model reading's findings rondo's
+ * send leaves out (D-0156): not in the text, and their marks do not count
+ * against `plain`. The page passes none.
  */
 export function reviseBoxOf(
   readings: readonly LapReading[],
   row: { readonly payload: JsonRecord } | null,
   labels: ReviseLabels & { readonly takeIn: (finding: string) => string },
+  left: readonly number[] = [],
 ): ReviseBox {
   // **A take-in the lap did not pass is drafted by rondo itself** (D-0098
   // rule 2.3, D-0105): the test and its one fix are fixed, so the box quotes
@@ -479,10 +495,10 @@ export function reviseBoxOf(
       ? { kind: "unavailable", reason: typeof reason === "string" ? reason : "" }
       : drafted("", false);
   }
-  const text = reviseText(model, row.payload, labels);
+  const text = reviseText(model, row.payload, labels, left);
   // A row that does not decode as a whole draft of this reading is shown as
   // none, never in part (D-0077 rule 4.1: not shown and not repaired).
   return text === null
     ? { kind: "unavailable", reason: "the stored draft does not read as a draft of this reading" }
-    : drafted(text, plainDraft(row.payload));
+    : drafted(text, plainDraft(row.payload, left));
 }

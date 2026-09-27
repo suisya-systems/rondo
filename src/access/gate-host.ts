@@ -20,8 +20,9 @@
  * rondo#517). A review extension, a spent round, a scope exit, a closing lap
  * and publish stay with the person (the owner's decision of 2026-09-27), and so
  * does every revise but one: a lap whose gate is withheld only by findings the
- * revise drafter answered as plain defects, with a round and budget left, is
- * answered with that draft ({@link reviseToSend}), on the same claim. A publish
+ * revise drafter answered as plain defects at or above the threshold, with a
+ * round and budget left, is answered with that draft ({@link reviseToSend}), on
+ * the same claim (D-0156: a judgment call below the threshold is left out). A publish
  * follows only where the scope includes it, and that is `publish-host.ts`'s
  * (rondo#470).
  */
@@ -45,7 +46,7 @@ import {
 import { workerRuns } from "./page-logic/laps.js";
 import { askOverLine } from "./page-logic/result.js";
 import { threadsOf } from "./page-logic/threads.js";
-import { reviseBoxOf, reviseLabels } from "./revise-draft/judgement.js";
+import { judgmentOf, reviseBoxOf, reviseLabels } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal, reviewScopeOf } from "./scope.js";
 import type { Chrome } from "./wording.js";
 
@@ -273,7 +274,9 @@ async function answerOne(ports: GateHostPorts, record: IterationRecord): Promise
  * - the scope's own round decision over the reading is `revise` -- a finding
  *   at or above its threshold and a round left -- and no budget closes;
  * - the box the gate would draw is a draft that quotes every standing finding
- *   and marks none a judgment call; its text is what is sent.
+ *   and marks none at or above the scope's threshold a judgment call; its text
+ *   is what is sent, less the findings below the threshold marked one, which
+ *   the note names (D-0156).
  */
 export async function reviseToSend(
   ports: Pick<GateHostPorts, "store" | "record" | "now" | "words">,
@@ -284,6 +287,10 @@ export async function reviseToSend(
   readonly decision: StoredScopeDecision;
   /** The approval in plain words, for the note (rondo#533). */
   readonly approval: string;
+  /** The threshold the send's judgment test was taken at, as the note names it. */
+  readonly line: string;
+  /** The findings left out of the body (D-0156), each as the box quotes it. */
+  readonly left: readonly string[];
 } | null> {
   const { words } = ports;
   if (
@@ -345,17 +352,24 @@ export async function reviseToSend(
   ) {
     return null;
   }
-  const box = reviseBoxOf(
-    readings,
-    await ports.record.reviseDraftFor(record.id, model),
-    reviseLabels(words),
-  );
+  const row = await ports.record.reviseDraftFor(record.id, model);
+  // **A judgment call below the threshold is left out, not waited on** (D-0156):
+  // the round decision graded every finding, so a position outside `atOrAbove`
+  // is below the scope's threshold.
+  const left =
+    row === null ? [] : judgmentOf(row.payload).filter((i) => !round.atOrAbove.includes(i));
+  const labels = reviseLabels(words);
+  const box = reviseBoxOf(readings, row, labels, left);
   return box.kind === "drafted" && box.plain === true
     ? {
         body: box.text,
         scopeDecisionId: tip.scopeDecisionId,
         decision: scope.decision,
         approval: approvalOf(words, scope.payload),
+        line: reviewPolicyOf(reviewScopeOf(scope.payload)).threshold,
+        left: left.map((i) =>
+          labels.finding(model.graded?.[i]?.severity ?? "", model.findings[i] ?? ""),
+        ),
       }
     : null;
 }
@@ -419,6 +433,8 @@ async function sendOne(
       send.approval,
       send.decision.actorId,
       sent.kind === "sent" ? null : sent.note,
+      send.line,
+      send.left,
     ),
     authorKind: "drafter",
     authorId: DETERMINISTIC_DRAFTER,

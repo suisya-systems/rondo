@@ -317,7 +317,7 @@ describe("rondo sends the drafted change under a goal scope (D-0145)", () => {
       messageId: "gate-revise-g-1",
       inReplyTo: "msg-1",
       asks: false,
-      body: EN.gateReviseSaid(EN.approvalNamed(true, "100.00"), "happy_ryo", null),
+      body: EN.gateReviseSaid(EN.approvalNamed(true, "100.00"), "happy_ryo", null, "major", []),
     });
     // Sent once: the claim is spent.
     await pass(w);
@@ -360,6 +360,40 @@ describe("rondo sends the drafted change under a goal scope (D-0145)", () => {
   ])("the press stays the person's with %s, and nothing is claimed", async (_what, change) => {
     const w = blocked();
     change(w);
+    await pass(w);
+    expect(w.claims.size).toBe(0);
+    expect(w.sent).toEqual([]);
+  });
+
+  test("a judgment call below the threshold is left out of what is sent, and the note names it (D-0156)", async () => {
+    // lap-609be10c on lap 19: a major and a nit, the nit marked the person's call.
+    const w = blocked();
+    w.readings = [checks, model(["major", "nit", "minor"])];
+    w.draft = { ...plain, changes: ["Fix it.", "Maybe.", "Tidy it."], judgment: [1] };
+    await pass(w);
+    expect(w.sent).toHaveLength(1);
+    expect(w.sent[0]).toMatchObject({
+      recheck: true,
+      input: {
+        body:
+          "- [major] a major thing\n  to change: Fix it.\n\n" +
+          "- [minor] a minor thing\n  to change: Tidy it.",
+      },
+    });
+    const note = w.messages[0]?.body ?? "";
+    expect(note).toBe(
+      EN.gateReviseSaid(EN.approvalNamed(true, "100.00"), "happy_ryo", null, "major", [
+        "- [nit] a nit thing",
+      ]),
+    );
+    expect(note).toContain("left out these findings below major");
+    expect(note).toContain("\n- [nit] a nit thing");
+  });
+
+  test("a judgment call at or above the threshold still keeps the press (D-0156)", async () => {
+    const w = blocked();
+    w.readings = [checks, model(["major", "nit"])];
+    w.draft = { ...plain, changes: ["Decide.", "Maybe."], judgment: [0, 1] };
     await pass(w);
     expect(w.claims.size).toBe(0);
     expect(w.sent).toEqual([]);
