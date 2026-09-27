@@ -365,15 +365,17 @@ function candidateView(
  * language's framing stays as written, and the person can still edit it.
  */
 export function asDecision(recommendation: string): string {
-  const stripped = recommendation
-    .trim()
+  const trimmed = recommendation.trim();
+  const lead = trimmed
     .replace(/^(?:recommended|recommendation|suggested|suggestion)\s*[:：]\s*/iu, "")
-    .replace(/^(?:i|we)\s+(?:would\s+)?(?:recommend|suggest)\s+(?:that\s+)?/iu, "")
+    .replace(/^(?:i|we)\s+(?:would\s+)?(?:recommend|suggest)\s+(?:that\s+)?/iu, "");
+  // Capitalised only where an English lead-in was cut: `npm ci` stays as written.
+  const stripped = (lead === trimmed ? lead : lead.charAt(0).toUpperCase() + lead.slice(1))
     .replace(/^(?:推奨|おすすめ|提案)\s*[:：]\s*/u, "")
     .replace(/こと(?:を|が)(?:推奨|おすすめ|お勧め|勧め)(?:します|する|されます|です)?[。.]?$/u, "")
     .replace(/を(?:推奨|おすすめ|お勧め)(?:します|する|です)?[。.]?$/u, "")
     .trim();
-  return stripped === "" ? recommendation : stripped.charAt(0).toUpperCase() + stripped.slice(1);
+  return stripped === "" ? recommendation : stripped;
 }
 
 /**
@@ -557,6 +559,9 @@ function Block({
                     <a className="triage-clause" href={candidate.clauseHref}>
                       {candidate.clauseSaid}
                     </a>
+                    {candidate.mixedScript ? (
+                      <p className="triage-mixed">{wording.triageMixedScript}</p>
+                    ) : null}
                     <Acts
                       wording={wording}
                       candidate={candidate}
@@ -684,13 +689,19 @@ function PointsAskForm({
               (`page/composer.js`); the store folds a line break into a space. */}
           <textarea
             name="request"
+            aria-describedby={ask.mixedScript ? `${ask.anchor}-mixed` : undefined}
             data-draft={`flow-ask:${ask.askId}:request`}
-            rows={1}
+            rows={3}
             required
             className={FIELD}
             defaultValue={ask.request}
           />
         </label>
+        {ask.mixedScript ? (
+          <p id={`${ask.anchor}-mixed`} className="triage-mixed">
+            {wording.triageMixedScript}
+          </p>
+        ) : null}
         <label>
           <span>{wording.flowAskWhyLabel}</span>
           <textarea
@@ -702,7 +713,6 @@ function PointsAskForm({
             defaultValue={ask.why}
           />
         </label>
-        {ask.mixedScript ? <p className="triage-mixed">{wording.triageMixedScript}</p> : null}
       </div>
       <ol className="triage-flow-ask-points">
         {ask.points.map((point, at) => (
@@ -782,7 +792,7 @@ function Acts({
           {wording.triagePutInBox}
         </a>
       ) : (
-        <a className="triage-goal-link" href={`#${asked.anchor}`}>
+        <a className="triage-goal-link triage-to-ask" href={`#${asked.anchor}`}>
           {wording.triageAnswerAsk}
         </a>
       )}

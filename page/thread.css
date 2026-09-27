@@ -975,6 +975,19 @@
   margin-top: 10px;
 }
 
+/* The request line is what gets sent: its weight mirrors the card's request. */
+.triage-flow-ask-words textarea[name="request"] {
+  font-weight: 600;
+}
+
+/* The card's way to the ask stands in for its primary press: a press's height. */
+.triage-acts > .triage-to-ask {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  font-size: var(--text-body);
+}
+
 /* Words that mix in another script after a second reading (rondo#492). */
 .triage-mixed {
   margin-top: 6px;

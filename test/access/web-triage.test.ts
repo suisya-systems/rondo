@@ -187,5 +187,80 @@ test("a suggestion is drawn as the decision it suggests, not as advice (rondo#49
   expect(asDecision("I recommend that we keep the flag")).toBe("We keep the flag");
   // A decision already, or nothing left once stripped, stays as written.
   expect(asDecision("The keychain")).toBe("The keychain");
+  expect(asDecision("npm ci under src/access")).toBe("npm ci under src/access");
   expect(asDecision("推奨")).toBe("推奨");
+});
+
+test("a candidate still mixing scripts is marked on the card, on a runner-up and in the ask (rondo#492)", async () => {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { TriageSection, triageBlocks } = await import("../../src/access/page/triage.js");
+  const one = (number: number) => ({
+    key: `issue:o/r#${String(number)}`,
+    clause: 1,
+    request: `o/r の репозиторий ${String(number)}`,
+    why: "理由",
+    openPoints: [{ point: "p", recommendation: "r" }],
+    source: { form: "issue" as const, repository: "o/r", number },
+    title: "t",
+    labels: [],
+    mixedScript: true,
+  });
+  const goal = {
+    goalId: "g-1",
+    repository: "o/r",
+    clauses: [{ said: "s", unmetIf: "u" }],
+    writtenBy: "ada",
+    writtenAtMs: 1,
+  };
+  const payload = {
+    repository: "o/r",
+    goalId: "g-1",
+    ranked: [one(1), one(2)],
+    withheld: [],
+    read: { issues: 2, stopped: 0 },
+    unavailable: null,
+  };
+  const ask = {
+    askId: "ask-1",
+    repository: "o/r",
+    goalId: "g-1",
+    scopeDecisionId: "sd-1",
+    proposalId: "t-1",
+    candidate: "issue:o/r#1",
+    points: [{ point: "p", recommendation: "r" }],
+    request: null,
+    why: null,
+    askedAtMs: 2,
+    answer: null,
+  };
+  const html = renderToStaticMarkup(
+    TriageSection({
+      wording: EN,
+      token: "t",
+      blocks: triageBlocks(
+        EN,
+        {
+          repositories: ["o/r"],
+          goals: [goal],
+          latest: [
+            {
+              proposalId: "t-1",
+              drafter: "d",
+              repository: "o/r",
+              payload: {},
+              snapshot: {},
+              createdAtMs: 1,
+            },
+          ],
+          payloads: new Map([["t-1", payload]]),
+          goalScopes: new Map([["g-1", { state: "running" as const }]]),
+          flowAsks: [ask],
+        },
+        3,
+      ),
+    }),
+  );
+  // The card, the runner-up and the ask each say it; the ask ties it to the field.
+  expect(html.split(EN.triageMixedScript)).toHaveLength(4);
+  expect(html).toContain('aria-describedby="flow-ask-o-r-mixed"');
 });
