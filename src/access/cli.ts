@@ -2208,17 +2208,15 @@ export async function main(
         publishing:
           sender === null || "refusal" in sender
             ? null
-            : async (row) =>
-                await publishingForPage(
-                  environment,
-                  store,
-                  asked,
-                  row,
-                  openAdvisoryRecord(opened.path),
-                  // The body's English is composed here, once, and recorded for
-                  // the press to read (rondo#290, `D-0079` section 4).
-                  openAdvisoryRecord(opened.path),
-                ),
+            : async (row) => {
+                // One connection for both legs: the thread the screen quotes,
+                // and the row the body's English is composed into once for the
+                // press to read (rondo#290, `D-0079` section 4). A second
+                // `openAdvisoryRecord` here would open a second file handle on
+                // every draw of this screen for no answer the first cannot give.
+                const advisory = openAdvisoryRecord(opened.path);
+                return await publishingForPage(environment, store, asked, row, advisory, advisory);
+              },
         // Read for the same reason and on the same condition: the material is
         // what a person is shown before they press, so it is drawn exactly
         // where the button is (D-0029 rule 2 and D-0041 rule 6).
@@ -8243,6 +8241,10 @@ export function commandPublishBody(
  * the run that draws the screen is the run there is, and the press publishes what
  * it recorded. continuo is started only where a body has to be composed -- a lap
  * whose row is already written is drawn without spawning anything.
+ *
+ * **A publish under a scope composes through here too**, for the same reason read
+ * the other way: no screen was drawn, so the publish itself is the one run there
+ * is, and it records what it composed for the page to draw afterwards.
  */
 function pagePublishBody(
   environment: Readonly<Record<string, string | undefined>>,
@@ -8278,11 +8280,14 @@ function pagePublishBody(
  * (rondo#290). Null for a lap that records no gate, which has no row to find.
  *
  * **No row is no body, and not a body saying there is no row.** A press reaches
- * this where nothing ever recorded one -- a publish under a scope with no screen
- * behind it, or a preview whose row would not write -- and what {@link
- * publishBodyOnce} answers in that same case is null too. The two surfaces
- * therefore render one and the same body, which the digest the press compares
- * against the screen requires of them.
+ * this where nothing ever recorded one -- a preview whose row would not write --
+ * and what {@link publishBodyOnce} answers in that same case is null too. The two
+ * surfaces therefore render one and the same body, which the digest the press
+ * compares against the screen requires of them.
+ *
+ * **A publish under a scope does not come through here**, because it has no
+ * screen to agree with: it composes through {@link pagePublishBody} like a
+ * preview does, and records what it composed.
  */
 function pressedPublishBody(
   record: Pick<AdvisoryRecord, "publishBodyFor">,
@@ -9001,11 +9006,18 @@ async function publishPage(
     environment,
     store,
     advisory,
-    // **Read, never composed** (rondo#290): the body the screen this press came
-    // from recorded. A publish under a scope (`publishUnderScope`) reaches this
-    // with no screen behind it, and reads the same row -- one rondo composed for
-    // a person who looked at the page, or none.
-    pressedPublishBody(advisory, record),
+    // **A press reads; a publish under a scope composes** (rondo#290). The
+    // press's body is inside the digest it carries back from the screen, so a
+    // second model answer here would refuse every press -- it reads the row the
+    // preview recorded and nothing else. A publish under a scope
+    // (`publishUnderScope`) has no screen behind it: its `shown` is a sentinel
+    // and the comparison below is skipped, so there is nothing for a composing
+    // to disagree with. Composing there is what keeps rondo's own publishes from
+    // being the one route that reaches a forge with no English account of the
+    // lap's report in the body.
+    scoped === null
+      ? pressedPublishBody(advisory, record)
+      : pagePublishBody(environment, advisory, record),
   );
   if (planned.kind === "refused") {
     const block = planned.block;

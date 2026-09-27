@@ -1597,6 +1597,66 @@ test(
 );
 
 test(
+  "a publish under a scope composes and records its own body, rather than publishing without one (rondo#290)",
+  async () => {
+    // **The third route to a forge, and it draws no screen** (rondo#290). A press
+    // reads the row its preview recorded because its digest is compared against
+    // that screen; a publish under a scope has no screen, so reading only would
+    // leave the route rondo publishes by itself as the one route whose body has
+    // no English account of the lap's report at all.
+    const world = await publishableWorld("stale", 1, undefined, "ja");
+    const { claimed, scoped } = scopedClaims();
+    const advisory = advisoryRecord(new DatabaseSync(world.storePath));
+    const gateId = `gate-${world.iterationId}`;
+    expect(await advisory.publishBodyFor(world.iterationId, gateId)).toBe(null);
+
+    // No continuo in reach, so the report does not read and no model is run: what
+    // is under test is that this route composes at all and writes what it came to.
+    const published = await publishUnderScope(
+      { RONDO_APPROVER: "ada", [CLI_PATH_ENV]: "" },
+      world.store,
+      world.storePath,
+      "ada",
+      world.asked,
+      world.iterationId,
+      scoped,
+    );
+    // The review's refusal still holds, and it is reached after the plan -- and
+    // therefore after the body -- was made.
+    expect(published.ok).toBe(false);
+    expect(published.why).toBe("publishRefusedNotRead");
+    expect(claimed).toEqual([]);
+
+    const row = await advisory.publishBodyFor(world.iterationId, gateId);
+    if (row === null) {
+      throw new Error("the publish under the scope recorded no body");
+    }
+    expect(row.payload["kind"]).toBe("unavailable");
+    // And the page drawn afterwards reads that same row, so the two agree.
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const shown = await publishingForPage(
+      { RONDO_APPROVER: "ada", [CLI_PATH_ENV]: "" },
+      world.store,
+      world.asked,
+      record.record,
+      null,
+      advisory,
+    );
+    if (shown.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
+    }
+    for (const { heading } of COMPOSED_SECTIONS) {
+      expect(shown.body).toContain(`## ${heading}`);
+    }
+    expect(shown.body).toContain("rondo has no English account of this lap's report to put here");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
   "rondo#470: a publish under a scope claims nothing where continuo is not there to close the run",
   async () => {
     const world = await publishableWorld("clear");

@@ -18934,6 +18934,12 @@ put to the human gate, and its answer". Refs `D-0053`,
 > spending nothing. One row per lap per gate: a second pass is `covered` and reads what the first
 > wrote, and an outcome that could not be composed is recorded as such.
 >
+> **A publish under a goal scope composes, because it has no screen to agree with.**
+> `publishUnderScope` takes the press's own path with a sentinel digest, and the comparison is skipped
+> for it -- so it composes and records exactly as a preview does. Reading only, there, would have made
+> the route rondo publishes by itself the one route reaching a forge with no English account of the
+> lap's report in the body, which is the whole of what rondo#290 is about.
+>
 > **Once, including while it is running.** The row settles which answer becomes the body; what it
 > cannot settle is a second drafter run, because a pass that has not written yet is not in the
 > database to be found -- so a pass that arrives while another is composing this lap's body joins it
