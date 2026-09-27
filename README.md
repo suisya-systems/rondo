@@ -34,7 +34,8 @@ narrows it), and an admission that would share a path with another line is
 refused. D-0098's rules for working in parallel are built as D-0103 describes,
 and D-0117 reads the two as one control layer. `RONDO_MAX_OCCUPYING` (how many
 laps may execute at once, across repositories) defaults to 2 (D-0124), and the
-parts of an approved split start by themselves (D-0127).
+parts of an approved split start by themselves (D-0127) and run side by side:
+the page counts a request's parts on its row and gives each its own step (D-0129).
 
 **As of D-0024 and D-0025 there is a way in**, and it has grown since. rondo
 ships a binary (`bin/rondo.mjs`) whose subcommands cover the lap itself
@@ -81,9 +82,6 @@ What does **not** exist yet:
 - **the localhost MCP surface.** `src/access/` is where it will live, and
   nothing of it exists; its shape is undecided, and the first design is to start
   read-only;
-- **two parts of one request at once.** Until the page can show several lines
-  of one request (rondo#452), a part waits while another part of its request
-  is open;
 - **merging without a press.** rondo reads a merge or a close made on the forge
   itself (D-0102) and closes out a merge by deleting the base branches it made
   and removing each lap's worktree through continuo's `workspace remove`
