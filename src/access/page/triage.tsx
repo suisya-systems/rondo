@@ -516,6 +516,9 @@ function PointsAskForm({
               <span lang="">{point.point}</span>
               <textarea
                 name={`answer-${String(at + 1)}`}
+                // Kept across the page's redraw as the composer's words are
+                // (`page/composer.js`), so an edited answer is what is sent.
+                data-draft={`flow-ask:${ask.askId}:${String(at + 1)}`}
                 rows={1}
                 required
                 className={FIELD}

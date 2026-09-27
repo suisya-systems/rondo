@@ -25191,12 +25191,13 @@ the newest goal: an edit would widen an approval nobody re-read.
 > skipped every one that had any, so the flow injected nothing). The picker no longer skips a
 > candidate with open points. When the candidate it would inject has open points nobody answered,
 > it returns `ask`, and the flow host records **one** `flow_ask` row -- id
-> `flow-ask-<scopeDecisionId>-<candidateKey>`, the points and rondo's suggestion for each as the
-> ranking wrote them -- and injects nothing; asking spends nothing, and the triage reading is
+> `flow-ask-<scopeDecisionId>-<candidateKey>-<round>`, the points and rondo's suggestion for each as
+> the ranking wrote them -- and injects nothing; an answer counts only while it answered every point
+> the ranking now holds, so a point a re-ranking added is asked in the next round; asking spends nothing, and the triage reading is
 > claimed when the answered request is injected. The page draws the ask above the goal scope's row
 > under the repository's triage block, each point a field that starts as rondo's suggestion, and one
 > press (`POST /flow-answer`, the person's press) records a `flow_answer` row beside the ask with one
-> answer per point. The next pass injects the request under the same claim and budget tests, its
+> answer per point; each field is kept across the page's redraw as a draft is. The next pass injects the request under the same claim and budget tests, its
 > body carrying "Open points, as the person answered them:" and each point with its answer. **One
 > ask at a time**: while an unanswered ask over a candidate the latest ranking still holds, and that
 > no *not now* put aside, stands for the goal (under any approval of it), the flow waits

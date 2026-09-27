@@ -440,7 +440,7 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
   await host.idle();
   const standing = await goalScopeStanding(w.record, "goal-1");
   if (standing.kind === "none") throw new Error("no goal scope");
-  const askId = `flow-ask-${standing.scopeDecisionId}-issue:o/r#7`;
+  const askId = `flow-ask-${standing.scopeDecisionId}-issue:o/r#7-1`;
   const blockOf = (html: string) => html.slice(html.indexOf('class="triage"'));
   // Nothing is drawn until the flow asks, and the card lists the points.
   const before = blockOf(await w.page({ kind: "requests" }));
@@ -469,6 +469,8 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
   expect(block).not.toContain(EN.triageOpenPoints);
   expect(block).toContain(EN.flowAskAction);
   expect(block).toMatch(/name="answer-1"[^>]*>The keychain<\/textarea>/);
+  // Each field keeps what the person typed across the page's redraw.
+  expect(block).toContain(`data-draft="flow-ask:${askId}:2"`);
   expect(block).toMatch(/name="answer-2"[^>]*>Keep it one release<\/textarea>/);
   // Above the goal scope's own row.
   expect(block.indexOf("/flow-answer")).toBeLessThan(block.indexOf(EN.triageGoalScopeRunning));

@@ -553,7 +553,7 @@ test("open points are asked once before the request, and the answers go into it 
   expect((await w.record.scopeSpent("sd-goal")).readCostUsd).toBe(0);
   const asks = await w.record.flowAsks();
   expect(asks.map((ask) => [ask.askId, ask.candidate, ask.answer])).toEqual([
-    [`flow-ask-sd-goal-issue:${REPO}#7`, `issue:${REPO}#7`, null],
+    [`flow-ask-sd-goal-issue:${REPO}#7-1`, `issue:${REPO}#7`, null],
   ]);
   expect(asks[0]?.points).toEqual([
     { point: "p", recommendation: "r" },
@@ -565,7 +565,7 @@ test("open points are asked once before the request, and the answers go into it 
   // An answer that leaves a point out is refused; a whole one is kept once.
   const answer = (answers: string[]) =>
     w.record.recordFlowAnswer({
-      askId: `flow-ask-sd-goal-issue:${REPO}#7`,
+      askId: `flow-ask-sd-goal-issue:${REPO}#7-1`,
       answers,
       answeredBy: "oidc|operator-1",
       answeredAtMs: 11_000,

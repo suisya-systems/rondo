@@ -112,9 +112,13 @@ export function flowMessageId(scopeDecisionId: string, candidateKey: string): st
   return `flow-${scopeDecisionId}-${candidateKey}`;
 }
 
-/** The id an ask over a candidate's open points is raised under: asked once per approval. */
-export function flowAskId(scopeDecisionId: string, candidateKey: string): string {
-  return `flow-ask-${scopeDecisionId}-${candidateKey}`;
+/**
+ * The id an ask over a candidate's open points is raised under: the `round`th
+ * ask over that candidate, so the same pick names the same ask, and points the
+ * ranking added since an answer are asked again under the next round.
+ */
+export function flowAskId(scopeDecisionId: string, candidateKey: string, round: number): string {
+  return `flow-ask-${scopeDecisionId}-${candidateKey}-${String(round)}`;
 }
 
 /** What the flow would inject next, or why it waits. */
@@ -175,11 +179,19 @@ export function pickNext(input: FlowInput): FlowPick {
   if (candidate === undefined) {
     return wait("nothing_eligible");
   }
-  const answered = input.asks.find(
-    (ask) => ask.candidateKey === candidate.key && ask.answers !== null,
+  // An answer counts when it answered every point the ranking holds now: a
+  // re-ranking can add a point nobody was asked.
+  const asked = input.asks.filter((ask) => ask.candidateKey === candidate.key);
+  const answered = asked.findLast(
+    (ask) =>
+      ask.answers !== null && candidate.openPoints.every((one) => ask.points.includes(one.point)),
   );
   if (candidate.openPoints.length > 0 && answered === undefined) {
-    return { kind: "ask", candidate, askId: flowAskId(input.scopeDecisionId, candidate.key) };
+    return {
+      kind: "ask",
+      candidate,
+      askId: flowAskId(input.scopeDecisionId, candidate.key, asked.length + 1),
+    };
   }
   return {
     kind: "inject",

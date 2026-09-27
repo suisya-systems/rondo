@@ -88,12 +88,12 @@ test("nothing eligible waits", () => {
 
 test("a candidate with open points is asked first, then injected with the answers (rondo#487)", () => {
   const asked = (answers: string[] | null) => [
-    { candidateKey: "issue:o/r#1", points: ["p1", "p2"], answers },
+    { candidateKey: "issue:o/r#1", points: ["p", "p"], answers },
   ];
   expect(pickNext(input({ triage: triage([issue(1, 2), issue(2)]) }))).toEqual({
     kind: "ask",
     candidate: issue(1, 2),
-    askId: "flow-ask-sd-1-issue:o/r#1",
+    askId: "flow-ask-sd-1-issue:o/r#1-1",
   });
   // An open ask holds the flow, and no second one is raised.
   expect(picked({ triage: triage([issue(1, 2), issue(2)]), asks: asked(null) })).toBe(
@@ -104,8 +104,8 @@ test("a candidate with open points is asked first, then injected with the answer
     candidate: issue(1, 2),
     messageId: "flow-sd-1-issue:o/r#1",
     answers: [
-      { point: "p1", answer: "a" },
-      { point: "p2", answer: "b" },
+      { point: "p", answer: "a" },
+      { point: "p", answer: "b" },
     ],
   });
   // Put aside, or gone from the ranking, the ask holds nothing.
@@ -117,6 +117,33 @@ test("a candidate with open points is asked first, then injected with the answer
     }),
   ).toBe("inject issue:o/r#2");
   expect(picked({ triage: triage([issue(2)]), asks: asked(null) })).toBe("inject issue:o/r#2");
+});
+
+test("an answer that does not cover a point the ranking added since is asked again, next round", () => {
+  const reranked: Ranked = {
+    ...issue(1),
+    openPoints: [
+      { point: "p1", recommendation: "r" },
+      { point: "p3", recommendation: "r" },
+    ],
+  };
+  const answered = [{ candidateKey: "issue:o/r#1", points: ["p1", "p2"], answers: ["a", "b"] }];
+  expect(pickNext(input({ triage: triage([reranked]), asks: answered }))).toEqual({
+    kind: "ask",
+    candidate: reranked,
+    askId: "flow-ask-sd-1-issue:o/r#1-2",
+  });
+  const again = [
+    ...answered,
+    { candidateKey: "issue:o/r#1", points: ["p1", "p3"], answers: ["c", "d"] },
+  ];
+  expect(pickNext(input({ triage: triage([reranked]), asks: again }))).toMatchObject({
+    kind: "inject",
+    answers: [
+      { point: "p1", answer: "c" },
+      { point: "p3", answer: "d" },
+    ],
+  });
 });
 
 test("no goal, no triage, a stale triage or an unavailable one waits", () => {
