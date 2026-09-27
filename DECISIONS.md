@@ -186,6 +186,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0151 | The scope card waits for rondo's draft: while the drafter still owes a request its draft, the thread, the right face and the list all say it is rondo's turn, and no scope is offered | accepted |
 | D-0152 | A lap continuo refused before its cost was read holds its reserve at a lap's send, the number the page counts, and not its cap; reading a timed-out lap's cost is continuo's | accepted |
 | D-0154 | A drafted scope ready for approval is the person's turn: the list, the header's count, the tab and the notification count it once rondo's draft is ready | accepted |
+| D-0155 | A merge waits only on the questions that hold its line: a question over another line the person answered with a stop no longer withholds the merge, on the page or on green | accepted |
 
 ---
 
@@ -27194,3 +27195,50 @@ and the tab pin, and the scope reading needs the record; the two are concatenate
 
 - **A notification or a *your turn* row for a request whose thread shows no approve card**: then
   the conditions in rule 1 have drifted from `threadActs`.
+
+## D-0155 — A merge waits only on the questions that hold its line: a question over another line the person answered with a stop no longer withholds the merge, on the page or on green
+
+**Status:** accepted (2026-09-28, rondo#539; the option the task brief recommended, taken while the
+owner was away). Narrows `D-0091` rule 1's "nothing in the thread waiting on the person" and
+`D-0126`'s merge on green. Refs `D-0064` (P2 to P4 open), `D-0072` rule 3, `D-0105`.
+
+**Why an entry is needed.** On lap-19 (2026-09-28, rondo `2fe4f51`) the request for rondo#290 ran
+four lines. Lap-9eda7616, the tip of the last one, went green on pull request #537 at 04:38, and the
+checks host logged `not merged on green, left for the press: nothing was merged: the merge is not
+offered: asked`. Every lap of the request had ended by then, so no gate was waiting. The one
+question still in `threads.waiting` under the request was `lap-stopped-lap-9c0887f1`, the time-limit
+stop of the request's first line, which the person had answered `stop` ("この線を止めます…出し直します").
+Every other question in the thread had been answered `carry_on`. Under `D-0072` rule 3 only a
+`carry_on` closes a question, so a stopped line's question waits for ever, and the merge, the page's
+merge card and the merge screen each counted any waiting question in the request. The person merged
+#537 by hand.
+
+### Decision
+
+1. **A waiting question in the request's thread holds a line's merge unless it names laps, none of
+   them in that line, and the person answered it `stop`.** So a question about the request as a
+   whole holds it; a question over this line holds it, stopped or not (a stop holds its own line);
+   a question over another line nobody has answered yet holds it. A question carried on to a
+   successor is not waiting, so it needs no rule here. The line is the lane ledger's holding line
+   of the lap, every lap of it root first.
+2. **One test for the press and the page** (`askHoldsMerge` in `src/access/page-logic/result.ts`):
+   `mergeOnce` (the press and the merge on green), the thread's merge card and the merge screen all
+   pass it to `mergeBlock` as `asked`. Another lap of the request at its gate still withholds the
+   merge, as before.
+
+**Options not taken.** Let a question over another line that has been released stop holding too:
+a line that ended with nothing to land has not had its question answered, and the person may still
+continue it. Scope every question to the line as `askOverLine` does for publish and the gate: a
+question about another line nobody has answered is still an item open on the person (`D-0064`), and
+merging past it is not what they were asked.
+
+### What it costs
+
+- **A green that was withheld before this is not merged by itself afterwards.** The checks host
+  merges on green only when it writes a new green report; a lap withheld before the fix is left to
+  the press, which the page now offers.
+
+### What would falsify it
+
+- **A person who stopped one line and still expected a sibling line's merge to wait for them.**
+  Then a stop over one line has to ask whether the request's other lines may still merge.

@@ -1,7 +1,7 @@
 import { planField } from "../../store/records.js";
 import type { WebPorts } from "../page/contract.js";
 import { backHead, CARD, CARD_HEADING, note, PRIMARY } from "../page/vocabulary.js";
-import { mergeBlock, resultOf } from "../page-logic/result.js";
+import { askHoldsMerge, mergeBlock, resultOf } from "../page-logic/result.js";
 import type { PageView } from "../page-logic/routes.js";
 import type { Threads } from "../page-logic/threads.js";
 import type { Chrome } from "../wording.js";
@@ -41,19 +41,20 @@ export async function mergeView(
   const record = found.record;
   const request = record.requestMessageId;
   const result = resultOf(threads.byId, record.id);
-  const holding = (await ports.store.laneLedger()).some(
+  const held = (await ports.store.laneLedger()).find(
     (line) => line.releasedBy === null && line.lapIds.includes(record.id),
   );
-  // A question, or another lap of the request at its gate, as the port asks it
-  // (`mergeOnce` in `src/access/merge.ts`), so no press is drawn it would refuse.
+  // A question that holds this line (rondo#539), or another lap of the request
+  // at its gate, as the port asks it (`mergeOnce` in `src/access/merge.ts`), so
+  // no press is drawn it would refuse.
   const gated = (await ports.store.readLive()).some(
     (live) =>
       live.kind === "read" &&
       live.record.status === "awaiting_human" &&
       live.record.requestMessageId === request,
   );
-  const asksWaiting = gated || [...threads.waiting].some((id) => threads.rootOf(id) === request);
-  if (result === null || mergeBlock(result, asksWaiting, holding) !== null) {
+  const asksWaiting = gated || askHoldsMerge(threads, request, held?.lapIds ?? [record.id]);
+  if (result === null || mergeBlock(result, asksWaiting, held !== undefined) !== null) {
     return framed(note(wording.mergeConfirmNotNow));
   }
   const head = result.checksCommit ?? "";

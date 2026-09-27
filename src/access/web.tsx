@@ -197,6 +197,7 @@ import {
   takeInFrom,
 } from "./page-logic/parts.js";
 import {
+  askHoldsMerge,
   askOverLine,
   asksOverLine,
   conflictFixBlock,
@@ -2613,15 +2614,21 @@ async function threadActs(
   // The press asks the same `mergeBlock` again over fresh rows.
   const resultRecord = resultLap(laps.map((lap) => lap.record));
   const result = resultRecord === null ? null : resultOf(threads.byId, resultRecord.id);
+  const resultLine =
+    resultRecord === null
+      ? undefined
+      : (await ports.store.laneLedger()).find(
+          (line) => line.releasedBy === null && line.lapIds.includes(resultRecord.id),
+        );
   const nextMerge =
     ports.mergeable !== true || nextPublish !== null || resultRecord === null || result === null
       ? null
       : mergeBlock(
             result,
-            waitedOn,
-            (await ports.store.laneLedger()).some(
-              (line) => line.releasedBy === null && line.lapIds.includes(resultRecord.id),
-            ),
+            // Only the questions that hold this line (rondo#539), as the press asks.
+            gated ||
+              askHoldsMerge(threads, requestMessageId, resultLine?.lapIds ?? [resultRecord.id]),
+            resultLine !== undefined,
           ) === null
         ? {
             record: resultRecord,
