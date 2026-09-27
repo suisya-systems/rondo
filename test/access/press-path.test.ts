@@ -30,14 +30,17 @@
  * `dist/cli.js`, which is what makes it reachable here rather than only
  * locally.
  *
- * **Not real either, and only for the publish press: `gh pr create`.** #239's
- * remaining leg needs a forge that can take a pull request, and no runner has
- * one; the credential-less refusal `test/access/web-publish.test.ts` asserts is
- * the boundary, not the leg. So the publish cases below stand in for that one
- * command and nothing else (see {@link forgeSeam}): the push ahead of it is a
- * real `git push` to a real bare repository, the plan is the shared
- * `publishPlanFor`, and the run close behind it is the pinned continuo's own
- * `run close`.
+ * **Not real either, and only for the publish press: the forge's own CLI.**
+ * #239's remaining leg needs a forge that can take a pull request, and no runner
+ * has one; the credential-less refusal `test/access/web-publish.test.ts` asserts
+ * is the boundary, not the leg. So the publish cases below stand in for `gh`
+ * itself -- an executable of that name, first on `PATH` (see
+ * {@link standInForPullRequest}) -- and for nothing nearer than that. Everything
+ * on rondo's side of that boundary is the real route: the plan is the shared
+ * `publishPlanFor`, the push ahead of it is a real `git push` to a real bare
+ * repository, `openPullRequest` builds the argument list and starts the process
+ * itself, and the run close behind it is the pinned continuo's own `run close`.
+ * What the tests read back is the argv the forge's CLI was handed.
  *
  * So the line this file draws is: **only the worker's turn, and the one forge
  * command, are stood in for.** Nothing rondo does is faked, and no press is
@@ -65,12 +68,20 @@
  * be written for Windows, where a native `codex.exe` would have run for real.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { expect, test, vi } from "vitest";
+import { expect, test } from "vitest";
 
 import {
   answerFromPage,
@@ -86,7 +97,7 @@ import { GATE_ACTOR } from "../../src/access/gate-host.js";
 import { agentTypeRecordOf } from "../../src/access/scope.js";
 import { newIterationId, newScopeId, type ScopeFormDraft } from "../../src/access/web-app.js";
 import { EN } from "../../src/access/wording.js";
-import { CLI_PATH_ENV, closeRun, run, startContinuo } from "../../src/continuo/invoker.js";
+import { CLI_PATH_ENV, run, startContinuo } from "../../src/continuo/invoker.js";
 import { CONTINUO_REVISION } from "../../src/continuo/pin.js";
 import { DB_CREATE, GATE_SHOW, RUN_SHOW } from "../../src/continuo/protocol.js";
 import { allocate } from "../../src/refrain/allocator.js";
@@ -101,50 +112,6 @@ import { planDigest } from "../../src/store/plan.js";
 import { approvedForPublication, type JsonRecord } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { EVIDENCE, PLAN } from "./page-world.js";
-
-/**
- * The forge, real except for the one command no runner can run: `gh pr create`.
- *
- * **One export of one module, and armed per test** (the shape
- * `test/access/drafted-start.test.ts` uses for continuo). Unarmed it is the real
- * command, so every other press in this file reaches the real `./forge.ts` --
- * the git queries the publish plan is read with, and the `git push` ahead of the
- * pull request leg, included. Armed it records what it was handed and answers
- * what the test says, which is how the two legs behind a forge get a success
- * path at all: what a stub must not do is stand in for the route *to* it, and
- * that route is `publishFromPage` -> `publishPlanFor` -> `pushTopicBranch`, all
- * of it real here.
- */
-const forgeSeam = vi.hoisted(() => ({
-  pullRequest: null as {
-    readonly answers: {
-      readonly status: number;
-      readonly stdout: string;
-      readonly stderr: string;
-    };
-    /** Every request the leg was handed, in order, unedited. */
-    readonly asked: unknown[];
-  } | null,
-}));
-vi.mock("../../src/access/forge.js", async (original) => {
-  const real = await original<typeof import("../../src/access/forge.js")>();
-  return {
-    ...real,
-    openPullRequest: async (request: Parameters<typeof real.openPullRequest>[0]) => {
-      const stood = forgeSeam.pullRequest;
-      if (stood === null) {
-        return await real.openPullRequest(request);
-      }
-      stood.asked.push(request);
-      return {
-        commandLine: "gh pr create [stood in for by test/access/press-path.test.ts]",
-        signal: null,
-        spawnError: null,
-        ...stood.answers,
-      };
-    },
-  };
-});
 
 /** Whether this is a CI run, spelled as `vitest.config.ts` spells it (D-0003). */
 function inContinuousIntegration(): boolean {
@@ -819,6 +786,78 @@ function git(directory: string, ...args: string[]): string {
 /** What the stood-in forge answers with where it opens one. */
 const PULL_REQUEST_URL = "https://github.com/suisya-systems/rondo/pull/4242";
 
+/** What a stood-in forge CLI was handed, and what it answered with. */
+interface StoodInForge {
+  /** The directory to put first on `PATH`; the `gh` inside it is the stand-in. */
+  readonly pathEntry: string;
+  /** Every argv a `gh pr create` was handed, in the order they were run. */
+  asked(): readonly (readonly string[])[];
+}
+
+/**
+ * A stand-in for the forge's CLI, at the boundary where rondo hands the work
+ * over: an executable named `gh`, first on `PATH`.
+ *
+ * **Why here and not a module seam.** What #239's remaining leg has no test for
+ * is rondo's route to the forge, and the last stretch of that route is inside
+ * `openPullRequest`: the `--repo`/`--base`/`--head`/`--title`/`--body` argument
+ * list, and the `spawn` that carries it to a process with `shell: false`. A
+ * stand-in for that function would skip exactly the part under test, so the
+ * stand-in is the *program* instead -- and the argv it recorded is what the tests
+ * read back, which is the strongest thing a test can say about a command line it
+ * did not compose.
+ *
+ * **Only `pr create`, and only the answer.** Every other `gh` invocation --
+ * whatever the plan's own reads reach for -- is handed to the operator's own `gh`
+ * with the `PATH` rondo's process was started with, so nothing else about this
+ * suite changes shape when the stand-in is installed.
+ *
+ * The argv is recorded NUL-separated because a pull request's body has newlines
+ * in it, and one file per invocation because "how many times" is an assertion
+ * the refusal cases make. The shape -- a POSIX shell script written to a
+ * temporary directory with `mode: 0o755` -- is `test/access/forge.test.ts`'s
+ * `fakeReviewer`, and so is its one limit: see {@link publishPress}.
+ */
+function standInForPullRequest(
+  dir: string,
+  answers: { readonly status: number; readonly stdout: string; readonly stderr: string },
+): StoodInForge {
+  const root = mkdtempSync(join(dir, "forge-cli-"));
+  const asked = join(root, "asked");
+  mkdirSync(asked);
+  writeFileSync(join(root, "stdout"), answers.stdout, "utf8");
+  writeFileSync(join(root, "stderr"), answers.stderr, "utf8");
+  writeFileSync(
+    join(root, "gh"),
+    [
+      "#!/bin/sh",
+      'if [ "$1" = "pr" ] && [ "$2" = "create" ]; then',
+      "  i=0",
+      `  while [ -e '${asked}/'$i ]; do i=$((i+1)); done`,
+      `  printf '%s\\0' "$@" > '${asked}/'$i`,
+      `  cat '${join(root, "stdout")}'`,
+      `  cat '${join(root, "stderr")}' >&2`,
+      `  exit ${String(answers.status)}`,
+      "fi",
+      `PATH='${process.env.PATH ?? ""}' exec gh "$@"`,
+      "",
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  return {
+    pathEntry: root,
+    asked: () =>
+      readdirSync(asked)
+        .map((name) => Number(name))
+        .sort((left, right) => left - right)
+        .map((index) => {
+          const written = readFileSync(join(asked, String(index)), "utf8");
+          // One trailing NUL per argument, so the split leaves an empty tail.
+          return written.split("\0").slice(0, -1);
+        }),
+  };
+}
+
 /**
  * A lap the publish press can be pressed on: started, answered *approve*, with
  * a commit on its topic branch and the screen already drawn.
@@ -899,13 +938,19 @@ async function publishableLap(label: string) {
   };
 }
 
-/** One publish press, with the forge leg standing in for the length of it. */
+/**
+ * One publish press, with the stood-in `gh` on `PATH` for the length of it.
+ *
+ * The press is the page's own `publishFromPage`, called with the screen's digest
+ * -- nothing about the press is arranged here beyond where `gh` is found.
+ */
 async function pressPublish(
   lap: Awaited<ReturnType<typeof publishableLap>>,
   answers: { readonly status: number; readonly stdout: string; readonly stderr: string },
 ) {
-  const asked: unknown[] = [];
-  forgeSeam.pullRequest = { answers, asked };
+  const forge = standInForPullRequest(lap.world.dir, answers);
+  const path = process.env.PATH;
+  process.env.PATH = `${forge.pathEntry}${delimiter}${path ?? ""}`;
   try {
     const pressed = await publishFromPage(
       environmentFor(),
@@ -919,11 +964,33 @@ async function pressPublish(
         despiteReview: lap.despiteReview,
       },
     );
-    return { pressed, asked };
+    return { pressed, asked: forge.asked() };
   } finally {
-    forgeSeam.pullRequest = null;
+    if (path === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = path;
+    }
   }
 }
+
+/**
+ * The publish cases, which need the stood-in `gh` and therefore a POSIX shell.
+ *
+ * `test/access/forge.test.ts` draws the same line for the same reason: a
+ * stand-in written as a `#!/bin/sh` script cannot be reached on Windows, where
+ * `spawn` without a shell resolves no `.cmd` shim (`src/access/forge.ts`'s own
+ * note). The Linux cell -- the one that provisions the pinned continuo the rest
+ * of this file needs -- is what drives this leg under CI.
+ */
+const publishPress = test.skipIf(!available || process.platform === "win32");
+
+/** Why a publish case is not running, where it is the platform rather than the pin. */
+const publishSkipNote =
+  available && process.platform === "win32"
+    ? " [skipped: the stood-in gh is a POSIX shell script, which spawn cannot reach on Windows; " +
+      "the Linux cell drives this leg]"
+    : skipNote;
 
 /** The run's status, as the pinned continuo holds it: `completed` once closed. */
 async function runStatus(lap: Awaited<ReturnType<typeof publishableLap>>): Promise<string> {
@@ -943,6 +1010,23 @@ async function runStatus(lap: Awaited<ReturnType<typeof publishableLap>>): Promi
   return observed.payload.status;
 }
 
+/**
+ * The run's whole row in continuo's control plane, column for column.
+ *
+ * Read straight out of the database, as the delegated case above reads
+ * `gate_transition`, because what a refused close-out has to be held to is *no
+ * change at all* rather than a status that is still not `completed`: a close
+ * writes the status and the row's `updated_at_ms`, so the row is the evidence.
+ */
+function runRow(lap: Awaited<ReturnType<typeof publishableLap>>): unknown {
+  const control = new DatabaseSync(lap.world.db, { readOnly: true });
+  try {
+    return control.prepare("SELECT * FROM run WHERE run_id = ?").all(lap.runId);
+  } finally {
+    control.close();
+  }
+}
+
 /** The line the thread carries where a lap was published, or undefined for none. */
 async function publishedLine(
   lap: Awaited<ReturnType<typeof publishableLap>>,
@@ -956,8 +1040,8 @@ async function publishedLine(
   )?.body;
 }
 
-test.skipIf(!available)(
-  `the publish press opens the pull request the screen showed, over a real push (#233 S5, #239)${skipNote}`,
+publishPress(
+  `the publish press opens the pull request the screen showed, over a real push (#233 S5, #239)${publishSkipNote}`,
   async () => {
     const lap = await publishableLap("publish-open");
     const { pressed, asked } = await pressPublish(lap, {
@@ -967,18 +1051,28 @@ test.skipIf(!available)(
     });
     expect(pressed.ok, `${pressed.why ?? ""}: ${pressed.note}`).toBe(true);
 
-    // **The leg ran on the act the screen described, field for field.** The
-    // press re-plans and re-digests before it runs anything (D-0042 rules 2 and
-    // 3), so this is the one assertion that says the screen and the act are the
-    // same publish rather than two computations that happened to agree.
+    // **The command line the forge's CLI was handed, argument for argument**, as
+    // that program recorded it -- so this is rondo's own `openPullRequest`
+    // spelling `pr create` and spawning it, and not a test's idea of either. And
+    // it is the act the screen described, field for field: the press re-plans and
+    // re-digests before it runs anything (D-0042 rules 2 and 3), so this is the
+    // one assertion that says the screen and the act are the same publish rather
+    // than two computations that happened to agree.
     expect(asked).toEqual([
-      {
-        repo: lap.preview.target.repo,
-        baseBranch: lap.preview.target.baseBranch,
-        headRef: lap.preview.target.headRef,
-        title: lap.preview.title,
-        body: lap.preview.body,
-      },
+      [
+        "pr",
+        "create",
+        "--repo",
+        lap.preview.target.repo,
+        "--base",
+        lap.preview.target.baseBranch,
+        "--head",
+        lap.preview.target.headRef,
+        "--title",
+        lap.preview.title,
+        "--body",
+        lap.preview.body,
+      ],
     ]);
 
     // **And the push it stands on was a real push.** The bare repository holds
@@ -998,17 +1092,20 @@ test.skipIf(!available)(
   PRESS_TIMEOUT_MS,
 );
 
-test.skipIf(!available)(
-  `the publish press whose pull request is refused stops before continuo's close (#233 S5, #239)${skipNote}`,
+publishPress(
+  `the publish press whose pull request is refused stops before continuo's close (#233 S5, #239)${publishSkipNote}`,
   async () => {
     const lap = await publishableLap("publish-refused");
+    const before = runRow(lap);
     const { pressed, asked } = await pressPublish(lap, {
       status: 1,
       stdout: "",
       stderr: "GraphQL: A pull request already exists for suisya-systems:rondo/press-path.\n",
     });
 
-    // The refusal the screen shows, carrying the forge's own words.
+    // The refusal the screen shows, carrying the forge's own words -- which
+    // arrived as that program's own stderr, over the same boundary the success
+    // case's answer came over.
     expect(pressed.ok).toBe(false);
     expect(pressed.why).toBe("publishRefusedPullRequestFailed");
     expect(pressed.note).toContain("the branch is pushed");
@@ -1028,16 +1125,18 @@ test.skipIf(!available)(
     // **And it stopped before the close, which cannot be taken back either**:
     // continuo refuses a second `run close`, so a press that closed the run on
     // its way past a failed pull request would leave the one state the screen
-    // exists to avoid. The run is still open in continuo's own row, and nothing
+    // exists to avoid. The run's row is exactly the row it was before the press,
+    // read back through the pinned build as well as out of the table, and nothing
     // in the thread says this lap was published.
     expect(await runStatus(lap)).not.toBe("completed");
+    expect(runRow(lap)).toEqual(before);
     expect(await publishedLine(lap)).toBeUndefined();
   },
   PRESS_TIMEOUT_MS,
 );
 
-test.skipIf(!available)(
-  `the publish press closes the real run behind the pull request and reports it (#233 S5, #239)${skipNote}`,
+publishPress(
+  `the publish press closes the real run behind the pull request and reports it (#233 S5, #239)${publishSkipNote}`,
   async () => {
     const lap = await publishableLap("publish-close");
     expect(await runStatus(lap)).not.toBe("completed");
@@ -1060,40 +1159,55 @@ test.skipIf(!available)(
   PRESS_TIMEOUT_MS,
 );
 
-test.skipIf(!available)(
-  `a publish whose run continuo has already closed reports nothing as published (#233 S5, #239)${skipNote}`,
+publishPress(
+  `a close-out continuo refuses leaves the run exactly as it was (#233 S5, #239)${publishSkipNote}`,
   async () => {
-    const lap = await publishableLap("publish-closed-already");
-    // The close-out's refusal, made to happen for continuo's own reason: a run
-    // closes once, on purpose (`run close` refuses a run that is already
-    // closed), so closing it here is the one way to reach that refusal without
-    // standing in for continuo.
-    const started = await startContinuo(environmentFor());
-    if (started.kind !== "ready") {
-      expect.unreachable(`continuo did not verify: ${started.reason}`);
-    }
-    const closed = await closeRun(started.continuo, {
-      db: lap.world.db,
-      runId: lap.runId,
-      outcome: "completed",
-      actorId: "ada",
-    });
-    expect(closed.kind).toBe("answered");
+    const lap = await publishableLap("publish-close-refused");
+    // The row the close-out would have written, as it stands before the press.
+    const before = runRow(lap);
+    expect(await runStatus(lap)).not.toBe("completed");
 
-    const { pressed, asked } = await pressPublish(lap, {
-      status: 0,
-      stdout: `${PULL_REQUEST_URL}\n`,
-      stderr: "",
-    });
-    expect(pressed.ok).toBe(false);
-    expect(pressed.why).toBe("publishRefusedRunNotClosed");
-    expect(pressed.note).toContain("the run did not close");
+    // **The condition is made to hold at the close-out itself, and not a leg
+    // earlier**: continuo's control plane is made unwritable just before the
+    // press, so the two legs ahead run exactly as they do in the success case
+    // above -- the same push to the same bare repository, the same pull request
+    // over the same boundary -- and the only leg that cannot take its write is
+    // the close. Nothing stands in for continuo: reads still answer, and the
+    // refusal is the pinned build's own over a database it may not write.
+    chmodSync(lap.world.db, 0o444);
+    let pressed: Awaited<ReturnType<typeof pressPublish>>;
+    try {
+      pressed = await pressPublish(lap, {
+        status: 0,
+        stdout: `${PULL_REQUEST_URL}\n`,
+        stderr: "",
+      });
+    } finally {
+      // Writable again before anything is read back, so that what the assertions
+      // below read is continuo answering normally about an untouched row rather
+      // than continuo answering about a database it cannot open as it usually
+      // does.
+      chmodSync(lap.world.db, 0o644);
+    }
+    expect(pressed.pressed.ok).toBe(false);
+    expect(pressed.pressed.why).toBe("publishRefusedRunNotClosed");
+    expect(pressed.pressed.note).toContain("the run did not close");
+
     // The two legs ahead of it did run: this is the close-out's own refusal and
     // not a refusal that stopped the press earlier.
-    expect(asked).toHaveLength(1);
+    expect(pressed.asked).toHaveLength(1);
     expect(git(lap.bare, "rev-parse", `refs/heads/${lap.preview.target.topicBranch}`).trim()).toBe(
       lap.tip,
     );
+
+    // **And the refused close-out changed nothing that lasts.** A close cannot be
+    // taken back -- continuo's `run` table refuses to reopen a terminal status at
+    // all (`run_status_is_forward_only`) -- so what this has to show is not a
+    // status that is merely still open but a row that is untouched, column for
+    // column, `updated_at_ms` included. Read both ways: out of the table, and
+    // back through the pinned build.
+    expect(runRow(lap)).toEqual(before);
+    expect(await runStatus(lap)).not.toBe("completed");
 
     // **And rondo says nothing it cannot stand behind**: the thread carries no
     // published line, because the close-out did not finish. A person is sent to
