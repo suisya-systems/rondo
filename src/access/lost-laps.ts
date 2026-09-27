@@ -70,7 +70,12 @@ export function lapLost(
 
 /** The id the one start again of a lost lap runs as, so a second pass finds it. */
 export function againId(iterationId: string): string {
-  return `${iterationId}-again`;
+  // Numbered rather than appended, so a line started again many times keeps an
+  // id the allocator accepts (at most 64 characters).
+  const numbered = /^(.*)-again-([0-9]+)$/.exec(iterationId);
+  return numbered === null
+    ? `${iterationId}-again-1`
+    : `${numbered[1] ?? ""}-again-${String(Number(numbered[2]) + 1)}`;
 }
 
 /** The ask a lost lap stops on, under the stop ask's own id (`lap-stopped-`). */
@@ -202,10 +207,15 @@ async function settleTheLost(ports: LostLapPorts, said: Set<string>): Promise<vo
     return;
   }
   for (const lap of lost) {
+    const asked = stopsOf(read.messages, lap.id);
+    const reported = `report-lost-${lap.id}`;
     if ((await ports.store.read(againId(lap.id))).kind === "read") {
+      // Started again by itself, and the host stopped before the thread was told.
+      if (asked.length === 0 && !read.messages.some((m) => m.messageId === reported)) {
+        await tell(ports, lap, reported, false, restartedReport(lap));
+      }
       continue;
     }
-    const asked = stopsOf(read.messages, lap.id);
     if (asked.length === 0) {
       const started =
         ports.restart !== null && (await firstLoss(ports, lap)) && (await ports.byItself(lap))
@@ -213,14 +223,7 @@ async function settleTheLost(ports: LostLapPorts, said: Set<string>): Promise<vo
           : null;
       if (started?.ok === true) {
         ports.log(`lost     lap '${lap.id}' was started again by itself: ${started.note}`);
-        await tell(
-          ports,
-          lap,
-          `report-lost-${lap.id}`,
-          false,
-          `Lap '${lap.id}' was lost: ${String(lap.reason)}. rondo started it again by itself ` +
-            `as '${againId(lap.id)}' (D-0139).`,
-        );
+        await tell(ports, lap, reported, false, restartedReport(lap));
         continue;
       }
       if (started !== null) {
@@ -252,6 +255,14 @@ async function settleTheLost(ports: LostLapPorts, said: Set<string>): Promise<vo
       ports.log(line);
     }
   }
+}
+
+/** rondo's record that a lost lap was started again by itself (a `report-` message). */
+function restartedReport(lap: IterationRecord): string {
+  return (
+    `Lap '${lap.id}' was lost: ${String(lap.reason)}. rondo started it again by itself ` +
+    `as '${againId(lap.id)}' (D-0139).`
+  );
 }
 
 /**

@@ -25998,7 +25998,7 @@ nothing of it ran.
    `endFaulted` takes). **It holds no budget and is not counted as unread** (`lapBudgetCapFor`,
    `spentUnder`). This amends `D-0130` rule 2 for this kind: a lost lap's spend is never read, so
    holding its cap would hold the room for ever.
-3. **Then it is started again, or asked about.** A lost lap is started again as `<id>-again`: its
+3. **Then it is started again, or asked about.** A lost lap is started again as `<id>-again-1` (`-again-<n+1>` for one that was itself a start again, so the id stays bounded): its
    stored plan, under the approval it ran under, in the approver's name, as `retry` runs one
    (`restartLostFromPage`).
    1. **By itself, once**, where its approval is a goal scope (`D-0128`) or approves a split its

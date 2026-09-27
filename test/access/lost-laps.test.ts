@@ -309,3 +309,25 @@ test("a scope that refuses the start again asks once, and its carry on starts th
   await pass(ports);
   expect(tried).toEqual(["lap-2", "lap-2"]);
 });
+
+test("a start again's id stays one the allocator accepts, however often a line is started again", () => {
+  const first = "lap-11d45296-d5a7-41b7-8983-66162d48963c";
+  expect(againId(first)).toBe(`${first}-again-1`);
+  expect(againId(`${first}-again-1`)).toBe(`${first}-again-2`);
+  let id = first;
+  for (let n = 0; n < 1000; n += 1) id = againId(id);
+  expect(id).toBe(`${first}-again-1000`);
+  expect(id.length).toBeLessThanOrEqual(64);
+});
+
+test("a start again whose report was never written is reported on the next pass", async () => {
+  const w = await world(true);
+  w.lap("lap-2", null);
+  expect(await endLost({ store: w.store, now: () => 20 }, "lap-2", "gone")).toBe("failed");
+  // Its start again was reserved; the host stopped before the thread was told.
+  w.lap(againId("lap-2"), "lap-2");
+  await pass(portsOf(w));
+  const ids = (await messages(w)).map((m) => m.messageId);
+  expect(ids).toContain("report-lost-lap-2");
+  expect(ids).not.toContain(lostAskId("lap-2"));
+});
