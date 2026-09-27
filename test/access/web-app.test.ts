@@ -34,6 +34,7 @@ import {
   type ConflictFixInput,
   createApp,
   type DraftedScopeFormDraft,
+  type FlowAnswerInput,
   type GoalInput,
   MAX_CLAIM_CHARS,
   type Merged,
@@ -1591,6 +1592,8 @@ const WRITE_TABLE = [
   "ALL /merge",
   // *Not now* on a candidate rondo proposed (D-0097 point 4.5 (a)).
   "ALL /not-now",
+  // The answer to the flow's open points (rondo#487).
+  "ALL /flow-answer",
   // The conflict fix of a published pull request (rondo#417, D-0105).
   "ALL /fix-conflict",
   // An open tab's report of its notice (rondo#414, D-0108).
@@ -1614,6 +1617,7 @@ const WRITE_TABLE = [
   "POST /goal",
   "POST /notice",
   "POST /not-now",
+  "POST /flow-answer",
   "POST /fix-conflict",
   "POST /merge",
 ];
@@ -1662,6 +1666,8 @@ const PRESS_ROUTES = [
   // The person's say over what rondo ranks (D-0097 points 2.1 (a) and 4.5 (a)).
   "/goal",
   "/not-now",
+  // The person's answers to the flow's open points (rondo#487).
+  "/flow-answer",
   // One more attempt that settles a published pull request's conflict (rondo#417, D-0105).
   "/fix-conflict",
 ];
@@ -3193,6 +3199,7 @@ function triagePorts(
   goals: GoalInput[],
   asides: NotNowInput[],
   answer: TriageWritten = { ok: true },
+  answered: FlowAnswerInput[] = [],
 ): ServedPorts {
   return {
     ...spyPorts([]),
@@ -3203,6 +3210,10 @@ function triagePorts(
       },
       async (input) => {
         asides.push(input);
+        return await Promise.resolve(answer);
+      },
+      async (input) => {
+        answered.push(input);
         return await Promise.resolve(answer);
       },
     ),
@@ -3240,6 +3251,44 @@ test("(triage) a person's press keeps a goal of whole rows and puts a candidate 
   expect(asides).toEqual([{ proposalId: "triage-1", candidate: "issue:o/r#7" }]);
   stop.abort();
   expect(await closed).toBe(0);
+});
+
+test("(triage) a person's press answers the flow's open points, each in order (rondo#487)", async () => {
+  const answered: FlowAnswerInput[] = [];
+  const { base, stop, closed } = await served(
+    createApp(triagePorts([], [], { ok: true }, answered), TOKEN),
+  );
+  const person = pressHeaders(base);
+  const form = {
+    token: TOKEN,
+    ask: "flow-ask-sd-1-issue:o/r#7",
+    "answer-1": "yes",
+    "answer-2": "no",
+  };
+  const sent = await send(base, "/flow-answer", "POST", person, form);
+  expect(sent.status).toBe(303);
+  expect(sent.location).toBe("/?requests=open&lang=en#triage-heading");
+  expect(answered).toEqual([{ askId: "flow-ask-sd-1-issue:o/r#7", answers: ["yes", "no"] }]);
+  // No press, or no answer at all, answers nothing.
+  expect(
+    (await send(base, "/flow-answer", "POST", { ...person, "sec-fetch-user": undefined }, form))
+      .status,
+  ).toBe(403);
+  expect(
+    (await send(base, "/flow-answer", "POST", person, { token: TOKEN, ask: "x" })).status,
+  ).toBe(400);
+  expect(answered).toHaveLength(1);
+  stop.abort();
+  expect(await closed).toBe(0);
+  const store = await served(
+    createApp(triagePorts([], [], { ok: false, note: "answered already" }), TOKEN),
+  );
+  const refused = await send(store.base, "/flow-answer", "POST", pressHeaders(store.base), form);
+  expect(refused.status).toBe(409);
+  expect(refused.body).toContain(EN.flowAskRefused);
+  expect(refused.body).toContain("answered already");
+  store.stop.abort();
+  expect(await store.closed).toBe(0);
 });
 
 test("(triage) no press, a half row or no approver writes nothing, and says why", async () => {

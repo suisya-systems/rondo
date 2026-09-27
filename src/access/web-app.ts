@@ -64,7 +64,7 @@ import {
 } from "../store/records.js";
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
 import type { WebPorts } from "./page/contract.js";
-import { postedClauses } from "./page/triage.js";
+import { postedAnswers, postedClauses } from "./page/triage.js";
 import {
   isSwitch,
   LANG_COOKIE,
@@ -1301,6 +1301,12 @@ export interface NotNowInput {
   readonly candidate: string;
 }
 
+/** What one answer to the flow's open points says (rondo#487). */
+export interface FlowAnswerInput {
+  readonly askId: string;
+  readonly answers: readonly string[];
+}
+
 /** What a triage press did; `note` is rondo's own reason when it did nothing. */
 export type TriageWritten = { readonly ok: true } | { readonly ok: false; readonly note: string };
 
@@ -1314,13 +1320,16 @@ export type TriageWritten = { readonly ok: true } | { readonly ok: false; readon
 export class TriagePort {
   readonly #keepGoal: (input: GoalInput) => Promise<TriageWritten>;
   readonly #notNow: (input: NotNowInput) => Promise<TriageWritten>;
+  readonly #answer: (input: FlowAnswerInput) => Promise<TriageWritten>;
 
   constructor(
     keepGoal: (input: GoalInput) => Promise<TriageWritten>,
     notNow: (input: NotNowInput) => Promise<TriageWritten>,
+    answer: (input: FlowAnswerInput) => Promise<TriageWritten>,
   ) {
     this.#keepGoal = keepGoal;
     this.#notNow = notNow;
+    this.#answer = answer;
   }
 
   /** Keep one goal, on one press. */
@@ -1339,6 +1348,15 @@ export class TriagePort {
     }
     minted.delete(press);
     return await this.#notNow(input);
+  }
+
+  /** Answer the flow's open points over one candidate, on one press (rondo#487). */
+  async answer(press: Press, input: FlowAnswerInput): Promise<TriageWritten> {
+    if (!minted.has(press)) {
+      return { ok: false, note: "nothing was answered: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#answer(input);
   }
 }
 
@@ -1518,6 +1536,7 @@ const MERGE_ROUTE = "/merge";
 
 /** *Not now* on one candidate rondo proposed (D-0097 point 4.5 (a)): a press. */
 const NOT_NOW_ROUTE = "/not-now";
+const FLOW_ANSWER_ROUTE = "/flow-answer";
 
 /**
  * The route that starts the attempt settling a published pull request's
@@ -1554,6 +1573,8 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   ADD_REPOSITORY_ROUTE,
   MERGE_ROUTE,
   NOT_NOW_ROUTE,
+  // Its answers are a few short lines, under the press's size (rondo#487).
+  FLOW_ANSWER_ROUTE,
   FIX_CONFLICT_ROUTE,
 ]);
 
@@ -2765,6 +2786,29 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     return c.redirect(`${viewHref({ kind: "requests" }, tagOf(c))}#triage-heading`, 303);
   });
 
+  // **The answer to the flow's open points** (rondo#487): one answer per
+  // point, kept beside the ask; the flow then sends the request with them.
+  app.post(FLOW_ANSWER_ROUTE, async (c) => {
+    const form = await c.req.parseBody();
+    const askId = typeof form["ask"] === "string" ? form["ask"] : "";
+    const answers = postedAnswers(form);
+    if (triage === null) {
+      return triageRefused(c, 403, "flowAskRefusedNoApprover", null);
+    }
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return triageRefused(c, minting.status, "flowAskRefusedPress", null);
+    }
+    if (askId === "" || answers.length === 0) {
+      return triageRefused(c, 400, "flowAskRefused", null);
+    }
+    const answered = await triage.answer(minting.press, { askId, answers });
+    if (!answered.ok) {
+      return triageRefused(c, 409, "flowAskRefused", null, answered.note);
+    }
+    return c.redirect(`${viewHref({ kind: "requests" }, tagOf(c))}#triage-heading`, 303);
+  });
+
   // **The merge press** (rondo#380, `D-0091`): a lap's pull request merged by
   // the operator's own forge CLI, on a person's press. Everything the button
   // was drawn on is read again in the port, and the head it carried must still
@@ -3221,7 +3265,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     );
   }
 
-  /** A goal or *not now* press that wrote nothing: back to the goal, or to the front. */
+  /** A goal, *not now* or open-points press that wrote nothing: back to the goal, or to the front. */
   function triageRefused(
     c: Context<PageEnv>,
     status: 400 | 403 | 409,
@@ -3233,7 +3277,10 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       | "goalRefused"
       | "triageNotNowRefusedNoApprover"
       | "triageNotNowRefusedPress"
-      | "triageNotNowRefused",
+      | "triageNotNowRefused"
+      | "flowAskRefusedNoApprover"
+      | "flowAskRefusedPress"
+      | "flowAskRefused",
     repository: string | null,
     note: string | null = null,
   ) {
@@ -3242,7 +3289,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       ? pressRefused(
           c,
           status,
-          wording.triageNotNowAction,
+          why.startsWith("flowAsk") ? wording.flowAskAction : wording.triageNotNowAction,
           wording[why],
           viewHref({ kind: "requests" }, wording.lang),
           wording.triageBack,

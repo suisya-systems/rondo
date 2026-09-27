@@ -2031,6 +2031,35 @@ export interface StoredTriageDecline extends TriageDeclineDraft {
   readonly repository: string;
 }
 
+/**
+ * The flow host's ask over a candidate's open points (rondo#487, D-0128): the
+ * points and rondo's suggestion for each, as the ranking wrote them, asked once
+ * per approval and candidate before the request is injected.
+ */
+export interface FlowAskDraft {
+  readonly askId: string;
+  readonly repository: string;
+  readonly goalId: string;
+  readonly scopeDecisionId: string;
+  readonly proposalId: string;
+  readonly candidate: string;
+  readonly points: readonly { readonly point: string; readonly recommendation: string }[];
+  readonly askedAtMs: number;
+}
+
+/** A person's answer to a flow ask: one answer per point, in the ask's order. */
+export interface FlowAnswerDraft {
+  readonly askId: string;
+  readonly answers: readonly string[];
+  readonly answeredBy: string;
+  readonly answeredAtMs: number;
+}
+
+/** One flow ask read back, with its answer once a person gave one. */
+export interface StoredFlowAsk extends FlowAskDraft {
+  readonly answer: Omit<FlowAnswerDraft, "askId"> | null;
+}
+
 /** One triage proposal row read back: the latest of a repository is what the page draws. */
 export interface StoredTriage {
   readonly proposalId: string;

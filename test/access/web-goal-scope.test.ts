@@ -394,3 +394,89 @@ test("a form whose row was written but never approved is tested again, not repla
   });
   expect(retry).toMatchObject({ ok: false, why: "goalScopeRefusedMoved" });
 });
+
+test("the flow's ask over open points is drawn beside the goal scope, each field starting as rondo's suggestion (rondo#487)", async () => {
+  const w = await world();
+  expect((await approve(w)).ok).toBe(true);
+  const host = triageHost({
+    store: w.store,
+    record: w.record,
+    repositories: async () => ["o/r"],
+    listIssues: async () =>
+      await Promise.resolve({
+        commandLine: "gh api repos/o/r/issues",
+        status: 0,
+        signal: null,
+        stdout: JSON.stringify({ number: 7, title: "setup asks for a shell", labels: [] }),
+        stderr: "",
+        spawnError: null,
+      }),
+    runDrafter: async () =>
+      await Promise.resolve({
+        kind: "answered" as const,
+        costUsd: 0.02,
+        finalMessage: JSON.stringify({
+          candidates: [
+            {
+              key: "issue:o/r#7",
+              clause: 1,
+              request: "Make setup in o/r finish without a shell",
+              why: "Setup asks for a terminal today.",
+              openPoints: [
+                { point: "Where the token is read from", recommendation: "The keychain" },
+                { point: "Whether to keep the old flag", recommendation: "Keep it one release" },
+              ],
+            },
+          ],
+        }),
+      }),
+    forgeHost: null,
+    now: () => 2_500,
+    mintId: () => "triage-1",
+    language: null,
+    log: () => undefined,
+  });
+  host.kick();
+  await host.idle();
+  const standing = await goalScopeStanding(w.record, "goal-1");
+  if (standing.kind === "none") throw new Error("no goal scope");
+  const askId = `flow-ask-${standing.scopeDecisionId}-issue:o/r#7`;
+  const blockOf = (html: string) => html.slice(html.indexOf('class="triage"'));
+  // Nothing is drawn until the flow asks.
+  expect(blockOf(await w.page({ kind: "requests" }))).not.toContain("/flow-answer");
+  expect(
+    await w.record.recordFlowAsk({
+      askId,
+      repository: "o/r",
+      goalId: "goal-1",
+      scopeDecisionId: standing.scopeDecisionId,
+      proposalId: "triage-1",
+      candidate: "issue:o/r#7",
+      points: [
+        { point: "Where the token is read from", recommendation: "The keychain" },
+        { point: "Whether to keep the old flag", recommendation: "Keep it one release" },
+      ],
+      askedAtMs: 3_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  const block = blockOf(await w.page({ kind: "requests" }));
+  expect(block).toContain('action="/flow-answer?lang=en"');
+  expect(hidden(block, "ask")).toBe(askId);
+  expect(block).toContain(EN.flowAskLead);
+  expect(block).toContain(EN.flowAskAction);
+  expect(block).toMatch(/name="answer-1"[^>]*>The keychain<\/textarea>/);
+  expect(block).toMatch(/name="answer-2"[^>]*>Keep it one release<\/textarea>/);
+  // Above the goal scope's own row.
+  expect(block.indexOf("/flow-answer")).toBeLessThan(block.indexOf(EN.triageGoalScopeRunning));
+  expect(blockOf(await w.page({ kind: "requests" }, JA))).toContain(JA.flowAskAction);
+  // Answered, it is gone: the flow sends the request with the answers.
+  expect(
+    await w.record.recordFlowAnswer({
+      askId,
+      answers: ["The keychain", "Drop it"],
+      answeredBy: "ada",
+      answeredAtMs: 4_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  expect(blockOf(await w.page({ kind: "requests" }))).not.toContain("/flow-answer");
+});

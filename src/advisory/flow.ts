@@ -55,6 +55,26 @@ export interface FlowInput {
    * requests. A wait on the person elsewhere does not hold the flow back.
    */
   readonly ownOpenAsk: boolean;
+  /**
+   * The asks over open points this flow's goal raised (rondo#487), under any
+   * approval of it: an answered one carries the person's answers, in the
+   * order of the points it asked.
+   */
+  readonly asks: readonly FlowAsked[];
+}
+
+/** One ask over a candidate's open points, and the answers once given. */
+export interface FlowAsked {
+  readonly candidateKey: string;
+  /** The points as asked: the ranking may say them differently by the time they are answered. */
+  readonly points: readonly string[];
+  readonly answers: readonly string[] | null;
+}
+
+/** One open point as the person answered it. */
+export interface Answered {
+  readonly point: string;
+  readonly answer: string;
 }
 
 export type WaitReason =
@@ -67,11 +87,21 @@ export type WaitReason =
   | "failed_twice"
   | "injection_pending"
   | "open_ask"
+  /** An ask over a candidate's open points waits on the person: not a failure (rondo#487). */
+  | "points_asked"
   | "no_slot"
   | "nothing_eligible";
 
 export type FlowPick =
-  | { readonly kind: "inject"; readonly candidate: Ranked; readonly messageId: string }
+  | {
+      readonly kind: "inject";
+      readonly candidate: Ranked;
+      readonly messageId: string;
+      /** The person's answers to its open points; empty when it had none. */
+      readonly answers: readonly Answered[];
+    }
+  /** The candidate has open points nobody answered: ask them first (rondo#487). */
+  | { readonly kind: "ask"; readonly candidate: Ranked; readonly askId: string }
   | { readonly kind: "wait"; readonly reason: WaitReason };
 
 /** How many injected lines in a row may end `failed` or `abandoned` before the flow stops. */
@@ -80,6 +110,11 @@ export const FAILURES_TO_STOP = 2;
 /** The request id an injection is sent under: the same pick always names the same message. */
 export function flowMessageId(scopeDecisionId: string, candidateKey: string): string {
   return `flow-${scopeDecisionId}-${candidateKey}`;
+}
+
+/** The id an ask over a candidate's open points is raised under: asked once per approval. */
+export function flowAskId(scopeDecisionId: string, candidateKey: string): string {
+  return `flow-ask-${scopeDecisionId}-${candidateKey}`;
 }
 
 /** What the flow would inject next, or why it waits. */
@@ -115,27 +150,42 @@ export function pickNext(input: FlowInput): FlowPick {
   if (input.ownOpenAsk) {
     return wait("open_ask");
   }
+  const aside = new Set(input.putAside);
+  // **One ask at a time** (rondo#487): an unanswered one holds the flow while
+  // its candidate is still ranked and not put aside; *not now* is a way to
+  // decline it.
+  const ranked = new Set(input.triage.ranked.map((one) => one.key));
+  if (
+    input.asks.some(
+      (ask) => ask.answers === null && ranked.has(ask.candidateKey) && !aside.has(ask.candidateKey),
+    )
+  ) {
+    return wait("points_asked");
+  }
   if (
     input.occupancy.occupying >= input.bounds.maxOccupying ||
     input.occupancy.live >= input.bounds.maxLive
   ) {
     return wait("no_slot");
   }
-  const aside = new Set(input.putAside);
   const injected = new Set(input.injections.map((one) => one.candidateKey));
   const candidate = input.triage.ranked.find(
-    (one) =>
-      one.source.form === "issue" &&
-      one.openPoints.length === 0 &&
-      !aside.has(one.key) &&
-      !injected.has(one.key),
+    (one) => one.source.form === "issue" && !aside.has(one.key) && !injected.has(one.key),
   );
   if (candidate === undefined) {
     return wait("nothing_eligible");
+  }
+  const answered = input.asks.find(
+    (ask) => ask.candidateKey === candidate.key && ask.answers !== null,
+  );
+  if (candidate.openPoints.length > 0 && answered === undefined) {
+    return { kind: "ask", candidate, askId: flowAskId(input.scopeDecisionId, candidate.key) };
   }
   return {
     kind: "inject",
     candidate,
     messageId: flowMessageId(input.scopeDecisionId, candidate.key),
+    answers:
+      answered?.points.map((point, at) => ({ point, answer: answered.answers?.[at] ?? "" })) ?? [],
   };
 }

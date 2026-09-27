@@ -862,6 +862,50 @@
   text-underline-offset: 2px;
 }
 
+/*
+ * The flow's ask over a candidate's open points (rondo#487): above the goal
+ * scope row, set off by the same hairline. It waits on the person, so it
+ * carries the waiting colour on its left edge (D-0082 rule 2).
+ */
+.triage-flow-ask {
+  margin-top: 14px;
+  padding: 12px 0 0 12px;
+  border-top: 1px dashed var(--color-border);
+  border-left: 2px solid var(--color-wait);
+}
+
+.triage-flow-ask-lead {
+  font-size: var(--text-meta);
+  line-height: 1.5;
+  color: var(--color-foreground);
+  font-weight: 500;
+}
+
+.triage-flow-ask .triage-ask {
+  margin-top: 4px;
+}
+
+.triage-flow-ask-points {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding-left: 0;
+  list-style: none;
+  max-width: 45em;
+}
+
+.triage-flow-ask-points label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--text-meta);
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.triage-flow-ask + .triage-goal-scope {
+  margin-top: 10px;
+}
+
 /* A candidate the flow already started: said, and not offered for the box. */
 .triage-started {
   display: inline-flex;

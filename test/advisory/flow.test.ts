@@ -53,12 +53,13 @@ const input = (over: Partial<FlowInput> = {}): FlowInput => ({
   occupancy: { occupying: 0, live: 0 },
   bounds: { maxOccupying: 1, maxLive: 3 },
   ownOpenAsk: false,
+  asks: [],
   ...over,
 });
 
 const picked = (over: Partial<FlowInput> = {}) => {
   const pick = pickNext(input(over));
-  return pick.kind === "inject" ? pick.candidate.key : pick.reason;
+  return pick.kind === "wait" ? pick.reason : `${pick.kind} ${pick.candidate.key}`;
 };
 
 test("it injects the first ranked candidate under a deterministic id", () => {
@@ -66,22 +67,56 @@ test("it injects the first ranked candidate under a deterministic id", () => {
     kind: "inject",
     candidate: issue(1),
     messageId: "flow-sd-1-issue:o/r#1",
+    answers: [],
   });
 });
 
-test("it takes only an issue with no open points, not put aside and not injected before", () => {
+test("it takes only an issue not put aside and not injected before", () => {
   expect(
     picked({
-      triage: triage([stopped, issue(1, 1), issue(2), issue(3), issue(4)]),
+      triage: triage([stopped, issue(2), issue(3), issue(4)]),
       putAside: ["issue:o/r#2"],
       injections: [injection(3, "closed")],
     }),
-  ).toBe("issue:o/r#4");
+  ).toBe("inject issue:o/r#4");
 });
 
 test("nothing eligible waits", () => {
-  expect(picked({ triage: triage([stopped, issue(1, 2)]) })).toBe("nothing_eligible");
+  expect(picked({ triage: triage([stopped]) })).toBe("nothing_eligible");
   expect(picked({ triage: triage([]) })).toBe("nothing_eligible");
+});
+
+test("a candidate with open points is asked first, then injected with the answers (rondo#487)", () => {
+  const asked = (answers: string[] | null) => [
+    { candidateKey: "issue:o/r#1", points: ["p1", "p2"], answers },
+  ];
+  expect(pickNext(input({ triage: triage([issue(1, 2), issue(2)]) }))).toEqual({
+    kind: "ask",
+    candidate: issue(1, 2),
+    askId: "flow-ask-sd-1-issue:o/r#1",
+  });
+  // An open ask holds the flow, and no second one is raised.
+  expect(picked({ triage: triage([issue(1, 2), issue(2)]), asks: asked(null) })).toBe(
+    "points_asked",
+  );
+  expect(pickNext(input({ triage: triage([issue(1, 2)]), asks: asked(["a", "b"]) }))).toEqual({
+    kind: "inject",
+    candidate: issue(1, 2),
+    messageId: "flow-sd-1-issue:o/r#1",
+    answers: [
+      { point: "p1", answer: "a" },
+      { point: "p2", answer: "b" },
+    ],
+  });
+  // Put aside, or gone from the ranking, the ask holds nothing.
+  expect(
+    picked({
+      triage: triage([issue(1, 2), issue(2)]),
+      asks: asked(null),
+      putAside: ["issue:o/r#1"],
+    }),
+  ).toBe("inject issue:o/r#2");
+  expect(picked({ triage: triage([issue(2)]), asks: asked(null) })).toBe("inject issue:o/r#2");
 });
 
 test("no goal, no triage, a stale triage or an unavailable one waits", () => {
@@ -96,7 +131,7 @@ test("no goal, no triage, a stale triage or an unavailable one waits", () => {
 test("an earlier injection still drafting or waiting to start holds the flow; a running one does not", () => {
   expect(picked({ injections: [injection(9, "drafting")] })).toBe("injection_pending");
   expect(picked({ injections: [injection(9, "waiting_to_start")] })).toBe("injection_pending");
-  expect(picked({ injections: [injection(9, "running")] })).toBe("issue:o/r#1");
+  expect(picked({ injections: [injection(9, "running")] })).toBe("inject issue:o/r#1");
 });
 
 test("an open ask on the flow's own requests holds it; a free slot is required", () => {
@@ -110,7 +145,7 @@ test("two consecutive ended injections failed or abandoned stop the flow", () =>
     picked({ injections: states.map((state, at) => injection(10 + at, state)) });
   expect(ended("failed", "abandoned")).toBe("failed_twice");
   expect(ended("failed", "running", "failed")).toBe("failed_twice");
-  expect(ended("failed", "closed", "failed")).toBe("issue:o/r#1");
-  expect(ended("failed")).toBe("issue:o/r#1");
-  expect(ended("failed", "failed", "closed")).toBe("issue:o/r#1");
+  expect(ended("failed", "closed", "failed")).toBe("inject issue:o/r#1");
+  expect(ended("failed")).toBe("inject issue:o/r#1");
+  expect(ended("failed", "failed", "closed")).toBe("inject issue:o/r#1");
 });

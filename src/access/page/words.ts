@@ -217,6 +217,16 @@ export interface PageWords extends DayWords {
   readonly triageGoalScopeResume: string;
   readonly triageStarted: string;
   readonly triageStartedLink: string;
+  /**
+   * The flow's ask over a candidate's open points (rondo#487): what it asks
+   * before it starts the request, the press that answers, and its refusals.
+   */
+  readonly flowAskLead: string;
+  readonly flowAskHint: string;
+  readonly flowAskAction: string;
+  readonly flowAskRefusedNoApprover: string;
+  readonly flowAskRefusedPress: string;
+  readonly flowAskRefused: string;
   readonly goalScopeHeading: string;
   readonly goalScopeRunningHeading: string;
   readonly goalScopePausedHeading: string;
@@ -617,6 +627,14 @@ export const PAGE_EN: PageWords = Object.freeze({
   triageGoalScopeResume: "See the approval, or resume",
   triageStarted: "Started",
   triageStartedLink: "Go to the request",
+  flowAskLead: "Before rondo starts this, it needs your answer on each open point:",
+  flowAskHint:
+    "Each answer starts as rondo's suggestion. Change any you disagree with; the request is sent with these answers.",
+  flowAskAction: "Start with these answers",
+  flowAskRefusedNoApprover:
+    "Nothing was answered: no approver is set for this rondo, so it writes nothing from the page.",
+  flowAskRefusedPress: "Nothing was answered: this did not come from a press on this page.",
+  flowAskRefused: "Nothing was answered: the question has moved on since the page was drawn.",
   goalScopeHeading: "Let rondo work toward this goal",
   goalScopeRunningHeading: "rondo is working toward this goal",
   goalScopePausedHeading: "Work toward this goal is paused",
@@ -1040,6 +1058,14 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageGoalScopeResume: "承認を見る・再開する",
   triageStarted: "開始済み",
   triageStartedLink: "依頼を見る",
+  flowAskLead: "rondo がこれを始める前に、未決の点それぞれに答えてください。",
+  flowAskHint:
+    "答えは rondo の提案で埋めてあります。違うと思うものだけ書き換えてください。依頼はこの答えを添えて送られます。",
+  flowAskAction: "この答えで始める",
+  flowAskRefusedNoApprover:
+    "回答していません。この rondo には承認者が設定されていないので、画面からは何も書き込みません。",
+  flowAskRefusedPress: "回答していません。この画面のボタンから送られたものではありません。",
+  flowAskRefused: "回答していません。画面を開いたあとで、この質問は新しくなっています。",
   goalScopeHeading: "この目標に向けて rondo に進めてもらう",
   goalScopeRunningHeading: "rondo がこの目標に向けて進めています",
   goalScopePausedHeading: "この目標に向けた作業は一時停止中です",
