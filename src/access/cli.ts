@@ -1652,6 +1652,12 @@ export async function main(
               ),
             readHolder: async (lineageId) =>
               await readHolder(
+                // **`READING_REMOTE` here as everywhere** (rondo#286, D-0153
+                // rule 4): one remote this host reads landings from, whichever
+                // path reads one, so the order tick and an admission refusal
+                // cannot answer about one line two ways. A host started with
+                // `--remote NAME` therefore settles no landing by itself and
+                // says so; that is the stop rule 4 asks for.
                 { store, readLanding, readChangedPaths, remote: READING_REMOTE },
                 lineageId,
                 Date.now(),
