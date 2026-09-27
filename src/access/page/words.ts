@@ -287,6 +287,8 @@ export interface PageWords extends DayWords {
   readonly goalScopeSampleHeading: string;
   readonly scopeStopWider: string;
   readonly scopeStopWiderDoes: string;
+  /** A stop whose raise is the gate's own screen: the expiry or the laps (rondo#512). */
+  readonly scopeStopWiderAtGate: string;
   readonly scopeStopWiderNoLap: string;
   readonly scopeStopChange: string;
   readonly scopeStopChangeDoes: string;
@@ -766,6 +768,9 @@ export const PAGE_EN: PageWords = Object.freeze({
   scopeStopWiderDoes:
     'Press "Raise the budget and carry on" below: a raised approval is recorded and approved, ' +
     "and this question closes. Then ask again at the waiting lap. The old approval is retired.",
+  scopeStopWiderAtGate:
+    'At the waiting lap, press "Raise the budget", then press "Carry on". The old approval is ' +
+    "retired once the raised one is approved.",
   scopeStopWiderNoLap:
     "No lap has started yet, so there is no budget to raise here. Stop this line and ask " +
     "again in a new request; its scope is drafted afresh.",
@@ -1284,6 +1289,8 @@ export const PAGE_JA: PageWords = Object.freeze({
   scopeStopWider: "範囲を広げて承認する",
   scopeStopWiderDoes:
     "下の「予算を増やして続ける」を押すと、引き上げた承認が記録・承認され、この問いが閉じます。そのあと、待っている周回でもう一度頼んでください。前の承認は使われなくなります。",
+  scopeStopWiderAtGate:
+    "待っている周回で「予算を引き上げる」を押してから「続ける」を押します。引き上げた承認が通ると、前の承認は使われなくなります。",
   scopeStopWiderNoLap:
     "まだ周回が始まっていないので、ここで引き上げる予算はありません。この線を止め、新しい依頼として頼み直してください。範囲はあらためて下書きされます。",
   scopeStopChange: "作業を変える",

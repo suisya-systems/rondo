@@ -218,7 +218,7 @@ import {
 } from "./question.js";
 import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
-import { approvalTip, budgetRefusal, ROUNDS_SPENT, SUCCESSOR_RECOMMENDED } from "./scope.js";
+import { approvalTip, budgetRefusal, stopRaises } from "./scope.js";
 import { goalScopeView } from "./screens/goal-scope.js";
 import { mergeView } from "./screens/merge.js";
 import { publishView } from "./screens/publish.js";
@@ -2249,7 +2249,16 @@ function scopeStopView(wording: Chrome, message: ThreadMessageDraft) {
   // to raise yet (Codex round 2).
   const atLap = message.bases.some((basis) => basis["form"] === "iteration");
   const options = [
-    [wording.scopeStopWider, atLap ? wording.scopeStopWiderDoes : wording.scopeStopWiderNoLap],
+    [
+      wording.scopeStopWider,
+      !atLap
+        ? wording.scopeStopWiderNoLap
+        : // The answering box raises rounds and cost itself (rondo#512); the
+          // expiry and the laps are raised on the gate's own screen.
+          stopRaises(message.body) !== null
+          ? wording.scopeStopWiderDoes
+          : wording.scopeStopWiderAtGate,
+    ],
     [wording.scopeStopChange, wording.scopeStopChangeDoes],
     [wording.scopeStopStop, wording.scopeStopStopDoes],
   ] as const;
@@ -2768,7 +2777,7 @@ interface BudgetRaise {
 /**
  * The raise each budget stop waiting in `root`'s thread offers, by the ask's
  * id: a `lap-stopped-` ask over a lap that ended `budget`, or a scope's stop
- * whose recommendation is a successor scope over a lap still at its gate
+ * on spent review rounds or cost (`stopRaises`) over a lap still at its gate
  * (rondo#512: the stop's words name this press, and the gate's raise link is
  * drawn only for a spent budget), whose line has one approved tip that reads.
  * Anything else offers none, and its box is the two answers it always had.
@@ -2780,8 +2789,8 @@ async function budgetRaises(
 ): Promise<ReadonlyMap<string, BudgetRaise>> {
   const raises = new Map<string, BudgetRaise>();
   for (const message of threads.messages) {
-    const stoppedByScope =
-      scopeStop(message) && message.body.includes(`\n${SUCCESSOR_RECOMMENDED}`);
+    const raising = scopeStop(message) ? stopRaises(message.body) : null;
+    const stoppedByScope = raising !== null;
     if (
       !(message.messageId.startsWith("lap-stopped-") || stoppedByScope) ||
       !threads.waiting.has(message.messageId) ||
@@ -2819,7 +2828,7 @@ async function budgetRaises(
         0,
         budgets.cost_usd - spent.readCostUsd - spent.unreadLaps * budgets.cost_reserve_usd,
       ),
-      rounds: stoppedByScope && message.body.includes(ROUNDS_SPENT),
+      rounds: raising === "rounds",
     });
   }
   return raises;

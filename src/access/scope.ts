@@ -1030,13 +1030,22 @@ async function holdingAsk(
  * act the scope never covered wants the work changed, or a successor that lists
  * it; a read that failed wants stopping until it is fixed.
  */
+/** The reason a spent round budget ends with (D-0065 4.3). */
+const ROUNDS_SPENT = "(D-0065 4.3)";
+
 /**
- * How a stop's body opens its recommendation of a successor scope, and the
- * reason a spent round budget ends with: the page reads both to offer its
- * raise-and-carry-on press on the stop (rondo#512), so they are said once.
+ * What a raise-and-carry-on press on this stop would raise (rondo#512), read
+ * off the body `stopBody` wrote: `rounds` where the review rounds are spent,
+ * `cost` where the money is, and null for any other stop -- an expiry, the
+ * laps or the approval itself, which the answering box has no field to fix.
  */
-export const SUCCESSOR_RECOMMENDED = "Recommended: a successor scope";
-export const ROUNDS_SPENT = "(D-0065 4.3)";
+export function stopRaises(body: string): "rounds" | "cost" | null {
+  return body.includes(" at the readings test.") && body.includes(ROUNDS_SPENT)
+    ? "rounds"
+    : body.includes(" at the cost test.")
+      ? "cost"
+      : null;
+}
 
 function recommendation(refusal: ScopeRefusal): string {
   if (refusal.verdict === "undecidable") {

@@ -26210,13 +26210,15 @@ rules 1.4 and 4.4, `D-0074` section 4, `D-0098` rule 8.
    empty records the pressed button's own label, in the page's language, as its body, so the
    thread still reads what was said. A send (not an answer) still needs words.
 2. **A scope stop over a lap at its gate offers raising and carrying on** (`D-0140` rule 3). The
-   offer is made where the stop's recommendation is a successor scope (`SUCCESSOR_RECOMMENDED`) and
-   its `iteration` basis names a lap that is `awaiting_human` at a gate. The press, the successor
+   offer is made where the stop is on spent review rounds or on cost (`stopRaises`), the two the
+   box has a field for, and its `iteration` basis names a lap that is `awaiting_human` at a gate.
+   A stop on the expiry, the laps or the approval itself keeps its two answers, and its raise
+   stays the full raise screen's. The press, the successor
    and the refusal are `D-0140` rule 3's, over the lap's approval tip, which for a goal-scoped lap is
    the goal scope's newest approval. **Where the review rounds ran out** (`ROUNDS_SPENT`), the box also
    draws the rounds, prefilled with one more than approved: rounds are counted along the line
-   (`D-0065` 4.1), so the approved number again would stop again. Anything else keeps its two
-   answers. The stop's option says this press, and that the person then asks again at the lap.
+   (`D-0065` 4.1), so the approved number again would stop again. The stop's option says this
+   press, and that the person then asks again at the lap.
 3. **Work approved and not begun outranks a stopped lap.** A request whose newest drafted approval
    has a plan no lap started from (`approvedUnstarted`) reads *not started* in the list, not *stopped*.
    Other states are unchanged.

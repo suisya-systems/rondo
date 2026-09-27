@@ -1005,8 +1005,8 @@ test("a scope stop over a lap at its gate offers raising and carrying on, with t
   const world = fresh();
   await openRequest(world, "req-a", "have a look at this");
   await reserve(world, "i-0001", "do the thing", null, "req-a");
-  const stopAsk = (reason: string, recommended: string) => [
-    "Stopped: the redo of 'i-0001' as 'i-0002' is outside scope 's-1' at the readings test.",
+  const stopAsk = (reason: string, recommended: string, test = "readings") => [
+    `Stopped: the redo of 'i-0001' as 'i-0002' is outside scope 's-1' at the ${test} test.`,
     `Reason: ${reason}`,
     "Options:",
     `Recommended: ${recommended}.`,
@@ -1075,6 +1075,8 @@ test("a scope stop over a lap at its gate offers raising and carrying on, with t
   expect(html).toContain('value="raise_carry_on"');
   expect(html).toContain('name="raise" value="sd-1"');
   expect(html).toContain(EN.answerRaiseRoundsLabel);
+  // The stop's option names the press the box draws.
+  expect(html).toContain(EN.scopeStopWiderDoes.replaceAll('"', "&quot;"));
   // One more round than was approved: rounds are counted along the line.
   expect(html).toMatch(/name="review_rounds" data-keep="rounds:i-0001:sd-1"[^>]*value="4"/);
   expect(html).not.toContain('type="hidden" name="review_rounds"');
@@ -1089,6 +1091,19 @@ test("a scope stop over a lap at its gate offers raising and carrying on, with t
     "change the work so a model reading can be taken",
   );
   expect(await draw("awaiting_human", change)).not.toContain('value="raise_carry_on"');
+  // Spent money is raised by the amount alone; an expiry has no field in the
+  // box, so its press would close the question and fix nothing (Codex).
+  const successor =
+    "a successor scope (D-0066 rule 1.4) with the budget or approval this line needs";
+  const cost = await draw("awaiting_human", stopAsk("$46.19 would pass $45.00", successor, "cost"));
+  expect(cost).toContain('value="raise_carry_on"');
+  expect(cost).toContain('type="hidden" name="review_rounds" value="3"');
+  expect(cost).not.toContain(EN.answerRaiseRoundsLabel);
+  const expired = await draw("awaiting_human", stopAsk("the scope expired", successor, "expiry"));
+  expect(expired).not.toContain('value="raise_carry_on"');
+  // Its raise is the gate's own screen, and the option says so.
+  expect(expired).toContain(EN.scopeStopWiderAtGate.replaceAll('"', "&quot;"));
+  expect(expired).not.toContain(EN.scopeStopWiderDoes.replaceAll('"', "&quot;"));
 });
 
 test("the header offers three text sizes, script only, outside what the redraw swaps, in the page's language", async () => {
