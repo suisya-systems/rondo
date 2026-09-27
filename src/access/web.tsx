@@ -1080,6 +1080,80 @@ function standingFindings(checks: LapReading | null, model: LapReading | null): 
   return [...(checks?.findings ?? []), ...(model?.findings ?? [])];
 }
 
+/** A closing fix, as the right face's card says it (D-0098 rules 5.3 and 8.6). */
+interface ClosingShown {
+  /** The commit the reviewer last read, which is not this lap's tip. */
+  readonly readCommit: string;
+  /** The findings the lap answers, in the reviewer's words. */
+  readonly findings: readonly string[];
+  /** The scope's round limit, or null where no approval reads. */
+  readonly rounds: number | null;
+  /** The pull request, where it was published: the commits are on it. */
+  readonly pullRequestUrl: string | null;
+}
+
+/**
+ * The closing fix `record` is, or null (D-0098 rule 5, D-0103 rule 5.4): the
+ * reading its predecessor's reviewer last made, and the findings of it the
+ * lap answers, read back by index from that reading.
+ */
+async function closingShown(
+  ports: WebPorts,
+  record: IterationRecord,
+  rounds: number | null,
+  pullRequestUrl: string | null,
+): Promise<ClosingShown | null> {
+  const closing = await ports.store.closingLapOf(record.id);
+  if (closing === null) {
+    return null;
+  }
+  const read = (await ports.store.readingsFor(closing.predecessorId)).find(
+    (reading) =>
+      isModelReadingDrafter(reading.drafter) && reading.readAtMs === closing.readingReadAtMs,
+  );
+  return {
+    readCommit: closing.readTipCommit,
+    findings: closing.findings.flatMap((at) => read?.findings[at] ?? []),
+    rounds,
+    pullRequestUrl,
+  };
+}
+
+/**
+ * **One card, not a standing finding** (D-0098 rule 8.6): the fix merges
+ * bytes no reviewer read, and says so beside the material, so the plain merge
+ * press stays. Each finding it answers is quoted; the commit the reviewer last
+ * read leads to the pull request's copy of it.
+ */
+function closingView(wording: Chrome, closing: ClosingShown) {
+  const short = closing.readCommit.slice(0, 7);
+  return (
+    <section id="closing" class={CARD}>
+      <h3 class={CARD_HEADING}>{wording.closingHeading}</h3>
+      <p class="text-body leading-6">
+        {wording.closingSaid(closing.findings.length, short, closing.rounds)}
+      </p>
+      {closing.findings.length === 0 ? null : (
+        <ul class="mt-1 list-disc pl-5 text-body leading-6" lang="">
+          {closing.findings.map((finding) => (
+            <li>{finding}</li>
+          ))}
+        </ul>
+      )}
+      {closing.pullRequestUrl === null ? null : (
+        <p class="mt-1 text-meta leading-5">
+          <a
+            href={`${closing.pullRequestUrl}/commits/${closing.readCommit}`}
+            class="text-link underline-offset-2 hover:underline"
+          >
+            {short}
+          </a>
+        </p>
+      )}
+    </section>
+  );
+}
+
 /**
  * **The material for this confirmation** (D-0083 rule 5): the worker's report, what
  * changed, the fence, and the two readings.
@@ -1107,6 +1181,8 @@ function materialView(
    */
   material: LapMaterialRead | null,
   readings: readonly LapReading[],
+  /** The closing fix this lap is, or null (D-0098 rule 8.6). */
+  closing: ClosingShown | null = null,
 ) {
   const model = latestReading(readings, isModelReadingDrafter);
   const modelDue = modelPendingOnPage(readings, model);
@@ -1159,6 +1235,7 @@ function materialView(
        * to a 720px face, which is rule 8's *cards go one across* met early
        * rather than a second layout.
        */}
+      {closing === null ? null : closingView(wording, closing)}
       {checksView(wording, record, checks, workGone)}
       {modelView(wording, model, modelDue, reload)}
       <p class="note text-meta leading-5 text-faint">{wording.readingsNote}</p>
@@ -3907,13 +3984,28 @@ export async function operatorPage(
   const sideReadings =
     gateFraming?.readings ??
     (selectedLap === null ? [] : (readingsByLap.get(selectedLap.record.id) ?? []));
+  const sideClosing =
+    sideLap === null
+      ? null
+      : await closingShown(
+          ports,
+          sideLap,
+          (await approvalOf(sideLap))?.payload.budgets.review_rounds ?? null,
+          resultOf(threads.byId, sideLap.id)?.url ?? null,
+        );
   const sideMaterial =
     sideLap === null
       ? null
       : sideAsking && gateFraming !== undefined
-        ? await materialView(wording, sideLap, gateFraming.material, sideReadings).toString()
-        : sideReadings.length > 0
-          ? await materialView(wording, sideLap, null, sideReadings).toString()
+        ? await materialView(
+            wording,
+            sideLap,
+            gateFraming.material,
+            sideReadings,
+            sideClosing,
+          ).toString()
+        : sideReadings.length > 0 || sideClosing !== null
+          ? await materialView(wording, sideLap, null, sideReadings, sideClosing).toString()
           : null;
   const threadSide =
     selectedGovernance === null || sideLap === null

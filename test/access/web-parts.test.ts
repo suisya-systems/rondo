@@ -21,14 +21,23 @@ import { lapEvents } from "../../src/access/page-logic/thread-events.js";
 import { relayQuestion } from "../../src/access/question.js";
 import { TAKE_IN_FINDING } from "../../src/access/review.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
-
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { agentTypeDigestOf, planDocument } from "./fixtures/drafter.js";
-import { EVIDENCE, mint, openGate, operatorPage, portsOver, recordAnswer } from "./page-world.js";
+import {
+  EVIDENCE,
+  fresh,
+  mint,
+  openGate,
+  openRequest,
+  operatorPage,
+  portsOver,
+  recordAnswer,
+  reserve as reserveLap,
+} from "./page-world.js";
 
 const ENV = { RONDO_APPROVER: "ada" };
 const JA = chromeFor("ja");
@@ -501,4 +510,97 @@ test("the attempt's event line says whether the take-in happened (D-0098 rule 8.
       () => "now",
     ).some((event) => event.id.endsWith(":take-in")),
   ).toBe(false);
+});
+
+test("the merge press names a closing fix that was not re-read: one card on the right face, repeated before the press (D-0098 rule 8.6)", async () => {
+  const world = fresh();
+  await openRequest(world, "req-a", "tidy the loader");
+  await reserveLap(world, "lap-pre", "tidy the loader", null, "req-a");
+  const read = await world.store.appendReading(
+    "lap-pre",
+    {
+      drafter: "rondo/model/1/gpt-6-astra",
+      verdict: "concerns",
+      findings: ["a name is misspelt", "a comment is stale", "the loop never stops"],
+      evidence: EVIDENCE,
+      unavailableReason: null,
+    },
+    2_000,
+  );
+  expect(read.kind).toBe("appended");
+  // The predecessor ended: its gate was answered with the closing press.
+  expect((await world.store.transition("lap-pre", "planned", "abandoned", {}, 2_100)).kind).toBe(
+    "transitioned",
+  );
+  await reserveLap(world, "lap-one", "tidy the loader", null, "req-a");
+  await openGate(world, "lap-one");
+  await recordAnswer(world, "lap-one");
+  expect(
+    (
+      await world.store.transition(
+        "lap-one",
+        "awaiting_human",
+        "closed",
+        { gateOutcome: "answered_and_forwarded" },
+        3_000,
+      )
+    ).kind,
+  ).toBe("transitioned");
+  const PR = "https://github.com/o/r/pull/9";
+  for (const [messageId, body] of [
+    ["report-published-lap-one", `Lap 'lap-one' was published: ${PR}`],
+    [
+      "report-checks-lap-one-green",
+      "Lap 'lap-one' checks are green on commit 'abc1234' of the pull request.",
+    ],
+  ]) {
+    const said = await world.record.recordThreadMessage({
+      messageId: messageId as string,
+      body: body as string,
+      authorKind: "drafter",
+      authorId: "rondo/deterministic/1",
+      inReplyTo: "req-a",
+      atMs: 3_100,
+      bases: [{ form: "iteration", iterationId: "lap-one" }],
+      asks: false,
+    });
+    expect(said.kind, JSON.stringify(said)).toBe("recorded");
+  }
+  const ports = {
+    ...portsOver(world, "ada", []),
+    mergeable: true,
+    store: {
+      ...world.store,
+      closingLapOf: async (id: string) =>
+        id === "lap-one"
+          ? {
+              iterationId: id,
+              predecessorId: "lap-pre",
+              readTipCommit: "f".repeat(40),
+              readingReadAtMs: 2_000,
+              findings: [0, 1],
+            }
+          : null,
+    },
+  };
+  const thread = await operatorPage(
+    ports,
+    "t",
+    { kind: "thread", messageId: "req-a", to: null },
+    EN,
+    mint,
+  );
+  const card = /<section id="closing"[\s\S]*?<\/section>/.exec(thread)?.[0] ?? "";
+  expect(card).toContain(EN.closingSaid(2, "fffffff", null));
+  expect(card).toContain("a name is misspelt");
+  expect(card).toContain("a comment is stale");
+  expect(card).not.toContain("the loop never stops");
+  expect(card).toContain(`href="${PR}/commits/${"f".repeat(40)}"`);
+  // A card, not a standing finding: the thread quotes no finding to answer over.
+  expect(thread).not.toContain('id="standing"');
+
+  const merge = await operatorPage(ports, "t", { kind: "merge", iterationId: "lap-one" }, EN, mint);
+  const said = merge.indexOf(EN.mergeNotReread("fffffff"));
+  expect(said).toBeGreaterThan(-1);
+  expect(merge.indexOf('action="/merge?lang=')).toBeGreaterThan(said);
 });

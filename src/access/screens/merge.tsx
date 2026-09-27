@@ -57,6 +57,7 @@ export async function mergeView(
     return framed(note(wording.mergeConfirmNotNow));
   }
   const head = result.checksCommit ?? "";
+  const closing = await ports.store.closingLapOf(record.id);
   const pullBase = planField(record, "pull_request_base_branch");
   const base = pullBase === "" ? planField(record, "base_branch") : pullBase;
   // A head the lap did not push (rondo#412, D-0102): merging it takes those in.
@@ -89,6 +90,13 @@ export async function mergeView(
             </ul>
             <p class="text-body leading-5">{wording.nextStepMergeMoved(carried)}</p>
           </>
+        )}
+        {/* **Not re-read, before the press** (D-0098 rules 5.3 and 8.6): the
+            last commit is a closing fix no reviewer read. */}
+        {closing === null ? null : (
+          <p id="merge-not-reread" class="text-body leading-5">
+            {wording.mergeNotReread(closing.readTipCommit.slice(0, 7))}
+          </p>
         )}
         <p class="text-body leading-5 font-medium">{wording.mergeConfirmNoUndo}</p>
       </section>
