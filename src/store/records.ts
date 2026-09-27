@@ -1805,16 +1805,18 @@ export const IRREVERSIBLE_ACTS = Object.freeze([
  * What an act under a scope can be recorded as (D-0066 rule 3.2).
  *
  * `push_branch` and `open_pull_request` are **named and not writable** until
- * the entry that supersedes D-0025 rule 6 lets the organisation publish; a gate
- * answer and `revise` get their kinds from the entry that opens O6, so they are
- * not named at all. `merge_default_branch` is a merge on green (D-0126), whose
- * `subject_id` is the iteration id.
+ * the entry that supersedes D-0025 rule 6 lets the organisation publish;
+ * `revise` is not named at all. `merge_default_branch` is a merge on green
+ * (D-0126), whose `subject_id` is the iteration id; `gate_answer` is the
+ * organisation's answer at a gate (D-0125 rule 5), whose `subject_id` is the
+ * gate id.
  */
 export const SCOPE_ACT_KINDS = Object.freeze([
   "admission",
   "push_branch",
   "open_pull_request",
   "merge_default_branch",
+  "gate_answer",
 ] as const);
 
 export type ScopeActKind = (typeof SCOPE_ACT_KINDS)[number];
@@ -1823,11 +1825,13 @@ export type ScopeActKind = (typeof SCOPE_ACT_KINDS)[number];
  * The act kinds a `scope_consumption` row may be written with today (D-0066
  * rule 3.2). An admission's `subject_id` is the iteration id, written in
  * `reserve()`'s own transaction; a merge on green's is the iteration id too,
- * written before the merge is asked of the forge (D-0126).
+ * written before the merge is asked of the forge (D-0126); a gate answer's is
+ * the gate id, written before the gate is walked (D-0125 rule 5, rondo#467).
  */
 export const WRITABLE_SCOPE_ACT_KINDS = Object.freeze([
   "admission",
   "merge_default_branch",
+  "gate_answer",
 ] as const satisfies readonly ScopeActKind[]);
 
 /** Who wrote a scope row (D-0066 rule 1.5, D-0061 rule 2.3's voice column). */

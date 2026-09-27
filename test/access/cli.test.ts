@@ -152,11 +152,18 @@ function fakeVerbs(
     },
     answer: async (_continuo, request) => {
       calls.push(`answer:${request.body}`);
+      const delegation = request.delegation ?? null;
       return answered({
         advanced: true,
         enqueued: true,
         messageId: "m-forwarded-relay",
         toStage: "forwarded",
+        answeredBy: {
+          actorKind: delegation === null ? "human" : "delegate",
+          actorId: request.actorId,
+          onBehalfOf: delegation?.onBehalfOf ?? null,
+          authorityRef: delegation?.authorityRef ?? null,
+        },
       });
     },
   };
@@ -422,6 +429,34 @@ test("from 'received' the walk is six verbs, in continuo's order", () => {
       "ack:m-forwarded-relay",
     ]);
   })();
+});
+
+test("a delegation reaches `gate answer`, and the recorder is handed who continuo holds", async () => {
+  // rondo#467: the organisation's answer is recorded as delegated, and rondo
+  // records `approve` only off continuo's own `answered_by`.
+  const { verbs } = fakeVerbs("presented");
+  const seen: unknown[] = [];
+  const outcome = await walkGate(
+    continuo,
+    {
+      ...walkRequest,
+      actorId: "rondo/gate/1",
+      delegation: { onBehalfOf: "happy_ryo", authorityRef: "sd-1" },
+      recordAnswer: async (answered) => {
+        seen.push(answered.answeredBy);
+      },
+    },
+    verbs,
+  );
+  expect(outcome).toEqual({ kind: "walked", closed: true, answerSent: true });
+  expect(seen).toEqual([
+    {
+      actorKind: "delegate",
+      actorId: "rondo/gate/1",
+      onBehalfOf: "happy_ryo",
+      authorityRef: "sd-1",
+    },
+  ]);
 });
 
 /**

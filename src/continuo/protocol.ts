@@ -606,12 +606,25 @@ export interface GateAcked {
  * `advanced: false`; a *different* body is refused `AnswerAlreadyRecorded`.
  * Both are what let a walk resume from `answered` after a partial failure
  * without either guessing a message id or being refused.
+ *
+ * `answeredBy` is the answer the gate carries as continuo stored it -- on a
+ * repeat, whoever answered first (`continuo D-1121`) -- so a host that asked
+ * for a delegated answer reads whether one was recorded rather than assuming it.
  */
 export interface GateAnswered {
   readonly advanced: boolean;
   readonly enqueued: boolean;
   readonly messageId: string;
   readonly toStage: string;
+  readonly answeredBy: GateAnswerer;
+}
+
+/** Who a gate's answer is recorded as coming from; the two references are null unless `delegate`. */
+export interface GateAnswerer {
+  readonly actorKind: string;
+  readonly actorId: string;
+  readonly onBehalfOf: string | null;
+  readonly authorityRef: string | null;
 }
 
 /**
@@ -997,8 +1010,18 @@ export const GATE_ANSWER: VerbContract<GateAnswered> = {
     enqueued: requireBoolean(payload, "enqueued"),
     messageId: requireString(payload, "message_id"),
     toStage: requireString(payload, "to_stage"),
+    answeredBy: answererOf(requireObject(payload, "answered_by")),
   }),
 };
+
+function answererOf(by: JsonObject): GateAnswerer {
+  return {
+    actorKind: requireString(by, "actor_kind"),
+    actorId: requireString(by, "actor_id"),
+    onBehalfOf: nullableString(by, "on_behalf_of"),
+    authorityRef: nullableString(by, "authority_ref"),
+  };
+}
 
 export const RUN_CLOSE: VerbContract<RunClosed> = {
   command: ["run", "close"],

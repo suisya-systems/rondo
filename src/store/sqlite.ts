@@ -121,7 +121,7 @@ import {
   type UnconsumedDecision,
   type WithheldByRule,
   WORKER_QUESTION_AUTHOR,
-  WRITABLE_SCOPE_ACT_KINDS,
+  type WRITABLE_SCOPE_ACT_KINDS,
 } from "./records.js";
 
 /**
@@ -1520,8 +1520,10 @@ CREATE TABLE IF NOT EXISTS scope_decision (
 -- act_kind is a closed union the writer refuses outside of, and today it has
 -- two writable members: admission, whose subject_id is the iteration id and
 -- whose row lands in reserve()'s BEGIN IMMEDIATE beside the iteration row
--- (rule 3.2), and merge_default_branch, a merge on green claimed before the
--- forge is asked, once per iteration (D-0126). **No CHECK spells the union**: proposal.kind's precedent, so that
+-- (rule 3.2), merge_default_branch, a merge on green claimed before the
+-- forge is asked, once per iteration (D-0126), and gate_answer, the
+-- organisation's answer claimed before the gate is walked, once per gate
+-- (D-0125 rule 5). **No CHECK spells the union**: proposal.kind's precedent, so that
 -- the entries that make push_branch and open_pull_request writable change a
 -- constant and not a table.
 --
@@ -3488,15 +3490,17 @@ export interface AdvisoryRecord {
    */
   scopeTip(scopeDecisionId: string): Promise<ScopeTip>;
   /**
-   * Claim a merge on green under an approved scope (D-0126 rule 3): the
-   * `merge_default_branch` consumption row, written before the merge is asked
-   * of the forge -- claim, then act, as `D-0042` -- so a second attempt is
-   * refused. **One per lap, whichever approval claims it**: the key alone
-   * would let a successor approval claim the same lap again.
+   * Claim an act under an approved scope before taking it -- claim, then act,
+   * as `D-0042` -- so a second attempt is refused: a merge on green
+   * (`merge_default_branch`, D-0126 rule 3, subject the iteration id) or the
+   * organisation's gate answer (`gate_answer`, D-0125 rule 5, subject the gate
+   * id). **One per subject, whichever approval claims it**: the key alone
+   * would let a successor approval claim the same subject again.
    */
-  claimScopedMerge(claim: {
+  claimScopedAct(claim: {
+    readonly actKind: "merge_default_branch" | "gate_answer";
     readonly scopeDecisionId: string;
-    readonly iterationId: string;
+    readonly subjectId: string;
     readonly nowMs: number;
   }): Promise<RecordOutcome>;
   /**
@@ -5026,8 +5030,8 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return tipOf(connection, scopeDecisionId);
     },
 
-    async claimScopedMerge(claim): Promise<RecordOutcome> {
-      const actKind: (typeof WRITABLE_SCOPE_ACT_KINDS)[number] = "merge_default_branch";
+    async claimScopedAct(claim): Promise<RecordOutcome> {
+      const actKind: (typeof WRITABLE_SCOPE_ACT_KINDS)[number] = claim.actKind;
       try {
         const written = connection
           .prepare(
@@ -5038,18 +5042,18 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
           .run(
             claim.scopeDecisionId,
             actKind,
-            claim.iterationId,
+            claim.subjectId,
             claim.nowMs,
             actKind,
-            claim.iterationId,
+            claim.subjectId,
           );
         return Number(written.changes) === 1
           ? { kind: "recorded" }
           : {
               kind: "refused",
               reason:
-                `a merge of '${claim.iterationId}' is already claimed under a scope, and a lap ` +
-                "is merged on green once (D-0126 rule 3)",
+                `'${actKind}' of '${claim.subjectId}' is already claimed under a scope, and ` +
+                "it is taken once (D-0126 rule 3, D-0125 rule 5)",
             };
       } catch (error) {
         return { kind: "defect", reason: describe(error) };

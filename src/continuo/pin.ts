@@ -91,8 +91,14 @@ export const CONTINUO_REPOSITORY = "https://github.com/suisya-systems/continuo.g
  * the `LapBudgetExhausted` refusal carrying `total_cost_usd` when the cap stops
  * a turn. The commits in between (`D-1120`, a fence-shapes test fix, and a
  * documentation pass) change nothing rondo reads.
+ *
+ * **It moves again to take `continuo D-1121`** (continuo#240): `gate answer
+ * --on-behalf-of --authority-ref`, which records the organisation's answer at
+ * a gate as delegated (`D-0125` rule 6, `D-0064` rule 3.6), and the
+ * `answered_by` key under the same `continuo.gate.answer/1`, which rondo now
+ * requires. A person's own answer is recorded as `human`, as before.
  */
-export const CONTINUO_REVISION = "24f1e004a141c9b51374c13ea8a480d8f8066349";
+export const CONTINUO_REVISION = "1894e08ba9f72e1c0c0cd6113e583a4561bf3150";
 
 /**
  * The exact line the pinned build's `--version` prints.
@@ -108,7 +114,7 @@ export const CONTINUO_REVISION = "24f1e004a141c9b51374c13ea8a480d8f8066349";
  * rondo wrote for itself.
  */
 export const CONTINUO_VERSION_LINE =
-  "@suisya-systems/continuo 0.0.0 (rev 24f1e004a141c9b51374c13ea8a480d8f8066349)";
+  "@suisya-systems/continuo 0.0.0 (rev 1894e08ba9f72e1c0c0cd6113e583a4561bf3150)";
 
 /** What a build reports when it has no git information (`continuo`'s literal). */
 const REVISION_UNKNOWN = "unknown";

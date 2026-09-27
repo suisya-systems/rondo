@@ -65,10 +65,12 @@ import { expect, test } from "vitest";
 
 import {
   answerFromPage,
+  answerUnderScope,
   recordScopeFromPage,
   reviseFromPage,
   startScopedFromPage,
 } from "../../src/access/cli.js";
+import { GATE_ACTOR } from "../../src/access/gate-host.js";
 import { agentTypeRecordOf } from "../../src/access/scope.js";
 import { newIterationId, newScopeId, type ScopeFormDraft } from "../../src/access/web-app.js";
 import { CLI_PATH_ENV, run, startContinuo } from "../../src/continuo/invoker.js";
@@ -535,6 +537,60 @@ test.skipIf(!available)(
     // **Which answer it was** (rondo#385, D-0092): recorded by the walk, and
     // named by the press rather than by the words carried.
     expect(read.record.gateAnswer).toBe("approve");
+  },
+  PRESS_TIMEOUT_MS,
+);
+
+test.skipIf(!available)(
+  `the organisation's answer closes the real gate, recorded by continuo as delegated (#467)${skipNote}`,
+  async () => {
+    const world = await pressWorld("delegated");
+    const { iterationId } = await startOnePress(world);
+    const read = await world.store.read(iterationId);
+    if (read.kind !== "read") {
+      throw new Error("the started lap would not read");
+    }
+    const answered = await answerUnderScope(
+      environmentFor(),
+      world.store,
+      world.storePath,
+      read.record,
+      { onBehalfOf: "ada", authorityRef: world.scopeDecisionId },
+    );
+    expect(answered).toEqual({ kind: "delegated" });
+
+    // **continuo's record**: the answer is a delegate's, naming the person and
+    // the approval, and never a human press (continuo D-1121).
+    const gate = await gateOf(world, read.record.gateId ?? "");
+    expect(gate.outcome).toBe("answered_and_forwarded");
+    const control = new DatabaseSync(world.db, { readOnly: true });
+    try {
+      expect(
+        control
+          .prepare(
+            "SELECT actor_kind, actor_id, on_behalf_of, authority_ref FROM gate_transition " +
+              "WHERE gate_id = ? AND to_stage = 'answered'",
+          )
+          .all(read.record.gateId),
+      ).toEqual([
+        {
+          actor_kind: "delegate",
+          actor_id: GATE_ACTOR,
+          on_behalf_of: "ada",
+          authority_ref: world.scopeDecisionId,
+        },
+      ]);
+    } finally {
+      control.close();
+    }
+
+    // **And rondo's**: the row settled, and the answer recorded as approve.
+    const after = await world.store.read(iterationId);
+    if (after.kind !== "read") {
+      throw new Error("the answered lap would not read");
+    }
+    expect(after.record.status).toBe("closed");
+    expect(after.record.gateAnswer).toBe("approve");
   },
   PRESS_TIMEOUT_MS,
 );
