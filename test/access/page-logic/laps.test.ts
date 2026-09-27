@@ -70,6 +70,66 @@ test("the last run is shown with how many came before, and its own error flag", 
       isError: true,
     },
     earlier: 1,
+    supersededBy: null,
+  });
+});
+
+test("a failing run is superseded by the latest whole-suite command when it ends clean, and by nothing else (rondo#497)", () => {
+  const failing = command(
+    12,
+    "npx vitest run test/a.test.ts",
+    "      Tests  1 failed | 4 passed (5)",
+    true,
+  );
+  const after = (...later: [string, boolean][]) =>
+    workerRuns(
+      JSON.stringify([
+        failing,
+        command(20, "git checkout src/a.ts", ""),
+        ...later.map(([cmd, isError], i) => command(30 + i, cmd, "", isError)),
+      ]),
+    );
+  for (const cmd of [
+    "npm run verify > $TMPDIR/v.log 2>&1",
+    "cd /work/x && npm test",
+    "npx vitest run",
+    "pytest -q",
+    "npm run verify >> log.txt",
+  ]) {
+    expect(after([cmd, false])).toMatchObject({
+      kind: "ran",
+      last: { index: 12, failed: 1 },
+      supersededBy: { index: 30, command: cmd },
+    });
+  }
+  // An error, a hidden exit status, a narrowed suite, or no test run supersedes nothing.
+  for (const cmd of [
+    "npm run verify | tail -3",
+    "npm test; echo done",
+    "npm test || true",
+    "npm test &",
+    "echo npm test",
+    "! npm test",
+    "npm test -- --help",
+    "npx vitest run test/a.test.ts",
+    "npm test && git status",
+    "git commit -m fix",
+    "npm test > $(false)",
+  ]) {
+    expect(after([cmd, false])).toMatchObject({ last: { index: 12 }, supersededBy: null });
+  }
+  expect(after(["npm run verify", true])).toMatchObject({ supersededBy: null });
+  // The latest whole-suite command decides: a later failed one undoes an earlier clean one.
+  expect(
+    after(["npm run verify > log 2>&1", false], ["npm run verify > log 2>&1", true]),
+  ).toMatchObject({
+    supersededBy: null,
+  });
+  // A clean run before the failure does not supersede it.
+  expect(
+    workerRuns(JSON.stringify([command(2, "npm run verify > log", ""), failing])),
+  ).toMatchObject({
+    supersededBy: null,
   });
 });
 

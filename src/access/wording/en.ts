@@ -335,6 +335,11 @@ explanation you pressed on and then answers the gate.`,
   blockedNothing: "blocked nothing",
   blockedUnknown: "not known what was blocked",
   fenceHeading: "The fence:",
+  fenceMeaning:
+    "These commands were stopped before they ran, because this lap's limits do not allow them, so " +
+    "they changed nothing. The worker went on without them, and rondo cannot tell whether the work " +
+    "needed them: if one of them was a step the work depends on (a check, an install, a push), the " +
+    "result may be missing it.",
   reportHeading: "The worker's report",
   reportFold: "In full, as the worker wrote it",
   reportNotRead: "The worker's report could not be read; it is in the text below if it was.",
@@ -384,6 +389,10 @@ explanation you pressed on and then answers the gate.`,
   workerCount: (kind, count) => `${String(count)} ${kind}`,
   workerRanErrored: "The command itself ended in error.",
   workerRanEarlier: (runs) => `and ${String(runs)} earlier run${runs === 1 ? "" : "s"}`,
+  workerRanSuperseded: (line) =>
+    `After this run the worker ran the whole test suite again (transcript line ${String(line)}), ` +
+    "and it finished without error, so this failure is not the lap's result. It may be a check " +
+    "the worker made on purpose, breaking the code to see a test fail and then putting it back.",
   workerRanSource: (line) =>
     `Read by rondo from the commands continuo recorded for this lap (transcript line ${String(line)}); ` +
     "rondo did not run it.",
@@ -426,6 +435,31 @@ explanation you pressed on and then answers the gate.`,
   checksNotMatched: "not matched",
   modelNotTaken: "Only the checks read this; the model review was not taken.",
   neitherReadingTaken: "Neither the checks nor the model review could read this work.",
+  storyHeading: "What happened",
+  storyLaps: (count) =>
+    count === 1
+      ? "One lap has run for this work."
+      : `${String(count)} laps have run for this work.`,
+  storyPart: (part, parts) =>
+    `The request was drafted as ${String(parts)} separate parts, and this gate is part ${String(part)}.`,
+  storyLapName: (n, current) => (current ? `Lap ${String(n)} (this one)` : `Lap ${String(n)}`),
+  storyToldRequest: "Started from the request itself.",
+  storyToldAsked: "Asked to change:",
+  storyToldNotRecorded:
+    "Carried on from the lap before; what it was asked beyond that is not recorded.",
+  storyShowAsked: "what was asked",
+  storyChanged: (commits, files) =>
+    `${String(commits)} commit${commits === 1 ? "" : "s"}, ${String(files)} file${files === 1 ? "" : "s"} changed.`,
+  storyChangedUnread: "What it committed has not been read.",
+  storyNow: "It is waiting on you now.",
+  storyEnded: (answer, otherwise) =>
+    answer === "revise"
+      ? "Sent back at its gate with a change asked."
+      : answer === "approve"
+        ? "Approved at its gate."
+        : `Ended (${otherwise}).`,
+  storyIntended: "What the request was drafted to change, in the drafter's words:",
+  storyOthers: "The other parts:",
   recordsFold: (count) => `What approve records (${String(count)} fields), and the full text`,
   denialUnreadable: "rondo could not record which command this was.",
   modelMayArrive: "The model review may still arrive.",

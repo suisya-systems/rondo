@@ -334,6 +334,10 @@ export const JA: Chrome = Object.freeze({
   blockedNothing: "止めたコマンドなし",
   blockedUnknown: "止めたコマンドは不明",
   fenceHeading: "実行の制限:",
+  fenceMeaning:
+    "これらのコマンドは、この周回に許されている範囲の外だったため、実行される前に止められました。何も変えていません。" +
+    "作業者はそれらなしで作業を続けました。どれかが作業の前提になる手順 (チェック、インストール、push など) だった場合、" +
+    "結果にその手順が欠けている可能性がありますが、必要だったかどうかは rondo には判断できません。",
   reportHeading: "作業者の報告",
   reportFold: "作業者が書いたとおりの全文",
   reportNotRead: "作業者の報告は読み取れませんでした。読めていれば下のテキストにあります。",
@@ -385,6 +389,9 @@ export const JA: Chrome = Object.freeze({
     `${{ passed: "成功", failed: "失敗", skipped: "スキップ" }[kind]} ${String(count)}`,
   workerRanErrored: "コマンド自体はエラーで終わっています。",
   workerRanEarlier: (runs) => `これより前にも ${String(runs)} 回実行しています`,
+  workerRanSuperseded: (line) =>
+    `作業者はこの後にテスト全体をもう一度実行し (作業記録 ${String(line)} 行目)、それはエラーなく終わっています。` +
+    "そのため、この失敗はこの周回の結果ではありません。テストが失敗することを確かめるために、作業者がわざとコードを壊してから戻した確認かもしれません。",
   workerRanSource: (line) =>
     `continuo がこの周回について記録したコマンド (作業記録 ${String(line)} 行目) を rondo が読み取ったものです。` +
     "rondo が実行したのではありません。",
@@ -449,6 +456,27 @@ export const JA: Chrome = Object.freeze({
   checksNotMatched: "照合できず",
   modelNotTaken: "チェックだけが読みました。モデルレビューは取れていません。",
   neitherReadingTaken: "チェックもモデルレビューも、この作業を読めませんでした。",
+  storyHeading: "これまでの経緯",
+  storyLaps: (count) => `この作業はこれで ${String(count)} 周目です。`,
+  storyPart: (part, parts) =>
+    `この依頼は ${String(parts)} つに分けて起案されました。このゲートはその ${String(part)} つ目 (作業 ${String(part)}) のものです。`,
+  storyLapName: (n, current) => (current ? `${String(n)} 周目 (今回)` : `${String(n)} 周目`),
+  storyToldRequest: "依頼の内容に取り組みました。",
+  storyToldAsked: "次の変更を求められました:",
+  storyToldNotRecorded: "前の周回の続きです。何を求められたかは記録にありません。",
+  storyShowAsked: "求められた内容",
+  storyChanged: (commits, files) =>
+    `${String(commits)} 件のコミットで ${String(files)} ファイルを変更しました。`,
+  storyChangedUnread: "コミット内容は読み取れていません。",
+  storyNow: "いまあなたの回答を待っています。",
+  storyEnded: (answer, otherwise) =>
+    answer === "revise"
+      ? "ゲートで変更を求められ、差し戻されました。"
+      : answer === "approve"
+        ? "ゲートで承認されました。"
+        : `終わりました (${otherwise})。`,
+  storyIntended: "起案時の説明 (起案者の言葉のまま):",
+  storyOthers: "ほかの作業:",
   recordsFold: (count) => `承認したときに記録される内容 (${String(count)} 項目) と記録全文`,
   denialUnreadable: "どのコマンドだったかを rondo は記録できませんでした。",
   modelMayArrive: "モデルレビューはこれから届くかもしれません。",

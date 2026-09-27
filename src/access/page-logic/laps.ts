@@ -194,13 +194,26 @@ export interface WorkerTestRun {
  *   knows. That is not "no tests ran": a runner rondo cannot read is the same
  *   row.
  * - `ran`: the last run the worker made, and how many it made before it.
+ *   Where that run failed or ended in error, `supersededBy` names a later
+ *   test command of the same lap that finished without error (rondo#497).
  *
  * rondo reads this; it runs nothing (D-0029 rule 9 is unchanged).
  */
 export type WorkerRuns =
   | { readonly kind: "unrecorded" }
   | { readonly kind: "none"; readonly commandCount: number }
-  | { readonly kind: "ran"; readonly last: WorkerTestRun; readonly earlier: number };
+  | {
+      readonly kind: "ran";
+      readonly last: WorkerTestRun;
+      readonly earlier: number;
+      readonly supersededBy: LaterCleanRun | null;
+    };
+
+/** A test command after the last readable run that exited 0 and printed no summary rondo reads. */
+export interface LaterCleanRun {
+  readonly index: number;
+  readonly command: string;
+}
 
 export function workerRuns(lapCommands: string | null): WorkerRuns {
   const decoded = lapCommands === null ? null : decodeLapCommands(lapCommands);
@@ -214,10 +227,54 @@ export function workerRuns(lapCommands: string | null): WorkerRuns {
       : [{ index: c.index, command: c.command, ...counts, isError: c.isError }];
   });
   const last = runs.at(-1);
-  return last === undefined
-    ? { kind: "none", commandCount: decoded.commands.length }
-    : { kind: "ran", last, earlier: runs.length - 1 };
+  if (last === undefined) {
+    return { kind: "none", commandCount: decoded.commands.length };
+  }
+  // The latest whole-suite command after it decides, whichever way it ended:
+  // a clean one earlier than a failed one supersedes nothing (Codex, rondo#497).
+  const later =
+    last.failed > 0 || last.isError
+      ? decoded.commands.findLast((c) => c.index > last.index && wholeSuiteCommand(c.command))
+      : undefined;
+  return {
+    kind: "ran",
+    last,
+    earlier: runs.length - 1,
+    supersededBy:
+      later === undefined || later.isError ? null : { index: later.index, command: later.command },
+  };
 }
+
+/**
+ * A command that runs the repository's whole test suite and nothing else, so
+ * its exit status is the suite's own (rondo#497). The case it is for: a worker
+ * breaks the code on purpose to see a test fail, puts it back, and runs
+ * `npm run verify > log 2>&1`, whose output holds no summary. A clean exit of
+ * that command is the lap's last verification, and the failure before it no
+ * longer speaks for the lap.
+ *
+ * **A closed list of invocations, with no arguments**: an argument can narrow
+ * the suite to one file or ask for `--help`, and a prefix (`echo`, `!`) or a
+ * pipe, `;` or `||` can end the command at 0 whatever the suite did. So the
+ * command is, after an optional `cd <dir> &&` and with its output redirected
+ * or not, exactly one of these.
+ *
+ * ponytail: the invocations by name, as {@link SUMMARY_LINE} is; another
+ * runner's clean exit supersedes nothing, and the upgrade is a line here.
+ */
+function wholeSuiteCommand(command: string): boolean {
+  const bare = command
+    .trim()
+    .replace(/^cd\s+[^\s;&|`$()]+\s*&&\s*/, "")
+    // A target may name a variable (`$TMPDIR/v.log`) and never substitute a command.
+    .replace(/\s+(?:\d?>>?|&>)\s*(?:\$\{?\w+\}?|[^\s;&|`$()])+/g, "")
+    .replace(/\s+\d>&\d/g, "")
+    .trim();
+  return WHOLE_SUITE.test(bare);
+}
+
+const WHOLE_SUITE =
+  /^(?:(?:npm|pnpm|yarn|bun) (?:run )?(?:test|verify)|(?:npx )?vitest(?: run)?|(?:npx )?jest|pytest(?: -q)?|python3? -m pytest(?: -q)?|cargo test|go test \.\/\.\.\.|make (?:test|check|verify))$/;
 
 // vitest `Tests  1 failed | 1842 passed (1843)`, jest `Tests: 1 failed, 40
 // passed, 41 total`, pytest `==== 1 failed, 40 passed in 1.20s ====` and its

@@ -146,7 +146,7 @@ import { facesMarkup, heldMarkup } from "./page/render.js";
 import { ResultLine } from "./page/result.js";
 import { Raw } from "./page/shell.js";
 import { ThreadFace, type ThreadItem } from "./page/thread.js";
-import { PartsSide, partStepOf, ThreadSide } from "./page/thread-side.js";
+import { type PartStep, PartsSide, partStepOf, ThreadSide } from "./page/thread-side.js";
 import {
   currentGoals,
   type GoalScopeState,
@@ -181,6 +181,7 @@ import { allowanceOf, governanceOf } from "./page-logic/governance.js";
 import {
   decodedDenials,
   endedRecently,
+  endedWhy,
   type LapUnderRequest,
   materialLanguage,
   saysMore,
@@ -204,6 +205,7 @@ import {
 } from "./page-logic/result.js";
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
+import { lapStory, raisedIn, type StoryLap } from "./page-logic/story.js";
 import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
 import {
   firstLine,
@@ -421,12 +423,15 @@ function fenceView(wording: Chrome, record: IterationRecord) {
           <span class="text-muted-foreground">{count}</span>
         </p>
       ) : (
-        <details id="fence-calls" class="group">
+        // **Open, with what it means for the result** (rondo#497): a count
+        // alone told a person nothing about whether it mattered.
+        <details id="fence-calls" class="group" open>
           <summary class="flex cursor-pointer list-none flex-wrap items-center gap-x-2 text-body leading-6 select-none [&::-webkit-details-marker]:hidden">
             {chevron()}
             <span class="font-semibold">{wording.fenceHeading}</span>
             <span class="text-muted-foreground">{count}</span>
           </summary>
+          <p class="mt-1 text-body leading-5 text-muted-foreground">{wording.fenceMeaning}</p>
           <ul class="mt-2 divide-y divide-border/70 rounded-md border border-border/70">
             {denials.slice(0, LIST_LIMIT).map((denial) =>
               typeof denial === "object" && denial !== null && !Array.isArray(denial) ? (
@@ -772,7 +777,7 @@ function workerRanView(wording: Chrome, record: IterationRecord) {
           <p class="mt-1 text-body leading-5">
             {wording.workerCount("passed", runs.last.passed)}
             <span class="text-faint"> · </span>
-            <span class={runs.last.failed > 0 ? "text-fail" : ""}>
+            <span class={runs.last.failed > 0 && runs.supersededBy === null ? "text-fail" : ""}>
               {wording.workerCount("failed", runs.last.failed)}
             </span>
             <span class="text-faint"> · </span>
@@ -782,8 +787,22 @@ function workerRanView(wording: Chrome, record: IterationRecord) {
             ) : null}
           </p>
           {runs.last.isError ? (
-            <p class="mt-1 text-body leading-5 text-fail">{wording.workerRanErrored}</p>
+            <p
+              class={`mt-1 text-body leading-5 ${runs.supersededBy === null ? "text-fail" : "text-muted-foreground"}`}
+            >
+              {wording.workerRanErrored}
+            </p>
           ) : null}
+          {runs.supersededBy === null ? null : (
+            <>
+              <p class="mt-1 text-body leading-5">
+                {wording.workerRanSuperseded(runs.supersededBy.index)}
+              </p>
+              <p class="mt-1 font-mono text-id leading-5 wrap-anywhere" lang="">
+                {runs.supersededBy.command}
+              </p>
+            </>
+          )}
           <p class="mt-1 text-meta leading-5 text-muted-foreground">
             {wording.workerRanSource(runs.last.index)}
           </p>
@@ -1013,30 +1032,6 @@ function modelView(
       )}
     </section>
   );
-}
-
-/** How many blockers and majors one model reading left open. */
-interface RaisedCounts {
-  readonly blockers: number;
-  readonly majors: number;
-}
-
-/**
- * What a model reading raised at or above `major`, or null where it raised
- * none (D-0065 as annotated from #220). Counted from the graded findings, so a
- * reading whose severities did not decode counts nothing here -- its findings
- * are still every one of them on the card.
- *
- * **The count and not the sentence** (rondo#237), because two screens say it:
- * the line by the gate's button, and the row of a lap somebody approved over
- * it. The gate's warning and the summary's line disagreeing about what was
- * open would be worse than either of them being absent.
- */
-function raisedIn(reading: LapReading | null): RaisedCounts | null {
-  const graded = reading?.graded ?? [];
-  const blockers = graded.filter((finding) => finding.severity === "blocker").length;
-  const majors = graded.filter((finding) => finding.severity === "major").length;
-  return blockers + majors === 0 ? null : { blockers, majors };
 }
 
 /** The line by the button, or null where the model review raised nothing that heavy. */
@@ -1287,6 +1282,146 @@ function materialView(
 }
 
 /**
+ * **What happened on the way to this gate** (rondo#497), the box's first card:
+ * how many laps ran, what each was asked, what it committed and how it ended,
+ * then where the request's other parts stand. Lap 18's person could not tell
+ * this from the gate: the story was in the folded records as raw text, and a
+ * split's second part was not named anywhere near the press.
+ *
+ * rondo's words over recorded facts only ({@link lapStory}); the words a
+ * change was asked with and the drafter's summary are quoted, in their own
+ * language (`lang=""`), and nothing is summarised.
+ */
+interface GateStory {
+  readonly laps: readonly StoryLap[];
+  /** Which part of a split this gate is, from 0, and how many there are; null for one line. */
+  readonly part: { readonly index: number; readonly count: number } | null;
+  readonly others: readonly PartStep[];
+  /** The drafter's summary of what the request changes, or null where none was written. */
+  readonly intended: string | null;
+}
+
+function storyView(
+  wording: Chrome,
+  story: GateStory,
+  current: IterationRecord,
+  work: LapWorkInspection | null,
+) {
+  // **Bounded, so the presses stay in reach on arrival** (D-0106, the Fable
+  // pass on rondo#497): quotes are clamped to three lines, and an earlier
+  // lap's asked words are folded, since its one line already says how it ended.
+  const QUOTE =
+    "mt-1 line-clamp-3 border-l-2 border-border pl-2 text-body leading-5 wrap-anywhere whitespace-pre-wrap";
+  return (
+    <section id="story" class={CARD}>
+      <h3 class={CARD_HEADING}>{wording.storyHeading}</h3>
+      <p class="mt-1 text-body leading-5">
+        {story.part === null
+          ? null
+          : `${wording.storyPart(story.part.index + 1, story.part.count)} `}
+        {wording.storyLaps(story.laps.length)}
+      </p>
+      {story.intended === null ? null : (
+        <>
+          <p class="mt-2 text-meta leading-5 text-muted-foreground">{wording.storyIntended}</p>
+          <p class={QUOTE} lang="" title={story.intended}>
+            {story.intended}
+          </p>
+        </>
+      )}
+      <ol class="mt-2 space-y-2">
+        {story.laps.map((lap, index) => {
+          const now = lap.record.id === current.id;
+          const subjects = now && work?.kind === "read" ? work.commits.slice(0, 3) : [];
+          const told =
+            lap.told.kind === "request"
+              ? wording.storyToldRequest
+              : lap.told.kind === "asked"
+                ? wording.storyToldAsked
+                : wording.storyToldNotRecorded;
+          const words = lap.told.kind === "asked" ? lap.told.words : null;
+          const outcome = [
+            lap.commits === null || lap.files === null
+              ? wording.storyChangedUnread
+              : wording.storyChanged(lap.commits, lap.files),
+            // The lap at the gate's count is the bar's, a few lines below.
+            now || lap.raised === null
+              ? null
+              : wording.modelRaised(lap.raised.blockers, lap.raised.majors),
+            now
+              ? wording.storyNow
+              : wording.storyEnded(lap.record.gateAnswer, endedWhy(wording, lap.record)),
+          ]
+            .filter((part) => part !== null)
+            .join(" ");
+          return (
+            <li class="text-body leading-5">
+              {now || words === null ? (
+                <>
+                  <span class="font-semibold">{wording.storyLapName(index + 1, now)}</span> {told}
+                  {words === null ? null : (
+                    <p class={QUOTE} lang="" title={words}>
+                      {words}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <details class="group">
+                  <summary class="cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
+                    <span class="font-semibold">{wording.storyLapName(index + 1, now)}</span> {told}{" "}
+                    <span class="text-meta text-faint underline underline-offset-2">
+                      {wording.storyShowAsked}
+                    </span>
+                  </summary>
+                  <p class={QUOTE} lang="">
+                    {words}
+                  </p>
+                </details>
+              )}
+              <p class="mt-0.5 text-muted-foreground">{outcome}</p>
+              {subjects.length === 0 ? null : (
+                <ul class="mt-1 space-y-0.5">
+                  {subjects.map((commit) => (
+                    <li class="flex gap-2 text-meta leading-5 text-muted-foreground">
+                      <span aria-hidden="true" class="text-faint">
+                        &#8226;
+                      </span>
+                      <span class="min-w-0 wrap-anywhere" lang="">
+                        {commit.subject}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      {story.others.length === 0 ? null : (
+        <>
+          <p class="mt-2 text-meta leading-5 text-muted-foreground">{wording.storyOthers}</p>
+          <ul class="mt-1 space-y-1">
+            {story.others.map((part) => (
+              <li class="text-body leading-5">
+                <span class="font-semibold">{part.name}</span> {part.said}
+                {part.links.map((link) => (
+                  <>
+                    {" "}
+                    <a href={link.href} class="underline underline-offset-2">
+                      {link.said}
+                    </a>
+                  </>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
  * The press, drawn only where there is something for it to answer.
  *
  * Three conditions, and each is a different way of not having a question in
@@ -1319,6 +1454,8 @@ function approveView(
    * write port, which is also where no button is drawn at all.
    */
   newIterationId: MintIterationId | null = null,
+  /** What happened on the way here (rondo#497), or null where it was not composed. */
+  story: GateStory | null = null,
 ) {
   if (!answerable(record, token) || record.gateId === null) {
     return null;
@@ -1356,6 +1493,7 @@ function approveView(
     // is the ask, and a new round of findings or a different question
     // arriving here is the change lap 18 found a person could not see.
     <div id="answering" class="mt-3 space-y-3" data-can-act="ask">
+      {story === null ? null : storyView(wording, story, record, work)}
       {/*
        * **The findings themselves, quoted here and unfolded** (D-0083 rule
        * 9.4, `D-0082` rule 7). The cards they come from are the right face's
@@ -4333,11 +4471,68 @@ export async function operatorPage(
         : { href: "#changed", linkSaid: wording.evQuestionBuiltLink }),
     };
   })();
+  /*
+   * **What happened on the way to this gate** (rondo#497): the laps of the
+   * gated lap's own line, which for a split is its part, and the parts beside
+   * it by the words the right face gives them.
+   */
+  const gateStory = ((): GateStory | null => {
+    if (gatedLap === null) {
+      return null;
+    }
+    const lineIds = ledger.find((line) => line.lapIds.includes(gatedLap.id))?.lapIds ?? [
+      gatedLap.id,
+    ];
+    const line = selectedLaps
+      .map((lap) => lap.record)
+      .filter((record) => lineIds.includes(record.id) || record.id === gatedLap.id);
+    const laps = lapStory(line, (id) => readingsByLap.get(id) ?? []);
+    const firstAtMs = laps[0]?.record.createdAtMs ?? gatedLap.createdAtMs;
+    const parts = partsOfRequest(gatedLap.requestMessageId);
+    const mine = parts.findIndex((part) => holdsLap(part, gatedLap.id));
+    // The drafter's summary of the proposal the work was started from: its
+    // last one before the line's first lap, written to the person (D-0022).
+    const intended =
+      selectedMessages.findLast(
+        (message) =>
+          message.authorKind === "drafter" &&
+          !message.asks &&
+          message.atMs <= firstAtMs &&
+          message.bases.some((basis) => basis["form"] === "proposal"),
+      )?.body ?? null;
+    return {
+      laps,
+      part: mine === -1 ? null : { index: mine, count: parts.length },
+      others: parts
+        .filter((_, index) => index !== mine)
+        .map((part) => {
+          const atGate = part.laps.find((lap) => lap.status === "awaiting_human");
+          return partStepOf(
+            wording,
+            part,
+            null,
+            atGate === undefined
+              ? null
+              : viewHref(
+                  {
+                    kind: "thread",
+                    messageId: gatedLap.requestMessageId,
+                    to: null,
+                    gate: atGate.id,
+                  },
+                  wording.lang,
+                ),
+          );
+        }),
+      intended,
+    };
+  })();
   const answeringBox =
     gatedLap === null || gateFraming === undefined
       ? null
-      : ((await approveView(wording, gatedLap, token, gateFraming, newIterationId)?.toString()) ??
-        null);
+      : ((
+          await approveView(wording, gatedLap, token, gateFraming, newIterationId, gateStory)
+        )?.toString() ?? null);
   const acts =
     selectedRoot === null
       ? null

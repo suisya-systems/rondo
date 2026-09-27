@@ -1010,6 +1010,9 @@ test("what the fence blocked is on the gate, each call in words, not only in the
   expect(card).toContain("The fence:");
   expect(card).toContain("blocked 1 command");
   expect(card).toContain("Bash  &quot;rm -rf /srv&quot;");
+  // What the stop means for the result is said, and the calls are open (rondo#497).
+  expect(card).toContain(EN.fenceMeaning);
+  expect(card).toContain('<details id="fence-calls" class="group" open');
   expect(html).toContain("The full record as text, including what is not shown above");
 });
 
@@ -1388,4 +1391,69 @@ test("with two laps at their gates, carry on revises the lap whose question the 
   const box = html.slice(html.indexOf('id="composer"'));
   expect(box).toContain('name="in_reply_to" value="question-i-0002"');
   expect(box).toContain('name="revise_iteration" value="i-0002"');
+});
+
+test("the gate opens on what happened: each lap, what it was asked, what it committed and how it ended (rondo#497)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  await world.store.recordGateAnswer("i-0001", "gate-i-0001", "revise", "ada", 4_000);
+  const closed = await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "answered_and_forwarded" },
+    4_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+  const predecessor = await world.store.read("i-0001");
+  if (predecessor.kind !== "read") throw new Error("the lap did not read");
+  const words = "Fix the three blockers.";
+  const next = revisionPlan({
+    predecessor: predecessor.record,
+    iterationId: "i-0002",
+    instruction: words,
+    takeIn: null,
+  });
+  if (next.kind !== "planned") throw new Error(next.reason);
+  const reserved = await world.store.reserve({
+    numbers: null,
+    id: "i-0002",
+    request: next.plan.prompt,
+    plan: { ...planFor("i-0002"), prompt: next.plan.prompt, base_branch: next.plan.baseBranch },
+    spend: null,
+    scopeSpend: null,
+    claim: null,
+    nowMs: 4_100,
+    supersedesIterationId: "i-0001",
+    requestMessageId: "req-1",
+    runId: "rondo-i-0002",
+    topicBranch: "rondo/i-0002",
+    workspace: "/srv/work/i-0002",
+  });
+  expect(reserved.kind).toBe("reserved");
+  await openGate(world, "i-0002");
+  const html = await operatorPage({ ...portsOver(world, "ada", []), material: structured }, "t", {
+    kind: "thread",
+    messageId: "req-1",
+    to: null,
+  });
+  const box = html.slice(html.indexOf('id="answering"'));
+  // First in the box, above the findings and the presses.
+  expect(box.indexOf('id="story"')).toBeGreaterThan(-1);
+  expect(box.indexOf('id="story"')).toBeLessThan(box.indexOf('id="answer-bar"'));
+  const story = box.slice(
+    box.indexOf('id="story"'),
+    box.indexOf("</section>", box.indexOf('id="story"')),
+  );
+  expect(story).toContain(EN.storyLaps(2));
+  expect(story).toContain(EN.storyToldRequest);
+  expect(story).toContain(EN.modelRaised(1, 1));
+  expect(story).toContain(EN.storyEnded("revise", ""));
+  expect(story).toContain(EN.storyLapName(2, true));
+  expect(story).toContain(EN.storyToldAsked);
+  expect(story).toContain(words);
+  expect(story).toContain(EN.storyNow);
+  // Not split, so no part is named.
+  expect(story).not.toContain(EN.storyOthers);
 });

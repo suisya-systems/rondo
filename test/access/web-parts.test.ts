@@ -739,3 +739,15 @@ test("a part closed without an approval, or whose pull request was closed unmerg
   );
   expect(partSteps(await page(w.world))).toEqual(["Part 1stopped", "Part 2stopped"]);
 });
+
+test("the gate's story names which part it is and where the other part stands, with the way to its gate (rondo#497)", async () => {
+  const w = await questioned();
+  await openGate(w.world as never, "lap-two");
+  const page = await gatePage(w);
+  const story = /<section id="story"[\s\S]*?<\/section>/.exec(page)?.[0] ?? "";
+  expect(story).toContain(EN.storyPart(1, 2));
+  expect(story).toContain(EN.storyOthers);
+  expect(story).toContain(EN.partName(2));
+  expect(story).toContain(EN.partYours);
+  expect(story).toContain(`href="/?thread=r1&amp;gate=lap-two&amp;lang=en"`);
+});

@@ -311,6 +311,11 @@ export interface Chrome extends PageWords {
   /** rondo#248 item 3: the way from a running row into its log, and the log's screen. */
   readonly fenceHeading: string;
   /**
+   * What the stopped commands mean for the result (rondo#497): why they were
+   * stopped, that they changed nothing, and where a missing step would show.
+   */
+  readonly fenceMeaning: string;
+  /**
    * The gate's card of the worker's own report (rondo#444): every gate is the
    * worker's turn ending, finished or stopped to ask, so the card is named for
    * what it holds and the report is shut under `reportFold`.
@@ -380,6 +385,11 @@ export interface Chrome extends PageWords {
   /** Where the figure came from: continuo's record of the lap's commands, at that transcript line. */
   readonly workerRanSource: (line: number) => string;
   /**
+   * The failing run above is not the lap's result: a later test command
+   * finished without error, and that is what the gate reads (rondo#497).
+   */
+  readonly workerRanSuperseded: (line: number) => string;
+  /**
    * What a reader reached and what it did not (rondo#69), from the store's
    * {@link ReadingReach}. The `en` set is the terminal's own lines, joined, so
    * the page and the terminal still say one thing about one drafter.
@@ -444,6 +454,29 @@ export interface Chrome extends PageWords {
   /** In the approve bar when the model's round ended with no reading. */
   readonly modelNotTaken: string;
   readonly neitherReadingTaken: string;
+  /**
+   * The gate's first card, what happened on the way to it (rondo#497): each
+   * lap of the line, what it was asked, what it committed and how it ended,
+   * then the request's other parts. rondo's words over recorded facts only.
+   */
+  readonly storyHeading: string;
+  readonly storyLaps: (count: number) => string;
+  /** Where the request was drafted as several parts: which one this gate is. */
+  readonly storyPart: (part: number, parts: number) => string;
+  readonly storyLapName: (n: number, current: boolean) => string;
+  readonly storyToldRequest: string;
+  /** Leads the words a revise at the gate before the lap asked it to change, quoted below. */
+  readonly storyToldAsked: string;
+  readonly storyToldNotRecorded: string;
+  /** Opens the fold holding an earlier lap's asked words. */
+  readonly storyShowAsked: string;
+  readonly storyChanged: (commits: number, files: number) => string;
+  readonly storyChangedUnread: string;
+  readonly storyNow: string;
+  readonly storyEnded: (answer: "approve" | "revise" | null, otherwise: string) => string;
+  /** Leads the drafter's own summary of the request, quoted below: what it was drafted to change. */
+  readonly storyIntended: string;
+  readonly storyOthers: string;
   /** The fold holding what the approve press records. */
   readonly recordsFold: (count: number) => string;
   /** A refused call whose shape rondo cannot read, on the fence card. */
