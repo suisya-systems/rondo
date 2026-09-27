@@ -142,9 +142,11 @@ import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./
 import { allowedBashIn } from "./delegation.js";
 import { type ClosingFinding, closingLapSection, definitionOfDone } from "./done.js";
 import {
+  asPart,
   type DraftedStartReadiness,
   draftedStartReadiness,
   onLanding,
+  partOf,
   planOrder,
 } from "./drafted-start.js";
 import { approvedSplits } from "./drafted-view.js";
@@ -5738,7 +5740,29 @@ async function startSplit(
           note: orderedNote({ kind: "ordered", after: order.after, first: order.first }),
         };
       }
-      const admitted = order.kind === "landed" ? onLanding(run, order.landing) : run;
+      // rondo#520: the part it is and the request's earlier line it starts from.
+      const part = await partOf(
+        { store, record },
+        input.requestMessageId,
+        input.proposalId,
+        input.planIndex,
+        run,
+        order,
+      );
+      const changed =
+        part.earlier.kind === "line"
+          ? await readChangedPaths({
+              repository: run.repository,
+              baseCommit: part.earlier.baseCommit,
+              tipCommit: part.earlier.commit,
+            })
+          : null;
+      const admitted = asPart(
+        order.kind === "landed" ? onLanding(run, order.landing) : run,
+        part.section,
+        part.earlier,
+        changed?.kind === "read" ? changed.paths : null,
+      );
       return await admitScopedPlan(
         environment,
         store,

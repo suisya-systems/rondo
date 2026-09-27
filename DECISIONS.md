@@ -178,6 +178,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0143 | A lap stopped at its time limit keeps what it had not committed, as one unverified commit in rondo's name on its own branch, and a retry of that lap merges it in as its first step; `D-0110` rule 1's option Z is narrowed | accepted |
 | D-0144 | The record's language is not what the reader sees: English-held text is read in the person's language on a press, stored by the original's digest beside it and never in its place, and drawn in place with the original one fold away | accepted |
 | D-0145 | Under a goal scope, rondo sends the drafted change itself when only plain review findings withhold the gate: every standing finding quoted, none marked a judgment call, a round and the budget left, no question on the lap | accepted |
+| D-0146 | A part of a split request is told it is a part, and its model review judges that part; a later split starts from the request's earlier line that has not landed, or says why it does not | accepted |
 | D-0147 | The goal flow's open question is in the person's turn: its block stays on the empty centre while another request waits on them | accepted |
 | D-0148 | A budget stop under a paused goal scope offers no raise; its box says the work is paused and links to resuming it | accepted |
 
@@ -26583,6 +26584,108 @@ The person can still pause the goal scope: a paused approval is not in force, an
 - **Goal-scoped gates whose drafts are plain but held for an unread test run** often enough that
   the second press remains: then the test-run condition should be narrowed.
 - **Two laps started from one gate** by a send and a press together: rule 6's guard is not holding.
+
+## D-0146 — A part of a split request is told it is a part, and its model review judges that part; a later split starts from the request's earlier line that has not landed, or says why it does not
+
+**Status:** accepted (2026-09-28, rondo#520; observed on lap 19 on rondo#290's flow). Refines
+`D-0063` rule 4 and `D-0098` rules 1.6 and 8, and reads `D-0065` 1.2's PROMPT as the lap's own ask.
+Refs `D-0027`, `D-0073` rules 2.3 and 2.5, `D-0100`, `D-0142`.
+
+### Context
+
+On lap 19 the drafter split rondo#290's request into plan 0 (the page publish path) and plan 1
+(the fixed three sections, no language-less skip, no ASCII-only refusal). Plan 1's lap did its plan,
+and the model review raised a **blocker** for plan 0's work. The reviewer's PROMPT was plan 1's
+drafted words, the definition of done and the quoted issue #290 -- the whole request -- and nothing
+in it said the lap was one part of several. A plan that did exactly its share could not pass without
+a press.
+
+Both plans were also cut from `main`. The request's first lap (lap-af3232a1, commit 52f6337) had
+already built the terminal path and the composer, and its line had neither landed nor been given up,
+so none of that work was in either part's base. The three lines would have conflicted on landing.
+rondo#519 (`D-0142`) closed the double start that produced that split; a split made on purpose hits
+the same thing.
+
+### Decision
+
+1. **A drafted plan is admitted with a part section** after its prompt (and after `D-0098` rule
+   1.6's order section): rondo's words, ASCII, opened by `What this work is part of`. For a split of
+   two or more plans it says *part i of N*, lists each other part by the first line of its drafted
+   prompt, and says that what the request or its quoted issues ask of another part is not this
+   work's to do. It also says where the work starts (rule 3). A split of one plan with no earlier
+   work gets no section; it is the whole request, as before. The worker reads the section, and so
+   does the reviewer, because it is part of the lap's prompt (`D-0065` 1.2).
+2. **The model reviewer judges the part.** Its fixed instructions say: where the PROMPT says the
+   work is one part of a request drafted into parts, that part is what the lap was asked to do, and
+   the request and quoted issues are context. A deliverable the PROMPT gives another part is not
+   missing from this work, and its absence is at most a nit. **Everything the work changes keeps
+   its full severity**, and so does anything a later instruction in the PROMPT (a revise) asks of
+   this lap. The cap is on *absence of another part's deliverable* and nothing wider.
+3. **A later split starts from the request's earlier line.** At admission rondo looks at the lane
+   ledger. It takes lines of the same repository whose root lap answers the same request and that no
+   plan of this split started. It drops a line that landed, a line the person released, and a line
+   whose last lap was abandoned. A line counts as having work when a deterministic reading of one
+   of its laps read a commit. Its work is the newest lap rondo read, by when each lap was made (the
+   ledger orders a line's laps by depth, so two retries of one lap are not in time order there).
+   - **Exactly one such line, not running**: the plan is cut from that lap's topic branch, and
+     `pull_request_base_branch` keeps the plan's own base. This is the revision's convention
+     (`D-0027`): the pull request opens against the default branch, nothing is fetched for a branch
+     that was never pushed (`D-0100`), and the catalogue's base-branch check is skipped. The section
+     names the branch and the commit rondo read.
+   - **Several lines, or the one line still running**: the plan starts from the default branch,
+     and the section names the lines and says why. rondo does not choose among lines, and a
+     running line's last commit is not known yet.
+   - **`D-0098` rule 1.6 wins in its own repository.** A plan whose order released it on a landing
+     in the same repository starts from that landing, which holds whatever the part it follows
+     started from. A landing in another repository says nothing about this one, so the earlier line
+     is still looked for.
+4. **The claim asks for the inherited paths too.** A lap cut from a branch is read from that branch
+   (the revision's range), so the paths the earlier line changed would never be compared against
+   this line's claim, though its pull request carries them. When the plan has a drafted claim
+   (`D-0073` rule 2.3), rondo adds the paths changed from the base of the line's first reading to
+   the tip of its newest (a revision's own reading starts at its predecessor's tip, so the newest
+   alone would miss the earlier laps), and a basis naming the earlier line. It leaves out paths the earlier line still holds: a closed
+   line that has not landed keeps its claim (rule 3.3), no other line can take those paths, and
+   asking for them would refuse the part on the line it builds on. If the changed paths cannot be
+   read, the whole repository is asked for (rule 2.5), unless the earlier line still holds paths,
+   which `/` would collide with: then the drafted claim stands, and the holding line keeps guarding
+   its own paths. Any other line holding one of them still refuses the admission, as it would for
+   any claim.
+5. **A lap cut from a line is still its plan, started.** When `startedFrom` compares a lap's plan
+   with a drafted plan, it strips the part section like the order section. A root lap's
+   `pull_request_base_branch` is read back as its `base_branch`, so the page offers no second start.
+
+**Options not taken.** A `part` field on the plan or on the review material: it changes the plan
+payload, and the prompt already goes to both readers. A split lap that *continues* the earlier line
+(`supersedes`): a split part is a new line with its own claim and order (`D-0098` rule 8), not a
+revise. Taking the earlier work in by merge as the lap's first step, like `D-0143`: the worker would
+have to do it before its own work, and the base does the same with no step. Choosing the newest of
+several lines: the lines of one request can be alternatives, such as rondo#519's double start, and
+picking one silently is what this issue is about.
+
+### What it costs
+
+- **A lap cut from a line is not a template for a later draft.** The template pickers skip plans
+  with `pull_request_base_branch` set as revise plans. Setup's plans and the request's other laps
+  still are.
+- **The branch is named, not pinned.** The chosen lap has ended, so its branch does not move under
+  rondo. A stopped lap's kept commit (`D-0143`) lands on the stopped lap's own branch, which is not
+  chosen, because it has no reading. The prompt's commit is the one rondo read. A worker who finds
+  the branch elsewhere can say so.
+- **Several parts cut from one line all carry its commits.** When one lands, the others carry the
+  same commits and merge cleanly.
+
+### What would falsify it
+
+- **A part's review still raising another part's deliverable as a blocker or major**: the
+  instruction is then too weak, and the part needs to reach the reviewer as a separate section of
+  the document.
+- **Parts whose section says *several lines* in ordinary use**: a request's lines are then more
+  often continuations than alternatives, and rondo needs a way to know which line a person means to
+  keep.
+- **An admission refused because the inherited paths are held by a line nobody expected**: the
+  earlier line's changes are then wider than its claim, and the claim should come from its claim
+  rows rather than its diff.
 
 ## D-0147 — The goal flow's open question is in the person's turn: its block stays on the empty centre while another request waits on them
 
