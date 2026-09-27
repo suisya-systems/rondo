@@ -681,6 +681,10 @@ async function readHolders(
  * **A record that disagrees with the remote this host reads from is a
  * person's to settle** (rule 4). rondo does not pick one of the two and does
  * not read a landing from either: it says what the disagreement is and stops.
+ * The one act it names is the release press, because that is the one a person
+ * can take: every landing reading in a process passes `READING_REMOTE`, so
+ * there is no setting that would point this host at the recorded remote
+ * instead (D-0153's standing cost).
  */
 export function landingRemoteOf(
   laps: readonly Pick<IterationRecord, "publishedRemote">[],
@@ -709,8 +713,7 @@ export function landingRemoteOf(
     : {
         undetermined:
           `its publish pushed to '${only}' and this host reads landings from '${wired}'. rondo ` +
-          "does not settle that disagreement by itself: point the host at the remote the " +
-          "publish used, or release the line by hand",
+          "does not settle that disagreement by itself: it waits for a release press",
       };
 }
 

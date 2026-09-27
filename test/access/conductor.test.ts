@@ -145,12 +145,13 @@ test("rondo#286 (D-0153): where a landing is read from is what the publish recor
   });
 
   // Rule 4: a record this host disagrees with is a person's to settle, and
-  // rondo names both sides rather than choosing one.
+  // rondo names both sides rather than choosing one. The only act it offers is
+  // the release press: no setting points a host's landing readings at another
+  // remote, so advice to do that would be advice nobody can take.
   expect(landingRemoteOf([lap("fork")], "origin")).toEqual({
     undetermined:
       "its publish pushed to 'fork' and this host reads landings from 'origin'. rondo does " +
-      "not settle that disagreement by itself: point the host at the remote the publish " +
-      "used, or release the line by hand",
+      "not settle that disagreement by itself: it waits for a release press",
   });
 
   // Two laps of one line published to two remotes is the same refusal to

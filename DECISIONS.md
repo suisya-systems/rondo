@@ -27211,8 +27211,9 @@ than one lap.
   such a row says where it was pushed, and inventing `origin` for it is the guess the entry
   refuses. The cost is one press per open line, once.
 - **A host pointed at a remote the publish did not use releases nothing by itself.** That is rule
-  4 working, and it is a stop rather than an error: the operator points the host at the same
-  remote, or presses release. It has one standing case: `rondo web --remote NAME` publishes to
+  4 working, and it is a stop rather than an error: the line waits for a release press, and that is
+  the one act the sentence offers, because nothing an operator can set points a host's landing
+  readings at another remote. It has one standing case: `rondo web --remote NAME` publishes to
   `NAME` while every landing reading in the process still reads from `READING_REMOTE`, so such a
   host disputes each of its own lines and settles none. One remote per process is what keeps the
   order tick and an admission refusal from answering about one line two ways; giving the host's
