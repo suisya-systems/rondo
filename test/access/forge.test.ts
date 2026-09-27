@@ -1010,3 +1010,12 @@ test("D-0143: a workspace that is not the row's branch, or not a checkout, is no
     "notKept",
   );
 });
+
+test("D-0143: new files are kept even where git is set not to show them", async () => {
+  const work = workspace();
+  git(work, "config", "status.showUntrackedFiles", "no");
+  writeFileSync(join(work, "only-new.txt"), "new\n");
+  const kept = await keepStoppedWork({ workspace: work, topicBranch: "topic" });
+  expect(kept.kind).toBe("kept");
+  expect(gitOut(work, "show", "--name-only", "--format=", "HEAD")).toBe("only-new.txt");
+});

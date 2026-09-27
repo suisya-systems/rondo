@@ -523,7 +523,8 @@ export async function keepStoppedWork(request: {
   if (branch.stdout.trim() !== request.topicBranch) {
     return { kind: "notKept", reason: `the workspace is on ${branch.stdout.trim()}` };
   }
-  const status = await git("status", "--porcelain");
+  // New files counted whatever `status.showUntrackedFiles` says, as `inspectLapWork` does.
+  const status = await git("status", "--porcelain", "--untracked-files=normal");
   if (status.status !== 0 || status.spawnError !== null) {
     return failed(status);
   }
