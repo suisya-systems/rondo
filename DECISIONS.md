@@ -16450,9 +16450,11 @@ number.
 
    > **Annotation (2026-09-27, from D-0131).** Added after this entry was accepted, and **not
    > additive**: it narrows what this rule counts as covered. A drafter row covers an operator message
-   > **only with the issue reads it held** — its material's assembly time, `material.draftedAtMs` — so
-   > a `forge` message answering that message later leaves it uncovered and the thread is drafted
-   > again over the new material (`D-0131` rule 1). This rule's "An operator message is drafted once a
+   > **only with the issue reads it held** — the membership of its own material, the proposal
+   > snapshot's `material.thread` or the drafter message's `message:` bases, and no time on either
+   > row — so a `forge` message answering that message that the row's material did not hold leaves it
+   > uncovered and the thread is drafted again over the new material (`D-0131` rule 1). A `forge`
+   > message a row cites is material it held, never a message it covers. This rule's "An operator message is drafted once a
    > drafter row covers it" is read with that qualification from `D-0131` on; everything else here,
    > including which rows cover and that every finished run writes one of the two, stands. Nothing
    > above is edited.
@@ -25467,12 +25469,20 @@ At rondo `8eaaa9e` on **2026-09-27**:
   every message under the request, `forge` messages included (`model-draft/host.ts`'s
   `gatherDrafterMaterial` filters by `threadOf`), and the document's THREAD section prints each
   message's bytes. What was missing was never the wiring; it was the second run.
-- **Coverage was time-blind.** `coveredMessageIds` (`src/store/sqlite.ts`) returned the union of
-  every proposal snapshot's `covers` and every drafter message's `message:` bases, with no reckoning
-  of when. So a row written before a read covered its message for ever.
-- **The material's own assembly time is on the row.** A proposal's snapshot carries
-  `material.draftedAtMs`, set by `ports.now()` at the top of `gatherDrafterMaterial`, which is
-  before the run and so before the row's `created_at_ms`.
+- **Coverage was blind to the read.** `coveredMessageIds` (`src/store/sqlite.ts`) returned the union
+  of every proposal snapshot's `covers` and every drafter message's `message:` bases, with no
+  reckoning of what the row had been handed. So a row written before a read covered its message for
+  ever.
+- **The material's own membership is on the row.** A proposal's snapshot carries the whole
+  `material`, and `material.thread` is every message the run was handed — `forge` messages included,
+  since `gatherDrafterMaterial` filters the thread by `threadOf` and nothing else. An unavailable
+  run writes no proposal, so what it held has to be on the one message it does write.
+- **Both clocks lie, and in the same direction.** A drafter message — a summary as much as an
+  unavailable run's — is written *after* its material was assembled, so its `at_ms` covers reads the
+  draft never saw. And a `forge` message's `at_ms` is stamped by the reader *before* it awaits the
+  repository resolution and the forge itself, so a read that started before a run's material and was
+  recorded after its draft carries a time that precedes it. Neither direction is a rounding error:
+  each is a read that never reaches the drafter.
 - **The reader already kicks the drafter.** `IssueReaderPorts.onRead` is `() => drafter.kick()`
   (`src/access/cli.ts`), so a landed read wakes the scan with no new plumbing.
 - **The bounds on a read.** One issue is at most `ISSUE_BOUND_BYTES` 60 000 bytes and one request's
@@ -25482,21 +25492,33 @@ At rondo `8eaaa9e` on **2026-09-27**:
 
 ### Decision
 
-1. **A drafter row covers an operator message only with the issue reads it held.** A row is a
-   proposal whose snapshot lists the message under `covers`, or an unavailable run's drafter message
-   citing it, exactly as rule 3.2 says. What it held is its material's assembly time —
-   `material.draftedAtMs`, the proposal's `created_at_ms` for a row written before that field was
-   carried, the message's own time for an unavailable run. **A `forge` message answering that
-   operator message later than that leaves the message uncovered**, so the thread is due again and
-   is drafted once more with the issue in its document. Everything else about rule 3.2 stands: the
-   row is still what covers, a finished run still writes one of the two, and a host restart still
-   loses nothing.
+1. **A drafter row covers an operator message only with the issue reads it held, and what it held is
+   its material's membership rather than a time.** A row is a proposal whose snapshot lists the
+   message under `covers`, or a drafter message citing it, exactly as rule 3.2 says. What it held is
+   read off the row itself: a proposal's `material.thread` is every message its run was handed, and
+   a drafter message's `message:` bases are what the run that wrote it cited — so an unavailable
+   run, which writes no proposal, **cites the reads it held beside the messages it covers**. **A
+   `forge` message answering that operator message that is not in that membership leaves the message
+   uncovered**, so the thread is due again and is drafted once more with the issue in its document.
+   1.1. **A `forge` message a row cites is material it held, not a message it covers.** Only the
+   non-`forge` messages among a drafter message's citations are covered, so citing a read can never
+   make an operator message look drafted.
+   1.2. **No time is compared, and that is the point.** A summary is written after its run's
+   material was assembled, and a read's `at_ms` is stamped before the repository is resolved and the
+   forge answers; a comparison of either against the other suppresses a redraft that is owed.
+   Membership answers "did this draft see it" directly instead of approximating it.
+   Everything else about rule 3.2 stands: the row is still what covers, a finished run still writes
+   one of the two, and a host restart still loses nothing.
 2. **The drafter's document carries an issue's body and comments, cut from the head when they are
    long.** A read over `DRAFTER_ISSUE_BOUND_BYTES` (20 000 bytes of body and comments together)
    reaches the document as its first bytes, never split inside a character, with a `cut` sentence
    rondo wrote saying how much of how much is there and that the rest is not. A comment past the
-   bound is cut to nothing rather than dropped, so the reader can see there was one. The worker's
-   prompt is **not** cut (`issuesQuote` is unchanged): the bound is the drafter's document's.
+   bound is cut to nothing rather than dropped, so the reader can see there was one. **What is kept
+   is one continuous head**: once a part is cut the rest of the budget is spent, so the bytes a
+   multibyte character that would not fit leaves over are not filled by a later comment — a hole in
+   the middle would be a reader shown the end of an issue while believing they had the start. The
+   worker's prompt is **not** cut (`issuesQuote` is unchanged): the bound is the drafter's
+   document's.
 3. **`D-0071` rule 1.5's "the material is never truncated" is unchanged.** It is about the document
    as a whole: over the bound, the run is still `unavailable` and writes one message. Rule 2 above
    cuts one part of the material *before* the document is assembled, so what the model gets is
@@ -25506,17 +25528,24 @@ At rondo `8eaaa9e` on **2026-09-27**:
    the read, so it covers the message with that read held and the next scan finds nothing. The
    withdrawn implementation's failure — a run spent that wrote nothing — is held by a test that
    asserts the second run is handed the issue's text *and* that a new split, a new drafted scope and
-   a new summary message landed (`test/access/drafter-host.test.ts`).
+   a new summary message landed (`test/access/drafter-host.test.ts`). The unavailable run has the
+   same guard of its own: a run citing the read it held covers the message, so a thread whose
+   drafter will not run is not scanned into it for ever (`test/store/draft-record.test.ts`).
 5. **What the first run wrote stays.** A redraft writes its own proposal, scope and messages beside
    the first's; nothing is edited or removed, and the person reads both. Which one a press acts on is
    `D-0127`'s and the scope screen's, unchanged: the latest split for the request.
 
 **Options not taken.** B: have the reader hold the drafter until every bare `#N` is read. It is
 `D-0081` rule 2.4's deadlock — the read waits on the drafter's ask and the drafter waits on the
-read — which is why `unreadUnderway` exists. C: compare the covering row's snapshot thread against
-the thread now, rather than times. More exact, but it means parsing every snapshot's material on
-every scan, and the times already fall the safe way: a read that landed *during* a run has a time
-after that run's `draftedAtMs`, so it makes the thread due again rather than being missed.
+read — which is why `unreadUnderway` exists. C: compare the material's assembly time
+(`material.draftedAtMs`) against the `forge` message's `at_ms`, which is what this entry said at
+its first writing and what rondo's gate sent back. It is cheaper to read — no `material.thread` to
+walk — but it is wrong twice over, and both were measured above: a summary's own write time covers
+reads its draft never saw, and a read stamped before its `await`s can precede the draft it landed
+after and stay covered for ever. D: record the reads a row held as a new `Basis` form rather than
+as `message:` citations. Honest, but a form is a locator the CLI parses and the page renders
+(`BASIS_FORMS`), and a `forge` message already *is* a message in the thread: citing it says what it
+has to say.
 
 ### What it costs
 
@@ -25525,6 +25554,10 @@ after that run's `draftedAtMs`, so it makes the thread due again rather than bei
   being in front of the model at all.
 - **A read that lands late in a long thread costs a run over the whole thread**, not over the read
   alone: the drafter has no partial mode, and rule 3.2's unit is the thread.
+- **Coverage reads each drafter proposal's `material.thread`, not just its `covers`.** One more
+  `json_each` over the same rows on every scan, of message ids and nothing else — the bodies stay
+  in SQLite. It is the price of the question being "did this draft see it" rather than "was it
+  earlier".
 - **Two drafts for one request are two things on the screen.** The person sees the first draft and
   then a second beside it, and rondo does not say "this one replaces that one" beyond the ordering
   the screen already has.
@@ -25534,9 +25567,13 @@ after that run's `draftedAtMs`, so it makes the thread due again rather than bei
 
 ### What would falsify it
 
-- **A store where a `forge` message is written with a clock ahead of the host's**: then a read looks
-  newer than every row that held it, the thread is due for ever, and coverage has to compare the
-  snapshot's thread rather than times (option C).
+- **A proposal snapshot whose `material.thread` stops listing every message the run was handed** —
+  a partial mode, or a material trimmed to fit a bound: then the membership under-reports, threads
+  are due for ever, and what a run held has to be written down for itself rather than read off the
+  material.
+- **An unavailable run whose message cannot cite what it held** — a citation refused, or a thread
+  of reads long enough that the bases column is the wrong place for them: then rule 1 needs option
+  D's own basis form, or a row of its own.
 - **A redraft that regularly writes the same split the first run wrote**: then the second run is the
   empty loop under another name, and what is due should be the read's arrival and not the thread.
 - **Issues whose first 20 000 bytes routinely mislead the drafter**: then the bound is too low, or
