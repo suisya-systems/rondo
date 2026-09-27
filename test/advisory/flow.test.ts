@@ -146,6 +146,26 @@ test("an answer that does not cover a point the ranking added since is asked aga
   });
 });
 
+test("nothing eligible says each candidate it passed over, and why (rondo#488)", () => {
+  expect(
+    pickNext(
+      input({
+        triage: triage([stopped, issue(2), issue(3)]),
+        putAside: ["issue:o/r#2"],
+        injections: [injection(3, "closed")],
+      }),
+    ),
+  ).toEqual({
+    kind: "wait",
+    reason: "nothing_eligible",
+    skipped: [
+      { key: "stopped:request-1", request: "do #0", why: "not_issue" },
+      { key: "issue:o/r#2", request: "do #2", why: "put_aside" },
+      { key: "issue:o/r#3", request: "do #3", why: "started" },
+    ],
+  });
+});
+
 test("no goal, no triage, a stale triage or an unavailable one waits", () => {
   expect(picked({ goal: null })).toBe("no_goal");
   expect(picked({ triage: null })).toBe("no_triage");

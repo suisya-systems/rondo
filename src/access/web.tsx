@@ -115,6 +115,7 @@ import {
 import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
 import { partsOf } from "./drafted-start.js";
 import { draftedStanding } from "./drafted-view.js";
+import { flowStopOf } from "./flow-stop.js";
 import type { LapWorkInspection } from "./forge.js";
 import { type GateAuto, gateAuto } from "./gate-auto.js";
 import { gateScope } from "./gate-host.js";
@@ -142,6 +143,7 @@ import { ThreadFace, type ThreadItem } from "./page/thread.js";
 import { PartsSide, partStepOf, ThreadSide } from "./page/thread-side.js";
 import {
   currentGoals,
+  type GoalScopeState,
   GoalScreen,
   TriageSection,
   takenRequest,
@@ -3535,10 +3537,19 @@ export async function operatorPage(
    * scope in force over the newest goal of each repository, and the requests
    * the flow already started, so a candidate it started reads *started*.
    */
-  const goalScopes = new Map<string, "running" | "paused">();
+  const goalScopes = new Map<string, GoalScopeState>();
   for (const goal of currentGoals(goals).values()) {
     const standing = await goalScopeStanding(ports.record, goal.goalId);
-    if (standing.kind !== "none") goalScopes.set(goal.goalId, standing.kind);
+    if (standing.kind === "none") continue;
+    // Green only while the flow can start or runs (rondo#488).
+    const stop =
+      standing.kind === "running"
+        ? await flowStopOf(ports.record, threads.messages, goal.goalId, standing.scopeDecisionId)
+        : null;
+    goalScopes.set(
+      goal.goalId,
+      stop === null ? { state: standing.kind } : { state: "stopped", stop },
+    );
   }
   const flowOpeners = threads.messages.flatMap((message) =>
     opensFlowRequest(message)

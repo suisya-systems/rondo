@@ -25208,6 +25208,29 @@ the newest goal: an edit would widen an approval nobody re-read.
 > answer written into a thread would make that thread a request the drafter drafts. Nothing above is
 > edited.
 
+> **Annotation (2026-09-27, from rondo#488).** Added after this entry was accepted, and additive: a
+> stop "said on the terminal where there is no request yet" was a stop the page could not see (lap
+> 18: the front and the goal scope screen kept a green *working on its own* while nothing would
+> start). **Such a stop is now also a row**: `flow_stop` (append-only, the approval's decision id,
+> the repository, the time, and `facts` -- the reason with what a person acts on as fields: the
+> expiry, the laps used, the cost figures, the newer goal, and for *nothing eligible* each ranked
+> candidate with why it was passed over: started, put aside, not an issue; open points are asked
+> first, not passed over, per the annotation above). A row is
+> written when its facts differ from the approval's newest row, so the same stop seen pass after
+> pass is one row and a stop that recurs after another is the newest again. **The page draws a goal scope in force as stopped** while its newest row stands and no
+> request of the goal is written, or while a stop of this approval stands in the thread of the
+> flow's latest request, **answered or not** (each stop is asked once, so after a *carry on* over a
+> limit still spent the flow stops again without a new question); it says the stop, the reason in
+> plain words, what was passed over and the next step (pause, or pause and approve again for new
+> limits; a stop still waiting on its answer leads to the question), in place of *working on its
+> own*, on the front's triage block and on the goal
+> scope screen. **Green is drawn only while neither holds.** A newest row outlives a stop the flow
+> gets past without writing a request (a later ranking with room only later); it reads stopped
+> until the request is written. **An open ask over open points is not working on its own either**:
+> while the flow waits on one (`points_asked`), the front's row says it waits on the answers above,
+> in the waiting colour, and the goal scope screen says the same with the way to them. Nothing above
+> is edited.
+
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 
 **Status:** accepted (2026-09-27, rondo#452). The issue records `D-0098`'s gate (2026-09-22, point

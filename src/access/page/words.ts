@@ -18,6 +18,8 @@
  * state is a sentence a person wrote for another person.
  */
 
+import type { SkipReason } from "../../advisory/flow.js";
+import type { FlowStop } from "../flow-stop.js";
 import type { PartCounts } from "../page-logic/parts.js";
 import type { ChecksState, LapResult } from "../page-logic/result.js";
 
@@ -243,6 +245,8 @@ export interface PageWords extends DayWords {
   readonly goalScopeGoalNote: (when: string) => string;
   readonly goalScopeRunningLead: string;
   readonly goalScopePauseNote: string;
+  /** The pause's note under a stop (rondo#488): nothing is being sent already. */
+  readonly goalScopePauseNoteStopped: string;
   readonly goalScopePauseAction: string;
   readonly goalScopePausedLead: string;
   readonly goalScopeRefusedGoalChanged: string;
@@ -257,6 +261,30 @@ export interface PageWords extends DayWords {
   readonly scopeStopChangeDoes: string;
   readonly scopeStopStop: string;
   readonly scopeStopStopDoes: string;
+  /**
+   * A goal scope in force whose flow has stopped (rondo#488): said in place
+   * of *working on its own*, with the reason in plain words, the facts where
+   * the stop came before any request, what was passed over when nothing in
+   * the ranking could start, and the next step.
+   */
+  readonly triageGoalScopeStopped: string;
+  /** A points ask is open (rondo#487): the flow waits on the answers, not on its own work. */
+  readonly triageGoalScopeAsking: string;
+  readonly goalScopeAskingLead: string;
+  readonly goalScopeAskingLink: string;
+  readonly triageGoalScopeStoppedLink: string;
+  readonly goalScopeStoppedHeading: string;
+  readonly flowStopReason: (reason: FlowStop) => string;
+  readonly flowStopExpiredAt: (at: string) => string;
+  readonly flowStopLapsUsed: (admissions: number, laps: number) => string;
+  readonly flowStopCostOver: (spent: string, committed: string, budget: string) => string;
+  readonly flowStopSkippedHeading: string;
+  readonly flowStopSkipped: (why: SkipReason) => string;
+  readonly flowStopRankingEmpty: string;
+  readonly flowStopNextHeading: string;
+  readonly flowStopNext: (reason: FlowStop) => string;
+  readonly flowStopAsked: string;
+  readonly flowStopAskedLink: string;
   readonly evProposal: string;
   readonly evProposalLink: string;
   /**
@@ -663,6 +691,8 @@ export const PAGE_EN: PageWords = Object.freeze({
     "waiting on you. It asks you when something is in dispute or a limit is reached.",
   goalScopePauseNote:
     "Pausing sends nothing more toward this goal. Work already under way carries on to its end.",
+  goalScopePauseNoteStopped:
+    "Pausing ends this approval: rondo sends nothing toward this goal until you approve again.",
   goalScopePauseAction: "Pause",
   goalScopePausedLead:
     "rondo sends nothing more toward this goal. To resume, approve again below; the limits count " +
@@ -690,6 +720,77 @@ export const PAGE_EN: PageWords = Object.freeze({
   scopeStopStop: "Stop this line",
   scopeStopStopDoes:
     "This line's work ends here. The request's other lines go on, and you can start it again later.",
+  triageGoalScopeStopped: "rondo has stopped working toward this goal.",
+  triageGoalScopeAsking:
+    "rondo is waiting for your answers above before it sends the next request.",
+  goalScopeAskingLead:
+    "rondo is waiting for your answers to the open points of the next request before it sends it. " +
+    "The questions are on the front page, under what rondo would ask for next.",
+  goalScopeAskingLink: "Go to the questions",
+  triageGoalScopeStoppedLink: "See the approval",
+  goalScopeStoppedHeading: "rondo has stopped working toward this goal",
+  flowStopReason: (reason) => {
+    switch (reason) {
+      case "newer_goal":
+        return "The goal was edited after it was approved, and the approval covers only the goal as it was.";
+      case "expiry":
+        return "The approval's time ran out.";
+      case "laps":
+        return "The approval's laps are used up.";
+      case "cost":
+        return "Sending another request would go past the approved cost.";
+      case "failed_twice":
+        return "The last two requests it sent ended without finishing.";
+      case "nothing_eligible":
+        return "Nothing in the latest ranking is something rondo may send by itself.";
+    }
+  },
+  flowStopExpiredAt: (at) => `It was approved until ${at} UTC.`,
+  flowStopLapsUsed: (admissions, laps) =>
+    `${String(admissions)} of ${String(laps)} ${laps === 1 ? "lap has" : "laps have"} been used.`,
+  flowStopCostOver: (spent, committed, budget) =>
+    `${spent} is spent so far. With the next request's reserve it would come to ${committed}, ` +
+    `over the ${budget} you approved.`,
+  flowStopSkippedHeading: "What it passed over",
+  flowStopSkipped: (why) => {
+    switch (why) {
+      case "started":
+        return "rondo already sent this one.";
+      case "put_aside":
+        return 'You put it aside with "Not now".';
+      case "not_issue":
+        return "It picks up a stopped request, which you send yourself.";
+    }
+  },
+  flowStopRankingEmpty: "The latest ranking has nothing in it.",
+  flowStopNextHeading: "What you can do",
+  flowStopNext: (reason) => {
+    switch (reason) {
+      case "newer_goal":
+        return "Approve the goal as it is now. This approval sends nothing more.";
+      case "expiry":
+      case "laps":
+      case "cost":
+        return (
+          'To go on, pause the approval and approve it again: "Approve and resume" drafts ' +
+          "new limits, counted from then. To stop, just pause it."
+        );
+      case "failed_twice":
+        return (
+          "Read why the last two requests failed, in their threads. Then pause the approval, " +
+          "or approve it again to let rondo try more."
+        );
+      case "nothing_eligible":
+        return (
+          "rondo looks again each time the ranking is read. To send one of these now, press " +
+          '"Put it in the box" on it. To stop, pause the approval.'
+        );
+    }
+  },
+  flowStopAsked:
+    "rondo asked you what to do next, in the thread of the last request it sent. Nothing more is " +
+    "sent until you answer there.",
+  flowStopAskedLink: "Go to the question",
   evProposal: "rondo has a proposal for what to ask next.",
   evProposalLink: "See it",
   sevenDays: "The last seven days",
@@ -1089,6 +1190,8 @@ export const PAGE_JA: PageWords = Object.freeze({
     "異論があるときや上限に達したときは、あなたに聞きます。",
   goalScopePauseNote:
     "一時停止すると、この目標に向けた新しい依頼は送りません。いま進んでいる作業は最後まで続きます。",
+  goalScopePauseNoteStopped:
+    "一時停止すると、この承認は終わります。もう一度承認するまで、rondo はこの目標に向けた依頼を送りません。",
   goalScopePauseAction: "一時停止する",
   goalScopePausedLead:
     "この目標に向けた新しい依頼は送りません。再開するには、下でもう一度承認してください。上限はそこから数え直します。",
@@ -1111,6 +1214,70 @@ export const PAGE_JA: PageWords = Object.freeze({
   scopeStopStop: "この線を止める",
   scopeStopStopDoes:
     "「この線を止める」を押します。この線の作業は終わり、依頼のほかの線は続きます。あとから続けることもできます。",
+  triageGoalScopeStopped: "rondo はこの目標に向けた作業を止めています。",
+  triageGoalScopeAsking: "rondo は、上の質問への答えを待ってから次の依頼を送ります。",
+  goalScopeAskingLead:
+    "次の依頼には先に決めることがあり、rondo はあなたの答えを待っています。質問は最初の画面の「rondo が次に勧める依頼」の下にあります。",
+  goalScopeAskingLink: "質問を見る",
+  triageGoalScopeStoppedLink: "承認を見る",
+  goalScopeStoppedHeading: "rondo はこの目標に向けた作業を止めています",
+  flowStopReason: (reason) => {
+    switch (reason) {
+      case "newer_goal":
+        return "承認したあとで目標が書き換えられました。承認の対象は、書き換える前の目標です。";
+      case "expiry":
+        return "承認の期限が切れました。";
+      case "laps":
+        return "承認した周回の数を使い切りました。";
+      case "cost":
+        return "次の依頼を送ると、承認した費用を超えます。";
+      case "failed_twice":
+        return "直前に送った 2 件の依頼が、どちらも最後まで終わりませんでした。";
+      case "nothing_eligible":
+        return "最新の順位付けに、rondo が自分で送ってよい依頼が残っていません。";
+    }
+  },
+  flowStopExpiredAt: (at) => `承認の期限は ${at} (UTC) でした。`,
+  flowStopLapsUsed: (admissions, laps) =>
+    `${String(laps)} 周のうち ${String(admissions)} 周を使いました。`,
+  flowStopCostOver: (spent, committed, budget) =>
+    `これまでに ${spent} を使っています。次の依頼の予備分を足すと ${committed} になり、承認した ${budget} を超えます。`,
+  flowStopSkippedHeading: "見送った候補",
+  flowStopSkipped: (why) => {
+    switch (why) {
+      case "started":
+        return "rondo がもう送っています。";
+      case "put_aside":
+        return "あなたが「今はやらない」で見送りました。";
+      case "not_issue":
+        return "止まった依頼の続きです。続けるかどうかはあなたが決めて送ります。";
+    }
+  },
+  flowStopRankingEmpty: "最新の順位付けには、候補が 1 件もありません。",
+  flowStopNextHeading: "できること",
+  flowStopNext: (reason) => {
+    switch (reason) {
+      case "newer_goal":
+        return "いまの目標をあらためて承認してください。この承認では、もう依頼を送りません。";
+      case "expiry":
+      case "laps":
+      case "cost":
+        return (
+          "続けるなら、承認をいったん一時停止してから「承認して再開する」を押します。上限は新しく下書きされ、そこから数え直します。" +
+          "やめるなら、一時停止だけで構いません。"
+        );
+      case "failed_twice":
+        return "失敗した 2 件の理由を、それぞれの依頼のスレッドで確かめてください。そのうえで一時停止するか、もう一度承認して続けさせます。";
+      case "nothing_eligible":
+        return (
+          "順位付けが新しくなるたびに、rondo は見直します。いますぐ送りたい候補があれば、その候補の「依頼の欄に入れる」を押してください。" +
+          "やめるなら、承認を一時停止します。"
+        );
+    }
+  },
+  flowStopAsked:
+    "rondo は、最後に送った依頼のスレッドで、次にどうするかをあなたに聞いています。そこで答えるまで、新しい依頼は送りません。",
+  flowStopAskedLink: "質問を見る",
   evProposal: "次に頼むことについて、rondo に提案があります。",
   evProposalLink: "見る",
   sevenDays: "この 7 日間",

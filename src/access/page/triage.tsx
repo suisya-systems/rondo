@@ -20,10 +20,11 @@
  */
 import type { Ranked, TriagePayload } from "../../advisory/triage.js";
 import type { GoalClause, StoredFlowAsk, StoredGoal, StoredTriage } from "../../store/records.js";
+import type { FlowStopRead } from "../flow-stop.js";
 import { ago } from "../inbox.js";
 import { viewHref } from "../page-logic/routes.js";
 import type { Chrome } from "../wording.js";
-import { money, PRIMARY, SECONDARY } from "./vocabulary.js";
+import { localTime, money, PRIMARY, SECONDARY } from "./vocabulary.js";
 
 /** The presses' own sizing, as the gate's: stacked at phone width. */
 const PRESS = "h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto";
@@ -56,8 +57,10 @@ export interface CandidateView {
  * or resumes it.
  */
 export interface GoalScopeLine {
-  readonly state: "none" | "running" | "paused";
+  readonly state: GoalScopeState["state"] | "none";
   readonly href: string;
+  /** Why a stopped flow stopped (rondo#488); null unless stopped. */
+  readonly stop: FlowStopSaid | null;
   /** The flow's open ask over a candidate's open points (rondo#487), or null. */
   readonly ask: PointsAsk | null;
 }
@@ -69,6 +72,67 @@ export interface PointsAsk {
   readonly candidate: string;
   readonly request: string;
   readonly points: readonly { readonly point: string; readonly recommendation: string }[];
+}
+
+/** A goal scope in force over a goal, as the page reads it (rondo#488). */
+export type GoalScopeState =
+  | { readonly state: "running" | "paused" }
+  | { readonly state: "stopped"; readonly stop: FlowStopRead };
+
+/**
+ * A stop in the page's words (rondo#488): the reason, the facts where the
+ * stop came before any request, what was passed over when nothing in the
+ * ranking could start, and the next step -- or, once the flow has a request,
+ * that it asked there, and the way to the question.
+ */
+export interface FlowStopSaid {
+  readonly reason: string;
+  readonly facts: string | null;
+  readonly skipped: readonly { readonly request: string; readonly why: string }[] | null;
+  readonly next: string;
+  readonly askedHref: string | null;
+}
+
+export function flowStopSaid(wording: Chrome, stop: FlowStopRead): FlowStopSaid {
+  if (stop.kind === "asked") {
+    // Answered and still stopped: the question is closed, the next step stands.
+    return {
+      reason: wording.flowStopReason(stop.reason),
+      facts: null,
+      skipped: null,
+      next: stop.open ? wording.flowStopAsked : wording.flowStopNext(stop.reason),
+      askedHref: stop.open
+        ? viewHref({ kind: "thread", messageId: stop.askedIn, to: null }, wording.lang)
+        : null,
+    };
+  }
+  const facts = stop.facts;
+  return {
+    reason: wording.flowStopReason(facts.reason),
+    facts:
+      facts.reason === "expiry"
+        ? wording.flowStopExpiredAt(localTime(facts.expiresAtMs).replace("T", " "))
+        : facts.reason === "laps"
+          ? wording.flowStopLapsUsed(facts.admissions, facts.laps)
+          : facts.reason === "cost"
+            ? wording.flowStopCostOver(
+                money(facts.spentUsd),
+                money(facts.committedUsd),
+                money(facts.budgetUsd),
+              )
+            : facts.reason === "nothing_eligible" && facts.skipped.length === 0
+              ? wording.flowStopRankingEmpty
+              : null,
+    skipped:
+      facts.reason === "nothing_eligible" && facts.skipped.length > 0
+        ? facts.skipped.map((one) => ({
+            request: one.request,
+            why: wording.flowStopSkipped(one.why),
+          }))
+        : null,
+    next: wording.flowStopNext(facts.reason),
+    askedHref: null,
+  };
 }
 
 /** One repository's block. */
@@ -112,13 +176,36 @@ export interface TriageReads {
   /** The payload of each latest row, read back; a row that will not read is absent. */
   readonly payloads: ReadonlyMap<string, TriagePayload>;
   /** The goal scope in force over each goal, by goal id (D-0128); absent where none is. */
-  readonly goalScopes?: ReadonlyMap<string, "running" | "paused">;
+  readonly goalScopes?: ReadonlyMap<string, GoalScopeState>;
   /** The request openers the flow wrote, each with the goal it names (D-0128). */
   readonly flowOpeners?: readonly { readonly messageId: string; readonly goalId: string }[];
   /** The flow's asks over open points (rondo#487), oldest first. */
   readonly flowAsks?: readonly StoredFlowAsk[];
   /** Every *not now*: an ask over a candidate put aside holds nothing (`pickNext`). */
   readonly putAside?: readonly { readonly repository: string; readonly candidate: string }[];
+}
+
+/**
+ * The ask over open points the flow waits on (rondo#487): unanswered, of this
+ * goal, over a candidate the ranking still holds and nobody put aside -- the
+ * picker's own reading (`pickNext`'s `points_asked`).
+ */
+export function waitingPointsAsk(
+  asks: readonly StoredFlowAsk[],
+  goalId: string,
+  payload: TriagePayload,
+  putAside: readonly { readonly repository: string; readonly candidate: string }[],
+): StoredFlowAsk | undefined {
+  if (payload.goalId !== goalId) return undefined;
+  return asks.find(
+    (ask) =>
+      ask.goalId === goalId &&
+      ask.answer === null &&
+      payload.ranked.some((one) => one.key === ask.candidate) &&
+      !putAside.some(
+        (one) => one.repository === payload.repository && one.candidate === ask.candidate,
+      ),
+  );
 }
 
 /** The newest goal of each repository. */
@@ -139,24 +226,18 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
     }
     const row = latest.get(repository);
     const payload = row === undefined ? undefined : reads.payloads.get(row.proposalId);
-    const state = reads.goalScopes?.get(goal.goalId) ?? "none";
+    const inForce = reads.goalScopes?.get(goal.goalId);
+    const state = inForce?.state ?? "none";
     // The ask the flow waits on: unanswered, of this goal, over a candidate
     // the ranking still holds -- the picker's own reading (`pickNext`).
     const asked =
-      state === "none" || payload?.goalId !== goal.goalId
+      state === "none" || payload === undefined
         ? undefined
-        : reads.flowAsks?.find(
-            (ask) =>
-              ask.goalId === goal.goalId &&
-              ask.answer === null &&
-              payload.ranked.some((one) => one.key === ask.candidate) &&
-              !(reads.putAside ?? []).some(
-                (one) => one.repository === repository && one.candidate === ask.candidate,
-              ),
-          );
+        : waitingPointsAsk(reads.flowAsks ?? [], goal.goalId, payload, reads.putAside ?? []);
     const goalScope: GoalScopeLine = {
       state,
       href: viewHref({ kind: "goalScope", repository }, wording.lang),
+      stop: inForce?.state === "stopped" ? flowStopSaid(wording, inForce.stop) : null,
       ask:
         asked === undefined
           ? null
@@ -474,11 +555,51 @@ function GoalScopeRow({
       </div>
     );
   }
+  // **Stopped is said in place of working** (rondo#488): the reason, what
+  // it passed over, and the next step, with the way to where it is taken.
+  if (line.stop !== null) {
+    const stop = line.stop;
+    return (
+      <div className="triage-goal-scope" data-state="stopped">
+        <div className="triage-goal-stop">
+          <p>
+            <span className="triage-goal-dot" aria-hidden="true" />
+            <b>{wording.triageGoalScopeStopped}</b>
+          </p>
+          <p>
+            {stop.reason}
+            {stop.facts === null ? null : ` ${stop.facts}`}
+          </p>
+          {stop.skipped === null ? null : (
+            <ul className="triage-goal-skipped" aria-label={wording.flowStopSkippedHeading}>
+              {stop.skipped.map((one) => (
+                <li key={one.request}>
+                  <span lang="">{one.request}</span>
+                  <span>{one.why}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p>{stop.next}</p>
+        </div>
+        <a className="triage-goal-link" href={stop.askedHref ?? line.href}>
+          {stop.askedHref === null ? wording.triageGoalScopeStoppedLink : wording.flowStopAskedLink}
+        </a>
+      </div>
+    );
+  }
+  // **Asking is not working on its own** (rondo#487, #488): the flow waits
+  // on the answers drawn above, so it is the person's turn.
+  const asking = line.state === "running" && line.ask !== null;
   return (
-    <div className="triage-goal-scope" data-state={line.state}>
+    <div className="triage-goal-scope" data-state={asking ? "asking" : line.state}>
       <p>
         <span className="triage-goal-dot" aria-hidden="true" />
-        {line.state === "running" ? wording.triageGoalScopeRunning : wording.triageGoalScopePaused}
+        {asking
+          ? wording.triageGoalScopeAsking
+          : line.state === "running"
+            ? wording.triageGoalScopeRunning
+            : wording.triageGoalScopePaused}
       </p>
       <a className="triage-goal-link" href={line.href}>
         {line.state === "running" ? wording.triageGoalScopePause : wording.triageGoalScopeResume}

@@ -92,6 +92,8 @@ export interface WebPorts extends InboxReadPorts {
       | "latestTriage"
       // D-0128: the goal scope in force over a goal, and whether it is paused.
       | "approvalsInForce"
+      // rondo#488: a stop the flow met before its first request.
+      | "flowStops"
       // rondo#487: the flow's asks over a candidate's open points, and the
       // *not now* that makes one hold nothing.
       | "flowAsks"

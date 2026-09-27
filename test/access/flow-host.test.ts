@@ -13,6 +13,7 @@ import { expect, test } from "vitest";
 import { approvedSplits } from "../../src/access/drafted-view.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { type FlowHostPorts, flowHost } from "../../src/access/flow-host.js";
+import { flowStopOf } from "../../src/access/flow-stop.js";
 import { unreadIssues } from "../../src/access/issue-read.js";
 import { MODEL_DRAFTER_PREFIX } from "../../src/access/model-draft/judgement.js";
 import { flowMessageId } from "../../src/advisory/flow.js";
@@ -470,6 +471,13 @@ test("a successor approval's stop in an inherited thread holds it too", async ()
   expect((await w.messages()).filter((m) => m.asks).map((m) => m.messageId)).toEqual([
     `flow-stop-sd-wide-nothing_eligible-${first}`,
   ]);
+  // The page finds it asked there, under the approval in force (rondo#488).
+  expect(await flowStopOf(w.record, await w.messages(), "g-1", "sd-wide")).toEqual({
+    kind: "asked",
+    reason: "nothing_eligible",
+    askedIn: first,
+    open: true,
+  });
   // A new candidate is ranked; the stop still stands unanswered.
   await w.triage("t-2", 0, [ranked(7), ranked(8)]);
   await w.pass();
@@ -500,6 +508,58 @@ test("an expired scope stops the flow before its first request, said on the term
   await w.pass();
   expect(await w.messages()).toEqual([]);
   expect(w.log.filter((line) => line.includes("stopped before its first request"))).toHaveLength(1);
+  // **Recorded, so the page can say it** (rondo#488): once, with its facts.
+  const stops = await w.record.flowStops();
+  expect(stops).toHaveLength(1);
+  expect(stops[0]).toMatchObject({
+    scopeDecisionId: "sd-goal",
+    repository: REPO,
+    facts: { reason: "expiry", expiresAtMs: 5_000 },
+  });
+  expect(stops[0]?.stopId.startsWith("flow-stop-sd-goal-expiry-")).toBe(true);
+  expect(await flowStopOf(w.record, await w.messages(), "g-1", "sd-goal")).toEqual({
+    kind: "recorded",
+    facts: { reason: "expiry", expiresAtMs: 5_000 },
+    atMs: 10_000,
+  });
+});
+
+test("nothing eligible before the first request records what it passed over (rondo#488)", async () => {
+  // A stopped request's resumption is not the flow's to send: passed over.
+  const resumed = (id: string): TriagePayload["ranked"][number] => ({
+    ...ranked(0),
+    key: `stopped:${id}`,
+    request: `Resume ${id}`,
+    source: { form: "stopped", iterationId: `it-${id}`, requestMessageId: id },
+  });
+  const w = await world({}, [resumed("r-1"), resumed("r-2")]);
+  await w.pass();
+  expect(await w.messages()).toEqual([]);
+  const stop = await flowStopOf(w.record, await w.messages(), "g-1", "sd-goal");
+  expect(stop).toEqual({
+    kind: "recorded",
+    facts: {
+      reason: "nothing_eligible",
+      skipped: [
+        { key: "stopped:r-1", request: "Resume r-1", why: "not_issue" },
+        { key: "stopped:r-2", request: "Resume r-2", why: "not_issue" },
+      ],
+    },
+    atMs: 10_000,
+  });
+  // A, B, A: the stop that recurs is the newest again (Codex round 2).
+  await w.triage("t-2", 0, [resumed("r-3")]);
+  await w.pass();
+  await w.triage("t-3", 0, [resumed("r-1"), resumed("r-2")]);
+  await w.pass();
+  await w.pass();
+  expect((await w.record.flowStops()).map((one) => one.facts["skipped"])).toEqual([
+    [expect.objectContaining({ key: "stopped:r-1" }), expect.anything()],
+    [expect.objectContaining({ key: "stopped:r-3" })],
+    [expect.objectContaining({ key: "stopped:r-1" }), expect.anything()],
+  ]);
+  // Another approval's stop is not this one's.
+  expect(await flowStopOf(w.record, await w.messages(), "g-1", "sd-other")).toBeNull();
 });
 
 test("a paused goal scope (laps: 0) injects nothing and asks nothing", async () => {
