@@ -24398,6 +24398,11 @@ At rondo `e537068` and continuo `f2fb450` (the pin) on **2026-09-27**:
   `--codex-home` must be absolute. A Codex lap's `spend` carries `model` and five token counts and
   leaves `total_cost_usd` and `num_turns` null; a Claude lap carries the six new keys as nulls
   (`continuo D-1114` rule 7). The Windows refusal is `continuo D-1120`, which is past the pin.
+- **One real Codex turn's usage** (`codex exec --json`, codex-cli 0.153.4, `gpt-6-astra`, a one-word
+  prompt): `input_tokens` 19830, `cached_input_tokens` 11520, `cache_write_input_tokens` 0,
+  `output_tokens` 5, `reasoning_output_tokens` 0. The cached count is part of the input, not beside
+  it. Reasoning and cache writes were zero, so rule 5's nesting of those two is the CLI's usage
+  semantics as read, not observed.
 - **Every path that drives continuo starts with `startContinuo(environment)`**, which already reads
   the host's other facts (`RONDO_CONTINUO_CLI`), and every lap's `spend` reaches the row through one
   function (`lapSpendFields`).
