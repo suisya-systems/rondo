@@ -112,6 +112,12 @@ export interface PageWords extends DayWords {
    * on saying `evStopped`.
    */
   readonly evRefused: (said: string) => string;
+  /**
+   * The third way (D-0121 rule 5): the approved budget stopped the try. `spent`
+   * and `left` are dollars, `spent` null when continuo could not say, and
+   * `left` null when no room was left to start it at all.
+   */
+  readonly evBudgetStopped: (spent: string | null, left: string | null) => string;
   readonly evBroke: string;
   readonly evBrokeReason: string;
   readonly evChecksPassed: string;
@@ -409,6 +415,14 @@ export const PAGE_EN: PageWords = Object.freeze({
     `The checks on ${pullRequest}: ${word}${detail === null ? "" : ` (${detail})`}.`,
   evStopped: "Stopped.",
   evRefused: (said) => `Stopped, because this was turned down: ${said}`,
+  evBudgetStopped: (spent, left) =>
+    `${
+      left === null
+        ? "Not started: the approved budget had nothing left for this try."
+        : spent === null
+          ? `Stopped at the approved budget, which had $${left} left for this try. What it spent was not reported.`
+          : `Stopped at the approved budget: this try spent $${spent} of the $${left} left for it.`
+    } To go on, ask again with a larger budget.`,
   evBroke: "Stopped by a fault in rondo itself. Nothing you asked for was wrong.",
   evBrokeReason: "What rondo recorded, for whoever looks after it",
   evChecksPassed: "The automatic checks all passed.",
@@ -685,6 +699,14 @@ export const PAGE_JA: PageWords = Object.freeze({
     `${pullRequest} のチェック: ${word}${detail === null ? "" : `（${detail}）`}`,
   evStopped: "取りやめました。",
   evRefused: (said) => `断られたため、ここで止まりました: ${said}`,
+  evBudgetStopped: (spent, left) =>
+    `${
+      left === null
+        ? "承認した予算に残りがなかったため、この回は始めませんでした。"
+        : spent === null
+          ? `承認した予算の上限で止まりました（この回に残っていたのは $${left}）。使った額は報告されていません。`
+          : `承認した予算の上限で止まりました。この回に残っていた $${left} のうち $${spent} を使いました。`
+    }続けるには、予算を増やして依頼し直してください。`,
   evBroke: "rondo 自身の不具合で止まりました。依頼のしかたに問題があったわけではありません。",
   evBrokeReason: "rondo が記録した内容（rondo を保守する人向け）",
   evChecksPassed: "自動チェックはすべて通りました。",

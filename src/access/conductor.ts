@@ -107,7 +107,6 @@ import { modelReadingLines } from "./model-review/judgement.js";
 import { refusalSaid } from "./page-logic/laps.js";
 import { relayQuestion } from "./question.js";
 import { LIST_LIMIT, READING_REMOTE, type ReadingOptions, readingOf } from "./review.js";
-import { type LapBudgetRecord, lapBudgetCapOf } from "./scope.js";
 import type { Chrome } from "./wording.js";
 
 export type { ConductorReport };
@@ -169,6 +168,7 @@ export function asEffect<T, U>(
         kind: "refused",
         message: result.message,
         ...(result.sessionId === undefined ? {} : { sessionId: result.sessionId }),
+        ...(result.budgetStop === undefined ? {} : { budgetStop: result.budgetStop }),
       };
     case "refusedInProse":
       // No identity here and none inferable: prose is an argparse-level refusal
@@ -202,7 +202,11 @@ export function asEffect<T, U>(
  * the row there, and reaches this layer through the loop rather than through the
  * plan the caller wrote (D-0021).
  */
-function lapRequestOf(plan: AdmittedPlan, modelTier: string): PerformLapRequest {
+function lapRequestOf(
+  plan: AdmittedPlan,
+  modelTier: string,
+  maxBudgetUsd: number | null,
+): PerformLapRequest {
   return {
     db: plan.db,
     runId: plan.runId,
@@ -226,6 +230,7 @@ function lapRequestOf(plan: AdmittedPlan, modelTier: string): PerformLapRequest 
     identityReadbackTimeoutMs: plan.identityReadbackTimeoutMs,
     gateOptions: plan.gateOptions,
     gateDeadlineAtMs: plan.gateDeadlineAtMs,
+    maxBudgetUsd,
     invocationCeilingMs: plan.invocationCeilingMs,
   };
 }
@@ -278,7 +283,7 @@ export function lapSpendFields(
 export function conductorPorts(
   continuo: VerifiedContinuo,
   store: IterationStore,
-  record: (Pick<AdvisoryRecord, "recordThreadMessage"> & LapBudgetRecord) | null,
+  record: Pick<AdvisoryRecord, "recordThreadMessage"> | null,
   now: () => number = Date.now,
   /** The person's words for a stopped lap's ask (D-0110 rule 2); null writes none. */
   words: Chrome | null = null,
@@ -389,21 +394,25 @@ export function conductorPorts(
       }
     },
     performLap: async (plan, modelTier, iterationId): Promise<EffectOutcome<LapPerformance>> => {
-      // D-0121: the room the scope's budget leaves this lap, read the moment it
-      // is sent so that the costs read since its admission count. A lap with no
-      // room left is not sent: a turn it started would only spend past the
-      // budget the person approved.
-      const budgetCapUsd = record === null ? null : await lapBudgetCapOf(record, iterationId);
-      if (budgetCapUsd !== null && budgetCapUsd <= 0) {
+      // D-0121: the room the scope's budget leaves this lap, computed and
+      // written onto its row in one transaction the moment it is sent, so the
+      // caps of laps running at once never add up past the budget (rule 7). A
+      // lap with no room left is not sent: a turn it started would only spend
+      // past the budget the person approved.
+      const budgetCapUsd = await store.sendLapBudget(iterationId, now());
+      // Below a micro dollar is no room either: continuo takes the cap in micro dollars.
+      if (budgetCapUsd !== null && budgetCapUsd < 0.000001) {
         return {
           kind: "refused",
           message:
             `the scope's budget has ${String(budgetCapUsd)} USD left for this lap once what its ` +
             "laps were read to cost and the other unread laps' reserves are taken off, so the " +
             "lap is not sent (D-0121)",
+          // Nothing was spawned, so it spent nothing: its reserve is released.
+          budgetStop: { totalCostUsd: 0 },
         };
       }
-      const outcome = await performLap(continuo, lapRequestOf(plan, modelTier));
+      const outcome = await performLap(continuo, lapRequestOf(plan, modelTier, budgetCapUsd));
       return asEffect(outcome.result, (payload) => ({
         // Kept rather than dropped: it is the only identity a lap's answer
         // carries that the conductor can check, and the check is the
@@ -521,7 +530,7 @@ export async function openConductor(
   store: IterationStore,
   environment: Readonly<Record<string, string | undefined>> = process.env,
   now: () => number = Date.now,
-  record: (Pick<AdvisoryRecord, "recordThreadMessage"> & LapBudgetRecord) | null = null,
+  record: Pick<AdvisoryRecord, "recordThreadMessage"> | null = null,
 ): Promise<
   | { readonly kind: "ready"; readonly ports: ReportingPorts; readonly revision: string }
   | { readonly kind: "refused"; readonly reason: string }

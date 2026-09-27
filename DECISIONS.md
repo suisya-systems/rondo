@@ -164,6 +164,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0125 | rondo decides whether a lap's gate would be approved automatically, and says why on the gate card: clear checks, no model finding at or above `major` on the same tip, a green test run read off the lap, no open question and no closing lap; the organisation's answer itself waits on continuo#240 | accepted |
 | D-0126 | Merge on green, opted into per scope: a scope may include `merge_default_branch`, and the checks host then merges a lap of it through the press's own path right after continuo reads the lap's own head green; `D-0064` rule 3.4's merge transition is taken, and `D-0025` rule 6's "never merges" gives way for such a merge | accepted |
 | D-0127 | Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended | accepted |
+| D-0130 | A lap's cap is written when it is sent and held until its cost is read, one reserve is kept for each lane a partner could still run in, and a budget stop ends the lap with what it spent | accepted |
 
 ---
 
@@ -24439,6 +24440,16 @@ scope's budget, and a reserve is an estimate, not an approved amount.
 - **Parallel laps that together pass the budget often.** Then the cap needs the other laps' caps,
   not their reserves.
 
+
+> **Annotation (2026-09-27, from D-0130).** Added after this entry was accepted, and additive. The
+> "Order" section's second step is carried out: the pin moved to continuo `24f1e00` (`continuo
+> D-1122`), every Claude lap is sent with its cap, and a budget stop is read as item 5 says, with
+> failure kind `budget`. **Rule 2's formula and rule 4's "written at the suspend" are superseded by
+> `D-0130`**: an unread lap holds its cap rather than its reserve once it was sent with one, one
+> reserve is kept for each free lane, and the cap is written when the lap is sent. The first bullet
+> of "What it costs" (two laps spending the same room) is what `D-0130` answers. Nothing above is
+> edited.
+
 ## D-0122 — `mechanical` runs on `claude-sonnet-5` through the Claude CLI: the tier table gains a provider column passed as `lap perform --provider`, every row `claude`, and a drafter may name a `mechanical` agent type only with one grounded claim per condition of `D-0044` rule 1
 
 **Status:** accepted (2026-09-27, rondo#89; the owner's answer through the secretary, option (a) of
@@ -24962,3 +24973,73 @@ was never released.
   screen then has to say that approving starts the work.
 - **An approval whose parts must not all run**, for example a part the person meant to drop before
   it started. That needs a per-part "not this one" that no rule decides yet.
+
+## D-0130 — A lap's cap is written when it is sent and held until its cost is read, one reserve is kept for each lane a partner could still run in, and a budget stop ends the lap with what it spent
+
+**Status:** accepted (2026-09-27, rondo#398 stage 2; the owner's answer through the secretary, option
+A of three). Partly supersedes `D-0121` rules 2 and 4, and carries out its "Order" section. Refs
+`D-0066` rule 3.4.2, `D-0023` (`maxOccupying`, 2 by default since `D-0124`), `D-0123`, `continuo D-1122`.
+
+**Why an entry is needed.** `D-0121` recorded as a known limit that two laps running at once could
+each spend the same room: a lap's cap took off the other unread laps' *reserves*, not what they were
+allowed to spend. With a budget of $50, a reserve of $5 and two lanes, a lap sent alone got $50 and
+one sent beside it $45, so together they could spend $95. The owner asked for it to be fixed with
+the cap's own sending (2026-09-27).
+
+### What was measured
+
+At rondo `a8181d1` and continuo `24f1e00` on **2026-09-27**:
+
+- **continuo enforces the cap and refuses a stopped turn** (`continuo D-1122`): `lap perform
+  --max-budget-usd <n>` takes a plain decimal (`^[0-9]{1,9}(\.[0-9]{1,9})?$`, above zero), and a
+  turn the cap stopped exits 2 as `LapBudgetExhausted` with `total_cost_usd` beside `session_id` in
+  the envelope, no gate opened. `total_cost_usd` is on that refusal and no other.
+- **The store knows the host's lanes**: it is opened with the host policy, and `maxOccupying` is
+  what `reserve()` already checks (`D-0023`).
+
+### Decision
+
+1. **A lap's cap is computed and written when it is sent, in one store transaction**
+   (`sendLapBudget`), after the lap's row is `performing`. Two laps sent together are serialised by
+   the write lock, so each sees the other's cap.
+2. **An unread lap holds its cap once it was sent with one**, and its reserve otherwise (not sent
+   yet, or sent before this entry). A read lap counts what was read. So the room a lap is sent with
+   is `cost_usd`, less what was read, less every other unread lap's hold.
+3. **One reserve is kept for each lane a partner could still run in**: `maxOccupying - 1 -` the
+   other laps of the approval running now. It is taken only from what is above this lap's own
+   reserve, so a budget that holds one lap gives that lap all of it. With $50, $5 and two lanes: the
+   first lap sent alone gets $45; one sent beside it gets $5; once the first is read at $12, the
+   next one sent gets $33.
+4. **The cap is passed to continuo on every Claude lap**, rounded down to the micro dollar, so
+   continuo never enforces more than rondo computed. A Codex lap is sent with none (`D-0121` rule 6,
+   `D-0123`); its cap is still written and still held.
+5. **A budget stop ends the lap with what it spent.** rondo reads the refusal's `total_cost_usd`
+   key, not its class, into `lap_cost_usd`, so the budget counts the spend and the lap holds nothing
+   more; the lap ends `failed` with failure kind `budget` and no gate. A lap with no room left when
+   it is sent is refused the same way, as a stop that spent nothing. The thread says what the try
+   spent of what it had and that going on means asking again with a larger budget, in the person's
+   language; continuo's class name does not reach them.
+
+**Options not taken.** B: split the room evenly across the free lanes. Fair, but a lap running alone
+always gets half. C: hold the cap and keep nothing for a partner. The first lap takes all the room
+and a lap beside it is refused, so parallel work under one approval stops.
+
+### What it costs
+
+- **A lap running alone gets one reserve less** than the room, while a second lane is free.
+- **First come, first served.** The lap sent first gets the larger cap; a partner gets what is
+  left, which is at least the reserve its admission counted.
+- **The admission rule is unchanged** (`D-0066` rule 3.4.2 counts reserves), and so is the page's
+  "held" figure. A lap admitted while another holds a large cap can find no room when it is sent,
+  and is refused then.
+- **An admitted lap not yet sent holds a reserve and does not fill a free lane** until it
+  is sent: the cap is conservative by one reserve in that case.
+- **The CLI checks between API calls**, so a lap can still pass its cap by one call (`continuo
+  D-1122`).
+
+### What would falsify it
+
+- **A turn that spends past its cap by more than one call**: then the hold does not bound what a
+  lap spends, and the sum can pass the budget.
+- **An approval whose laps are usually run one at a time on a host with a second lane**: then the
+  reserve kept for a partner is room nobody uses, and the free-lane count should read the queue.

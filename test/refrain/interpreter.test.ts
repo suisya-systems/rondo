@@ -1058,6 +1058,25 @@ test("an admission that answered nothing keeps the row at admitting and keeps th
   expect(second.status).toBeNull();
 });
 
+test("D-0121: a lap its spend cap stopped ends as a budget stop with what it spent, and opens no gate", async () => {
+  const h = harness({
+    performLap: {
+      kind: "refused",
+      message: "LapBudgetExhausted: the turn hit its cap",
+      sessionId: "s-1",
+      budgetStop: { totalCostUsd: 7.9 },
+    },
+  });
+  const report = await admitOnce(h);
+  expect(report.status).toBe("failed");
+  const row = await readRow(h.store, "i-0001");
+  expect(row?.failureKind).toBe("budget");
+  // Counted as what it spent, so its reserve is released.
+  expect(row?.lapCostUsd).toBe(7.9);
+  expect(row?.gateId).toBeNull();
+  expect(says(report, "stopped at the scope's budget")).toBe(true);
+});
+
 test("a lap that answered a refusal ends at failed and releases the lock", async () => {
   const h = harness({ performLap: { kind: "refused", message: "LeaseHeld: outbox-delivery" } });
   const report = await admitOnce(h);

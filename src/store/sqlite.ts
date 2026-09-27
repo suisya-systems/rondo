@@ -86,6 +86,7 @@ import {
   type LaneHolder,
   type LapReading,
   type LapReadingDraft,
+  lapBudgetCap,
   latestReading,
   MODEL_READING_DRAFTER_PREFIX,
   type Occupancy,
@@ -100,6 +101,7 @@ import {
   readScopePayload,
   type ScopeDecisionDraft,
   type ScopeDraft,
+  type ScopePayload,
   type ScopeRefusal,
   type ScopeSpent,
   type ScopeTest,
@@ -676,6 +678,13 @@ export interface IterationStore {
    * a line that reserved none or is not in this store. Writes nothing.
    */
   numberReservations(iterationId: string): Promise<readonly NumberReservation[]>;
+  /**
+   * The cap `iterationId` is sent with, computed and written onto its row in
+   * one transaction (D-0121 rules 2 and 7), or null where it was admitted under
+   * no approval or the approval will not read -- and then nothing is written.
+   * One transaction, so two laps sent at once each see the other's cap.
+   */
+  sendLapBudget(iterationId: string, nowMs: number): Promise<number | null>;
   /**
    * The highest number ever reserved in `record` of `repository` (as
    * `repositoryKey` spells it), released ones included, or 0 (D-0098 rule
@@ -2673,6 +2682,18 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
 
     async laneLedger(): Promise<readonly LedgerLine[]> {
       return ledgerLines(connection);
+    },
+
+    async sendLapBudget(iterationId: string, nowMs: number): Promise<number | null> {
+      return immediateTransaction(connection, () => {
+        const cap = lapBudgetCapFor(connection, iterationId, policy.maxOccupying);
+        if (cap !== null) {
+          connection
+            .prepare("UPDATE iteration SET lap_budget_cap_usd = ?, updated_at_ms = ? WHERE id = ?")
+            .run(cap, nowMs, iterationId);
+        }
+        return cap;
+      });
     },
 
     async numberReservations(iterationId: string): Promise<readonly NumberReservation[]> {
@@ -5753,6 +5774,68 @@ function admittedUnder(connection: DatabaseSync, iterationId: string): string | 
   return typeof decision === "string" && decision !== "" ? decision : null;
 }
 
+/**
+ * {@link lapBudgetCap} for one admitted lap, read from rows under the write
+ * lock, or null where no single approval admitted it or the approval's scope
+ * will not read. A lap whose cost is read counts that; an unread one holds its
+ * cap when it was sent with one and its reserve otherwise (D-0121 rule 7).
+ */
+function lapBudgetCapFor(
+  connection: DatabaseSync,
+  iterationId: string,
+  maxOccupying: number,
+): number | null {
+  const decisionId = admittedUnder(connection, iterationId);
+  if (decisionId === null) {
+    return null;
+  }
+  const decision = connection
+    .prepare("SELECT scope_id FROM scope_decision WHERE scope_decision_id = ?")
+    .get(decisionId) as SqlRow | undefined;
+  const scopeRow =
+    decision === undefined
+      ? undefined
+      : (connection
+          .prepare(`${SELECT_SCOPE} WHERE scope_id = ?`)
+          .get(String(decision["scope_id"])) as SqlRow | undefined);
+  if (scopeRow === undefined) {
+    return null;
+  }
+  let budgets: ScopePayload["budgets"];
+  try {
+    budgets = toScope(scopeRow).payload.budgets;
+  } catch (error) {
+    if (error instanceof StoreDefect) {
+      return null;
+    }
+    throw error;
+  }
+  const others = connection
+    .prepare(
+      "SELECT i.lap_cost_usd AS cost, i.lap_budget_cap_usd AS cap, i.status AS status " +
+        "FROM scope_consumption c LEFT JOIN iteration i ON i.id = c.subject_id " +
+        "WHERE c.scope_decision_id = ? AND c.act_kind = 'admission' AND c.subject_id <> ?",
+    )
+    .all(decisionId, iterationId) as SqlRow[];
+  const basis = { readCostUsd: 0, heldCapsUsd: 0, unreadUncappedLaps: 0, runningLaps: 0 };
+  for (const row of others) {
+    const cost = row["cost"];
+    const cap = row["cap"];
+    if (typeof cost === "number") {
+      basis.readCostUsd += cost;
+    } else if (typeof cap === "number") {
+      // Never below zero: a lap refused for no room holds nothing, and credits nothing back.
+      basis.heldCapsUsd += Math.max(0, cap);
+    } else {
+      basis.unreadUncappedLaps += 1;
+    }
+    if (row["status"] === "performing") {
+      basis.runningLaps += 1;
+    }
+  }
+  return lapBudgetCap(budgets, basis, maxOccupying);
+}
+
 function spentUnder(connection: DatabaseSync, scopeDecisionId: string): ScopeSpent {
   const row = connection
     .prepare(
@@ -7561,7 +7644,7 @@ function optionalText(row: SqlRow, column: string, subject = "iteration"): strin
  */
 function optionalFailureKind(row: SqlRow): FailureKind | null {
   const value = optionalText(row, "failure_kind");
-  return value === "refusal" || value === "defect" ? value : null;
+  return value === "refusal" || value === "defect" || value === "budget" ? value : null;
 }
 
 /** D-0092's answer, or null where rondo holds none; the table's CHECK already narrows it. */

@@ -80,7 +80,13 @@ export type FailureKind =
   /** Something upstream said no. The person has a next move, and it is theirs. */
   | "refusal"
   /** rondo broke. The person can do nothing about it and should not be made to read it. */
-  | "defect";
+  | "defect"
+  /**
+   * The approved budget stopped it (D-0121 rule 5): its spend cap stopped the
+   * turn, or no room was left to send it. The person's next move is a larger
+   * budget.
+   */
+  | "budget";
 
 export type IterationStatus =
   /** Reserved, with the plan and its digest committed and nothing sent. */
@@ -527,6 +533,47 @@ export type GateAnswer = "approve" | "revise";
  * them is a person saying yes.
  */
 export const APPROVED_OUTCOME = "answered_and_forwarded";
+
+/**
+ * What the other laps admitted under one approval hold, read when a lap is sent
+ * (D-0121 rule 2). Every count leaves out the lap being sent.
+ */
+export interface LapBudgetBasis {
+  /** The sum of `lap_cost_usd` over the laps whose cost was read. */
+  readonly readCostUsd: number;
+  /** The sum of the caps of the unread laps that were sent with one: each holds its cap. */
+  readonly heldCapsUsd: number;
+  /** Unread laps sent with no cap, or not sent yet: each holds `cost_reserve_usd`. */
+  readonly unreadUncappedLaps: number;
+  /** Laps running now (`performing`). */
+  readonly runningLaps: number;
+}
+
+/**
+ * The cap a lap is sent with (D-0121 rules 2 and 7): the room the approval's
+ * budget leaves it, less a reserve for every lane a partner could still run in.
+ *
+ * - **The room** is `cost_usd`, less what was read, less each unread lap's
+ *   hold: its cap when it was sent with one, its reserve otherwise. So the caps
+ *   of laps running at once never add up past the budget.
+ * - **A reserve per free lane**: `maxOccupying - 1 - runningLaps` partners
+ *   could still start beside this lap, and each is left the reserve its
+ *   admission counted. It is taken only from what is above this lap's own
+ *   reserve, so a budget that holds one lap gives that lap all of it.
+ *
+ * At or below zero means no room: a lap beside it spent past its reserve.
+ */
+export function lapBudgetCap(
+  budgets: { readonly cost_usd: number; readonly cost_reserve_usd: number },
+  basis: LapBudgetBasis,
+  maxOccupying: number,
+): number {
+  const reserve = budgets.cost_reserve_usd;
+  const room =
+    budgets.cost_usd - basis.readCostUsd - basis.heldCapsUsd - basis.unreadUncappedLaps * reserve;
+  const partners = Math.max(0, maxOccupying - 1 - basis.runningLaps);
+  return room - Math.min(partners * reserve, Math.max(0, room - reserve));
+}
 
 /**
  * Whether a lap spent all the room the scope's budget left it when it was sent

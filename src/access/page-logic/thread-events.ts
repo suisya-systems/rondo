@@ -149,6 +149,18 @@ function endedLine(
         said: refusalSaid(wording, record, record.reason) ?? wording.evRefused(record.reason),
         yours: true,
       };
+    case "budget": {
+      // D-0121 rule 5: the person's to act on, with what the try spent and the
+      // room it was sent with. A cap at or below zero was no room at all.
+      const left = record.lapBudgetCapUsd;
+      return {
+        said: wording.evBudgetStopped(
+          record.lapCostUsd === null ? null : record.lapCostUsd.toFixed(2),
+          left === null || left <= 0 ? null : left.toFixed(2),
+        ),
+        yours: true,
+      };
+    }
     case "defect":
       return {
         said: wording.evBroke,
