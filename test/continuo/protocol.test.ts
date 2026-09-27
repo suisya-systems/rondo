@@ -321,6 +321,31 @@ describe("continuo's own refusals", () => {
     expect("sessionId" in result).toBe(false);
   });
 
+  test("a budget stop is read from its total_cost_usd key, and every other refusal carries none (continuo D-1122)", () => {
+    const stopped = (metadata: Record<string, unknown>) =>
+      decode(
+        LAP_PERFORM,
+        output({
+          status: 2,
+          stderr: refusal(LAP_PERFORM.schema, "LapBudgetExhausted", "the turn hit its cap", {
+            session_id: "s-r1-1",
+            ...metadata,
+          }),
+        }),
+      );
+    expect(stopped({ total_cost_usd: 0.0209669 })).toMatchObject({
+      kind: "refused",
+      sessionId: "s-r1-1",
+      budgetStop: { totalCostUsd: 0.0209669 },
+    });
+    // null is continuo saying the CLI did not report it: still a budget stop.
+    expect(stopped({ total_cost_usd: null })).toMatchObject({
+      budgetStop: { totalCostUsd: null },
+    });
+    expect("budgetStop" in stopped({})).toBe(false);
+    expect(stopped({ total_cost_usd: "0.02" }).kind).toBe("invokerDefect");
+  });
+
   test("the identity is the field or nothing, and never the message", () => {
     // D-0015 rule 7, as a case: the sentence quotes an id -- continuo's
     // messages have always quoted it -- and the key is absent because this

@@ -72,6 +72,7 @@ function lapRequest(overrides: Partial<PerformLapRequest> = {}): PerformLapReque
     identityReadbackTimeoutMs: 30_000,
     gateOptions: [],
     gateDeadlineAtMs: null,
+    maxBudgetUsd: null,
     invocationCeilingMs: 1_800_000,
     ...overrides,
   };
@@ -220,6 +221,21 @@ describe("the numbers", () => {
     const reason = defectReason(await performedLap({ pollIntervalMs: 1.5 }));
     expect(reason).toContain("pollIntervalMs");
     expect(reason).not.toContain(REACHED_RUN);
+  });
+});
+
+describe("the spend cap (D-0121, continuo D-1122)", () => {
+  test("a cap continuo can enforce reaches the spawn", async () => {
+    const reason = defectReason(await performedLap({ maxBudgetUsd: 45.1234567 }));
+    expect(reason).toContain(REACHED_RUN);
+  });
+
+  test("a cap below a micro dollar, or not a number, is refused before it becomes an argv string", async () => {
+    for (const maxBudgetUsd of [0.0000004, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const reason = defectReason(await performedLap({ maxBudgetUsd }));
+      expect(reason, String(maxBudgetUsd)).toContain("maxBudgetUsd");
+      expect(reason).not.toContain(REACHED_RUN);
+    }
   });
 });
 

@@ -1200,3 +1200,53 @@ test("D-0098 rule 5.5: a line that already had a closing lap is refused a second
   ).toContain("'i-close' of this line was already its closing lap");
   expect(count(connection, "SELECT COUNT(*) AS n FROM closing_lap")).toBe(1);
 });
+
+// --- The cap a lap is sent with (D-0121) ---------------------------------------
+
+test("D-0121: laps sent under one approval hold their caps, and the caps never add up past the budget", async () => {
+  const payload = withBudgets({ cost_usd: 50, cost_reserve_usd: 5 });
+  const seed = await seeded({ maxOccupying: 2, maxLive: 100 });
+  expect(await seed.record.recordScope(scope({ payload }))).toEqual({ kind: "recorded" });
+  expect(
+    await seed.record.recordScopeDecision(scopeDecision({ scopeDigest: contentDigest(payload) })),
+  ).toEqual({ kind: "recorded" });
+  const { connection, store } = seed;
+  const running = (id: string) =>
+    connection.prepare("UPDATE iteration SET status = 'performing' WHERE id = ?").run(id);
+  const capOf = (id: string) =>
+    (
+      connection.prepare("SELECT lap_budget_cap_usd AS c FROM iteration WHERE id = ?").get(id) as {
+        c: number | null;
+      }
+    ).c;
+
+  // Sent alone, with a second lane free: the room less one reserve for a partner.
+  admitted(connection, "i-a", null);
+  running("i-a");
+  expect(await store.sendLapBudget("i-a", 10)).toBe(45);
+  expect(capOf("i-a")).toBe(45);
+  // Sent beside it: what is left, which is the reserve its admission counted.
+  admitted(connection, "i-b", null);
+  running("i-b");
+  expect(await store.sendLapBudget("i-b", 11)).toBe(5);
+  // The first is read at 12: the next lap gets what the budget still holds,
+  // less the second's cap, with no lane left for a partner.
+  connection
+    .prepare("UPDATE iteration SET lap_cost_usd = 12, status = 'closed' WHERE id = 'i-a'")
+    .run();
+  admitted(connection, "i-c", null);
+  running("i-c");
+  expect(await store.sendLapBudget("i-c", 12)).toBe(33);
+});
+
+test("D-0121: a budget that holds one lap gives it all, and a lap under no approval has no cap", async () => {
+  const payload = withBudgets({ cost_usd: 5, cost_reserve_usd: 5 });
+  const seed = await seeded({ maxOccupying: 2, maxLive: 100 });
+  expect(await seed.record.recordScope(scope({ payload }))).toEqual({ kind: "recorded" });
+  expect(
+    await seed.record.recordScopeDecision(scopeDecision({ scopeDigest: contentDigest(payload) })),
+  ).toEqual({ kind: "recorded" });
+  admitted(seed.connection, "i-a", null);
+  expect(await seed.store.sendLapBudget("i-a", 10)).toBe(5);
+  expect(await seed.store.sendLapBudget("i-held", 10)).toBeNull();
+});

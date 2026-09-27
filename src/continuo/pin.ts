@@ -85,8 +85,14 @@ export const CONTINUO_REPOSITORY = "https://github.com/suisya-systems/continuo.g
  * worktree (`D-0119` rule 4). The commits in between (`D-1114` to `D-1118`)
  * add a Codex worker and sandbox checks that rondo does not select; the keys
  * rondo reads are unchanged.
+ *
+ * **It moves again to take `continuo D-1122`** (continuo#241): `lap perform
+ * --max-budget-usd`, the cap rondo sends every Claude lap with (`D-0121`), and
+ * the `LapBudgetExhausted` refusal carrying `total_cost_usd` when the cap stops
+ * a turn. The commits in between (`D-1120`, a fence-shapes test fix, and a
+ * documentation pass) change nothing rondo reads.
  */
-export const CONTINUO_REVISION = "f2fb45092f8d3f00613b1612ecbf6932a229d35a";
+export const CONTINUO_REVISION = "24f1e004a141c9b51374c13ea8a480d8f8066349";
 
 /**
  * The exact line the pinned build's `--version` prints.
@@ -102,7 +108,7 @@ export const CONTINUO_REVISION = "f2fb45092f8d3f00613b1612ecbf6932a229d35a";
  * rondo wrote for itself.
  */
 export const CONTINUO_VERSION_LINE =
-  "@suisya-systems/continuo 0.0.0 (rev f2fb45092f8d3f00613b1612ecbf6932a229d35a)";
+  "@suisya-systems/continuo 0.0.0 (rev 24f1e004a141c9b51374c13ea8a480d8f8066349)";
 
 /** What a build reports when it has no git information (`continuo`'s literal). */
 const REVISION_UNKNOWN = "unknown";

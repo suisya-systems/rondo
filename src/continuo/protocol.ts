@@ -118,6 +118,16 @@ export type ContinuoResult<T> =
        * {@link message} (D-0015 rule 7).
        */
       readonly sessionId?: string;
+      /**
+       * Present exactly when the refusal is a turn its spend cap stopped
+       * (`continuo D-1122`): what the turn spent, null when the CLI did not say.
+       *
+       * **Read from the key, not from {@link errorClass}.** continuo adds
+       * `total_cost_usd` to the envelope on that refusal and no other, so its
+       * presence is the structured fact; the class stays a hint rondo does not
+       * branch on.
+       */
+      readonly budgetStop?: { readonly totalCostUsd: number | null };
     }
   /** Exit 2 whose stderr is not a document: an argparse-level refusal, in
    *  prose. Relayed verbatim (escaped at the terminal boundary), never parsed. */
@@ -1446,6 +1456,10 @@ function decodeRefusal<T>(contract: VerbContract<T>, stderr: string): ContinuoRe
     // already reads -- and a verb that starts naming its session later is
     // decoded by this line on the day it does.
     const sessionId = optionalIdentity(document, "session_id");
+    const budgetStop =
+      fieldValue(document, "total_cost_usd") === undefined
+        ? undefined
+        : { totalCostUsd: nullableNumber(document, "total_cost_usd") };
     return {
       kind: "refused",
       db: requireString(document, "db"),
@@ -1455,6 +1469,7 @@ function decodeRefusal<T>(contract: VerbContract<T>, stderr: string): ContinuoRe
       // present key holding `undefined` is a different value from an absent one,
       // and the record is meant to say what the document said.
       ...(sessionId === undefined ? {} : { sessionId }),
+      ...(budgetStop === undefined ? {} : { budgetStop }),
     };
   } catch (error) {
     return unreadable(verbName(contract), `a '${contract.schema}' refusal document`, error);

@@ -1481,6 +1481,19 @@ async function performStep(
     case "refused":
     case "defect": {
       const session = refusedSessionId(walked);
+      // D-0121 rule 5: a lap its spend cap stopped, or one with no room left to
+      // send, ends here with what it spent on the row, so the budget counts the
+      // spend and releases the lap's reserve. It opens no gate.
+      const budgetStop = walked.kind === "refused" ? walked.budgetStop : undefined;
+      if (budgetStop !== undefined) {
+        lines.push(
+          budgetStop.totalCostUsd === null
+            ? "The lap stopped at the scope's budget, and continuo could not say what it spent; " +
+                "it keeps its reserve (D-0121)."
+            : `The lap stopped at the scope's budget, having spent ${String(budgetStop.totalCostUsd)} ` +
+                "USD (D-0121).",
+        );
+      }
       if (session !== undefined) {
         // **Said before it is committed**, exactly as the answered path says its
         // gate id first and for the same reason: a blocked commit -- an operator
@@ -1510,8 +1523,9 @@ async function performStep(
         // lap whose session is unknown keeps a null rather than a guess.
         {
           reason: messageOf(walked),
-          failureKind: failureKindOf(walked),
+          failureKind: budgetStop === undefined ? failureKindOf(walked) : "budget",
           ...(session === undefined ? {} : { sessionId: session }),
+          ...(budgetStop === undefined ? {} : { lapCostUsd: budgetStop.totalCostUsd }),
         },
         `The lap did not complete: ${messageOf(walked)}`,
         // The lock is released on both spellings, because an answer means the

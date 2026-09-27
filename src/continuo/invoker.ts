@@ -906,6 +906,14 @@ export interface PerformLapRequest {
   readonly gateOptions: readonly string[];
   readonly gateDeadlineAtMs: number | null;
   /**
+   * The most the lap's turn may spend, in US dollars (`D-0121`), passed as
+   * `continuo D-1122`'s `--max-budget-usd`, or null for no cap. Sent only to
+   * a Claude lap: continuo refuses the flag under `--provider codex`, whose CLI
+   * has no spend cap, and `D-0121` holds a Codex lap to the budget only before
+   * it starts.
+   */
+  readonly maxBudgetUsd: number | null;
+  /**
    * **Not a continuo flag.** rondo's own ceiling on the whole invocation,
    * passed to {@link run} as the per-call timeout override. It never reaches a
    * command line, and it is the operator's declared patience rather than
@@ -1000,6 +1008,7 @@ export async function performLap(
       // its own argument, and it has been checked as an id on that assumption.
       "--model",
       selection.model,
+      ...(selection.provider === "claude" ? budgetFlag(request.maxBudgetUsd) : []),
       "--interlock-root",
       requireAbsolute("interlockRoot", request.interlockRoot),
       "--claude-org-path",
@@ -1030,6 +1039,27 @@ export async function performLap(
     result: await run(continuo, LAP_PERFORM, argv, { timeoutMs: ceiling }),
     model: selection.model,
   };
+}
+
+/**
+ * `--max-budget-usd`, in the plain decimal `continuo D-1122` accepts
+ * (`^[0-9]{1,9}(\.[0-9]{1,9})?$`, above zero). Rounded **down** to the micro
+ * dollar, so the cap continuo enforces is never above the one rondo computed,
+ * and refused when that leaves nothing: a cap that small is no room at all.
+ */
+function budgetFlag(maxBudgetUsd: number | null): readonly string[] {
+  if (maxBudgetUsd === null) {
+    return [];
+  }
+  const micro = Math.floor(maxBudgetUsd * 1_000_000);
+  if (!Number.isFinite(maxBudgetUsd) || micro <= 0 || micro >= 1e15) {
+    throw new ArgumentRefusal(
+      `'maxBudgetUsd' is ${String(maxBudgetUsd)}, and a cap continuo can enforce is a positive ` +
+        "amount of at least one micro dollar and fewer than ten digits of whole dollars",
+    );
+  }
+  const text = (micro / 1_000_000).toFixed(6).replace(/\.?0+$/, "");
+  return ["--max-budget-usd", text];
 }
 
 /** `--endpoint-recipient`, checked against continuo's `choices`. */

@@ -68,6 +68,12 @@ export type EffectOutcome<T> =
        * on a refusal (`continuo D-1102`).
        */
       readonly sessionId?: string;
+      /**
+       * Present when the refusal is a lap its spend cap stopped (D-0121 rule 5,
+       * `continuo D-1122`): what it spent, null when continuo could not say.
+       * Only `performLap` carries one.
+       */
+      readonly budgetStop?: { readonly totalCostUsd: number | null };
     }
   | { readonly kind: "defect"; readonly reason: string }
   | { readonly kind: "noAnswer"; readonly reason: string };
