@@ -7951,7 +7951,7 @@ export type PublishPlanned =
  */
 export type PublishBodyComposing = (
   reportLanguage: string | null,
-) => Promise<ComposedBodyOutcome>;
+) => Promise<ComposedBodyOutcome | null>;
 
 /**
  * The English sections composed from this lap's report (`D-0079` section 4), or
@@ -8034,6 +8034,13 @@ function pagePublishBody(
 /**
  * The page's press: the body the preview recorded, and nothing composed
  * (rondo#290). Null for a lap that records no gate, which has no row to find.
+ *
+ * **No row is no body, and not a body saying there is no row.** A press reaches
+ * this where nothing ever recorded one -- a publish under a scope with no screen
+ * behind it, or a preview whose row would not write -- and what {@link
+ * publishBodyOnce} answers in that same case is null too. The two surfaces
+ * therefore render one and the same body, which the digest the press compares
+ * against the screen requires of them.
  */
 function pressedPublishBody(
   record: Pick<AdvisoryRecord, "publishBodyFor">,
@@ -8043,14 +8050,7 @@ function pressedPublishBody(
     return null;
   }
   const subject = { iterationId: lap.id, gateId: lap.gateId };
-  return async () =>
-    (await recordedPublishBody(record, subject)) ?? {
-      kind: "unavailable",
-      // A press before anything composed one. The screen that drew this lap
-      // composed and recorded a body, so the two agree only where that run came
-      // to nothing at all -- and then both say so and neither quotes the report.
-      reason: "no English account of this lap's report is recorded for it",
-    };
+  return async () => await recordedPublishBody(record, subject);
 }
 
 export async function publishPlanFor(

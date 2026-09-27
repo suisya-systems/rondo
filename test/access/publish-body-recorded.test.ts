@@ -169,7 +169,7 @@ test("a report that would not read is recorded as such, so the screen and the pr
   const subject = { iterationId: record.id, gateId: `gate-${record.id}` };
   const first = ports(advisory, null);
   const outcome = await publishBodyOnce(first.ports, subject, "ja");
-  expect(outcome.kind).toBe("unavailable");
+  expect(outcome?.kind).toBe("unavailable");
   expect(first.documents).toHaveLength(0);
   // Recorded all the same: a body that is missing is missing on both surfaces,
   // which is what keeps the press's digest the screen's.
@@ -208,12 +208,35 @@ test("the recorded body is the body the pull request is opened with, and the rep
   expect(text.body).not.toContain("変更の要旨");
 });
 
-test("a lap that asked its worker for no language records no body (rondo#290)", async () => {
+test("a lap that asked its worker for no language still records a composed body (rondo#290)", async () => {
   const { record, advisory } = await closedLap(null);
-  // The plan names no language, so `publishPlanFor` asks for no composing at all
-  // -- which is why every body published before this existed is unchanged.
+  const subject = { iterationId: record.id, gateId: `gate-${record.id}` };
+  // **The plan names no language, and the composing runs anyway.** What the row
+  // holds is the language the lap *asked* for, and a lap that asked for none
+  // still reports in whatever language the request was written in -- which is
+  // the case whose body used to reach the forge with no English account in it.
   expect(record.plan["material_language"]).toBe(null);
-  expect(await recordedPublishBody(advisory, { iterationId: record.id, gateId: "gate-none" })).toBe(
-    null,
-  );
+  const first = ports(advisory, REPORT);
+  expect(await publishBodyOnce(first.ports, subject, null)).toEqual({
+    kind: "composed",
+    ...SECTIONS,
+  });
+  expect(first.documents[0]).toContain(REPORT);
+  // The document says the language was not asked for rather than naming one.
+  expect(first.documents[0]).toContain("no particular language");
+  expect(first.documents[0]).not.toContain("IETF language tag '");
+  expect(await recordedPublishBody(advisory, subject)).toEqual({ kind: "composed", ...SECTIONS });
+});
+
+test("a row that would not write leaves the preview reading no body, as the press does (rondo#290)", async () => {
+  const { record, advisory } = await closedLap("ja");
+  // **The row is what both surfaces read, so a write that fails is a body both
+  // of them do without.** A press finds no row and composes nothing
+  // (`pressedPublishBody`); a preview whose row would not write answers the same
+  // null, and the two therefore render one body rather than disagreeing over the
+  // digest the press compares.
+  const subject = { iterationId: record.id, gateId: "gate-not-this-lap" };
+  const first = ports(advisory, REPORT);
+  expect(await publishBodyOnce(first.ports, subject, "ja")).toBe(null);
+  expect(await recordedPublishBody(advisory, subject)).toBe(null);
 });

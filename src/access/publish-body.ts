@@ -410,15 +410,21 @@ export async function recordedPublishBody(
  * is there. Nothing is composed twice for one lap: a row another pass wrote
  * first is `covered`, and what is read back is that row.
  *
+ * **What this answers is the row and never this run's own outcome**, which is
+ * the whole of how the screen and the press are kept from disagreeing. A store
+ * that would not take the row leaves this null -- exactly what
+ * {@link recordedPublishBody} answers the press with -- so the two surfaces show
+ * one body without an account rather than two different bodies; the next pass
+ * composes again and writes it.
+ *
  * **Never throws**, for {@link composePublishBody}'s reason: a body is not worth
- * refusing an approved lap over, so a store that will not take the row answers
- * with the run's own outcome and the next pass writes it.
+ * refusing an approved lap over.
  */
 export async function publishBodyOnce(
   ports: RecordedBodyPorts,
   subject: PublishBodySubject,
   reportLanguage: string | null,
-): Promise<ComposedBodyOutcome> {
+): Promise<ComposedBodyOutcome | null> {
   const already = await recordedPublishBody(ports.record, subject);
   if (already !== null) {
     return already;
@@ -432,7 +438,7 @@ export async function publishBodyOnce(
             "the gate this lap reported at would not read, so there was no report to compose from",
         } as const)
       : await composePublishBody(ports, { report, reportLanguage });
-  const written = await ports.record.recordPublishBody(
+  await ports.record.recordPublishBody(
     {
       proposalId: ports.mintId(),
       kind: "publish_body",
@@ -460,10 +466,8 @@ export async function publishBodyOnce(
     } satisfies ProposalDraft,
     subject.gateId,
   );
-  if (written.kind === "covered") {
-    // Another pass composed it first: that row is the body, and this run's
-    // answer is thrown away rather than shown beside it.
-    return (await recordedPublishBody(ports.record, subject)) ?? outcome;
-  }
-  return outcome;
+  // The row, whoever wrote it. A pass that found `covered` was beaten to it by
+  // another, and that row is the body: this run's answer is thrown away rather
+  // than shown beside it.
+  return await recordedPublishBody(ports.record, subject);
 }
