@@ -113,6 +113,13 @@ export interface DraftTemplate {
   readonly heldAtMs: number;
 }
 
+/** One repository's tracked paths at a ref, two levels deep, or null when git would not list them. */
+export interface DraftRepositoryPaths {
+  readonly repository: string;
+  readonly ref: string;
+  readonly paths: readonly string[] | null;
+}
+
 /**
  * One agent type the drafter may name (rule 2.1.2).
  *
@@ -177,6 +184,12 @@ export interface DrafterMaterial {
    */
   readonly policies: readonly never[];
   readonly laps: readonly DraftLap[];
+  /**
+   * What each offered template's repository holds at its base branch (D-0136,
+   * rondo#496): the paths a claim is drawn from. Without them every claim fell
+   * back to `/`, since a thread seldom names a file.
+   */
+  readonly repositoryPaths: readonly DraftRepositoryPaths[];
   /** The iteration rows rule 4.2 reads, reduced to the fields it reads. */
   readonly rows: readonly BudgetRow[];
   /** The document's assembly time (rule 4.2.6). */
@@ -286,9 +299,12 @@ const INSTRUCTIONS = [
   "  paths can run at the same time and plans that share one run one after the other. A path is",
   "  relative to the repository root and spelled with '/': a file ('README.md'), or a directory",
   "  ending in '/' ('src/store/') that covers everything under it. No patterns ('*', '?', '[').",
-  "  '/' alone is the whole repository. Claim from what the thread says the work touches; when it",
-  "  does not say, or you are unsure, claim wider: a claim too wide only makes plans wait, a",
-  "  claim too narrow lets two plans change one file at once. When nothing narrows it, claim '/'.",
+  "  '/' alone is the whole repository. Claim the files and directories the work touches, read",
+  "  from the thread and from REPOSITORY PATHS: a directory from that list covers the files under",
+  "  it, and a plan that also changes shared files (tests, documents, word lists) claims those",
+  "  too. Claim '/' only when the work really spans the whole repository. A path a lap changes",
+  "  outside its claim is added to it when the lap finishes, or put to the person when another",
+  "  plan holds that path, so a claim naming the right directories is safe even if it misses one.",
   "- A plan that can only start once an earlier plan of this split has been merged names it by",
   '  "after": that plan\'s index in "plans", from 0 and earlier than its own. It then starts by',
   "  itself once that plan is merged. Use it for a chain across repositories: a change in one",
@@ -311,6 +327,7 @@ function carried(material: DrafterMaterial): string[] {
   return [
     ...material.thread.flatMap((m) => [m.messageId, m.body]),
     ...material.templates.map((t) => JSON.stringify(t.plan)),
+    ...material.repositoryPaths.flatMap((r) => r.paths ?? []),
     ...material.laps.flatMap((lap) => [
       lap.prompt ?? "",
       ...lap.readings.flatMap((r) => r.findings),
@@ -320,7 +337,7 @@ function carried(material: DrafterMaterial): string[] {
 
 /**
  * The document rondo hands the drafter on standard input (D-0071 rules 1.3 and
- * 2.1): fixed instructions, then six fenced sections. Deterministic: the same
+ * 2.1): fixed instructions, then seven fenced sections. Deterministic: the same
  * material is the same document.
  */
 export function drafterDocument(material: DrafterMaterial): string {
@@ -413,6 +430,16 @@ export function drafterDocument(material: DrafterMaterial): string {
                   ? `recorded from setup ${a.source.setupId} if a scope lists it`
                   : `recorded from message ${a.source.messageId} if a scope lists it`
             }`,
+        )
+        .join("\n"),
+    ),
+    section(
+      "REPOSITORY PATHS",
+      material.repositoryPaths
+        .map(
+          (r) =>
+            `--- ${r.repository} at ${r.ref}\n` +
+            (r.paths === null ? "(git would not list it)" : r.paths.join("\n")),
         )
         .join("\n"),
     ),

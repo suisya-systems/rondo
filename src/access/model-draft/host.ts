@@ -33,7 +33,7 @@ import {
   type LaneClaimAsk,
 } from "../../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
-import type { runDrafter } from "../forge.js";
+import type { readRepositoryPaths, runDrafter } from "../forge.js";
 import { hostFailure } from "../host-failure.js";
 import { issueForDrafter, type WorkRepository, workRepository } from "../issue-read.js";
 import { agentTypeRecordOf } from "../scope.js";
@@ -61,6 +61,12 @@ export interface DrafterPorts {
   >;
   readonly runDrafter: typeof runDrafter;
   readonly now: () => number;
+  /**
+   * What a repository holds at a ref (D-0136). Absent lists nothing: the page
+   * reads held plans through the same gathering on every render, and only a
+   * drafter run is handed the listing.
+   */
+  readonly listPaths?: typeof readRepositoryPaths;
 }
 
 /** One finished run: what it was handed and what came of it. */
@@ -198,7 +204,7 @@ export function threadOf(
  * that into an unavailable run.
  */
 export async function gatherDrafterMaterial(
-  ports: Pick<DrafterPorts, "store" | "record" | "now">,
+  ports: Pick<DrafterPorts, "store" | "record" | "now" | "listPaths">,
   requestMessageId: string,
   language: string | null,
 ): Promise<DrafterMaterial> {
@@ -312,6 +318,21 @@ export async function gatherDrafterMaterial(
     }
   }
 
+  // **The paths a claim is drawn from** (D-0136, rondo#496): each offered
+  // repository at the branch its laps start from, read once per pair.
+  const listPaths = ports.listPaths;
+  const listings = new Map<string, { readonly repository: string; readonly ref: string }>();
+  for (const template of offered) {
+    const planned = readRunPlan(template.plan);
+    if (listPaths !== undefined && planned.kind === "planned") {
+      const { repository, baseBranch: ref } = planned.plan;
+      listings.set(`${repository}\0${ref}`, { repository, ref });
+    }
+  }
+  const repositoryPaths = await Promise.all(
+    [...listings.values()].map(async (at) => ({ ...at, paths: (await listPaths?.(at)) ?? null })),
+  );
+
   const laps = [];
   for (const record of records
     .filter((r) => r.requestMessageId === requestMessageId)
@@ -339,6 +360,7 @@ export async function gatherDrafterMaterial(
     agentTypes: [...agentTypes.values()],
     policies: [],
     laps,
+    repositoryPaths,
     rows: records.map(budgetRow),
     draftedAtMs,
     language,
