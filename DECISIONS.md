@@ -186,6 +186,8 @@ C-NN`, so the spaces can never be read as one.
 | D-0151 | The scope card waits for rondo's draft: while the drafter still owes a request its draft, the thread, the right face and the list all say it is rondo's turn, and no scope is offered | accepted |
 | D-0152 | A lap continuo refused before its cost was read holds its reserve at a lap's send, the number the page counts, and not its cap; reading a timed-out lap's cost is continuo's | accepted |
 | D-0153 | The landing is read from the remote the publish recorded pushing to: no record is undetermined and waits for a release press, and a record this host disagrees with is a person's to settle | accepted |
+| D-0154 | A drafted scope ready for approval is the person's turn: the list, the header's count, the tab and the notification count it once rondo's draft is ready | accepted |
+| D-0155 | A merge waits only on the questions that hold its line: a question over another line the person answered with a stop no longer withholds the merge, on the page or on green | accepted |
 
 ---
 
@@ -25461,6 +25463,20 @@ the newest goal: an edit would widen an approval nobody re-read.
 > can be told apart. That is not done here and is a known limit: **a decision a re-ranking finds
 > after the answer is not asked**, and is left to the drafter and the lap. Nothing above is edited.
 
+> **Annotation (2026-09-28, from rondo#540).** Added after this entry was accepted, and additive.
+> Found in lap 19: the front's card drew the latest ranking's first candidate (#534), while the ask
+> under it, raised from an older reading, was over #286. A person reading the card answered the
+> form and started #286. *Not now* on #534 then re-drew #534, because the card changed only when the
+> next reading landed (77 s later). **While the flow waits on an ask, the card is the asked
+> candidate**, in the ask's request line and why (the words the form sends). The other candidates
+> the ranking holds fold under it in ranking order. **A candidate put aside leaves the card at
+> once**: the page drops every candidate a *not now* in that repository names, as the picker and the
+> next reading do, without waiting for that reading. Options not taken: keeping ranking order and
+> labelling the first card *not the one asked* (two full cards to tell apart), and re-reading on the
+> press (a model run on every *not now*, and still a race). Known limit: while an answered candidate
+> waits for a slot, the page still reads an open ask over another candidate as the one the flow
+> waits on. Nothing above is edited.
+
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 
 **Status:** accepted (2026-09-27, rondo#452). The issue records `D-0098`'s gate (2026-09-22, point
@@ -27208,3 +27224,96 @@ than one lap.
   only way work reaches a forge here, and what else pushes has to record it too.
 - **An operator who keeps two remotes on purpose** and wants both read. Then the reading needs a
   set of remotes rather than one, and rule 4 becomes a read of each instead of a stop.
+
+## D-0154 — A drafted scope ready for approval is the person's turn: the list, the header's count, the tab and the notification count it once rondo's draft is ready
+
+**Status:** accepted (2026-09-28, rondo#534). Follows `D-0151` (its option not taken, *lifting a
+drafted scope into the list's your turn*, left for its own issue). Refs `D-0036` rule 5, `D-0083`
+rule 2, rondo#311 (reaching the person), `D-0090` (a repository to add first).
+
+### Context
+
+After `D-0151` the thread shows the amber *approve the drafted scope* card once rondo's draft is
+ready, but `waitsOnYou` read only gates and questions. The request was missing from the list's
+*your turn* group, from the header's waiting count and the tab's badge, and from the host's
+notification: the person could find it only by opening the thread, while approving it was the one
+thing that moved the request.
+
+### Decision
+
+1. **A request is waited on by its drafted scope exactly when the thread's card offers it**: a
+   root request with no lap (live or ended), no question standing in its thread, no draft still
+   owed (`D-0151`'s `owed`), no repository to add first (`D-0090`), and whose standing is a draft
+   nobody has decided (`draftedStanding` kind `drafted`). `scopesAwaitingYou` in
+   `page-logic/waits.ts` is that reading, and the page and the host's tick both call it beside
+   `waitsOnYou`.
+2. **Its episode is the draft's scope id** (`scope:<scopeId>`). A redraft over a newer message is a
+   new scope and a new wait, so a person told about the old draft is told about the new one; the
+   same draft is told once (`D-0068` rule 3.1).
+3. **The header's count adds one per such request**, beside gates, questions and approvable
+   proposals. The drafter's split proposal is not an approvable kind, so it is not counted twice.
+4. **What is owed is read once per pass by one function** (`draftsOwedNow`, moved beside
+   `waitsOnYou`): a read that fails owes everything, so it withholds the wait as it withholds the
+   card.
+
+**Options not taken.** Counting a request with no draft (no drafter host, or a run that drafted
+nothing) as the person's turn: nothing rondo holds waits on them, and with no drafter host every
+new request would ring. Making `waitsOnYou` itself async: its synchronous reading is what the tests
+and the tab pin, and the scope reading needs the record; the two are concatenated at the two callers.
+
+### What it costs
+
+- **The page and the tick read the scope standing of every lapless request** each pass. Bounded by
+  the requests with no lap, no question and nothing owed.
+
+### What would falsify it
+
+- **A notification or a *your turn* row for a request whose thread shows no approve card**: then
+  the conditions in rule 1 have drifted from `threadActs`.
+
+## D-0155 — A merge waits only on the questions that hold its line: a question over another line the person answered with a stop no longer withholds the merge, on the page or on green
+
+**Status:** accepted (2026-09-28, rondo#539; the option the task brief recommended, taken while the
+owner was away). Narrows `D-0091` rule 1's "nothing in the thread waiting on the person" and
+`D-0126`'s merge on green. Refs `D-0064` (P2 to P4 open), `D-0072` rule 3, `D-0105`.
+
+**Why an entry is needed.** On lap-19 (2026-09-28, rondo `2fe4f51`) the request for rondo#290 ran
+four lines. Lap-9eda7616, the tip of the last one, went green on pull request #537 at 04:38, and the
+checks host logged `not merged on green, left for the press: nothing was merged: the merge is not
+offered: asked`. Every lap of the request had ended by then, so no gate was waiting. The one
+question still in `threads.waiting` under the request was `lap-stopped-lap-9c0887f1`, the time-limit
+stop of the request's first line, which the person had answered `stop` ("この線を止めます…出し直します").
+Every other question in the thread had been answered `carry_on`. Under `D-0072` rule 3 only a
+`carry_on` closes a question, so a stopped line's question waits for ever, and the merge, the page's
+merge card and the merge screen each counted any waiting question in the request. The person merged
+#537 by hand.
+
+### Decision
+
+1. **A waiting question in the request's thread holds a line's merge unless it names laps, none of
+   them in that line, and the person answered it `stop`.** So a question about the request as a
+   whole holds it; a question over this line holds it, stopped or not (a stop holds its own line);
+   a question over another line nobody has answered yet holds it. A question carried on to a
+   successor is not waiting, so it needs no rule here. The line is the lane ledger's holding line
+   of the lap, every lap of it root first.
+2. **One test for the press and the page** (`askHoldsMerge` in `src/access/page-logic/result.ts`):
+   `mergeOnce` (the press and the merge on green), the thread's merge card and the merge screen all
+   pass it to `mergeBlock` as `asked`. Another lap of the request at its gate still withholds the
+   merge, as before.
+
+**Options not taken.** Let a question over another line that has been released stop holding too:
+a line that ended with nothing to land has not had its question answered, and the person may still
+continue it. Scope every question to the line as `askOverLine` does for publish and the gate: a
+question about another line nobody has answered is still an item open on the person (`D-0064`), and
+merging past it is not what they were asked.
+
+### What it costs
+
+- **A green that was withheld before this is not merged by itself afterwards.** The checks host
+  merges on green only when it writes a new green report; a lap withheld before the fix is left to
+  the press, which the page now offers.
+
+### What would falsify it
+
+- **A person who stopped one line and still expected a sibling line's merge to wait for them.**
+  Then a stop over one line has to ask whether the request's other lines may still merge.

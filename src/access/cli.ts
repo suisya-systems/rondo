@@ -1819,6 +1819,10 @@ export async function main(
       words: chromeFor(selected.tag),
       notify: notifierAt(environment[NOTIFIER_ENV] ?? null),
       say,
+      // A drafted scope is a turn once the page would offer it (rondo#534).
+      draftsOwed: () => drafter.owed(),
+      unheld: async (id: string) =>
+        (await requestRepository({ store, record, now: Date.now }, id)).work.kind === "unheld",
     };
     // ponytail: a fixed one-minute rescan for messages and readings written
     // outside this process; a changedSince watch when that minute is felt.

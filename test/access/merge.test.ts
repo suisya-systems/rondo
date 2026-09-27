@@ -30,6 +30,8 @@ interface Options {
   readonly checks?: "green" | "red" | null;
   /** A question from rondo still waiting in the request's thread. */
   readonly asking?: boolean;
+  /** A question over these laps, and whether the person answered it `stop` (rondo#539). */
+  readonly lineAsk?: { readonly laps: readonly string[]; readonly stopped: boolean };
   readonly released?: boolean;
   readonly before?: PullRequestState;
   readonly after?: PullRequestState;
@@ -252,6 +254,31 @@ async function over(options: Options = {}) {
       asks: true,
     } as ThreadMessageDraft);
   }
+  if (options.lineAsk !== undefined) {
+    messages.push({
+      messageId: "lap-stopped-1",
+      body: "The work stopped on the time limit.",
+      authorKind: "drafter",
+      authorId: "rondo/advisory/deterministic",
+      inReplyTo: "request-1",
+      atMs: 4,
+      bases: options.lineAsk.laps.map((iterationId) => ({ form: "iteration", iterationId })),
+      asks: true,
+    } as ThreadMessageDraft);
+    if (options.lineAsk.stopped) {
+      messages.push({
+        messageId: "reply-stop-1",
+        body: "Stop this line.",
+        authorKind: "operator",
+        authorId: "ada",
+        inReplyTo: "lap-stopped-1",
+        atMs: 5,
+        bases: [],
+        asks: false,
+        answerOutcome: "stop",
+      } as ThreadMessageDraft);
+    }
+  }
   const asked: string[] = [];
   const deletedBases: string[] = [];
   const removedRuns: string[] = [];
@@ -393,6 +420,25 @@ test("nothing is asked of the forge where the button would not be drawn", async 
     why: "mergeRefusedMoved",
   });
   expect(world.asked).toEqual([]);
+});
+
+test("rondo#539: a question over another line the person stopped does not hold this line's merge", async () => {
+  // Lap 19: the request's first line was stopped, and its question waits for ever.
+  const stopped = await over({ lineAsk: { laps: ["lap-other"], stopped: true } });
+  expect(await stopped.press(input)).toMatchObject({ ok: true });
+  const onGreen = await over({ lineAsk: { laps: ["lap-other"], stopped: true } });
+  await onGreen.onGreen();
+  expect(onGreen.asked).toContain(`merge ${PR} --squash ${TIP}`);
+  // Nobody has answered the other line's question yet, or the stop is this line's own.
+  for (const lineAsk of [
+    { laps: ["lap-other"], stopped: false },
+    { laps: ["lap-1"], stopped: true },
+    { laps: ["lap-other", "lap-1"], stopped: true },
+  ]) {
+    const world = await over({ lineAsk });
+    expect(await world.press(input)).toMatchObject({ ok: false, why: "mergeRefusedAsked" });
+    expect(world.asked).toEqual([]);
+  }
 });
 
 test("a pull request that moved, closed or merged on the forge is not merged again", async () => {

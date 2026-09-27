@@ -405,6 +405,56 @@ test("a question still waiting on the person keeps the merge press off the page"
   expect(await mergeScreen(world)).not.toContain('action="/merge?');
 });
 
+test("a question over another line the person stopped leaves the merge press on the page (rondo#539)", async () => {
+  const world = await approved();
+  await published(world);
+  await checked(world, { kind: "green", counted: 2, skipped: 0 });
+  const ask = (messageId: string, lap: string) =>
+    world.record.recordThreadMessage({
+      messageId,
+      body: "The work stopped on the time limit.",
+      authorKind: "drafter",
+      authorId: "rondo/advisory/deterministic",
+      inReplyTo: "req-r",
+      atMs: 8_000,
+      bases: [{ form: "iteration", iterationId: lap }],
+      asks: true,
+    });
+  expect(await ask("lap-stopped-i-other", "i-other")).toMatchObject({ kind: "recorded" });
+  // Nobody has answered it yet: it holds the merge.
+  expect(await merging(world)).not.toMatch(MERGE_WAY);
+  expect(
+    await world.record.recordThreadMessage({
+      messageId: "reply-stop",
+      body: "Stop this line.",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: "lap-stopped-i-other",
+      atMs: 9_000,
+      bases: [],
+      asks: false,
+      answerOutcome: "stop",
+    }),
+  ).toMatchObject({ kind: "recorded" });
+  expect(await merging(world)).toMatch(MERGE_WAY);
+  expect(await mergeScreen(world)).toContain('action="/merge?');
+  // A stop over this line's own lap still holds it.
+  expect(await ask("lap-stopped-i-r", "i-r")).toMatchObject({ kind: "recorded" });
+  await world.record.recordThreadMessage({
+    messageId: "reply-stop-own",
+    body: "Stop.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "lap-stopped-i-r",
+    atMs: 9_500,
+    bases: [],
+    asks: false,
+    answerOutcome: "stop",
+  });
+  expect(await merging(world)).not.toMatch(MERGE_WAY);
+  expect(await mergeScreen(world)).not.toContain('action="/merge?');
+});
+
 test("another lap of the request at its gate keeps the merge screen's press away, as the port refuses it (rondo#437)", async () => {
   const world = await approved();
   await published(world);

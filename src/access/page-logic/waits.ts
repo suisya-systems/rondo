@@ -34,6 +34,8 @@ import {
   type NonTerminalStatus,
   WAIT_SIDE,
 } from "../../store/records.js";
+import type { AdvisoryRecord } from "../../store/sqlite.js";
+import { draftedStanding } from "../drafted-view.js";
 import type { Threads } from "./threads.js";
 
 /**
@@ -99,6 +101,76 @@ export function waitsOnYou(threads: Threads, laps: readonly IterationRecord[]): 
     }
   }
   return waits;
+}
+
+/**
+ * Which requests rondo still owes a draft, read once per pass (rondo#495).
+ * **A read that fails withholds the scope, and does not offer it**: a draft
+ * may be on its way, and a scope pressed over it is the act this guards
+ * against (Codex). Absent where no drafter runs: nothing is owed.
+ */
+export async function draftsOwedNow(ports: {
+  readonly draftsOwed?: (() => Promise<ReadonlySet<string>>) | undefined;
+}): Promise<(requestMessageId: string) => boolean> {
+  if (ports.draftsOwed === undefined) {
+    return () => false;
+  }
+  try {
+    const owed = await ports.draftsOwed();
+    return (id) => owed.has(id);
+  } catch {
+    return () => true;
+  }
+}
+
+/**
+ * **A drafted scope waiting on the person's approval is their turn** (rondo#534,
+ * D-0154): once rondo's draft is ready, approving it is the one thing that moves
+ * the request. The thread's *approve the drafted scope* card, by its own
+ * conditions: a request with no lap, no question in its thread, no draft still
+ * owed (`D-0151`) and no repository to add first, whose standing is a draft
+ * nobody has decided. Only a draft: a request with none is not waited on by
+ * anything rondo holds.
+ *
+ * The episode is the draft's scope, so a redraft over a newer message is a new
+ * wait and a person already told about the old one is told again.
+ */
+export async function scopesAwaitingYou(
+  ports: {
+    readonly record: Pick<
+      AdvisoryRecord,
+      "scopesFor" | "scopeDecisionOf" | "readProposal" | "scopeSupersededByApproved"
+    >;
+    /** Whether the request's work is in a repository rondo does not hold (`D-0090`). */
+    readonly unheld: (requestMessageId: string) => Promise<boolean>;
+  },
+  threads: Threads,
+  /** Every lap the store holds, ended ones too: a request with any is past its scope card. */
+  laps: readonly IterationRecord[],
+  owes: (requestMessageId: string) => boolean,
+): Promise<readonly Wait[]> {
+  const lapped = new Set(laps.map((lap) => lap.requestMessageId));
+  const asked = new Set([...threads.waiting].map((id) => threads.rootOf(id)));
+  const waits = await Promise.all(
+    threads.messages
+      .filter(
+        (message) =>
+          message.inReplyTo === null &&
+          !owes(message.messageId) &&
+          !lapped.has(message.messageId) &&
+          !asked.has(message.messageId),
+      )
+      .map(async ({ messageId: root }): Promise<Wait[]> => {
+        if (await ports.unheld(root)) {
+          return [];
+        }
+        const standing = await draftedStanding(ports, root);
+        return standing.kind === "drafted"
+          ? [{ root, episode: `scope:${standing.drafted.scope.scopeId}` }]
+          : [];
+      }),
+  );
+  return waits.flat();
 }
 
 /**

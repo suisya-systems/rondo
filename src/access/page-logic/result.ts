@@ -279,7 +279,8 @@ function movedOf(said: Said | undefined): LapResult["moved"] {
  * - `notPublished`: there is no pull request to merge.
  * - `notGreen`: rondo's own latest reading is not green, or names no commit.
  * - `asked`: a question in the request's thread still waits on the person --
- *   `D-0064`'s "no P2 to P4 item open".
+ *   `D-0064`'s "no P2 to P4 item open" -- and holds this line
+ *   ({@link askHoldsMerge}), or another lap of the request is at its gate.
  * - `merged`: it is merged, by a press or outside rondo.
  * - `closed`: it was closed on the forge without a merge (rondo#413).
  * - `landed`: the line was released, so its work is on the default branch by
@@ -358,15 +359,49 @@ export function askOverLine(
     [...threads.waiting].find(
       (id) =>
         threads.rootOf(id) === requestMessageId &&
-        (threads.byId.get(id)?.bases ?? []).some(
-          (basis) =>
-            typeof basis === "object" &&
-            basis !== null &&
-            "iterationId" in basis &&
-            typeof basis.iterationId === "string" &&
-            lineIds.includes(basis.iterationId),
-        ),
+        lapsNamed(threads, id).some((lap) => lineIds.includes(lap)),
     ) ?? null
+  );
+}
+
+/**
+ * Whether a question waiting in `requestMessageId`'s thread holds the merge of
+ * the line `lineIds` (rondo#539, D-0155): `mergeBlock`'s `asked`, for the page
+ * and for the press alike.
+ *
+ * **Every waiting question holds it but one the person answered by stopping
+ * another line.** A question about the request as a whole, or about this line,
+ * holds it, stopped or not (a stop holds its own line, D-0072 rule 3); so does
+ * one about another line nobody has answered yet. A stopped line's question
+ * waits for ever -- only a `carry_on` closes it -- and on lap 19 it withheld
+ * the green merge of the line the person had started in its place. A question
+ * carried on to a successor is not waiting at all.
+ */
+export function askHoldsMerge(
+  threads: WaitingThreads & { readonly stopped: ReadonlySet<string> },
+  requestMessageId: string,
+  lineIds: readonly string[],
+): boolean {
+  return [...threads.waiting].some((id) => {
+    if (threads.rootOf(id) !== requestMessageId) {
+      return false;
+    }
+    const laps = lapsNamed(threads, id);
+    return (
+      laps.length === 0 || !threads.stopped.has(id) || laps.some((lap) => lineIds.includes(lap))
+    );
+  });
+}
+
+/** The laps a message's bases name. */
+function lapsNamed(threads: WaitingThreads, messageId: string): readonly string[] {
+  return (threads.byId.get(messageId)?.bases ?? []).flatMap((basis) =>
+    typeof basis === "object" &&
+    basis !== null &&
+    "iterationId" in basis &&
+    typeof basis.iterationId === "string"
+      ? [basis.iterationId]
+      : [],
   );
 }
 
