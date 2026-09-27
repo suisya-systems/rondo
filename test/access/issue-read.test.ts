@@ -501,9 +501,9 @@ test("a bare #N is read where its request would publish, and a second naming of 
   // piece of work, chosen silently and in two different places.
   const older = heldIn("/srv/a", null);
   const newer = heldIn("/srv/a", "o/new");
-  expect(await bareIssueRepository(rowsHolding([older, newer], [], "o/old"), "r1", NAMED_AT)).toEqual(
-    { disputed: true, namings: [byFlag("/srv/a", "o/old"), byPlan("/srv/a", "o/new")] },
-  );
+  expect(
+    await bareIssueRepository(rowsHolding([older, newer], [], "o/old"), "r1", NAMED_AT),
+  ).toEqual({ disputed: true, namings: [byFlag("/srv/a", "o/old"), byPlan("/srv/a", "o/new")] });
   // **And no scope narrows it**: both plans are of the one repository a scope
   // would name, so the person's own answer about which work is meant cannot
   // settle this. What settles it is the flag or the row, which is why the
