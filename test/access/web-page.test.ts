@@ -953,13 +953,18 @@ test("a budget stop's answering box offers raising the budget first, prefilled, 
     cost_reserve_usd: 2.5,
     expires_at_ms: Date.parse("2026-10-01T00:00Z"),
   };
-  const draw = async (failureKind: string) => {
+  const draw = async (
+    failureKind: string,
+    requests: unknown = ["req-a"],
+    laps: number = budgets.laps,
+  ) => {
     world.connection
       .prepare("UPDATE iteration SET failure_kind = ? WHERE id = 'i-0001'")
       .run(failureKind);
     const ports = portsOver(world, "ada", []);
     const record = {
       ...world.record,
+      goals: async () => [{ goalId: "g-1", repository: "acme/widgets" }],
       scopeDecisionAdmitting: async () => "sd-1",
       scopeTip: async () => ({ kind: "absent" }),
       readScopeDecision: async () => ({ kind: "read", decision: { scopeId: "s-1" } }),
@@ -968,10 +973,10 @@ test("a budget stop's answering box offers raising the budget first, prefilled, 
         scope: {
           scopeId: "s-1",
           payload: {
-            requests: ["req-a"],
+            requests,
             workspaces: [],
             agent_types: [],
-            budgets,
+            budgets: { ...budgets, laps },
             severity_threshold: "major",
             outward_acts: [],
             irreversible_additions: [],
@@ -1001,6 +1006,15 @@ test("a budget stop's answering box offers raising the budget first, prefilled, 
   const other = await draw("defect");
   expect(other).toContain('value="carry_on"');
   expect(other).not.toContain('value="raise_carry_on"');
+  // Under a paused goal scope the raise would carry its `laps: 0` and stop
+  // again (rondo#524): the box says so and links to resuming it instead.
+  const paused = await draw("budget", { from_goal: "g-1" }, 0);
+  expect(paused).not.toContain('value="raise_carry_on"');
+  expect(paused).toContain('value="carry_on"');
+  expect(paused).toContain(EN.answerRaisePaused);
+  expect(paused).toContain('href="/?goal_scope=acme%2Fwidgets');
+  // A goal scope running still offers it.
+  expect(await draw("budget", { from_goal: "g-1" })).toContain('value="raise_carry_on"');
 });
 
 test("a scope stop over a lap at its gate offers raising and carrying on, with the review rounds when they ran out; its box needs no words (rondo#512)", async () => {

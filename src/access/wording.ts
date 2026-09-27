@@ -222,6 +222,8 @@ export interface Chrome extends PageWords {
   /** A scope stop on spent review rounds: the rounds' box beside the amount (rondo#512). */
   readonly answerRaiseRoundsLabel: string;
   readonly answerRaiseLeft: (left: string, reserve: string, enough: boolean) => string;
+  /** A budget stop under a paused goal scope, drawn in the raise's place (rondo#524). */
+  readonly answerRaisePaused: string;
   readonly newRequestHeading: string;
   readonly requestPlaceholder: string;
   readonly replyPlaceholder: string;
