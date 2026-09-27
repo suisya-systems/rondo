@@ -205,6 +205,13 @@ export interface Chrome extends PageWords {
   /** What each of the two presses does, said where the words are typed. */
   readonly answerOutcomeNote: string;
   /**
+   * A worker's question at its gate (D-0142): *carry on* starts the next
+   * attempt with the answer, on the one press. `answerReviseDraftLead` heads
+   * the change the reading drafted, which goes with it as shown.
+   */
+  readonly answerReviseNote: string;
+  readonly answerReviseDraftLead: string;
+  /**
    * A budget stop's first answer (D-0140 rule 3): a budgets-only successor of
    * the lap's approval, then *carry on*, on one press. `answerRaiseLabel` is
    * its amount's box; `answerRaiseLeft` what the rest of the approval allows,

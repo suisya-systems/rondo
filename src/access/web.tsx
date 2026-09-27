@@ -111,6 +111,7 @@ import {
   type ScopeSpent,
   type ThreadMessageDraft,
   WAIT_SIDE,
+  WORKER_QUESTION_AUTHOR,
 } from "../store/records.js";
 import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
 import { approvedUnstarted, partsOf } from "./drafted-start.js";
@@ -2054,7 +2055,8 @@ async function shownBeforePress(
       auto: gateAuto({
         readings,
         runs: workerRuns(record.lapCommands),
-        questionOpen: questionOpen !== null,
+        // A lap that put a worker's question is never rondo's to approve (D-0142).
+        questionOpen: questionOpen !== null || workerQuestion !== null,
         closing: (await ports.store.closingLapOf(record.id)) !== null,
         scope: tip.kind === "tip" ? await gateScope(ports.record, tip.scopeDecisionId) : null,
         nowMs: ports.now(),
@@ -2835,6 +2837,44 @@ async function budgetRaises(
 }
 
 /**
+ * A worker's question at its gate, answered in the thread's box (D-0142):
+ * the lap, the approval its next attempt spends, the successor minted at
+ * render, and the change the reading drafted, which the box shows above its
+ * buttons and posts as shown -- so *carry on* is the gate's revise.
+ */
+interface AnswerRevise {
+  readonly iterationId: string;
+  readonly scopeDecisionId: string;
+  readonly successor: string;
+  readonly draft: string;
+}
+
+/** The answer box's revise fields, and the drafted change it carries, where there is one. */
+function answerReviseFields(wording: Chrome, revise: AnswerRevise) {
+  return (
+    <div class="mx-4 mt-2 space-y-1">
+      <input type="hidden" name="revise_iteration" value={revise.iterationId} />
+      <input type="hidden" name="revise_decision" value={revise.scopeDecisionId} />
+      <input type="hidden" name="revise_successor" value={revise.successor} />
+      <p class="text-meta leading-5 text-muted-foreground">{wording.answerReviseNote}</p>
+      {revise.draft === "" ? null : (
+        <>
+          <input type="hidden" name="revise_draft" value={revise.draft} />
+          <p class="text-meta leading-5 text-muted-foreground">{wording.answerReviseDraftLead}</p>
+          {/* The reviewer's words, so the block states no language. */}
+          <pre
+            lang=""
+            class="max-h-48 overflow-auto rounded-md border border-border bg-muted/60 px-3 py-2 text-meta leading-5 whitespace-pre-wrap"
+          >
+            {revise.draft}
+          </pre>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * The box a person writes into: a new request on `requests`, a reply on
  * `thread` (D-0061 rule 4, D-0059 section 5a's send).
  *
@@ -2877,6 +2917,8 @@ function composerView(
   taken: { readonly key: string; readonly text: string } | null = null,
   /** The raise each budget stop offers, by the ask's id (D-0140 rule 3). */
   raises: ReadonlyMap<string, BudgetRaise> = new Map(),
+  /** The worker's question at its gate this box can answer by revising (D-0142). */
+  answerRevise: AnswerRevise | null = null,
 ) {
   if (view.kind !== "requests" && view.kind !== "thread") {
     return null;
@@ -2896,6 +2938,12 @@ function composerView(
   const answers = replying?.answers === true;
   const raise =
     answers && replying !== null ? (raises.get(replying.target.messageId) ?? null) : null;
+  const revising =
+    answers &&
+    answerRevise !== null &&
+    replying?.target.messageId === `question-${answerRevise.iterationId}`
+      ? answerRevise
+      : null;
   const action = `/${answers ? "answer-ask" : kind}?lang=${encodeURIComponent(wording.lang)}`;
   return (
     <form
@@ -3005,6 +3053,7 @@ function composerView(
               </p>
             ) : null}
             {raise === null ? null : raiseFields(wording, raise)}
+            {revising === null ? null : answerReviseFields(wording, revising)}
           </>
         )}
         {/* Where htmx puts a refusal (the page's `responseHandling`); the draft stays. */}
@@ -4074,6 +4123,49 @@ export async function operatorPage(
     nowMs,
     taken,
   )?.toString();
+  // **Carry on, at a worker's question, is the gate's revise** (D-0142): for
+  // the lap whose question the box answers, which need not be the gate the
+  // centre frames when several wait (Codex); only where that gate would draw
+  // its revise press, and holding what its box holds.
+  const answerRevise = await (async (): Promise<AnswerRevise | null> => {
+    const target =
+      selectedRoot === null || newIterationId === null
+        ? null
+        : replyTarget(
+            threads,
+            { messageId: selectedRoot, to: view.kind === "thread" ? view.to : null },
+            ports.actorId,
+          );
+    const lapId =
+      target?.answers === true && target.target.authorId === WORKER_QUESTION_AUTHOR
+        ? target.target.messageId.replace(/^question-/, "")
+        : null;
+    if (lapId === null || newIterationId === null || !threads.waiting.has(`question-${lapId}`)) {
+      return null;
+    }
+    const found = await ports.store.read(lapId);
+    if (
+      found.kind !== "read" ||
+      found.record.status !== "awaiting_human" ||
+      found.record.gateId === null
+    ) {
+      return null;
+    }
+    const tip = await approvalTip(ports.record, lapId);
+    if (
+      tip.kind !== "tip" ||
+      (await budgetClosing(ports, tip.scopeDecisionId, ports.now())) !== null
+    ) {
+      return null;
+    }
+    const box = await reviseBox(ports, wording, lapId, await ports.store.readingsFor(lapId));
+    return {
+      iterationId: lapId,
+      scopeDecisionId: tip.scopeDecisionId,
+      successor: newIterationId(),
+      draft: box.kind === "drafted" ? box.text : "",
+    };
+  })();
   const addBox =
     selectedRoot === null
       ? null
@@ -4090,6 +4182,7 @@ export async function operatorPage(
           nowMs,
           null,
           await budgetRaises(ports, threads, selectedRoot),
+          answerRevise,
         )?.toString();
   /*
    * **The box to answer in** (D-0083 rule 9): the gate, whole, inside the

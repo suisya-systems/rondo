@@ -274,6 +274,8 @@ explanation you pressed on and then answers the gate.`,
     "Sent as written. Carry on lets the work be tried again; Stop this line keeps it stopped, " +
     "and you can carry on later.",
   answerRaiseAction: "Raise the budget and carry on",
+  answerReviseNote: "Carry on starts the next attempt right away, with this answer.",
+  answerReviseDraftLead: "The next attempt is also given this change:",
   answerRaiseLabel: "Budget from here on (USD)",
   answerRaiseRoundsLabel: "Review rounds for this line",
   answerRaiseLeft: (left, reserve, enough) =>
