@@ -400,7 +400,8 @@ export function conductorPorts(
       // lap with no room left is not sent: a turn it started would only spend
       // past the budget the person approved.
       const budgetCapUsd = await store.sendLapBudget(iterationId, now());
-      if (budgetCapUsd !== null && budgetCapUsd <= 0) {
+      // Below a micro dollar is no room either: continuo takes the cap in micro dollars.
+      if (budgetCapUsd !== null && budgetCapUsd < 0.000001) {
         return {
           kind: "refused",
           message:
