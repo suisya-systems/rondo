@@ -100,6 +100,7 @@ import {
   type OpenProposal,
   type OperatorAttention,
   type OperatorVerificationClaim,
+  type PerformingLap,
   type ProposalDraft,
   type ReadingEvidence,
   type RecordChange,
@@ -697,6 +698,17 @@ export interface IterationStore {
    */
   sendLapBudget(iterationId: string, nowMs: number): Promise<number | null>;
   /**
+   * Record which processes drive a `performing` lap (D-0139): the host and pid
+   * of the rondo process that sends it, then the pid of its `lap perform`
+   * child. Written only while the row is `performing`; it moves no status.
+   */
+  markLapProcess(
+    iterationId: string,
+    mark: { readonly driverHost: string; readonly driverPid: number } | { readonly lapPid: number },
+  ): Promise<void>;
+  /** Every `performing` lap with the processes {@link markLapProcess} wrote (D-0139). */
+  performingLaps(): Promise<readonly PerformingLap[]>;
+  /**
    * The highest number ever reserved in `record` of `repository` (as
    * `repositoryKey` spells it), released ones included, or 0 (D-0098 rule
    * 3.3): half of the floor an admission's numbers start above.
@@ -1051,6 +1063,11 @@ CREATE TABLE IF NOT EXISTS iteration (
   -- The room the scope's budget left this lap when it was sent (D-0121). NULL
   -- where it was admitted under no approval, or the lap was never sent.
   lap_budget_cap_usd    REAL,
+  -- Which processes drive a performing lap (D-0139): NULL on a row sent
+  -- before them, which is told lost by its ceiling instead.
+  driver_host           TEXT,
+  driver_pid            INTEGER,
+  lap_pid               INTEGER,
   reason                TEXT,
   -- Whose failure a terminal 'failed' was (rondo#348). Nullable, and null on
   -- every row written before it: nothing on such a row recovers the kind, so
@@ -1846,6 +1863,10 @@ const ADDED_COLUMNS = Object.freeze({
   lap_commands: "TEXT",
   // D-0121: nullable, no back-fill -- no lap before it was sent with a cap.
   lap_budget_cap_usd: "REAL",
+  // D-0139: nullable, no back-fill -- no lap before it recorded its processes.
+  driver_host: "TEXT",
+  driver_pid: "INTEGER",
+  lap_pid: "INTEGER",
   occupying: GENERATED_COLUMNS.occupying,
   holds_identifiers: GENERATED_COLUMNS.holds_identifiers,
 });
@@ -2760,6 +2781,38 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
         }
         return cap;
       });
+    },
+
+    async markLapProcess(iterationId, mark): Promise<void> {
+      if ("lapPid" in mark) {
+        connection
+          .prepare("UPDATE iteration SET lap_pid = ? WHERE id = ? AND status = 'performing'")
+          .run(mark.lapPid, iterationId);
+        return;
+      }
+      connection
+        .prepare(
+          "UPDATE iteration SET driver_host = ?, driver_pid = ?, lap_pid = NULL " +
+            "WHERE id = ? AND status = 'performing'",
+        )
+        .run(mark.driverHost, mark.driverPid, iterationId);
+    },
+
+    async performingLaps(): Promise<readonly PerformingLap[]> {
+      return (
+        connection
+          .prepare(
+            "SELECT id, driver_host, driver_pid, lap_pid, updated_at_ms FROM iteration " +
+              "WHERE status = 'performing' ORDER BY created_at_ms, id",
+          )
+          .all() as SqlRow[]
+      ).map((row) => ({
+        iterationId: String(row["id"]),
+        driverHost: optionalText(row, "driver_host"),
+        driverPid: optionalNumber(row, "driver_pid"),
+        lapPid: optionalNumber(row, "lap_pid"),
+        updatedAtMs: Number(row["updated_at_ms"]),
+      }));
     },
 
     async numberReservations(iterationId: string): Promise<readonly NumberReservation[]> {
@@ -6255,7 +6308,9 @@ function lapBudgetCapFor(
     .prepare(
       "SELECT i.lap_cost_usd AS cost, i.lap_budget_cap_usd AS cap, i.status AS status " +
         "FROM scope_consumption c LEFT JOIN iteration i ON i.id = c.subject_id " +
-        "WHERE c.scope_decision_id = ? AND c.act_kind = 'admission' AND c.subject_id <> ?",
+        "WHERE c.scope_decision_id = ? AND c.act_kind = 'admission' AND c.subject_id <> ? " +
+        // D-0139: a lost lap holds nothing; what it spent was never read.
+        "AND i.failure_kind IS NOT 'lost'",
     )
     .all(decisionId, iterationId) as SqlRow[];
   const basis = { readCostUsd: 0, heldCapsUsd: 0, unreadUncappedLaps: 0, runningLaps: 0 };
@@ -6282,7 +6337,9 @@ function spentUnder(connection: DatabaseSync, scopeDecisionId: string): ScopeSpe
   const row = connection
     .prepare(
       "SELECT COUNT(*) AS admissions, COALESCE(SUM(i.lap_cost_usd), 0) AS read_cost, " +
-        "COALESCE(SUM(CASE WHEN i.lap_cost_usd IS NULL THEN 1 ELSE 0 END), 0) AS unread " +
+        // D-0139: a lost lap is not unread; it holds no reserve.
+        "COALESCE(SUM(CASE WHEN i.lap_cost_usd IS NULL AND i.failure_kind IS NOT 'lost' " +
+        "THEN 1 ELSE 0 END), 0) AS unread " +
         "FROM scope_consumption c LEFT JOIN iteration i ON i.id = c.subject_id " +
         "WHERE c.scope_decision_id = ? AND c.act_kind = 'admission'",
     )
@@ -8136,7 +8193,9 @@ function optionalText(row: SqlRow, column: string, subject = "iteration"): strin
  */
 function optionalFailureKind(row: SqlRow): FailureKind | null {
   const value = optionalText(row, "failure_kind");
-  return value === "refusal" || value === "defect" || value === "budget" ? value : null;
+  return value === "refusal" || value === "defect" || value === "budget" || value === "lost"
+    ? value
+    : null;
 }
 
 /** D-0092's answer, or null where rondo holds none; the table's CHECK already narrows it. */

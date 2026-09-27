@@ -110,6 +110,13 @@ test("straight after approve, the page says approved and not published, and neve
   expect(head(japanese)).not.toContain("まだです");
 });
 
+test("a report of rondo's on a lap is never an empty card: one line says what it records (rondo#506)", async () => {
+  const world = await approved();
+  await published(world);
+  expect(await en(world)).toContain(EN.lapReportSaid("published"));
+  expect(await ja(world)).toContain(chromeFor("ja").lapReportSaid("published"));
+});
+
 test("once published, the pull request is on the page as a link, in the person's language", async () => {
   // Lap 11: 「どこにPRができたのかの通知もないから自分でGithub見に行く必要がある」.
   const world = await approved();

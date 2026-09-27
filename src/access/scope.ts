@@ -142,6 +142,12 @@ export interface ScopeSnapshot {
   }>;
   /** Null for a lineage start. */
   readonly predecessor: {
+    /**
+     * Whether the predecessor was lost to a restart of rondo (D-0139): it never
+     * reached a gate, so there is no reading to test and its start again is
+     * not a review round. Absent where a caller did not gather it.
+     */
+    readonly lost?: boolean;
     readonly grants: Read<{
       readonly granted: readonly string[];
       readonly contractDigestMatches: boolean;
@@ -391,6 +397,11 @@ export function scopeVerdict(act: ScopeAct, snapshot: ScopeSnapshot): ScopeVerdi
   if (readings.kind === "unreadable") {
     return undecidable("readings", `the predecessor's readings cannot be read: ${readings.reason}`);
   }
+  if (readings.latestModelReading === null && predecessor.lost === true && !act.closing) {
+    // D-0139: a lost lap is started again as it was sent; the laps and the
+    // cost above still bound it.
+    return { kind: "inside" };
+  }
   if (readings.latestModelReading === null) {
     // Q-a: D-0066 is silent, and a redo is the correction of a finding -- with
     // no reading there is nothing to show the redo corrects.
@@ -635,6 +646,7 @@ export async function gatherScopeSnapshot(
       predecessor:
         act.kind === "redo" && lineage !== null
           ? {
+              lost: await predecessorLost(ports, act.predecessorId),
               grants: await predecessorGrants(ports, act.predecessorId),
               readings:
                 lineage.kind === "read"
@@ -712,6 +724,12 @@ function classifyAs(plan: RunPlan, iterationId: string): ScopeSnapshot["classifi
  * (rule 4.2's "recomposed through the facade", D-0047 rule 4's seam), and whether
  * that recomposition is the contract its row carries.
  */
+/** Whether the predecessor ended `failed` with the kind `lost` (D-0139). */
+async function predecessorLost(ports: ScopeReadPorts, predecessorId: string): Promise<boolean> {
+  const row = await ports.store.read(predecessorId);
+  return row.kind === "read" && row.record.failureKind === "lost";
+}
+
 async function predecessorGrants(
   ports: ScopeReadPorts,
   predecessorId: string,

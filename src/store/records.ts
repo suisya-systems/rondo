@@ -86,7 +86,23 @@ export type FailureKind =
    * turn, or no room was left to send it. The person's next move is a larger
    * budget.
    */
-  | "budget";
+  | "budget"
+  /**
+   * The lap was lost (D-0139): the rondo process driving it and its `lap
+   * perform` child are both gone, so nothing answered and nothing will. It
+   * holds no budget, and what it spent before it died is not counted.
+   */
+  | "lost";
+
+/** A `performing` lap, with the processes that drive it where they were recorded (D-0139). */
+export interface PerformingLap {
+  readonly iterationId: string;
+  readonly driverHost: string | null;
+  readonly driverPid: number | null;
+  readonly lapPid: number | null;
+  /** When the row was last written: at the latest, when its lap was sent. */
+  readonly updatedAtMs: number;
+}
 
 export type IterationStatus =
   /** Reserved, with the plan and its digest committed and nothing sent. */
@@ -193,7 +209,11 @@ export const RELEASED_BY: Readonly<Record<NonTerminalStatus, readonly string[]>>
   classified: ["the interpreter, immediately"],
   admitting: ["run admit answering", "an operator's abandon() when nothing answered"],
   admitted: ["the interpreter, immediately"],
-  performing: ["lap perform answering", "an operator's abandon() when nothing answered"],
+  performing: [
+    "lap perform answering",
+    "an operator's abandon() when nothing answered",
+    "the host finding its driver and child both gone (D-0139)",
+  ],
   awaiting_human: ["resume() observing a non-null gate outcome", "the abort edge"],
   withdrawal_requested: ["resume() observing a non-null gate outcome"],
   stalled: ["an operator's abandon()"],

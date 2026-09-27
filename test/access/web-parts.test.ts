@@ -456,6 +456,27 @@ test("a part that must first take in another part's merge says so on its step an
   expect(box).toContain('href="https://github.com/o/r/pull/7"');
 });
 
+test("a request is headed merged only once every part has landed (rondo#506)", async () => {
+  const w = await split([undefined, undefined]);
+  await w.start(0, "lap-one");
+  await approve(w, "lap-one");
+  await report(
+    w,
+    "report-published-lap-one",
+    "Lap 'lap-one' was published: https://github.com/o/r/pull/7",
+  );
+  await report(w, "report-merged-lap-one", "Lap 'lap-one' went into 'main' by squash.");
+  await w.start(1, "lap-two");
+  const gov = (html: string) =>
+    (/<p class="gov[^"]*"[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "").replace(/<[^>]+>/g, "");
+  const english = gov(await page(w.world));
+  expect(english).not.toContain("merged after");
+  expect(english).toContain("1 of 2 parts running, 1 finished");
+  const japanese = gov(await page(w.world, JA));
+  expect(japanese).not.toContain("でマージ");
+  expect(japanese).toContain("作業 2 件のうち 1 件が進行中");
+});
+
 test("a part whose files no merged part claimed is not told to take anything in", () => {
   const merged = {
     index: 0,

@@ -103,6 +103,7 @@ import {
   readRecordAdditions,
 } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
+import { thisDriver } from "./lost-laps.js";
 import { modelReadingLines } from "./model-review/judgement.js";
 import { refusalSaid } from "./page-logic/laps.js";
 import { relayQuestion } from "./question.js";
@@ -412,7 +413,16 @@ export function conductorPorts(
           budgetStop: { totalCostUsd: 0 },
         };
       }
-      const outcome = await performLap(continuo, lapRequestOf(plan, modelTier, budgetCapUsd));
+      // D-0139: which processes drive the lap, so a restart of this host can
+      // tell a lap nothing is running from one still running.
+      await store.markLapProcess(iterationId, thisDriver());
+      const outcome = await performLap(
+        continuo,
+        lapRequestOf(plan, modelTier, budgetCapUsd),
+        // A failed write leaves no child pid, which the host reads as unknown
+        // and leaves to the plan's ceiling rather than calling the lap lost.
+        (pid) => void store.markLapProcess(iterationId, { lapPid: pid }).catch(() => undefined),
+      );
       return asEffect(outcome.result, (payload) => ({
         // Kept rather than dropped: it is the only identity a lap's answer
         // carries that the conductor can check, and the check is the
@@ -1750,6 +1760,21 @@ export async function endFaulted(
   reason: string,
 ): Promise<ConductorReport> {
   return await faultedIteration(ports, iterationId, reason);
+}
+
+/**
+ * End a lost lap at `failed` with `lost` (D-0139): its driver and its `lap
+ * perform` child are gone. Answers the status the row is at afterwards.
+ */
+export async function endLost(
+  ports: {
+    readonly store: Pick<ConductorPorts["store"], "read" | "transition">;
+    readonly now: () => number;
+  },
+  iterationId: string,
+  reason: string,
+): Promise<string | null> {
+  return (await faultedIteration(ports, iterationId, reason, "lost")).status;
 }
 
 /**

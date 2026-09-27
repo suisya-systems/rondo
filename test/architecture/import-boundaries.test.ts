@@ -388,6 +388,12 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   "src/access/reach.ts": {
     "node:child_process": ["spawn"],
   },
+  // D-0139: the host name a lap's driver is recorded under, and read back to
+  // tell a lap of this host from one of another. A string, and nothing else of
+  // the machine: whether a pid lives is the `process` global's signal-0 probe.
+  "src/access/lost-laps.ts": {
+    "node:os": ["hostname"],
+  },
   "src/access/forge.ts": {
     "node:child_process": ["spawn"],
     "node:fs": ["mkdtempSync", "rmSync"],
@@ -1311,6 +1317,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/model-draft/host.ts": [SPLITTING],
   // D-0098 rule 1.4: the tick that admits a `then` on its `first`'s landing.
   "src/access/order-host.ts": [DISPATCHER],
+  // D-0139: a lap whose rondo process died is ended, and started again or asked about.
+  "src/access/lost-laps.ts": [DISPATCHER],
   "src/access/model-draft/judgement.ts": [SPLITTING],
   // D-0098 rule 3.3: the reserved numbers are wording a worker runs on (D-0064 O3).
   "src/access/record-numbers.ts": [SPLITTING],

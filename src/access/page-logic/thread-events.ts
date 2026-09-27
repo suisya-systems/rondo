@@ -177,6 +177,9 @@ function endedLine(
         yours: true,
       };
     }
+    case "lost":
+      // D-0139: nothing of it runs; its restart, or the stop, is in the thread.
+      return { said: wording.evLost };
     case "defect":
       return {
         said: wording.evBroke,

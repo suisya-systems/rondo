@@ -1259,6 +1259,12 @@ export interface Chrome extends PageWords {
    */
   readonly lapStoppedSaid: (said: string | null) => string;
   /**
+   * The stop rondo asks in the thread when a lap was lost to a restart of
+   * rondo (D-0139): nothing of it is running, its held money is back, and
+   * the answering box's *carry on* starts it again, which is recommended.
+   */
+  readonly lapLostAsk: string;
+  /**
    * The same stop, when rondo could not end the lap either (D-0109 rule 3):
    * said as itself, because inviting somebody to start again over work that is
    * still holding its place would be the page lying about its own state.

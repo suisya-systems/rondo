@@ -129,6 +129,7 @@ import {
   compareClaim,
   conductorPorts,
   endFaulted,
+  endLost,
   notRereadSentence,
   type ReportingPorts,
   type RequestThread,
@@ -187,6 +188,7 @@ import {
   requestOf,
   unreadIssues,
 } from "./issue-read.js";
+import { againId, lostLapHost, pidAlive, thisDriver } from "./lost-laps.js";
 import { continuoWorkspaceRemover, mergeOnGreen, mergePress, releasePublished } from "./merge.js";
 import {
   type DrafterPorts,
@@ -1658,6 +1660,33 @@ export async function main(
             now: Date.now,
             log: say,
           });
+    // **And lost laps** (D-0139, rondo#506): a lap whose rondo process and
+    // `lap perform` child are both gone is ended, and started again by itself
+    // or asked about -- read now, as this host starts, and on every minute.
+    const lost = lostLapHost({
+      store,
+      record,
+      end: async (iterationId, reason) =>
+        await endLost({ store, now: Date.now }, iterationId, reason),
+      byItself: async (lap) => await startsByItself(record, lap),
+      restart:
+        sender === null || "refusal" in sender
+          ? null
+          : async (lap) =>
+              await restartLostFromPage(
+                environment,
+                store,
+                opened.path,
+                sender.actorId,
+                chromeFor(selected.tag),
+                lap,
+              ),
+      words: chromeFor(selected.tag),
+      host: thisDriver().driverHost,
+      alive: pidAlive,
+      now: Date.now,
+      log: say,
+    });
     // **And the flow** (D-0128 rule 5, rondo#469): under a goal scope a person
     // approved, the goal's next request is asked for here; the drafter drafts
     // it and the order tick above starts it. Only where the tick runs, since
@@ -1744,6 +1773,7 @@ export async function main(
     const listening = (line: string): void => {
       say(line);
       if (rescan === null) {
+        lost.kick();
         issues.kick();
         drafter.kick();
         reviser.kick();
@@ -1759,6 +1789,7 @@ export async function main(
         // screen in front of them. One minute is not a policy about staleness;
         // it is the tick this process already has.
         rescan = setInterval(() => {
+          lost.kick();
           issues.kick();
           drafter.kick();
           reviser.kick();
@@ -5953,6 +5984,144 @@ export async function conflictFixFromPage(
   } finally {
     fixing.delete(input.successorId);
   }
+}
+
+/**
+ * Whether a lost lap starts again by itself (D-0139): its approval is a goal
+ * scope, or approves a split its request runs as.
+ */
+async function startsByItself(record: AdvisoryRecord, lap: IterationRecord): Promise<boolean> {
+  const tip = await approvalTip(record, lap.id);
+  if (tip.kind !== "tip") {
+    return false;
+  }
+  const splits = await approvedSplits({ record });
+  if (
+    splits.some(
+      (split) =>
+        split.scopeDecisionId === tip.scopeDecisionId &&
+        split.requestMessageId === lap.requestMessageId,
+    )
+  ) {
+    return true;
+  }
+  const decided = await record.readScopeDecision(tip.scopeDecisionId);
+  if (decided.kind !== "read") {
+    return false;
+  }
+  const scope = await record.readScope(decided.decision.scopeId);
+  return scope.kind === "read" && requestsGoal(scope.scope.payload.requests) !== null;
+}
+
+/**
+ * Start a lost lap again (D-0139): its stored plan, run once more as
+ * {@link againId}, under the approval it ran under and in the approver's name,
+ * as `retry` runs one. Answers once the new row is reserved, so the host's pass
+ * does not wait out the lap. A second call finds the row and is the first.
+ */
+export async function restartLostFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  words: Chrome,
+  lost: IterationRecord,
+): Promise<Started> {
+  const successorId = againId(lost.id);
+  if ((await store.read(successorId)).kind === "read") {
+    return { ok: true, note: `iteration '${successorId}' was already admitted` };
+  }
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return { ok: false, why: "startRefusedNotAdmitted", note: actor.refusal };
+  }
+  if (lost.status !== "failed" || lost.failureKind !== "lost") {
+    return { ok: false, why: "startRefusedNotAdmitted", note: `lap '${lost.id}' was not lost` };
+  }
+  const decoded = readPlan(lost.plan);
+  if (decoded.kind !== "planned") {
+    return { ok: false, why: "startRefusedNotAdmitted", note: decoded.reason };
+  }
+  const advisory = openAdvisoryRecord(storePath);
+  const tip = await approvalTip(advisory, lost.id);
+  if (tip.kind !== "tip") {
+    return {
+      ok: false,
+      why: "startRefusedNotAdmitted",
+      note: `lap '${lost.id}' has no one approval in force to start again under`,
+    };
+  }
+  const startup = await startContinuo(environment);
+  if (startup.kind === "refused") {
+    return { ok: false, why: "startRefusedNotAdmitted", note: startup.reason };
+  }
+  const ports = conductorPorts(startup.continuo, store, advisory, Date.now, words);
+  const running = admitUnderScope(
+    {
+      store,
+      record: advisory,
+      nowMs: Date.now,
+      admit: (plan, id, supersedes, requestMessageId, scopeSpend) =>
+        admit(
+          ports,
+          unpromptedPorts(store, storePath),
+          plan,
+          START_POLICY,
+          id,
+          supersedes,
+          null,
+          requestMessageId,
+          scopeSpend,
+        ),
+    },
+    tip.scopeDecisionId,
+    {
+      kind: "redo",
+      iterationId: successorId,
+      plan: decoded.plan,
+      predecessorId: lost.id,
+      requestMessageId: lost.requestMessageId,
+      closing: false,
+    },
+  ).then(async (outcome): Promise<Started> => {
+    if (outcome.kind === "refused") {
+      return {
+        ok: false,
+        why: "startRefusedNotAdmitted",
+        note: `the ${outcome.verdict} verdict at the ${outcome.test} test: ${outcome.reason}`,
+      };
+    }
+    if (outcome.kind === "halted") {
+      return {
+        ok: false,
+        why: "startRefusedNotAdmitted",
+        note: `nothing was admitted; the admission stopped with status ${String(outcome.status)}`,
+      };
+    }
+    const report = outcome.report;
+    sayReport(report);
+    // A reservation refused (a line holds the paths, the host is full) admits nothing.
+    if (report.iterationId === null) {
+      return { ok: false, why: "startRefusedNotAdmitted", note: report.lines.join("\n") };
+    }
+    // The gate-opening review, as every other admission takes it.
+    if (report.status === "awaiting_human") {
+      await sayGateOpen(() =>
+        takeModelReading(
+          modelReviewPorts(startup.continuo, store, ports.thread ?? null),
+          report.iterationId ?? successorId,
+        ),
+      );
+    }
+    return { ok: true, note: `iteration '${successorId}' ran` };
+  });
+  return await answerOnceReserved(
+    store,
+    advisory,
+    words,
+    { iterationId: successorId, requestMessageId: lost.requestMessageId },
+    running,
+  );
 }
 
 /** Every conflict-fix press this process has in flight, by the successor's id. */

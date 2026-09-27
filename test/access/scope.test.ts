@@ -389,6 +389,42 @@ test("redo readings: exit and revise are inside, stop is outside, none is undeci
   ).toMatchObject({ kind: "undecidable", test: "readings" });
 });
 
+test("D-0139: a lost predecessor has no reading to test, so its start again is inside, and only that", () => {
+  const lost = (latest: LapReading | null, isLost: boolean) =>
+    snapshot({
+      predecessor: {
+        ...PREDECESSOR,
+        lost: isLost,
+        readings: { kind: "read", latestModelReading: latest, roundsTaken: 3 },
+      },
+    });
+  expect(scopeVerdict(REDO, lost(null, true))).toEqual(INSIDE);
+  // Not lost: Q-a's undecidable stands.
+  expect(scopeVerdict(REDO, lost(null, false))).toMatchObject({
+    kind: "undecidable",
+    test: "readings",
+  });
+  // A closing lap of a lost one is not a start again.
+  expect(scopeVerdict({ ...REDO, closing: true }, lost(null, true))).toMatchObject({
+    kind: "undecidable",
+    test: "readings",
+  });
+  // The budgets before it still bound it.
+  expect(
+    scopeVerdict(
+      REDO,
+      snapshot({
+        spent: { admissions: 99, readCostUsd: 0, unreadLaps: 0 },
+        predecessor: {
+          ...PREDECESSOR,
+          lost: true,
+          readings: { kind: "read", latestModelReading: null, roundsTaken: 0 },
+        },
+      }),
+    ).kind,
+  ).toBe("outside");
+});
+
 test("D-0098 rule 5.2: a closing redo is inside only under fix_unread, after an exit, with something below", () => {
   const CLOSING: ScopeAct = { ...REDO, closing: true };
   const withReading = (

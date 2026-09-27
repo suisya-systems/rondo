@@ -763,6 +763,8 @@ export async function faulted(
   ports: WritingPorts,
   iterationId: string,
   reason: string,
+  /** `lost` for a lap whose driver and child are both gone (D-0139). */
+  kind: "defect" | "lost" = "defect",
 ): Promise<ConductorReport> {
   const lines: string[] = [];
   const found = await ports.store.read(iterationId);
@@ -786,7 +788,7 @@ export async function faulted(
     record,
     lines,
     "failed",
-    { ...appendedReason(record, reason), failureKind: "defect" },
+    { ...appendedReason(record, reason), failureKind: kind },
     `Iteration ${record.id} was ended from '${record.status}': ${reason}`,
   );
   // `terminal` answers `finished` for every terminal status, which `failed` is.
