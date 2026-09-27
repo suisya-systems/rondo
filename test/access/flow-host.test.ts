@@ -716,3 +716,61 @@ test("a put-aside ask holds nothing: the flow moves on to the next candidate", a
     second,
   ]);
 });
+
+test("ask, re-rank, answer: the answer injects on the next pass, before another candidate is asked (rondo#504)", async () => {
+  const w = await world({}, [ranked(7, 2), ranked(8, 1)]);
+  await w.pass();
+  // Re-ranked before the person answers: #8 first, #7's points as asked.
+  w.setNow(10_500);
+  await w.triage("t-2", 0.5, [ranked(8, 1), ranked(7, 2)]);
+  expect(
+    await w.record.recordFlowAnswer({
+      askId: `flow-ask-sd-goal-issue:${REPO}#7-1`,
+      answers: ["yes", "no"],
+      request: null,
+      why: null,
+      answeredBy: "oidc|operator-1",
+      answeredAtMs: 11_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  w.setNow(11_000);
+  await w.pass();
+  const openers = (await w.messages()).filter((m) => m.inReplyTo === null);
+  expect(openers.map((m) => m.messageId)).toEqual([first]);
+  expect(openers[0]?.body).toContain("- p: yes\n- p: no");
+  // #8 is asked only once #7 is spoken for.
+  expect((await w.record.flowAsks()).map((ask) => ask.askId)).toEqual([
+    `flow-ask-sd-goal-issue:${REPO}#7-1`,
+  ]);
+});
+
+test("ask, re-rank with the points worded afresh, answer: it injects with the points as asked (rondo#504)", async () => {
+  const w = await world({}, [ranked(7, 2), ranked(8)]);
+  await w.pass();
+  w.setNow(10_500);
+  const reworded = {
+    ...ranked(7),
+    openPoints: [
+      { point: "p, said again", recommendation: "r" },
+      { point: "q", recommendation: "rq" },
+    ],
+  };
+  await w.triage("t-2", 0.5, [ranked(8), reworded]);
+  expect(
+    await w.record.recordFlowAnswer({
+      askId: `flow-ask-sd-goal-issue:${REPO}#7-1`,
+      answers: ["yes", "no"],
+      request: null,
+      why: null,
+      answeredBy: "oidc|operator-1",
+      answeredAtMs: 11_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  w.setNow(11_000);
+  await w.pass();
+  const openers = (await w.messages()).filter((m) => m.inReplyTo === null);
+  expect(openers.map((m) => m.messageId)).toEqual([first]);
+  expect(openers[0]?.body).toContain("- p: yes\n- p: no");
+  expect(openers[0]?.body).not.toContain("said again");
+  expect(await w.record.flowAsks()).toHaveLength(1);
+});

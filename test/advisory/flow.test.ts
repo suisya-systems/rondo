@@ -119,7 +119,7 @@ test("a candidate with open points is asked first, then injected with the answer
   expect(picked({ triage: triage([issue(2)]), asks: asked(null) })).toBe("inject issue:o/r#2");
 });
 
-test("an answer that does not cover a point the ranking added since is asked again, next round", () => {
+test("an answer stands when a re-ranking words its points differently, and goes in as asked (rondo#504)", () => {
   const reranked: Ranked = {
     ...issue(1),
     openPoints: [
@@ -129,21 +129,80 @@ test("an answer that does not cover a point the ranking added since is asked aga
   };
   const answered = [{ candidateKey: "issue:o/r#1", points: ["p1", "p2"], answers: ["a", "b"] }];
   expect(pickNext(input({ triage: triage([reranked]), asks: answered }))).toEqual({
-    kind: "ask",
-    candidate: reranked,
-    askId: "flow-ask-sd-1-issue:o/r#1-2",
-  });
-  const again = [
-    ...answered,
-    { candidateKey: "issue:o/r#1", points: ["p1", "p3"], answers: ["c", "d"] },
-  ];
-  expect(pickNext(input({ triage: triage([reranked]), asks: again }))).toMatchObject({
     kind: "inject",
+    candidate: reranked,
+    messageId: "flow-sd-1-issue:o/r#1",
     answers: [
-      { point: "p1", answer: "c" },
-      { point: "p3", answer: "d" },
+      { point: "p1", answer: "a" },
+      { point: "p2", answer: "b" },
     ],
   });
+  // An ask over it left open after an earlier answer does not hold it; the newest answer is sent.
+  const later = [
+    ...answered,
+    { candidateKey: "issue:o/r#1", points: ["p3"], answers: ["c"] },
+    { candidateKey: "issue:o/r#1", points: ["p4"], answers: null },
+  ];
+  expect(pickNext(input({ triage: triage([reranked]), asks: later }))).toMatchObject({
+    kind: "inject",
+    answers: [{ point: "p3", answer: "c" }],
+  });
+});
+
+test("an open ask still holds a candidate with no open points: only an answered one passes it (rondo#504)", () => {
+  const open = [{ candidateKey: "issue:o/r#2", points: ["p"], answers: null }];
+  expect(picked({ triage: triage([issue(1), issue(2, 1)]), asks: open })).toBe("points_asked");
+});
+
+test("ask, re-rank, answer: the answered candidate injects before the ranking's first is asked (rondo#504)", () => {
+  // Asked over #1; a re-ranking put #2 first before the person answered.
+  const answered = [{ candidateKey: "issue:o/r#1", points: ["p", "p"], answers: ["a", "b"] }];
+  expect(pickNext(input({ triage: triage([issue(2, 1), issue(1, 2)]), asks: answered }))).toEqual({
+    kind: "inject",
+    candidate: issue(1, 2),
+    messageId: "flow-sd-1-issue:o/r#1",
+    answers: [
+      { point: "p", answer: "a" },
+      { point: "p", answer: "b" },
+    ],
+  });
+  // A second ask over #2 still open does not hold the answered one back.
+  const both = [...answered, { candidateKey: "issue:o/r#2", points: ["p"], answers: null }];
+  expect(picked({ triage: triage([issue(2, 1), issue(1, 2)]), asks: both })).toBe(
+    "inject issue:o/r#1",
+  );
+  // It waits for a slot rather than asking another candidate meanwhile.
+  expect(
+    picked({
+      triage: triage([issue(2, 1), issue(1, 2)]),
+      asks: answered,
+      occupancy: { occupying: 1, live: 1 },
+    }),
+  ).toBe("no_slot");
+  // Injected, put aside or gone from the ranking, the answer no longer leads.
+  expect(
+    picked({
+      triage: triage([issue(2, 1), issue(1, 2)]),
+      asks: answered,
+      injections: [injection(1, "running")],
+    }),
+  ).toBe("ask issue:o/r#2");
+  expect(
+    picked({
+      triage: triage([issue(2, 1), issue(1, 2)]),
+      asks: answered,
+      putAside: ["issue:o/r#1"],
+    }),
+  ).toBe("ask issue:o/r#2");
+  expect(picked({ triage: triage([issue(2, 1)]), asks: answered })).toBe("ask issue:o/r#2");
+  // An ask over #1 left open once #1 started holds nothing.
+  expect(
+    picked({
+      triage: triage([issue(2, 1), issue(1, 2)]),
+      asks: [...answered, { candidateKey: "issue:o/r#1", points: ["p"], answers: null }],
+      injections: [injection(1, "running")],
+    }),
+  ).toBe("ask issue:o/r#2");
 });
 
 test("nothing eligible says each candidate it passed over, and why (rondo#488)", () => {

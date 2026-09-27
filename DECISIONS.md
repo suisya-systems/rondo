@@ -25336,6 +25336,40 @@ the newest goal: an edit would widen an approval nobody re-read.
 > points is not asked, so its words are not editable before the flow sends it; the check above is
 > what guards it. Nothing above is edited.
 
+> **Annotation (2026-09-27, from rondo#504).** Added after this entry was accepted, and **not
+> additive**. It replaces the rule in the rondo#487 annotation above that "an answer counts only
+> while it answered every point the ranking now holds, so a point a re-ranking added is asked in the
+> next round". The owner decided this on 2026-09-27. Found in lap 18: #290 and #286 were answered
+> on the page and never injected, for two reasons.
+>
+> 1. The picker took the ranking's first candidate not yet started and only then looked for an
+>    answer. A re-ranking that put another candidate first (18:57, #298) asked that one instead.
+> 2. Triage words the points afresh on every reading: #286's points were worded differently in
+>    each of four readings between 15:54 and 19:20. So an answer given hours after its ask never
+>    matched the ranking's points word for word, and was dropped without a word.
+>
+> **An answer stands for its candidate.** If a re-ranking words its points differently, the
+> newest answered ask still counts. The injected body carries the points as they were asked, each
+> with the person's answer. The request line and why are that answer's (rondo#492).
+>
+> **A candidate the person answered comes first.** Of the candidates the flow may start, the first
+> ranked one with an answered ask is taken before the ranking's first. It injects on the next pass
+> when a slot is free, and otherwise waits for one (`no_slot`) rather than asking another
+> candidate. An open ask over another candidate does not hold it back, because injecting raises no
+> second ask. That ask still holds a candidate nobody has answered, including one with no open
+> points.
+>
+> **An open ask stops holding once its candidate is covered.** An ask left open over a candidate
+> that an earlier answer covers, or that has already started, holds nothing, and the page no longer
+> draws it as the ask the flow waits on. Put aside, started or gone from the ranking, an answer
+> leads nothing.
+>
+> **Options not taken.** (B) Asking again only the points whose words match no answered point: the
+> words change on every reading, so in practice every point is asked again. (C) Giving triage the
+> points already answered, so it reuses their words for the same decision and a genuinely new point
+> can be told apart. That is not done here and is a known limit: **a decision a re-ranking finds
+> after the answer is not asked**, and is left to the drafter and the lap. Nothing above is edited.
+
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 
 **Status:** accepted (2026-09-27, rondo#452). The issue records `D-0098`'s gate (2026-09-22, point

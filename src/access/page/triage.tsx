@@ -194,8 +194,9 @@ export interface TriageReads {
 
 /**
  * The ask over open points the flow waits on (rondo#487): unanswered, of this
- * goal, over a candidate the ranking still holds and nobody put aside -- the
- * picker's own reading (`pickNext`'s `points_asked`).
+ * goal, over a candidate the ranking still holds, nobody put aside and no
+ * earlier answer covers -- the picker's own reading (`pickNext`'s
+ * `points_asked`; an answer stands for its candidate, rondo#504).
  */
 export function waitingPointsAsk(
   asks: readonly StoredFlowAsk[],
@@ -209,6 +210,10 @@ export function waitingPointsAsk(
       ask.goalId === goalId &&
       ask.answer === null &&
       payload.ranked.some((one) => one.key === ask.candidate) &&
+      !asks.some(
+        (other) =>
+          other.goalId === goalId && other.candidate === ask.candidate && other.answer !== null,
+      ) &&
       !putAside.some(
         (one) => one.repository === payload.repository && one.candidate === ask.candidate,
       ),
