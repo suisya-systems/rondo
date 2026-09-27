@@ -1298,6 +1298,30 @@ export const JA: Chrome = Object.freeze({
   conflictFixRefusedNotStarted:
     "何も始めていません。ここで見た内容は失われていません。何が起きたかは、このマシンで" +
     " rondo を管理する人が確かめられます。",
+  retakeReviewAction: "レビューをもう一度受ける",
+  retakeReviewBusy: "レビューをもう一度受けています…",
+  retakeReviewBack: "確認に戻る",
+  retakeRefusedNoApprover:
+    "レビューはやり直していません。この端末の rondo はまだあなたが誰かを知らないので、" +
+    "ここではあなたとして何も決められません。",
+  retakeRefusedPress:
+    "レビューはやり直していません。これは人がこのページのボタンを押して行うもので、" +
+    "スクリプトからはできません。",
+  retakeRefusedForm:
+    "レビューはやり直していません。そのフォームはこのページのものではありません。" +
+    "読み込み直してから押してください。",
+  retakeRefusedGone:
+    "レビューはやり直していません。この確認はもうあなたを待っていないか、レビューは" +
+    "すでにやり直されています。ページを読み込み直すと、いまの状態が分かります。",
+  retakeRefusedBudget: (taken, budget) =>
+    `レビューはやり直していません。この作業は、範囲が認めるレビュー ${String(budget)} 回の` +
+    `うち ${String(taken)} 回を使っていて、やり直しはもう 1 回に数えます。範囲のレビュー回数を` +
+    "引き上げれば、やり直せます。",
+  retakeRefusedForked:
+    "レビューはやり直していません。この作業の承認が別々に 2 回引き上げられていて、レビューが" +
+    "あと何回できるかが決まらず、rondo はどちらかを選びません。",
+  retakeRefusedNoContinuo:
+    "レビューはやり直していません。作業を動かす rondo の部分が起動しません。",
   nextStepPublishUpdate: (pullRequest) =>
     `競合の解消は承認済みです。公開すると ${pullRequest} に push し、チェックがもう一度` +
     "動きます。マージはしません。",

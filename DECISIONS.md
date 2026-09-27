@@ -170,6 +170,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0131 | A drafter row covers an operator message only with the issue reads it held, so a read that lands after a draft makes its thread due again; and an issue reaches the drafter's document as its body and comments, cut from the head with the cut named | accepted |
 | D-0136 | A drafted claim is drawn from the repository's own paths: the drafter is handed each offered repository's tracked paths at its base branch, two levels deep, and claims `/` only for work that spans the whole repository; `D-0073` rule 5's gate widening is the safety valve | accepted |
 | D-0137 | A bare `#N` is read in the repository its own request would publish to: `publishesTo` is the one rule both sides ask, and a reference the plans in play name two repositories for is not read at all; `D-0081` rule 3.4 is narrowed | accepted |
+| D-0138 | Over-bound review material leaves out, by name, what only read before it is refused; `D-0105` rule 3.1 is withheld only by the conflicting lap's own line; and a model reading a second run could change can be taken again, once, as one more review round | accepted |
 
 ---
 
@@ -25798,3 +25799,123 @@ the read is made to agree with it, and where it cannot agree nothing is read.
   anchor is not the plans in play, and the chosen-plan route this entry declined is what is needed.
 - **A read recorded from one repository and published to another because the plans changed after
   it** (the residual above), seen in a real store rather than reasoned about.
+
+## D-0138 — Over-bound review material leaves out, by name, what only read before it is refused; `D-0105` rule 3.1 is withheld only by the conflicting lap's own line; and a model reading a second run could change can be taken again, once, as one more review round
+
+**Status:** accepted (2026-09-27, rondo#500; the owner's answers through the secretary, all three as
+recommended). Annotates `D-0065` rules 1.4 and 4.1 and narrows `D-0105` rule 3.1; supersedes
+nothing. Refs `D-0009`, `D-0065`, `D-0074`, `D-0079`, `D-0105`, rondo#313, rondo#417, rondo#499.
+
+### Context
+
+rondo#313's flow request ran two parts on lap 18. Part 1 was published as rondo#499 and then
+conflicted with `main`; part 2 finished and waited at its gate. **Measured on 2026-09-27 from the lap
+18 store, read only**:
+
+- **The page said a take-in was running when none existed.** The result band's "rondo is settling
+  the conflict in a new attempt" was drawn whenever any later lap of the request was not terminal.
+  Part 2, at its gate, was such a lap. No attempt descended from part 1's lap. And the real press was
+  withheld by `D-0105` rule 3.1, because a gate of the request (part 2's) was waiting.
+- **Part 2's model reading was refused as over the bound, and its diff was not why.** The material
+  was 407 894 bytes against 400 000. Its range was `a47b61d..1f9456e`, 2 commits and 6 files. Of the
+  lap's recorded commands (341 142 characters), 176 125 characters were the outputs of 40 `Read`
+  calls, 42 658 of `grep`, and 8 192 of one subagent. The issue guessed that part 2's branch carried
+  part 1's changes; it did not, so a narrower diff base or dropping regenerable files would not have
+  brought this lap under the bound.
+- **Nothing at the gate could take the reading again**, so the person had a gate with no independent
+  review and no way to get one.
+
+### Decision
+
+1. **Over the bound, what only read is left out first, by name** (`prepareReview`,
+   `src/access/model-review/judgement.ts`). In this order, and only while the document is still over
+   the bound:
+   1. the outputs of read-only commands: a `Read`, `Grep` or `Glob` call, or a shell pipeline of
+      `grep`, `rg`, `cat`, `head`, `tail`, `ls`, `wc` or `sed -n` with nothing that could write, chain
+      or substitute (`isReadOnlyCommand`);
+   2. the outputs of subagent calls (`Agent`).
+
+   Each output left out is replaced **in place** by a marker. The marker says rondo omitted it, how
+   many characters it held, which kind it was, and that no finding may rest on it or on its absence.
+   The command line stays, so an event basis still resolves. **Never left out:** the diff, the
+   commits, the prompt, the criterion, the rule files, the deterministic findings, the rationale, and
+   the output of any command that acted. **Still over after both steps**, the reading is
+   `unavailable` and its reason names what was left out and that it is not truncated. `D-0065` rule
+   1.4 holds as written: no byte of what is handed over is cut, and what is not handed over is named.
+2. **The conflict fix is withheld only by its own line** (`conflictFixBlock`'s `asksWaiting`, on the
+   page and at the press). A gate or a question of the conflicting lap's line withholds it. Another
+   part of the request waiting at its own gate does not: that gate is answered where it is, and the
+   two do not decide each other. This is the same reasoning `D-0105` rule 3.1 already gave for the
+   drafter's question about the request. **The fix stays a press.** rondo does not start it
+   unattended, because it spends the scope's `redo`. The result band claims "settling" only for an
+   attempt that descends from the published lap along `supersedes`. Where a question of the line
+   withholds the press, the band says so, what unblocks it, and that resolving it by hand still works.
+3. **Take the review again** (`/retake-review`, `retakeReviewFromPage`). The gate's model review
+   card draws it only where the lap's one model reading is `unavailable` for a reason a second run
+   could change (`retakeOffered`):
+   1. the reviewer did not answer (a timeout among them);
+   2. its answer did not parse;
+   3. the material was over the bound before rule 1 existed (a reason that ends
+      `(D-0065 1.4).`).
+
+   A refusal after rule 1 was applied, the family, the criterion, unreadable material and a digest
+   mismatch are the same on a second run and offer nothing.
+   1. **Once per lap, and so once per tip.** After the second reading, whatever it came to, nothing
+      is offered.
+   2. **It is a review round.** `reviewRoundsAlong` counts a lap's reading taken again as one more
+      round (`D-0065` rule 4.1 annotated). Under an approval, the press refuses with the rounds taken
+      and the budget when one more would exceed the scope's `review_rounds`, and says that raising it
+      makes room. Outside a scope nothing is counted (`D-0065` rule 5.5).
+   3. **Asked again at the press** over fresh rows, as every press is. A lap no longer at its gate, or
+      one whose reading was already taken again, takes nothing.
+4. **Every sentence is in every catalogue** (`D-0079`): the band's withheld line, and the press, its
+   busy label, its way back and its refusals, in English and Japanese.
+
+### What was put to the owner, and the answer
+
+1. **How to shrink over-bound material.** (A) leave out the outputs of reads, then of subagents, each
+   named (recommended); (B) the issue's narrower diff base and regenerable files, which does not fit
+   the lap that raised it; (C) raise the bound, which only moves the edge.
+2. **Whether another part's gate withholds a conflict fix.** Narrow it to the line (recommended), and
+   keep the fix a press rather than starting it unattended under a goal scope.
+3. **When the retry is offered and what it costs.** Only for reasons a rerun can change, once per tip,
+   counted as a review round and refused past the budget (recommended).
+
+**The owner's answer (2026-09-27, through the secretary):** all three as recommended.
+
+### What it costs
+
+- **A reviewer that reads less of what the worker read.** Rule 1's marker keeps the reviewer from
+  resting a finding on the gap, but a finding the output would have supported is not made.
+- **The read-only test is the command's text.** `sed -n 'w file'` counts as a read. A finer test
+  needs continuo to report which calls wrote.
+- **Once per lap is stricter than once per tip.** A lap that resumed into a second gate on new
+  commits already holds two readings, and is offered no retake. An `unavailable` row carries no
+  evidence, so its tip cannot be told.
+- **A reviewer run has no cost of its own.** A retake is counted as a round, and the scope's spend
+  counts laps and not reviewer runs, so this entry adds none.
+- **The retake is not recorded as the person's act.** It is a second reading row, and the round count
+  tells it from a resumed gate only by its first reading's reason.
+- **Once is held by one process.** Two `rondo web` processes serving one store could each pass
+  `retakeOffered` before either appends, and run the reviewer twice. A store-backed claim would close
+  it; one host process per store is what is run today. A forked approval refuses the press, because
+  its budget cannot be told (`D-0074` rule 2.1).
+
+### Annotations this entry adds
+
+| Entry | What the annotation says | Additive? |
+|---|---|---|
+| `D-0065` rule 1.4 | Over the bound, outputs of reads, then of subagents, are left out by name before the reading is `unavailable` (`D-0138` rule 1) | **not additive** |
+| `D-0065` rule 4.1 | A reading the person took again is one more round of its lap (`D-0138` rule 3.2) | **not additive** |
+| `D-0105` rule 3.1 | Only a gate or question of the conflicting lap's line withholds the fix (`D-0138` rule 2) | **not additive** |
+
+### What would falsify it
+
+- **A review that fits only because rule 1 left out what the finding needed**, seen as a clear reading
+  over a defect whose evidence was in an omitted output: then the order, or the classifier, is wrong.
+- **Laps that stay over the bound after both steps**: then a bound on the worker's reads, or on the
+  subagents' reports, belongs in the lap and not in the review.
+- **A conflict fix started over another part's gate that that part's answer would have changed**:
+  then the parts do decide each other, and rule 2 is too narrow.
+- **Retakes that come back `unavailable` for the same reason as the first reading**: then the reason
+  was not one a second run could change, and `retakeOffered` should not have offered it.

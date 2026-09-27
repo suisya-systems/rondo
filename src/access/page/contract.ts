@@ -157,6 +157,11 @@ export interface WebPorts extends InboxReadPorts {
    */
   readonly fixesConflicts?: boolean;
   /**
+   * Whether the host holds a *take the review again* press (rondo#500, D-0138
+   * rule 3), on `fixesConflicts`'s terms. Absent is false.
+   */
+  readonly retakesReviews?: boolean;
+  /**
    * The repositories rondo triages (D-0097, `D-0081`): the empty centre draws
    * one block for each. Absent is none, and then no triage section is drawn.
    */

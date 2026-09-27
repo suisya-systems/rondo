@@ -38,9 +38,10 @@ export function ResultLine({
   readonly result: LapResult | null;
   /**
    * Where rondo's fix of a conflict stands (rondo#417, D-0105): offered by the
-   * card above, or an attempt at it running; null for neither.
+   * card above, an attempt at it running, or withheld while a question of its
+   * line waits on the person (rondo#500); null for none.
    */
-  readonly conflictFix?: "offered" | "running" | null;
+  readonly conflictFix?: "offered" | "running" | "waits" | null;
 }) {
   const detail = result === null ? null : wording.checksDetail(result.checks);
   const moved = result?.moved ?? null;
@@ -96,7 +97,9 @@ export function ResultLine({
                   ? wording.resultConflictFixing(result.conflictsWith)
                   : conflictFix === "offered"
                     ? wording.resultConflictDoOffered(result.conflictsWith)
-                    : wording.resultConflictDo(result.conflictsWith)}
+                    : conflictFix === "waits"
+                      ? wording.resultConflictWaits(result.conflictsWith)
+                      : wording.resultConflictDo(result.conflictsWith)}
               </li>
             </>
           )}

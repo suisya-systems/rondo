@@ -54,6 +54,7 @@ import {
   type RaiseInput,
   type ReleaseInput,
   ReleasePort,
+  type RetakeReviewFromWeb,
   type ReviseInput,
   RevisePort,
   SayPort,
@@ -932,6 +933,78 @@ test("(fix-conflict) a person's press starts the fix once; a script, a stale for
   expect(await none.closed).toBe(0);
 });
 
+test("(retake-review) a person's press takes the review again once; a script, a bad form, no port or a spent budget takes nothing", async () => {
+  const retaken: string[] = [];
+  const withRetake = (retake: RetakeReviewFromWeb | null) => {
+    const ports = spyPorts([]);
+    return {
+      ...ports,
+      revise: new RevisePort(
+        async () => await Promise.resolve({ ok: true, note: "" }),
+        null,
+        retake,
+      ),
+    } as ServedPorts;
+  };
+  const { base, stop, closed } = await served(
+    createApp(
+      withRetake(async (iterationId) => {
+        retaken.push(iterationId);
+        return await Promise.resolve({ ok: true, note: "" });
+      }),
+      TOKEN,
+    ),
+  );
+  const person = pressHeaders(base);
+  const form = { token: TOKEN, iteration: "i-0001", request: "req-1" };
+
+  const pressed = await send(base, "/retake-review", "POST", person, form);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
+  expect(retaken).toEqual(["i-0001"]);
+  const script = await send(
+    base,
+    "/retake-review",
+    "POST",
+    { ...person, "sec-fetch-user": undefined },
+    form,
+  );
+  expect(script.status).toBe(403);
+  const bad = await send(base, "/retake-review", "POST", person, { ...form, iteration: "" });
+  expect(bad.status).toBe(400);
+  expect(retaken).toHaveLength(1);
+  stop.abort();
+  expect(await closed).toBe(0);
+
+  const none = await served(createApp(withRetake(null), TOKEN));
+  const refused = await send(none.base, "/retake-review", "POST", pressHeaders(none.base), form);
+  expect(refused.status).toBe(403);
+  none.stop.abort();
+  expect(await none.closed).toBe(0);
+
+  // The budget's refusal says the rounds, in the person's words.
+  const spent = await served(
+    createApp(
+      withRetake(
+        async () =>
+          await Promise.resolve({
+            ok: false,
+            why: "retakeRefusedBudget" as const,
+            rounds: { taken: 3, budget: 3 },
+            note: "3 of 3 review round(s) are taken",
+          }),
+      ),
+      TOKEN,
+    ),
+  );
+  const over = await send(spent.base, "/retake-review", "POST", pressHeaders(spent.base), form);
+  expect(over.status).toBe(409);
+  expect(over.body).toContain("this work has used 3 of the 3 review rounds its scope allows");
+  spent.stop.abort();
+  expect(await spent.closed).toBe(0);
+  expect(retaken).toHaveLength(1);
+});
+
 test("(revise) every other shape of request to the revise route is refused and writes nothing", async () => {
   const revised: Revised = [];
   const { base, stop, closed } = await served(createApp(spyPorts([], [], [], [], revised), TOKEN));
@@ -1596,6 +1669,8 @@ const WRITE_TABLE = [
   "ALL /flow-answer",
   // The conflict fix of a published pull request (rondo#417, D-0105).
   "ALL /fix-conflict",
+  // Taking a gate's model review again (rondo#500, D-0138).
+  "ALL /retake-review",
   // An open tab's report of its notice (rondo#414, D-0108).
   "ALL /notice",
   "ALL /*",
@@ -1618,6 +1693,7 @@ const WRITE_TABLE = [
   "POST /notice",
   "POST /not-now",
   "POST /flow-answer",
+  "POST /retake-review",
   "POST /fix-conflict",
   "POST /merge",
 ];
@@ -1670,6 +1746,8 @@ const PRESS_ROUTES = [
   "/flow-answer",
   // One more attempt that settles a published pull request's conflict (rondo#417, D-0105).
   "/fix-conflict",
+  // Taking a gate's model review again, one more review round (rondo#500, D-0138).
+  "/retake-review",
 ];
 
 /**

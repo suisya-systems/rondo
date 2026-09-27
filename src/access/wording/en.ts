@@ -1282,6 +1282,30 @@ explanation you pressed on and then answers the gate.`,
   conflictFixRefusedNotStarted:
     "Nothing was started, and nothing here is lost. Whoever maintains rondo on this machine can " +
     "see what it said.",
+  retakeReviewAction: "Take the review again",
+  retakeReviewBusy: "Taking the review again...",
+  retakeReviewBack: "Back to the confirmation",
+  retakeRefusedNoApprover:
+    "The review was not taken again: rondo on this machine does not yet know who you are, so " +
+    "nothing here can be decided as you.",
+  retakeRefusedPress:
+    "The review was not taken again: this is done by a person pressing this page's button, and a " +
+    "script cannot.",
+  retakeRefusedForm:
+    "The review was not taken again: that form did not come from this page. Reload it and press " +
+    "again.",
+  retakeRefusedGone:
+    "The review was not taken again: this confirmation is no longer waiting, or its review was " +
+    "already taken again. Reload the page to see where it stands.",
+  retakeRefusedBudget: (taken, budget) =>
+    `The review was not taken again: this work has used ${String(taken)} of the ` +
+    `${String(budget)} review rounds its scope allows, and taking it again is one more. Raising ` +
+    "the scope's review rounds makes room for it.",
+  retakeRefusedForked:
+    "The review was not taken again: this work's approval was raised twice, separately, so how " +
+    "many review rounds it has left cannot be told, and rondo does not pick one of them.",
+  retakeRefusedNoContinuo:
+    "The review was not taken again: the part of rondo that runs the work will not start.",
   nextStepPublishUpdate: (pullRequest) =>
     `The conflict fix is approved. Publishing pushes it onto ${pullRequest}; the checks run ` +
     "there again, and nothing is merged.",
