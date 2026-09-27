@@ -128,11 +128,15 @@ export function gateAuto(input: GateAutoInput): GateAuto {
     : { kind: "would_not_approve", reasons: Object.freeze(reasons) };
 }
 
-/** What the latest model reading stands in the way with, or null where it does not. */
-function modelReason(
+/**
+ * What the latest model reading stands in the way with, or null where it does
+ * not. A scoped publish asks it too (D-0066 rule 4.2's act that carries a
+ * lap's result onward, rondo#470).
+ */
+export function modelReason(
   readings: readonly LapReading[],
   checks: LapReading | null,
-  scope: GateScope | null,
+  scope: Pick<GateScope, "payload"> | null,
 ): GateAutoReason | null {
   const model = latestReading(readings, isModelReadingDrafter);
   if (model === null) {

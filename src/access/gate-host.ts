@@ -19,7 +19,8 @@
  * **It only approves.** Revise, a review extension, a spent round, a scope
  * exit, a closing lap and publish stay with the person (the owner's decision
  * of 2026-09-27): each of those is a reason `gateAuto` answers `would not
- * approve`, or not an answer at all.
+ * approve`, or not an answer at all. A publish follows only where the scope
+ * includes it, and that is `publish-host.ts`'s (rondo#470).
  */
 import type { GateDelegation } from "../continuo/invoker.js";
 import type { IterationRecord, StoredScopeDecision } from "../store/records.js";

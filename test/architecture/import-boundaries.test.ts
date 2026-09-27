@@ -1312,6 +1312,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/model-review/host.ts": ["Reviewer"],
   "src/access/model-review/judgement.ts": ["Reviewer"],
   "src/access/page/contract.ts": [HUMAN],
+  // rondo#470: publish inside a scope, through the press's own path.
+  "src/access/publish-host.ts": ["Publishing"],
   "src/access/page/empty-side.tsx": [HUMAN],
   "src/access/page/empty.tsx": [HUMAN],
   "src/access/page/triage.tsx": [HUMAN, WORK_DISCOVERY],
