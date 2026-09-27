@@ -954,12 +954,29 @@ async function deliverOnce(
   runId: string | null,
   verbs: GateVerbs,
 ): Promise<number | null> {
-  const delivered = await verbs.deliver(continuo, {
-    db: request.db,
-    destinationDir: request.destinationDir,
-    holder: request.holder,
-    runId,
-  });
+  const deliver = async () =>
+    await verbs.deliver(continuo, {
+      db: request.db,
+      destinationDir: request.destinationDir,
+      holder: request.holder,
+      runId,
+    });
+  let delivered = await deliver();
+  // **The lap's own delivery lease outlives its turn by up to a second**
+  // (measured 2026-09-27, rondo#467: `LeaseHeld` on epoch 1 until ~0.8 s
+  // after `lap perform` returned). A walk started right after a lap -- the
+  // organisation's answer, or a quick press -- waits it out rather than
+  // failing; a drain is idempotent, so trying again sends nothing twice.
+  // ponytail: a fixed 250 ms poll for at most 5 s; read the lease's own
+  // expiry if continuo ever reports it as a field.
+  for (
+    let tries = 0;
+    tries < 20 && delivered.kind === "refused" && delivered.errorClass === "LeaseHeld";
+    tries += 1
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    delivered = await deliver();
+  }
   if (delivered.kind !== "answered") {
     return relayFailure("gate deliver", delivered);
   }
