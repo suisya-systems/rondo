@@ -35,6 +35,7 @@ import {
   readingRangeOf,
   reviewGate,
   reviewLines,
+  reviseApproval,
   revisionBlocker,
   sayGateOpen,
   transcriptPort,
@@ -370,14 +371,17 @@ test("--prompt and --prompt-file together are refused rather than ranked", () =>
   }
 });
 
-test("D-0098 rule 5.2: --closing-fix reaches revise with a scope, and is refused without one", () => {
+test("D-0098 rule 5.2: --closing-fix reaches revise, with or without a named scope", () => {
   const base = ["revise", "--actor-id", "me", "--body=fix", "--iteration-id", "i-2"];
   const scoped = parseCommand([...base, "--scope-decision-id", "sd-1", "--closing-fix"]);
   expect(scoped.kind === "parsed" && scoped.parsed.closingFix).toBe(true);
   const plain = parseCommand([...base, "--scope-decision-id", "sd-1"]);
   expect(plain.kind === "parsed" && plain.parsed.closingFix).toBe(false);
+  // D-0157: the approval is drawn when nobody names one, so the flag no longer
+  // needs --scope-decision-id beside it to have a scope to be the option of.
   const bare = parseCommand([...base, "--closing-fix"]);
-  expect(bare.kind === "refused" ? bare.reason : "").toContain("--scope-decision-id");
+  expect(bare.kind === "parsed" && bare.parsed.closingFix).toBe(true);
+  expect(bare.kind === "parsed" && bare.parsed.scopeDecisionId).toBeNull();
   // Only revise takes it.
   expect(parseCommand(["publish", "--actor-id", "me", "--closing-fix"]).kind).toBe("refused");
 });
@@ -2834,6 +2838,72 @@ test("a request that names one issue here closes it, and nothing else does (rond
   expect(body("https://ghe.example.com/suisya-systems/rondo/issues/9")).toContain(
     "Refs https://ghe.example.com/suisya-systems/rondo/issues/9",
   );
+});
+
+test("D-0157: revise draws the approval its predecessor was admitted under, and refuses when it cannot", async () => {
+  // `i-scoped` ran under sd-1 and nothing raised it; `i-raised`'s approval was
+  // replaced by an approved successor, so the tip of its chain is sd-2;
+  // `i-forked`'s chain has two approved tips; `i-bare` records no admission.
+  const admitting: Record<string, string> = {
+    "i-scoped": "sd-1",
+    "i-raised": "sd-old",
+    "i-forked": "sd-fork",
+  };
+  const record = {
+    scopeDecisionAdmitting: async (id: string) => admitting[id] ?? null,
+    scopeTip: async (decision: string) => {
+      if (decision === "sd-old") {
+        return { kind: "tip" as const, scopeDecisionId: "sd-2" };
+      }
+      return decision === "sd-fork"
+        ? { kind: "forked" as const, scopeDecisionIds: ["sd-x", "sd-y"] }
+        : { kind: "tip" as const, scopeDecisionId: decision };
+    },
+  };
+
+  // Named always wins, and says nothing back: the person chose it at this keyboard.
+  expect(await reviseApproval(record, "i-scoped", "sd-typed")).toEqual({
+    kind: "spending",
+    scopeDecisionId: "sd-typed",
+    saying: null,
+  });
+  // A lap with no approval of its own is still revised under one that is named.
+  expect(await reviseApproval(record, "i-bare", "sd-typed")).toMatchObject({
+    kind: "spending",
+    scopeDecisionId: "sd-typed",
+  });
+
+  // Omitted: the admission row's approval, named in one line with why it is that one.
+  const drawn = await reviseApproval(record, "i-scoped", null);
+  expect(drawn).toMatchObject({ kind: "spending", scopeDecisionId: "sd-1" });
+  expect(drawn.kind === "spending" ? drawn.saying : "").toBe(
+    "spending approval 'sd-1', the approval iteration 'i-scoped' was admitted under",
+  );
+
+  // D-0074 section 2: what is spent is the approved tip of that approval's
+  // chain, and the line names both so a reader can see why it is not sd-old.
+  const raised = await reviseApproval(record, "i-raised", null);
+  expect(raised).toMatchObject({ kind: "spending", scopeDecisionId: "sd-2" });
+  const said = raised.kind === "spending" ? (raised.saying ?? "") : "";
+  expect(said).toContain("spending approval 'sd-2'");
+  expect(said).toContain("the approved tip of the chain of 'sd-old'");
+  expect(said).toContain("iteration 'i-raised' was admitted under");
+
+  // Nothing to draw stops there, and points at the flag rather than running the
+  // correction on no budget (lap 9's N-33).
+  const bare = await reviseApproval(record, "i-bare", null);
+  expect(bare.kind).toBe("refused");
+  const reason = bare.kind === "refused" ? bare.reason : "";
+  expect(reason).toContain("iteration 'i-bare' records no admission against any scope");
+  expect(reason).toContain("--scope-decision-id ID");
+
+  // Two approved tips: rondo does not pick one here either (D-0074 rule 2.1).
+  const forked = await reviseApproval(record, "i-forked", null);
+  expect(forked.kind).toBe("refused");
+  const forkedReason = forked.kind === "refused" ? forked.reason : "";
+  expect(forkedReason).toContain("'sd-x' and 'sd-y'");
+  expect(forkedReason).toContain("does not pick");
+  expect(forkedReason).toContain("--scope-decision-id ID");
 });
 
 test("D-0149: the lap a carry on starts again is a stopped or lost one with an approval in force", async () => {
