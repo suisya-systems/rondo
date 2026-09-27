@@ -1875,6 +1875,9 @@ export async function main(
         // What the page says under a message whose issue is still to be read
         // (D-0078 section 4.3), off the reader that reads it.
         issuesUnread: issues.unread,
+        // The drafts still to come, so the page waits for rondo's plan
+        // before it offers a scope (rondo#495).
+        draftsOwed: () => drafter.owed(),
         // Which repository a request's work runs in, and the press that adds
         // one it names and rondo does not hold (rondo#383, D-0090) -- on the
         // release press's condition, since the plan it records is the

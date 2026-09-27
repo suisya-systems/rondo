@@ -183,6 +183,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0148 | A budget stop under a paused goal scope offers no raise; its box says the work is paused and links to resuming it | accepted |
 | D-0149 | Carrying on at a lap's stop starts that lap again: a lap stopped at its budget or its time limit runs again from its branch on the answer's own press, with the person's words, and an answer to a stop rondo starts again is not drafted | accepted |
 | D-0150 | The gate says what happened on the way to it: the laps of its line, what each was asked and committed, and the request's other parts; the execution limits say what was stopped and that its impact is unknown; and a failing test run the latest clean whole-suite run supersedes does not withhold automatic approval | accepted |
+| D-0151 | The scope card waits for rondo's draft: while the drafter still owes a request its draft, the thread, the right face and the list all say it is rondo's turn, and no scope is offered | accepted |
 | D-0152 | A lap continuo refused before its cost was read holds its reserve at a lap's send, the number the page counts, and not its cap; reading a timed-out lap's cost is continuo's | accepted |
 
 ---
@@ -26942,6 +26943,64 @@ what happened. They could not:
 - **A gate approved automatically whose superseding whole-suite run did not in fact pass** (an
   `is_error: false` on a failed command, or a script named `test` that runs no tests).
 - **A story line that says something the lap's records do not hold.**
+
+## D-0151 — The scope card waits for rondo's draft: while the drafter still owes a request its draft, the thread, the right face and the list all say it is rondo's turn, and no scope is offered
+
+**Status:** accepted (2026-09-28, rondo#495; lap 18, owner-operated). Amends `D-0082` rule 1 as
+rondo#375 applied it (the next step at the top of the thread). Refs `D-0071` rule 3.2 (what is
+due), `D-0078` section 3.3 (a draft waits on its issue reads), rondo#494 (the redraw's wash).
+
+### Context
+
+Right after the owner sent a request, the thread showed the amber *Your next step* card with *Set
+the scope*. rondo had only read the linked issue; its drafter drafted the split and scope 43
+seconds later. A scope pressed in that window is one decided without rondo's plan, and the amber
+said it was the person's turn while it was rondo's. The list's row said *Not started yet* and the
+right face said nothing, so the three faces gave three answers to whose turn it was.
+
+### Decision
+
+1. **What rondo owes is the drafter host's own reading** (`DrafterHost.owed`): a request with an
+   operator message no drafter row covers, not from before the drafter, not given up, and not
+   waiting on a repository to be added -- including one still waiting on an issue read. It is the
+   same scan that decides what is due, so the page and the drafter cannot disagree.
+2. **While a draft is owed and no scope is approved, the top of the thread says it is rondo's turn**
+   (*rondo is reading the request and drafting a plan*), in the neutral family and with nothing to
+   press. This holds over an earlier draft too: the owed one is drafted over the newer message.
+3. **The scope card appears once nothing is owed**: a drafted scope to approve, or -- where the
+   drafter's latest run drafted nothing -- the person's own scope, the card saying rondo could not
+   draft a plan and that what stopped it is in the thread. It carries `data-can-act`, so it is
+   washed when it arrives (rondo#494).
+4. **The right face and the list read the same predicate.** A request with no lap shows *What
+   remains before this ends* with a first step, *Plan and scope*: under way while rondo drafts,
+   yours when the card is, done once approved. The list's row says *rondo is drafting a plan*,
+   with the neutral dot.
+5. **A reading of what is owed that fails withholds the scope rather than offering it**: a draft
+   may be on its way, and a scope pressed over it is the act this rule is against.
+6. **An issue read the store refused is not still to come** (`unreadUnderway`): nothing reads it
+   again in this process, so holding the draft on it held both the drafter and rule 2's sentence
+   for good. The thread's own *not read yet* note is unchanged.
+
+**Options not taken.** A timer after the request (show the card after N seconds): it guesses at a
+run's length, and a run that takes longer puts the card back in front of the plan. Lifting a
+drafted scope into the list's *your turn*: that is `waitsOnYou`, which also sets the header's
+count and reaches a person who is not looking (rondo#311); changing it is a change to what rondo
+notifies about, and is left for its own issue.
+
+### What it costs
+
+- **A page with no drafter host says nothing is owed**, and draws the card as before. A drafter
+  that throws on every run leaves the request owed, and the page says rondo is drafting until the
+  fault clears -- which is what the host is doing: trying again on each scan.
+- **The scope screen itself is not gated.** Reached by its address while a draft is owed, it still
+  offers the person's own form; only the thread's way to it waits.
+
+### What would falsify it
+
+- **A thread that says rondo is drafting with no run in flight and none coming**: then a path
+  leaves a message uncovered for good, and `owed` names a request nothing will draft.
+- **The card appearing before the draft lands**: then `owed` drops a request the drafter still
+  holds.
 
 ## D-0152 — A lap continuo refused before its cost was read holds its reserve at a lap's send, the number the page counts, and not its cap; reading a timed-out lap's cost is continuo's
 

@@ -36,6 +36,7 @@ export type RowState =
   | "approved"
   | "finished"
   | "stopped"
+  | "drafting"
   | "notStarted";
 
 /** One request, as the list draws it. */

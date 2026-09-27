@@ -1075,7 +1075,13 @@ export function issueReader(ports: IssueReaderPorts): IssueReader {
   ): Promise<ReadonlyMap<string, readonly NamedIssue[]>> => {
     const where = whereBareReads();
     const underway = new Map<string, readonly NamedIssue[]>();
-    for (const [messageId, references] of await unread(messages)) {
+    for (const [messageId, unreadHere] of await unread(messages)) {
+      // **A read the store refused is not still to come** (rondo#495): nothing
+      // tries it again in this process, so waiting on it would hold the
+      // request's draft -- and the page's "rondo is drafting" -- for good.
+      const references = unreadHere.filter(
+        (reference) => !givenUp.has(`${messageId}\u0000${reference.named}`),
+      );
       const namedAtMs = messages.find((m) => m.messageId === messageId)?.atMs ?? 0;
       const left = references.some((reference) => reference.repo === null)
         ? "disputed" in

@@ -1116,6 +1116,13 @@ explanation you pressed on and then answers the gate.`,
     "and the work can start.",
   nextStepDrafted:
     "rondo has drafted a scope for this request. Check it and approve it, and the work can start.",
+  nextStepRondoHeading: "rondo's turn",
+  nextStepDrafting:
+    "rondo is reading the request and drafting a plan. The scope for you to check appears here " +
+    "once it is drafted; there is nothing for you to do yet.",
+  nextStepNoDraft:
+    "rondo could not draft a plan for this request; what stopped it is in the thread below. Set " +
+    "its scope yourself -- what it may spend and touch -- and the work can start.",
   nextStepAnswer:
     "rondo is waiting for your answer. Until you answer, the work on this request does not go on.",
   nextStepStart: "The scope is approved. Start the work from its screen.",

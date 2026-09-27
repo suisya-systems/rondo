@@ -107,10 +107,13 @@
   white-space: nowrap;
 }
 
-/* The six steps, across the card: the order is the order they happen in (the pull request is its own step, rondo#376). */
+/* The steps, across the card, one column each however many there are -- six under a lap, seven
+   before one, with the plan and its scope first (rondo#495): the order is the order they happen in
+   (the pull request is its own step, rondo#376). */
 .side-steps {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 6px;
   margin-top: 10px;
   list-style: none;
@@ -143,6 +146,11 @@
 
 .side-step-waiting b {
   font-weight: 700;
+}
+
+/* The person's: in full ink, so it does not read as "not yet" -- and still no amber (rule 4, rondo#495). */
+.side-step-yours {
+  color: var(--color-foreground);
 }
 
 .side-note {
