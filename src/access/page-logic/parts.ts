@@ -14,7 +14,7 @@
  * asked in the thread what becomes of this one.
  */
 
-import { pathsOverlap, WHOLE_REPOSITORY } from "../../store/lanes.js";
+import { pathsOverlap, repositoryKey, WHOLE_REPOSITORY } from "../../store/lanes.js";
 import { approvedForPublication, type IterationRecord, isTerminal } from "../../store/records.js";
 import type { PartRead } from "../drafted-start.js";
 import type { LapResult } from "./result.js";
@@ -70,6 +70,8 @@ export interface PartView {
   readonly laps: readonly IterationRecord[];
   /** The paths the part asked to hold; null claims the whole repository. */
   readonly claim: readonly string[] | null;
+  /** The part's repository, or null where its template is gone. */
+  readonly repository: string | null;
 }
 
 /** What {@link partViews} reads besides the parts: the rows the page already holds. */
@@ -109,7 +111,15 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
             : laps.at(-1)?.status === "closed"
               ? "finished"
               : "stopped";
-      return { index: part.index, standing, wait: null, pullRequest, laps, claim: part.claim };
+      return {
+        index: part.index,
+        standing,
+        wait: null,
+        pullRequest,
+        laps,
+        claim: part.claim,
+        repository: part.repository,
+      };
     }
     if (part.order.kind !== "waiting") {
       return {
@@ -119,6 +129,7 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
         pullRequest,
         laps,
         claim: part.claim,
+        repository: part.repository,
       };
     }
     const after = part.order.after;
@@ -144,6 +155,7 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
       pullRequest,
       laps,
       claim: part.claim,
+      repository: part.repository,
     };
   });
 }
@@ -199,6 +211,8 @@ export function holdsLap(view: PartView, iterationId: string): boolean {
 export function takeInFrom(
   views: readonly PartView[],
   iterationId: string,
+  /** The lap's own repository: a take-in fetches and compares only that one. */
+  repository: string | null,
   reached: readonly string[],
 ): PartView | null {
   return (
@@ -206,6 +220,9 @@ export function takeInFrom(
       (view) =>
         view.standing === "merged" &&
         !holdsLap(view, iterationId) &&
+        repository !== null &&
+        view.repository !== null &&
+        repositoryKey(view.repository) === repositoryKey(repository) &&
         reached.some((path) =>
           (view.claim ?? [WHOLE_REPOSITORY]).some((held) => pathsOverlap(held, path)),
         ),

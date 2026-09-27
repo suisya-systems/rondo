@@ -89,8 +89,17 @@ export function partStepOf(
    * 8.5, `takeInFrom`), or null.
    */
   takeIn: PartView["pullRequest"] = null,
+  /**
+   * The address that puts this part's gate in the box, where the box shows
+   * another part's (D-0129), or null.
+   */
+  gateHref: string | null = null,
 ): PartStep {
-  const step = partStepAlone(wording, view);
+  const alone = partStepAlone(wording, view);
+  const step =
+    gateHref === null
+      ? alone
+      : { ...alone, links: [...alone.links, { href: gateHref, said: wording.partGateLink }] };
   return takeIn === null
     ? step
     : {

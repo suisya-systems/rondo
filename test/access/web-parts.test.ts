@@ -246,6 +246,7 @@ test("a wait on another repository names it and its pull request", () => {
     pullRequest: null,
     laps: [],
     claim: null,
+    repository: null,
   });
   expect(step).toEqual({
     name: "Part 2",
@@ -463,11 +464,16 @@ test("a part whose files no merged part claimed is not told to take anything in"
     pullRequest: { url: "https://github.com/o/r/pull/7", number: "7" },
     laps: [],
     claim: ["lib/"],
+    repository: "/srv/cadenza",
   };
-  expect(takeInFrom([merged], "lap-two", ["docs/readme.md"])).toBeNull();
-  expect(takeInFrom([merged], "lap-two", ["lib/a.ts"])).toBe(merged);
+  expect(takeInFrom([merged], "lap-two", "/srv/cadenza", ["docs/readme.md"])).toBeNull();
+  expect(takeInFrom([merged], "lap-two", "/srv/cadenza", ["lib/a.ts"])).toBe(merged);
   // Not merged yet: nothing has landed to take in.
-  expect(takeInFrom([{ ...merged, standing: "finished" }], "lap-two", ["lib/a.ts"])).toBeNull();
+  expect(
+    takeInFrom([{ ...merged, standing: "finished" }], "lap-two", "/srv/cadenza", ["lib/a.ts"]),
+  ).toBeNull();
+  // Another repository's paths are not this lap's: the same path there is a different file.
+  expect(takeInFrom([merged], "lap-two", "/srv/rondo", ["lib/a.ts"])).toBeNull();
 });
 
 test("the attempt's event line says whether the take-in happened (D-0098 rule 8.5)", async () => {
@@ -603,4 +609,33 @@ test("the merge press names a closing fix that was not re-read: one card on the 
   const said = merge.indexOf(EN.mergeNotReread("fffffff"));
   expect(said).toBeGreaterThan(-1);
   expect(merge.indexOf('action="/merge?lang=')).toBeGreaterThan(said);
+});
+
+test("two parts at their gates: the step of the one the box is not showing leads to its own gate (D-0129)", async () => {
+  const w = await questioned();
+  await openGate(w.world as never, "lap-two");
+  const first = await gatePage(w);
+  // The box answers the first gate, and part 2's step leads to its own.
+  expect(first).toContain('<input type="hidden" name="iteration" value="lap-one"/>');
+  const link = "/?thread=r1&amp;gate=lap-two&amp;lang=en";
+  expect(first).toContain(`href="${link}"`);
+  expect(partSteps(first)[1]).toBe(`[yours] Part 2${EN.partYours} ${EN.partGateLink}`);
+
+  const second = await operatorPage(
+    {
+      ...portsOver(w.world, "ada", []),
+      material: async () => ({ lines: [], why: null, work: null }),
+    },
+    "t",
+    { kind: "thread", messageId: "r1", to: null, gate: "lap-two" },
+    EN,
+    mint,
+    () => "scope-x",
+    () => "lap-next",
+  );
+  expect(second).toContain('<input type="hidden" name="iteration" value="lap-two"/>');
+  expect(second).not.toContain('<input type="hidden" name="iteration" value="lap-one"/>');
+  // Now part 1's step leads back to its gate, and the question's line is not over this box.
+  expect(second).toContain('href="/?thread=r1&amp;gate=lap-one&amp;lang=en"');
+  expect(second).not.toContain("before stopping to ask");
 });

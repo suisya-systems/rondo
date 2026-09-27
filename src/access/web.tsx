@@ -3164,10 +3164,17 @@ export async function operatorPage(
   // **Whichever lap of this request is at a gate**, which need not be the one
   // the list speaks with: `saysMore` orders by what a row should say, and a
   // gate is answered wherever it stands (Codex).
-  const answeringLap =
-    selectedRoot === null
-      ? null
-      : (lapsUnder(selectedRoot).find((lap) => lap.question === "waiting")?.record.id ?? null);
+  // **The gate the address names, where several parts wait at one** (D-0129):
+  // a part's step links its own gate, so one part's open question does not
+  // stand between the person and another part's answer.
+  const answeringLap = (() => {
+    if (selectedRoot === null) {
+      return null;
+    }
+    const gated = lapsUnder(selectedRoot).filter((lap) => lap.question === "waiting");
+    const named = view.kind === "thread" ? view.gate : undefined;
+    return (gated.find((lap) => lap.record.id === named) ?? gated[0])?.record.id ?? null;
+  })();
   // The lap's line as the ledger holds it, which is how the conflict fix reads
   // a question over a line (D-0105); the verdict walks the lineage.
   const shown = await shownBeforePress(
@@ -3700,7 +3707,7 @@ export async function operatorPage(
       return null;
     }
     return (
-      takeInFrom(partsOfRequest(gatedLap.requestMessageId), gatedLap.id, [
+      takeInFrom(partsOfRequest(gatedLap.requestMessageId), gatedLap.id, repositoryOf(gatedLap), [
         ...reach.collided,
         ...reach.unheld,
       ])?.pullRequest ?? null
@@ -4032,13 +4039,23 @@ export async function operatorPage(
             parts:
               selectedRoot === null
                 ? []
-                : partsOfRequest(selectedRoot).map((part) =>
-                    partStepOf(
+                : partsOfRequest(selectedRoot).map((part) => {
+                    // A part at a gate the box is not showing: the way to it.
+                    const atGate = part.laps.find(
+                      (lap) => lap.status === "awaiting_human" && lap.id !== gatedLap?.id,
+                    );
+                    return partStepOf(
                       wording,
                       part,
                       gatedLap !== null && holdsLap(part, gatedLap.id) ? takeIn : null,
-                    ),
-                  ),
+                      atGate === undefined
+                        ? null
+                        : viewHref(
+                            { kind: "thread", messageId: selectedRoot, to: null, gate: atGate.id },
+                            wording.lang,
+                          ),
+                    );
+                  }),
           }),
         };
   const emptySide = !centreIsEmpty

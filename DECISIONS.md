@@ -24776,7 +24776,12 @@ how a take-in is known before its press. Each is recorded here once.
    question itself carries it. What waits on the answer is the worker's own `waits`, read from the
    block in the report the gate read, and left out where the report was not read. The line links the
    right face's card of what changed, not the forge: the commit is not pushed until it is published.
-   The line under the title keeps the other parts' state: *1 other part still running*.
+   The line under the title keeps the other parts' state: *1 other part still running*. **Where
+   several parts wait at a gate, each is answered on its own.** The thread's address may name the
+   gate the box answers (`?thread=...&gate=<lap>`). The step of a part at a gate the box is not
+   showing links it, so one part's open question never stands between the person and another
+   part's answer. Without a name, or naming no lap at a gate, the first waiting one is answered, as
+   before.
 5. **The revise box carries the answer and says what answering releases** (rules 4.5 and 8.4, the
    gate's point 2). Where the lap put a question, the box says what the press starts (*this starts
    part 1's next attempt with your answer in it*) and names the parts whose `after` is this part. While
@@ -24786,7 +24791,9 @@ how a take-in is known before its press. Each is recorded here once.
    a reading drafted, with a note saying so.
 6. **A take-in is known from the gate's comparison and the other part's claim** (rule 8.5, the case
    of `D-0098` rule 2.1). The lap reached files outside its own claim (the reach's collided and
-   unheld paths), and another part of the request that claimed them was merged. The part's step and
+   unheld paths), and another part of the request **in the lap's own repository** that claimed them
+   was merged. A take-in fetches and compares only that repository, so the same path in another one
+   is a different file. The part's step and
    the revise box then say *another part changed these files and was merged; the next attempt starts
    by merging it in*, linking the merged pull request. The revise press still decides the take-in
    with `git` (`revisionTakeIn`). The attempt's event line says whether it happened: a plan carrying a

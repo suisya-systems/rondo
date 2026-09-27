@@ -396,6 +396,8 @@ export interface PageWords extends DayWords {
   /** The earlier part ended unmerged, and the question is in the thread (rules 1.5 and 8.2). */
   readonly partUnlanded: (after: number) => string;
   readonly partUnlandedLink: string;
+  /** The way to a part's own gate, where the box shows another part's (D-0129). */
+  readonly partGateLink: string;
   /** The next attempt merges in what another part landed on these files first (rule 8.5). */
   readonly partTakeIn: string;
   /** A part's step with the take-in after it. */
@@ -745,6 +747,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   partUnlanded: (after) =>
     `part ${String(after + 1)} ended without being merged, so this one will not start by itself`,
   partUnlandedLink: "Answer the question",
+  partGateLink: "Answer this part",
   partTakeIn:
     "another part changed these files and was merged; the next attempt starts by merging it in",
   partThen: (said, more) => `${said}; ${more}`,
@@ -1087,6 +1090,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   partUnlanded: (after) =>
     `作業 ${String(after + 1)} がマージされないまま終わったため、この作業は自動では始まりません`,
   partUnlandedLink: "質問に答える",
+  partGateLink: "この作業に答える",
   partTakeIn:
     "ほかの作業がこのファイルを変更してマージされました。次の回は、まずその変更を取り込んでから始めます",
   partThen: (said, more) => `${said}。${more}`,
