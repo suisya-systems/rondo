@@ -981,6 +981,11 @@ export interface Chrome extends PageWords {
   readonly reviseDraftBases: (bases: string) => string;
   readonly reviseDraftChange: (words: string) => string;
   /**
+   * The line under a finding the drafter marked as the person's call (D-0145
+   * rule 4): rondo does not send a draft holding one by itself.
+   */
+  readonly reviseDraftJudgment: string;
+  /**
    * D-0098 rule 2.3 as D-0105 builds it: the take-in test the lap failed,
    * quoted as rondo's reading wrote it, with the one change that passes it.
    */

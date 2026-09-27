@@ -176,7 +176,13 @@ import {
   stoppedAtTimeLimit,
 } from "./forge.js";
 import { forgeHost, publishesTo, publishPreflight, redactRemoteUrl } from "./forge-preflight.js";
-import { GATE_ACTOR, gateHost, type ScopedAnswer } from "./gate-host.js";
+import {
+  GATE_ACTOR,
+  gateHost,
+  type ScopedAnswer,
+  type ScopedRevise,
+  type ScopedReviseInput,
+} from "./gate-host.js";
 import { goalScopeMaterial, goalScopeStanding } from "./goal-scope.js";
 import { hostFailure } from "./host-failure.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
@@ -1746,6 +1752,26 @@ export async function main(
         }
         return answered;
       },
+      // **And the drafted change under a goal scope** (D-0145, rondo#517), on
+      // the revise press's own condition: an approver the allowlist accepts.
+      revise:
+        sender === null || "refusal" in sender
+          ? null
+          : {
+              send: async (lap, input) =>
+                await reviseUnderScope(
+                  environment,
+                  store,
+                  opened.path,
+                  sender.actorId,
+                  chromeFor(selected.tag),
+                  lap,
+                  input,
+                ),
+              hasRoom: async () => (await store.occupancy()).occupying < bounds.policy.maxOccupying,
+              words: chromeFor(selected.tag),
+              mintId: newIterationId,
+            },
       now: Date.now,
       log: say,
     });
@@ -4780,6 +4806,62 @@ export async function answerFromPage(
 }
 
 /**
+ * rondo's own send of a drafted change at one gate (D-0145, rondo#517): the
+ * revise press's path, walked as {@link GATE_ACTOR} for the scope's approver,
+ * answering once the next lap is reserved so the host's pass does not wait out
+ * the lap, as a lost lap's start again does (`restartLostFromPage`). The gate
+ * host has already decided and claimed it; this is the act.
+ */
+export async function reviseUnderScope(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  words: Chrome,
+  record: IterationRecord,
+  input: ScopedReviseInput,
+): Promise<ScopedRevise> {
+  if (record.requestMessageId === null) {
+    return { kind: "notSent", note: "the lap names no request", answered: false };
+  }
+  let why: ReviseRefusal | undefined;
+  const running = reviseFromPage(
+    environment,
+    store,
+    storePath,
+    approver,
+    {
+      iterationId: record.id,
+      successorId: input.successorId,
+      scopeDecisionId: input.scopeDecisionId,
+      body: input.body,
+    },
+    input,
+  ).then((revised): Started => {
+    why = revised.why;
+    return { ok: revised.ok, note: revised.note };
+  });
+  const started = await answerOnceReserved(
+    store,
+    openAdvisoryRecord(storePath),
+    words,
+    { iterationId: input.successorId, requestMessageId: record.requestMessageId },
+    running,
+  );
+  return started.ok
+    ? { kind: "sent" }
+    : {
+        kind: "notSent",
+        note: started.note,
+        // Past the walk, or a walk that stopped part way: the gate may hold it.
+        answered:
+          why === "reviseRefusedAfterGate" ||
+          why === "reviseRefusedNotSettled" ||
+          why === "reviseRefusedWalkFailed",
+      };
+}
+
+/**
  * The organisation's answer at one gate (D-0125 rule 6, rondo#467): the
  * approve press's walk, in {@link GATE_ACTOR}'s name and carrying the
  * delegation, then `resume` to settle rondo's row. The gate host has already
@@ -5946,6 +6028,7 @@ export async function reviseFromPage(
   storePath: string,
   approver: string,
   input: ReviseInput,
+  delegated: ScopedReviseInput | null = null,
 ): Promise<Revised> {
   const already = revising.get(input.successorId);
   if (already !== undefined) {
@@ -5959,7 +6042,7 @@ export async function reviseFromPage(
             "and it carries other words",
         };
   }
-  const running = revisePage(environment, store, storePath, approver, input);
+  const running = revisePage(environment, store, storePath, approver, input, delegated);
   revising.set(input.successorId, { running, body: input.body });
   try {
     return await running;
@@ -6468,6 +6551,8 @@ async function revisePage(
   storePath: string,
   approver: string,
   input: ReviseInput,
+  /** rondo's own send under a goal scope (D-0145): walked as its delegate, never as a press. */
+  delegated: ScopedReviseInput | null,
 ): Promise<Revised> {
   const actor = approvedActor(approver, environment);
   if ("refusal" in actor) {
@@ -6535,13 +6620,16 @@ async function revisePage(
   }
   // **Written before the press acts on it** (D-0042 rules 2 and 3), as the
   // approve press writes it: the framing a person pressed on is the same
-  // framing whichever of the gate's two answers they chose.
-  const shown = await recordPagePress(
-    advisoryPorts(store, storePath, () => {}),
-    input.iterationId,
-  );
-  if (!shown.ok) {
-    return { ok: false, why: "reviseRefusedNotSetUp", note: shown.note };
+  // framing whichever of the gate's two answers they chose. rondo's own send
+  // is no press, and records none, as its approve records none.
+  if (delegated === null) {
+    const shown = await recordPagePress(
+      advisoryPorts(store, storePath, () => {}),
+      input.iterationId,
+    );
+    if (!shown.ok) {
+      return { ok: false, why: "reviseRefusedNotSetUp", note: shown.note };
+    }
   }
   const startup = await startContinuo(environment);
   if (startup.kind === "refused") {
@@ -6583,16 +6671,46 @@ async function revisePage(
   // of stopping names its own sentence here, and the one case rondo cannot
   // settle says so rather than claiming the gate was untouched.
   let halted: ReviseRefusal | null = null;
+  let haltNote: string | null = null;
   const answerGate = async (): Promise<number | null> => {
+    // **Asked again right before the walk** (D-0145 rule 6): a reading or a
+    // draft that moved since the pass, or a host that filled, sends nothing.
+    if (delegated !== null && !(await delegated.recheck())) {
+      halted = "reviseRefusedNotSetUp";
+      haltNote =
+        "nothing was answered: the gate no longer meets every condition for rondo to send " +
+        "the drafted change, or the host has no room for the next lap";
+      return 1;
+    }
+    // **Whose answer continuo holds decides who goes on** (D-0145 rule 6): an
+    // answer with the same words already given by the other side -- a press
+    // before rondo's send, or rondo's send before a press -- is theirs, and
+    // this walk starts no second lap over it.
+    let theirs = false;
+    const walkActor = delegated === null ? actor.actorId : GATE_ACTOR;
     const walked = await walkGate(continuo, {
       db: planField(record, "db"),
       gateId,
       destinationDir: planField(record, "endpoint_destination_dir"),
       holder: planField(record, "lease_claimant_id"),
-      actorId: actor.actorId,
+      actorId: walkActor,
       body: input.body,
-      recordAnswer: answerRecorder(store, record.id, gateId, "revise", actor.actorId),
+      ...(delegated === null ? {} : { delegation: delegated.delegation }),
+      recordAnswer: async (answered) => {
+        const byRondo =
+          answered.answeredBy.actorKind === "delegate" &&
+          answered.answeredBy.actorId === GATE_ACTOR;
+        theirs = delegated === null ? byRondo : !byRondo;
+        if (!theirs) {
+          await store.recordGateAnswer(record.id, gateId, "revise", walkActor, Date.now());
+        }
+      },
     });
+    if (theirs) {
+      sayReport(await resume(ports, record.id));
+      halted = "reviseRefusedGateClosed";
+      return 1;
+    }
     // **A walk that failed part way is not a gate that was not touched.** The
     // walk is present, deliver, ack (`walkGate`); an answer that reached
     // continuo and then a delivery that did not still comes back `failed`, and
@@ -6680,7 +6798,9 @@ async function revisePage(
     return {
       ok: false,
       why: halted ?? (gateAnswered ? "reviseRefusedAfterGate" : "reviseRefusedNotSetUp"),
-      note: `nothing was admitted; the gate walk stopped with status ${String(outcome.status)}`,
+      note:
+        haltNote ??
+        `nothing was admitted; the gate walk stopped with status ${String(outcome.status)}`,
     };
   }
   const report = outcome.report;

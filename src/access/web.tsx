@@ -221,8 +221,8 @@ import {
   readWorkerQuestion,
 } from "./question.js";
 import { readingsByDigest } from "./read-in.js";
-import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
-import { reviseText } from "./revise-draft/judgement.js";
+import { denialLine, LIST_LIMIT } from "./review.js";
+import { type ReviseBox, reviseBoxOf, reviseLabels } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal, stopRaises } from "./scope.js";
 import { goalScopeView } from "./screens/goal-scope.js";
 import { mergeView } from "./screens/merge.js";
@@ -1045,31 +1045,6 @@ function modelRaised(wording: Chrome, reading: LapReading | null): string | null
 }
 
 /**
- * What the revise box holds, and what the view says beside it (D-0077 section
- * 4). **There is no deterministic fallback** (rule 4.2): a lap with no draft
- * gets an empty box and a sentence, and the person is the author of what they
- * write there.
- *
- * - `none`: the latest model reading has no finding (or there is none), so
- *   there is nothing to draft and nothing is said, as before any drafter.
- * - `pending`: a reading with findings that no draft holds yet (rule 4.3).
- * - `unavailable`: the run over it wrote no draft; `reason` is rondo's, for
- *   D-0076 rule 4.5's closed fold and never inline.
- * - `drafted`: the box's text, assembled by {@link reviseText} from the stored
- *   reading and the drafter's words (rule 3.4).
- */
-type ReviseBox =
-  | { readonly kind: "none" }
-  | { readonly kind: "pending" }
-  | { readonly kind: "unavailable"; readonly reason: string }
-  | {
-      readonly kind: "drafted";
-      readonly text: string;
-      /** The box holds a worker's question and the person's answer (D-0098 rule 4.5). */
-      readonly answer?: true;
-    };
-
-/**
  * **The answer goes into the box, word for word** (D-0098 rule 4.5, D-0103
  * rule 4.6): once the person has carried a worker's question on, the revise
  * box opens holding the question and the answer as `questionRevise` quotes
@@ -1094,40 +1069,9 @@ async function reviseBox(
   iterationId: string,
   readings: readonly LapReading[],
 ): Promise<ReviseBox> {
-  // **A take-in the lap did not pass is drafted by rondo itself** (D-0098
-  // rule 2.3, D-0105): the test and its one fix are fixed, so the box quotes
-  // the reading's own finding first, with or without the model's draft.
-  const takeIn = (reviewedReading(readings)?.findings ?? [])
-    .filter((finding) => finding.includes(TAKE_IN_FINDING))
-    .map(wording.reviseDraftTakeIn);
-  const drafted = (text: string): ReviseBox => ({
-    kind: "drafted",
-    text: [...takeIn, text].filter((part) => part !== "").join("\n\n"),
-  });
   const model = latestReading(readings, isModelReadingDrafter);
-  if (model === null || model.verdict !== "concerns" || model.findings.length === 0) {
-    return takeIn.length === 0 ? { kind: "none" } : drafted("");
-  }
-  const row = await ports.record.reviseDraftFor(iterationId, model);
-  if (row === null) {
-    return takeIn.length === 0 ? { kind: "pending" } : drafted("");
-  }
-  if (row.payload["kind"] === "unavailable") {
-    const reason = row.payload["reason"];
-    return takeIn.length === 0
-      ? { kind: "unavailable", reason: typeof reason === "string" ? reason : "" }
-      : drafted("");
-  }
-  const text = reviseText(model, row.payload, {
-    finding: wording.reviseDraftFinding,
-    bases: wording.reviseDraftBases,
-    change: wording.reviseDraftChange,
-  });
-  // A row that does not decode as a whole draft of this reading is shown as
-  // none, never in part (D-0077 rule 4.1: not shown and not repaired).
-  return text === null
-    ? { kind: "unavailable", reason: "the stored draft does not read as a draft of this reading" }
-    : drafted(text);
+  const row = model === null ? null : await ports.record.reviseDraftFor(iterationId, model);
+  return reviseBoxOf(readings, row, reviseLabels(wording));
 }
 
 /** Whether a row carries a question this page can put a button under. */

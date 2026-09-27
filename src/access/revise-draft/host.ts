@@ -427,7 +427,12 @@ async function draftAndWrite(
 /** The stored structure (D-0077 rule 5.1): the drafter's words, or why there are none. */
 function payloadOf(outcome: ReviseOutcome): JsonRecord {
   return outcome.kind === "drafted"
-    ? { kind: "drafted", lead: outcome.lead, changes: [...outcome.changes] }
+    ? {
+        kind: "drafted",
+        lead: outcome.lead,
+        changes: [...outcome.changes],
+        judgment: [...outcome.judgment],
+      }
     : { kind: "unavailable", reason: outcome.reason };
 }
 

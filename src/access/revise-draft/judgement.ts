@@ -19,20 +19,29 @@
  */
 
 import type { DrafterRow } from "../../continuo/roles.js";
-import { findingBasisText, type JsonRecord, type LapReading } from "../../store/records.js";
+import {
+  findingBasisText,
+  isModelReadingDrafter,
+  type JsonRecord,
+  type LapReading,
+  latestReading,
+  reviewedReading,
+} from "../../store/records.js";
 import { sectionFramer } from "../framing.js";
 import {
   answerJson,
   DRAFTER_INPUT_BOUND_BYTES,
   type DrafterRun,
 } from "../model-draft/judgement.js";
+import { TAKE_IN_FINDING } from "../review.js";
+import type { Chrome } from "../wording.js";
 
 /**
  * The version of the revise drafter's own instructions (D-0077 rule 1.2, as
  * D-0071 rule 1.4 versions the scope drafter's): a changed {@link INSTRUCTIONS}
  * is a new version, a changed model a new table entry.
  */
-const REVISE_INSTRUCTIONS_VERSION = 1;
+const REVISE_INSTRUCTIONS_VERSION = 2;
 
 /**
  * What every row the revise drafter writes is named under (D-0077 rule 1.2).
@@ -41,7 +50,7 @@ const REVISE_INSTRUCTIONS_VERSION = 1;
  */
 export const REVISE_DRAFTER_PREFIX = "rondo/revise-drafter/";
 
-/** The row name a run writes under: `rondo/revise-drafter/1/<model-id>`. */
+/** The row name a run writes under: `rondo/revise-drafter/<version>/<model-id>`. */
 export function reviseDrafterName(row: DrafterRow): string {
   return `${REVISE_DRAFTER_PREFIX}${String(REVISE_INSTRUCTIONS_VERSION)}/${row.model}`;
 }
@@ -85,6 +94,12 @@ export interface ReviseDrafted {
   readonly lead: string | null;
   /** Parallel to the reading's findings: `changes[i]` is the words for finding `i`. */
   readonly changes: readonly string[];
+  /**
+   * The positions (from 0) of the findings the drafter did not call plain
+   * defects (D-0145 rule 4): a judgment call, or no mark at all. Rondo sends a
+   * draft by itself only where this is empty.
+   */
+  readonly judgment: readonly number[];
 }
 
 /** What one run came to (D-0077 rule 4.2). */
@@ -108,7 +123,12 @@ const INSTRUCTIONS = [
   "- Never tell the worker to leave a finding at or above the severity threshold unfixed. You",
   "  may say a finding below it can be left.",
   "- The lead is optional: at most a few sentences before the findings, for what the change as",
-  "  a whole should keep in mind.",
+  "  a whole should keep in mind. It must not introduce a choice the person has to make.",
+  '- Mark every entry with "judgment": false when the finding is a plain defect and the change',
+  "  you wrote is the evident fix, or true when it is a matter for the person: a trade-off, a",
+  "  point the worker or the person may dispute, a finding that may be wrong, or a fix that needs",
+  "  a choice. When unsure, mark it true. rondo sends a draft with no true mark by itself, under",
+  "  the person's approval, without waiting for them to press.",
   "",
 ];
 
@@ -153,7 +173,8 @@ export function reviseDocument(material: ReviseMaterial): string {
     "Answer with ONE JSON object and nothing else:",
     "{",
     '  "lead": "..." or null,',
-    `  "findings": [{"finding": <number from 1 to ${String(count)}>, "change": "what to change"}]`,
+    `  "findings": [{"finding": <number from 1 to ${String(count)}>, "change": "what to change", ` +
+      '"judgment": true or false}]',
     "}",
     `"findings" holds exactly ${String(count)} entries, one per finding number.`,
     "",
@@ -285,8 +306,9 @@ function checked(reading: LapReading, answer: unknown): ReviseDrafted {
   }
   const count = reading.findings.length;
   const changes: (string | undefined)[] = Array.from({ length: count }, () => undefined);
+  const judgment: number[] = [];
   entries.forEach((one, i) => {
-    const entry = only(one, ["finding", "change"], `entry ${String(i)}`);
+    const entry = only(one, ["finding", "change", "judgment"], `entry ${String(i)}`);
     const position = entry["finding"];
     if (
       typeof position !== "number" ||
@@ -302,12 +324,29 @@ function checked(reading: LapReading, answer: unknown): ReviseDrafted {
       throw new ReviseDefect(`finding ${String(position)} is named more than once`);
     }
     changes[position - 1] = words(entry["change"], `entry ${String(i)}'s change`);
+    const mark = entry["judgment"];
+    if (mark !== undefined && typeof mark !== "boolean") {
+      throw new ReviseDefect(`entry ${String(i)}'s judgment is not true or false`);
+    }
+    // **Fails closed** (D-0145 rule 4): only an explicit false is a plain defect.
+    if (mark !== false) {
+      judgment.push(position - 1);
+    }
   });
   const missing = changes.findIndex((change) => change === undefined);
   if (missing !== -1) {
     throw new ReviseDefect(`finding ${String(missing + 1)} is not addressed`);
   }
-  return { lead, changes: changes as string[] };
+  return { lead, changes: changes as string[], judgment: judgment.sort((a, b) => a - b) };
+}
+
+/**
+ * Whether a stored draft marks no finding as a judgment call (D-0145 rule 4).
+ * A row written before the mark existed carries none, and is not sendable.
+ */
+export function plainDraft(drafted: JsonRecord): boolean {
+  const judgment = drafted["judgment"];
+  return Array.isArray(judgment) && judgment.length === 0;
 }
 
 /** How the box labels what rondo renders, in the page's language. */
@@ -315,6 +354,8 @@ export interface ReviseLabels {
   readonly finding: (severity: string, text: string) => string;
   readonly bases: (bases: string) => string;
   readonly change: (words: string) => string;
+  /** The line under a finding the drafter marked as the person's call (D-0145 rule 4). */
+  readonly judgment: string;
 }
 
 /**
@@ -341,16 +382,107 @@ export function reviseText(
   ) {
     return null;
   }
+  const judgment = drafted["judgment"];
   const blocks = reading.findings.map((text, i) => {
     const graded = reading.graded?.[i];
     const bases = (graded?.bases ?? []).map(findingBasisText);
     return [
       graded === undefined ? `- ${text}` : labels.finding(graded.severity, text),
       ...(bases.length === 0 ? [] : [labels.bases(bases.join(", "))]),
+      ...(Array.isArray(judgment) && judgment.includes(i) ? [labels.judgment] : []),
       // The words' own lines stay under their label, so no line of the
       // drafter's reads as a finding of the reviewer's.
       labels.change((changes[i] as string).replaceAll("\n", "\n    ")),
     ].join("\n");
   });
   return [...(lead === null ? [] : [lead]), ...blocks].join("\n\n");
+}
+
+/** The box's labels, in the language `words` is in. */
+export function reviseLabels(
+  words: Pick<
+    Chrome,
+    | "reviseDraftFinding"
+    | "reviseDraftBases"
+    | "reviseDraftChange"
+    | "reviseDraftJudgment"
+    | "reviseDraftTakeIn"
+  >,
+): ReviseLabels & { readonly takeIn: (finding: string) => string } {
+  return {
+    finding: words.reviseDraftFinding,
+    bases: words.reviseDraftBases,
+    change: words.reviseDraftChange,
+    judgment: words.reviseDraftJudgment,
+    takeIn: words.reviseDraftTakeIn,
+  };
+}
+
+/**
+ * What the revise box holds (D-0077 section 4). **There is no deterministic
+ * fallback** (rule 4.2): a lap with no draft gets an empty box and a sentence,
+ * and the person is the author of what they write there.
+ *
+ * - `none`: the latest model reading has no finding (or there is none), so
+ *   there is nothing to draft and nothing is said, as before any drafter.
+ * - `pending`: a reading with findings that no draft holds yet (rule 4.3).
+ * - `unavailable`: the run over it wrote no draft; `reason` is rondo's, for
+ *   D-0076 rule 4.5's closed fold and never inline.
+ * - `drafted`: the box's text, assembled by {@link reviseText} from the stored
+ *   reading and the drafter's words (rule 3.4). `plain` where every standing
+ *   finding is in the text and none is a judgment call (D-0145 rule 4).
+ */
+export type ReviseBox =
+  | { readonly kind: "none" }
+  | { readonly kind: "pending" }
+  | { readonly kind: "unavailable"; readonly reason: string }
+  | {
+      readonly kind: "drafted";
+      readonly text: string;
+      /** The box holds a worker's question and the person's answer (D-0098 rule 4.5). */
+      readonly answer?: true;
+      readonly plain?: true;
+    };
+
+/**
+ * The revise box over one lap's readings and the revise draft stored for its
+ * latest model reading (`reviseDraftFor`, or null where none is). One function
+ * for the page and for rondo's own send (D-0145 rule 5), so what rondo sends is
+ * what the gate would have shown.
+ */
+export function reviseBoxOf(
+  readings: readonly LapReading[],
+  row: { readonly payload: JsonRecord } | null,
+  labels: ReviseLabels & { readonly takeIn: (finding: string) => string },
+): ReviseBox {
+  // **A take-in the lap did not pass is drafted by rondo itself** (D-0098
+  // rule 2.3, D-0105): the test and its one fix are fixed, so the box quotes
+  // the reading's own finding first, with or without the model's draft.
+  const checks = reviewedReading(readings)?.findings ?? [];
+  const takeIn = checks.filter((finding) => finding.includes(TAKE_IN_FINDING)).map(labels.takeIn);
+  const drafted = (text: string, plain: boolean): ReviseBox => ({
+    kind: "drafted",
+    text: [...takeIn, text].filter((part) => part !== "").join("\n\n"),
+    // Every checks finding is a take-in, so every standing finding is quoted.
+    ...(plain && takeIn.length === checks.length ? { plain: true as const } : {}),
+  });
+  const model = latestReading(readings, isModelReadingDrafter);
+  if (model === null || model.verdict !== "concerns" || model.findings.length === 0) {
+    return takeIn.length === 0 ? { kind: "none" } : drafted("", false);
+  }
+  if (row === null) {
+    return takeIn.length === 0 ? { kind: "pending" } : drafted("", false);
+  }
+  if (row.payload["kind"] === "unavailable") {
+    const reason = row.payload["reason"];
+    return takeIn.length === 0
+      ? { kind: "unavailable", reason: typeof reason === "string" ? reason : "" }
+      : drafted("", false);
+  }
+  const text = reviseText(model, row.payload, labels);
+  // A row that does not decode as a whole draft of this reading is shown as
+  // none, never in part (D-0077 rule 4.1: not shown and not repaired).
+  return text === null
+    ? { kind: "unavailable", reason: "the stored draft does not read as a draft of this reading" }
+    : drafted(text, plainDraft(row.payload));
 }
