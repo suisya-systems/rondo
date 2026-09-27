@@ -32,6 +32,22 @@ export interface DayWords {
   readonly dayOlder: string;
 }
 
+/** The kinds of report rondo writes on a lap, as their `report-<kind>-` ids name them. */
+export const LAP_REPORT_KINDS = Object.freeze([
+  "gate",
+  "model",
+  "published",
+  "checks",
+  "merged",
+  "closed",
+  "closeout",
+  "conflict",
+  "moved",
+  "closing",
+  "lost",
+] as const);
+export type LapReportKind = (typeof LAP_REPORT_KINDS)[number] | "other";
+
 export interface PageWords extends DayWords {
   /** The heading over the requests waiting on the person (rule 2's one exception). */
   readonly yourTurn: string;
@@ -122,7 +138,15 @@ export interface PageWords extends DayWords {
    */
   readonly evBudgetStopped: (spent: string | null, left: string | null) => string;
   readonly evBroke: string;
+  /** A lap lost to a restart of rondo (D-0139); what came next is in the thread. */
+  readonly evLost: string;
   readonly evBrokeReason: string;
+  /**
+   * The one line a report of rondo's on a lap shows over its shut record
+   * (rondo#506), by the kind its id names; `other` for a kind not listed, so
+   * no card is drawn empty.
+   */
+  readonly lapReportSaid: (kind: LapReportKind) => string;
   readonly evChecksPassed: string;
   readonly evChecksFailed: string;
   readonly evReadingClear: string;
@@ -569,7 +593,24 @@ export const PAGE_EN: PageWords = Object.freeze({
           : `Stopped at the approved budget: this try spent $${spent} of the $${left} left for it.`
     } To go on, ask again with a larger budget.`,
   evBroke: "Stopped by a fault in rondo itself. Nothing you asked for was wrong.",
+  evLost:
+    "Lost when rondo was restarted. Nothing of it is running, and the money held for it is back.",
   evBrokeReason: "What rondo recorded, for whoever looks after it",
+  lapReportSaid: (kind) =>
+    ({
+      gate: "rondo recorded what this try did.",
+      model: "rondo recorded the model review of this try.",
+      published: "rondo recorded the pull request it opened.",
+      checks: "rondo recorded what the checks came to.",
+      merged: "rondo recorded the merge.",
+      closed: "rondo recorded that the pull request was closed.",
+      closeout: "rondo recorded the clean-up after the merge.",
+      conflict: "rondo recorded a conflict with the base branch.",
+      moved: "rondo recorded that the pull request moved.",
+      closing: "rondo recorded the closing fix.",
+      lost: "rondo recorded that this try was lost when rondo restarted.",
+      other: "rondo recorded something about this try.",
+    })[kind],
   evChecksPassed: "The automatic checks all passed.",
   evChecksFailed: "The automatic checks did not pass.",
   evReadingClear: "Another model read the change and raised nothing.",
@@ -1084,7 +1125,23 @@ export const PAGE_JA: PageWords = Object.freeze({
           : `承認した予算の上限で止まりました。この回に残っていた $${left} のうち $${spent} を使いました。`
     }続けるには、予算を増やして依頼し直してください。`,
   evBroke: "rondo 自身の不具合で止まりました。依頼のしかたに問題があったわけではありません。",
+  evLost: "rondo の再起動で失われました。動いているものはなく、取り置いていた金額は戻しました。",
   evBrokeReason: "rondo が記録した内容（rondo を保守する人向け）",
+  lapReportSaid: (kind) =>
+    ({
+      gate: "この回の作業内容を rondo が記録しました。",
+      model: "この回のモデルレビューを rondo が記録しました。",
+      published: "開いたプルリクエストを rondo が記録しました。",
+      checks: "チェックの結果を rondo が記録しました。",
+      merged: "マージを rondo が記録しました。",
+      closed: "プルリクエストが閉じられたことを rondo が記録しました。",
+      closeout: "マージ後の後片付けを rondo が記録しました。",
+      conflict: "取り込み先との競合を rondo が記録しました。",
+      moved: "プルリクエストが動いたことを rondo が記録しました。",
+      closing: "仕上げの修正を rondo が記録しました。",
+      lost: "rondo の再起動でこの回が失われたことを記録しました。",
+      other: "この回について rondo が記録しました。",
+    })[kind],
   evChecksPassed: "自動チェックはすべて通りました。",
   evChecksFailed: "自動チェックが通りませんでした。",
   evReadingClear: "別の AI が変更を読み直し、指摘はありませんでした。",

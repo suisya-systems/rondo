@@ -1321,6 +1321,49 @@ test("D-0121: a lap refused for no room holds nothing, and its negative cap cred
   expect(await seed.store.sendLapBudget("i-b", 11)).toBe(4);
 });
 
+test("D-0139: a lost lap holds no cap and is not unread, so its room comes back", async () => {
+  const payload = withBudgets({ cost_usd: 50, cost_reserve_usd: 5 });
+  const seed = await seeded({ maxOccupying: 2, maxLive: 100 });
+  expect(await seed.record.recordScope(scope({ payload }))).toEqual({ kind: "recorded" });
+  expect(
+    await seed.record.recordScopeDecision(scopeDecision({ scopeDigest: contentDigest(payload) })),
+  ).toEqual({ kind: "recorded" });
+  const { connection, record, store } = seed;
+  admitted(connection, "i-lost", null);
+  connection.prepare("UPDATE iteration SET status = 'performing' WHERE id = 'i-lost'").run();
+  expect(await store.sendLapBudget("i-lost", 10)).toBe(45);
+  admitted(connection, "i-b", null);
+  // Held: the lost lap's 45 is taken off what the next lap may spend.
+  expect(await store.sendLapBudget("i-b", 11)).toBe(5);
+  expect((await record.scopeSpent("sd-0001")).unreadLaps).toBe(2);
+  connection
+    .prepare("UPDATE iteration SET status = 'failed', failure_kind = 'lost' WHERE id = 'i-lost'")
+    .run();
+  // Lost: it holds nothing, and it is not an unread lap holding a reserve.
+  expect(await store.sendLapBudget("i-b", 12)).toBe(45);
+  expect((await record.scopeSpent("sd-0001")).unreadLaps).toBe(1);
+  // Control: a lap that failed any other way still holds its cap.
+  connection.prepare("UPDATE iteration SET failure_kind = 'defect' WHERE id = 'i-lost'").run();
+  expect(await store.sendLapBudget("i-b", 13)).toBe(5);
+});
+
+test("D-0139: which processes drive a lap are written only while it performs, and listed", async () => {
+  const seed = await seeded();
+  const { connection, store } = seed;
+  admitted(connection, "i-a", null);
+  await store.markLapProcess("i-a", { driverHost: "h", driverPid: 11 });
+  expect(await store.performingLaps()).toEqual([]);
+  connection.prepare("UPDATE iteration SET status = 'performing' WHERE id = 'i-a'").run();
+  await store.markLapProcess("i-a", { driverHost: "h", driverPid: 11 });
+  await store.markLapProcess("i-a", { lapPid: 12 });
+  expect(await store.performingLaps()).toEqual([
+    { iterationId: "i-a", driverHost: "h", driverPid: 11, lapPid: 12, updatedAtMs: 1 },
+  ]);
+  // A lap sent again names its new driver and no child yet.
+  await store.markLapProcess("i-a", { driverHost: "h", driverPid: 13 });
+  expect((await store.performingLaps())[0]).toMatchObject({ driverPid: 13, lapPid: null });
+});
+
 test("D-0128: a goal scope covers the flow's openers naming its goal, and a newer goal is approved again", async () => {
   const goalScope: JsonRecord = { ...PAYLOAD, requests: { from_goal: "g-1" } };
   const seed = await seeded();

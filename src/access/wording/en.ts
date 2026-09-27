@@ -1104,6 +1104,17 @@ explanation you pressed on and then answers the gate.`,
       "Recommended: carrying on.",
       "This line stays stopped until this message is answered.",
     ].join("\n"),
+  lapLostAsk: [
+    "The work was lost: rondo was restarted while it ran, and nothing of it is running now. " +
+      "The money held for it is back.",
+    "Options:",
+    "- Starting this part again (answer carry on). Gives up: what the lost try changed and did " +
+      "not commit.",
+    "- Changing the work (answer stop, then ask again with the change). Gives up: this try's line.",
+    "- Stopping (answer stop). Gives up: this part's work.",
+    "Recommended: starting this part again.",
+    "This line stays stopped until this message is answered.",
+  ].join("\n"),
   startStoppedSaid: [
     "Stopped: the work you started could not be kept running, so rondo has ended it.",
     "Nothing of it is running now, and the room it took on this host, the money held for it and " +

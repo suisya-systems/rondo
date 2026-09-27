@@ -170,6 +170,7 @@ import {
   type Tone,
   whoWrote,
 } from "./page/vocabulary.js";
+import { LAP_REPORT_KINDS, type LapReportKind } from "./page/words.js";
 import { folds } from "./page-logic/event-fold.js";
 import { allowanceOf, governanceOf } from "./page-logic/governance.js";
 import {
@@ -2192,19 +2193,28 @@ function lapReport(message: ThreadMessageDraft): boolean {
  * kept, byte for byte, under the fold `evBrokeReason` labels.
  */
 function lapReportView(wording: Chrome, message: ThreadMessageDraft) {
+  // **Never an empty card** (rondo#506): one line in the person's language
+  // says what the shut record is about, from the kind its id names.
+  const named = message.messageId.slice("report-".length).split("-")[0] ?? "";
+  const kind = (LAP_REPORT_KINDS as readonly string[]).includes(named)
+    ? (named as LapReportKind)
+    : "other";
   return (
-    <details class="group">
-      <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
-        {chevron()}
-        {wording.evBrokeReason}
-      </summary>
-      <p
-        class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
-        lang="en"
-      >
-        {message.body}
-      </p>
-    </details>
+    <div class="space-y-2">
+      <p class="text-body leading-6">{wording.lapReportSaid(kind)}</p>
+      <details class="group">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+          {chevron()}
+          {wording.evBrokeReason}
+        </summary>
+        <p
+          class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+          lang="en"
+        >
+          {message.body}
+        </p>
+      </details>
+    </div>
   );
 }
 
@@ -3469,7 +3479,14 @@ export async function operatorPage(
     const lap = resultLap(selectedLaps.map((each) => each.record));
     return lap === null ? null : resultOf(threads.byId, lap.id);
   })();
-  const endedAtMs = selectedResult?.merged?.atMs ?? selectedResult?.closedAtMs ?? null;
+  // **A request run as parts has ended only once every part has landed**
+  // (rondo#506): one merged part's pull request is not the request's, so
+  // until then the line keeps its clock and counts every part instead.
+  const selectedParts = selectedRoot === null ? [] : partsOfRequest(selectedRoot);
+  const partsUnlanded = selectedParts.some((part) => part.standing !== "merged");
+  const endedAtMs = partsUnlanded
+    ? null
+    : (selectedResult?.merged?.atMs ?? selectedResult?.closedAtMs ?? null);
   // **A later attempt of a request whose pull request conflicts is its fix**
   // (rondo#417, D-0105): the result stays the approved lap's until the fix is
   // approved, so the band says the fix is under way rather than asking the
@@ -4063,7 +4080,12 @@ export async function operatorPage(
                       // **The other parts keep their state here** (D-0098
                       // rule 8.3): answering one part is not all there is.
                       others: (() => {
-                        const parts = partsOfRequest(selectedRoot);
+                        const parts = selectedParts;
+                        // Where a part has landed and another has not, the
+                        // line says every part, the landed one too (rondo#506).
+                        if (partsUnlanded && parts.some((part) => part.standing === "merged")) {
+                          return wording.partsSaid(partCounts(parts), false);
+                        }
                         const others = parts.filter(
                           (part) => governedLap === null || !holdsLap(part, governedLap.id),
                         );

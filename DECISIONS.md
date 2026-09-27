@@ -171,6 +171,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0136 | A drafted claim is drawn from the repository's own paths: the drafter is handed each offered repository's tracked paths at its base branch, two levels deep, and claims `/` only for work that spans the whole repository; `D-0073` rule 5's gate widening is the safety valve | accepted |
 | D-0137 | A bare `#N` is read in the repository its own request would publish to: `publishesTo` is the one rule both sides ask, and a reference the plans in play name two repositories for is not read at all; `D-0081` rule 3.4 is narrowed | accepted |
 | D-0138 | Over-bound review material leaves out, by name, what only read before it is refused; `D-0105` rule 3.1 is withheld only by the conflicting lap's own line; and a model reading a second run could change can be taken again, once, as one more review round | accepted |
+| D-0139 | A lap is lost when, on this host, the rondo process that sent it and its `lap perform` child are both gone: it ends `failed` with the kind `lost`, holds no budget, and is started again once by itself under a goal scope or an approved split, or asked about | accepted |
 
 ---
 
@@ -25953,3 +25954,89 @@ conflicted with `main`; part 2 finished and waited at its gate. **Measured on 20
   then the parts do decide each other, and rule 2 is too narrow.
 - **Retakes that come back `unavailable` for the same reason as the first reading**: then the reason
   was not one a second run could change, and `retakeOffered` should not have offered it.
+
+## D-0139 — A lap is lost when, on this host, the rondo process that sent it and its `lap perform` child are both gone: it ends `failed` with the kind `lost`, holds no budget, and is started again once by itself under a goal scope or an approved split, or asked about
+
+**Status:** accepted (2026-09-27, rondo#506; the owner's answers through the secretary, both as
+recommended). Adds a release to `D-0019` rule 10's `performing` row and a failure kind to rondo#348's
+two; amends `D-0130` rule 2 for that kind. Supersedes nothing. Refs `D-0019` rules 11 and 12,
+`D-0036` rule 5, `D-0048` rule 3, `D-0066`, `D-0073` rule 4.3, `D-0110` rule 2, `D-0121`, `D-0127`,
+`D-0128`, `D-0130`.
+
+### Context
+
+**Measured on 2026-09-27 from the lap 18 stores, read only.** #494's second part
+(`lap-11d45296-d5a7-41b7-8983-66162d48963c`) was sent at 19:10:48. The service was restarted at 19:18:29,
+and its worker died with it. Afterwards:
+
+- rondo's row stayed `performing`, with no session, no gate and `lap_budget_cap_usd` 2.5. Nothing
+  answered, so nothing would ever move it, and its $2.50 stayed held (`D-0130` rule 2).
+- continuo's run stayed `created`. Its session read `observation` = `observed`, `provider_state` =
+  `init` and `released_at_ms` = null, which is what a live lap reads too: the fields `D-0048` rule 3
+  refuses by name for exactly that reason. The run's `outbox-delivery` lease stopped being renewed and
+  expired at 19:19:21.
+- The plan's `invocation_ceiling_ms` was 2 280 000 (38 minutes).
+
+`D-0019` rule 12 keeps a `performing` row that nothing answered, because a fenced child may outlive
+rondo's timer. That is right while anything of the lap may run. It kept this lap for ever, though
+nothing of it ran.
+
+### Decision
+
+1. **Whether a lap is lost is read from rondo's own processes, not from continuo** (option A of
+   three). When the lap is sent, its row records the host name and pid of the rondo process that
+   sends it (`driver_host`, `driver_pid`), and then the pid of its `lap perform` child (`lap_pid`),
+   through `markLapProcess`. **A `performing` lap is lost when its host is this host and both pids are
+   gone** (a signal-0 probe; `EPERM` counts as alive). A row that names another host, or either pid
+   still alive, is left as it is: that is rule 12's hold, kept, and it fails closed. **A row sent
+   before these columns** names no pids. It is lost once it has performed past its plan's
+   `invocation_ceiling_ms` (option B), which is as long as any rondo process would have waited for it.
+   The resident host reads for lost laps when it starts and on its minute tick (`lost-laps.ts`).
+2. **A lost lap ends `failed` with the failure kind `lost`** (`endLost`, the path `D-0109` rule 3's
+   `endFaulted` takes). **It holds no budget and is not counted as unread** (`lapBudgetCapFor`,
+   `spentUnder`). This amends `D-0130` rule 2 for this kind: a lost lap's spend is never read, so
+   holding its cap would hold the room for ever.
+3. **Then it is started again, or asked about.** A lost lap is started again as `<id>-again`: its
+   stored plan, under the approval it ran under, in the approver's name, as `retry` runs one
+   (`restartLostFromPage`).
+   1. **By itself, once**, where its approval is a goal scope (`D-0128`) or approves a split its
+      request runs as (`D-0127`). The thread gets a report saying so. A lap that is itself the start
+      again of a lost lap is not started a second time by itself.
+   2. **Otherwise, or when that start is refused**, the stop is asked in the thread, under `D-0110`
+      rule 2's id (`lap-stopped-<id>`), with three options: start this part again (answer *carry on*;
+      recommended), change the work (answer *stop*, then ask again with the change), or stop. A
+      *carry on* starts it again on the next tick.
+   3. **The scope still decides.** A redo of a lost lap has no model reading to test, so `scopeVerdict`
+      lets it past `Q-a`'s "no round to test" only for a lost predecessor and never for a closing lap.
+      The laps and cost budgets before it still bound it.
+4. **The request's header says merged only when every part has landed** (`web.tsx`). Until then the
+   header keeps its clock and counts every part. A report of rondo's on a lap shows one line in the
+   person's language over its shut record (`lapReportSaid`), so no card is drawn empty.
+
+**Options not taken.** C: continuo's run state, meaning the delivery lease `run show` carries. It
+would widen what rondo reads about a run in flight (`D-0048` rule 3, `D-0036` rule 5), and what the
+lease means is continuo's to say, at continuo's gate. B alone: the ceiling rule for every row. That
+takes up to the ceiling to notice, and it would also call a lap lost that rondo's own timer gave up
+on while rondo lived, which is rule 12's case. For the budget: counting the cap as spent. That is
+safe, but it frees nothing, and freeing the room is what rondo#506 asks for.
+
+### What it costs
+
+- **What a lost lap spent before it died is not counted** against its scope. It is at most its cap.
+- **A reused pid reads as alive**, so the lap is not found lost. That errs toward rule 12's hold.
+- **A worker that outlives both its driver and its `lap perform` child**, for instance after a
+  SIGKILL of that child alone, is not seen. The start again runs in a new iteration, workspace and
+  topic branch, and a push is askable, so the two do not share a file or a branch.
+- **The claim is not kept.** A `failed` line releases its claim (`D-0073` rule 4.3), and the start
+  again takes it back (rule 2.6). Another line can take the paths in between, and then the start again
+  is refused and the stop is asked.
+- **A lap on another host** that died is never found lost here. Only that host's rondo can find it.
+
+### What would falsify it
+
+- **A lap found lost while its worker was still writing to its workspace**: then a dead driver and
+  a dead child do not mean nothing runs, and continuo's own liveness is needed (option C, at its gate).
+- **Lost laps that go on costing more than their caps say**: then leaving their spend out of the
+  budget is not small, and a lost lap should hold its cap until someone reads what it spent.
+- **A restart that leaves a lap `performing` with its driver recorded**: then the pids were not
+  written before the lap could run.

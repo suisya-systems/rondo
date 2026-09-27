@@ -351,7 +351,11 @@ export async function run<T>(
   continuo: VerifiedContinuo,
   contract: VerbContract<T>,
   argv: readonly string[],
-  options: { readonly timeoutMs?: number } = {},
+  options: {
+    readonly timeoutMs?: number;
+    /** Told the child's pid once it is spawned (rondo#506: a lost lap is told by it). */
+    readonly spawned?: (pid: number) => void;
+  } = {},
 ): Promise<ContinuoResult<T>> {
   if (!verifiedHandles.has(continuo)) {
     // Checked before the arguments and before the spawn, because it is the
@@ -394,6 +398,7 @@ export async function run<T>(
     continuo.cliPath,
     [...contract.command, ...argv.filter((argument) => argument !== JSON_FLAG), JSON_FLAG],
     options.timeoutMs ?? contract.timeoutMs,
+    options.spawned,
   );
   if (output.kind === "failed") {
     return { kind: "invokerDefect", reason: output.reason };
@@ -457,6 +462,7 @@ async function runProcess(
   cliPath: string,
   argv: readonly string[],
   timeoutMs: number,
+  spawned?: (pid: number) => void,
 ): Promise<ProcessOutcome> {
   return await new Promise<ProcessOutcome>((resolve) => {
     let child: ReturnType<typeof spawn>;
@@ -482,6 +488,9 @@ async function runProcess(
           "This is rondo's own defect, not continuo's answer.",
       });
       return;
+    }
+    if (child.pid !== undefined) {
+      spawned?.(child.pid);
     }
     let stdout = "";
     let stderr = "";
@@ -1056,6 +1065,8 @@ export interface PerformLapOutcome {
 export async function performLap(
   continuo: VerifiedContinuo,
   request: PerformLapRequest,
+  /** Told the `lap perform` child's pid once it is spawned (rondo#506). */
+  spawned?: (pid: number) => void,
 ): Promise<PerformLapOutcome> {
   const worker: WorkerHost = continuo.worker ?? { provider: "claude" };
   const selection = mapModelTier(request.modelTier, worker.provider);
@@ -1131,7 +1142,10 @@ export async function performLap(
     throw error;
   }
   return {
-    result: await run(continuo, LAP_PERFORM, argv, { timeoutMs: ceiling }),
+    result: await run(continuo, LAP_PERFORM, argv, {
+      timeoutMs: ceiling,
+      ...(spawned === undefined ? {} : { spawned }),
+    }),
     model: selection.model,
   };
 }
