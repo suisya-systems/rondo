@@ -674,6 +674,44 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
   expect(jaBlock).toContain('value="Where the token is read from\n-&gt; The keychain"');
   expect(jaBlock).not.toMatch(/<label>(?:(?!<\/label>)[\s\S])*form="read-in"/);
   expect(jaBlock).toMatch(/<textarea name="answer-1" aria-label="Where the token is read from"/);
+  // Another request's question in the person's turn does not hide this one,
+  // which is theirs too and where the screen's link leads (rondo#522).
+  for (const message of [
+    { messageId: "other-request", inReplyTo: null, asks: false, authorKind: "operator", bases: [] },
+    {
+      messageId: "other-ask",
+      inReplyTo: "other-request",
+      asks: true,
+      authorKind: "drafter",
+      bases: [{ form: "message", messageId: "other-request" }],
+    },
+  ] as const) {
+    expect(
+      await w.record.recordThreadMessage({
+        ...message,
+        body: "b",
+        authorId: message.authorKind === "operator" ? "ada" : FLOW_AUTHOR,
+        atMs: 3_100,
+      }),
+    ).toEqual({ kind: "recorded" });
+  }
+  const turn = await w.page({ kind: "requests" });
+  expect(turn).toContain('id="triage-heading"');
+  expect(hidden(blockOf(turn), "ask")).toBe(askId);
+  expect(await w.page({ kind: "goalScope", repository: "o/r" })).toContain(EN.goalScopeAskingLink);
+  expect(
+    await w.record.recordThreadMessage({
+      messageId: "other-answer",
+      body: "carry on",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: "other-ask",
+      atMs: 3_200,
+      bases: [],
+      asks: false,
+      answerOutcome: "carry_on",
+    }),
+  ).toEqual({ kind: "recorded" });
   // Put aside, the ask holds nothing and is not drawn, as the picker reads it.
   const aside = await w.record.recordFlowAsk({
     askId: `${askId}-aside`,
