@@ -167,11 +167,14 @@ export interface LapPerformance {
    * carried no number under any of the three keys -- and a report that names
    * one of them for both asserts something rondo did not observe (`D-0032`).
    *
+   * `priced` is a Codex lap, whose cost is its token counts at the public API
+   * rate (D-0123) rather than a number the worker reported.
+   *
    * The union is spelled here rather than imported, like every other type in
    * this module: `src/refrain -> src/continuo` stays refused, and the adapter
    * names the mapping where it names the other three.
    */
-  readonly spendSource: "notReported" | "resultEvent";
+  readonly spendSource: "notReported" | "resultEvent" | "priced";
   /**
    * The room the scope's budget left the lap when it was sent (D-0121), or
    * null where it was admitted under no approval or the approval did not read.

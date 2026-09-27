@@ -172,10 +172,13 @@ export function mappedNeutralRoleNames(): readonly string[] {
  * and this table is the place that answer is written down.
  *
  * **The provider is a column of the row** (continuo D-1114 decision 2): the
- * worker CLI `lap perform --provider` runs the model on. Every row is `claude`
- * today; a `codex` row waits on rondo#460, because a Codex worker is the
- * reviewer's family (D-0065 rule 3.3), reports no dollar cost, needs the
- * operator's Codex home, and is refused on Windows (continuo D-1120).
+ * worker CLI `lap perform --provider` runs the model on. **There is one table
+ * per provider, and the host picks the table** (D-0123): `RONDO_WORKER_PROVIDER`
+ * swaps the main worker between the Claude CLI and the Codex CLI for every lap
+ * on the host, and the tier then picks the row inside that table. Under Codex
+ * every tier is `gpt-6-astra`, the one current model a ChatGPT login runs, so
+ * the Codex table has no cheaper row to give `mechanical`. The reviewer follows
+ * the lap's family rather than the table ({@link reviewerFor}).
  *
  * **Changing a pair is a new decision entry**, not an edit. The whole reason the
  * value is here rather than derived is that somebody decided it; a pair replaced
@@ -192,6 +195,15 @@ const MODEL_TIER_TABLE: Readonly<Record<string, ModelRow>> = Object.freeze({
   standard: Object.freeze({ model: "claude-opus-5", family: "claude", provider: "claude" }),
   mechanical: Object.freeze({ model: "claude-sonnet-5", family: "claude", provider: "claude" }),
 });
+
+/** The same tiers when the host's worker is the Codex CLI (D-0123). */
+const CODEX_TIER_TABLE: Readonly<Record<string, ModelRow>> = Object.freeze({
+  standard: Object.freeze({ model: "gpt-6-astra", family: "gpt", provider: "codex" }),
+  mechanical: Object.freeze({ model: "gpt-6-astra", family: "gpt", provider: "codex" }),
+});
+
+const TIER_TABLES: Readonly<Record<WorkerProvider, Readonly<Record<string, ModelRow>>>> =
+  Object.freeze({ claude: MODEL_TIER_TABLE, codex: CODEX_TIER_TABLE });
 
 /**
  * One model rondo runs, and the family rondo files it under (D-0065 rule 3.3).
@@ -210,6 +222,9 @@ export interface ModelRow {
 
 /** The worker CLIs `lap perform --provider` takes (continuo D-1114 rule 1). */
 export type WorkerProvider = "claude" | "codex";
+
+/** Every provider, in the order `RONDO_WORKER_PROVIDER`'s refusal names them. */
+export const WORKER_PROVIDERS: readonly WorkerProvider[] = Object.freeze(["claude", "codex"]);
 
 /**
  * What a model tier selected, or rondo's reason it selected nothing.
@@ -238,12 +253,16 @@ export type ModelSelection =
  * measured (F-2), the most expensive one. A tier rondo cannot price is refused
  * before the spawn instead.
  */
-export function mapModelTier(modelTier: string): ModelSelection {
+export function mapModelTier(
+  modelTier: string,
+  provider: WorkerProvider = "claude",
+): ModelSelection {
+  const table = TIER_TABLES[provider];
   // `Object.hasOwn` rather than a bare index, for {@link mapNeutralRole}'s
   // reason: `constructor` and every other prototype name is an unknown tier
   // rather than a function arriving where a string was expected.
-  if (Object.hasOwn(MODEL_TIER_TABLE, modelTier)) {
-    const row = MODEL_TIER_TABLE[modelTier];
+  if (Object.hasOwn(table, modelTier)) {
+    const row = table[modelTier];
     if (row !== undefined) {
       return { kind: "selected", model: row.model, provider: row.provider };
     }
@@ -289,17 +308,34 @@ export interface ReviewerRow {
 }
 
 /**
- * The reviewer table: one row, the model the organisation already reviews
- * with (D-0065 rule 3.2). The first row is the one in force.
+ * The reviewer table, one row per family a lap can run on (D-0065 rule 3.2,
+ * D-0123). The first row is the model the organisation already reviews with;
+ * the second reads the laps that run on the first row's family, which a Codex
+ * worker does, so that a gpt lap still has a reviewer of another family and
+ * its model reading is not `unavailable` by construction.
  */
 const REVIEWER_TABLE: readonly ReviewerRow[] = Object.freeze([
   Object.freeze({ model: "gpt-6-astra", family: "gpt", executable: "codex" }),
+  Object.freeze({ model: "claude-opus-5", family: "claude", executable: "claude" }),
 ]);
 
-/** The reviewer row in force. */
+/** The first reviewer row, the one a Claude lap is read by. */
 export function reviewerRow(): ReviewerRow {
-  // The table is a frozen literal with one row, so the first row is always there.
+  // The table is a frozen literal, so the first row is always there.
   return REVIEWER_TABLE[0] as ReviewerRow;
+}
+
+/**
+ * The reviewer for a lap that ran on `lapModel`: the first row of a family
+ * other than the lap's (D-0123).
+ *
+ * A lap whose model rondo's tables do not file, or no model at all, gets the
+ * first row, and {@link reviewerFamilyCheck} then refuses it as it always has:
+ * choosing a reviewer is not a way around the check.
+ */
+export function reviewerFor(lapModel: string | null): ReviewerRow {
+  const lapFamily = lapModel === null ? null : modelFamilyOf(lapModel);
+  return REVIEWER_TABLE.find((row) => row.family !== lapFamily) ?? reviewerRow();
 }
 
 /**
@@ -331,7 +367,8 @@ export function drafterRow(): DrafterRow {
  * never wrote down cannot be shown to be a different model.
  */
 export function modelFamilyOf(modelId: string): string | null {
-  for (const row of [...Object.values(MODEL_TIER_TABLE), ...REVIEWER_TABLE]) {
+  const tierRows = Object.values(TIER_TABLES).flatMap((table) => Object.values(table));
+  for (const row of [...tierRows, ...REVIEWER_TABLE]) {
     if (row.model === modelId) {
       return row.family;
     }
@@ -391,4 +428,73 @@ export function reviewerFamilyCheck(reviewer: ReviewerRow, lapModel: string | nu
     };
   }
   return { kind: "distinct" };
+}
+
+/**
+ * The token counts a Codex lap reports in place of a dollar figure (continuo
+ * D-1114 rule 7), each null when the CLI did not carry it.
+ */
+export interface LapTokens {
+  readonly model: string | null;
+  readonly inputTokens: number | null;
+  readonly cachedInputTokens: number | null;
+  readonly cacheWriteInputTokens: number | null;
+  readonly outputTokens: number | null;
+}
+
+/**
+ * OpenAI's public API price, in USD per million tokens, for the models a Codex
+ * lap runs on (D-0123): the standard tier at short context, read off
+ * https://developers.openai.com/api/docs/pricing on 2026-09-27. **A changed
+ * price is a new decision entry**, as a changed tier row is.
+ *
+ * The lap runs under a ChatGPT login and is not billed per token; this is what
+ * the same tokens cost through the API, which is the figure the Claude CLI's
+ * `total_cost_usd` also is, so the two tiers compare and a scope's budget
+ * holds a Codex lap to a number.
+ */
+const API_PRICE_PER_MTOK: Readonly<
+  Record<string, { input: number; cachedInput: number; cacheWrite: number; output: number }>
+> = Object.freeze({
+  "gpt-6-astra": Object.freeze({ input: 10, cachedInput: 1, cacheWrite: 12.5, output: 50 }),
+});
+
+/**
+ * What a Codex lap's tokens cost at {@link API_PRICE_PER_MTOK}, or null when
+ * the model has no price or a count is missing or does not add up.
+ *
+ * **The counts nest, as the Codex CLI's usage does**: cached input and cache
+ * writes are parts of `input_tokens`, and reasoning is part of `output_tokens`,
+ * so reasoning is not priced twice and the uncached input is what is left.
+ * Two known limits (D-0123): the usage is the turn's total, so a request past
+ * the long-context threshold (272K input tokens, priced higher) is priced at the
+ * short-context rate; and the price page does not say how reasoning is billed,
+ * so it is priced as the output it is counted in.
+ */
+export function apiCostUsd(tokens: LapTokens): number | null {
+  const price =
+    tokens.model !== null && Object.hasOwn(API_PRICE_PER_MTOK, tokens.model)
+      ? API_PRICE_PER_MTOK[tokens.model]
+      : undefined;
+  const { inputTokens, cachedInputTokens, cacheWriteInputTokens, outputTokens } = tokens;
+  if (
+    price === undefined ||
+    inputTokens === null ||
+    cachedInputTokens === null ||
+    cacheWriteInputTokens === null ||
+    outputTokens === null
+  ) {
+    return null;
+  }
+  const uncached = inputTokens - cachedInputTokens - cacheWriteInputTokens;
+  if (Math.min(uncached, cachedInputTokens, cacheWriteInputTokens, outputTokens) < 0) {
+    return null;
+  }
+  return (
+    (uncached * price.input +
+      cachedInputTokens * price.cachedInput +
+      cacheWriteInputTokens * price.cacheWrite +
+      outputTokens * price.output) /
+    1_000_000
+  );
 }

@@ -475,6 +475,12 @@ environment:
                       bounds how many questions may wait on a person at once
   RONDO_MAX_OCCUPYING how many may be executing at once. Default 1, and raising
                       it needs continuo to allow a second concurrent lap first
+  RONDO_WORKER_PROVIDER
+                      the worker CLI every lap runs on: claude (the default)
+                      or codex. codex is refused on Windows
+  RONDO_CODEX_HOME    the Codex home a Codex lap logs in through. Absolute;
+                      required with codex
+  RONDO_CODEX_COMMAND the Codex CLI. Absolute; required with codex
   GH_HOST             the forge host the repository is on. Default: github.com
 
 The command line never merges a pull request, and nothing here runs unless you
