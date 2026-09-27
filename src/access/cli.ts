@@ -7764,46 +7764,37 @@ export type ReviseApproval =
  * **Left off, it is drawn from the record rather than from the operator's
  * memory.** The lap being revised carries an `admission` consumption row naming
  * the approval it ran under, so the id a person used to copy off an earlier
- * screen is already written down. What is spent is the approved tip of that
- * approval's chain (`D-0074` section 2), which is what the page's revise press
- * spends for the same lap: one function, so the two surfaces cannot drift on
- * which approval a correction of one lap belongs to.
+ * screen is already written down, and that row's approval -- **that one, and no
+ * relative of it** -- is what the correction is spent on.
  *
  * **Nothing to draw refuses, and never falls back to a lap outside every
- * approval.** A lap with no admission row, or a chain with two approved tips,
- * leaves rondo with no approval it was given and no licence to pick one. An
- * unscoped correction of a scoped lap is lap 9's N-33
- * (`docs/operations/lap-9-dogfood.md`), and this is the path it took, so the
- * refusal names the flag a person answers it with instead.
+ * approval.** A lap with no admission row leaves rondo with no approval it was
+ * given and no licence to pick one. An unscoped correction of a scoped lap is
+ * lap 9's N-33 (`docs/operations/lap-9-dogfood.md`), and this is the path it
+ * took, so the refusal names the flag a person answers it with instead.
  *
- * **An approval drawn but no longer usable is not judged here.** Expired,
- * superseded, out of laps or held by an open ask is the verdict's answer,
- * computed before the walk, refusing with its own test and writing `D-0066`
- * rule 4.4's stop (`D-0070` section 2.1) -- not a second copy of those tests.
+ * **An approval drawn but no longer usable stops the command, and this function
+ * does not look for another one.** Expired, out of laps, held by an open ask and
+ * -- the case worth naming, because there *is* a nearby approval to reach for --
+ * **superseded by an approved successor** are all the verdict's answer, computed
+ * before the walk, refusing with its own test and writing `D-0066` rule 4.4's
+ * stop (`D-0070` section 2.1). Walking to the chain's approved tip
+ * (`approvalTip`, `D-0074` section 2) would carry the correction on under an
+ * approval nobody gave it: the successor is a person's approval of a *rewritten*
+ * scope, and a lap they have not been asked about is not inside it. So the
+ * supersession refusal is relayed as the stop it is, and the person is asked
+ * (`D-0157` rule 2).
  */
 export async function reviseApproval(
-  record: Pick<AdvisoryRecord, "scopeDecisionAdmitting" | "scopeTip">,
+  record: Pick<AdvisoryRecord, "scopeDecisionAdmitting">,
   predecessorId: string,
   named: string | null,
 ): Promise<ReviseApproval> {
   if (named !== null) {
     return { kind: "spending", scopeDecisionId: named, saying: null };
   }
-  // Two reads of one row, both cheap: the admission the sentence names, and
-  // `approvalTip`'s own walk to the tip of the chain below it.
   const admitted = await record.scopeDecisionAdmitting(predecessorId);
-  const tip = await approvalTip(record, predecessorId);
-  if (tip.kind === "forked") {
-    return {
-      kind: "refused",
-      reason:
-        `revise drew no approval for the second lap: iteration '${predecessorId}' was admitted ` +
-        `under a line with two approved tips, ` +
-        `${tip.scopeDecisionIds.map((id) => `'${id}'`).join(" and ")}, and rondo does not pick ` +
-        "one (D-0074 rule 2.1). Name the one this correction spends with --scope-decision-id ID.",
-    };
-  }
-  if (tip.kind === "none" || admitted === null) {
+  if (admitted === null) {
     return {
       kind: "refused",
       reason:
@@ -7813,15 +7804,12 @@ export async function reviseApproval(
         "that. Name the approval this correction spends with --scope-decision-id ID.",
     };
   }
-  const drawn = tip.scopeDecisionId;
   return {
     kind: "spending",
-    scopeDecisionId: drawn,
+    scopeDecisionId: admitted,
     saying:
-      drawn === admitted
-        ? `spending approval '${drawn}', the approval iteration '${predecessorId}' was admitted under`
-        : `spending approval '${drawn}', the approved tip of the chain of '${admitted}', the ` +
-          `approval iteration '${predecessorId}' was admitted under`,
+      `spending approval '${admitted}', the approval iteration '${predecessorId}' was ` +
+      "admitted under",
   };
 }
 

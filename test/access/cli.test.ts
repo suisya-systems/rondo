@@ -2842,23 +2842,15 @@ test("a request that names one issue here closes it, and nothing else does (rond
 
 test("D-0157: revise draws the approval its predecessor was admitted under, and refuses when it cannot", async () => {
   // `i-scoped` ran under sd-1 and nothing raised it; `i-raised`'s approval was
-  // replaced by an approved successor, so the tip of its chain is sd-2;
-  // `i-forked`'s chain has two approved tips; `i-bare` records no admission.
-  const admitting: Record<string, string> = {
-    "i-scoped": "sd-1",
-    "i-raised": "sd-old",
-    "i-forked": "sd-fork",
-  };
+  // replaced by an approved successor, sd-2, and `scopeTip` would say so;
+  // `i-bare` records no admission at all.
+  const admitting: Record<string, string> = { "i-scoped": "sd-1", "i-raised": "sd-old" };
   const record = {
     scopeDecisionAdmitting: async (id: string) => admitting[id] ?? null,
-    scopeTip: async (decision: string) => {
-      if (decision === "sd-old") {
-        return { kind: "tip" as const, scopeDecisionId: "sd-2" };
-      }
-      return decision === "sd-fork"
-        ? { kind: "forked" as const, scopeDecisionIds: ["sd-x", "sd-y"] }
-        : { kind: "tip" as const, scopeDecisionId: decision };
-    },
+    scopeTip: async (decision: string) =>
+      decision === "sd-old"
+        ? { kind: "tip" as const, scopeDecisionId: "sd-2" }
+        : { kind: "tip" as const, scopeDecisionId: decision },
   };
 
   // Named always wins, and says nothing back: the person chose it at this keyboard.
@@ -2880,14 +2872,18 @@ test("D-0157: revise draws the approval its predecessor was admitted under, and 
     "spending approval 'sd-1', the approval iteration 'i-scoped' was admitted under",
   );
 
-  // D-0074 section 2: what is spent is the approved tip of that approval's
-  // chain, and the line names both so a reader can see why it is not sd-old.
+  // D-0157 rule 2: the approval on the record, and not the approved successor
+  // that replaced it. What is drawn for `i-raised` is sd-old, which the verdict
+  // then refuses at its `superseded` test -- the stop the person answers. Moving
+  // to sd-2 here would spend an approval nobody gave this correction, so the
+  // successor's id must not appear in what is drawn or in what is said.
   const raised = await reviseApproval(record, "i-raised", null);
-  expect(raised).toMatchObject({ kind: "spending", scopeDecisionId: "sd-2" });
+  expect(raised).toMatchObject({ kind: "spending", scopeDecisionId: "sd-old" });
   const said = raised.kind === "spending" ? (raised.saying ?? "") : "";
-  expect(said).toContain("spending approval 'sd-2'");
-  expect(said).toContain("the approved tip of the chain of 'sd-old'");
-  expect(said).toContain("iteration 'i-raised' was admitted under");
+  expect(said).toBe(
+    "spending approval 'sd-old', the approval iteration 'i-raised' was admitted under",
+  );
+  expect(said).not.toContain("sd-2");
 
   // Nothing to draw stops there, and points at the flag rather than running the
   // correction on no budget (lap 9's N-33).
@@ -2896,14 +2892,6 @@ test("D-0157: revise draws the approval its predecessor was admitted under, and 
   const reason = bare.kind === "refused" ? bare.reason : "";
   expect(reason).toContain("iteration 'i-bare' records no admission against any scope");
   expect(reason).toContain("--scope-decision-id ID");
-
-  // Two approved tips: rondo does not pick one here either (D-0074 rule 2.1).
-  const forked = await reviseApproval(record, "i-forked", null);
-  expect(forked.kind).toBe("refused");
-  const forkedReason = forked.kind === "refused" ? forked.reason : "";
-  expect(forkedReason).toContain("'sd-x' and 'sd-y'");
-  expect(forkedReason).toContain("does not pick");
-  expect(forkedReason).toContain("--scope-decision-id ID");
 });
 
 test("D-0149: the lap a carry on starts again is a stopped or lost one with an approval in force", async () => {

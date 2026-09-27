@@ -742,9 +742,9 @@ instruction byte for byte as the gate's answer, and the prompt gets it byte for 
 
 **The second lap spends an approved scope, and you do not have to know which one** (`D-0157`).
 `--scope-decision-id ID` names the approval and always wins. Leave it off and rondo draws the
-approval the lap you are revising was admitted under -- the approved tip of that approval's chain, if
-it was raised since (`D-0074` section 2) -- and says which one it drew, and why it is that one, in a
-line before the gate is walked:
+approval the lap you are revising was admitted under -- that approval itself, never a successor that
+replaced it -- and says which one it drew, and why it is that one, in a line before the gate is
+walked:
 
 ```console
 spending approval 'scope-decision-scope-1789270620294-1789270953820', the approval iteration 'lap9-002' was admitted under
@@ -757,12 +757,13 @@ ran on a budget belongs to that budget, which is what lap 9 got wrong
 finding ran on none and the round the scope exists to count was not counted.
 
 **A lap with no approval to draw is refused, and nothing is sent.** A lap admitted under no scope
-records no admission to read one off, and a lap whose approval chain has two approved tips has no one
-approval rondo may pick (`D-0074` rule 2.1); both refuse before the gate is touched, naming the
-reason and `--scope-decision-id` as what answers it. There is no fallback to a second lap outside
-every approval. An approval that *is* drawn but is expired, superseded or out of laps is refused by
+records no admission to read one off; that refuses before the gate is touched, naming the reason and
+`--scope-decision-id` as what answers it. There is no fallback to a second lap outside every
+approval. An approval that *is* drawn but is expired, **superseded**, or out of laps is refused by
 the scope's verdict instead, with the test that refused it, the stop written into the request's
-thread, and the gate left at its stage.
+thread -- which is rondo asking you -- and the gate left at its stage. A superseded approval is not
+quietly traded for the successor that replaced it: answer the stop, or name with
+`--scope-decision-id` the approval this correction belongs to.
 
 **Nothing here happens on its own.** A revision is a person typing the command; there is no retry
 loop, no bound to reach, and no path into `revise` that does not start with a keyboard. Revise as

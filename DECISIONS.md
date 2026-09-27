@@ -27414,23 +27414,24 @@ none. So what was left, and what this entry decides, is the terminal.
 1. **An explicit `--scope-decision-id` always wins**, unchanged and unquestioned. A person who names
    an approval has said which budget the correction belongs to; the value is passed through and the
    verdict tests it, as `D-0070` section 1.4 has it. Nothing is said back to them about it.
-2. **Omitted, the approval is drawn from the record.** It is the **approved tip of the chain** that
-   starts at the approval the predecessor's `admission` consumption row names -- `approvalTip`,
-   `D-0074` section 2, the same read and the same function the page's revise press uses, so the two
-   surfaces cannot disagree about which approval a correction of one lap belongs to. **One line says
-   so before the gate is walked**: which approval, and that it is the one that lap was admitted
-   under; where the tip is not the admitting approval, the line names both.
-3. **Nothing to draw refuses, and never falls back to a lap outside every approval.** Two cases: a
-   predecessor with no `admission` row against any scope, and a chain with two approved tips, which
-   rondo does not pick between (`D-0074` rule 2.1). Both stop before the seam is read, cost nothing,
-   and name `--scope-decision-id` as what answers them. This departs from the issue's own proposal,
-   which kept today's unscoped behaviour for a predecessor with no consumption row: the unscoped lap
-   is the fault N-33 records, so it is not kept as a fallback.
-4. **An approval drawn but no longer usable is the verdict's answer, not a second copy of its
-   tests.** Expired, superseded, out of laps, out of rounds, or held by an open ask is computed by
-   `scopeVerdict` before the gate is walked, refuses with its own test and reason, writes `D-0066`
-   rule 4.4's stop, and leaves the gate untouched (`D-0070` section 2.1). Drawing an approval reads
-   only; it judges nothing.
+2. **Omitted, the approval is drawn from the record: the one the predecessor's `admission`
+   consumption row names, and no relative of it.** It is resolved, not searched for: rondo does not
+   walk to the approved tip of that approval's chain (`approvalTip`, `D-0074` section 2) when the
+   approval has been superseded since. A successor is a person's approval of a **rewritten** scope,
+   and a correction they have not been asked about is not inside it, so moving to it would be rondo
+   choosing an approval nobody gave this lap. **One line says which approval before the gate is
+   walked**, and that it is the one that lap was admitted under.
+3. **Nothing to draw refuses, and never falls back to a lap outside every approval.** A predecessor
+   with no `admission` row against any scope stops before the seam is read, costs nothing, and names
+   `--scope-decision-id` as what answers it. This departs from the issue's own proposal, which kept
+   today's unscoped behaviour for a predecessor with no consumption row: the unscoped lap is the
+   fault N-33 records, so it is not kept as a fallback.
+4. **An approval drawn but no longer usable stops the command, and is the verdict's answer rather
+   than a second copy of its tests.** Expired, superseded, out of laps, out of rounds, or held by an
+   open ask is computed by `scopeVerdict` before the gate is walked, refuses with its own test and
+   reason, writes `D-0066` rule 4.4's stop into the request's thread -- which is how the person is
+   asked -- and leaves the gate untouched (`D-0070` section 2.1). Drawing an approval reads only; it
+   judges nothing, and it looks for nothing else after a refusal.
 5. **There is no opt-out.** No `--unscoped`, and no flag that keeps a correction off the approval's
    budget. A person who wants a correction counted elsewhere names that approval.
 6. **It is the terminal only.** Nothing on the page moves, and `D-0070` sections 2 and 3 are
@@ -27447,7 +27448,7 @@ none. So what was left, and what this entry decides, is the terminal.
 | Open point | Answer |
 |---|---|
 | Is an opt-out needed (for example `--unscoped`)? | No (rule 5). Drawing the approval is the whole of it. |
-| What happens when the predecessor's approval is superseded or expired? | The chain's approved tip is what is spent (rule 2); anything the verdict then refuses is a refusal with its reason and its stop, never a fallback to unscoped (rules 3 and 4). |
+| What happens when the predecessor's approval is superseded or expired? | The recorded approval itself is what is drawn (rule 2), and the verdict refuses it -- at its `superseded` or `expiry` test -- with its reason and its stop, which asks the person. Never a successor rondo picked, and never a fallback to unscoped (rules 3 and 4). |
 | Is it CLI-only? | Yes (rule 6), answered on the issue once rondo#233 settled the page. |
 
 ### Options not taken
@@ -27468,7 +27469,9 @@ none. So what was left, and what this entry decides, is the terminal.
 - **A lap admitted under no approval can no longer be revised without naming one.** That is a path
   that worked before and does not now, and there is no `--unscoped` out of it: an unapproved lap's
   gate is answered with `rondo answer`, and the work continues with `rondo start`.
-- **A chain with two approved tips refuses a bare `revise`** where it used to run one unscoped.
+- **A lap whose approval was superseded refuses a bare `revise`** where it used to run one unscoped,
+  and rondo does not carry it on under the successor: the way through is the stop's answer, or
+  `--scope-decision-id` naming the approval the correction belongs to.
 - **The drawn approval is the one the lap ran under, not the one the person had in mind.** The line
   before the walk is what makes that visible, and it is a line, not a confirmation: a person who
   meant another approval names it.
