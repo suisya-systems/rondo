@@ -1378,3 +1378,23 @@ test("D-0128: a goal scope covers the flow's openers naming its goal, and a newe
   expect(await scopeIds("m-newer")).toEqual([]);
   expect(count(connection, "SELECT COUNT(*) AS n FROM scope_consumption")).toBe(1);
 });
+
+test("rondo#470: a scoped publish claims its push and its pull request once per lap each", async () => {
+  const { record } = await approved();
+  const claim = {
+    actKind: "push_branch",
+    scopeDecisionId: "sd-0001",
+    subjectId: "i-a",
+    nowMs: 9,
+  } as const;
+  expect(await record.claimScopedAct(claim)).toEqual({ kind: "recorded" });
+  expect((await record.claimScopedAct(claim)).kind).toBe("refused");
+  expect((await record.claimScopedAct({ ...claim, scopeDecisionId: "sd-0002" })).kind).toBe(
+    "refused",
+  );
+  const open = { ...claim, actKind: "open_pull_request" } as const;
+  expect(await record.claimScopedAct(open)).toEqual({ kind: "recorded" });
+  expect((await record.claimScopedAct(open)).kind).toBe("refused");
+  // Neither is a lap.
+  expect((await record.scopeSpent("sd-0001")).admissions).toBe(0);
+});
