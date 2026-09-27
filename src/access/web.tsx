@@ -113,7 +113,7 @@ import {
   WAIT_SIDE,
 } from "../store/records.js";
 import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
-import { partsOf } from "./drafted-start.js";
+import { approvedUnstarted, partsOf } from "./drafted-start.js";
 import { draftedStanding } from "./drafted-view.js";
 import { flowStopOf } from "./flow-stop.js";
 import type { LapWorkInspection } from "./forge.js";
@@ -218,7 +218,7 @@ import {
 } from "./question.js";
 import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
-import { approvalTip, budgetRefusal } from "./scope.js";
+import { approvalTip, budgetRefusal, ROUNDS_SPENT, SUCCESSOR_RECOMMENDED } from "./scope.js";
 import { goalScopeView } from "./screens/goal-scope.js";
 import { mergeView } from "./screens/merge.js";
 import { publishView } from "./screens/publish.js";
@@ -2703,7 +2703,9 @@ function raiseFields(wording: Chrome, raise: BudgetRaise) {
       <input type="hidden" name="iteration" value={raise.iterationId} />
       <input type="hidden" name="request" value={raise.requestMessageId} />
       <input type="hidden" name="laps" value={String(b.laps)} />
-      <input type="hidden" name="review_rounds" value={String(b.review_rounds)} />
+      {raise.rounds ? null : (
+        <input type="hidden" name="review_rounds" value={String(b.review_rounds)} />
+      )}
       <input type="hidden" name="cost_reserve_usd" value={money(b.cost_reserve_usd)} />
       <input type="hidden" name="expires_at_ms" value={localTime(b.expires_at_ms)} />
       <p class="text-meta leading-5 text-muted-foreground">
@@ -2727,6 +2729,22 @@ function raiseFields(wording: Chrome, raise: BudgetRaise) {
           class="w-28 rounded-md border border-border bg-background px-2 py-1 text-body leading-5"
         />
       </label>
+      {/* A stop on spent review rounds (rondo#512): rounds are counted along
+          the line, so one more than approved is what lets the next try run. */}
+      {raise.rounds ? (
+        <label class="flex items-center gap-2 text-meta leading-5 text-muted-foreground">
+          <span>{wording.answerRaiseRoundsLabel}</span>
+          <input
+            type="number"
+            name="review_rounds"
+            data-keep={`rounds:${raise.iterationId}:${raise.scopeDecisionId}`}
+            min="1"
+            step="1"
+            value={String(b.review_rounds + 1)}
+            class="w-20 rounded-md border border-border bg-background px-2 py-1 text-body leading-5"
+          />
+        </label>
+      ) : null}
     </div>
   );
 }
@@ -2743,13 +2761,17 @@ interface BudgetRaise {
   readonly scopeDecisionId: string;
   readonly budgets: ScopePayload["budgets"];
   readonly leftUsd: number;
+  /** Whether what ran out is the review rounds, drawn as a box of their own. */
+  readonly rounds: boolean;
 }
 
 /**
  * The raise each budget stop waiting in `root`'s thread offers, by the ask's
- * id: a `lap-stopped-` ask over a lap that ended `budget`, whose line has one
- * approved tip that reads. Anything else offers none, and its box is the two
- * answers it always had.
+ * id: a `lap-stopped-` ask over a lap that ended `budget`, or a scope's stop
+ * whose recommendation is a successor scope over a lap still at its gate
+ * (rondo#512: the stop's words name this press, and the gate's raise link is
+ * drawn only for a spent budget), whose line has one approved tip that reads.
+ * Anything else offers none, and its box is the two answers it always had.
  */
 async function budgetRaises(
   ports: WebPorts,
@@ -2758,8 +2780,10 @@ async function budgetRaises(
 ): Promise<ReadonlyMap<string, BudgetRaise>> {
   const raises = new Map<string, BudgetRaise>();
   for (const message of threads.messages) {
+    const stoppedByScope =
+      scopeStop(message) && message.body.includes(`\n${SUCCESSOR_RECOMMENDED}`);
     if (
-      !message.messageId.startsWith("lap-stopped-") ||
+      !(message.messageId.startsWith("lap-stopped-") || stoppedByScope) ||
       !threads.waiting.has(message.messageId) ||
       threads.rootOf(message.messageId) !== root
     ) {
@@ -2770,7 +2794,14 @@ async function budgetRaises(
     ];
     if (typeof iterationId !== "string") continue;
     const found = await ports.store.read(iterationId);
-    if (found.kind !== "read" || found.record.failureKind !== "budget") continue;
+    if (
+      found.kind !== "read" ||
+      !(stoppedByScope
+        ? found.record.status === "awaiting_human" && found.record.gateId !== null
+        : found.record.failureKind === "budget")
+    ) {
+      continue;
+    }
     const tip = await approvalTip(ports.record, iterationId);
     if (tip.kind !== "tip") continue;
     const decided = await ports.record.readScopeDecision(tip.scopeDecisionId);
@@ -2788,6 +2819,7 @@ async function budgetRaises(
         0,
         budgets.cost_usd - spent.readCostUsd - spent.unreadLaps * budgets.cost_reserve_usd,
       ),
+      rounds: stoppedByScope && message.body.includes(ROUNDS_SPENT),
     });
   }
   return raises;
@@ -2984,7 +3016,8 @@ function composerView(
       <textarea
         id="composer-body"
         name="body"
-        required
+        // An answer is its press (rondo#512): words beside it are optional.
+        required={!answers}
         rows={replying === null ? 4 : 3}
         placeholder={replying === null ? wording.requestPlaceholder : wording.replyPlaceholder}
         data-draft={replying === null ? "request" : `reply:${replying.root}`}
@@ -3387,6 +3420,22 @@ export async function operatorPage(
     ),
   );
   const partsOfRequest = (messageId: string) => partsByRequest.get(messageId) ?? [];
+  /*
+   * **Work approved and not begun outranks a stopped lap** (rondo#512): a
+   * request whose split was drafted again after its lap stopped, and approved,
+   * has not been given up, whatever that lap's ending says.
+   */
+  const unstarted = new Set(
+    (
+      await Promise.all(
+        threads.messages
+          .filter((message) => message.inReplyTo === null)
+          .map(async (root) =>
+            (await approvedUnstarted(ports, root.messageId)) ? [root.messageId] : [],
+          ),
+      )
+    ).flat(),
+  );
 
   /*
    * **The left face's rows** (D-0083 rules 2, 5 and 7). Every request the
@@ -3405,8 +3454,11 @@ export async function operatorPage(
         messageId: root.messageId,
         title: firstLine(root.body),
         repository: placeOf(lap?.record ?? null),
-        state: rowStateOf(lap?.record ?? null, turnsHere.has(root.messageId), (record) =>
-          isTerminal(record.status),
+        state: ((state) =>
+          state === "stopped" && unstarted.has(root.messageId) ? "notStarted" : state)(
+          rowStateOf(lap?.record ?? null, turnsHere.has(root.messageId), (record) =>
+            isTerminal(record.status),
+          ),
         ),
         // What an approved row goes on to say: published or not, and its
         // checks (rondo#376). Read for every row, since it is a map lookup.

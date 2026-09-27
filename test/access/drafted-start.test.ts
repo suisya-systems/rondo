@@ -15,7 +15,7 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test, vi } from "vitest";
 
 import { recordDraftedScopeFromPage, startSplitFromPage } from "../../src/access/cli.js";
-import { draftedStartReadiness } from "../../src/access/drafted-start.js";
+import { approvedUnstarted, draftedStartReadiness } from "../../src/access/drafted-start.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { ISSUES_QUOTE_OPENING } from "../../src/access/issue-read.js";
 import { draftedPlanRun } from "../../src/access/model-draft/host.js";
@@ -593,6 +593,49 @@ test(
     expect(person.kind, JSON.stringify(person)).toBe("reserved");
     // What lap 18 did: a flow lap claiming '/' holds every other plan off.
     expect((await flowLap("lap-flow-whole", ["/"])).kind).toBe("laneRefused");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "an approved split with a plan no lap started from is work to come, until every plan has a lap (rondo#512)",
+  async () => {
+    const w = await drafted();
+    const ports = { store: w.store, record: w.record };
+    // Drafted and not approved: nothing is to come yet.
+    expect(await approvedUnstarted(ports, "r1")).toBe(false);
+    await recordDraftedScopeFromPage(ENV, w.storePath, "ada", {
+      draftDigest: w.draft.scopeDigest,
+      draftScopeId: w.draft.scopeId,
+      scopeId: "scope-mine-1",
+      budgets: w.draft.payload.budgets,
+      severityThreshold: w.draft.payload.severity_threshold,
+      outwardActs: w.draft.payload.outward_acts,
+    });
+    expect(await approvedUnstarted(ports, "r1")).toBe(true);
+    for (const index of [0, 1]) {
+      const run = await draftedPlanRun(w, "r1", w.proposalId, index);
+      if (run.kind !== "runnable") throw new Error(`plan ${String(index)} does not run`);
+      const id = `lap-plan-${String(index)}`;
+      const reserved = await w.store.reserve({
+        numbers: null,
+        id,
+        request: "Two things, please.",
+        plan: admittedPayload(run.plan, id),
+        spend: null,
+        scopeSpend: null,
+        claim: ownLane(id),
+        nowMs: 15_000 + index,
+        supersedesIterationId: null,
+        requestMessageId: "r1",
+        runId: `rondo-${id}`,
+        topicBranch: `rondo/${id}`,
+        workspace: `/srv/work/${id}`,
+      });
+      expect(reserved.kind).toBe("reserved");
+      // Plan 1 is still to come after plan 0 started; none is after both.
+      expect(await approvedUnstarted(ports, "r1")).toBe(index === 0);
+    }
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );

@@ -241,6 +241,10 @@ test("pause writes the laps: 0 successor, and resume succeeds the pause", async 
   expect(screen).toContain(EN.goalScopePausedHeading);
   expect(screen).toContain(EN.goalScopeResumeAction);
   expect(hidden(screen, "resumes")).toBe(standing.scopeDecisionId);
+  // What the paused approval allowed is still checked (rondo#512): a resume
+  // that came back unchecked would take the merge away without anyone asking.
+  expect(screen).toMatch(/name="outward_acts" value="push_branch"[^>]*checked/);
+  expect(screen).not.toMatch(/name="outward_acts" value="open_pull_request"[^>]*checked/);
   const resumed = await approve(w);
   expect(resumed.ok).toBe(true);
   const after = await goalScopeStanding(w.record, "goal-1");

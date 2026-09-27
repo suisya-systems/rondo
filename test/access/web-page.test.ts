@@ -1001,6 +1001,96 @@ test("a budget stop's answering box offers raising the budget first, prefilled, 
   expect(other).not.toContain('value="raise_carry_on"');
 });
 
+test("a scope stop over a lap at its gate offers raising and carrying on, with the review rounds when they ran out; its box needs no words (rondo#512)", async () => {
+  const world = fresh();
+  await openRequest(world, "req-a", "have a look at this");
+  await reserve(world, "i-0001", "do the thing", null, "req-a");
+  const stopAsk = (reason: string, recommended: string) => [
+    "Stopped: the redo of 'i-0001' as 'i-0002' is outside scope 's-1' at the readings test.",
+    `Reason: ${reason}`,
+    "Options:",
+    `Recommended: ${recommended}.`,
+  ];
+  const draw = async (status: string, body: readonly string[]) => {
+    world.connection
+      .prepare("UPDATE iteration SET status = ?, gate_id = 'gate/g/0' WHERE id = 'i-0001'")
+      .run(status);
+    world.connection.prepare("DELETE FROM conversation_message WHERE asks = 1").run();
+    const asked = await world.record.recordThreadMessage({
+      messageId: "scope-stop-i-0002-600",
+      body: body.join("\n"),
+      authorKind: "drafter",
+      authorId: "rondo/advisory/deterministic",
+      inReplyTo: "req-a",
+      atMs: 600,
+      bases: [
+        { form: "message", messageId: "req-a" },
+        { form: "iteration", iterationId: "i-0001" },
+      ],
+      asks: true,
+    });
+    expect(asked.kind).toBe("recorded");
+    const ports = portsOver(world, "ada", []);
+    const record = {
+      ...world.record,
+      scopeDecisionAdmitting: async () => "sd-1",
+      scopeTip: async () => ({ kind: "absent" }),
+      readScopeDecision: async () => ({ kind: "read", decision: { scopeId: "s-1" } }),
+      readScope: async () => ({
+        kind: "read",
+        scope: {
+          scopeId: "s-1",
+          payload: {
+            requests: ["req-a"],
+            workspaces: [],
+            agent_types: [],
+            budgets: {
+              laps: 18,
+              review_rounds: 3,
+              cost_usd: 45,
+              cost_reserve_usd: 2.5,
+              expires_at_ms: Date.parse("2026-10-01T00:00Z"),
+            },
+            severity_threshold: "major",
+            outward_acts: [],
+            irreversible_additions: [],
+          },
+        },
+      }),
+      scopeSpent: async () => ({ admissions: 6, readCostUsd: 33.69, unreadLaps: 0 }),
+    } as unknown as typeof ports.record;
+    return await operatorPage(
+      { ...ports, record },
+      "t",
+      { kind: "thread", messageId: "req-a", to: null },
+      EN,
+      mint,
+    );
+  };
+  const rounds = stopAsk(
+    "1 finding(s) at or above 'major' are open after 3 of 3 review round(s) (D-0065 4.3)",
+    "a successor scope (D-0066 rule 1.4) with the review rounds this line needs",
+  );
+  const html = await draw("awaiting_human", rounds);
+  expect(html).toContain('value="raise_carry_on"');
+  expect(html).toContain('name="raise" value="sd-1"');
+  expect(html).toContain(EN.answerRaiseRoundsLabel);
+  // One more round than was approved: rounds are counted along the line.
+  expect(html).toMatch(/name="review_rounds" data-keep="rounds:i-0001:sd-1"[^>]*value="4"/);
+  expect(html).not.toContain('type="hidden" name="review_rounds"');
+  // The answer is the press: the box may be left empty.
+  expect(html).not.toMatch(/<textarea id="composer-body"[^>]*required/);
+
+  // A stop over a lap no longer at its gate, or one recommending a change of
+  // the work, keeps its two answers: a raise there would be refused.
+  expect(await draw("closed", rounds)).not.toContain('value="raise_carry_on"');
+  const change = stopAsk(
+    "the plan names no review criterion",
+    "change the work so a model reading can be taken",
+  );
+  expect(await draw("awaiting_human", change)).not.toContain('value="raise_carry_on"');
+});
+
 test("the header offers three text sizes, script only, outside what the redraw swaps, in the page's language", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");

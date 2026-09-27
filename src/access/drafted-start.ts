@@ -345,6 +345,35 @@ export async function partsOf(
   );
 }
 
+/**
+ * Whether the approval standing over `requestMessageId`'s newest draft has a
+ * plan no lap has started from (rondo#512): a split drafted again after a lap
+ * stopped, and approved, is work to come -- not the stopped lap's ending.
+ */
+export async function approvedUnstarted(
+  ports: Parameters<typeof partsOf>[0],
+  requestMessageId: string,
+): Promise<boolean> {
+  const standing = await draftedStanding(ports, requestMessageId);
+  if (standing.kind !== "decided") {
+    return false;
+  }
+  const decided = await ports.record.readScopeDecision(standing.scopeDecisionId);
+  const scope =
+    decided.kind === "read" ? await ports.record.readScope(decided.decision.scopeId) : null;
+  const drafted = scope?.kind === "read" ? await draftedPlansUnder(ports, scope.scope) : null;
+  if (drafted === null) {
+    return false;
+  }
+  for (const plan of drafted.plans) {
+    const run = await draftedPlanRun(ports, requestMessageId, drafted.proposalId, plan.index);
+    if (run.kind === "runnable" && (await startedFrom(ports, requestMessageId, run)) === null) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** The open lines of the plan's repository holding a path its claim asks for. */
 function heldBy(
   ledger: readonly LedgerLine[],

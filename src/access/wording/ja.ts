@@ -263,6 +263,7 @@ export const JA: Chrome = Object.freeze({
     "あとから「続ける」こともできます。",
   answerRaiseAction: "予算を増やして続ける",
   answerRaiseLabel: "これからの予算（USD）",
+  answerRaiseRoundsLabel: "この線のレビュー回数",
   answerRaiseLeft: (left, reserve, enough) =>
     `この承認に残っているのは $${left} で、次の 1 回が取り置く $${reserve} に` +
     `${enough ? "足ります" : "足りません"}。増やすと、予算だけを変えた新しい承認が記録されます。` +

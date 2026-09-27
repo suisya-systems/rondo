@@ -2215,10 +2215,6 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     ) {
       return refused(c, 400, "sendRefusedForm", back);
     }
-    const body = form["body"];
-    if (typeof body !== "string" || body.trim() === "") {
-      return refused(c, 400, "sendRefusedNoWords", back);
-    }
     // **Which answer the press is, read off the form and never defaulted**
     // (D-0072 rule 4). The screen draws one button per answer, both carrying
     // this field; a press naming neither is the form refusal the rest of this
@@ -2229,6 +2225,19 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       return refused(c, 400, "sendRefusedForm", back);
     }
     const outcome = posted === "stop" ? "stop" : "carry_on";
+    // **An answer needs no words** (rondo#512): the press is the answer, so a
+    // box left empty records the pressed button's own label. The box was
+    // `required`, and a browser refused to send a bare *carry on* at all.
+    const typed = typeof form["body"] === "string" ? form["body"] : "";
+    const wording = wordingOf(c);
+    const body =
+      typed.trim() !== ""
+        ? typed
+        : posted === "stop"
+          ? wording.answerStopAction
+          : posted === "raise_carry_on"
+            ? wording.answerRaiseAction
+            : wording.answerCarryOnAction;
     let press = minting.press;
     // **Raise the budget and carry on** (D-0140 rule 3): a budget stop's first
     // option is two answers on one press -- a budgets-only successor of the

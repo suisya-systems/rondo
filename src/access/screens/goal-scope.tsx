@@ -161,6 +161,7 @@ export async function goalScopeView(
             newScopeId,
             nowMs,
             goalCard(wording, goal, goalHref, nowMs),
+            standing.kind === "paused" ? standing.scope : null,
           )
         }
       </>
@@ -345,6 +346,8 @@ async function draft(
   newScopeId: MintScopeId | null,
   nowMs: number,
   goal: unknown,
+  /** The paused approval a resume replaces, whose defaults the form keeps (rondo#512). */
+  paused: StoredScope | null = null,
 ): Promise<unknown> {
   const plans = material.goal.clauses.length;
   const budgets = await scopeBudgetsFromStore(
@@ -436,7 +439,13 @@ async function draft(
         {where}
         {sampleCaveat(wording, budgets.cost_reserve_usd.bases, wording.goalScopeSampleHeading)}
         {budgetBoxes(wording, budgets, false)}
-        {defaultsSection(wording, "major", [])}
+        {/* A resume starts from what the paused approval allowed (rondo#512):
+            pausing is not a reason to withdraw what the person had checked. */}
+        {defaultsSection(
+          wording,
+          paused?.payload.severity_threshold ?? "major",
+          paused?.payload.outward_acts ?? [],
+        )}
         <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
         {/* The same press under the last box (D-0106), as every scope form has. */}
         <div class="flex flex-col">{press}</div>
