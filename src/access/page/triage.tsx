@@ -117,6 +117,8 @@ export interface TriageReads {
   readonly flowOpeners?: readonly { readonly messageId: string; readonly goalId: string }[];
   /** The flow's asks over open points (rondo#487), oldest first. */
   readonly flowAsks?: readonly StoredFlowAsk[];
+  /** Every *not now*: an ask over a candidate put aside holds nothing (`pickNext`). */
+  readonly putAside?: readonly { readonly repository: string; readonly candidate: string }[];
 }
 
 /** The newest goal of each repository. */
@@ -147,7 +149,10 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
             (ask) =>
               ask.goalId === goal.goalId &&
               ask.answer === null &&
-              payload.ranked.some((one) => one.key === ask.candidate),
+              payload.ranked.some((one) => one.key === ask.candidate) &&
+              !(reads.putAside ?? []).some(
+                (one) => one.repository === repository && one.candidate === ask.candidate,
+              ),
           );
     const goalScope: GoalScopeLine = {
       state,

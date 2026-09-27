@@ -475,6 +475,29 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
   // Above the goal scope's own row.
   expect(block.indexOf("/flow-answer")).toBeLessThan(block.indexOf(EN.triageGoalScopeRunning));
   expect(blockOf(await w.page({ kind: "requests" }, JA))).toContain(JA.flowAskAction);
+  // Put aside, the ask holds nothing and is not drawn, as the picker reads it.
+  const aside = await w.record.recordFlowAsk({
+    askId: `${askId}-aside`,
+    repository: "o/r",
+    goalId: "goal-1",
+    scopeDecisionId: standing.scopeDecisionId,
+    proposalId: "triage-1",
+    candidate: "issue:o/r#7",
+    points: [{ point: "p", recommendation: "r" }],
+    askedAtMs: 2_000,
+  });
+  expect(aside).toEqual({ kind: "recorded" });
+  expect(hidden(blockOf(await w.page({ kind: "requests" })), "ask")).toBe(`${askId}-aside`);
+  expect(
+    await w.record.recordTriageDecline({
+      declineId: "d-1",
+      proposalId: "triage-1",
+      candidate: "issue:o/r#7",
+      declinedBy: "ada",
+      declinedAtMs: 3_500,
+    }),
+  ).toEqual({ kind: "recorded" });
+  expect(blockOf(await w.page({ kind: "requests" }))).not.toContain("/flow-answer");
   // Answered, it is gone: the flow sends the request with the answers.
   expect(
     await w.record.recordFlowAnswer({
