@@ -991,7 +991,7 @@ test("a budget stop's answering box offers raising the budget first, prefilled, 
   const html = await draw("budget");
   expect(html).toContain('value="raise_carry_on"');
   expect(html).toContain(EN.answerRaiseAction);
-  expect(html).toMatch(/name="cost_usd"[^>]*value="15.00"/);
+  expect(html).toMatch(/name="cost_usd" data-keep="raise:i-0001:sd-1"[^>]*value="15.00"/);
   expect(html).toContain('name="raise" value="sd-1"');
   expect(html).toContain('name="expires_at_ms" value="2026-10-01T00:00"');
   expect(html).toContain(EN.answerRaiseLeft("1.46", "2.50", false));

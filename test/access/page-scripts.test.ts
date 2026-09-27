@@ -292,6 +292,10 @@ class HTMLTextAreaElement {
   value = "";
   defaultValue = "";
 }
+class HTMLInputElement {
+  dataset: Record<string, string> = {};
+  value = "";
+}
 
 /**
  * A page running `page/composer.js` over one draft box and its note; or, with
@@ -330,6 +334,7 @@ function composerPage(
     Idiomorph,
     HTMLDetailsElement,
     HTMLTextAreaElement,
+    HTMLInputElement,
     HTMLFormElement,
     HTMLButtonElement,
     addEventListener: () => {},
@@ -410,6 +415,18 @@ test("the morph is told to leave a fold's open and a draft's words to the person
   expect(leaves("class", new HTMLDetailsElement())).not.toBe(false);
   expect(leaves("value", new HTMLTextAreaElement())).not.toBe(false);
   expect(leaves("open", new HTMLTextAreaElement())).not.toBe(false);
+  // **A budget stop's typed amount stays the person's too** (D-0140, Codex),
+  // until its key changes: another question's or approval's box takes the
+  // server's value. A number box with no key is the server's.
+  const amount = new HTMLInputElement();
+  amount.dataset = { keep: "raise:i-0001:sd-1" };
+  expect(leaves("value", amount)).toBe(false);
+  expect(leaves("value", new HTMLInputElement())).not.toBe(false);
+  const morphed = Idiomorph.defaults.callbacks.beforeNodeMorphed;
+  const next = new HTMLInputElement();
+  next.dataset = { keep: "raise:i-0001:sd-2" };
+  morphed?.(amount, next);
+  expect(leaves("value", amount)).not.toBe(false);
 });
 
 test("a draft that landed under the person's words is said after a merged redraw", () => {
@@ -884,6 +901,7 @@ function onePage() {
     Element: Painted,
     HTMLDetailsElement: class {},
     HTMLTextAreaElement: class {},
+    HTMLInputElement: class {},
     HTMLFormElement: class {},
     HTMLButtonElement: class {},
   });

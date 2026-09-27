@@ -2718,6 +2718,9 @@ function raiseFields(wording: Chrome, raise: BudgetRaise) {
         <input
           type="number"
           name="cost_usd"
+          // Kept across the redraw while it is this question's over this
+          // approval (`page/composer.js`, Codex).
+          data-keep={`raise:${raise.iterationId}:${raise.scopeDecisionId}`}
           min="0.01"
           step="0.01"
           value={money(b.cost_usd)}
