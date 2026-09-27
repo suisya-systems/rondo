@@ -665,6 +665,59 @@ async function readHolders(
 }
 
 /**
+ * The remote a line's landing is read from (rondo#286, D-0153), or why rondo
+ * will not read one at all.
+ *
+ * **What `publish` recorded pushing to, and nothing else** (rule 2). The
+ * reading used to fetch a hard-coded `origin`: a `rondo publish --remote X`
+ * was then read against a forge the work was never pushed to, and an
+ * unrelated `origin` holding the same bytes would have released the line
+ * early. So the remote comes off the line's laps, where the push wrote it.
+ *
+ * **No record is `undetermined`, never `notLanded`** (rule 3): a lap pushed by
+ * hand, or one published before rondo recorded this, says nothing about a
+ * merge, and the line waits for a person's release press.
+ *
+ * **A record that disagrees with the remote this host reads from is a
+ * person's to settle** (rule 4). rondo does not pick one of the two and does
+ * not read a landing from either: it says what the disagreement is and stops.
+ * The one act it names is the release press, because that is the one a person
+ * can take: every landing reading in a process passes `READING_REMOTE`, so
+ * there is no setting that would point this host at the recorded remote
+ * instead (D-0153's standing cost).
+ */
+export function landingRemoteOf(
+  laps: readonly Pick<IterationRecord, "publishedRemote">[],
+  wired: string,
+): { readonly remote: string } | { readonly undetermined: string } {
+  const recorded = [
+    ...new Set(laps.flatMap((lap) => (lap.publishedRemote === null ? [] : [lap.publishedRemote]))),
+  ].sort();
+  const only = recorded[0];
+  if (only === undefined) {
+    return {
+      undetermined:
+        "rondo holds no record of the remote a publish pushed it to, so nothing says which " +
+        "forge would hold its work: it waits for a release press",
+    };
+  }
+  if (recorded.length > 1) {
+    return {
+      undetermined:
+        `its laps were published to more than one remote (${recorded.map((each) => `'${each}'`).join(", ")}), ` +
+        "and which of them a landing would be read from is a person's to say",
+    };
+  }
+  return only === wired
+    ? { remote: only }
+    : {
+        undetermined:
+          `its publish pushed to '${only}' and this host reads landings from '${wired}'. rondo ` +
+          "does not settle that disagreement by itself: it waits for a release press",
+      };
+}
+
+/**
  * Read one line's landing and release it if it landed or ended with nothing to
  * land. Exported for the resident host's order tick (D-0098 rule 1.4), which
  * reads a waiting `first` the same way an admission refusal does.
@@ -736,6 +789,14 @@ export async function readHolder(
   if (root === undefined || typeof repository !== "string") {
     return undetermined("its first lap's plan names no repository");
   }
+  // **The landing is read from where the publish pushed** (rondo#286, D-0153):
+  // read before any git is run, because a line whose remote rondo cannot name
+  // has no forge to fetch from.
+  const pushedTo = landingRemoteOf(line.laps, lanes.remote);
+  if ("undetermined" in pushedTo) {
+    return undetermined(pushedTo.undetermined);
+  }
+  const remote = pushedTo.remote;
   // The lineage's first base is the root lap's, and only the root's: a later
   // lap's reading is taken over its predecessor's branch, and the root's own
   // changes would fall out of the set. Each closed tip's tip is its own.
@@ -765,7 +826,7 @@ export async function readHolder(
   const landing = await lanes.readLanding({
     ...(takenIn.length === 0 ? {} : { takenIn }),
     repository,
-    remote: lanes.remote,
+    remote,
     baseCommit,
     tipCommits,
     record:
@@ -785,13 +846,13 @@ export async function readHolder(
     return {
       released: false,
       line:
-        `Line ${lineageId}'s work is not on ${lanes.remote}/${landing.branch} yet: ` +
+        `Line ${lineageId}'s work is not on ${remote}/${landing.branch} yet: ` +
         `${landing.differing.map((path) => `'${path}'`).join(", ")} differ.`,
     };
   }
   return await release(
     shape.closedTips,
-    `Line ${lineageId}'s work is on ${lanes.remote}/${landing.branch}`,
+    `Line ${lineageId}'s work is on ${remote}/${landing.branch}`,
     { branch: landing.branch, commit: landing.headCommit },
   );
 }
@@ -1105,7 +1166,15 @@ export interface LandingPorts {
   readonly readLanding: (request: LandingRequest) => Promise<LandingReading>;
   /** What reads the paths a lap at its gate changed (D-0073 rule 5). */
   readonly readChangedPaths: (request: ChangedPathsRequest) => Promise<ChangedPathsReading>;
-  /** The remote `publish` pushes to, whose default branch is read. */
+  /**
+   * The remote this host reads landings from, which is `READING_REMOTE`
+   * wherever rondo wires it (rondo#286, D-0153 rule 4).
+   *
+   * **Not where the reading fetches from**: that is what the publish
+   * recorded pushing to ({@link landingRemoteOf}). This is the other half of
+   * the comparison, and a line published somewhere else is left to a person
+   * rather than read against either.
+   */
   readonly remote: string;
 }
 

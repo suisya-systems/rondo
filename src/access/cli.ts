@@ -1652,6 +1652,12 @@ export async function main(
               ),
             readHolder: async (lineageId) =>
               await readHolder(
+                // **`READING_REMOTE` here as everywhere** (rondo#286, D-0153
+                // rule 4): one remote this host reads landings from, whichever
+                // path reads one, so the order tick and an admission refusal
+                // cannot answer about one line two ways. A host started with
+                // `--remote NAME` therefore settles no landing by itself and
+                // says so; that is the stop rule 4 asks for.
                 { store, readLanding, readChangedPaths, remote: READING_REMOTE },
                 lineageId,
                 Date.now(),
@@ -9153,6 +9159,10 @@ async function publishPage(
       detail: pushFailed,
     };
   }
+  // **Where the push went, recorded before the next leg** (rondo#286, D-0153
+  // rule 1): the landing reading reads the forge rondo pushed to, and a
+  // publish whose pull request fails pushed all the same.
+  await store.markPublishedRemote(record.id, plan.remote, Date.now());
   // A conflict fix opens nothing: the pull request it fixes is already open
   // (rondo#417, D-0105), and the push above moved its head.
   const openUnclaimed = plan.updates === null ? await claimLeg(scoped, "open_pull_request") : null;
@@ -9420,6 +9430,9 @@ async function commandPublish(
   if (!reportCommand("push the branch", pushed)) {
     return 1;
   }
+  // rondo#286 (D-0153 rule 1), as the page's publish records it: the remote
+  // the operator's `--remote` named is where this lap's work now is.
+  await store.markPublishedRemote(record.id, remote, Date.now());
 
   const opened =
     plan.updates === null

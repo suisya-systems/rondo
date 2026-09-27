@@ -13,6 +13,7 @@ import { expect, test } from "vitest";
 import {
   commandPublishBody,
   lapReport,
+  main,
   publishFromPage,
   publishingForPage,
   publishPlanFor,
@@ -21,6 +22,7 @@ import {
   type ScopedPublish,
 } from "../../src/access/cli.js";
 import { reportToRequest } from "../../src/access/conductor.js";
+import { consoleSeams } from "../../src/access/console.js";
 import { inspectLapWork } from "../../src/access/forge.js";
 import type {} from "../../src/access/inbox.js";
 import { resultOf } from "../../src/access/page-logic/result.js";
@@ -1682,11 +1684,16 @@ test.skipIf(!canPublish)(
     const bare = join(forge, "throwaway.git");
     execFileSync("git", ["init", "--quiet", "--bare", "--initial-branch", "main", bare]);
 
-    const world = await publishableWorld("clear", 1, bare);
+    const world = await publishableWorld("clear");
+    // **The push goes somewhere that is not `origin`** (rondo#286): the
+    // workspace keeps its `origin`, which is a repository nobody has, and the
+    // press is given `--remote elsewhere` -- the case the landing reading used
+    // to read against the wrong forge.
+    execFileSync("git", ["-C", world.workspace, "remote", "add", "elsewhere", bare]);
     // The remote is a path and `asked.repo` is a forge name, so they cannot
     // agree; the mismatch is overruled here rather than hidden, which is the
     // flag's own purpose.
-    const asked = { ...world.asked, allowRemoteMismatch: true };
+    const asked = { ...world.asked, remote: "elsewhere", allowRemoteMismatch: true };
     const environment = { RONDO_APPROVER: "ada", [CLI_PATH_ENV]: publishCli ?? "" };
     const row = await world.store.read(world.iterationId);
     if (row.kind !== "read") {
@@ -1737,12 +1744,129 @@ test.skipIf(!canPublish)(
     ).trim();
     expect(pushed).toBe(tip);
 
+    // **And where it pushed is on the row** (rondo#286, D-0153 rule 1): the
+    // remote the press was given, not the `origin` the workspace also has. It
+    // is written at the push, so a publish that stops at the forge leg below
+    // has recorded it all the same.
+    const after = await world.store.read(world.iterationId);
+    expect(after.kind === "read" ? after.record.publishedRemote : null).toBe("elsewhere");
+
     // **And the press stopped where the forge begins.** Not a pass dressed as
     // one: the pull request leg needs a forge this machine does not have, and
     // the press says so in the words the screen shows.
     expect(pressed.ok).toBe(false);
     expect(pressed.why).toBe("publishRefusedPullRequestFailed");
     expect(pressed.note).toContain("the branch is pushed");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+/**
+ * The case above, driven through the command line instead of the press
+ * (rondo#286, D-0153 rule 1).
+ *
+ * **Why both and not one.** `rondo publish` and the page's press reach the same
+ * three legs through different functions -- `commandPublish` and `publishPage`
+ * -- and each writes the remote it pushed to itself. The press's write is
+ * asserted above; this is the other writer, which nothing else here would
+ * notice going missing. What it asserts is the same pair of facts: the push
+ * really reached a remote that is not `origin`, and that remote is on the row
+ * **after the pull request leg has failed** -- so the landing reading has its
+ * basis even for the publish that stopped half way, which is the ordering rule
+ * 1 is about.
+ *
+ * The forge credential is taken away exactly as it is above, and for the same
+ * reason: the second leg has to fail for one stated reason on every machine.
+ * `main` starts a continuo before it publishes, so this carries the same
+ * capability gate as well.
+ */
+test.skipIf(!canPublish)(
+  "rondo publish --remote X records where it pushed, and the record survives the forge leg failing (rondo#286)" +
+    (canPublish ? "" : ` [skipped: ${CLI_PATH_ENV} is unset]`),
+  async () => {
+    const forge = mkdtempSync(join(tmpdir(), "rondo-publish-cli-forge-"));
+    const bare = join(forge, "throwaway.git");
+    execFileSync("git", ["init", "--quiet", "--bare", "--initial-branch", "main", bare]);
+
+    const world = await publishableWorld("clear");
+    execFileSync("git", ["-C", world.workspace, "remote", "add", "elsewhere", bare]);
+    const row = await world.store.read(world.iterationId);
+    if (row.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+
+    const held = {
+      GH_CONFIG_DIR: process.env["GH_CONFIG_DIR"],
+      GH_TOKEN: process.env["GH_TOKEN"],
+      GITHUB_TOKEN: process.env["GITHUB_TOKEN"],
+    };
+    process.env["GH_CONFIG_DIR"] = mkdtempSync(join(tmpdir(), "rondo-publish-cli-nocreds-"));
+    process.env["GH_TOKEN"] = "";
+    process.env["GITHUB_TOKEN"] = "";
+    const said: string[] = [];
+    const write = consoleSeams.write;
+    const writeError = consoleSeams.writeError;
+    consoleSeams.write = (text: string) => {
+      said.push(text);
+    };
+    consoleSeams.writeError = (text: string) => {
+      said.push(text);
+    };
+    let code: number;
+    try {
+      code = await main(
+        [
+          "publish",
+          "--iteration-id",
+          world.iterationId,
+          "--repo",
+          world.asked.repo,
+          // The remote is a path and `--repo` is a forge name, so they cannot
+          // agree; the flag overrules that rather than hiding it, as the press
+          // above does with the same pair.
+          "--remote",
+          "elsewhere",
+          "--allow-remote-mismatch",
+          "--actor-id",
+          "ada",
+        ],
+        {
+          RONDO_STORE: world.storePath,
+          RONDO_APPROVER: "ada",
+          [CLI_PATH_ENV]: publishCli ?? "",
+        },
+      );
+    } finally {
+      consoleSeams.write = write;
+      consoleSeams.writeError = writeError;
+      for (const [name, value] of Object.entries(held)) {
+        if (value === undefined) {
+          delete process.env[name];
+        } else {
+          process.env[name] = value;
+        }
+      }
+    }
+
+    // **The push happened**, to the remote the flag named.
+    const tip = execFileSync("git", ["-C", world.workspace, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+    }).trim();
+    const pushed = execFileSync(
+      "git",
+      ["-C", bare, "rev-parse", `refs/heads/${row.record.topicBranch ?? ""}`],
+      { encoding: "utf8" },
+    ).trim();
+    expect(pushed).toBe(tip);
+
+    // **And the command stopped at the forge leg**, saying what is left.
+    expect(code).toBe(1);
+    expect(said.join("")).toContain("was pushed to 'elsewhere'");
+
+    // **And where it pushed is on the row**, written before that failure: the
+    // landing reading reads this record and never `origin`.
+    const after = await world.store.read(world.iterationId);
+    expect(after.kind === "read" ? after.record.publishedRemote : null).toBe("elsewhere");
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );

@@ -322,6 +322,7 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     lapTurns: null,
     lapDurationMs: null,
     lapBudgetCapUsd: null,
+    publishedRemote: null,
     reason: null,
     failureKind: null,
     gateAnswer: null,

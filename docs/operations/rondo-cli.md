@@ -869,6 +869,12 @@ every plan written before `D-0081` -- and a lap that names one nowhere is refuse
 and an inferred slug would be whatever that clone happened to point at (`D-0075` rule 3.1).
 `--remote` defaults to `origin`.
 
+**Where it pushed is recorded on the lap** (`D-0153`), and that record is the only thing the
+landing reading looks at. A line rondo holds no such record for is read as *undetermined* -- never
+as landed -- and waits for `release`; a line published to a remote this host does not read landings
+from waits for it too, with the disagreement named, because which of two repositories holds the
+work is not rondo's to decide.
+
 The command line **never merges**, and nothing here runs unless a person typed `publish`: no other command in
 the tree reaches the module that can start a process, and that module is the only one granted a
 spawn -- which `test/architecture/import-boundaries.test.ts` checks with a planted violation rather
