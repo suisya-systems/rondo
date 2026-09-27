@@ -56,6 +56,8 @@ interface Options {
   readonly answer?: "approve" | "revise";
   /** A merge on green was already claimed for the lap. */
   readonly claimed?: boolean;
+  /** The ports' clock; 9 by default. */
+  readonly now?: () => number;
 }
 
 const open: PullRequestState = {
@@ -255,7 +257,7 @@ async function over(options: Options = {}) {
   const ports: MergeOnGreenPorts = {
     store,
     record,
-    now: () => 9,
+    now: options.now ?? (() => 9),
     pressing,
     deleteLapBase: async ({ runId }) => {
       deletedBases.push(runId);
@@ -654,6 +656,17 @@ test("D-0126: nothing is merged on green, and nothing asked, unless every condit
   expect(await moved.onGreen("fff0000")).toContain("left for the press");
   expect(moved.asked).toEqual([]);
   expect((await moved.press({ ...input, head: "fff0000" })).ok).toBe(true);
+});
+
+test("D-0126: a scope that stops allowing the merge while the forge is read claims nothing", async () => {
+  // The expiry falls between the first reading of the scope, whose clock is
+  // the first asked, and the claim.
+  let calls = 0;
+  const world = await over({ expiresAtMs: 10, now: () => (calls++ === 0 ? 9 : 10) });
+  const asking = world.onGreen();
+  expect(await asking).toContain("no longer does");
+  expect(world.claims).toEqual([]);
+  expect(world.asked).toEqual([`view ${PR}`, "methods github.com/owner/name"]);
 });
 
 test("D-0126: a merge already claimed is not asked of the forge again", async () => {

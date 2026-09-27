@@ -160,6 +160,55 @@ export async function mergeOnGreen(
   if (ports.pressing?.has(iterationId) === true) {
     return null;
   }
+  const authority = await mergeAuthority(ports, iterationId);
+  if (authority === null) {
+    return null;
+  }
+  ports.pressing?.add(iterationId);
+  try {
+    const merged = await mergeOnce(
+      ports,
+      { iterationId, head },
+      {
+        scopeId: authority.scopeId,
+        // **Asked again at the claim** (Codex round 1): the forge's reads
+        // take time, and a scope that expired or an approved successor
+        // without the merge in between authorises nothing.
+        claim: async () => {
+          const now = await mergeAuthority(ports, iterationId);
+          if (now?.scopeDecisionId !== authority.scopeDecisionId) {
+            return {
+              kind: "refused",
+              reason: "the scope that allowed the merge no longer does, or has been replaced",
+            };
+          }
+          return await ports.record.claimScopedMerge({
+            scopeDecisionId: authority.scopeDecisionId,
+            iterationId,
+            nowMs: ports.now(),
+          });
+        },
+      },
+    );
+    return merged.ok ? merged.note : `not merged on green, left for the press: ${merged.note}`;
+  } finally {
+    ports.pressing?.delete(iterationId);
+  }
+}
+
+/**
+ * The approval a merge on green is made under, or null where there is none:
+ * the lap's gate answered `approve`, and the approved tip of its scope chain
+ * including the merge and not expired (D-0126 rules 2.1 and 2.2).
+ *
+ * ponytail: read in steps and not in the claim's own statement, so an
+ * approval written between the last read and the claim is not seen; the
+ * window is one tick of the event loop. One query in the claim is the upgrade.
+ */
+async function mergeAuthority(
+  ports: MergeOnGreenPorts,
+  iterationId: string,
+): Promise<{ readonly scopeDecisionId: string; readonly scopeId: string } | null> {
   const found = await ports.store.read(iterationId);
   if (found.kind !== "read" || !approvedForPublication(found.record)) {
     return null;
@@ -173,33 +222,12 @@ export async function mergeOnGreen(
     return null;
   }
   const stored = await ports.record.readScope(decided.decision.scopeId);
-  if (
-    stored.kind !== "read" ||
+  return stored.kind !== "read" ||
     !stored.scope.payload.outward_acts.includes("merge_default_branch") ||
     // D-0066 rule 1.2.4: an expired scope authorises nothing.
     stored.scope.payload.budgets.expires_at_ms <= ports.now()
-  ) {
-    return null;
-  }
-  ports.pressing?.add(iterationId);
-  try {
-    const merged = await mergeOnce(
-      ports,
-      { iterationId, head },
-      {
-        scopeId: decided.decision.scopeId,
-        claim: async () =>
-          await ports.record.claimScopedMerge({
-            scopeDecisionId: tip.scopeDecisionId,
-            iterationId,
-            nowMs: ports.now(),
-          }),
-      },
-    );
-    return merged.ok ? merged.note : `not merged on green, left for the press: ${merged.note}`;
-  } finally {
-    ports.pressing?.delete(iterationId);
-  }
+    ? null
+    : { scopeDecisionId: tip.scopeDecisionId, scopeId: decided.decision.scopeId };
 }
 
 /** The scope a merge on green is made under (D-0126). */

@@ -24506,7 +24506,9 @@ At rondo `7a038e1` on **2026-09-27**, by reading. Line numbers drift; re-measure
    the checks host share, so a press on the page while it runs is refused as in flight
    (`mergeRefusedInFlight`) and the checks host does not read the lap meanwhile.
 3. **Claim, then act** (`D-0042`). After every read and before the forge is asked to merge, a
-   `scope_consumption(act_kind='merge_default_branch', subject_id=<iteration id>)` row is written.
+   `scope_consumption(act_kind='merge_default_branch', subject_id=<iteration id>)` row is written,
+   and rule 2.1 and 2.2 are asked again first: a scope that expired, or an approved successor
+   without the act, while the forge was read authorises nothing.
    **Once per lap, whichever approval claims it**: the writer refuses a second row for the same lap
    even under a successor approval, which the table's key alone would allow. A second attempt is
    refused before the forge is asked, and a merge the forge then refused stays claimed, so the lap is
