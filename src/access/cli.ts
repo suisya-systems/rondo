@@ -232,7 +232,6 @@ import { asksOverLine, conflictFixBlock, resultOf } from "./page-logic/result.js
 import { requestWords, threadsOf } from "./page-logic/threads.js";
 import {
   type ComposedBodyOutcome,
-  composePublishBody,
   type PublishBodyPorts,
   publishBodyOnce,
   recordedPublishBody,
@@ -8209,28 +8208,76 @@ export async function lapReport(
 }
 
 /**
- * How the terminal's `publish` comes by the body's English (`D-0079` section 4,
- * rondo#290): read this lap's report, then compose an English account of it.
+ * One lap's body, composed once and recorded, for whichever surface asks
+ * (rondo#290): the shared read-then-compose-then-record of
+ * {@link publishBodyOnce}, over the two legs a surface supplies.
  *
- * **One composing per publish, and no row.** The terminal's body is compared
- * against nothing -- there is no earlier screen of it to disagree with -- so
- * unlike the page's ({@link pagePublishBody}) this neither records nor reads a
- * row. What it shares with the page is the two legs it is handed and the ask
- * itself, so the two surfaces put the same question to the same drafter.
+ * **One row for both routes, so one lap has one body.** A publish is reachable
+ * from the page and from a terminal, and a body composed afresh on the second
+ * route would replace the English account the first one showed with different
+ * text -- the same question answered twice by a model that need not answer it
+ * the same way. So neither route composes what is already recorded: the first
+ * one there composes and writes the row, and every route after it reads that
+ * row. This is the read half of "composed once" as well as the write half, which
+ * is why the press ({@link pressedPublishBody}) can read the row and compose
+ * nothing at all.
+ *
+ * **What a surface supplies is how it reaches a report and a drafter**, and
+ * nothing else: the terminal has continuo already verified in its hand, the page
+ * starts one where a body has to be composed, and both put the same question to
+ * the drafter `./forge.ts` runs.
+ *
+ * Null for a lap that records no gate, which has no report to compose from and
+ * no row to record against; the body's three sections then say that they have no
+ * account, exactly as they do for a composing that could not run.
+ */
+export type PublishBodyLegs = PublishBodyPorts & {
+  /** This lap's report, as the worker wrote it, or null where it would not read. */
+  readonly report: () => Promise<string | null>;
+};
+
+function recordingPublishBody(
+  record: Pick<AdvisoryRecord, "recordPublishBody" | "publishBodyFor">,
+  lap: IterationRecord,
+  legs: PublishBodyLegs,
+): PublishBodyComposing | null {
+  if (lap.gateId === null) {
+    return null;
+  }
+  const subject = { iterationId: lap.id, gateId: lap.gateId };
+  return async (reportLanguage) =>
+    await publishBodyOnce(
+      {
+        record,
+        report: legs.report,
+        runDrafter: legs.runDrafter,
+        drafter: drafterRow(),
+        mintId: () => newDraftId("publish-body"),
+        now: Date.now,
+      },
+      subject,
+      reportLanguage,
+    );
+}
+
+/**
+ * How the terminal's `publish` comes by the body's English (`D-0079` section 4,
+ * rondo#290): the row the page recorded where there is one, and otherwise one
+ * composing of its own, recorded on the same row.
+ *
+ * **The same row the page uses, read and written through the same code**
+ * ({@link recordingPublishBody}). Publishing the same lap from a terminal after
+ * previewing it on the page must not put a second English account where the
+ * previewed one was, so the terminal is a reader of that row first and a composer
+ * only where nothing has composed yet. It reaches the report through the continuo
+ * this command already verified.
  */
 export function commandPublishBody(
-  ports: PublishBodyPorts & { readonly report: () => Promise<string | null> },
-): PublishBodyComposing {
-  return async (reportLanguage) => {
-    const report = await ports.report();
-    return report === null
-      ? {
-          kind: "unavailable",
-          reason:
-            "the gate this lap reported at would not read, so there was no report to compose from",
-        }
-      : await composePublishBody(ports, { report, reportLanguage });
-  };
+  record: Pick<AdvisoryRecord, "recordPublishBody" | "publishBodyFor">,
+  lap: IterationRecord,
+  legs: PublishBodyLegs,
+): PublishBodyComposing | null {
+  return recordingPublishBody(record, lap, legs);
 }
 
 /**
@@ -8245,34 +8292,33 @@ export function commandPublishBody(
  * **A publish under a scope composes through here too**, for the same reason read
  * the other way: no screen was drawn, so the publish itself is the one run there
  * is, and it records what it composed for the page to draw afterwards.
+ *
+ * **The two legs arrive as one value**, the way the terminal's do
+ * ({@link commandPublishBody}): a caller that has a report and a drafter already
+ * to hand hands them over, and everything from the recorded row to the row this
+ * writes is then the same code on both routes rather than a second copy of it.
+ * The default is the page's own -- a continuo started where a body has to be
+ * composed, and `./forge.ts`'s drafter.
  */
 function pagePublishBody(
   environment: Readonly<Record<string, string | undefined>>,
   record: Pick<AdvisoryRecord, "recordPublishBody" | "publishBodyFor">,
   lap: IterationRecord,
+  legs: PublishBodyLegs | null,
 ): PublishBodyComposing | null {
-  if (lap.gateId === null) {
-    return null;
-  }
-  const subject = { iterationId: lap.id, gateId: lap.gateId };
-  return async (reportLanguage) =>
-    await publishBodyOnce(
-      {
-        record,
-        report: async () => {
-          const startup = await startContinuo(environment);
-          return startup.kind === "refused"
-            ? null
-            : await lapReport(async (request) => await showGate(startup.continuo, request), lap);
-        },
-        runDrafter: async (document) => await runDrafter(drafterRow(), document),
-        drafter: drafterRow(),
-        mintId: () => newDraftId("publish-body"),
-        now: Date.now,
+  return recordingPublishBody(
+    record,
+    lap,
+    legs ?? {
+      report: async () => {
+        const startup = await startContinuo(environment);
+        return startup.kind === "refused"
+          ? null
+          : await lapReport(async (request) => await showGate(startup.continuo, request), lap);
       },
-      subject,
-      reportLanguage,
-    );
+      runDrafter: async (document) => await runDrafter(drafterRow(), document),
+    },
+  );
 }
 
 /**
@@ -8794,6 +8840,12 @@ export async function publishingForPage(
    * passes.
    */
   body: Pick<AdvisoryRecord, "recordPublishBody" | "publishBodyFor"> | null = null,
+  /**
+   * How that composing reaches the lap's report and the drafter
+   * ({@link PublishBodyLegs}). Null is the page's own pair: a continuo started
+   * where a body has to be composed, and `./forge.ts`'s drafter.
+   */
+  legs: PublishBodyLegs | null = null,
 ): Promise<PublishShown> {
   const planned = await publishPlanFor(
     record,
@@ -8801,7 +8853,7 @@ export async function publishingForPage(
     environment,
     store,
     thread,
-    body === null ? null : pagePublishBody(environment, body, record),
+    body === null ? null : pagePublishBody(environment, body, record, legs),
   );
   if (planned.kind === "refused") {
     return { kind: "refused", block: planned.block };
@@ -9017,7 +9069,7 @@ async function publishPage(
     // lap's report in the body.
     scoped === null
       ? pressedPublishBody(advisory, record)
-      : pagePublishBody(environment, advisory, record),
+      : pagePublishBody(environment, advisory, record, null),
   );
   if (planned.kind === "refused") {
     const block = planned.block;
@@ -9257,6 +9309,11 @@ async function commandPublish(
   // preflight -- a preview must not pass where the real run would fail -- is
   // now a property of `publishPlanFor`: everything below is printing and the
   // three legs.
+  // **One record, read by both the body and the issue the body names.** The
+  // page's publish opens the same one; a terminal that opened a second handle
+  // for the body would read the same rows, but the row a preview wrote is what
+  // the body has to come from, so the two reads are one.
+  const advisory = openAdvisoryRecord(storePath);
   const planned = await publishPlanFor(
     record,
     {
@@ -9266,12 +9323,14 @@ async function commandPublish(
     },
     environment,
     store,
-    openAdvisoryRecord(storePath),
-    // **The body's English, composed from the lap's report** (`D-0079` section
-    // 4, rondo#290). Both legs are reachable from here and from nowhere inside
-    // that function: continuo is this command's own, and the drafter is the one
-    // `./forge.ts` runs for every other composed draft.
-    commandPublishBody({
+    advisory,
+    // **The body's English, from the row this lap's body is recorded on**
+    // (`D-0079` section 4, rondo#290). Both legs are reachable from here and
+    // from nowhere inside that function: continuo is this command's own, and the
+    // drafter is the one `./forge.ts` runs for every other composed draft. What
+    // the row is for is that a lap previewed on the page and published from here
+    // carries one and the same English account.
+    commandPublishBody(advisory, record, {
       report: async () =>
         await lapReport(async (request) => await showGate(continuo, request), record),
       runDrafter: async (document) => await runDrafter(drafterRow(), document),

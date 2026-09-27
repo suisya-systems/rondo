@@ -25,7 +25,11 @@ import { inspectLapWork } from "../../src/access/forge.js";
 import type {} from "../../src/access/inbox.js";
 import { resultOf } from "../../src/access/page-logic/result.js";
 import { threadsOf } from "../../src/access/page-logic/threads.js";
-import { COMPOSED_SECTIONS, publishBodyOnce } from "../../src/access/publish-body.js";
+import {
+  COMPOSED_SECTIONS,
+  PUBLISH_BODY_DRAFTER_PREFIX,
+  publishBodyOnce,
+} from "../../src/access/publish-body.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import { CLI_PATH_ENV, type ShowGateRequest } from "../../src/continuo/invoker.js";
@@ -1127,6 +1131,7 @@ test(
       throw new Error("the fixture row would not read");
     }
     expect(record.record.plan["material_language"]).toBe("ja");
+    const advisory = advisoryRecord(new DatabaseSync(world.storePath));
 
     const asked: ShowGateRequest[] = [];
     const documents: string[] = [];
@@ -1141,7 +1146,7 @@ test(
       {},
       world.store,
       null,
-      commandPublishBody({
+      commandPublishBody(advisory, record.record, {
         report: async () =>
           await lapReport(async (request) => {
             asked.push(request);
@@ -1178,30 +1183,64 @@ test(
     expect(body).not.toContain("変更の要旨");
     expect(body).not.toContain("端末の publish");
 
-    // **A gate that does not read as answered is no report**, and the body then
-    // keeps its three sections and says it has no account -- it does not fall
-    // back to the report, and it does not go without a heading.
-    const unread = await publishPlanFor(
+    // **The row is what a second publish of this lap reads**, whichever route it
+    // comes from: nothing is put to the drafter again, and the body is the same
+    // English account the first publish wrote.
+    const again = await publishPlanFor(
       record.record,
       world.asked,
       {},
       world.store,
       null,
-      commandPublishBody({
-        report: async () =>
-          await lapReport(
-            async (request) => ({
-              kind: "refused",
-              db: request.db,
-              errorClass: "continuo.gate.unknown",
-              message: "no such gate",
-            }),
-            record.record,
-          ),
+      commandPublishBody(advisory, record.record, {
+        report: async () => {
+          throw new Error("a recorded body is not read from the gate again");
+        },
         runDrafter: async () => {
-          throw new Error("nothing is composed from a gate that would not read");
+          throw new Error("a recorded body is not composed again");
         },
       }),
+    );
+    if (again.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(again)}`);
+    }
+    expect(again.plan.pullRequest.body).toBe(body);
+    expect(documents).toHaveLength(1);
+
+    // **A gate that does not read as answered is no report**, and the body then
+    // keeps its three sections and says it has no account -- it does not fall
+    // back to the report, and it does not go without a heading. A lap of its own,
+    // because a lap whose body is already recorded composes nothing.
+    const other = await publishableWorld("clear", 1, undefined, "ja");
+    const otherRecord = await other.store.read(other.iterationId);
+    if (otherRecord.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const unread = await publishPlanFor(
+      otherRecord.record,
+      other.asked,
+      {},
+      other.store,
+      null,
+      commandPublishBody(
+        advisoryRecord(new DatabaseSync(other.storePath)),
+        otherRecord.record,
+        {
+          report: async () =>
+            await lapReport(
+              async (request) => ({
+                kind: "refused",
+                db: request.db,
+                errorClass: "continuo.gate.unknown",
+                message: "no such gate",
+              }),
+              otherRecord.record,
+            ),
+          runDrafter: async () => {
+            throw new Error("nothing is composed from a gate that would not read");
+          },
+        },
+      ),
     );
     if (unread.kind !== "ready") {
       throw new Error(`the fixture would not plan: ${JSON.stringify(unread)}`);
@@ -1210,6 +1249,159 @@ test(
       expect(unread.plan.pullRequest.body).toContain(`## ${heading}`);
     }
     expect(unread.plan.pullRequest.body).toContain("there was no report to compose from");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "the page's publish composes the body through its own wiring, records it, and the press publishes that row (D-0079 section 4, rondo#290)",
+  async () => {
+    // **The page's entry, leg by leg, with nothing seeded**: `publishingForPage`
+    // is handed the record the row goes on and the pair it reaches a report and a
+    // drafter with, and everything between -- the language off the lap's plan, the
+    // `gate show` for the report, the document, the answer's three sections, the
+    // row -- is the code the page runs. Then the press, over the same row, so the
+    // digest the screen was drawn with still stands.
+    const world = await publishableWorld("stale", 1, undefined, "ja");
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const advisory = advisoryRecord(new DatabaseSync(world.storePath));
+    const asked: ShowGateRequest[] = [];
+    const documents: string[] = [];
+    const composed = {
+      summary: "The page's publish composes an English account of this lap's report.",
+      grounds: "D-0079 section 4 puts English in a pull request body and nowhere earlier.",
+      verification: "The repository's own verification was run and it passed.",
+    };
+    const shown = await publishingForPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.asked,
+      record.record,
+      null,
+      advisory,
+      {
+        report: async () =>
+          await lapReport(async (request) => {
+            asked.push(request);
+            return answeredGate(request.gateId, request.db, JAPANESE_REPORT);
+          }, record.record),
+        runDrafter: async (document) => {
+          documents.push(document);
+          return { kind: "answered", costUsd: null, finalMessage: JSON.stringify(composed) };
+        },
+      },
+    );
+    if (shown.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
+    }
+
+    // The report came off this lap's own gate, in this lap's own database.
+    expect(asked).toEqual([
+      { db: String(record.record.plan["db"]), gateId: `gate-${world.iterationId}` },
+    ]);
+    // The language the lap asked its worker for reached the drafter as material,
+    // beside the report itself.
+    expect(documents).toHaveLength(1);
+    expect(documents[0]).toContain("IETF language tag 'ja'");
+    expect(documents[0]).toContain(JAPANESE_REPORT);
+    // The three sections are in the body, in order, and the report is not.
+    const headings = COMPOSED_SECTIONS.map((one) => shown.body.indexOf(`## ${one.heading}`));
+    expect(headings.every((at) => at >= 0)).toBe(true);
+    expect([...headings].sort((a, b) => a - b)).toEqual(headings);
+    for (const section of Object.values(composed)) {
+      expect(shown.body).toContain(section);
+    }
+    expect(shown.body).not.toContain("変更の要旨");
+
+    // **The row is where it went**: a `publish_body` proposal against this lap's
+    // gate, carrying the English sections the drafter answered with.
+    const row = await advisory.publishBodyFor(world.iterationId, `gate-${world.iterationId}`);
+    expect(row?.payload).toEqual({ kind: "composed", ...composed });
+    expect(row?.drafter).toContain(PUBLISH_BODY_DRAFTER_PREFIX);
+
+    // **The press reads that row and composes nothing**: it reaches the reading's
+    // refusal, which is downstream of the digest comparison, so the screen and
+    // the press agreed about the body.
+    const pressed = await publishFromPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.storePath,
+      "ada",
+      world.asked,
+      { iterationId: world.iterationId, shown: shown.shown, despiteReview: false },
+    );
+    expect(pressed.ok).toBe(false);
+    expect(pressed.why).toBe("publishRefusedNotRead");
+    expect(documents).toHaveLength(1);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a lap previewed on the page and published from the terminal carries one and the same body (rondo#290)",
+  async () => {
+    // **The property the two routes exist to have**: a body is of a lap, not of a
+    // surface. The page composes and records; the terminal, publishing the same
+    // lap afterwards, reads that row instead of putting the same question to the
+    // drafter a second time and getting a different English account back.
+    const world = await publishableWorld("clear", 1, undefined, "ja");
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const advisory = advisoryRecord(new DatabaseSync(world.storePath));
+    const composed = {
+      summary: "One lap has one English account of its report, whichever route publishes it.",
+      grounds: "D-0079 section 4 asks for English here; rondo#290 asks for one of it.",
+      verification: "The repository's own verification was run and it passed.",
+    };
+    let runs = 0;
+    const shown = await publishingForPage(
+      { RONDO_APPROVER: "ada" },
+      world.store,
+      world.asked,
+      record.record,
+      null,
+      advisory,
+      {
+        report: async () => JAPANESE_REPORT,
+        runDrafter: async () => {
+          runs += 1;
+          return { kind: "answered", costUsd: null, finalMessage: JSON.stringify(composed) };
+        },
+      },
+    );
+    if (shown.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(shown)}`);
+    }
+    expect(runs).toBe(1);
+
+    // The terminal's publish of the same lap: its own continuo and its own
+    // drafter are in its hand, and it reaches for neither, because the row is
+    // already written.
+    const planned = await publishPlanFor(
+      record.record,
+      world.asked,
+      {},
+      world.store,
+      null,
+      commandPublishBody(advisoryRecord(new DatabaseSync(world.storePath)), record.record, {
+        report: async () => {
+          throw new Error("a recorded body is not read from the gate again");
+        },
+        runDrafter: async () => {
+          throw new Error("a recorded body is not composed again");
+        },
+      }),
+    );
+    if (planned.kind !== "ready") {
+      throw new Error(`the fixture would not plan: ${JSON.stringify(planned)}`);
+    }
+    expect(planned.plan.pullRequest.body).toBe(shown.body);
+    expect(runs).toBe(1);
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
