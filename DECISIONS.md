@@ -25185,6 +25185,23 @@ the newest goal: an edit would widen an approval nobody re-read.
 > yet. **A pause is not asked about**: `laps: 0` is already the person's answer. Nothing above is
 > edited.
 
+> **Annotation (2026-09-27, from rondo#488).** Added after this entry was accepted, and additive: a
+> stop "said on the terminal where there is no request yet" was a stop the page could not see (lap
+> 18: the front and the goal scope screen kept a green *working on its own* while nothing would
+> start). **Such a stop is now also a row**: `flow_stop` (append-only, the approval's decision id,
+> the repository, the time, and `facts` -- the reason with what a person acts on as fields: the
+> expiry, the laps used, the cost figures, the newer goal, and for *nothing eligible* each ranked
+> candidate with why it was passed over: started, put aside, open points, not an issue). The row
+> is named by the approval, the reason and a digest of the facts, so each distinct stop is written
+> once. **The page draws a goal scope in force as stopped** while its newest row stands and no
+> request of the goal is written, or while a stop of this approval is an open ask in the thread of
+> the flow's latest request; it says the stop, the reason in plain words, what was passed over and
+> the next step (pause, or pause and approve again for new limits; a stop asked in a thread leads
+> to the question), in place of *working on its own*, on the front's triage block and on the goal
+> scope screen. **Green is drawn only while neither holds.** A newest row outlives a stop the flow
+> gets past without writing a request (a later ranking with room only later); it reads stopped
+> until the request is written. Nothing above is edited.
+
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 
 **Status:** accepted (2026-09-27, rondo#452). The issue records `D-0098`'s gate (2026-09-22, point
