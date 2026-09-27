@@ -1222,25 +1222,21 @@ test(
       {},
       other.store,
       null,
-      commandPublishBody(
-        advisoryRecord(new DatabaseSync(other.storePath)),
-        otherRecord.record,
-        {
-          report: async () =>
-            await lapReport(
-              async (request) => ({
-                kind: "refused",
-                db: request.db,
-                errorClass: "continuo.gate.unknown",
-                message: "no such gate",
-              }),
-              otherRecord.record,
-            ),
-          runDrafter: async () => {
-            throw new Error("nothing is composed from a gate that would not read");
-          },
+      commandPublishBody(advisoryRecord(new DatabaseSync(other.storePath)), otherRecord.record, {
+        report: async () =>
+          await lapReport(
+            async (request) => ({
+              kind: "refused",
+              db: request.db,
+              errorClass: "continuo.gate.unknown",
+              message: "no such gate",
+            }),
+            otherRecord.record,
+          ),
+        runDrafter: async () => {
+          throw new Error("nothing is composed from a gate that would not read");
         },
-      ),
+      }),
     );
     if (unread.kind !== "ready") {
       throw new Error(`the fixture would not plan: ${JSON.stringify(unread)}`);
