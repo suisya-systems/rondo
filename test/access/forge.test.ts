@@ -22,6 +22,7 @@ import {
   pushTopicBranch,
   readChangedPaths,
   readLanding,
+  readRepositoryPaths,
   runReviewer,
 } from "../../src/access/forge.js";
 import { evidenceOf, materialDigestOf, readingOf } from "../../src/access/review.js";
@@ -942,4 +943,27 @@ posix("a Claude reviewer row runs claude -p over the document with no tools (D-0
     document,
   );
   expect(refused.kind).toBe("failed");
+});
+
+test("a drafter's path listing is the base branch's tree, two levels deep, directories ending in '/' (D-0136)", async () => {
+  const work = mkdtempSync(join(tmpdir(), "rondo-paths-"));
+  git(work, "init", work);
+  mkdirSync(join(work, "src", "store"), { recursive: true });
+  writeFileSync(join(work, "README.md"), "r\n");
+  writeFileSync(join(work, "src", "index.ts"), "i\n");
+  writeFileSync(join(work, "src", "store", "lanes.ts"), "l\n");
+  git(work, "add", ".");
+  git(work, "commit", "-m", "base");
+  // Uncommitted and on another branch: not what a lap starts from.
+  git(work, "switch", "-c", "topic");
+  writeFileSync(join(work, "topic.txt"), "t\n");
+  git(work, "add", ".");
+  git(work, "commit", "-m", "topic");
+  expect(await readRepositoryPaths({ repository: work, ref: "main" })).toEqual([
+    "README.md",
+    "src/",
+    "src/index.ts",
+    "src/store/",
+  ]);
+  expect(await readRepositoryPaths({ repository: work, ref: "no-such-branch" })).toBeNull();
 });

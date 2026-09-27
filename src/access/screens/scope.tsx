@@ -1687,9 +1687,20 @@ async function scopeApproved(
   const runsOn = gone ? null : (drawn ?? (allowed.length === 1 ? (allowed[0] as HeldPlan) : null));
   return (
     <>
-      {/* **What can be started comes first** (D-0106, rondo#408): the start
-          press, the plans to choose from, or why there is none -- then the
-          approval it runs under, which is a record and not a thing to do. */}
+      {/* **That it is approved comes first** (D-0136, rondo#496): on lap 18 a
+          screen whose plans all waited showed no press, and with the approval
+          under them it read as an approval still to give. The line is short;
+          the budgets it approved stay below as a record. */}
+      <section class={`${CARD} space-y-1`}>
+        <h3 class={CARD_HEADING}>
+          {wording.scopeApproved(wording.age(ago(decided.decision.decidedAtMs, nowMs)))}
+        </h3>
+        <p class="font-mono text-id leading-5 wrap-anywhere text-faint">
+          {wording.scopeDigest(scope.scopeDigest)}
+        </p>
+      </section>
+      {/* **Then what can be started** (D-0106, rondo#408): the start press,
+          the plans to choose from, or why there is none. */}
       {retired ? (
         <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
           {wording.scopeRetired}
@@ -1753,14 +1764,6 @@ async function scopeApproved(
           </span>
         </form>
       )}
-      <section class={`${CARD} space-y-1`}>
-        <h3 class={CARD_HEADING}>
-          {wording.scopeApproved(wording.age(ago(decided.decision.decidedAtMs, nowMs)))}
-        </h3>
-        <p class="font-mono text-id leading-5 wrap-anywhere text-faint">
-          {wording.scopeDigest(scope.scopeDigest)}
-        </p>
-      </section>
       <section class={`${CARD} space-y-2`}>
         {payload.workspaces.map((workspace) => (
           <p class="text-body leading-5 text-muted-foreground wrap-anywhere">
