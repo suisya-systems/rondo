@@ -217,7 +217,8 @@ import { requestWords, threadsOf } from "./page-logic/threads.js";
 import {
   type ComposedBodyOutcome,
   composePublishBody,
-  type PublishBodyMaterial,
+  publishBodyOnce,
+  recordedPublishBody,
 } from "./publish-body.js";
 import { publishHost } from "./publish-host.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
@@ -2140,6 +2141,9 @@ export async function main(
                   store,
                   asked,
                   row,
+                  openAdvisoryRecord(opened.path),
+                  // The body's English is composed here, once, and recorded for
+                  // the press to read (rondo#290, `D-0079` section 4).
                   openAdvisoryRecord(opened.path),
                 ),
         // Read for the same reason and on the same condition: the material is
@@ -7909,59 +7913,6 @@ export type PublishPlanned =
   | { readonly kind: "ready"; readonly plan: PublishPlan };
 
 /**
- * What composing the body's English needs, as two values a caller supplies
- * (`D-0079` section 4, rondo#290).
- *
- * **The report is read where a caller has continuo, and the composing is
- * `./publish-body.ts`'s**: this function reaches neither on its own, and both
- * are the sort of thing a test replaces. Only the terminal's `publish` passes
- * them today; the page passes null, because its preview and its press run this
- * twice and a model's answer is not the same twice -- what that path needs is a
- * composed body recorded once and read by both, which is a row this change does
- * not add. A body composed from neither still carries all three sections and
- * says under each what it does not have (`./pull-request.ts`).
- */
-export interface PublishBodyComposing {
-  /** The lap's report, as the worker wrote it, or null where it would not read. */
-  readonly report: () => Promise<string | null>;
-  readonly compose: (material: PublishBodyMaterial) => Promise<ComposedBodyOutcome>;
-}
-
-/**
- * The English sections composed from this lap's report (`D-0079` section 4), or
- * null where the caller passed no way to compose them.
- *
- * **Asked for whether or not the lap asked its worker for a language**
- * (rondo#290). `material_language` records what was *asked*, not what came back:
- * a lap that asked for nothing is written in whatever language the person who
- * asked for the work writes in, which is the case whose body reached the forge
- * with no English account of the work in it at all. So the language is material
- * the document names and not a condition on running it, and what decides whether
- * a body has an account is whether a report could be read and composed from.
- */
-async function composedBodyFor(
-  record: IterationRecord,
-  composing: PublishBodyComposing | null,
-): Promise<ComposedBodyOutcome | null> {
-  if (composing === null) {
-    return null;
-  }
-  const report = await composing.report();
-  if (report === null) {
-    return {
-      kind: "unavailable",
-      reason:
-        "the gate this lap reported at would not read, so there was no report to compose from",
-    };
-  }
-  const language = planField(record, "material_language");
-  return await composing.compose({
-    report,
-    reportLanguage: language === "" ? null : language,
-  });
-}
-
-/**
  * Everything that happens before a publish pushes anything, as one function.
  *
  * **Extracted so the terminal and the page cannot drift** (rondo#233 S5), which
@@ -7984,6 +7935,124 @@ async function composedBodyFor(
  * PublishBodyComposing}), so the one model run a publish makes is a value this
  * function is handed rather than a process it starts.
  */
+/**
+ * How one caller comes by the body's English, given what is known about the
+ * language the lap's report is written in (`D-0079` section 4, rondo#290).
+ *
+ * **A function rather than the legs it needs**, because the two surfaces come by
+ * it differently and only the language is common. The terminal's `publish` reads
+ * the report through its own continuo and composes there and then: it runs once
+ * per publish, and nothing compares its body against an earlier read of it. The
+ * page's preview composes **once** and records the row ({@link publishBodyOnce}),
+ * and the page's press reads that row and composes nothing
+ * ({@link recordedPublishBody}) -- because the body is inside the digest the
+ * press compares against what the screen showed, and a second model answer to
+ * one question would refuse every press.
+ */
+export type PublishBodyComposing = (
+  reportLanguage: string | null,
+) => Promise<ComposedBodyOutcome>;
+
+/**
+ * The English sections composed from this lap's report (`D-0079` section 4), or
+ * null where the caller passed no way to compose them.
+ *
+ * **Asked for whether or not the lap asked its worker for a language**
+ * (rondo#290). `material_language` records what was *asked*, not what came back:
+ * a lap that asked for nothing is written in whatever language the person who
+ * asked for the work writes in, which is the case whose body reached the forge
+ * with no English account of the work in it at all. So the language is material
+ * the document names and not a condition on running it, and what decides whether
+ * a body has an account is whether a report could be read and composed from.
+ */
+async function composedBodyFor(
+  record: IterationRecord,
+  composing: PublishBodyComposing | null,
+): Promise<ComposedBodyOutcome | null> {
+  if (composing === null) {
+    return null;
+  }
+  const language = planField(record, "material_language");
+  return await composing(language === "" ? null : language);
+}
+
+/**
+ * The gate rationale of one lap, which is the report itself: continuo's
+ * word-for-word copy of the worker's last words (`./question.ts`). Null where
+ * the lap records no gate, or the gate does not read as answered.
+ */
+async function lapReport(
+  continuo: VerifiedContinuo,
+  record: IterationRecord,
+): Promise<string | null> {
+  if (record.gateId === null) {
+    return null;
+  }
+  const observed = await showGate(continuo, {
+    db: planField(record, "db"),
+    gateId: record.gateId,
+  });
+  return observed.kind === "answered" ? observed.payload.rationale : null;
+}
+
+/**
+ * The page's preview: this lap's body, composed once and recorded (rondo#290).
+ *
+ * **The composing is here and not in the press**, and the row is what joins
+ * them: D-0059 section 5a's Q1 makes this screen a precondition of the press, so
+ * the run that draws the screen is the run there is, and the press publishes what
+ * it recorded. continuo is started only where a body has to be composed -- a lap
+ * whose row is already written is drawn without spawning anything.
+ */
+function pagePublishBody(
+  environment: Readonly<Record<string, string | undefined>>,
+  record: Pick<AdvisoryRecord, "recordPublishBody" | "publishBodyFor">,
+  lap: IterationRecord,
+): PublishBodyComposing | null {
+  if (lap.gateId === null) {
+    return null;
+  }
+  const subject = { iterationId: lap.id, gateId: lap.gateId };
+  return async (reportLanguage) =>
+    await publishBodyOnce(
+      {
+        record,
+        report: async () => {
+          const startup = await startContinuo(environment);
+          return startup.kind === "refused" ? null : await lapReport(startup.continuo, lap);
+        },
+        runDrafter: async (document) => await runDrafter(drafterRow(), document),
+        drafter: drafterRow(),
+        mintId: () => newDraftId("publish-body"),
+        now: Date.now,
+      },
+      subject,
+      reportLanguage,
+    );
+}
+
+/**
+ * The page's press: the body the preview recorded, and nothing composed
+ * (rondo#290). Null for a lap that records no gate, which has no row to find.
+ */
+function pressedPublishBody(
+  record: Pick<AdvisoryRecord, "publishBodyFor">,
+  lap: IterationRecord,
+): PublishBodyComposing | null {
+  if (lap.gateId === null) {
+    return null;
+  }
+  const subject = { iterationId: lap.id, gateId: lap.gateId };
+  return async () =>
+    (await recordedPublishBody(record, subject)) ?? {
+      kind: "unavailable",
+      // A press before anything composed one. The screen that drew this lap
+      // composed and recorded a body, so the two agree only where that run came
+      // to nothing at all -- and then both say so and neither quotes the report.
+      reason: "no English account of this lap's report is recorded for it",
+    };
+}
+
 export async function publishPlanFor(
   record: IterationRecord,
   asked: PublishAsked,
@@ -8448,8 +8517,22 @@ export async function publishingForPage(
   asked: PublishAsked,
   record: IterationRecord,
   thread: Pick<AdvisoryRecord, "threadMessages" | "scopesFor" | "readProposal"> | null = null,
+  /**
+   * Where the body's English is composed and recorded (rondo#290): the one run
+   * of it, because this is the screen the press is pressed from. Null composes
+   * nothing, which is what a caller that only wants the plan's other fields
+   * passes.
+   */
+  body: Pick<AdvisoryRecord, "recordPublishBody" | "publishBodyFor"> | null = null,
 ): Promise<PublishShown> {
-  const planned = await publishPlanFor(record, asked, environment, store, thread);
+  const planned = await publishPlanFor(
+    record,
+    asked,
+    environment,
+    store,
+    thread,
+    body === null ? null : pagePublishBody(environment, body, record),
+  );
   if (planned.kind === "refused") {
     return { kind: "refused", block: planned.block };
   }
@@ -8646,12 +8729,18 @@ async function publishPage(
     };
   }
   const record = found.record;
+  const advisory = openAdvisoryRecord(storePath);
   const planned = await publishPlanFor(
     record,
     asked,
     environment,
     store,
-    openAdvisoryRecord(storePath),
+    advisory,
+    // **Read, never composed** (rondo#290): the body the screen this press came
+    // from recorded. A publish under a scope (`publishUnderScope`) reaches this
+    // with no screen behind it, and reads the same row -- one rondo composed for
+    // a person who looked at the page, or none.
+    pressedPublishBody(advisory, record),
   );
   if (planned.kind === "refused") {
     const block = planned.block;
@@ -8905,24 +8994,18 @@ async function commandPublish(
     // 4, rondo#290). Both legs are reachable from here and from nowhere inside
     // that function: continuo is this command's own, and the drafter is the one
     // `./forge.ts` runs for every other composed draft.
-    {
-      report: async () => {
-        if (record.gateId === null) {
-          return null;
-        }
-        const observed = await showGate(continuo, {
-          db: planField(record, "db"),
-          gateId: record.gateId,
-        });
-        // The gate's rationale is continuo's word-for-word copy of the worker's
-        // last words (`./question.ts`), which is the report itself.
-        return observed.kind === "answered" ? observed.payload.rationale : null;
-      },
-      compose: async (material) =>
-        await composePublishBody(
-          { runDrafter: async (document) => await runDrafter(drafterRow(), document) },
-          material,
-        ),
+    async (reportLanguage) => {
+      const report = await lapReport(continuo, record);
+      return report === null
+        ? {
+            kind: "unavailable",
+            reason:
+              "the gate this lap reported at would not read, so there was no report to compose from",
+          }
+        : await composePublishBody(
+            { runDrafter: async (document) => await runDrafter(drafterRow(), document) },
+            { report, reportLanguage },
+          );
     },
   );
   if (planned.kind === "refused") {

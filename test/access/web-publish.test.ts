@@ -23,7 +23,7 @@ import { inspectLapWork } from "../../src/access/forge.js";
 import type {} from "../../src/access/inbox.js";
 import { resultOf } from "../../src/access/page-logic/result.js";
 import { threadsOf } from "../../src/access/page-logic/threads.js";
-import { COMPOSED_SECTIONS, type PublishBodyMaterial } from "../../src/access/publish-body.js";
+import { COMPOSED_SECTIONS } from "../../src/access/publish-body.js";
 import { evidenceOf, READING_REMOTE } from "../../src/access/review.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import { CLI_PATH_ENV } from "../../src/continuo/invoker.js";
@@ -1020,25 +1020,28 @@ test(
     // still reports in whatever language the request was written in.
     expect(record.record.plan["material_language"] ?? null).toBe(null);
 
-    const asked: PublishBodyMaterial[] = [];
+    const asked: (string | null)[] = [];
     const composed = {
       summary: "The composing step reads the lap's report and writes this body's English.",
       grounds: "D-0079 section 4 requires English here and nowhere earlier.",
       verification: "The repository's own verification was run and passed.",
     };
-    const planned = await publishPlanFor(record.record, world.asked, {}, world.store, null, {
-      report: async () => "報告: 組み立ての処理を書き、verify を通しました。",
-      compose: async (material) => {
-        asked.push(material);
+    const planned = await publishPlanFor(
+      record.record,
+      world.asked,
+      {},
+      world.store,
+      null,
+      async (reportLanguage) => {
+        asked.push(reportLanguage);
         return { kind: "composed", ...composed };
       },
-    });
+    );
     expect(planned.kind).toBe("ready");
     if (planned.kind !== "ready") return;
 
-    // Composed once, from the report, with no language claimed for it.
-    expect(asked.map((one) => one.reportLanguage)).toEqual([null]);
-    expect(asked[0]?.report).toContain("verify");
+    // Composed once, with no language claimed for the report it read.
+    expect(asked).toEqual([null]);
 
     const body = planned.plan.pullRequest.body;
     const headings = COMPOSED_SECTIONS.map((one) => body.indexOf(`## ${one.heading}`));
@@ -1047,17 +1050,19 @@ test(
     for (const section of Object.values(composed)) {
       expect(body).toContain(section);
     }
-    // The report's own words stay on the gate rondo read them from.
-    expect(body).not.toContain("組み立ての処理");
-
     // **A gate that would not read is a body without an account, not a body
     // without sections**: the three headings stand and each says what it has.
-    const unread = await publishPlanFor(record.record, world.asked, {}, world.store, null, {
-      report: async () => null,
-      compose: async () => {
-        throw new Error("nothing to compose from");
-      },
-    });
+    const unread = await publishPlanFor(
+      record.record,
+      world.asked,
+      {},
+      world.store,
+      null,
+      async () => ({
+        kind: "unavailable",
+        reason: "there was no report to compose from",
+      }),
+    );
     expect(unread.kind).toBe("ready");
     if (unread.kind !== "ready") return;
     const without = unread.plan.pullRequest.body;

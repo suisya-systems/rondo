@@ -18915,6 +18915,21 @@ put to the human gate, and its answer". Refs `D-0053`,
 > by both, which is a row and is not taken here; the residual below stays open for it, and a body
 > composed from nothing still carries its three sections.
 
+> **Annotation (2026-09-28, from rondo#290, second part).** Added after this entry was accepted, and
+> additive. **Section 4 is now built for the page's `publish` too, as a row**, which closes the
+> residual the annotation above left open. The row is a `publish_body` proposal, named
+> `rondo/publish-body/<version>/<model-id>` and **never approvable**: what a person answers is the
+> publish itself, so the kind is absent from `APPROVABLE_PROPOSAL_KINDS` for `revise_draft`'s reason.
+> **The preview writes it and the press only reads it.** D-0059 section 5a's Q1 already makes the
+> screen a precondition of the press, so the run that draws the screen is the one composing run there
+> is; the press reads the row, spawns nothing and spends nothing, and the body therefore stays inside
+> the digest it compares -- the body was **not** taken out of it, which would have let the one part of
+> a pull request a person can only check by reading move under a press that matched everything else.
+> One row per lap per gate: a second pass is `covered` and reads what the first wrote, and an outcome
+> that could not be composed is recorded as such, so a missing body is missing on both surfaces
+> rather than on one. A lap whose plan names no language composes nothing and records nothing, and
+> the terminal's `publish` is unchanged: it composes per publish, as the annotation above describes.
+
 **This entry decides and builds.** The building change is the pull request that carries it:
 `src/access/wording.ts`, `src/access/model-draft.ts` and `src/continuo/invoker.ts`, with their tests.
 The rule on where English is written (section 4) is decided here and built elsewhere.

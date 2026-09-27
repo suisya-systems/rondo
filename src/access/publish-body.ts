@@ -40,6 +40,9 @@
  * over strings.
  */
 
+import type { DrafterRow } from "../continuo/roles.js";
+import type { JsonRecord, ProposalDraft } from "../store/records.js";
+import type { AdvisoryRecord } from "../store/sqlite.js";
 import { sectionFramer } from "./framing.js";
 import { answerJson, DRAFTER_INPUT_BOUND_BYTES, type DrafterRun } from "./model-draft/judgement.js";
 
@@ -298,4 +301,169 @@ export async function composePublishBody(
       reason: `the drafter could not be run: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
+}
+
+/**
+ * The version of the composing instructions above (`D-0079` section 4, as
+ * `D-0077` rule 1.2 versions the revise drafter's): a changed
+ * {@link INSTRUCTIONS} or a changed {@link COMPOSED_SECTIONS} is a new version,
+ * a changed model a new table entry.
+ */
+const PUBLISH_BODY_INSTRUCTIONS_VERSION = 1;
+
+/**
+ * What every row a composing writes is named under.
+ *
+ * **Outside `MODEL_DRAFTER_PREFIX` and outside the revise drafter's**, for
+ * `REVISE_DRAFTER_PREFIX`'s reason: the scope screen finds a drafter's scope by
+ * that prefix and the gate view finds a revise draft by this one, and a
+ * composed body must never read as either.
+ */
+export const PUBLISH_BODY_DRAFTER_PREFIX = "rondo/publish-body/";
+
+/** The row name a composing writes under: `rondo/publish-body/1/<model-id>`. */
+export function publishBodyDrafterName(row: DrafterRow): string {
+  return `${PUBLISH_BODY_DRAFTER_PREFIX}${String(PUBLISH_BODY_INSTRUCTIONS_VERSION)}/${row.model}`;
+}
+
+/** The stored structure: the sections composed, or why there are none. */
+export function publishBodyPayload(outcome: ComposedBodyOutcome): JsonRecord {
+  return outcome.kind === "composed"
+    ? {
+        kind: "composed",
+        summary: outcome.summary,
+        grounds: outcome.grounds,
+        verification: outcome.verification,
+      }
+    : { kind: "unavailable", reason: outcome.reason };
+}
+
+/**
+ * One recorded row read back, and **total over whatever the column holds**: a
+ * payload this reader cannot make sense of is an unavailable body naming that,
+ * because the alternative is a screen that draws nothing where a body goes
+ * while a press composes one of its own.
+ */
+export function recordedBodyOf(payload: JsonRecord): ComposedBodyOutcome {
+  if (payload["kind"] === "unavailable") {
+    const reason = payload["reason"];
+    return {
+      kind: "unavailable",
+      reason:
+        typeof reason === "string" && reason !== "" ? reason : "the recorded row says only that",
+    };
+  }
+  const sections = COMPOSED_SECTIONS.map((one) => payload[one.key]);
+  if (!sections.every((value) => typeof value === "string" && value.trim() !== "")) {
+    return { kind: "unavailable", reason: "the recorded body does not hold all three sections" };
+  }
+  return {
+    kind: "composed",
+    summary: sections[0] as string,
+    grounds: sections[1] as string,
+    verification: sections[2] as string,
+  };
+}
+
+/** Which lap's body this is: the lap, and the gate it reported at. */
+export interface PublishBodySubject {
+  readonly iterationId: string;
+  readonly gateId: string;
+}
+
+/** What composing once reaches, each a value a test can replace. */
+export interface RecordedBodyPorts extends PublishBodyPorts {
+  readonly record: Pick<AdvisoryRecord, "recordPublishBody" | "publishBodyFor">;
+  /** The lap's report, as the worker wrote it, or null where it would not read. */
+  readonly report: () => Promise<string | null>;
+  readonly drafter: DrafterRow;
+  readonly mintId: () => string;
+  readonly now: () => number;
+}
+
+/**
+ * The body recorded for one lap, or null where none is (rondo#290).
+ *
+ * **The read half of "composed once", and the whole of what a press does.** A
+ * publish is pressed from a screen that showed this plan, and the body is inside
+ * the digest the press compares against it; a press that composed one of its own
+ * would put a second model answer where the screen's was and refuse itself. So
+ * the press reads and never composes -- it spawns nothing and spends nothing --
+ * and a lap with no row publishes the body it published before this existed.
+ */
+export async function recordedPublishBody(
+  record: Pick<AdvisoryRecord, "publishBodyFor">,
+  subject: PublishBodySubject,
+): Promise<ComposedBodyOutcome | null> {
+  const found = await record.publishBodyFor(subject.iterationId, subject.gateId);
+  return found === null ? null : recordedBodyOf(found.payload);
+}
+
+/**
+ * The body of one lap, composed once and recorded (rondo#290, `D-0079` section
+ * 4): the recorded row where there is one, and otherwise one composing run,
+ * written as a row and read back.
+ *
+ * **Written whatever it came to**, the way a revise draft is (`D-0077` rule
+ * 5.1): a run that could not compose records the reason, so the screen and the
+ * press agree about a body that is missing exactly as they agree about one that
+ * is there. Nothing is composed twice for one lap: a row another pass wrote
+ * first is `covered`, and what is read back is that row.
+ *
+ * **Never throws**, for {@link composePublishBody}'s reason: a body is not worth
+ * refusing an approved lap over, so a store that will not take the row answers
+ * with the run's own outcome and the next pass writes it.
+ */
+export async function publishBodyOnce(
+  ports: RecordedBodyPorts,
+  subject: PublishBodySubject,
+  reportLanguage: string | null,
+): Promise<ComposedBodyOutcome> {
+  const already = await recordedPublishBody(ports.record, subject);
+  if (already !== null) {
+    return already;
+  }
+  const report = await ports.report();
+  const outcome =
+    report === null
+      ? ({
+          kind: "unavailable",
+          reason:
+            "the gate this lap reported at would not read, so there was no report to compose from",
+        } as const)
+      : await composePublishBody(ports, { report, reportLanguage });
+  const written = await ports.record.recordPublishBody(
+    {
+      proposalId: ports.mintId(),
+      kind: "publish_body",
+      drafter: publishBodyDrafterName(ports.drafter),
+      payload: publishBodyPayload(outcome),
+      // The gate is what the row is found by, beside the language the lap asked
+      // its worker for: what was composed from, without the report's own bytes.
+      // The empty string is "none was asked for", which is a fact about the ask
+      // and never a condition on composing (rondo#290).
+      snapshot: { gate_id: subject.gateId, report_language: reportLanguage ?? "" },
+      derivation: null,
+      iterationId: subject.iterationId,
+      supersedesIterationId: null,
+      supersedesProposalId: null,
+      predecessorPlanDigest: null,
+      predecessorContractDigest: null,
+      agentTypeDigest: null,
+      configDigest: null,
+      contractDigest: null,
+      continuoRevision: null,
+      cadenzaRevision: null,
+      elevatedFromMessageId: null,
+      elevatedByActorId: null,
+      createdAtMs: ports.now(),
+    } satisfies ProposalDraft,
+    subject.gateId,
+  );
+  if (written.kind === "covered") {
+    // Another pass composed it first: that row is the body, and this run's
+    // answer is thrown away rather than shown beside it.
+    return (await recordedPublishBody(ports.record, subject)) ?? outcome;
+  }
+  return outcome;
 }

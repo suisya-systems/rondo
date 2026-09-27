@@ -634,7 +634,9 @@ export function newDraftId(
     | "forge"
     | "triage"
     | "goal"
-    | "not-now",
+    | "not-now"
+    // D-0079 section 4 (rondo#290): one composing of a pull request's English body.
+    | "publish-body",
 ): string {
   return `${kind}-${randomUUID()}`;
 }
