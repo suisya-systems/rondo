@@ -18,7 +18,13 @@
  * and the draft lands as a row the page reads on its next poll.
  */
 
-import type { ProposalDraft, ThreadMessageDraft } from "../store/records.js";
+import {
+  asksForWork,
+  opensFlowRequest,
+  type ProposalDraft,
+  requestsGoal,
+  type ThreadMessageDraft,
+} from "../store/records.js";
 import type { AdvisoryRecord } from "../store/sqlite.js";
 import { hostFailure } from "./host-failure.js";
 import type { DrafterPorts, DrafterRunResult } from "./model-draft/host.js";
@@ -39,7 +45,12 @@ export interface DrafterHostPorts extends DrafterPorts {
   readonly record: DrafterPorts["record"] &
     Pick<
       AdvisoryRecord,
-      "recordDraft" | "draftedMessageIds" | "claimDraft" | "releaseDraft" | "messagesBeforeDrafter"
+      | "recordDraft"
+      | "draftedMessageIds"
+      | "claimDraft"
+      | "releaseDraft"
+      | "messagesBeforeDrafter"
+      | "scopesFor"
     >;
   /** A fresh row id with a readable prefix, as the page mints its own. */
   readonly mintId: (kind: "draft" | "drafted-scope" | "drafter" | "drafter-host") => string;
@@ -215,13 +226,15 @@ async function scan(
   const reading = new Set<string>();
   const past = new Set<string>();
   for (const m of read.messages) {
-    if (m.authorKind !== "operator") {
+    // The flow host's opener is due as a person's message is (rondo#469): a
+    // goal scope a person approved stands behind it (D-0128 rule 5).
+    if (!asksForWork(m)) {
       continue;
     }
     const root = rootOf(m.messageId);
-    // A root that is not an operator's opening message opens no request.
+    // A root that is not an operator's opening message, or the flow's, opens no request.
     const opening = read.messages.find((one) => one.messageId === root);
-    if (opening === undefined || opening.authorKind !== "operator" || opening.inReplyTo !== null) {
+    if (opening === undefined || !asksForWork(opening) || opening.inReplyTo !== null) {
       continue;
     }
     operatorIds.set(root, [...(operatorIds.get(root) ?? []), m.messageId]);
@@ -266,9 +279,7 @@ async function write(
     );
     return "held";
   }
-  const operatorIds = material.thread
-    .filter((m) => m.authorKind === "operator")
-    .map((m) => m.messageId);
+  const operatorIds = material.thread.filter(asksForWork).map((m) => m.messageId);
   const latestOperatorMessageId = operatorIds[operatorIds.length - 1] as string;
   const nowMs = ports.now();
   const cost = result.costUsd === null ? "cost not reported" : `$${result.costUsd.toFixed(4)}`;
@@ -318,6 +329,16 @@ async function write(
     return await unavailable(result.outcome.reason);
   }
   const drafted = result.outcome;
+  // **A request a goal scope covers is drafted a split and no scope of its own**
+  // (rondo#469): the goal scope is its approval, and D-0127's tick starts it.
+  const opener = material.thread.find((m) => m.messageId === material.requestMessageId);
+  const underGoal =
+    opener !== undefined &&
+    opensFlowRequest(opener) &&
+    (await ports.record.scopesFor(material.requestMessageId)).some(
+      (scope) => requestsGoal(scope.payload.requests) !== null,
+    );
+  const draftedScope = underGoal ? null : drafted.scope;
   const proposalId = ports.mintId("draft");
   const onProposal = { form: "proposal", proposalId };
   const proposal: ProposalDraft = {
@@ -336,7 +357,7 @@ async function write(
       cost_usd: result.costUsd,
       // Which stated value won each narrowed field, and on whose words
       // (D-0071 rule 4.1): what the scope screen cites beside that field.
-      narrowed: (drafted.scope?.narrowed ?? []).map((n) => ({
+      narrowed: (draftedScope?.narrowed ?? []).map((n) => ({
         field: n.field,
         value: n.value,
         message_id: n.basisMessageId,
@@ -373,17 +394,17 @@ async function write(
     drafterPrefix: DRAFTER_PREFIX,
     proposal,
     scope:
-      drafted.scope === null
+      draftedScope === null
         ? null
         : {
             scopeId: ports.mintId("drafted-scope"),
-            payload: drafted.scope.payload,
+            payload: draftedScope.payload,
             supersedesScopeId: null,
             authorKind: "drafter",
             authorId: result.drafter,
-            bases: [...drafted.scope.bases, onProposal],
+            bases: [...draftedScope.bases, onProposal],
             createdAtMs: nowMs,
-            agentTypeRecords: drafted.scope.agentTypeRecords.map((r) => ({
+            agentTypeRecords: draftedScope.agentTypeRecords.map((r) => ({
               agentTypeDigest: r.agentTypeDigest,
               agentTypeInput: r.agentTypeInput,
               planDigest: r.planDigest,
@@ -406,7 +427,7 @@ async function write(
   }
   ports.log(
     `drafter  ${material.requestMessageId}: ${drafted.act} (${cost})` +
-      `${drafted.scope === null ? "" : ", with a drafted scope"}`,
+      `${draftedScope === null ? (underGoal ? ", under its goal scope" : "") : ", with a drafted scope"}`,
   );
   return "written";
 }

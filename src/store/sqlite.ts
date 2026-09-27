@@ -71,6 +71,7 @@ import {
   FINDING_SEVERITIES,
   type FindingBasis,
   type FindingSeverity,
+  FLOW_AUTHOR_PREFIX,
   type GateAnswer,
   type GoalDraft,
   type GradedFinding,
@@ -1527,7 +1528,9 @@ CREATE TABLE IF NOT EXISTS scope_decision (
 -- (rule 3.2), merge_default_branch, a merge on green claimed before the
 -- forge is asked, once per iteration (D-0126), and gate_answer, the
 -- organisation's answer claimed before the gate is walked, once per gate
--- (D-0125 rule 5). **No CHECK spells the union**: proposal.kind's precedent, so that
+-- (D-0125 rule 5), and triage_reading, a triage proposal whose ranking the flow
+-- host injected from, claimed before the injection so its model spend counts
+-- toward the goal scope's cost (rondo#469). **No CHECK spells the union**: proposal.kind's precedent, so that
 -- the entries that make push_branch and open_pull_request writable change a
 -- constant and not a table.
 --
@@ -3411,6 +3414,12 @@ export interface AdvisoryRecord {
    */
   draftedMessageIds(drafterPrefix: string): Promise<ReadonlySet<string>>;
   /**
+   * The newest split a drafter named with `drafterPrefix` wrote for
+   * `requestMessageId` (its snapshot's material names the request), or null
+   * (rondo#469: a request a goal scope covers has no drafted scope to find it by).
+   */
+  latestSplitFor(requestMessageId: string, drafterPrefix: string): Promise<string | null>;
+  /**
    * Take the one drafter run of a thread (D-0071 rule 3.3) until `untilMs`,
    * or learn that another holder has it. True when `holder` now holds it.
    */
@@ -3500,11 +3509,13 @@ export interface AdvisoryRecord {
    * as `D-0042` -- so a second attempt is refused: a merge on green
    * (`merge_default_branch`, D-0126 rule 3, subject the iteration id) or the
    * organisation's gate answer (`gate_answer`, D-0125 rule 5, subject the gate
-   * id). **One per subject, whichever approval claims it**: the key alone
-   * would let a successor approval claim the same subject again.
+   * id), or a triage reading the flow host injects from (`triage_reading`,
+   * rondo#469, subject the triage proposal id). **One per subject, whichever
+   * approval claims it**: the key alone would let a successor approval claim
+   * the same subject again.
    */
   claimScopedAct(claim: {
-    readonly actKind: "merge_default_branch" | "gate_answer";
+    readonly actKind: "merge_default_branch" | "gate_answer" | "triage_reading";
     readonly scopeDecisionId: string;
     readonly subjectId: string;
     readonly nowMs: number;
@@ -4646,6 +4657,18 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       return coveredMessageIds(connection, drafterPrefix);
     },
 
+    async latestSplitFor(requestMessageId: string, drafterPrefix: string) {
+      const row = connection
+        .prepare(
+          "SELECT proposal_id FROM proposal WHERE kind = 'split' " +
+            "AND substr(drafter, 1, length(?)) = ? AND json_extract(CASE WHEN " +
+            "json_valid(snapshot) THEN snapshot ELSE '{}' END, '$.material.requestMessageId') = ? " +
+            "ORDER BY created_at_ms DESC, rowid DESC LIMIT 1",
+        )
+        .get(drafterPrefix, drafterPrefix, requestMessageId) as SqlRow | undefined;
+      return row === undefined ? null : String(row["proposal_id"]);
+    },
+
     async claimDraft(
       requestMessageId: string,
       holder: string,
@@ -5370,7 +5393,8 @@ function coveredMessageIds(connection: DatabaseSync, drafterPrefix: string): Set
 
 /**
  * Every operator message in a request's thread -- the request and every reply
- * under it, through any voice (D-0071 rule 7.2).
+ * under it, through any voice (D-0071 rule 7.2) -- and the flow host's opener,
+ * which asks for the work as a person's message does (rondo#469, `asksForWork`).
  */
 function threadOperatorMessages(connection: DatabaseSync, requestMessageId: string): string[] {
   return (
@@ -5379,9 +5403,10 @@ function threadOperatorMessages(connection: DatabaseSync, requestMessageId: stri
         "WITH RECURSIVE thread(id) AS (SELECT ? UNION " +
           "SELECT m.message_id FROM conversation_message m JOIN thread t ON m.in_reply_to = t.id) " +
           "SELECT m.message_id FROM conversation_message m JOIN thread t ON m.message_id = t.id " +
-          "WHERE m.author_kind = 'operator'",
+          "WHERE m.author_kind = 'operator' OR (m.author_kind = 'drafter' AND " +
+          "m.in_reply_to IS NULL AND substr(m.author_id, 1, length(?)) = ?)",
       )
-      .all(requestMessageId) as SqlRow[]
+      .all(requestMessageId, FLOW_AUTHOR_PREFIX, FLOW_AUTHOR_PREFIX) as SqlRow[]
   ).map((row) => String(row["message_id"]));
 }
 
@@ -5881,6 +5906,7 @@ function lapBudgetCapFor(
       basis.runningLaps += 1;
     }
   }
+  basis.readCostUsd += triageCostUnder(connection, decisionId);
   return lapBudgetCap(budgets, basis, maxOccupying);
 }
 
@@ -5895,9 +5921,26 @@ function spentUnder(connection: DatabaseSync, scopeDecisionId: string): ScopeSpe
     .get(scopeDecisionId) as SqlRow;
   return Object.freeze({
     admissions: Number(row["admissions"]),
-    readCostUsd: Number(row["read_cost"]),
+    readCostUsd: Number(row["read_cost"]) + triageCostUnder(connection, scopeDecisionId),
     unreadLaps: Number(row["unread"]),
   });
+}
+
+/**
+ * What the triage readings claimed under an approval cost (rondo#469): each
+ * reading's `cost_usd`, as its snapshot recorded it. A reading that reported
+ * no cost adds nothing, as a reading of it would say.
+ */
+function triageCostUnder(connection: DatabaseSync, scopeDecisionId: string): number {
+  const row = connection
+    .prepare(
+      "SELECT COALESCE(SUM(json_extract(CASE WHEN json_valid(p.snapshot) THEN p.snapshot " +
+        "ELSE '{}' END, '$.cost_usd')), 0) AS cost FROM scope_consumption c " +
+        "JOIN proposal p ON p.proposal_id = c.subject_id " +
+        "WHERE c.scope_decision_id = ? AND c.act_kind = 'triage_reading'",
+    )
+    .get(scopeDecisionId) as SqlRow;
+  return Number(row["cost"]);
 }
 
 /**

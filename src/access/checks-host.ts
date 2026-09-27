@@ -167,6 +167,8 @@ export interface ChecksHostPorts {
    * Absent, nothing is merged here.
    */
   readonly mergeOnGreen?: (iterationId: string, head: string) => Promise<string | null>;
+  /** Called after a merge made outside rondo is closed out: the flow host's kick (rondo#469). */
+  readonly closedOut?: () => void;
   /** The forge host, as `publish` reads it (`GH_HOST`), or null for `gh`'s own. */
   readonly host: string | null;
   readonly now: () => number;
@@ -429,6 +431,9 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
     // D-0119: a merge is closed out; a close without one keeps everything.
     const closedOut =
       ended.kind === "mergedOutside" ? await closeOutMerged(ports, iterationId) : null;
+    if (ended.kind === "mergedOutside") {
+      ports.closedOut?.();
+    }
     return {
       line: [line, closedOut].filter((one) => one !== null).join("\n") || null,
       halt: false,

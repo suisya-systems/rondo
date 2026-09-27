@@ -25108,6 +25108,28 @@ the newest goal: an edit would widen an approval nobody re-read.
 - **Goal scopes paused more often than they run.** Then one approval per goal is still too coarse,
   and the pause is the per-request approval with more steps.
 
+> **Annotation (2026-09-27, from rondo#469).** Added after this entry was accepted, and additive:
+> rule 5's flow host is built (`src/access/flow-host.ts`). It runs in the resident host on the
+> one-minute tick, when a lap it started settles and when a merge is closed out, and only where
+> `D-0127`'s tick runs. Per repository it takes the newest approval in force over a goal of it, and
+> asks `pickNext`; on `inject` it writes the opener under the pick's id with author kind `drafter`
+> and author `rondo/flow/1` -- rondo's voice, never the person's -- body the ranked request followed
+> by "rondo started this because it goes against clause N of the goal", and bases the triage
+> proposal and the goal (no basis form locates an issue, so the issue is named in the body). **The
+> triage reading's model spend is the approval's**: the flow host claims it as a `scope_consumption`
+> row of a new act kind, `triage_reading` (subject the triage proposal id, one per reading whichever
+> approval claims it), before it writes the opener, and the scope's spend adds that reading's
+> `cost_usd` to what was read, for `reserve()`'s cost test and the lap's cap alike. The split
+> drafter treats the flow's opener as it treats a person's message (due, covered, stale) and, where
+> a goal scope covers it, drafts the split and no scope; `approvedSplits` gives the tick the newest
+> split drafted for each opener a goal scope in force covers, so the last bullet of *What it costs*
+> no longer holds. The flow host starts nothing. A stop -- the scope past its expiry, laps or cost, a
+> newer goal, two injected requests ended `failed` or `abandoned`, nothing left it may start -- is
+> one ask in the thread of the flow's latest request (widen, a new goal scope, or stop), named by
+> the approval, the reason and that request, and said on the terminal where there is no request
+> yet. **A pause is not asked about**: `laps: 0` is already the person's answer. Nothing above is
+> edited.
+
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 
 **Status:** accepted (2026-09-27, rondo#452). The issue records `D-0098`'s gate (2026-09-22, point

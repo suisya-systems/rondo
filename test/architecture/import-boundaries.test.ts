@@ -1289,6 +1289,9 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/drafted-view.ts": [SPLITTING],
   "src/access/drafter-host.ts": [SPLITTING],
   "src/access/triage-host.ts": [WORK_DISCOVERY],
+  // D-0128 rule 5, rondo#469: the goal's next request, asked for under a goal
+  // scope; it writes the opener and starts nothing (D-0067 option A: no coordinator).
+  "src/access/flow-host.ts": [WORK_DISCOVERY],
   "src/access/forge-preflight.ts": ["Publishing"],
   "src/access/forge.ts": ["Publishing"],
   "src/access/framing.ts": [SPLITTING, "Reviewer"],
