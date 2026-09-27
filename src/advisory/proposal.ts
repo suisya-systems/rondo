@@ -1169,6 +1169,8 @@ function readBasis(at: unknown, what: string): Basis {
       return { form, proposalId: text(row, "proposalId", `${what}'s basis`) };
     case "setup":
       return { form, setupId: text(row, "setupId", `${what}'s basis`) };
+    case "goal":
+      return { form, goalId: text(row, "goalId", `${what}'s basis`) };
     default:
       throw new PayloadDefect(
         `${what}'s basis is of form '${form}', which is not one of ${BASIS_FORMS.join(", ")}. ` +
