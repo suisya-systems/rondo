@@ -159,6 +159,7 @@ export async function draftedStartReadiness(
     return { kind: verdict.kind, test: verdict.test, reason: verdict.reason };
   }
   // ponytail: one open line per request until rondo#452 draws several; that change deletes this.
+  // A readiness test, not a lock: a press racing the tick before its row is reserved can pass it.
   const sibling = (await ports.store.readLive()).find(
     (outcome) => outcome.kind === "read" && outcome.record.requestMessageId === requestMessageId,
   );

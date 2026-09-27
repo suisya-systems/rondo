@@ -24496,7 +24496,9 @@ At rondo `7a038e1` and continuo `f2fb450` on **2026-09-27**:
   `continuo D-1104`'s holder-identity half: the outbox delivery lease is per run (point 5), not
   merely a column. It also carries `D-1105`'s per-run state root. So continuo no longer refuses a
   second concurrent lap, and rule 18's fence keys are per run.
-- **The smoke run** of two laps at once against this continuo and one store is recorded in
+- **The smoke run: two laps at once against this continuo and one store, in two repositories.**
+  Both performed at the same time (`in flight (2)`) and both reached their gate, and continuo
+  refused neither of them. It is recorded in
   [`docs/operations/parallel-two-smoke.md`](docs/operations/parallel-two-smoke.md).
 
 ### Decision
@@ -24556,7 +24558,11 @@ owner decided that approving the scope is the press.
    rondo#284.
 5. **Two parts of one request are not started together until rondo#452 lands.** A part whose
    request already has an open lap reads `sibling`. The page says why, and the press is refused.
-   The guard is in `src/access/drafted-start.ts`, and rondo#452 removes it.
+   The guard is in `src/access/drafted-start.ts`, and rondo#452 removes it. **It is a readiness
+   test, not a lock.** The tick is safe, because it starts parts one after another and each start
+   answers once its row exists. But a person pressing another part of the request while the tick's
+   start has not yet reserved its row can slip past it. The page then has two lines of one request
+   to show. That is the thing rondo#452 builds, and nothing is lost.
 6. **The tick's start answers once the lap's row is reserved** (`answerOnceReserved`, as the
    press's does since `D-0109`). One pass can start two parts and still read landings while they
    run. A start that ends badly after that is an ask in the request's thread.
