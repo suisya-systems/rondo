@@ -190,7 +190,7 @@ function catalogDisagreement(plan: AdmittedPlan, project: ResolvedProject): stri
  * A tier name is a cadenza neutral name and already crosses this boundary on
  * `ClassificationRecord.modelTier`; no model id is added here (D-0014 rule 1).
  */
-export const PRICED_MODEL_TIERS = Object.freeze(["standard"] as const);
+export const PRICED_MODEL_TIERS = Object.freeze(["standard", "mechanical"] as const);
 
 /**
  * The third thing rondo checks about its own inputs: that the agent type names

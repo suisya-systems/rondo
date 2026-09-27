@@ -465,6 +465,54 @@ export function budgetRefusal(
   return null;
 }
 
+/**
+ * The room the scope's budget leaves one admitted lap that is about to run
+ * (D-0121): `cost_usd`, less what its laps were read to cost, less a reserve for
+ * every *other* unread lap. `spent` is read after the lap's own admission, so
+ * the lap is one of `spent.unreadLaps` and its own reserve is not taken off:
+ * the cap is what it may spend in place of that reserve.
+ *
+ * It can be at or below zero -- a lap running beside this one was read to cost
+ * more than its reserve after this one was admitted -- and then nothing is left
+ * for this lap to spend.
+ */
+export function lapBudgetCap(budgets: ScopePayload["budgets"], spent: ScopeSpent): number {
+  const others = Math.max(0, spent.unreadLaps - 1);
+  return budgets.cost_usd - spent.readCostUsd - others * budgets.cost_reserve_usd;
+}
+
+/** What {@link lapBudgetCapOf} reads: the approval a lap was admitted under, and its spend. */
+export type LapBudgetRecord = Pick<
+  AdvisoryRecord,
+  "scopeDecisionAdmitting" | "readScopeDecision" | "readScope" | "scopeSpent"
+>;
+
+/**
+ * {@link lapBudgetCap} for one admitted lap, read from the store, or null where
+ * the lap was admitted under no approval or the approval will not read. A null
+ * sends the lap with no cap, as every lap was sent before D-0121: its admission
+ * was already held to the budget, and a cap rondo cannot read is not one to
+ * invent.
+ */
+export async function lapBudgetCapOf(
+  record: LapBudgetRecord,
+  iterationId: string,
+): Promise<number | null> {
+  const decisionId = await record.scopeDecisionAdmitting(iterationId);
+  if (decisionId === null) {
+    return null;
+  }
+  const decision = await record.readScopeDecision(decisionId);
+  if (decision.kind !== "read") {
+    return null;
+  }
+  const scope = await record.readScope(decision.decision.scopeId);
+  if (scope.kind !== "read") {
+    return null;
+  }
+  return lapBudgetCap(scope.scope.payload.budgets, await record.scopeSpent(decisionId));
+}
+
 /** The approval a lap's next act spends: none, its chain's tip, or two tips and so none (D-0074 section 2). */
 export type LapApproval =
   | { readonly kind: "none" }

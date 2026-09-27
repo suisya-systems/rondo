@@ -42,6 +42,7 @@ const governance = (over: Partial<Governance> = {}): Governance => ({
   askedAtMs: 1_000,
   allowance: { spentUsd: 5, heldUsd: 0, heldTries: 0, heldInProgress: false, approvedUsd: 50 },
   byTry: [{ costUsd: 5, running: false }],
+  atBudgetCap: null,
   tries: { at: 1, of: 4 },
   chain: [
     { step: "answer", state: "waiting" },
@@ -99,6 +100,13 @@ test("what is held for the try in progress is said beside the spend, and is not 
   });
   expect(html).toContain("$0.79 of $25.00, with $2.50 held for the try in progress");
   expect(html).toContain("$21.71");
+});
+
+test("a lap that spent all the room the budget left it says so, and one that did not says nothing (D-0121)", () => {
+  const html = side({ atBudgetCap: { costUsd: 7.5, capUsd: 7.5 } });
+  expect(html).toContain(EN.govAtCapLabel);
+  expect(html).toContain(EN.govAtCap("7.50", "7.50"));
+  expect(side()).not.toContain(EN.govAtCapLabel);
 });
 
 test("a request of several tries shows its total, with each try as the detail", () => {

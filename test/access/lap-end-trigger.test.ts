@@ -181,6 +181,7 @@ const LAP_OPENED_A_GATE: EffectOutcome<LapPerformance> = {
     turns: null,
     durationMs: null,
     spendSource: "notReported",
+    budgetCapUsd: null,
   },
 };
 

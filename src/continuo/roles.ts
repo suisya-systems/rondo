@@ -160,15 +160,22 @@ export function mappedNeutralRoleNames(): readonly string[] {
  * provisional is the shape: the mapping exists, it lives here, and a tier
  * outside it is refused.
  *
- * **The domain is open and the table has one row**, which is the same gap
+ * **The domain is open and the table has two rows** (D-0044 rule 1, D-0122):
+ * `standard`, and `mechanical` for a lap whose whole arc can be checked by
+ * something other than a person reading it. This is the same gap
  * {@link NEUTRAL_ROLE_TABLE} closes for role names. cadenza validates
  * `executorPolicy.modelTier` structurally only -- `src/domain/agent-type.ts` at
  * the vendored revision checks the spelling of an identifier and says nothing
- * about which tiers exist -- and `standard` is the only tier any agent type in
- * this repository uses. continuo, on the other side, checks that `--model` is a
- * plain model id and states in its own words that it does not know which ids the
- * worker CLI knows. So neither side can answer "which model is `standard`", and
- * this table is the place that answer is written down.
+ * about which tiers exist. continuo, on the other side, checks that `--model` is
+ * a plain model id and states in its own words that it does not know which ids
+ * the worker CLI knows. So neither side can answer "which model is `standard`",
+ * and this table is the place that answer is written down.
+ *
+ * **The provider is a column of the row** (continuo D-1114 decision 2): the
+ * worker CLI `lap perform --provider` runs the model on. Every row is `claude`
+ * today; a `codex` row waits on rondo#460, because a Codex worker is the
+ * reviewer's family (D-0065 rule 3.3), reports no dollar cost, needs the
+ * operator's Codex home, and is refused on Windows (continuo D-1120).
  *
  * **Changing a pair is a new decision entry**, not an edit. The whole reason the
  * value is here rather than derived is that somebody decided it; a pair replaced
@@ -182,7 +189,8 @@ export function mappedNeutralRoleNames(): readonly string[] {
  * the table is none of these -- it is the refusal below, working.
  */
 const MODEL_TIER_TABLE: Readonly<Record<string, ModelRow>> = Object.freeze({
-  standard: Object.freeze({ model: "claude-opus-5", family: "claude" }),
+  standard: Object.freeze({ model: "claude-opus-5", family: "claude", provider: "claude" }),
+  mechanical: Object.freeze({ model: "claude-sonnet-5", family: "claude", provider: "claude" }),
 });
 
 /**
@@ -197,7 +205,11 @@ const MODEL_TIER_TABLE: Readonly<Record<string, ModelRow>> = Object.freeze({
 export interface ModelRow {
   readonly model: string;
   readonly family: string;
+  readonly provider: WorkerProvider;
 }
+
+/** The worker CLIs `lap perform --provider` takes (continuo D-1114 rule 1). */
+export type WorkerProvider = "claude" | "codex";
 
 /**
  * What a model tier selected, or rondo's reason it selected nothing.
@@ -209,7 +221,7 @@ export interface ModelRow {
  * chose to append -- so there is no upstream check to fall back on.
  */
 export type ModelSelection =
-  | { readonly kind: "selected"; readonly model: string }
+  | { readonly kind: "selected"; readonly model: string; readonly provider: WorkerProvider }
   | { readonly kind: "unknown"; readonly reason: string };
 
 /**
@@ -233,7 +245,7 @@ export function mapModelTier(modelTier: string): ModelSelection {
   if (Object.hasOwn(MODEL_TIER_TABLE, modelTier)) {
     const row = MODEL_TIER_TABLE[modelTier];
     if (row !== undefined) {
-      return { kind: "selected", model: row.model };
+      return { kind: "selected", model: row.model, provider: row.provider };
     }
   }
   return {
