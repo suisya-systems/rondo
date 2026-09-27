@@ -4328,32 +4328,36 @@ export async function operatorPage(
             react: EmptyCentre({
               wording,
               composer: askBox === null || askBox === undefined ? null : Raw({ html: askBox }),
-              // **Not while something is in the person's turn** (D-0097 point
-              // 4.1 (d)): they came to answer, and D-0083 rule 3 opens that.
-              triage:
-                requestsList.yourTurn.length > 0
-                  ? null
-                  : TriageSection({
-                      wording,
-                      blocks: triageBlocks(
-                        wording,
-                        {
-                          repositories: triageRepositories,
-                          goals,
-                          latest: latestTriage,
-                          payloads: triagePayloads,
-                          goalScopes,
-                          flowOpeners,
-                          flowAsks,
-                          putAside,
-                        },
-                        nowMs,
-                      ),
-                      token: ports.triageWritable === true ? token : null,
-                      // The ranking writes in the host's language when one is
-                      // set: nothing to read where the page is in it too.
-                      reads: ports.hostLanguage === wording.lang ? null : reads,
-                    }),
+              triage: TriageSection({
+                wording,
+                blocks: triageBlocks(
+                  wording,
+                  {
+                    repositories: triageRepositories,
+                    goals,
+                    latest: latestTriage,
+                    payloads: triagePayloads,
+                    goalScopes,
+                    flowOpeners,
+                    flowAsks,
+                    putAside,
+                  },
+                  nowMs,
+                ).filter(
+                  // **Not while something is in the person's turn** (D-0097
+                  // point 4.1 (d)): they came to answer, and D-0083 rule 3
+                  // opens that. A block whose goal flow waits on the person's
+                  // answers is in their turn too, and the goal scope screen
+                  // leads here to it (rondo#522).
+                  (block) =>
+                    requestsList.yourTurn.length === 0 ||
+                    (block.kind !== "noGoal" && block.goalScope.ask !== null),
+                ),
+                token: ports.triageWritable === true ? token : null,
+                // The ranking writes in the host's language when one is
+                // set: nothing to read where the page is in it too.
+                reads: ports.hostLanguage === wording.lang ? null : reads,
+              }),
             }),
           }
         : {

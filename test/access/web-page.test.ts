@@ -993,6 +993,8 @@ test("a budget stop's answering box offers raising the budget first, prefilled, 
   expect(html).toContain(EN.answerRaiseAction);
   expect(html).toMatch(/name="cost_usd" data-keep="raise:i-0001:sd-1"[^>]*value="15.00"/);
   expect(html).toContain('name="raise" value="sd-1"');
+  // The raise keeps the approval's laps (rondo#522).
+  expect(html).toContain('name="laps" value="6"');
   expect(html).toContain('name="expires_at_ms" value="2026-10-01T00:00"');
   expect(html).toContain(EN.answerRaiseLeft("1.46", "2.50", false));
   // Any other stop keeps its two answers.

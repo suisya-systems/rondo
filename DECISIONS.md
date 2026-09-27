@@ -178,6 +178,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0143 | A lap stopped at its time limit keeps what it had not committed, as one unverified commit in rondo's name on its own branch, and a retry of that lap merges it in as its first step; `D-0110` rule 1's option Z is narrowed | accepted |
 | D-0144 | The record's language is not what the reader sees: English-held text is read in the person's language on a press, stored by the original's digest beside it and never in its place, and drawn in place with the original one fold away | accepted |
 | D-0145 | Under a goal scope, rondo sends the drafted change itself when only plain review findings withhold the gate: every standing finding quoted, none marked a judgment call, a round and the budget left, no question on the lap | accepted |
+| D-0147 | The goal flow's open question is in the person's turn: its block stays on the empty centre while another request waits on them | accepted |
 
 ---
 
@@ -26581,3 +26582,44 @@ The person can still pause the goal scope: a paused approval is not in force, an
 - **Goal-scoped gates whose drafts are plain but held for an unread test run** often enough that
   the second press remains: then the test-run condition should be narrowed.
 - **Two laps started from one gate** by a send and a press together: rule 6's guard is not holding.
+
+## D-0147 — The goal flow's open question is in the person's turn: its block stays on the empty centre while another request waits on them
+
+**Status:** accepted (2026-09-28, rondo#522; observed on lap 19). Narrows `D-0097` point 4.1 (d)
+without superseding it. Refs `D-0083` rule 3, `D-0128`, rondo#487.
+
+### Context
+
+`D-0097` point 4.1 (d) draws the triage section *not while something waits on the person*: they
+came to answer. rondo#487 then put the goal flow's own ask over a candidate's open points inside
+that section, and the goal scope screen, the front's goal-scope row and the flow-answer redirects
+all lead to it (`#triage-heading`). On lap 19 another request's gate was the person's turn, so the
+whole section was dropped, and the screen said a question was waiting behind a link to a page with
+no question on it. The ask is itself something waiting on the person, so 4.1 (d)'s reason does not
+cover it.
+
+### Decision
+
+1. **While anything is in the person's turn, the triage section keeps exactly the blocks whose goal
+   flow waits on an open ask**, drawn in full (the recommendation, the ask's form, the goal-scope
+   row). Every other block still steps aside, as 4.1 (d) says. With nothing in the person's turn the
+   section is unchanged.
+2. **A raise keeps the approval's laps.** The issue also read a `laps: 0` approval after a raise.
+   The lap-19 store shows that row (`scope-9b3b3c11…`) is the goal scope's *pause* successor: it
+   differs from its predecessor only in `laps`, which is what `pauseGoalScopeFromPage` writes
+   (`D-0128` rule 4), and no raise answer was recorded near it. The raise's own form carries the tip's
+   `laps` as drawn; a test now pins it. Nothing else changes.
+
+**Options not taken.** Counting a flow ask as a row of the person's turn in the list: it has no
+thread to open, and the list's walk is over threads (`D-0083` rule 3). Pointing the screen's link
+somewhere else: the question's form is only drawn in the triage block.
+
+### What it costs
+
+- **A recommendation is drawn beside an open gate** for a repository whose flow asks. That is the
+  thing 4.1 (d) kept away, accepted here because the ask is part of it.
+
+### What would falsify it
+
+- **A person answering the flow's ask before the gate they came for** and saying they were pulled
+  away from it: then the block should follow the gate in the walk, not stand beside it.
