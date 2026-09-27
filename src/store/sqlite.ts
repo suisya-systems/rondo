@@ -5782,7 +5782,8 @@ function lapBudgetCapFor(
     if (typeof cost === "number") {
       basis.readCostUsd += cost;
     } else if (typeof cap === "number") {
-      basis.heldCapsUsd += cap;
+      // Never below zero: a lap refused for no room holds nothing, and credits nothing back.
+      basis.heldCapsUsd += Math.max(0, cap);
     } else {
       basis.unreadUncappedLaps += 1;
     }

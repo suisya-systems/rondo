@@ -1250,3 +1250,19 @@ test("D-0121: a budget that holds one lap gives it all, and a lap under no appro
   expect(await seed.store.sendLapBudget("i-a", 10)).toBe(5);
   expect(await seed.store.sendLapBudget("i-held", 10)).toBeNull();
 });
+
+test("D-0121: a lap refused for no room holds nothing, and its negative cap credits nothing back", async () => {
+  const payload = withBudgets({ cost_usd: 50, cost_reserve_usd: 5 });
+  const seed = await seeded({ maxOccupying: 2, maxLive: 100 });
+  expect(await seed.record.recordScope(scope({ payload }))).toEqual({ kind: "recorded" });
+  expect(
+    await seed.record.recordScopeDecision(scopeDecision({ scopeDigest: contentDigest(payload) })),
+  ).toEqual({ kind: "recorded" });
+  admitted(seed.connection, "i-spent", 46);
+  admitted(seed.connection, "i-a", null);
+  admitted(seed.connection, "i-b", null);
+  // 50 - 46 - 5 held for i-b: -1, no room.
+  expect(await seed.store.sendLapBudget("i-a", 10)).toBe(-1);
+  // i-b sees i-a hold nothing, not -1: only the 4 that is really left.
+  expect(await seed.store.sendLapBudget("i-b", 11)).toBe(4);
+});
