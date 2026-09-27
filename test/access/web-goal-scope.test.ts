@@ -16,6 +16,7 @@ import { expect, test } from "vitest";
 
 import { DETERMINISTIC_DRAFTER } from "../../src/access/advisory.js";
 import { pauseGoalScopeFromPage, recordGoalScopeFromPage } from "../../src/access/cli.js";
+import { flowHost } from "../../src/access/flow-host.js";
 import type { CommandOutcome } from "../../src/access/forge.js";
 import { goalScopeMaterial, goalScopeStanding } from "../../src/access/goal-scope.js";
 import { triageHost } from "../../src/access/triage-host.js";
@@ -109,6 +110,9 @@ async function world() {
     );
   return { storePath, store, record, page };
 }
+
+/** A line as the page escapes it. */
+const quoted = (line: string) => line.replaceAll('"', "&quot;");
 
 const hidden = (html: string, name: string) =>
   new RegExp(`name="${name}" value="([^"]*)"`).exec(html)?.[1] ?? "";
@@ -310,6 +314,105 @@ test("a candidate the flow already started reads started, and is not offered for
   expect(block).toContain(EN.triageStartedLink);
   expect(block).not.toContain(EN.triagePutInBox);
   expect(block).not.toContain('action="/not-now');
+});
+
+test("a flow stopped before its first request is said on the front and the screen, not running (rondo#488)", async () => {
+  const w = await world();
+  expect((await approve(w)).ok).toBe(true);
+  const standing = await goalScopeStanding(w.record, "goal-1");
+  if (standing.kind === "none") throw new Error("no approval");
+  const front = async (wording = EN) => {
+    const page = await w.page({ kind: "requests" }, wording);
+    return page.slice(page.indexOf('class="triage"'));
+  };
+  expect(await front()).toContain(EN.triageGoalScopeRunning);
+
+  // The flow host meets the expiry before it has written anything.
+  const flow = flowHost({
+    store: w.store,
+    record: w.record,
+    policy: { maxOccupying: 4, maxLive: 6 },
+    now: () => BUDGETS.expires_at_ms + 1,
+    log: () => undefined,
+  });
+  flow.kick();
+  await flow.settled();
+  const stopped = await front();
+  expect(stopped).not.toContain(EN.triageGoalScopeRunning);
+  expect(stopped).toContain('data-state="stopped"');
+  expect(stopped).toContain(EN.triageGoalScopeStopped);
+  expect(stopped).toContain(EN.flowStopReason("expiry"));
+  expect(stopped).toContain(quoted(EN.flowStopNext("expiry")));
+  expect(stopped).toContain(EN.triageGoalScopeStoppedLink);
+  const screen = await w.page({ kind: "goalScope", repository: "o/r" });
+  expect(screen).toContain(EN.goalScopeStoppedHeading);
+  expect(screen).not.toContain(EN.goalScopeRunningLead);
+  expect(screen).toContain(EN.flowStopReason("expiry"));
+  expect(screen).toContain('action="/goal-scope-pause?lang=en"');
+  // Every catalogue says it (D-0079).
+  expect(await front(JA)).toContain(JA.flowStopReason("expiry"));
+  expect(await w.page({ kind: "goalScope", repository: "o/r" }, JA)).toContain(
+    JA.goalScopeStoppedHeading,
+  );
+
+  // Nothing eligible: which candidates were passed over, and why, in words.
+  expect(
+    await w.record.recordFlowStop({
+      stopId: "flow-stop-later",
+      scopeDecisionId: standing.scopeDecisionId,
+      repository: "o/r",
+      facts: {
+        reason: "nothing_eligible",
+        skipped: [
+          { key: "issue:o/r#7", request: "Make setup finish without a shell", why: "open_points" },
+          { key: "issue:o/r#8", request: "Drop the manual step", why: "put_aside" },
+        ],
+      },
+      atMs: BUDGETS.expires_at_ms + 2,
+    }),
+  ).toEqual({ kind: "recorded" });
+  for (const html of [await front(), await w.page({ kind: "goalScope", repository: "o/r" })]) {
+    expect(html).toContain(EN.flowStopReason("nothing_eligible"));
+    expect(html).toContain("Make setup finish without a shell");
+    expect(html).toContain(EN.flowStopSkipped("open_points"));
+    expect(html).toContain(quoted(EN.flowStopSkipped("put_aside")));
+    expect(html).toContain(EN.flowStopNext("nothing_eligible"));
+  }
+
+  // Once a request is written the stop is asked in its thread: the front's
+  // triage steps aside for the person's turn, and the screen leads to it.
+  const opener = flowMessageId(standing.scopeDecisionId, "issue:o/r#9");
+  for (const message of [
+    {
+      messageId: opener,
+      inReplyTo: null,
+      asks: false,
+      bases: [{ form: "goal", goalId: "goal-1" }],
+    },
+    {
+      messageId: `flow-stop-${standing.scopeDecisionId}-cost-${opener}`,
+      inReplyTo: opener,
+      asks: true,
+      bases: [{ form: "message", messageId: opener }],
+    },
+  ]) {
+    expect(
+      await w.record.recordThreadMessage({
+        ...message,
+        body: "b",
+        authorKind: "drafter",
+        authorId: FLOW_AUTHOR,
+        atMs: 6_000,
+      }),
+    ).toEqual({ kind: "recorded" });
+  }
+  expect(await w.page({ kind: "requests" })).not.toContain('class="triage"');
+  const asked = await w.page({ kind: "goalScope", repository: "o/r" });
+  expect(asked).toContain(EN.goalScopeStoppedHeading);
+  expect(asked).toContain(EN.flowStopReason("cost"));
+  expect(asked).toContain(EN.flowStopAsked);
+  expect(asked).toContain(EN.flowStopAskedLink);
+  expect(asked).not.toContain(EN.flowStopReason("nothing_eligible"));
 });
 
 test("a scope stop shows its three options, in the page's language, with rondo's record folded", async () => {

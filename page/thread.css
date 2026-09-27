@@ -851,6 +851,49 @@
   background: var(--color-ok);
 }
 
+/* A goal scope in force whose flow stopped (rondo#488): the person's turn,
+   so the waiting colour, with the reason and the next step beside it. */
+.triage-goal-scope[data-state="stopped"] {
+  align-items: flex-start;
+  color: var(--color-foreground);
+}
+
+.triage-goal-scope[data-state="stopped"] .triage-goal-dot {
+  background: var(--color-wait);
+}
+
+.triage-goal-stop {
+  display: grid;
+  gap: 4px;
+  max-width: 45em;
+}
+
+.triage-goal-stop > p:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.triage-goal-stop > p:not(:first-child),
+.triage-goal-skipped {
+  padding-left: 15px;
+  color: var(--color-muted-foreground);
+}
+
+.triage-goal-skipped {
+  display: grid;
+  gap: 4px;
+  margin: 2px 0;
+}
+
+.triage-goal-skipped > li {
+  display: grid;
+}
+
+.triage-goal-skipped > li > span:first-child {
+  color: var(--color-foreground);
+}
+
 .triage-goal-link {
   font-size: var(--text-meta);
   font-weight: 500;

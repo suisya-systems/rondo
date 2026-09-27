@@ -9,7 +9,9 @@
  *   with one plan per clause, and one press that records and approves it --
  *   the person's P1 over every request the flow injects from this goal;
  * - **running**: what it allows and what it has used, and the pause press,
- *   which writes the `laps: 0` successor (rule 4);
+ *   which writes the `laps: 0` successor (rule 4); **stopped** in its place
+ *   when the flow has stopped (rondo#488): the reason, what it passed over,
+ *   and the next step, above the same limits and press;
  * - **paused**: the same draft again, whose press resumes, as the paused
  *   approval's successor.
  *
@@ -17,9 +19,11 @@
  * scope screen does: it is a form being filled in.
  */
 import type { StoredGoal, StoredScope } from "../../store/records.js";
+import { flowStopOf } from "../flow-stop.js";
 import { goalScopeMaterial, goalScopeStanding } from "../goal-scope.js";
 import { ago } from "../inbox.js";
 import type { MintScopeId, WebPorts } from "../page/contract.js";
+import { type FlowStopSaid, flowStopSaid } from "../page/triage.js";
 import {
   CARD,
   CARD_HEADING,
@@ -54,6 +58,13 @@ export async function goalScopeView(
     read.kind === "noGoal" ? null : read.kind === "read" ? read.material.goal : read.goal;
   const standing =
     goal === null ? { kind: "none" as const } : await goalScopeStanding(ports.record, goal.goalId);
+  // Green only while the flow can start or runs (rondo#488).
+  const messages = standing.kind === "running" ? await ports.record.threadMessages() : null;
+  const stopRead =
+    goal === null || standing.kind !== "running" || messages?.kind !== "read"
+      ? null
+      : await flowStopOf(ports.record, messages.messages, goal.goalId, standing.scopeDecisionId);
+  const stop = stopRead === null ? null : flowStopSaid(wording, stopRead);
   const head = (
     <header class="space-y-2">
       <div class="flex min-w-0 items-center gap-2">
@@ -79,7 +90,9 @@ export async function goalScopeView(
         </a>
         <h2 class="min-w-0 flex-1 truncate text-title leading-6 font-semibold">
           {standing.kind === "running"
-            ? wording.goalScopeRunningHeading
+            ? stop === null
+              ? wording.goalScopeRunningHeading
+              : wording.goalScopeStoppedHeading
             : standing.kind === "paused"
               ? wording.goalScopePausedHeading
               : wording.goalScopeHeading}
@@ -110,6 +123,7 @@ export async function goalScopeView(
         standing.scope,
         token,
         newScopeId,
+        stop,
       )
     ) : material === null ? (
       note(wording.goalScopeNoPlan)
@@ -175,7 +189,10 @@ function goalCard(wording: Chrome, goal: StoredGoal, goalHref: string, nowMs: nu
   );
 }
 
-/** The approval in force: what it allows, what it has used, and the pause press. */
+/**
+ * The approval in force: what it allows, what it has used, and the pause
+ * press -- under the stop, when the flow has stopped (rondo#488).
+ */
 async function running(
   ports: WebPorts,
   wording: Chrome,
@@ -184,12 +201,17 @@ async function running(
   scope: StoredScope,
   token: string | null,
   newScopeId: MintScopeId | null,
+  stop: FlowStopSaid | null,
 ): Promise<unknown> {
   const budgets = scope.payload.budgets;
   const spent = await ports.record.scopeSpent(scopeDecisionId);
   return (
     <>
-      <p class="text-body leading-6">{wording.goalScopeRunningLead}</p>
+      {stop === null ? (
+        <p class="text-body leading-6">{wording.goalScopeRunningLead}</p>
+      ) : (
+        stopCard(wording, stop)
+      )}
       <section class={`${CARD} space-y-1`}>
         <h3 class={CARD_HEADING}>{wording.raiseWasHeading}</h3>
         <p class="text-body leading-6">
@@ -228,6 +250,50 @@ async function running(
         </form>
       )}
     </>
+  );
+}
+
+/**
+ * Why the flow stopped and what to do (rondo#488): the person's turn, so it is
+ * the one card on the screen that carries the waiting colour (D-0082 rule 2).
+ */
+function stopCard(wording: Chrome, stop: FlowStopSaid) {
+  return (
+    <section
+      id="goal-scope-stop"
+      class="space-y-3 rounded-lg border border-wait/40 bg-wait-wash px-4 py-3"
+    >
+      <div class="space-y-1">
+        <p class="text-body leading-6 font-medium">{stop.reason}</p>
+        {stop.facts === null ? null : (
+          <p class="text-body leading-6 text-muted-foreground">{stop.facts}</p>
+        )}
+      </div>
+      {stop.skipped === null ? null : (
+        <div class="space-y-1.5">
+          <h3 class={CARD_HEADING}>{wording.flowStopSkippedHeading}</h3>
+          <ul class="space-y-2">
+            {stop.skipped.map((one) => (
+              <li class="text-body leading-5">
+                <span class="block" lang="">
+                  {one.request}
+                </span>
+                <span class="block text-meta text-muted-foreground">{one.why}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div class="space-y-1">
+        <h3 class={CARD_HEADING}>{wording.flowStopNextHeading}</h3>
+        <p class="text-body leading-6">{stop.next}</p>
+        {stop.askedHref === null ? null : (
+          <a href={stop.askedHref} class={`text-meta ${LINK}`}>
+            {wording.flowStopAskedLink}
+          </a>
+        )}
+      </div>
+    </section>
   );
 }
 

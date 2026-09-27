@@ -23,17 +23,21 @@
  * or nothing left the ranking would start. The ask sits in the thread of the
  * flow's latest request, so the flow waits on it (`ownOpenAsk`), and in the
  * flow's own voice, so it holds no part of that request (`holdsNothing`); with no
- * request yet there is no thread, and the stop is said on the terminal. A pause
- * is the person's own answer (`laps: 0`, D-0128 rule 4) and is not asked about.
+ * request yet there is no thread, so the stop is a `flow_stop` row with its
+ * facts, which the page reads (`flow-stop.ts`, rondo#488), and is said on the
+ * terminal. A pause is the person's own answer (`laps: 0`, D-0128 rule 4) and
+ * is not asked about.
  */
 
 import { type Injection, type InjectionState, pickNext } from "../advisory/flow.js";
 import { readSplitPayload } from "../advisory/proposal.js";
 import { type Ranked, readTriagePayload } from "../advisory/triage.js";
 import type { HostPolicy } from "../refrain/policy.js";
+import { contentDigest } from "../store/plan.js";
 import {
   FLOW_AUTHOR,
   type IterationRecord,
+  type JsonRecord,
   opensFlowRequest,
   requestsGoal,
   type StoredGoal,
@@ -43,6 +47,7 @@ import {
   type ThreadMessageDraft,
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+import { type FlowStop, type FlowStopFacts, stopPrefix } from "./flow-stop.js";
 import { hostFailure } from "./host-failure.js";
 import { MODEL_DRAFTER_PREFIX } from "./model-draft/judgement.js";
 
@@ -63,6 +68,7 @@ export interface FlowHostPorts {
     | "readProposal"
     | "claimScopedAct"
     | "recordThreadMessage"
+    | "recordFlowStop"
   >;
   readonly policy: Pick<HostPolicy, "maxOccupying" | "maxLive">;
   readonly now: () => number;
@@ -77,15 +83,6 @@ export interface FlowHost {
   /** Resolves when no pass is in flight (for tests). */
   settled(): Promise<void>;
 }
-
-/** Why the flow stops and asks the person (rondo#469). */
-export type FlowStop =
-  | "newer_goal"
-  | "expiry"
-  | "laps"
-  | "cost"
-  | "failed_twice"
-  | "nothing_eligible";
 
 /** One goal scope in force, and the goal it covers. */
 interface Flow {
@@ -227,14 +224,14 @@ async function flowOne(
       state: own || (state !== "failed" && state !== "abandoned") ? state : "closed",
     });
   }
-  const stop = async (reason: FlowStop, detail: string): Promise<void> =>
-    await askStop(ports, sayOnce, flow, repository, openers.at(-1) ?? null, reason, detail);
+  const stop = async (facts: FlowStopFacts, detail: string): Promise<void> =>
+    await askStop(ports, sayOnce, flow, repository, openers.at(-1) ?? null, facts, detail);
 
   // The scope and the goal first: past either, nothing the picker says matters.
   const newest = seen.goals.filter((one) => one.repository === repository).at(-1);
   if (newest !== undefined && newest.goalId !== goal.goalId) {
     return await stop(
-      "newer_goal",
+      { reason: "newer_goal", goalId: goal.goalId, newestGoalId: newest.goalId },
       `the goal was edited: goal '${newest.goalId}' is now the newest, and this scope covers ` +
         `only the requests from goal '${goal.goalId}' (D-0128 rule 3)`,
     );
@@ -246,23 +243,30 @@ async function flowOne(
   const nowMs = ports.now();
   if (nowMs >= budgets.expires_at_ms) {
     return await stop(
-      "expiry",
+      { reason: "expiry", expiresAtMs: budgets.expires_at_ms },
       `the scope expired at ${new Date(budgets.expires_at_ms).toISOString()}`,
     );
   }
   // The laps and the cost, as `reserve()` will test the next request's first lap.
-  const spentStop = async (): Promise<readonly [FlowStop, string] | null> => {
+  const spentStop = async (): Promise<readonly [FlowStopFacts, string] | null> => {
     const spent = await ports.record.scopeSpent(scopeDecisionId);
     if (spent.admissions >= budgets.laps) {
       return [
-        "laps",
+        { reason: "laps", admissions: spent.admissions, laps: budgets.laps },
         `the scope has admitted ${String(spent.admissions)} of ${String(budgets.laps)} laps`,
       ];
     }
     const committed = spent.readCostUsd + (spent.unreadLaps + 1) * budgets.cost_reserve_usd;
     return committed > budgets.cost_usd
       ? [
-          "cost",
+          {
+            reason: "cost",
+            committedUsd: committed,
+            budgetUsd: budgets.cost_usd,
+            spentUsd: spent.readCostUsd,
+            reserveUsd: budgets.cost_reserve_usd,
+            unreadLaps: spent.unreadLaps,
+          },
           `another request would commit ${committed.toFixed(2)} USD against a budget of ` +
             `${String(budgets.cost_usd)}: ${spent.readCostUsd.toFixed(2)} spent, triage ` +
             `readings included, plus ${String(budgets.cost_reserve_usd)} reserved for each of ` +
@@ -292,15 +296,16 @@ async function flowOne(
   if (pick.kind === "wait") {
     if (pick.reason === "failed_twice") {
       return await stop(
-        "failed_twice",
+        { reason: "failed_twice" },
         "the last two requests it started ended failed or abandoned",
       );
     }
     if (pick.reason === "nothing_eligible") {
       return await stop(
-        "nothing_eligible",
-        "the latest ranking holds no candidate it may start: each one is started already, " +
-          "put aside, still has open points, or is not an issue",
+        { reason: "nothing_eligible", skipped: pick.skipped },
+        `the latest ranking holds no candidate it may start: ${
+          pick.skipped.map((one) => `${one.key} (${one.why})`).join(", ") || "it is empty"
+        }`,
       );
     }
     return sayOnce(`waiting (${pick.reason})`);
@@ -354,11 +359,6 @@ async function flowOne(
 /** How a flow's request ids begin: `flowMessageId` without the candidate. */
 function flowPrefix(scopeDecisionId: string): string {
   return `flow-${scopeDecisionId}-`;
-}
-
-/** How the stops an approval raises are named (`askStop`). */
-function stopPrefix(scopeDecisionId: string): string {
-  return `flow-stop-${scopeDecisionId}-`;
 }
 
 /**
@@ -438,11 +438,25 @@ async function askStop(
   flow: Flow,
   repository: string,
   latest: ThreadMessageDraft | null,
-  reason: FlowStop,
+  facts: FlowStopFacts,
   detail: string,
 ): Promise<void> {
+  const { reason } = facts;
   if (latest === null) {
-    return sayOnce(`stopped before its first request: ${detail}`);
+    // **No thread to ask in, so the stop is a row the page reads** (rondo#488),
+    // named by the approval and its facts: each distinct stop is written once.
+    const recorded = await ports.record.recordFlowStop({
+      stopId: `${stopPrefix(flow.scopeDecisionId)}${reason}-${contentDigest(facts as unknown as JsonRecord)}`,
+      scopeDecisionId: flow.scopeDecisionId,
+      repository,
+      facts: facts as unknown as JsonRecord,
+      atMs: ports.now(),
+    });
+    return sayOnce(
+      recorded.kind === "defect"
+        ? `stopped before its first request (${detail}), and the stop was not recorded: ${recorded.reason}`
+        : `stopped before its first request: ${detail}`,
+    );
   }
   const messageId = `${stopPrefix(flow.scopeDecisionId)}${reason}-${latest.messageId}`;
   const outcome = await ports.record.recordThreadMessage({

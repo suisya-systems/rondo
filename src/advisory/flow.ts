@@ -70,9 +70,25 @@ export type WaitReason =
   | "no_slot"
   | "nothing_eligible";
 
+/** Why a ranked candidate is not one the flow may start by itself (rondo#488). */
+export type SkipReason = "started" | "put_aside" | "open_points" | "not_issue";
+
+/** One candidate of the ranking the flow passed over, and why. */
+export interface Skipped {
+  readonly key: string;
+  readonly request: string;
+  readonly why: SkipReason;
+}
+
 export type FlowPick =
   | { readonly kind: "inject"; readonly candidate: Ranked; readonly messageId: string }
-  | { readonly kind: "wait"; readonly reason: WaitReason };
+  | { readonly kind: "wait"; readonly reason: Exclude<WaitReason, "nothing_eligible"> }
+  /** Every ranked candidate, each with why it is passed over (rondo#488). */
+  | {
+      readonly kind: "wait";
+      readonly reason: "nothing_eligible";
+      readonly skipped: readonly Skipped[];
+    };
 
 /** How many injected lines in a row may end `failed` or `abandoned` before the flow stops. */
 export const FAILURES_TO_STOP = 2;
@@ -84,7 +100,10 @@ export function flowMessageId(scopeDecisionId: string, candidateKey: string): st
 
 /** What the flow would inject next, or why it waits. */
 export function pickNext(input: FlowInput): FlowPick {
-  const wait = (reason: WaitReason): FlowPick => ({ kind: "wait", reason });
+  const wait = (reason: Exclude<WaitReason, "nothing_eligible">): FlowPick => ({
+    kind: "wait",
+    reason,
+  });
   if (input.goal === null) {
     return wait("no_goal");
   }
@@ -123,19 +142,27 @@ export function pickNext(input: FlowInput): FlowPick {
   }
   const aside = new Set(input.putAside);
   const injected = new Set(input.injections.map((one) => one.candidateKey));
-  const candidate = input.triage.ranked.find(
-    (one) =>
-      one.source.form === "issue" &&
-      one.openPoints.length === 0 &&
-      !aside.has(one.key) &&
-      !injected.has(one.key),
-  );
-  if (candidate === undefined) {
-    return wait("nothing_eligible");
+  const skip = (one: Ranked): SkipReason | null =>
+    injected.has(one.key)
+      ? "started"
+      : aside.has(one.key)
+        ? "put_aside"
+        : one.source.form !== "issue"
+          ? "not_issue"
+          : one.openPoints.length > 0
+            ? "open_points"
+            : null;
+  const skipped: Skipped[] = [];
+  for (const one of input.triage.ranked) {
+    const why = skip(one);
+    if (why === null) {
+      return {
+        kind: "inject",
+        candidate: one,
+        messageId: flowMessageId(input.scopeDecisionId, one.key),
+      };
+    }
+    skipped.push({ key: one.key, request: one.request, why });
   }
-  return {
-    kind: "inject",
-    candidate,
-    messageId: flowMessageId(input.scopeDecisionId, candidate.key),
-  };
+  return { kind: "wait", reason: "nothing_eligible", skipped };
 }

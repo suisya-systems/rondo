@@ -20,10 +20,11 @@
  */
 import type { Ranked, TriagePayload } from "../../advisory/triage.js";
 import type { GoalClause, StoredGoal, StoredTriage } from "../../store/records.js";
+import type { FlowStopRead } from "../flow-stop.js";
 import { ago } from "../inbox.js";
 import { viewHref } from "../page-logic/routes.js";
 import type { Chrome } from "../wording.js";
-import { money, PRIMARY, SECONDARY } from "./vocabulary.js";
+import { localTime, money, PRIMARY, SECONDARY } from "./vocabulary.js";
 
 /** The presses' own sizing, as the gate's: stacked at phone width. */
 const PRESS = "h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto";
@@ -52,12 +53,71 @@ export interface CandidateView {
 
 /**
  * Whether rondo works toward the goal on its own (D-0128): no goal scope, one
- * in force, or one paused -- and the way to the screen that approves, pauses
- * or resumes it.
+ * in force, one in force whose flow has stopped (rondo#488), or one paused --
+ * and the way to the screen that approves, pauses or resumes it.
  */
 export interface GoalScopeLine {
-  readonly state: "none" | "running" | "paused";
+  readonly state: GoalScopeState["state"] | "none";
   readonly href: string;
+  readonly stop: FlowStopSaid | null;
+}
+
+/** A goal scope in force over a goal, as the page reads it (rondo#488). */
+export type GoalScopeState =
+  | { readonly state: "running" | "paused" }
+  | { readonly state: "stopped"; readonly stop: FlowStopRead };
+
+/**
+ * A stop in the page's words (rondo#488): the reason, the facts where the
+ * stop came before any request, what was passed over when nothing in the
+ * ranking could start, and the next step -- or, once the flow has a request,
+ * that it asked there, and the way to the question.
+ */
+export interface FlowStopSaid {
+  readonly reason: string;
+  readonly facts: string | null;
+  readonly skipped: readonly { readonly request: string; readonly why: string }[] | null;
+  readonly next: string;
+  readonly askedHref: string | null;
+}
+
+export function flowStopSaid(wording: Chrome, stop: FlowStopRead): FlowStopSaid {
+  if (stop.kind === "asked") {
+    return {
+      reason: wording.flowStopReason(stop.reason),
+      facts: null,
+      skipped: null,
+      next: wording.flowStopAsked,
+      askedHref: viewHref({ kind: "thread", messageId: stop.askedIn, to: null }, wording.lang),
+    };
+  }
+  const facts = stop.facts;
+  return {
+    reason: wording.flowStopReason(facts.reason),
+    facts:
+      facts.reason === "expiry"
+        ? wording.flowStopExpiredAt(localTime(facts.expiresAtMs).replace("T", " "))
+        : facts.reason === "laps"
+          ? wording.flowStopLapsUsed(facts.admissions, facts.laps)
+          : facts.reason === "cost"
+            ? wording.flowStopCostOver(
+                money(facts.spentUsd),
+                money(facts.committedUsd),
+                money(facts.budgetUsd),
+              )
+            : facts.reason === "nothing_eligible" && facts.skipped.length === 0
+              ? wording.flowStopRankingEmpty
+              : null,
+    skipped:
+      facts.reason === "nothing_eligible" && facts.skipped.length > 0
+        ? facts.skipped.map((one) => ({
+            request: one.request,
+            why: wording.flowStopSkipped(one.why),
+          }))
+        : null,
+    next: wording.flowStopNext(facts.reason),
+    askedHref: null,
+  };
 }
 
 /** One repository's block. */
@@ -101,7 +161,7 @@ export interface TriageReads {
   /** The payload of each latest row, read back; a row that will not read is absent. */
   readonly payloads: ReadonlyMap<string, TriagePayload>;
   /** The goal scope in force over each goal, by goal id (D-0128); absent where none is. */
-  readonly goalScopes?: ReadonlyMap<string, "running" | "paused">;
+  readonly goalScopes?: ReadonlyMap<string, GoalScopeState>;
   /** The request openers the flow wrote, each with the goal it names (D-0128). */
   readonly flowOpeners?: readonly { readonly messageId: string; readonly goalId: string }[];
 }
@@ -122,9 +182,11 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
     if (goal === undefined) {
       return { kind: "noGoal", repository, goalHref };
     }
+    const inForce = reads.goalScopes?.get(goal.goalId);
     const goalScope: GoalScopeLine = {
-      state: reads.goalScopes?.get(goal.goalId) ?? "none",
+      state: inForce?.state ?? "none",
       href: viewHref({ kind: "goalScope", repository }, wording.lang),
+      stop: inForce?.state === "stopped" ? flowStopSaid(wording, inForce.stop) : null,
     };
     const row = latest.get(repository);
     const payload = row === undefined ? undefined : reads.payloads.get(row.proposalId);
@@ -423,6 +485,39 @@ function GoalScopeRow({
         <p>{wording.triageGoalScopeOffer}</p>
         <a className="triage-goal-link" href={line.href}>
           {wording.triageGoalScopeAction}
+        </a>
+      </div>
+    );
+  }
+  // **Stopped is said in place of working** (rondo#488): the reason, what
+  // it passed over, and the next step, with the way to where it is taken.
+  if (line.stop !== null) {
+    const stop = line.stop;
+    return (
+      <div className="triage-goal-scope" data-state="stopped">
+        <div className="triage-goal-stop">
+          <p>
+            <span className="triage-goal-dot" aria-hidden="true" />
+            <b>{wording.triageGoalScopeStopped}</b>
+          </p>
+          <p>
+            {stop.reason}
+            {stop.facts === null ? null : ` ${stop.facts}`}
+          </p>
+          {stop.skipped === null ? null : (
+            <ul className="triage-goal-skipped" aria-label={wording.flowStopSkippedHeading}>
+              {stop.skipped.map((one) => (
+                <li key={one.request}>
+                  <span lang="">{one.request}</span>
+                  <span>{one.why}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p>{stop.next}</p>
+        </div>
+        <a className="triage-goal-link" href={stop.askedHref ?? line.href}>
+          {stop.askedHref === null ? wording.triageGoalScopeStoppedLink : wording.flowStopAskedLink}
         </a>
       </div>
     );

@@ -73,6 +73,7 @@ import {
   type FindingSeverity,
   FLOW_AUTHOR,
   FLOW_AUTHOR_PREFIX,
+  type FlowStopDraft,
   type GateAnswer,
   type GoalDraft,
   type GradedFinding,
@@ -112,6 +113,7 @@ import {
   type ScopeTest,
   type SetupPlanDraft,
   type StoredDecision,
+  type StoredFlowStop,
   type StoredGoal,
   type StoredProposal,
   type StoredScope,
@@ -1663,6 +1665,18 @@ CREATE TABLE IF NOT EXISTS triage_decline (
   candidate                   TEXT    NOT NULL,
   declined_by                 TEXT    NOT NULL,
   declined_at_ms              INTEGER NOT NULL
+);
+
+-- rondo#488. A stop the flow host met before its goal scope's first request,
+-- when there is no thread to ask in. Append-only; the newest row of an
+-- approval is its stop until a request is written. facts is canonical JSON,
+-- {reason, ...} with what a person acts on as fields.
+CREATE TABLE IF NOT EXISTS flow_stop (
+  stop_id                     TEXT    PRIMARY KEY,
+  scope_decision_id           TEXT    NOT NULL,
+  repository                  TEXT    NOT NULL,
+  facts                       TEXT    NOT NULL,
+  at_ms                       INTEGER NOT NULL
 );
 
 -- D-0098 rule 3.2. A decision-record number a line was handed at admission.
@@ -3399,6 +3413,13 @@ export interface AdvisoryRecord {
   recordTriageDecline(draft: TriageDeclineDraft): Promise<RecordOutcome>;
   /** Every *not now*, oldest first. */
   triageDeclines(): Promise<readonly StoredTriageDecline[]>;
+  /**
+   * Record a stop the flow met before its first request (rondo#488). Refused
+   * for an id already held: the same stop is recorded once.
+   */
+  recordFlowStop(draft: FlowStopDraft): Promise<RecordOutcome>;
+  /** Every flow stop, oldest first. */
+  flowStops(): Promise<readonly StoredFlowStop[]>;
   /** The newest triage proposal of each repository, oldest repository first. */
   latestTriage(): Promise<readonly StoredTriage[]>;
   /**
@@ -4935,6 +4956,54 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
         declinedAtMs: Number(row["declined_at_ms"]),
         repository: triageRepository(String(row["payload"])) ?? "",
       }));
+    },
+
+    async recordFlowStop(draft: FlowStopDraft): Promise<RecordOutcome> {
+      return immediateTransaction(connection, () => {
+        if (
+          connection.prepare("SELECT 1 FROM flow_stop WHERE stop_id = ?").get(draft.stopId) !==
+          undefined
+        ) {
+          return { kind: "refused", reason: `a flow stop '${draft.stopId}' is already recorded` };
+        }
+        connection
+          .prepare(
+            "INSERT INTO flow_stop (stop_id, scope_decision_id, repository, facts, at_ms) " +
+              "VALUES (?, ?, ?, ?, ?)",
+          )
+          .run(
+            draft.stopId,
+            draft.scopeDecisionId,
+            draft.repository,
+            canonicalJson(draft.facts),
+            draft.atMs,
+          );
+        return { kind: "recorded" };
+      });
+    },
+
+    async flowStops(): Promise<readonly StoredFlowStop[]> {
+      return (
+        connection.prepare("SELECT * FROM flow_stop ORDER BY at_ms, rowid").all() as SqlRow[]
+      ).flatMap((row) => {
+        let facts: unknown;
+        try {
+          facts = JSON.parse(String(row["facts"]));
+        } catch {
+          return [];
+        }
+        return isRecord(facts)
+          ? [
+              {
+                stopId: String(row["stop_id"]),
+                scopeDecisionId: String(row["scope_decision_id"]),
+                repository: String(row["repository"]),
+                facts,
+                atMs: Number(row["at_ms"]),
+              },
+            ]
+          : [];
+      });
     },
 
     async latestTriage(): Promise<readonly StoredTriage[]> {

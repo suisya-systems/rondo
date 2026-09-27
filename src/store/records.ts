@@ -2031,6 +2031,21 @@ export interface StoredTriageDecline extends TriageDeclineDraft {
   readonly repository: string;
 }
 
+/**
+ * A stop the flow host met before its goal scope's first request (rondo#488):
+ * with no request there is no thread to ask in, so the stop is a row the page
+ * reads. `facts` holds the reason and what a person acts on, as fields.
+ */
+export interface FlowStopDraft {
+  readonly stopId: string;
+  readonly scopeDecisionId: string;
+  readonly repository: string;
+  readonly facts: JsonRecord;
+  readonly atMs: number;
+}
+
+export type StoredFlowStop = FlowStopDraft;
+
 /** One triage proposal row read back: the latest of a repository is what the page draws. */
 export interface StoredTriage {
   readonly proposalId: string;
