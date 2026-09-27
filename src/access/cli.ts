@@ -47,6 +47,7 @@ import {
   isNestedSandboxRefusal,
   type ObservedSession,
 } from "../continuo/protocol.js";
+import { drafterRow } from "../continuo/roles.js";
 import { lapTranscriptDirectory, readLapLog } from "../continuo/transcript.js";
 import { allocate } from "../refrain/allocator.js";
 import {
@@ -212,6 +213,11 @@ import type {
 import { workerRuns } from "./page-logic/laps.js";
 import { asksOverLine, conflictFixBlock, resultOf } from "./page-logic/result.js";
 import { requestWords, threadsOf } from "./page-logic/threads.js";
+import {
+  type ComposedBodyOutcome,
+  composePublishBody,
+  type PublishBodyMaterial,
+} from "./publish-body.js";
 import { publishHost } from "./publish-host.js";
 import { type PullRequestText, pullRequestText } from "./pull-request.js";
 import { notifierAt, reachThePerson, recordTabNotice } from "./reach.js";
@@ -7915,6 +7921,53 @@ export type PublishPlanned =
  * D-0060 rule 4's refusal is not overridable by anybody, so it is a refusal;
  * the reading's is a judgement a person may overrule, so it is carried.
  */
+/**
+ * What composing the body's English needs, as two values a caller supplies
+ * (`D-0079` section 4, rondo#290).
+ *
+ * **The report is read where a caller has continuo, and the composing is
+ * `./publish-body.ts`'s**: this function reaches neither on its own, and both
+ * are the sort of thing a test replaces. Only the terminal's `publish` passes
+ * them today; the page passes null, because its preview and its press run this
+ * twice and a model's answer is not the same twice -- what that path needs is a
+ * composed body recorded once and read by both, which is a row this change does
+ * not add.
+ */
+export interface PublishBodyComposing {
+  /** The lap's report, as the worker wrote it, or null where it would not read. */
+  readonly report: () => Promise<string | null>;
+  readonly compose: (material: PublishBodyMaterial) => Promise<ComposedBodyOutcome>;
+}
+
+/**
+ * The English sections composed from this lap's report, or null where nothing
+ * had to be composed (`D-0079` section 4).
+ *
+ * **Asked for only where the lap asked its worker for a language.** With none
+ * asked, the report is written in whatever the request was written in and this
+ * repository's English is not a boundary the report has to be carried across, so
+ * rondo neither runs a model nor says anything about it -- which is also why
+ * every body published before this change is unchanged by it.
+ */
+async function composedBodyFor(
+  record: IterationRecord,
+  composing: PublishBodyComposing | null,
+): Promise<ComposedBodyOutcome | null> {
+  const language = planField(record, "material_language");
+  if (composing === null || language === "") {
+    return null;
+  }
+  const report = await composing.report();
+  if (report === null) {
+    return {
+      kind: "unavailable",
+      reason:
+        "the gate this lap reported at would not read, so there was no report to compose from",
+    };
+  }
+  return await composing.compose({ report, reportLanguage: language });
+}
+
 export async function publishPlanFor(
   record: IterationRecord,
   asked: PublishAsked,
@@ -7928,6 +7981,12 @@ export async function publishPlanFor(
    * the press's.
    */
   thread: Pick<AdvisoryRecord, "threadMessages" | "scopesFor" | "readProposal"> | null = null,
+  /**
+   * How the body's English is composed from a report written in another
+   * language (`D-0079` section 4, rondo#290). Null composes nothing, and the
+   * body is then the deterministic one it has always been.
+   */
+  composing: PublishBodyComposing | null = null,
 ): Promise<PublishPlanned> {
   if (record.status !== "closed") {
     return {
@@ -8141,6 +8200,7 @@ export async function publishPlanFor(
     requestWords: await requestWordsOf(thread, record.requestMessageId),
     plansDrafted: await plansDraftedFor(thread, record.requestMessageId),
     forge: { host, repo },
+    composedBody: await composedBodyFor(record, composing),
   });
 
   const readings = await store.readingsFor(record.id);
@@ -8825,6 +8885,29 @@ async function commandPublish(
     environment,
     store,
     openAdvisoryRecord(storePath),
+    // **The body's English, composed from the lap's report** (`D-0079` section
+    // 4, rondo#290). Both legs are reachable from here and from nowhere inside
+    // that function: continuo is this command's own, and the drafter is the one
+    // `./forge.ts` runs for every other composed draft.
+    {
+      report: async () => {
+        if (record.gateId === null) {
+          return null;
+        }
+        const observed = await showGate(continuo, {
+          db: planField(record, "db"),
+          gateId: record.gateId,
+        });
+        // The gate's rationale is continuo's word-for-word copy of the worker's
+        // last words (`./question.ts`), which is the report itself.
+        return observed.kind === "answered" ? observed.payload.rationale : null;
+      },
+      compose: async (material) =>
+        await composePublishBody(
+          { runDrafter: async (document) => await runDrafter(drafterRow(), document) },
+          material,
+        ),
+    },
   );
   if (planned.kind === "refused") {
     return refuse(planned.reason);

@@ -18887,6 +18887,18 @@ through the window and it chose the recommended option on each; the answers are 
 put to the human gate, and its answer". Refs `D-0053`,
 `D-0055`, `D-0056`, `D-0063`, `D-0071`, `D-0076`, rondo#257, rondo#159.
 
+> **Annotation (2026-09-28, from rondo#290).** Added after this entry was accepted, and additive.
+> **Section 4 is built for the terminal's `publish`.** `src/access/publish-body.ts` composes the
+> English body from the lap's own report: the ask names reading the report and writing an English
+> account of it and refuses going sentence by sentence (rule 4.2), the three sections it answers
+> with stand in one fixed order -- what changed, why, what was verified -- and the report's own
+> words are quoted nowhere in the body, which says instead that they are on the gate the person
+> answered. **The page's publish composes nothing yet**: its preview and its press each run
+> `publishPlanFor`, and the body is inside the digest the press compares against what the screen
+> showed, so a model's answer taken twice would refuse every press. That path needs a composed body
+> recorded once and read by both, which is a row and is not taken here; the residual below stays
+> open for it.
+
 **This entry decides and builds.** The building change is the pull request that carries it:
 `src/access/wording.ts`, `src/access/model-draft.ts` and `src/continuo/invoker.ts`, with their tests.
 The rule on where English is written (section 4) is decided here and built elsewhere.

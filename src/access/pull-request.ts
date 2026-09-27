@@ -28,6 +28,7 @@ import {
 } from "../store/records.js";
 import { fileCounts, type LapWorkInspection } from "./forge.js";
 import { type NamedIssue, namedIssues } from "./issue-read.js";
+import { COMPOSED_SECTIONS, type ComposedBodyOutcome } from "./publish-body.js";
 import { LIST_LIMIT } from "./review.js";
 
 /**
@@ -136,6 +137,18 @@ export interface PullRequestTextInput {
   readonly plansDrafted?: number;
   /** The forge host and `OWNER/NAME` the pull request is opened in, to tell an issue here from one elsewhere. */
   readonly forge?: { readonly host: string; readonly repo: string };
+  /**
+   * The English sections composed from the lap's report (`D-0079` section 4,
+   * rondo#290), or null where nothing was composed because nothing had to be:
+   * the lap asked its worker for no language, so its report is not in one this
+   * body would have to be written across.
+   *
+   * **A body is never the report translated, and never the report** (rule 4.2).
+   * The composed shape is the only way the report's meaning reaches this body:
+   * an `unavailable` outcome leaves the sections out and says where the report
+   * is, and there is no path here that quotes the report's own words.
+   */
+  readonly composedBody?: ComposedBodyOutcome | null;
 }
 
 export interface PullRequestText {
@@ -255,7 +268,14 @@ function pullRequestBody(input: PullRequestTextInput): string {
 /** The body, section by section. */
 function composeBody(input: PullRequestTextInput, withRequest: boolean): string {
   const { record, runId, topicBranch, baseBranch, work } = input;
-  const lines: string[] = ["## What changed", ""];
+  const composed = input.composedBody ?? null;
+  // The first composed section stands under this heading, which is
+  // `COMPOSED_SECTIONS[0]`'s own: the account of the change comes before the
+  // evidence for it, and the commits and files below are that evidence.
+  const lines: string[] = [`## ${COMPOSED_SECTIONS[0].heading}`, ""];
+  if (composed !== null && composed.kind === "composed") {
+    lines.push(composed.summary, "");
+  }
 
   if (work.kind === "read") {
     if (work.commits.length === 0) {
@@ -308,6 +328,8 @@ function composeBody(input: PullRequestTextInput, withRequest: boolean): string 
     );
   }
 
+  lines.push(...composedLines(composed));
+
   lines.push("## How this got here", "");
   lines.push(
     `- rondo walked run \`${listed(runId, "run id")}\` (iteration \`${listed(record.id, "id")}\`) ` +
@@ -343,6 +365,50 @@ function composeBody(input: PullRequestTextInput, withRequest: boolean): string 
     "This pull request was opened by `rondo publish`, which an operator ran. Merging it is not.",
   );
   return lines.join("\n");
+}
+
+/**
+ * The sections composed from the lap's report, after the change's evidence
+ * (`D-0079` section 4, rondo#290).
+ *
+ * **The order is `COMPOSED_SECTIONS`' and is fixed**: what changed, then why,
+ * then what was verified. The first of them is already above, under the heading
+ * it names, so this renders the rest in the same order from the same list --
+ * which is what keeps one decision about the order in one place.
+ *
+ * **A body that could not be composed says so, and still does not quote the
+ * report** (rule 4.2). What a reader loses is rondo's account of the report;
+ * what they must not be given instead is the report itself, in a language this
+ * pull request is not written in, standing where the account belongs. So the
+ * sentence names where the report is -- the gate the person answered, which is
+ * rondo's record of it -- and this body claims nothing it did not read.
+ */
+function composedLines(outcome: ComposedBodyOutcome | null): readonly string[] {
+  if (outcome === null) {
+    return [];
+  }
+  if (outcome.kind === "unavailable") {
+    return [
+      "This lap reported on its own work in the language the person who approved it reads, and " +
+        `rondo could not compose an English account of it for this body: ${listed(outcome.reason, "reason")}. ` +
+        "The report itself is not quoted here, and is not translated: it is on the gate that " +
+        "person answered, in rondo's own record of this lap.",
+      "",
+    ];
+  }
+  return [
+    ...COMPOSED_SECTIONS.slice(1).flatMap(({ key, heading }) => [
+      `## ${heading}`,
+      "",
+      outcome[key],
+      "",
+    ]),
+    "The three sections above were composed in English from this lap's own report, which its " +
+      "worker wrote in the language the person who approved it reads. They are an account of what " +
+      "that report says and not a translation of it; the report itself is on the gate that person " +
+      "answered, in rondo's own record of this lap.",
+    "",
+  ];
 }
 
 /**
