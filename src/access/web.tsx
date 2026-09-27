@@ -2180,8 +2180,12 @@ function scopeStopView(wording: Chrome, message: ThreadMessageDraft) {
   // which the stop does not lift; the other two options are the answering
   // presses below. No link: the request's scope screen holds while a question
   // waits (rondo#431), so it cannot approve a successor now.
+  // A redo's stop names the lap it stopped (an `iteration` basis), which is
+  // waiting with its gate; a first admission's names none, and has no budget
+  // to raise yet (Codex round 2).
+  const atLap = message.bases.some((basis) => basis["form"] === "iteration");
   const options = [
-    [wording.scopeStopWider, wording.scopeStopWiderDoes],
+    [wording.scopeStopWider, atLap ? wording.scopeStopWiderDoes : wording.scopeStopWiderNoLap],
     [wording.scopeStopChange, wording.scopeStopChangeDoes],
     [wording.scopeStopStop, wording.scopeStopStopDoes],
   ] as const;

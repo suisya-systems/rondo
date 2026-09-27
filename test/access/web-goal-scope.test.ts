@@ -17,13 +17,17 @@ import { expect, test } from "vitest";
 import { DETERMINISTIC_DRAFTER } from "../../src/access/advisory.js";
 import { pauseGoalScopeFromPage, recordGoalScopeFromPage } from "../../src/access/cli.js";
 import type { CommandOutcome } from "../../src/access/forge.js";
-import { goalScopeStanding } from "../../src/access/goal-scope.js";
+import { goalScopeMaterial, goalScopeStanding } from "../../src/access/goal-scope.js";
 import { triageHost } from "../../src/access/triage-host.js";
 import type { GoalScopeInput } from "../../src/access/web-app.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refrain/plan.js";
-import { requestsGoal } from "../../src/store/records.js";
+import {
+  type JsonRecord,
+  requestsGoal,
+  scopePayloadWithDefaults,
+} from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { mint, operatorPage, PLAN, portsOver } from "./page-world.js";
 
@@ -342,7 +346,48 @@ test("a scope stop shows its three options, in the page's language, with rondo's
     ]) {
       expect(html).toContain(said);
     }
+    // A first admission's stop names no lap: there is no gate to raise at.
+    expect(html).toContain(wording.scopeStopWiderNoLap);
+    expect(html).not.toContain(wording.scopeStopWiderDoes);
     // rondo's record is kept, shut, byte for byte.
     expect(html).toContain("is outside scope 's-1'.");
   }
+});
+
+test("a form whose row was written but never approved is tested again, not replayed", async () => {
+  const w = await world();
+  const draft = await w.page({ kind: "goalScope", repository: "o/r" });
+  // The first press wrote its row and stopped before the approval.
+  const interrupted = scopeId();
+  const standingBefore = await goalScopeStanding(w.record, "goal-1");
+  expect(standingBefore.kind).toBe("none");
+  const read = await goalScopeMaterial(
+    { store: w.store, record: w.record, now: () => 3_000 },
+    "o/r",
+  );
+  if (read.kind !== "read") throw new Error(read.kind);
+  const written = await w.record.recordScope({
+    scopeId: interrupted,
+    payload: scopePayloadWithDefaults({
+      requests: { from_goal: "goal-1" },
+      workspaces: read.material.workspaces,
+      agent_types: read.material.agentTypes.map((one) => one.agentTypeDigest),
+      budgets: BUDGETS,
+    } as unknown as JsonRecord),
+    supersedesScopeId: null,
+    authorKind: "operator",
+    authorId: "ada",
+    bases: [],
+    createdAtMs: 3_000,
+    agentTypeRecords: read.material.agentTypes,
+  });
+  expect(written).toEqual({ kind: "recorded" });
+  // Another press approves meanwhile; the retry of the first is refused.
+  expect((await approve(w)).ok).toBe(true);
+  const retry = await approve(w, {
+    scopeId: interrupted,
+    goalId: hidden(draft, "goal"),
+    drawn: hidden(draft, "drawn"),
+  });
+  expect(retry).toMatchObject({ ok: false, why: "goalScopeRefusedMoved" });
 });

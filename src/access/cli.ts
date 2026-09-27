@@ -5198,7 +5198,13 @@ export async function recordGoalScopeFromPage(
     }
     const standing = await goalScopeStanding(record, material.goal.goalId);
     const replay = await record.readScope(input.scopeId);
-    const replayed = replay.kind === "read" && replay.scope.authorId === actor.actorId;
+    // **Only an approved replay passes** (Codex round 2): a row this form
+    // wrote whose approval never landed is tested like a first press, else a
+    // retry after another approval would approve a second root over the goal.
+    const replayed =
+      replay.kind === "read" &&
+      replay.scope.authorId === actor.actorId &&
+      (await approvedScope(record, input.scopeId));
     const resumes = standing.kind === "paused" ? standing.scopeDecisionId : null;
     if (!replayed && (standing.kind === "running" || resumes !== input.resumes)) {
       return {
@@ -5267,7 +5273,8 @@ export async function pauseGoalScopeFromPage(
     const replayed =
       replay.kind === "read" &&
       replay.scope.authorId === actor.actorId &&
-      replay.scope.supersedesScopeId === predecessor.scopeId;
+      replay.scope.supersedesScopeId === predecessor.scopeId &&
+      (await approvedScope(record, input.scopeId));
     if (
       !replayed &&
       (predecessor.payload.budgets.laps === 0 ||
@@ -5290,6 +5297,12 @@ export async function pauseGoalScopeFromPage(
       agentTypeRecords: [],
     });
   });
+}
+
+/** Whether a scope row carries an `approved` decision. */
+async function approvedScope(record: AdvisoryRecord, scopeId: string): Promise<boolean> {
+  const decided = await record.scopeDecisionOf(scopeId);
+  return decided.kind === "read" && decided.decision.outcome === "approved";
 }
 
 /**
