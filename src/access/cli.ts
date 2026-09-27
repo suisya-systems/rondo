@@ -79,8 +79,10 @@ import {
   type LapReading,
   latestReading,
   modelReadingDue,
+  namedRequests,
   planField,
   readingCoverage,
+  requestsGoal,
   reviewedReading,
   type ScopeBudgets,
   type ScopeOutwardAct,
@@ -217,6 +219,7 @@ import {
   approvalTip,
   heldAgentTypeLines,
   type ScopedAdmission,
+  scopeCovers,
 } from "./scope.js";
 import { triageHost } from "./triage-host.js";
 import {
@@ -357,7 +360,7 @@ export const USAGE = `rondo - the operator surface for delegated work
                           the observation rests: snapshot:/pointer,
                           iteration:ID, gate:ID#SEQ, run:ID,
                           repo:PATH@COMMIT#FIRST-LAST, message:ID,
-                          scope:ID, proposal:ID or setup:ID. Write
+                          scope:ID, proposal:ID, setup:ID or goal:ID. Write
                           --observation with
                           an equals sign: an observation may begin with a dash
   rondo propose --iteration-id ID --successor-id ID
@@ -2347,6 +2350,8 @@ export function parseBasis(text: string): Basis | null {
       return { form: "proposal", proposalId: rest };
     case "setup":
       return { form: "setup", setupId: rest };
+    case "goal":
+      return { form: "goal", goalId: rest };
     case "gate": {
       const hash = rest.lastIndexOf("#");
       const tail = rest.slice(hash + 1);
@@ -2385,7 +2390,7 @@ export function parseBasis(text: string): Basis | null {
 /** The one sentence that lists what a `--basis` may be, written once. */
 const BASIS_FORMS_LINE =
   "snapshot:/pointer, iteration:ID, gate:ID#SEQ, run:ID, repo:PATH@COMMIT#FIRST-LAST, message:ID, " +
-  "scope:ID, proposal:ID or setup:ID";
+  "scope:ID, proposal:ID, setup:ID or goal:ID";
 
 /**
  * Door nine: hand one observation to the advisory, and record that a person
@@ -3027,7 +3032,12 @@ async function commandScope(
   const budgets = payload.budgets;
   say(`recorded as scope '${scope.scopeId}'`);
   say(`digest: ${scope.scopeDigest}`);
-  say(`requests: ${payload.requests.join(", ")}`);
+  const goalId = requestsGoal(payload.requests);
+  say(
+    goalId === null
+      ? `requests: ${namedRequests(payload.requests).join(", ")}`
+      : `requests: every one the flow injects from goal ${goalId}`,
+  );
   for (const workspace of payload.workspaces) {
     say(`workspace: ${workspace.repository} at ${workspace.workspace_root}`);
   }
@@ -4904,7 +4914,7 @@ async function raiseScope(
     return notTaken(`the scope '${decided.decision.scopeId}' will not read`);
   }
   const predecessor = read.scope;
-  if (!predecessor.payload.requests.includes(input.requestMessageId)) {
+  if (!(await scopeCovers(record, predecessor.payload, input.requestMessageId))) {
     return notTaken(`the scope '${predecessor.scopeId}' does not list this request`);
   }
   const already = await record.readScope(input.scopeId);

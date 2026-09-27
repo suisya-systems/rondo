@@ -89,6 +89,7 @@ import {
   lapBudgetCap,
   latestReading,
   MODEL_READING_DRAFTER_PREFIX,
+  namedRequests,
   type Occupancy,
   type OpenAsk,
   type OpenProposal,
@@ -97,8 +98,10 @@ import {
   type ProposalDraft,
   type ReadingEvidence,
   type RecordChange,
+  type RequestOpener,
   readingContent,
   readScopePayload,
+  requestsGoal,
   type ScopeDecisionDraft,
   type ScopeDraft,
   type ScopePayload,
@@ -115,13 +118,14 @@ import {
   type StoredTriage,
   type StoredTriageDecline,
   SUSPENDED_STATUSES,
+  scopeCoversRequest,
   TERMINAL_STATUSES,
   type ThreadMessageDraft,
   type TriageDeclineDraft,
   type UnconsumedDecision,
   type WithheldByRule,
   WORKER_QUESTION_AUTHOR,
-  WRITABLE_SCOPE_ACT_KINDS,
+  type WRITABLE_SCOPE_ACT_KINDS,
 } from "./records.js";
 
 /**
@@ -3349,6 +3353,8 @@ export interface AdvisoryRecord {
    * person's own scope that replaced it. A row that will not read is skipped.
    */
   scopesFor(requestMessageId: string): Promise<readonly StoredScope[]>;
+  /** The message opening a request, or null for any other id (D-0128 rule 1's goal test). */
+  requestOpener(messageId: string): Promise<RequestOpener | null>;
   /**
    * The held record behind one agent-type digest, for the scope's screen to
    * read the tier and grants back from (D-0069 section 1): an
@@ -3867,7 +3873,20 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
     // D-0061 rule 1): a thread message with no `in_reply_to`, by the same
     // test `reserve()` makes of a lap's request link. An elevation's bare
     // id or a reply is a message, and neither is a request.
-    for (const messageId of reading.payload.requests) {
+    const goalScope = requestsGoal(reading.payload.requests);
+    if (
+      goalScope !== null &&
+      connection.prepare("SELECT 1 FROM goal WHERE goal_id = ?").get(goalScope) === undefined
+    ) {
+      return {
+        kind: "refused",
+        reason:
+          `the scope '${draft.scopeId}' covers the requests from goal '${goalScope}', which is ` +
+          "no goal row: a scope over a goal nobody wrote covers nothing a reader can follow " +
+          "(D-0128 rule 1)",
+      };
+    }
+    for (const messageId of namedRequests(reading.payload.requests)) {
       const standing = requestStanding(connection, messageId);
       if (standing !== "opens") {
         return {
@@ -4711,20 +4730,33 @@ export function advisoryRecord(connection: DatabaseSync): AdvisoryRecord {
       const ids = (
         connection
           .prepare(
-            "SELECT s.scope_id FROM scope s, " +
-              "json_each(CASE WHEN json_valid(s.payload) THEN s.payload ELSE '{}' END, '$.requests') j " +
-              "WHERE j.value = ? ORDER BY s.created_at_ms, s.rowid",
+            // A named scope lists the id; a goal scope (D-0128) is a candidate
+            // tested against the opener below.
+            "SELECT s.scope_id FROM scope s WHERE json_valid(s.payload) AND (" +
+              "json_type(s.payload, '$.requests') = 'object' OR (" +
+              "json_type(s.payload, '$.requests') = 'array' AND EXISTS (" +
+              "SELECT 1 FROM json_each(s.payload, '$.requests') j WHERE j.value = ?))) " +
+              "ORDER BY s.created_at_ms, s.rowid",
           )
           .all(requestMessageId) as SqlRow[]
       ).map((row) => String(row["scope_id"]));
+      const opener = requestOpenerOf(connection, requestMessageId);
       const scopes: StoredScope[] = [];
       for (const id of ids) {
         const read = await this.readScope(id);
-        if (read.kind === "read") {
+        if (
+          read.kind === "read" &&
+          (requestsGoal(read.scope.payload.requests) === null ||
+            (opener !== null && scopeCoversRequest(read.scope.payload.requests, opener)))
+        ) {
           scopes.push(read.scope);
         }
       }
       return scopes;
+    },
+
+    async requestOpener(messageId: string): Promise<RequestOpener | null> {
+      return requestOpenerOf(connection, messageId);
     },
 
     async recordSetupPlan(draft: SetupPlanDraft): Promise<RecordOutcome> {
@@ -5224,6 +5256,8 @@ const BASIS_LOCATOR_FIELDS: Readonly<Record<string, Readonly<Record<string, stri
   proposal: { proposalId: "string" },
   // D-0075 rule 2.4: a drafted scope rests on the setup row it records from.
   setup: { setupId: "string" },
+  // D-0128 rule 1: a request the flow host injects names the goal it serves.
+  goal: { goalId: "string" },
 };
 
 /**
@@ -5591,6 +5625,16 @@ function threadMessageRefusal(connection: DatabaseSync, draft: ThreadMessageDraf
       return (
         `a basis of '${draft.messageId}' is setup:${String(basis["setupId"])}, which is no ` +
         "setup row: a locator to nothing is a basis nobody can follow (D-0061 rule 2.6)"
+      );
+    }
+    if (
+      basis["form"] === "goal" &&
+      connection.prepare("SELECT 1 FROM goal WHERE goal_id = ?").get(basis["goalId"] as string) ===
+        undefined
+    ) {
+      return (
+        `a basis of '${draft.messageId}' is goal:${String(basis["goalId"])}, which is no ` +
+        "goal row: a locator to nothing is a basis nobody can follow (D-0061 rule 2.6)"
       );
     }
   }
@@ -6071,6 +6115,33 @@ function requestStanding(
   return row["author_kind"] !== null && row["in_reply_to"] === null ? "opens" : "not_a_request";
 }
 
+/**
+ * The row opening a request, or null for an id that opens none. Bases that do
+ * not parse read as none, which a goal scope covers nothing of (D-0128 rule 1).
+ */
+function requestOpenerOf(connection: DatabaseSync, messageId: string): RequestOpener | null {
+  const row = connection
+    .prepare(
+      "SELECT author_id, bases FROM conversation_message " +
+        "WHERE message_id = ? AND author_kind IS NOT NULL AND in_reply_to IS NULL",
+    )
+    .get(messageId) as SqlRow | undefined;
+  if (row === undefined) {
+    return null;
+  }
+  let bases: unknown = [];
+  try {
+    bases = JSON.parse(String(row["bases"] ?? "[]"));
+  } catch {
+    bases = [];
+  }
+  return {
+    messageId,
+    authorId: String(row["author_id"] ?? ""),
+    bases: Array.isArray(bases) ? (bases as JsonValue[]) : [],
+  };
+}
+
 /** Why `messageId` cannot be a lap's request link, or null when it can (D-0061 rule 4). */
 function requestRefusal(connection: DatabaseSync, messageId: string): string | null {
   const standing = requestStanding(connection, messageId);
@@ -6175,11 +6246,16 @@ function scopeRefusal(
   // refused, earlier in `reserve()`, an id that opens no request, so this asks
   // only whether the scope covers it (D-0066 rule 1.2.1).
   const request = input.requestMessageId;
-  if (!payload.requests.includes(request)) {
+  const opener = requestOpenerOf(connection, request);
+  if (opener === null || !scopeCoversRequest(payload.requests, opener)) {
     return outside(
       "request",
-      `the request '${request}' is not one scope '${scopeId}' lists, ` +
-        "and a scope covers only the requests it lists (D-0066 rule 1.2.1)",
+      requestsGoal(payload.requests) === null
+        ? `the request '${request}' is not one scope '${scopeId}' lists, ` +
+            "and a scope covers only the requests it lists (D-0066 rule 1.2.1)"
+        : `the request '${request}' is not one the flow injected from goal ` +
+            `'${requestsGoal(payload.requests)}', and scope '${scopeId}' covers only those ` +
+            "(D-0128 rule 1)",
     );
   }
   // 5. No open ask over the act's line, read under the write lock (rules 4.2
