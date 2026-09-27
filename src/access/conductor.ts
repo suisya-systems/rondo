@@ -44,6 +44,7 @@ import {
   type VerifiedContinuo,
 } from "../continuo/invoker.js";
 import type { ContinuoResult, LapSpend } from "../continuo/protocol.js";
+import { apiCostUsd } from "../continuo/roles.js";
 import { classifyPlan } from "../refrain/classification.js";
 import {
   abandon as abandonIteration,
@@ -243,17 +244,22 @@ function lapRequestOf(
  * what lets a reader see no fourth number appeared on the way across. A `null`
  * spend is continuo unable to say, and stays three nulls, never a zero.
  */
-function lapSpendFields(
+export function lapSpendFields(
   spend: LapSpend | null,
 ): Pick<LapPerformance, "costUsd" | "turns" | "durationMs" | "spendSource"> {
-  return spend === null
-    ? { costUsd: null, turns: null, durationMs: null, spendSource: "notReported" }
-    : {
-        costUsd: spend.totalCostUsd,
-        turns: spend.numTurns,
-        durationMs: spend.durationMs,
-        spendSource: "resultEvent",
-      };
+  if (spend === null) {
+    return { costUsd: null, turns: null, durationMs: null, spendSource: "notReported" };
+  }
+  // A Codex lap reports tokens and no dollars (continuo D-1114 rule 7); rondo
+  // prices them at the public API rate (D-0123). A reported cost is never
+  // replaced.
+  const priced = spend.totalCostUsd === null ? apiCostUsd(spend) : null;
+  return {
+    costUsd: priced ?? spend.totalCostUsd,
+    turns: spend.numTurns,
+    durationMs: spend.durationMs,
+    spendSource: priced === null ? "resultEvent" : "priced",
+  };
 }
 
 /**

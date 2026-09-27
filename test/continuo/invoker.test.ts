@@ -31,6 +31,7 @@ import {
   performLap,
   presentGate,
   RUN_CLOSE_OUTCOMES,
+  resolveWorker,
   SERVED_ENDPOINT_RECIPIENTS,
   showGate,
   showRun,
@@ -279,6 +280,84 @@ describe("the model tier, which only rondo can price", () => {
       // argument.
       expect(outcome.model).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
     }
+  });
+});
+
+describe("the host's worker (D-0123)", () => {
+  const codexHost = {
+    RONDO_WORKER_PROVIDER: "codex",
+    RONDO_CODEX_HOME: "/home/op/.codex",
+    RONDO_CODEX_COMMAND: "/usr/local/bin/codex",
+  };
+
+  test("no provider, an empty one, or 'claude' is the Claude CLI", () => {
+    for (const environment of [
+      {},
+      { RONDO_WORKER_PROVIDER: " " },
+      { RONDO_WORKER_PROVIDER: "claude" },
+    ]) {
+      expect(resolveWorker(environment, "linux")).toEqual({
+        kind: "resolved",
+        worker: { provider: "claude" },
+      });
+    }
+  });
+
+  test("codex takes its home and its command, both absolute", () => {
+    expect(resolveWorker(codexHost, "linux")).toEqual({
+      kind: "resolved",
+      worker: {
+        provider: "codex",
+        codexHome: "/home/op/.codex",
+        codexCommand: "/usr/local/bin/codex",
+      },
+    });
+    for (const [name, value] of [
+      ["RONDO_CODEX_HOME", undefined],
+      ["RONDO_CODEX_HOME", ".codex"],
+      ["RONDO_CODEX_COMMAND", ""],
+      ["RONDO_CODEX_COMMAND", "codex"],
+    ] as const) {
+      const refused = resolveWorker({ ...codexHost, [name]: value }, "linux");
+      expect(refused.kind, `${name}=${String(value)}`).toBe("refused");
+      expect(refused.kind === "refused" && refused.reason).toContain(name);
+    }
+  });
+
+  test("an unknown provider, and codex on Windows, refuse the host with the reason", () => {
+    const unknown = resolveWorker({ RONDO_WORKER_PROVIDER: "gemini" }, "linux");
+    expect(unknown.kind === "refused" && unknown.reason).toContain("claude, codex");
+    const windows = resolveWorker(codexHost, "win32");
+    expect(windows.kind).toBe("refused");
+    if (windows.kind === "refused") {
+      expect(windows.reason).toContain("D-1120");
+      expect(windows.reason).toMatch(/^[\x20-\x7e]+$/);
+    }
+    // Claude on Windows is unchanged.
+    expect(resolveWorker({}, "win32").kind).toBe("resolved");
+  });
+
+  test("a Codex host drives every tier on the Codex model, and a relative home never reaches run", async () => {
+    const codex: VerifiedContinuo = {
+      ...unissued,
+      worker: { provider: "codex", codexHome: "/home/op/.codex", codexCommand: "/usr/bin/codex" },
+    };
+    for (const tier of mappedModelTiers()) {
+      const outcome = await performLap(codex, lapRequest({ modelTier: tier }));
+      expect(defectReason(outcome.result)).toContain(REACHED_RUN);
+      expect(outcome.model).toBe("gpt-6-astra");
+    }
+    const relative = await performLap(
+      {
+        ...codex,
+        worker: { provider: "codex", codexHome: ".codex", codexCommand: "/usr/bin/codex" },
+      },
+      lapRequest(),
+    );
+    const reason = defectReason(relative.result);
+    expect(reason).toContain("codexHome");
+    expect(reason).not.toContain(REACHED_RUN);
+    expect(relative.model).toBeNull();
   });
 });
 

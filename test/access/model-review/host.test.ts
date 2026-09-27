@@ -328,8 +328,30 @@ test("a plan with no criterion is refused before anything is gathered or spawned
   expect(lines.join("\n")).toContain("no model reading could be taken");
 });
 
-test("a lap run under the reviewer's own family is refused without spawning", async () => {
+test("a Codex lap is read by the Claude reviewer row, not refused as the reviewer's family", async () => {
   const { store, id, ports, calls } = await world({ model: "gpt-6-astra" });
+  const rows: string[] = [];
+  const runReviewer = ports.runReviewer;
+
+  await takeModelReading(
+    {
+      ...ports,
+      runReviewer: async (row, document) => {
+        rows.push(`${row.executable}:${row.model}`);
+        return await runReviewer(row, document);
+      },
+    },
+    id,
+  );
+
+  // D-0123: the reviewer is the first row of another family than the lap's.
+  expect(rows).toEqual(["claude:claude-opus-5"]);
+  expect(calls.run).toHaveLength(1);
+  expect((await store.readingsFor(id)).at(-1)?.drafter).toContain("claude-opus-5");
+});
+
+test("a lap under a model rondo files under no family is refused without spawning", async () => {
+  const { store, id, ports, calls } = await world({ model: "mystery-1" });
 
   await takeModelReading(ports, id);
 

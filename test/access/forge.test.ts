@@ -905,3 +905,41 @@ test("a conflict fix is pushed onto the pull request's branch, and never over a 
     }),
   ).toContain(fix);
 });
+
+posix("a Claude reviewer row runs claude -p over the document with no tools (D-0123)", async () => {
+  const result = JSON.stringify({
+    type: "result",
+    subtype: "success",
+    is_error: false,
+    num_turns: 1,
+    result: '\n {"findings":[]} \n',
+    permission_denials: [],
+    usage: {},
+    total_cost_usd: 0.01,
+  });
+  const fake = fakeReviewer(result);
+  const document = "review this lap\n";
+
+  const run = await runReviewer(
+    { model: "claude-opus-5", family: "claude", executable: fake.executable },
+    document,
+  );
+
+  expect(run).toEqual({
+    kind: "answered",
+    finalMessage: '{"findings":[]}',
+    deliveredDigest: contentDigest({ delivered: document }),
+  });
+  expect(readFileSync(fake.seen, "utf8")).toBe(document);
+  const argv = readFileSync(`${fake.seen}.argv`, "utf8").split("\n");
+  expect(argv.slice(0, 3)).toEqual(["-p", "--model", "claude-opus-5"]);
+  expect(argv).toContain("--safe-mode");
+
+  // A tool call fails the reading, as it fails a draft.
+  const tooled = fakeReviewer(JSON.stringify({ ...JSON.parse(result), num_turns: 2 }));
+  const refused = await runReviewer(
+    { model: "claude-opus-5", family: "claude", executable: tooled.executable },
+    document,
+  );
+  expect(refused.kind).toBe("failed");
+});

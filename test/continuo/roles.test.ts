@@ -18,6 +18,7 @@ import { describe, expect, test } from "vitest";
 
 import { admitRun, type VerifiedContinuo } from "../../src/continuo/invoker.js";
 import {
+  apiCostUsd,
   CONTINUO_ROSTER,
   mapModelTier,
   mapNeutralRole,
@@ -25,6 +26,7 @@ import {
   mappedNeutralRoleNames,
   modelFamilyOf,
   reviewerFamilyCheck,
+  reviewerFor,
   reviewerRow,
 } from "../../src/continuo/roles.js";
 import { PRICED_MODEL_TIERS } from "../../src/refrain/classification.js";
@@ -190,14 +192,27 @@ describe("the model table, which is a policy rather than a transcription", () =>
     ]);
   });
 
-  test("every tier names its provider, and every provider is claude until rondo#460 (D-0122)", () => {
-    // continuo D-1114 decision 2 puts the provider in this table. A `codex` row
-    // is rondo#460's: it needs a reviewer of another family (D-0065 rule 3.3).
+  test("every tier names its provider, and the default table is the Claude CLI's (D-0122)", () => {
+    // continuo D-1114 decision 2 puts the provider in this table.
     for (const tier of mappedModelTiers()) {
       const selection = mapModelTier(tier);
       expect(selection.kind === "selected" && selection.provider).toBe("claude");
       expect(modelFamilyOf(selectedModel(tier))).toBe("claude");
     }
+  });
+
+  test("a Codex host runs every tier on gpt-6-astra through the Codex CLI (D-0123)", () => {
+    // The same tiers, so an agent type prices on either host; a tier outside
+    // them is refused on a Codex host as on a Claude one.
+    for (const tier of mappedModelTiers()) {
+      expect(mapModelTier(tier, "codex")).toEqual({
+        kind: "selected",
+        model: "gpt-6-astra",
+        provider: "codex",
+      });
+    }
+    expect(mapModelTier("frugal", "codex").kind).toBe("unknown");
+    expect(mapModelTier("constructor", "codex").kind).toBe("unknown");
   });
 
   test("every model is a plain model id, which is continuo's own rule for the flag", () => {
@@ -284,6 +299,20 @@ describe("the reviewer table and the family check (D-0065 section 3)", () => {
     }
   });
 
+  test("each lap is read by the first reviewer of another family (D-0123)", () => {
+    expect(reviewerFor("claude-opus-5")).toEqual(reviewerRow());
+    expect(reviewerFor("claude-sonnet-5")).toEqual(reviewerRow());
+    const codexLap = reviewerFor("gpt-6-astra");
+    expect(codexLap).toEqual({ model: "claude-opus-5", family: "claude", executable: "claude" });
+    expect(reviewerFamilyCheck(codexLap, "gpt-6-astra")).toEqual({ kind: "distinct" });
+    // Choosing a reviewer is not a way around the check: an unknown or absent
+    // lap model gets the first row, and the check refuses it as before.
+    for (const lapModel of ["mystery-1", null]) {
+      expect(reviewerFor(lapModel)).toEqual(reviewerRow());
+      expect(reviewerFamilyCheck(reviewerFor(lapModel), lapModel).kind).toBe("refused");
+    }
+  });
+
   test("the reviewer and the standard tier are of different families", () => {
     expect(reviewerFamilyCheck(reviewerRow(), "claude-opus-5")).toEqual({ kind: "distinct" });
   });
@@ -307,5 +336,30 @@ describe("the reviewer table and the family check (D-0065 section 3)", () => {
     if (unknown.kind === "refused") {
       expect(unknown.reason).toContain("mystery-1");
     }
+  });
+});
+
+describe("a Codex lap's tokens at the public API price (D-0123)", () => {
+  const tokens = {
+    model: "gpt-6-astra",
+    inputTokens: 1_000_000,
+    cachedInputTokens: 600_000,
+    cacheWriteInputTokens: 100_000,
+    outputTokens: 200_000,
+  };
+
+  test("the counts nest: cached input and cache writes are parts of the input", () => {
+    // 300K uncached at $10, 600K cached at $1, 100K written at $12.50, 200K
+    // output at $50 per million.
+    expect(apiCostUsd(tokens)).toBeCloseTo(3 + 0.6 + 1.25 + 10, 10);
+  });
+
+  test("no price for the model, a missing count, or counts that do not add up price nothing", () => {
+    expect(apiCostUsd({ ...tokens, model: "claude-opus-5" })).toBeNull();
+    expect(apiCostUsd({ ...tokens, model: null })).toBeNull();
+    expect(apiCostUsd({ ...tokens, model: "constructor" })).toBeNull();
+    expect(apiCostUsd({ ...tokens, outputTokens: null })).toBeNull();
+    expect(apiCostUsd({ ...tokens, cachedInputTokens: 2_000_000 })).toBeNull();
+    expect(apiCostUsd({ ...tokens, cacheWriteInputTokens: -1 })).toBeNull();
   });
 });

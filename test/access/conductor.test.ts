@@ -16,7 +16,7 @@
  */
 import { expect, test } from "vitest";
 
-import { asEffect } from "../../src/access/conductor.js";
+import { asEffect, lapSpendFields } from "../../src/access/conductor.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
 
 /** The reader is never reached on a failure path, and says so if it is. */
@@ -102,4 +102,29 @@ test("an answered outcome is the one path that reads the payload", () => {
     kind: "answered",
     value: "r1",
   });
+});
+
+test("a Codex lap's tokens are priced, and a reported cost is never replaced (D-0123)", () => {
+  const tokens = {
+    model: "gpt-6-astra",
+    inputTokens: 1_000_000,
+    cachedInputTokens: 0,
+    cacheWriteInputTokens: 0,
+    outputTokens: 100_000,
+  };
+  const codex = lapSpendFields({ totalCostUsd: null, numTurns: null, durationMs: 9, ...tokens });
+  expect(codex).toEqual({ costUsd: 15, turns: null, durationMs: 9, spendSource: "priced" });
+
+  const claude = lapSpendFields({ totalCostUsd: 1.5, numTurns: 3, durationMs: 9, ...tokens });
+  expect(claude).toMatchObject({ costUsd: 1.5, spendSource: "resultEvent" });
+
+  // Tokens that do not price leave the null a null (D-0046: not read, not zero).
+  const unpriced = lapSpendFields({
+    totalCostUsd: null,
+    numTurns: null,
+    durationMs: 9,
+    ...tokens,
+    model: null,
+  });
+  expect(unpriced).toMatchObject({ costUsd: null, spendSource: "resultEvent" });
 });

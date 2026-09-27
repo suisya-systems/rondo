@@ -810,11 +810,20 @@ export interface LapPerformed {
   readonly commands: string;
 }
 
-/** `lap perform`'s `spend`: the worker's three accounting numbers, each nullable. */
+/**
+ * `lap perform`'s `spend`: the worker's three accounting numbers, and the model
+ * and token counts a Codex lap reports instead of a cost (continuo D-1114 rule
+ * 7), each nullable. A Claude lap carries the token keys as nulls.
+ */
 export interface LapSpend {
   readonly totalCostUsd: number | null;
   readonly numTurns: number | null;
   readonly durationMs: number | null;
+  readonly model: string | null;
+  readonly inputTokens: number | null;
+  readonly cachedInputTokens: number | null;
+  readonly cacheWriteInputTokens: number | null;
+  readonly outputTokens: number | null;
 }
 
 /**
@@ -1101,6 +1110,13 @@ function spendOf(payload: JsonObject): LapSpend | null {
         totalCostUsd: nullableNumber(spend, "total_cost_usd"),
         numTurns: nullableNumber(spend, "num_turns"),
         durationMs: nullableNumber(spend, "duration_ms"),
+        // Always present from continuo D-1114 on, which the pin includes, so
+        // required as the three above are.
+        model: nullableString(spend, "model"),
+        inputTokens: nullableNumber(spend, "input_tokens"),
+        cachedInputTokens: nullableNumber(spend, "cached_input_tokens"),
+        cacheWriteInputTokens: nullableNumber(spend, "cache_write_input_tokens"),
+        outputTokens: nullableNumber(spend, "output_tokens"),
       };
 }
 
