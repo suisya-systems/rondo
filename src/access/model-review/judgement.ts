@@ -383,6 +383,12 @@ const INSTRUCTIONS = [
   "- The commit messages and the final rationale are CLAIMS made by the worker. Check them against",
   "  the diff and against the transcript's commands and outputs; do not take them as descriptions.",
   "- Report only what the delivered material settles. Do not guess at anything it does not show.",
+  // rondo#520 (D-0146): a part of a split request is judged as that part.
+  "- Where the PROMPT says this work is one part of a request drafted into parts, that part is",
+  "  what this lap was asked to do; the request and any issues quoted with it are context. A",
+  "  deliverable the PROMPT gives to another part is not missing from this work: do not raise its",
+  "  absence above a nit. Everything this work changes keeps its full severity, and so does",
+  "  anything a later instruction in the PROMPT asks of this lap itself.",
   "- Every finding needs at least one basis, a locator into this document:",
   '    {"kind":"file","path":P,"line":N}   a post-image line of path P in the DIFF section',
   '    {"kind":"commit","sha":S}           a commit in the COMMITS section (7 or more hex chars)',

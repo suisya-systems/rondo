@@ -324,6 +324,16 @@ test("the document carries all six things, numbered so bases can be checked, fen
   expect(reviewDocument(material())).toBe(reviewDocument(material()));
 });
 
+test("a part of a split request is judged as that part: another part's deliverable is at most a nit (rondo#520)", () => {
+  const doc = reviewDocument(material()).replace(/\n +/g, " ");
+  expect(doc).toContain(
+    "Where the PROMPT says this work is one part of a request drafted into parts, that part is " +
+      "what this lap was asked to do; the request and any issues quoted with it are context.",
+  );
+  expect(doc).toContain("do not raise its absence above a nit.");
+  expect(doc).toContain("Everything this work changes keeps its full severity");
+});
+
 test("the policy defaults to 3 rounds and 'major', and a scope overrides both", () => {
   expect(reviewPolicyOf(null)).toEqual({
     roundBudget: 3,

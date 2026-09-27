@@ -15,7 +15,13 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test, vi } from "vitest";
 
 import { recordDraftedScopeFromPage, startSplitFromPage } from "../../src/access/cli.js";
-import { approvedUnstarted, draftedStartReadiness } from "../../src/access/drafted-start.js";
+import {
+  approvedUnstarted,
+  asPart,
+  draftedStartReadiness,
+  earlierWork,
+  PART_OPENING,
+} from "../../src/access/drafted-start.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { ISSUES_QUOTE_OPENING } from "../../src/access/issue-read.js";
 import { draftedPlanRun } from "../../src/access/model-draft/host.js";
@@ -639,3 +645,209 @@ test(
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
+
+/** A lap of request r1 that no plan of the split started, ended with work rondo read (rondo#520). */
+async function earlierLap(w: Awaited<ReturnType<typeof drafted>>, id: string, atMs: number) {
+  const run = await draftedPlanRun(w, "r1", w.proposalId, 0);
+  if (run.kind !== "runnable") throw new Error("plan 0 does not run");
+  const reserved = await w.store.reserve({
+    numbers: null,
+    id,
+    request: "Two things, please.",
+    plan: admittedPayload({ ...run.plan, prompt: "Both things at once." }, id),
+    spend: null,
+    scopeSpend: null,
+    claim: {
+      paths: [`src/${id}.ts`],
+      authorKind: "drafter",
+      authorId: "rondo/drafter/9/m",
+      bases: [],
+    },
+    nowMs: atMs,
+    supersedesIterationId: null,
+    requestMessageId: "r1",
+    runId: `rondo-${id}`,
+    topicBranch: `rondo/${id}`,
+    workspace: `/srv/work/${id}`,
+  });
+  expect(reserved.kind, JSON.stringify(reserved)).toBe("reserved");
+  const path = ["planned", "classified", "admitting", "admitted", "performing", "awaiting_human"];
+  for (let step = 1; step < path.length; step += 1) {
+    const moved = await w.store.transition(
+      id,
+      path[step - 1] as "planned",
+      path[step] as "classified",
+      {},
+      atMs + step,
+      path[step] === "awaiting_human"
+        ? {
+            drafter: "rondo/deterministic/2",
+            verdict: "clear",
+            findings: [],
+            evidence: {
+              baseRef: "refs/remotes/origin/main",
+              baseCommit: "a".repeat(40),
+              tipCommit: "c".repeat(40),
+              materialDigest: "sha256:x",
+              commitCount: 1,
+              fileCount: 1,
+            },
+            unavailableReason: null,
+          }
+        : undefined,
+    );
+    expect(moved.kind, JSON.stringify(moved)).toBe("transitioned");
+  }
+  const closed = await w.store.transition(
+    id,
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "answered_and_forwarded" },
+    atMs + 9,
+  );
+  expect(closed.kind).toBe("transitioned");
+}
+
+/** Press plan `planIndex` and return the plan and claim admission was handed. */
+async function pressPlan(w: Awaited<ReturnType<typeof drafted>>, planIndex: number) {
+  const approved = await recordDraftedScopeFromPage(ENV, w.storePath, "ada", {
+    draftScopeId: w.draft.scopeId,
+    draftDigest: w.draft.scopeDigest,
+    scopeId: "scope-mine-1",
+    budgets: w.draft.payload.budgets,
+    severityThreshold: w.draft.payload.severity_threshold,
+    outwardActs: w.draft.payload.outward_acts,
+  });
+  seams.pressed = [];
+  vi.useFakeTimers({ toFake: ["Date"], now: 20_000 });
+  try {
+    const result = await startSplitFromPage(ENV, w.store, w.storePath, "ada", DEFAULT_HOST_POLICY, {
+      iterationId: `lap-pressed-${String(planIndex)}`,
+      requestMessageId: "r1",
+      scopeDecisionId: approved.scopeDecisionId as string,
+      proposalId: w.proposalId,
+      planIndex,
+    });
+    expect(result.note, JSON.stringify(result)).toContain("captured by the test");
+    // conductor.admit(ports, advisory, plan, policy, id, supersedes, spend, request, scopeSpend, claim)
+    const [, , plan, , , , , , , claim] = seams.pressed;
+    return { plan: plan as RunPlan, claim };
+  } finally {
+    vi.useRealTimers();
+    seams.pressed = null;
+  }
+}
+
+test(
+  "a part of a split is told it is a part and what the others are, and starts from the default branch when the request has no earlier work (rondo#520)",
+  async () => {
+    const w = await drafted();
+    const { plan } = await pressPlan(w, 1);
+    expect(plan.prompt).toContain(
+      `${PROMPTS[1]}${PART_OPENING} (rondo adds this because the request was drafted into parts):\n` +
+        "This work is part 2 of 2 of one request. Do this part only; other laps do the others:\n" +
+        `- part 1: ${PROMPTS[0]}\n`,
+    );
+    expect(plan.baseBranch).toBe("main");
+    expect(plan.pullRequestBaseBranch).toBeNull();
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a later split starts from the request's earlier line, opens its pull request against the default branch, and is still that plan, started (rondo#520)",
+  async () => {
+    const w = await drafted();
+    await earlierLap(w, "lap-early", 12_000);
+    const { plan, claim } = await pressPlan(w, 0);
+    expect(plan.baseBranch).toBe("rondo/lap-early");
+    expect(plan.pullRequestBaseBranch).toBe("main");
+    expect(plan.prompt).toContain(
+      `This work starts from branch rondo/lap-early, at commit ${"c".repeat(40)} when rondo read it`,
+    );
+    // The fixture's repository is no git repository, so what the earlier line
+    // changed is not read; that line still holds its paths, so '/' would
+    // collide with it, and the drafted claim stands.
+    expect(claim).toMatchObject({ paths: ["src/access/scope.ts"] });
+
+    // The lap admitted from that plan is the plan, started: no second start.
+    const ports = { store: w.store, record: w.record, policy: DEFAULT_HOST_POLICY, nowMs: 20_000 };
+    const reserved = await w.store.reserve({
+      numbers: null,
+      id: "lap-part",
+      request: "Two things, please.",
+      plan: admittedPayload(plan, "lap-part"),
+      spend: null,
+      scopeSpend: null,
+      claim: ownLane("lap-part"),
+      nowMs: 21_000,
+      supersedesIterationId: null,
+      requestMessageId: "r1",
+      runId: "rondo-lap-part",
+      topicBranch: "rondo/lap-part",
+      workspace: "/srv/work/lap-part",
+    });
+    expect(reserved.kind, JSON.stringify(reserved)).toBe("reserved");
+    expect(
+      await draftedStartReadiness(ports, "r1", "scope-decision-none", w.proposalId, 0),
+    ).toEqual({ kind: "started", iterationId: "lap-part" });
+    // A plan's own line is not earlier work: plan 1 is not cut from plan 0's.
+    const run = await draftedPlanRun(w, "r1", w.proposalId, 1);
+    if (run.kind !== "runnable") throw new Error("plan 1 does not run");
+    expect(await earlierWork(ports, "r1", w.proposalId, run)).toMatchObject({
+      kind: "line",
+      lineageId: "lap-early",
+    });
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "earlier work on several lines is not chosen between, and the part says so (rondo#520)",
+  async () => {
+    const w = await drafted();
+    await earlierLap(w, "lap-early-a", 12_000);
+    await earlierLap(w, "lap-early-b", 13_000);
+    const { plan } = await pressPlan(w, 1);
+    expect(plan.baseBranch).toBe("main");
+    expect(plan.prompt).toContain(
+      "This request has earlier work that has not landed (line lap-early-a, lap-early-b), and " +
+        "this work does not start from it because that work is on several lines",
+    );
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test("a part cut from an earlier line also asks for what that line changed (rondo#520)", () => {
+  const plan = { baseBranch: "main", pullRequestBaseBranch: null, prompt: "Do it." } as RunPlan;
+  const claim = { paths: ["src/a.ts"], authorKind: "drafter" as const, authorId: "d", bases: [] };
+  const earlier = {
+    kind: "line" as const,
+    lineageId: "lap-early",
+    branch: "rondo/lap-early",
+    commit: "c".repeat(40),
+    baseCommit: "a".repeat(40),
+    // What the earlier line still holds is not asked for again.
+    held: ["src/held/"],
+  };
+  const part = asPart({ plan, claim }, "\n\n---\nsection", earlier, [
+    "src/b.ts",
+    "src/a.ts",
+    "src/held/c.ts",
+  ]);
+  expect(part.plan).toMatchObject({
+    baseBranch: "rondo/lap-early",
+    pullRequestBaseBranch: "main",
+    prompt: "Do it.\n\n---\nsection",
+  });
+  expect(part.claim).toEqual({
+    ...claim,
+    paths: ["src/a.ts", "src/b.ts"],
+    bases: [{ form: "iteration", iterationId: "lap-early" }],
+  });
+  // Unread changes: the whole repository, unless the earlier line still holds paths.
+  expect(asPart({ plan, claim }, "", { ...earlier, held: [] }, null).claim).toBeNull();
+  expect(asPart({ plan, claim }, "", earlier, null).claim).toEqual(claim);
+  // No earlier line: the plan keeps its base and its claim.
+  expect(asPart({ plan, claim }, "", { kind: "none" }, null)).toEqual({ plan, claim });
+});
