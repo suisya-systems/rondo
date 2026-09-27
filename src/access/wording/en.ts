@@ -529,7 +529,7 @@ explanation you pressed on and then answers the gate.`,
     "laps this store has recorded. Approve it as it is, or change a value first -- your version " +
     "is then recorded in place of rondo's draft.",
   scopeDraftedPlansHeading: "What rondo proposes to run",
-  scopeDraftedPlan: (n) => `Plan ${String(n)}`,
+  scopeDraftedPlan: (n) => `Part ${String(n)}`,
   scopeDraftedTemplateGone: "The plan this was drafted from is no longer one rondo holds.",
   scopeNarrowed: (computed) =>
     `rondo lowered this from ${computed} because of what you wrote here:`,
@@ -551,9 +551,6 @@ explanation you pressed on and then answers the gate.`,
   planStartPlain: "Starts one lap on this plan, counted against the scope you approved",
   planStarted: "Started.",
   planStartedLink: "Open the lap",
-  planSibling:
-    "Waiting: another part of this request is still open. This part starts by itself once " +
-    "that one ends.",
   planBusy: (limit) =>
     limit === 1
       ? "No room yet: this host runs one lap at a time, and one is running. The start button " +

@@ -511,8 +511,8 @@ refuses and lists them rather than picking.
 **Approving a drafted split starts its parts** (D-0127). While `rondo web` runs with an approver,
 its minute tick starts every part of an approved split that can start, in the approver's name, as a
 press would. A part with no room, or held by another line, is tried again the next minute. A part
-that waits on another part (`after`) starts when that part's work lands. Until the page can show
-several lines of one request (rondo#452), a part waits while another lap of its request is open.
+that waits on another part (`after`) starts when that part's work lands. Two parts of one request
+run side by side; the page counts them on the request's row and gives each its own step (D-0129).
 **Before upgrading to this, discard a store that holds an approved split whose parts you left
 unpressed**: they start on the first minute after the upgrade. No verb closes an approval, and
 an approved successor scope still covers the same split.

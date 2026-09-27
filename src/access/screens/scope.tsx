@@ -1546,11 +1546,13 @@ async function planStart(
         </p>
       );
     // D-0098 rule 1: no press while `first` has not landed; it starts by itself.
-    // ponytail: no sentence of its own yet (rule 8.2's step is page work).
+    // The sentence is the thread's step for the part (rule 8.2).
     case "ordered":
-      return null;
-    case "sibling":
-      return line(wording.planSibling);
+      return line(
+        ready.first?.state === "endedUnlanded"
+          ? wording.partUnlanded(ready.after)
+          : wording.partWaiting(ready.after, null, null),
+      );
     case "busy":
       return line(wording.planBusy(ready.limit));
     case "full":

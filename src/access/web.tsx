@@ -97,6 +97,7 @@ import {
   findingBasisText,
   type IterationRecord,
   isApprovableKind,
+  isDeterministicReadingDrafter,
   isModelReadingDrafter,
   isTerminal,
   type LapReading,
@@ -111,6 +112,7 @@ import {
   WAIT_SIDE,
 } from "../store/records.js";
 import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
+import { partsOf } from "./drafted-start.js";
 import { draftedStanding } from "./drafted-view.js";
 import type { LapWorkInspection } from "./forge.js";
 import { type GateAuto, gateAuto } from "./gate-auto.js";
@@ -118,6 +120,7 @@ import { gateScope } from "./gate-host.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
 import { type IssueComment, parseForgeRead } from "./issue-read.js";
 import { isModelDrafterName } from "./model-draft/judgement.js";
+import { unlandedPrefix } from "./order-host.js";
 import type {
   ClaimReach,
   LapMaterialRead,
@@ -134,7 +137,7 @@ import { facesMarkup } from "./page/render.js";
 import { ResultLine } from "./page/result.js";
 import { Raw } from "./page/shell.js";
 import { ThreadFace, type ThreadItem } from "./page/thread.js";
-import { ThreadSide } from "./page/thread-side.js";
+import { PartsSide, partStepOf, ThreadSide } from "./page/thread-side.js";
 import {
   currentGoals,
   GoalScreen,
@@ -172,7 +175,15 @@ import {
   saysMore,
   workerRuns,
 } from "./page-logic/laps.js";
-import { placeSaid, repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
+import { placeName, placeSaid, repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
+import {
+  holdsLap,
+  type PartView,
+  type PullRequestLink,
+  partCounts,
+  partViews,
+  takeInFrom,
+} from "./page-logic/parts.js";
 import {
   askOverLine,
   asksOverLine,
@@ -193,6 +204,12 @@ import {
 } from "./page-logic/threads.js";
 import { waitsOnYou } from "./page-logic/waits.js";
 import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
+import {
+  type AnsweredQuestion,
+  answeredQuestion,
+  questionRevise,
+  readWorkerQuestion,
+} from "./question.js";
 import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal } from "./scope.js";
@@ -974,7 +991,30 @@ type ReviseBox =
   | { readonly kind: "none" }
   | { readonly kind: "pending" }
   | { readonly kind: "unavailable"; readonly reason: string }
-  | { readonly kind: "drafted"; readonly text: string };
+  | {
+      readonly kind: "drafted";
+      readonly text: string;
+      /** The box holds a worker's question and the person's answer (D-0098 rule 4.5). */
+      readonly answer?: true;
+    };
+
+/**
+ * **The answer goes into the box, word for word** (D-0098 rule 4.5, D-0103
+ * rule 4.6): once the person has carried a worker's question on, the revise
+ * box opens holding the question and the answer as `questionRevise` quotes
+ * them, ahead of anything the reading drafted.
+ */
+function withAnswer(box: ReviseBox, answered: AnsweredQuestion | null): ReviseBox {
+  if (answered === null) {
+    return box;
+  }
+  const quoted = questionRevise(answered);
+  return {
+    kind: "drafted",
+    text: box.kind === "drafted" ? `${quoted}\n\n${box.text}` : quoted,
+    answer: true,
+  };
+}
 
 /** Read the revise box for one lap's readings (D-0077 rule 2.2's "drafted"). */
 async function reviseBox(
@@ -1042,6 +1082,80 @@ function standingFindings(checks: LapReading | null, model: LapReading | null): 
   return [...(checks?.findings ?? []), ...(model?.findings ?? [])];
 }
 
+/** A closing fix, as the right face's card says it (D-0098 rules 5.3 and 8.6). */
+interface ClosingShown {
+  /** The commit the reviewer last read, which is not this lap's tip. */
+  readonly readCommit: string;
+  /** The findings the lap answers, in the reviewer's words. */
+  readonly findings: readonly string[];
+  /** The scope's round limit, or null where no approval reads. */
+  readonly rounds: number | null;
+  /** The pull request, where it was published: the commits are on it. */
+  readonly pullRequestUrl: string | null;
+}
+
+/**
+ * The closing fix `record` is, or null (D-0098 rule 5, D-0103 rule 5.4): the
+ * reading its predecessor's reviewer last made, and the findings of it the
+ * lap answers, read back by index from that reading.
+ */
+async function closingShown(
+  ports: WebPorts,
+  record: IterationRecord,
+  rounds: number | null,
+  pullRequestUrl: string | null,
+): Promise<ClosingShown | null> {
+  const closing = await ports.store.closingLapOf(record.id);
+  if (closing === null) {
+    return null;
+  }
+  const read = (await ports.store.readingsFor(closing.predecessorId)).find(
+    (reading) =>
+      isModelReadingDrafter(reading.drafter) && reading.readAtMs === closing.readingReadAtMs,
+  );
+  return {
+    readCommit: closing.readTipCommit,
+    findings: closing.findings.flatMap((at) => read?.findings[at] ?? []),
+    rounds,
+    pullRequestUrl,
+  };
+}
+
+/**
+ * **One card, not a standing finding** (D-0098 rule 8.6): the fix merges
+ * bytes no reviewer read, and says so beside the material, so the plain merge
+ * press stays. Each finding it answers is quoted; the commit the reviewer last
+ * read leads to the pull request's copy of it.
+ */
+function closingView(wording: Chrome, closing: ClosingShown) {
+  const short = closing.readCommit.slice(0, 7);
+  return (
+    <section id="closing" class={CARD}>
+      <h3 class={CARD_HEADING}>{wording.closingHeading}</h3>
+      <p class="text-body leading-6">
+        {wording.closingSaid(closing.findings.length, short, closing.rounds)}
+      </p>
+      {closing.findings.length === 0 ? null : (
+        <ul class="mt-1 list-disc pl-5 text-body leading-6" lang="">
+          {closing.findings.map((finding) => (
+            <li>{finding}</li>
+          ))}
+        </ul>
+      )}
+      {closing.pullRequestUrl === null ? null : (
+        <p class="mt-1 text-meta leading-5">
+          <a
+            href={`${closing.pullRequestUrl}/commits/${closing.readCommit}`}
+            class="text-link underline-offset-2 hover:underline"
+          >
+            {short}
+          </a>
+        </p>
+      )}
+    </section>
+  );
+}
+
 /**
  * **The material for this confirmation** (D-0083 rule 5): the worker's report, what
  * changed, the fence, and the two readings.
@@ -1069,6 +1183,8 @@ function materialView(
    */
   material: LapMaterialRead | null,
   readings: readonly LapReading[],
+  /** The closing fix this lap is, or null (D-0098 rule 8.6). */
+  closing: ClosingShown | null = null,
 ) {
   const model = latestReading(readings, isModelReadingDrafter);
   const modelDue = modelPendingOnPage(readings, model);
@@ -1121,6 +1237,7 @@ function materialView(
        * to a 720px face, which is rule 8's *cards go one across* met early
        * rather than a second layout.
        */}
+      {closing === null ? null : closingView(wording, closing)}
       {checksView(wording, record, checks, workGone)}
       {modelView(wording, model, modelDue, reload)}
       <p class="note text-meta leading-5 text-faint">{wording.readingsNote}</p>
@@ -1566,7 +1683,9 @@ function reviseForm(
             class="note text-meta leading-5 text-muted-foreground"
           >
             {box.kind === "drafted"
-              ? wording.reviseDrafted
+              ? box.answer === true
+                ? wording.reviseAnswerDrafted
+                : wording.reviseDrafted
               : box.kind === "pending"
                 ? wording.reviseDrafting
                 : wording.reviseUndrafted}
@@ -1593,6 +1712,39 @@ function reviseForm(
             this line stands, so the press is drawn but not pressable. The box
             stays, and what is written in it is kept, so the change can be
             written now and sent once the question is answered. */}
+        {/* **What answering releases, and how long it has waited** (D-0098 rule
+            8.4, the gate's point 2 answer: on the revise box). No deadline,
+            because there is none: nothing here says what rondo will assume. */}
+        {framing.workerQuestion === null ? null : (
+          <p id="revise-answer" class="note text-meta leading-5 text-foreground">
+            {[
+              wording.reviseAnswerStarts(framing.workerQuestion.part),
+              ...(framing.workerQuestion.releases.length === 0
+                ? []
+                : [wording.reviseAnswerReleases(framing.workerQuestion.releases)]),
+              ...(framing.workerQuestion.waitedSaid === null
+                ? []
+                : [wording.questionWaited(framing.workerQuestion.waitedSaid)]),
+              // Japanese sentences run on with no space between them.
+            ].join(wording.lang === "ja" ? "" : " ")}
+          </p>
+        )}
+        {/* **A take-in is said inside the press's box** (D-0098 rule 8.5,
+            D-0082 rule 7): the attempt this starts first merges in what
+            another part landed on these files. */}
+        {framing.takeIn == null ? null : (
+          <p id="revise-take-in" class="note text-meta leading-5 text-foreground">
+            {wording.reviseTakeIn}
+            {framing.takeIn.url === null ? null : (
+              <>
+                {" "}
+                <a href={framing.takeIn.url} class="text-link hover:underline">
+                  {wording.pullRequest(framing.takeIn.number)}
+                </a>
+              </>
+            )}
+          </p>
+        )}
         {framing.questionOpen === null ? null : (
           <p id="revise-waits" class="note text-meta leading-5 text-foreground">
             {framing.questionOpen.stopped
@@ -1667,8 +1819,30 @@ interface Shown {
    * (`askStandsOver`, D-0072 rule 3), so the form says so before the press.
    */
   readonly questionOpen: { readonly id: string; readonly stopped: boolean } | null;
+  /**
+   * The worker's question this lap put, as the revise box says it (D-0098
+   * rule 8.4, D-0103's gate point 2), or null where it put none.
+   */
+  readonly workerQuestion: WorkerQuestionBox | null;
+  /**
+   * The merged pull request of another part this lap's next attempt merges in
+   * first (D-0098 rule 8.5, `takeInFrom`), or absent where none.
+   */
+  readonly takeIn?: PullRequestLink | null;
   /** Whether rondo would approve this gate automatically, and why not (D-0125). */
   readonly auto: GateAuto;
+}
+
+/** What the revise box says about a worker's question (D-0098 rule 8.4). */
+interface WorkerQuestionBox {
+  /** The person's `carry_on` answer, with the question, or null while it stands. */
+  readonly answered: AnsweredQuestion | null;
+  /** How long it has waited, already said, while it stands; null once answered. */
+  readonly waitedSaid: string | null;
+  /** Which part the lap is, from 1, where the request runs as several lines. */
+  readonly part: number | null;
+  /** The parts that wait for this one to be merged, from 1. */
+  readonly releases: readonly number[];
 }
 
 /**
@@ -1784,6 +1958,8 @@ async function shownBeforePress(
   answeringLapId: string | null = null,
   /** The question over a lap's line that waits on the person, or null ({@link Shown.questionOpen}). */
   questionOver: (record: IterationRecord) => Promise<Shown["questionOpen"]> = async () => null,
+  /** The worker's question this lap put, or null ({@link Shown.workerQuestion}). */
+  workerQuestionOf: (record: IterationRecord) => WorkerQuestionBox | null = () => null,
 ): Promise<ReadonlyMap<string, Shown>> {
   const shown = new Map<string, Shown>();
   const wanted = answeringLapId;
@@ -1801,6 +1977,7 @@ async function shownBeforePress(
     const material = ports.material === null ? null : await ports.material(wording, record);
     const tip = await approvalTip(ports.record, record.id);
     const questionOpen = await questionOver(record);
+    const workerQuestion = workerQuestionOf(record);
     shown.set(record.id, {
       claims: propose(snapshot).payload.claims,
       snapshot,
@@ -1810,8 +1987,12 @@ async function shownBeforePress(
       forked: tip.kind === "forked",
       closedBy:
         tip.kind === "tip" ? await budgetClosing(ports, tip.scopeDecisionId, ports.now()) : null,
-      revise: await reviseBox(ports, wording, record.id, readings),
+      revise: withAnswer(
+        await reviseBox(ports, wording, record.id, readings),
+        workerQuestion?.answered ?? null,
+      ),
       questionOpen,
+      workerQuestion,
       auto: gateAuto({
         readings,
         runs: workerRuns(record.lapCommands),
@@ -2900,6 +3081,48 @@ export async function operatorPage(
         );
 
   /*
+   * **A request run as several lines** (D-0098 rule 8, D-0129): the parts of
+   * its approved split, each with its laps, read once for the list's row, the
+   * line under the title and the right face's steps.
+   */
+  const lapById = new Map(
+    [...allLapsByRequest.values()].flat().map((lap) => [lap.record.id, lap.record] as const),
+  );
+  const lapsOfLine = (lineageId: string): readonly IterationRecord[] =>
+    (ledger.find((line) => line.lineageId === lineageId)?.lapIds ?? [lineageId])
+      .flatMap((id) => lapById.get(id) ?? [])
+      .toSorted((left, right) => left.createdAtMs - right.createdAtMs);
+  const partsByRequest = new Map<string, readonly PartView[]>(
+    await Promise.all(
+      threads.messages
+        .filter((message) => message.inReplyTo === null)
+        .map(async (root) => {
+          const parts = await partsOf(ports, root.messageId);
+          const proposalId = parts[0]?.proposalId ?? "";
+          return [
+            root.messageId,
+            partViews(parts, {
+              lapsOf: lapsOfLine,
+              resultOf: (id) => resultOf(threads.byId, id),
+              placeOf: placeName,
+              // Rule 1.5's question about the part: standing, or answered *stop*.
+              askOf: (index) => {
+                const asks = [...threads.waiting].filter(
+                  (id) =>
+                    threads.rootOf(id) === root.messageId &&
+                    id.startsWith(unlandedPrefix({ proposalId }, index)),
+                );
+                const open = asks.find((id) => !threads.stopped.has(id));
+                return open !== undefined ? { open } : asks.length > 0 ? "dropped" : null;
+              },
+            }),
+          ] as const;
+        }),
+    ),
+  );
+  const partsOfRequest = (messageId: string) => partsByRequest.get(messageId) ?? [];
+
+  /*
    * **The left face's rows** (D-0083 rules 2, 5 and 7). Every request the
    * store holds, named by the person's own words, with the repository its
    * work is in and one sentence of state. What waits on the person is lifted
@@ -2922,6 +3145,10 @@ export async function operatorPage(
         // What an approved row goes on to say: published or not, and its
         // checks (rondo#376). Read for every row, since it is a map lookup.
         published: lap === null ? null : resultOf(threads.byId, lap.record.id),
+        parts: (() => {
+          const parts = partsOfRequest(root.messageId);
+          return parts.length === 0 ? null : partCounts(parts);
+        })(),
         atMs: Math.max(...members.map((message) => message.atMs)),
       };
     });
@@ -2960,10 +3187,17 @@ export async function operatorPage(
   // **Whichever lap of this request is at a gate**, which need not be the one
   // the list speaks with: `saysMore` orders by what a row should say, and a
   // gate is answered wherever it stands (Codex).
-  const answeringLap =
-    selectedRoot === null
-      ? null
-      : (lapsUnder(selectedRoot).find((lap) => lap.question === "waiting")?.record.id ?? null);
+  // **The gate the address names, where several parts wait at one** (D-0129):
+  // a part's step links its own gate, so one part's open question does not
+  // stand between the person and another part's answer.
+  const answeringLap = (() => {
+    if (selectedRoot === null) {
+      return null;
+    }
+    const gated = lapsUnder(selectedRoot).filter((lap) => lap.question === "waiting");
+    const named = view.kind === "thread" ? view.gate : undefined;
+    return (gated.find((lap) => lap.record.id === named) ?? gated[0])?.record.id ?? null;
+  })();
   // The lap's line as the ledger holds it, which is how the conflict fix reads
   // a question over a line (D-0105); the verdict walks the lineage.
   const shown = await shownBeforePress(
@@ -2983,6 +3217,24 @@ export async function operatorPage(
                 ?.lapIds ?? [record.id],
             );
       return id === null ? null : { id, stopped: threads.stopped.has(id) };
+    },
+    (record) => {
+      const askId = `question-${record.id}`;
+      const ask = threads.byId.get(askId);
+      if (ask === undefined || !ask.asks) {
+        return null;
+      }
+      const parts = partsOfRequest(record.requestMessageId);
+      const mine = parts.find((part) => holdsLap(part, record.id));
+      return {
+        answered: answeredQuestion(threads.messages, record.id),
+        waitedSaid: threads.waiting.has(askId) ? wording.age(ago(ask.atMs, nowMs)) : null,
+        part: mine === undefined ? null : mine.index + 1,
+        releases:
+          mine === undefined
+            ? []
+            : parts.filter((part) => part.wait?.after === mine.index).map((part) => part.index + 1),
+      };
     },
   );
   /*
@@ -3465,7 +3717,68 @@ export async function operatorPage(
    * approve, the finding quoted -- which
    * `test/access/gate-elements.test.ts` is the net under.
    */
-  const gateFraming = answeringLap === null ? undefined : shown.get(answeringLap);
+  /*
+   * **What the next attempt takes in first** (D-0098 rules 2.1 and 8.5): the
+   * gate's comparison says the lap reached files outside its own, and another
+   * part of the request that claimed them was merged. Said on the part's step
+   * and inside the revise box; the press decides it again with `git`.
+   */
+  const takeIn = (() => {
+    const framed = answeringLap === null ? undefined : shown.get(answeringLap);
+    const reach = framed?.material?.reach;
+    if (gatedLap === null || reach?.kind !== "outside") {
+      return null;
+    }
+    return (
+      takeInFrom(partsOfRequest(gatedLap.requestMessageId), gatedLap.id, repositoryOf(gatedLap), [
+        ...reach.collided,
+        ...reach.unheld,
+      ])?.pullRequest ?? null
+    );
+  })();
+  const gateFraming = (() => {
+    const framed = answeringLap === null ? undefined : shown.get(answeringLap);
+    return framed === undefined ? undefined : { ...framed, takeIn };
+  })();
+  /*
+   * **A worker's question, and what it stopped on** (D-0098 rule 8.3): one
+   * event line directly above the box, while the question the lap put
+   * (`question-<lap>`, `src/access/question.ts`) stands. The commit is the one
+   * rondo measured, the reading's tip, as the question itself carries it; what
+   * waits on the answer is the worker's own words, read from the block in its
+   * report where the report was read. The link is the right face's card of what
+   * changed: the commit is not on the forge until it is published.
+   */
+  const questionLead = (() => {
+    if (gatedLap === null) {
+      return null;
+    }
+    const askId = `question-${gatedLap.id}`;
+    const ask = threads.byId.get(askId);
+    if (ask === undefined || !threads.waiting.has(askId)) {
+      return null;
+    }
+    const tip = latestReading(readingsByLap.get(gatedLap.id) ?? [], isDeterministicReadingDrafter)
+      ?.evidence?.tipCommit;
+    if (tip === undefined) {
+      return null;
+    }
+    const why = gateFraming?.material?.why ?? null;
+    const read = why === null ? null : readWorkerQuestion(why);
+    return {
+      id: `${askId}:built`,
+      kind: "other" as const,
+      said: wording.evQuestionBuilt(
+        tip.slice(0, 7),
+        read?.kind === "question" ? read.question.waits : null,
+      ),
+      at: wording.age(ago(ask.atMs, nowMs)),
+      atMs: ask.atMs,
+      ...(gateFraming?.material == null
+        ? {}
+        : { href: "#changed", linkSaid: wording.evQuestionBuiltLink }),
+    };
+  })();
   const answeringBox =
     gatedLap === null || gateFraming === undefined
       ? null
@@ -3562,6 +3875,17 @@ export async function operatorPage(
                               wording.age(ago(selectedGovernance.askedAtMs, endedAtMs)),
                               selectedResult?.merged == null ? "closed" : "merged",
                             ),
+                      // **The other parts keep their state here** (D-0098
+                      // rule 8.3): answering one part is not all there is.
+                      others: (() => {
+                        const parts = partsOfRequest(selectedRoot);
+                        const others = parts.filter(
+                          (part) => governedLap === null || !holdsLap(part, governedLap.id),
+                        );
+                        return parts.length === 0 || others.length === 0
+                          ? null
+                          : wording.partsSaid(partCounts(others), true);
+                      })(),
                     }),
               // **What became of the work, as a state** (rondo#376): approved,
               // the pull request and its checks, and the merge that is the
@@ -3585,6 +3909,7 @@ export async function operatorPage(
               acts: actsMarkup === null ? null : Raw({ html: actsMarkup }),
               next: nextMarkup === null ? null : Raw({ html: nextMarkup }),
               answering: answeringBox === null ? null : Raw({ html: answeringBox }),
+              answeringLead: answeringBox === null ? null : questionLead,
               adding: addBox === null || addBox === undefined ? null : Raw({ html: addBox }),
             }),
           };
@@ -3689,17 +4014,41 @@ export async function operatorPage(
   const sideReadings =
     gateFraming?.readings ??
     (selectedLap === null ? [] : (readingsByLap.get(selectedLap.record.id) ?? []));
+  const sideClosing =
+    sideLap === null
+      ? null
+      : await closingShown(
+          ports,
+          sideLap,
+          (await approvalOf(sideLap))?.payload.budgets.review_rounds ?? null,
+          resultOf(threads.byId, sideLap.id)?.url ?? null,
+        );
   const sideMaterial =
     sideLap === null
       ? null
       : sideAsking && gateFraming !== undefined
-        ? await materialView(wording, sideLap, gateFraming.material, sideReadings).toString()
-        : sideReadings.length > 0
-          ? await materialView(wording, sideLap, null, sideReadings).toString()
+        ? await materialView(
+            wording,
+            sideLap,
+            gateFraming.material,
+            sideReadings,
+            sideClosing,
+          ).toString()
+        : sideReadings.length > 0 || sideClosing !== null
+          ? await materialView(wording, sideLap, null, sideReadings, sideClosing).toString()
           : null;
   const threadSide =
     selectedGovernance === null || sideLap === null
-      ? null
+      ? // **An approved split with nothing started still has its parts' waits**
+        // (D-0098 rule 8.2): no lap to read an agreement from, so the steps alone.
+        selectedRoot === null || partsOfRequest(selectedRoot).length === 0
+        ? null
+        : {
+            react: PartsSide({
+              wording,
+              parts: partsOfRequest(selectedRoot).map((part) => partStepOf(wording, part)),
+            }),
+          }
       : {
           react: ThreadSide({
             wording,
@@ -3719,6 +4068,26 @@ export async function operatorPage(
             })(),
             material: sideMaterial === null ? null : Raw({ html: sideMaterial }),
             asking: sideAsking,
+            parts:
+              selectedRoot === null
+                ? []
+                : partsOfRequest(selectedRoot).map((part) => {
+                    // A part at a gate the box is not showing: the way to it.
+                    const atGate = part.laps.find(
+                      (lap) => lap.status === "awaiting_human" && lap.id !== gatedLap?.id,
+                    );
+                    return partStepOf(
+                      wording,
+                      part,
+                      gatedLap !== null && holdsLap(part, gatedLap.id) ? takeIn : null,
+                      atGate === undefined
+                        ? null
+                        : viewHref(
+                            { kind: "thread", messageId: selectedRoot, to: null, gate: atGate.id },
+                            wording.lang,
+                          ),
+                    );
+                  }),
           }),
         };
   const emptySide = !centreIsEmpty

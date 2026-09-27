@@ -227,7 +227,8 @@ async function askUnlanded(
   ports.log(`order    the question about plan ${String(index)} was not written: ${outcome.reason}`);
 }
 
-function unlandedPrefix(split: ApprovedSplit, index: number): string {
+/** How rule 1.5's question about plan `index` is named, before the lap that ended. */
+export function unlandedPrefix(split: Pick<ApprovedSplit, "proposalId">, index: number): string {
   return `order-unlanded-${split.proposalId}-${String(index)}-`;
 }
 

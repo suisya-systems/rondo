@@ -18,6 +18,7 @@
  * state is a sentence a person wrote for another person.
  */
 
+import type { PartCounts } from "../page-logic/parts.js";
 import type { ChecksState, LapResult } from "../page-logic/result.js";
 
 /** Where a request sits on the time axis, said as a heading (D-0083 rule 2). */
@@ -376,6 +377,60 @@ export interface PageWords extends DayWords {
    * says what is being answered over, in the readers' own words.
    */
   readonly standingHeading: string;
+  /**
+   * A request run as several lines (D-0098 rule 8, D-0129), counted in one
+   * sentence: on its row in the list, and -- with `others` -- for the parts
+   * other than the one being answered, under the title (rule 8.3).
+   */
+  readonly partsSaid: (counts: PartCounts, others: boolean) => string;
+  /** The heading over one step per part on the right face (rule 8.2). */
+  readonly partsHeading: string;
+  /** A part, by the number the split's plans carry. */
+  readonly partName: (n: number) => string;
+  readonly partRunning: string;
+  readonly partYours: string;
+  readonly partToStart: string;
+  readonly partMerged: string;
+  readonly partFinished: string;
+  readonly partStopped: string;
+  /**
+   * An unstarted part waiting on an earlier one's merge: that part by number,
+   * the other repository where it is not this part's, and its pull request
+   * where it has one (rule 8.2). Nothing to press: it starts by itself.
+   */
+  readonly partWaiting: (after: number, place: string | null, pullRequest: string | null) => string;
+  /** The earlier part ended unmerged, and the question is in the thread (rules 1.5 and 8.2). */
+  readonly partUnlanded: (after: number) => string;
+  readonly partUnlandedLink: string;
+  /** The way to a part's own gate, where the box shows another part's (D-0129). */
+  readonly partGateLink: string;
+  /** The next attempt merges in what another part landed on these files first (rule 8.5). */
+  readonly partTakeIn: string;
+  /** A part's step with the take-in after it. */
+  readonly partThen: (said: string, more: string) => string;
+  /** The same, as a sentence inside the revise box (rule 8.5). */
+  readonly reviseTakeIn: string;
+  /**
+   * The event line over the answering box (rule 8.3): what the worker built and
+   * committed before stopping, and what waits on the answer, in its words.
+   */
+  readonly evQuestionBuilt: (commit: string, waits: string | null) => string;
+  readonly evQuestionBuiltLink: string;
+  /** What the revise press does once the question is answered (rule 8.4), and for which part. */
+  readonly reviseAnswerStarts: (part: number | null) => string;
+  /** The note under a revise box that holds the question and the answer (rule 4.5). */
+  readonly reviseAnswerDrafted: string;
+  /** The parts that wait for this one to be merged, which answering moves on (rule 8.4). */
+  readonly reviseAnswerReleases: (parts: readonly number[]) => string;
+  /** How long the question has waited; never a deadline (rule 8.4). */
+  readonly questionWaited: (age: string) => string;
+  /** Whether an attempt merged in what another part landed first (rule 8.5). */
+  readonly evTookIn: string;
+  readonly evTakeInMissed: string;
+  /** The closing fix's card and the merge screen's line: not re-read (rule 8.6). */
+  readonly closingHeading: string;
+  readonly closingSaid: (findings: number, readCommit: string, rounds: number | null) => string;
+  readonly mergeNotReread: (readCommit: string) => string;
 }
 
 export const PAGE_EN: PageWords = Object.freeze({
@@ -661,6 +716,83 @@ export const PAGE_EN: PageWords = Object.freeze({
     count === 1 ? "decided without asking: 1" : `decided without asking: ${String(count)}`,
   govDecidedNone: "Nothing about this was decided without asking you.",
   standingHeading: "What was raised",
+  partsSaid: (c, others) => {
+    const clauses = [
+      ...(c.yours === 0 ? [] : [`${String(c.yours)} ${c.yours === 1 ? "needs" : "need"} you`]),
+      ...(c.waiting === 0
+        ? []
+        : [
+            c.waitingOn === null
+              ? `${String(c.waiting)} waiting for another part to be merged`
+              : `${String(c.waiting)} waiting for ${c.waitingOn}'s change to land`,
+          ]),
+      ...(c.toStart === 0 ? [] : [`${String(c.toStart)} not started`]),
+      ...(c.finished === 0 ? [] : [`${String(c.finished)} finished`]),
+      ...(c.stopped === 0 ? [] : [`${String(c.stopped)} stopped`]),
+    ];
+    const part = (n: number) => (n === 1 ? "part" : "parts");
+    const lead = others
+      ? c.running === 0
+        ? `${String(c.total)} other ${part(c.total)}`
+        : `${String(c.running)} other ${part(c.running)} still running`
+      : c.running === 0
+        ? `${String(c.total)} parts`
+        : `${String(c.running)} of ${String(c.total)} parts running`;
+    return clauses.length === 0
+      ? lead
+      : `${lead}${c.running === 0 ? ": " : ", "}${clauses.join(", ")}`;
+  },
+  partsHeading: "Each part",
+  partName: (n) => `Part ${String(n)}`,
+  partRunning: "under way",
+  partYours: "waiting on you",
+  partToStart: "not started yet",
+  partMerged: "merged",
+  partFinished: "finished",
+  partStopped: "stopped",
+  partWaiting: (after, place, pullRequest) =>
+    `waiting until ${
+      pullRequest === null
+        ? `part ${String(after + 1)}`
+        : place === null
+          ? pullRequest
+          : `${place} ${pullRequest}`
+    } is merged; then it starts by itself`,
+  partUnlanded: (after) =>
+    `part ${String(after + 1)} ended without being merged, so this one will not start by itself`,
+  partUnlandedLink: "Answer the question",
+  partGateLink: "Answer this part",
+  partTakeIn:
+    "another part changed these files and was merged; the next attempt starts by merging it in",
+  partThen: (said, more) => `${said}; ${more}`,
+  reviseTakeIn:
+    "Another part changed these files and was merged; the next attempt starts by merging it in.",
+  evQuestionBuilt: (commit, waits) =>
+    `The worker built and committed ${commit} before stopping to ask.` +
+    (waits === null ? "" : ` Waiting on your answer: ${waits}`),
+  evQuestionBuiltLink: "What changed",
+  reviseAnswerStarts: (part) =>
+    part === null
+      ? "Once the question is answered, this starts the next attempt with your answer in it."
+      : `Once the question is answered, this starts part ${String(part)}'s next attempt with your answer in it.`,
+  reviseAnswerReleases: (parts) =>
+    `Answering also moves on ${parts.map((n) => `part ${String(n)}`).join(", ")}, which ${
+      parts.length === 1 ? "waits" : "wait"
+    } for this part to be merged.`,
+  questionWaited: (age) => `The question has waited ${age}.`,
+  reviseAnswerDrafted:
+    "rondo put the worker's question and your answer in the box, word for word. Add to it as you like: what you send is yours.",
+  evTookIn: "This attempt first merged in what another part had merged.",
+  evTakeInMissed: "This attempt did not merge in what another part had merged.",
+  closingHeading: "Closing fix",
+  closingSaid: (findings, readCommit, rounds) =>
+    `${String(findings)} finding${findings === 1 ? "" : "s"} below your threshold fixed with tests in one attempt; ` +
+    `the reviewer last read commit ${readCommit}, not this one` +
+    (rounds === null
+      ? "."
+      : ` (your limit was ${String(rounds)} round${rounds === 1 ? "" : "s"}).`),
+  mergeNotReread: (readCommit) =>
+    `The last commit is a closing fix and was not re-read: the reviewer last read ${readCommit}.`,
 } satisfies PageWords);
 
 export const PAGE_JA: PageWords = Object.freeze({
@@ -936,4 +1068,76 @@ export const PAGE_JA: PageWords = Object.freeze({
   govDecided: (count) => `聞かずに決めたこと ${String(count)} 件`,
   govDecidedNone: "この依頼について、聞かずに決めたことはありません。",
   standingHeading: "挙がっている点",
+  partsSaid: (c, others) => {
+    const clauses = [
+      ...(c.yours === 0 ? [] : [`${String(c.yours)} 件はあなたの番`]),
+      ...(c.waiting === 0
+        ? []
+        : [
+            c.waitingOn === null
+              ? `${String(c.waiting)} 件はほかの作業のマージ待ち`
+              : `${String(c.waiting)} 件は ${c.waitingOn} の変更の取り込み待ち`,
+          ]),
+      ...(c.toStart === 0 ? [] : [`${String(c.toStart)} 件はまだ始まっていません`]),
+      ...(c.finished === 0 ? [] : [`${String(c.finished)} 件は終わりました`]),
+      ...(c.stopped === 0 ? [] : [`${String(c.stopped)} 件は取りやめました`]),
+    ];
+    const lead = others
+      ? c.running === 0
+        ? `ほかの作業 ${String(c.total)} 件`
+        : `ほかの作業 ${String(c.running)} 件は進行中`
+      : c.running === 0
+        ? `作業 ${String(c.total)} 件`
+        : `作業 ${String(c.total)} 件のうち ${String(c.running)} 件が進行中`;
+    return clauses.length === 0
+      ? lead
+      : `${lead}${c.running === 0 ? "：" : "、"}${clauses.join("、")}`;
+  },
+  partsHeading: "作業ごとの状況",
+  partName: (n) => `作業 ${String(n)}`,
+  partRunning: "進行中",
+  partYours: "あなたの番",
+  partToStart: "まだ始まっていません",
+  partMerged: "マージ済み",
+  partFinished: "終わりました",
+  partStopped: "取りやめました",
+  partWaiting: (after, place, pullRequest) =>
+    `${
+      pullRequest === null
+        ? `作業 ${String(after + 1)}`
+        : place === null
+          ? pullRequest
+          : `${place} の ${pullRequest}`
+    } がマージされるのを待っています。マージされれば自動で始まります`,
+  partUnlanded: (after) =>
+    `作業 ${String(after + 1)} がマージされないまま終わったため、この作業は自動では始まりません`,
+  partUnlandedLink: "質問に答える",
+  partGateLink: "この作業に答える",
+  partTakeIn:
+    "ほかの作業がこのファイルを変更してマージされました。次の回は、まずその変更を取り込んでから始めます",
+  partThen: (said, more) => `${said}。${more}`,
+  reviseTakeIn:
+    "ほかの作業がこのファイルを変更してマージされました。次の回は、まずその変更を取り込んでから始めます。",
+  evQuestionBuilt: (commit, waits) =>
+    `作業者は質問する前に、ここまでを作って ${commit} にコミットしました。` +
+    (waits === null ? "" : `返事を待っている部分: ${waits}`),
+  evQuestionBuiltLink: "変更内容",
+  reviseAnswerStarts: (part) =>
+    part === null
+      ? "質問に答えたあとにこれを押すと、あなたの返事を入れて次の回を始めます。"
+      : `質問に答えたあとにこれを押すと、あなたの返事を入れて作業 ${String(part)} の次の回を始めます。`,
+  reviseAnswerReleases: (parts) =>
+    `返事をすると、この作業のマージを待っている${parts.map((n) => `作業 ${String(n)}`).join("・")} も先へ進みます。`,
+  questionWaited: (age) => `この質問は ${age} 待っています。`,
+  reviseAnswerDrafted:
+    "作業者の質問とあなたの返事を、そのまま枠に入れました。自由に書き足してください。送る内容はあなたのものです。",
+  evTookIn: "この回は、ほかの作業がマージした変更をまず取り込みました。",
+  evTakeInMissed: "この回は、ほかの作業がマージした変更を取り込みませんでした。",
+  closingHeading: "仕上げの修正",
+  closingSaid: (findings, readCommit, rounds) =>
+    `しきい値より軽い指摘 ${String(findings)} 件を、テストつきで 1 回の作業で直しました。` +
+    `別の AI が最後に読んだのはコミット ${readCommit} で、この修正は読み直していません` +
+    (rounds === null ? "。" : `（読み直しの上限は ${String(rounds)} 回でした）。`),
+  mergeNotReread: (readCommit) =>
+    `最後のコミットは仕上げの修正で、読み直していません。別の AI が最後に読んだのは ${readCommit} です。`,
 } satisfies PageWords);

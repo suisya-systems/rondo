@@ -362,22 +362,6 @@ test(
         1,
       ),
     ).toMatchObject({ kind: "full", live: 2, limit: 1 });
-    // With room, plan 1 still waits while a lap of its request is open
-    // (rondo#463 point 5, until rondo#452), and the press admits nothing.
-    const sibling = await draftedStartReadiness(ports(), "r1", decision, w.proposalId, 1);
-    expect(sibling.kind).toBe("sibling");
-    // The draft's clock, so the scope has not expired when the press reads the time.
-    vi.useFakeTimers({ toFake: ["Date"], now: 20_000 });
-    const beside = await startSplitFromPage(ENV, w.store, w.storePath, "ada", DEFAULT_HOST_POLICY, {
-      iterationId: "lap-beside",
-      requestMessageId: "r1",
-      scopeDecisionId: decision,
-      proposalId: w.proposalId,
-      planIndex: 1,
-    }).finally(() => vi.useRealTimers());
-    expect(beside).toMatchObject({ ok: false, why: "startRefusedNotAdmitted" });
-    expect(beside.note).toContain("of this request is still open");
-    expect((await w.store.read("lap-beside")).kind).toBe("absent");
 
     // The press asks the same questions and admits nothing on a no.
     const pressed = await startSplitFromPage(

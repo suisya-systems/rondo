@@ -53,11 +53,17 @@ export function GovernanceLine({
   wording,
   governance,
   askedSaid,
+  others = null,
 }: {
   readonly wording: Chrome;
   readonly governance: Governance;
   /** When it was asked, already said: only the caller has read the clock. */
   readonly askedSaid: string;
+  /**
+   * The state of the request's other parts, already said, where it runs as
+   * several lines (D-0098 rule 8.3: *2 other parts still running*); else null.
+   */
+  readonly others?: string | null;
 }) {
   const { repository, allowance, tries, chain } = governance;
   return (
@@ -85,6 +91,7 @@ export function GovernanceLine({
        * the reason a person knows to look.
        */}
       <span className="gov-decided">{wording.govDecided(governance.decided.count)}</span>
+      {others === null ? null : <span className="gov-parts">{others}</span>}
     </p>
   );
 }

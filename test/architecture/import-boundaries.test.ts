@@ -1325,6 +1325,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page-logic/language.ts": [HUMAN],
   "src/access/page-logic/laps.ts": [HUMAN],
   "src/access/page-logic/list.ts": [HUMAN],
+  "src/access/page-logic/parts.ts": [HUMAN],
   "src/access/page-logic/result.ts": [HUMAN],
   "src/access/page-logic/routes.ts": [HUMAN],
   "src/access/page-logic/selection.ts": [HUMAN],

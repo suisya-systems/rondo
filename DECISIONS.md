@@ -165,6 +165,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0126 | Merge on green, opted into per scope: a scope may include `merge_default_branch`, and the checks host then merges a lap of it through the press's own path right after continuo reads the lap's own head green; `D-0064` rule 3.4's merge transition is taken, and `D-0025` rule 6's "never merges" gives way for such a merge | accepted |
 | D-0127 | Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended | accepted |
 | D-0128 | A scope can cover the requests rondo injects from a goal: `requests` gains one decidable form, `{"from_goal": "<goal_id>"}`, and under it the flow host, never triage, starts the goal's next request | accepted |
+| D-0129 | How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed | accepted |
 | D-0130 | A lap's cap is written when it is sent and held until its cost is read, one reserve is kept for each lane a partner could still run in, and a budget stop ends the lap with what it spent | accepted |
 
 ---
@@ -22882,6 +22883,10 @@ At rondo `24294fa` and the pinned cadenza, by reading:
    step, the question's event line, the pre-filled revise box and the closing-fix card are open. Each
    reaches the person today through the thread's asks, the gate's findings and the report's words.
 
+   > **Annotation (2026-09-27, from D-0129).** Additive: `D-0098` rule 8 is built (rondo#452). The
+   > `ordered` readiness says its wait on the scope screen, and the take-in step, the question's
+   > event line, the pre-filled revise box and the closing-fix card are drawn (`D-0129`).
+
 ### What was put to the gate, and its answer
 
 1. **The worker's fence and rule 2.** (a) cadenza's `COMMON_BASH` gains `git merge` (#417 needs it
@@ -24726,6 +24731,9 @@ At rondo `7a038e1` and continuo `f2fb450` on **2026-09-27**:
 - **Two parts of one request do not run together yet.** `D-0127` rule 5 keeps them apart until the
   page can show several lines of one request (rondo#452).
 
+  > **Annotation (2026-09-27, from D-0129).** Not additive: the page shows several lines of one
+  > request, and `D-0127` rule 5's guard is removed, so two parts of one request run together.
+
 ### What would falsify it
 
 - **A second concurrent lap refused by continuo** (`LeaseHeld`, or a shared state root). That would
@@ -24987,6 +24995,12 @@ owner decided that approving the scope is the press.
    answers once its row exists. But a person pressing another part of the request while the tick's
    start has not yet reserved its row can slip past it. The page then has two lines of one request
    to show. That is the thing rondo#452 builds, and nothing is lost.
+
+   > **Annotation (2026-09-27, from D-0129).** Not additive (rondo#452): the page counts a
+   > request's parts on its row and gives each part its own step, so the `sibling` readiness, its
+   > press refusal, its scope-screen line and its wording are removed. Rule 4's `sibling` is gone
+   > with it. A part is still held by files another line holds, by an earlier part's landing and by
+   > room.
 6. **The tick's start answers once the lap's row is reserved** (`answerOnceReserved`, as the
    press's does since `D-0109`). One pass can start two parts and still read landings while they
    run. A start that ends badly after that is an ask in the request's thread.
@@ -25093,6 +25107,112 @@ the newest goal: an edit would widen an approval nobody re-read.
   picker's order is not the person's, and the goal scope is wider than it reads.
 - **Goal scopes paused more often than they run.** Then one approval per goal is still too coarse,
   and the pause is the per-request approval with more steps.
+
+## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
+
+**Status:** accepted (2026-09-27, rondo#452). The issue records `D-0098`'s gate (2026-09-22, point
+3): the page half of rule 8 is a follow-up. The secretary answered the four points the build raised
+inside decisions already taken: build to `D-0098` rule 8 and `D-0103`'s gate answers (two presses,
+the rule 8.4 sentence on the revise box); wire `questionRevise`, which `D-0098` rule 4.5 asks for;
+one pull request; and this number. Refs `D-0098` rule 8, `D-0103`, `D-0127`, `D-0124`, `D-0076`,
+`D-0082`, `D-0083`, `D-0106`, rondo#452, rondo#463.
+
+**Why an entry is needed.** Rule 8 says what the page shows. Building it took choices the rule does
+not make: what a part is when the page reads it, where each sentence sits, what a step links to, and
+how a take-in is known before its press. Each is recorded here once.
+
+### Decision
+
+1. **A part is a plan of the request's approved drafted split.** `partsOf`
+   (`src/access/drafted-start.ts`) reads the split behind the request's approved scope
+   (`draftedStanding`, `draftedPlansUnder`). Each plan's line is the lap started from it
+   (`startedFrom`), and its place in the order is `planOrder`. A split of one plan, or a request with
+   no approved drafted scope, has no parts and reads exactly as before. A part is *part N*, the number
+   rule 1.5's question already uses. The scope screen's English "Plan N" becomes "Part N" to match;
+   the Japanese already said 作業 N.
+2. **Each part has one standing, and only the person's is amber** (rule 8.1). The standings are yours
+   (a lap at its gate, or an earlier part that ended unmerged while rule 1.5's question stands),
+   running, waiting on an earlier part's merge, not started, merged, finished, and stopped. Finished
+   is an approved gate whose pull request was not closed unmerged; any other ending is stopped, and
+   so is a part the person dropped by answering rule 1.5's question *stop*. The row's
+   sentence counts them in place of the one state: *2 of 3 parts running, 1 waiting for another part
+   to be merged*. A wait names the other repository only where every waiting part waits on the same
+   one (*waiting for cadenza's change to land*). The row is amber only where the list already lifts it
+   under *your turn*.
+3. **One step per part, under "what remains before this ends"** (rule 8.2). The steps sit on the
+   right face above the five steps of the part being answered. An unstarted part says what it waits
+   on and that it starts by itself: *waiting until cadenza #131 is merged; then it starts by itself*.
+   The pull request is linked where the earlier part published one, and its repository is named only
+   where it is not the part's own. A part whose earlier part ended unmerged is the one amber step,
+   linking rule 1.5's question in the thread. **The other request's thread** that rule 8.2 names is
+   this thread: under `D-0103` rule 1.2 an order is a split's `after`, so both parts are one request.
+   Before any part has started there is no lap to read an agreement from, so the right face holds
+   the parts' steps alone. The approved scope screen says the same sentence under an ordered plan,
+   still with no press. The
+   step's colour is in `page/thread.css` beside the governance chain's amber; `page/side.css` stays
+   the amber-free sheet the empty state's test holds.
+4. **A worker's question puts one event line directly above the answering box** (rule 8.3), while
+   the question stands. The commit is the one rondo measured, the deterministic reading's tip, as the
+   question itself carries it. What waits on the answer is the worker's own `waits`, read from the
+   block in the report the gate read, and left out where the report was not read. The line links the
+   right face's card of what changed, not the forge: the commit is not pushed until it is published.
+   The line under the title keeps the other parts' state: *1 other part still running*. **Where
+   several parts wait at a gate, each is answered on its own.** The thread's address may name the
+   gate the box answers (`?thread=...&gate=<lap>`). The step of a part at a gate the box is not
+   showing links it, so one part's open question never stands between the person and another
+   part's answer. Without a name, or naming no lap at a gate, the first waiting one is answered, as
+   before.
+5. **The revise box carries the answer and says what answering releases** (rules 4.5 and 8.4, the
+   gate's point 2). Where the lap put a question, the box says what the press starts (*this starts
+   part 1's next attempt with your answer in it*) and names the parts whose `after` is this part. While
+   the question stands, it also says how long the question has waited. There is no deadline, no
+   countdown and nothing rondo will assume. Once the person has carried the question on, the box
+   opens holding `questionRevise`'s text, the question and the answer byte for byte, ahead of anything
+   a reading drafted, with a note saying so.
+6. **A take-in is known from the gate's comparison and the other part's claim** (rule 8.5, the case
+   of `D-0098` rule 2.1). The lap reached files outside its own claim (the reach's collided and
+   unheld paths), and another part of the request **in the lap's own repository** that claimed them
+   was merged. A take-in fetches and compares only that repository, so the same path in another one
+   is a different file. The part's step and
+   the revise box then say *another part changed these files and was merged; the next attempt starts
+   by merging it in*, linking the merged pull request. The revise press still decides the take-in
+   with `git` (`revisionTakeIn`). The attempt's event line says whether it happened: a plan carrying a
+   `landed` take-in reads *first merged in* (green) at the automatic checks that tested it, or *did not
+   merge in* (red) where the ancestry finding stands. The finding itself stays the gate's, in the box.
+   A conflict fix's take-in (`D-0105`) keeps its own lines.
+7. **A closing fix is one card on the right face and one line before the merge press** (rule 8.6).
+   The card is read from `closingLapOf`. Its findings are quoted by index from the model reading the
+   closing lap names (`readingReadAtMs` on the predecessor). The commit the reviewer last read links
+   to the pull request's copy of it, and the round limit comes from the lap's approval. The merge
+   screen says *not re-read* before the press. No standing finding is drawn, so the plain merge press
+   stays. The page's store port gains `closingLapOf`.
+8. **`D-0127` rule 5's guard is removed.** With several lines of one request drawn, the `sibling`
+   readiness, its press refusal, its scope-screen line and its wording go.
+
+### What this gives up
+
+- **The parts are read on every redraw.** `startedFrom` scans every lap once per part, for every
+  request in the list. That is cheap at today's size; recording the plan's line on the lap is the fix
+  when it is not.
+- **A take-in said before its press can be wrong in one direction.** When a merged part claimed the
+  paths but did not in fact change the ones this lap reached, the press takes nothing in, and the step
+  said it would.
+- **What each part holds is not said on the row.** Rule 8.1 asks for files and branch where a part's
+  holding is mentioned. That is said where it matters: the scope screen's held reason names the
+  paths and the holding request (`D-0113`). The row stays one sentence.
+- **Event lines still number tries across the whole request.** Two parts' laps read *try 1*, *try 2*
+  in the order they started, not per part.
+
+### What would falsify it
+
+- **A row counting parts for a request run as one line**, or a request whose split has two plans
+  drawn with one state: rule 1 is not holding.
+- **An amber step or row for a wait rondo clears itself**: rule 2 or 3 is not holding.
+- **A revise box offering a deadline or an assumed answer**, or a box that sends an answer other than
+  the person's words: rule 5 is not holding.
+- **A take-in sentence where no part of the request was merged**, or an attempt whose line says it
+  merged the other part in while its ancestry finding stands: rule 6 is not holding.
+- **A closing fix merged from a screen that did not say *not re-read***: rule 7 is not holding.
 
 ## D-0130 — A lap's cap is written when it is sent and held until its cost is read, one reserve is kept for each lane a partner could still run in, and a budget stop ends the lap with what it spent
 

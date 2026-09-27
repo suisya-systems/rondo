@@ -26,6 +26,7 @@ import {
   planField,
 } from "../../store/records.js";
 import type { ThreadEvent } from "../page/events.js";
+import { TAKE_IN_FINDING } from "../review.js";
 import type { Chrome } from "../wording.js";
 import { refusalSaid } from "./laps.js";
 import type { LapResult } from "./result.js";
@@ -83,6 +84,21 @@ export interface ReadingLine {
 /** Whether a reading is the automatic checks rather than a model's. */
 function isChecks(drafter: string): boolean {
   return !drafter.startsWith("rondo/model/");
+}
+
+/**
+ * Whether the lap was told to merge in what another line landed first (D-0098
+ * rule 2, `take_in` with cause `landed`). A conflict fix's take-in (D-0105) is
+ * said by its own lines, not by this one.
+ */
+function tookInLanded(record: IterationRecord): boolean {
+  const takeIn = record.plan["take_in"];
+  return (
+    typeof takeIn === "object" &&
+    takeIn !== null &&
+    !Array.isArray(takeIn) &&
+    (takeIn as Record<string, unknown>)["cause"] === "landed"
+  );
 }
 
 /**
@@ -238,6 +254,25 @@ export function lapEvents(
       ),
       at: at(reading.atMs),
       atMs: reading.atMs,
+      tryAt,
+    });
+  }
+  /*
+   * **Whether the attempt took the other part in** (D-0098 rule 8.5): said at
+   * the automatic checks that tested it, which find a take-in the lap did not
+   * pass (D-0103 rule 2.3) -- that finding is the gate's, in the box.
+   */
+  const tested = readings.findLast(
+    (reading) => reading.verdict !== "unavailable" && isChecks(reading.drafter),
+  );
+  if (tested !== undefined && tookInLanded(record)) {
+    const missed = tested.findings.some((finding) => finding.includes(TAKE_IN_FINDING));
+    events.push({
+      id: `${record.id}:take-in`,
+      kind: missed ? "failed" : "passed",
+      said: said(missed ? wording.evTakeInMissed : wording.evTookIn),
+      at: at(tested.atMs),
+      atMs: tested.atMs,
       tryAt,
     });
   }

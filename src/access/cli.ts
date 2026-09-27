@@ -5235,12 +5235,6 @@ async function startSplit(
     // pressed or ticked. No press lifts an order (rule 1.5 is the person's P3).
     case "ordered":
       return { ok: false, why: "startRefusedNotAdmitted", note: orderedNote(ready) };
-    case "sibling":
-      return {
-        ok: false,
-        why: "startRefusedNotAdmitted",
-        note: `iteration '${ready.iterationId}' of this request is still open; this plan starts once it ends`,
-      };
     case "busy":
     case "full":
       return {
