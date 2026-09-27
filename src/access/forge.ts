@@ -38,10 +38,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { isTurnTimeoutRefusal } from "../continuo/protocol.js";
 import type { DrafterRow, ReviewerRow } from "../continuo/roles.js";
+import { KEPT_WORK_SUBJECT } from "../refrain/revision.js";
 import { recordNumber, recordNumbers } from "../store/lanes.js";
 import { contentDigest } from "../store/plan.js";
-import type { ReadingEvidence } from "../store/records.js";
+import type { IterationRecord, ReadingEvidence } from "../store/records.js";
 import { hostFailure } from "./host-failure.js";
 import type { DrafterRun } from "./model-draft/judgement.js";
 import type { ReviewerRun } from "./model-review/judgement.js";
@@ -456,6 +458,104 @@ export async function inspectTopicBranch(request: {
     return { kind: "unreadable", reason: queryFailure(branch) ?? branch.commandLine };
   }
   return { kind: "read", exists: branch.status === 0 };
+}
+
+/** What {@link keepStoppedWork} did with a stopped lap's workspace (D-0143). */
+export type KeptWork =
+  | { readonly kind: "kept"; readonly commit: string }
+  | { readonly kind: "clean" }
+  | { readonly kind: "notKept"; readonly reason: string };
+
+/**
+ * Whether a row is a lap continuo stopped at its time limit (D-0143): ended
+ * `failed` on the turn-timeout refusal, with a workspace and a branch to keep.
+ */
+export function stoppedAtTimeLimit(row: IterationRecord): boolean {
+  return (
+    row.status === "failed" &&
+    row.reason !== null &&
+    isTurnTimeoutRefusal(row.reason) &&
+    row.workspace !== null &&
+    row.topicBranch !== null
+  );
+}
+
+/**
+ * **Keep what a lap stopped at its time limit had not committed** (D-0143,
+ * rondo#516): one commit on the lap's own topic branch, in rondo's name and
+ * marked unverified. continuo has stopped the session before it answers the
+ * refusal and leaves the workspace as it was, so nothing else writes here.
+ *
+ * It is kept, not delivered: a failed lap has no gate and is never published.
+ * Only a retry cut from this branch carries it on, and that lap's worker is
+ * told to verify it, and a person approves that lap at its gate.
+ *
+ * The workspace is checked first -- its top level is the row's workspace and
+ * its branch is the row's topic branch -- so a stale path never commits into
+ * another checkout. The repository's own commit hooks run, as for any commit.
+ */
+export async function keepStoppedWork(request: {
+  readonly workspace: string;
+  readonly topicBranch: string;
+}): Promise<KeptWork> {
+  const git = (...argv: string[]) =>
+    runCommand("git", ["-C", request.workspace, ...argv], PREFLIGHT_TIMEOUT_MS);
+  // The commit runs the repository's hooks, which may lint: a forge command's bound.
+  const commit = (...argv: string[]) =>
+    runCommand("git", ["-C", request.workspace, ...argv], FORGE_TIMEOUT_MS);
+  const failed = (outcome: CommandOutcome): KeptWork => ({
+    kind: "notKept",
+    reason: queryFailure(outcome) ?? outcome.commandLine,
+  });
+  // The workspace is a checkout's top level: no prefix below it. Asked of git
+  // rather than compared as paths, so a symlink on the way is not a mismatch.
+  const top = await git("rev-parse", "--show-prefix");
+  if (top.status !== 0 || top.spawnError !== null) {
+    return failed(top);
+  }
+  if (top.stdout.trim() !== "") {
+    return { kind: "notKept", reason: `the workspace is ${top.stdout.trim()} inside a checkout` };
+  }
+  const branch = await git("symbolic-ref", "--short", "HEAD");
+  if (branch.status !== 0 || branch.spawnError !== null) {
+    return failed(branch);
+  }
+  if (branch.stdout.trim() !== request.topicBranch) {
+    return { kind: "notKept", reason: `the workspace is on ${branch.stdout.trim()}` };
+  }
+  // New files counted whatever `status.showUntrackedFiles` says, as `inspectLapWork` does.
+  const status = await git("status", "--porcelain", "--untracked-files=normal");
+  if (status.status !== 0 || status.spawnError !== null) {
+    return failed(status);
+  }
+  if (status.stdout.trim() === "") {
+    return { kind: "clean" };
+  }
+  const added = await git("add", "--all");
+  if (added.status !== 0 || added.spawnError !== null) {
+    return failed(added);
+  }
+  const committed = await commit(
+    "-c",
+    "user.name=rondo",
+    "-c",
+    "user.email=rondo@localhost",
+    "-c",
+    "commit.gpgsign=false",
+    "commit",
+    "--quiet",
+    // The author said on the command line, which an inherited GIT_AUTHOR_* does not override.
+    "--author=rondo <rondo@localhost>",
+    "-m",
+    KEPT_WORK_SUBJECT,
+  );
+  if (committed.status !== 0 || committed.spawnError !== null) {
+    return failed(committed);
+  }
+  const head = await git("rev-parse", "HEAD");
+  return head.status === 0 && head.spawnError === null
+    ? { kind: "kept", commit: head.stdout.trim() }
+    : failed(head);
 }
 
 /** What a pull request needs. */

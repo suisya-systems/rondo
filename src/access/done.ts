@@ -50,7 +50,9 @@ export const DONE_OPENING = "\n\n---\nDefinition of done";
  * rondo#432). Lap 13's try was cut at its turn budget mid-change, with 15 files
  * edited and nothing committed, and a next try is cut from the last try's
  * commits (`src/refrain/revision.ts`). So the worker is told the budget in
- * minutes and to commit each working step as it goes. Null says nothing, for
+ * minutes and to commit each working step as it goes. What a stop leaves
+ * uncommitted is kept as one unverified commit (D-0143), so the line says that
+ * only the worker's commits count as done. Null says nothing, for
  * a caller with no plan to read it from.
  */
 export function definitionOfDone(
@@ -63,7 +65,7 @@ export function definitionOfDone(
     ...(turnTimeoutMs === null
       ? []
       : [
-          `- This lap has ${String(Math.round(turnTimeoutMs / 60_000))} minutes; a lap still working then is stopped. Commit each working step as you go: a stop keeps only what is committed.`,
+          `- This lap has ${String(Math.round(turnTimeoutMs / 60_000))} minutes; a lap still working then is stopped. Commit each working step as you go: after a stop, only your commits count as done work; rondo keeps the rest as one unverified commit that the next try has to check.`,
         ]),
     "- Before you report, run the repository's own install and verification, as the repository defines them.",
     "- If the verification cannot run, or does not pass, say so in your report. Never say it passed when it did not run.",

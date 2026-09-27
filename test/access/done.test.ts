@@ -46,7 +46,7 @@ test("a drafted prompt that never says commit still reaches the lap asking for a
   expect(prompt).toContain("Never say it passed when it did not run.");
 });
 
-test("the worker is told the plan's turn budget and that a stop keeps only what is committed (D-0110)", async () => {
+test("the worker is told the plan's turn budget and that only its commits count as done work after a stop (D-0110, D-0143)", async () => {
   // Lap 13's try was cut at 15 minutes with 15 files edited and no commit, and
   // a next try is cut from the last try's commits.
   const prompt = await lapPrompt({
@@ -54,7 +54,7 @@ test("the worker is told the plan's turn budget and that a stop keeps only what 
     invocation_ceiling_ms: 2_280_000,
   });
   expect(prompt).toContain(
-    "- This lap has 30 minutes; a lap still working then is stopped. Commit each working step as you go: a stop keeps only what is committed.",
+    "- This lap has 30 minutes; a lap still working then is stopped. Commit each working step as you go: after a stop, only your commits count as done work; rondo keeps the rest as one unverified commit that the next try has to check.",
   );
   expect(definitionOfDone([], null)).not.toContain("minutes");
 });

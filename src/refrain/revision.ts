@@ -51,7 +51,14 @@
 import { type IterationRecord, planField } from "../store/records.js";
 
 import { allocate } from "./allocator.js";
-import { type AdmittedPlan, type PlanOutcome, readPlan, runPlan, type TakeIn } from "./plan.js";
+import {
+  type AdmittedPlan,
+  type PlanOutcome,
+  type RunPlan,
+  readPlan,
+  runPlan,
+  type TakeIn,
+} from "./plan.js";
 
 /**
  * Everything a second lap needs that the first lap's row does not already hold.
@@ -173,6 +180,51 @@ export function revisionPlan(input: RevisionRequest): PlanOutcome {
     // agree. The predecessor's grantee rides along in the spread above and is
     // overwritten there, which is why it does not have to be cleared here.
   });
+}
+
+/** The subject of the commit rondo keeps a stopped lap's work in (D-0143). */
+export const KEPT_WORK_SUBJECT =
+  "rondo: unverified work left uncommitted when this lap was stopped at its time limit";
+
+/**
+ * **A retry of a lap stopped at its time limit starts where it stopped**
+ * (D-0143, rondo#516): the stored plan, with the first step of its prompt
+ * merging the stopped lap's branch -- its commits, and the one rondo kept its
+ * uncommitted work in -- into this lap's.
+ *
+ * **Merged in, not cut from.** The branch a lap is cut from is also the base
+ * its reading and its review are taken against (`readLapWork`, the review's
+ * `base...tip`), so a lap cut from the stopped branch would reach its gate with
+ * the kept commit below its base, where no reviewer reads it. Merged, it is
+ * inside this lap's own diff, read and reviewed like the rest, and the plan's
+ * base and pull-request base stay what they were. A merge rather than a pick
+ * because `git merge --no-edit` is the one history verb cadenza's command list
+ * grants a worker (the take-in's, D-0098 rule 2), and because it takes a
+ * stopped branch that holds a merge of its own. The stopped branch is in the
+ * repository this workspace is cut from, so nothing is fetched.
+ *
+ * A retry of a retry adds a section after the earlier one, which stays with
+ * whatever the person asked after it: merging a branch the newer one already
+ * holds changes nothing, and one it does not hold brings in work. The caller says the predecessor was stopped at its time limit; this layer
+ * reads no continuo sentence.
+ */
+export function stoppedRetryPlan(plan: RunPlan, predecessor: IterationRecord): RunPlan {
+  if (predecessor.topicBranch === null) {
+    return plan;
+  }
+  return {
+    ...plan,
+    prompt:
+      `${plan.prompt}\n\n--- The previous try was stopped at its time limit ---\n\n` +
+      `A previous try of this work (iteration '${predecessor.id}') was stopped at its time` +
+      " limit before it finished, and its commits are on the local branch" +
+      ` '${predecessor.topicBranch}'. Before anything else, bring them into this branch with` +
+      ` \`git merge --no-edit ${predecessor.topicBranch}\`. A commit titled` +
+      ` '${KEPT_WORK_SUBJECT}' is rondo's, not a worker's: it holds what that try had not` +
+      " committed, and nobody has verified it. Check it before you build on it; keep what is" +
+      " right and change or remove the rest. Then continue the work rather than starting it" +
+      " over, and commit each step as soon as it passes.",
+  };
 }
 
 /**
