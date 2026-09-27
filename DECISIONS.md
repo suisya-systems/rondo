@@ -161,6 +161,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0122 | `mechanical` runs on `claude-sonnet-5` through the Claude CLI: the tier table gains a provider column passed as `lap perform --provider`, every row `claude`, and a drafter may name a `mechanical` agent type only with one grounded claim per condition of `D-0044` rule 1 | accepted |
 | D-0123 | The host's worker is the Claude CLI or the Codex CLI: `RONDO_WORKER_PROVIDER` picks the tier table, a `gpt` lap is read by a Claude reviewer, a Codex lap's tokens are priced at OpenAI's public API rate, and Windows refuses `codex` at start | accepted |
 | D-0124 | Two laps at once by default: D-0023 rule 17's condition is met by the pinned continuo, the default `maxOccupying` is 2, host-wide and across repositories, and `maxLive` stays 3 | accepted |
+| D-0126 | Merge on green, opted into per scope: a scope may include `merge_default_branch`, and the checks host then merges a lap of it through the press's own path right after continuo reads the lap's own head green; `D-0064` rule 3.4's merge transition is taken, and `D-0025` rule 6's "never merges" gives way for such a merge | accepted |
 | D-0127 | Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended | accepted |
 | D-0130 | A lap's cap is written when it is sent and held until its cost is read, one reserve is kept for each lane a partner could still run in, and a budget stop ends the lap with what it spent | accepted |
 
@@ -3359,6 +3360,10 @@ surface that replaces all of that, and it is deliberately the smallest one that 
    > merge, where rondo's own reading is green on the head and nothing in the request's thread waits
    > on them, through the operator's own `gh`. The command line still never merges. Nothing below is
    > edited.
+   > **Annotation (2026-09-27, from D-0126).** Added after this entry was accepted, and **not
+   > additive**. **"Never merges" no longer holds for a merge on green under a scope that includes
+   > `merge_default_branch`**: the checks host merges such a lap through the press's own path. The
+   > command line still never merges. Nothing below is edited.
 
    **A closed iteration is not an approved one, and `publish` checks which it has.** `withdrawn`,
    `expired` and `unanswerable` each close a gate and therefore close the iteration, and none of
@@ -12738,6 +12743,10 @@ but does not put them to the person:
    > waiting -- a reading on no record anybody can audit -- is answered. **The transition is still not
    > taken**: taking it is a gate decision, and so is whether a merge reads `ci show` itself. Nothing
    > above is edited.
+   > **Annotation (2026-09-27, from D-0126).** Added after this entry was accepted, and additive.
+   > **The transition is taken, per scope**: a scope may include `merge_default_branch`, and rondo
+   > merges a lap of it once continuo has read the lap's own head green, with no P2 to P4 item open.
+   > Every other merge stays a person's act. Nothing above is edited.
 
 5. **Every act taken inside a scope names the scope.** An admission, a redo, an agent-type choice, a
    gate answer, a push: each records the scope it was taken under, so "which scope authorised this"
@@ -14428,6 +14437,9 @@ number.
    6. **`outward_acts`**: a subset of a closed vocabulary, empty by default. It holds
       `push_branch` and `open_pull_request` (`D-0064` O7). **`merge_default_branch` is refused by
       the writer** until the entry that builds CI observation takes `D-0064` rule 3.4's transition.
+      > **Annotation (2026-09-27, from D-0126).** Added after this entry was accepted, and
+      > additive. `D-0126` takes that transition: `outward_acts` admits `merge_default_branch`, and
+      > the writer no longer refuses it. Nothing above is edited.
    7. **`irreversible_additions`**: names added to `D-0064` rule 3.4's list. The list itself is
       not stored on the row, so **a scope cannot shorten it by construction**; the effective list is
       rule 3.4's plus this field.
@@ -21277,6 +21289,9 @@ still open.
    > item asks about now stands on continuo's evidence, and "Why it is not taken now" below is answered.
    > **The transition is still not taken**: taking it is a gate decision, as is whether the merge button
    > reads `ci show` directly. Nothing below is edited.
+   > **Annotation (2026-09-27, from D-0126).** Added after this entry was accepted, and additive.
+   > **The transition is taken**, per scope: a lap whose scope includes `merge_default_branch` is
+   > merged on green by the checks host through the press's own path. The press is unchanged.
 
 **Why it is not taken now.** The judgement and its evidence are moving to continuo's
 `ci_observation`, and that work is under way. Until it lands, rondo's own reading is not on a record
@@ -24664,6 +24679,110 @@ At rondo `7a038e1` and continuo `f2fb450` on **2026-09-27**:
 - **Two laps in different repositories that break each other** through something neither claims,
   such as a shared cache, a port or a global tool install. The number is then too high for this
   host, whatever the ledger says.
+
+## D-0126 — Merge on green, opted into per scope: a scope may include `merge_default_branch`, and the checks host then merges a lap of it through the press's own path right after continuo reads the lap's own head green; `D-0064` rule 3.4's merge transition is taken, and `D-0025` rule 6's "never merges" gives way for such a merge
+
+**Status:** accepted (2026-09-27, rondo#465; the owner's decision of 2026-09-27, written in the
+issue). This is part 1; scoped publish, which completes the chain from approval to merge, is a
+follow-up. Takes `D-0064` rule 3.4's merge transition. Supersedes `D-0025` rule 6's "never merges"
+for a scoped merge. Annotates `D-0066` rule 1.2.6 and `D-0091` section 2. Refs `D-0042`, `D-0066`,
+`D-0091`, `D-0095`, `D-0102`, `D-0113`, `D-0119`, `D-0120`.
+
+**Why an entry is needed.** `D-0064` rule 3.4 keeps merging on the irreversible list until its
+transition is taken by an entry, and `D-0091` section 2 left that for a gate decision after `D-0095`
+moved the green reading onto continuo's evidence. The owner has taken it: merge on green, opted into
+per scope.
+
+### What was measured
+
+At rondo `7a038e1` on **2026-09-27**, by reading. Line numbers drift; re-measure the claim.
+
+- **A merge from the page is `mergeOnce`** (`src/access/merge.ts`): it reads the lap, its thread and
+  its ledger line again through `mergeBlock`, requires the head read green to be the lap's own tip
+  (or a moved head the page showed, `D-0102`), refuses a closed, retargeted or queued pull request,
+  merges with `--match-head-commit`, confirms the merge on the forge, and then releases the line and
+  closes it out (`D-0113`, `D-0119`, `D-0120`).
+- **Green is continuo's `ci show` verdict** on the pull request's head, read by the checks host on
+  the one-minute tick and written as one line in the request's thread (`D-0095`).
+- **The scope writer refused `merge_default_branch` by name** (`validateScopePayload`,
+  `src/store/records.ts`), and `scope_consumption` had one writable act kind, `admission`.
+
+### Decision
+
+1. **A scope may include `merge_default_branch` in `outward_acts`.** It is absent by default. Opting
+   in is a new scope row with a new digest, approved as P1 like any scope (`D-0066` rules 1.4 and
+   2). No field is added.
+2. **The checks host merges on green where all of these hold**, right after it writes a `green`
+   answer (`mergeOnGreen`, `src/access/merge.ts`):
+   1. the approved tip of the lap's scope chain (`D-0074` rule 2.1) includes the act, and has not
+      expired (`D-0066` rule 1.2.4);
+   2. the gate was answered `approve` (`approvedForPublication`, `D-0092`);
+   3. the head read green is the lap's own tip. A moved head (`D-0102`) goes to the person's press;
+   4. `mergeBlock` is null, asked again inside the press's path.
+
+   The auto-approval conditions are not asked again: a person's approval over findings is their
+   judgement. The merge is `mergeOnce`, holding the lap in the `pressing` set the page's press and
+   the checks host share, so a press on the page while it runs is refused as in flight
+   (`mergeRefusedInFlight`) and the checks host does not read the lap meanwhile.
+3. **Claim, then act** (`D-0042`). After every read and before the forge is asked to merge, a
+   `scope_consumption(act_kind='merge_default_branch', subject_id=<iteration id>)` row is written,
+   and rule 2.1 and 2.2 are asked again first: a scope that expired, or an approved successor
+   without the act, while the forge was read authorises nothing.
+   **Once per lap, whichever approval claims it**: the writer refuses a second row for the same lap
+   even under a successor approval, which the table's key alone would allow. A second attempt is
+   refused before the forge is asked, and a merge the forge then refused stays claimed, so the lap is
+   the person's.
+4. **The thread says who merged it.** The merge line reads "merged by rondo under scope `<scope
+   id>`, on checks read green", with where it went, how and the merge commit, as a press's does.
+   The checks line no longer says rondo merges only on a press. The page's chain draws *merge* as
+   *ahead* under a scope that includes it.
+5. **Refusals are left for the person's press, which is unchanged**: a merge queue, a retarget, a
+   forge failure or a merge the forge did not confirm writes no merge line, and the press is drawn as
+   before. Only the terminal says why.
+
+### What was put to the human gate, and its answer
+
+The owner decided on 2026-09-27 and wrote the decision in rondo#465: merge on green can be opted
+into per scope, on the four conditions of rule 2, with the claim of rule 3 and the report of rule 4.
+The expiry test in rule 2.1 is `D-0066` rule 1.2.4's, read as it is for every act under a scope.
+
+### What this gives up
+
+- **`D-0025` rule 6's "never merges", for a scoped merge.** rondo merges without a person's press
+  where a person approved a scope that includes merging. The command line still never merges.
+- **A merge on green is tried once.** A refusal or a forge failure is not retried automatically;
+  the press is how it is merged after that.
+- **A merge is not undone by rondo.** It is the one irreversible act rondo now takes under a scope;
+  the scope's approval is where the person agrees to it.
+
+### What this does not do
+
+- **Scoped publish**, the rest of the chain from approval to merge, is a follow-up.
+- **It does not merge a moved head**, through a merge queue, with `--admin` or `--auto`, or by
+  deleting the branch; `D-0091` rule 1.3 is unchanged for both paths.
+- **It does not move any other act off `D-0064` rule 3.4's list.** `merge_default_branch` stays in
+  `IRREVERSIBLE_ACTS`: the transition covers a merge on green under a scope that includes it, and
+  every other merge is a person's.
+
+### Annotations this entry adds
+
+| Entry | What the annotation says | Additive? |
+|---|---|---|
+| `D-0064` rule 3.4 | The merge transition is taken, per scope (this entry) | additive |
+| `D-0025` rule 6 | "Never merges" no longer holds for a scoped merge on green (this entry); the command line still never merges | **not additive** |
+| `D-0066` rule 1.2.6 | `outward_acts` admits `merge_default_branch`, and the writer no longer refuses it | additive |
+| `D-0091` section 2 | The transition is taken by this entry; the press is unchanged | additive |
+
+### What would falsify it
+
+- **A merge on green of a commit continuo had not read green**, or of a moved head: rule 2.3 is not
+  holding.
+- **Two merges attempted for one lap**, by the host twice or by the host and a press at once: rule 3
+  or the shared `pressing` set is not holding.
+- **A merge on green where the approved tip of the lap's scope did not include the act**, or had
+  expired, or the gate was answered `revise`.
+- **A person who opted in and then went to the forge to merge anyway**, for a reason rondo could have
+  met: rule 2 is drawn on the wrong conditions.
 
 ## D-0127 — Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended
 

@@ -117,7 +117,7 @@ test("the request's tries are listed with their costs, and a running one holds t
   expect(gated.allowance?.heldInProgress).toBe(false);
 });
 
-test("the chain reads the lap's status, and its last step is never rondo's", () => {
+test("the chain reads the lap's status, and its last step is rondo's only under a merging scope", () => {
   const atGate = governanceOf(lap({ status: "awaiting_human" }), null, 1, approval(), false, []);
   expect(atGate.chain).toEqual([
     { step: "answer", state: "waiting" },
@@ -126,9 +126,8 @@ test("the chain reads the lap's status, and its last step is never rondo's", () 
     { step: "merge", state: "yours" },
   ]);
 
-  // **`merge_default_branch` is not a scope's to grant** (D-0064 rule 3.4, and
-  // the store refuses the name), so no approval can move the last step off
-  // *yours*. Drawing it as *ahead* would say rondo was going to do it.
+  // Push and open without merge leave the last step a person's: drawing it as
+  // *ahead* would say rondo was going to do it.
   const permissive = governanceOf(
     lap({ status: "closed", gateOutcome: "approve" }),
     null,
@@ -142,6 +141,17 @@ test("the chain reads the lap's status, and its last step is never rondo's", () 
     { step: "proposal", state: "done" },
     { step: "merge", state: "yours" },
   ]);
+
+  // **A scope that includes the merge puts rondo on it** (D-0126).
+  const merging = governanceOf(
+    lap({ status: "closed", gateOutcome: "approve" }),
+    null,
+    1,
+    approval({ outward_acts: ["push_branch", "open_pull_request", "merge_default_branch"] }),
+    true,
+    [],
+  );
+  expect(merging.chain.at(-1)).toEqual({ step: "merge", state: "ahead" });
 
   // **Permission and an ended lap are not evidence a proposal was made**
   // (Codex): a lap can end failed, abandoned, or closed and still waiting for

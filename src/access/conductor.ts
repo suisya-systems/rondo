@@ -1160,6 +1160,11 @@ export type LapEvent =
        * reviewer last read and the findings it answers, or absent/null.
        */
       readonly notReread?: ClosingNotReread | null;
+      /**
+       * rondo merged it on green under this scope, and no person pressed
+       * (D-0126); absent for a press.
+       */
+      readonly underScope?: string;
     }
   /**
    * A closing lap reached its gate and was not read again (D-0098 rule 5.3):
@@ -1469,7 +1474,10 @@ export async function writeReport(
     // `alreadyRecorded` makes a second write of the same line nothing.
     messageId = `report-merged-${iterationId}`;
     body =
-      `Lap '${iterationId}' was merged on a person's press on the page: pull request ` +
+      (event.underScope === undefined
+        ? `Lap '${iterationId}' was merged on a person's press on the page: pull request `
+        : `Lap '${iterationId}' was merged by rondo under scope '${event.underScope}', on ` +
+          "checks read green: pull request ") +
       `${event.pullRequestUrl} went into '${event.into}' by ${event.method}` +
       (event.mergeCommit === null ? "." : ` as commit '${event.mergeCommit}'.`) +
       (event.notReread === undefined || event.notReread === null
@@ -1593,7 +1601,8 @@ function checksBody(
   const on = `on commit '${commit}'`;
   const nothingElse =
     "rondo read this and did nothing else with the pull request: it does not comment on or retry " +
-    "one, and it does not merge one unless a person presses merge.";
+    "one, and it does not merge one unless a person presses merge or the approved scope " +
+    "includes merging (D-0126).";
   if (reading.kind === "green") {
     // **A skipped check is not said to have passed** (rondo#376): the forge's
     // `skipped` and `neutral` do not fail the reading, and the sentence says
