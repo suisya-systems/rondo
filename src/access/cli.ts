@@ -7840,7 +7840,7 @@ export async function reviseApproval(
  * {@link import("../refrain/revision.js").revisionPlan}. rondo writes no part of
  * either (`D-0009`).
  */
-async function commandRevise(
+export async function commandRevise(
   parsed: ParsedCommand,
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
