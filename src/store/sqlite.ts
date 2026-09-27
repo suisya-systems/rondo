@@ -3486,7 +3486,10 @@ export interface AdvisoryRecord {
   /**
    * Every operator message a drafter row covers (D-0071 rule 3.2): one a
    * proposal row by a drafter named with `drafterPrefix` lists under its
-   * snapshot's `covers`, or one such a drafter's message cites by `message:`.
+   * snapshot's `covers`, or one such a drafter's message cites by `message:`
+   * -- and only where that row's material held every issue read answering it
+   * (`D-0131` rule 1). A `forge` message a row cites is material it held, not
+   * a message it covers, so it is never in this set.
    */
   draftedMessageIds(drafterPrefix: string): Promise<ReadonlySet<string>>;
   /**
@@ -5626,21 +5629,111 @@ function messagesBeforeEpoch(
   return new Set(rows.map((row) => String(row["message_id"])));
 }
 
+/** One drafter row's two sets: what it covers, and what its material held. */
+interface DrafterRowCoverage {
+  readonly covers: Set<string>;
+  readonly held: Set<string>;
+}
+
+/** The row `id` names, made on first mention. */
+function rowCoverage(rows: Map<string, DrafterRowCoverage>, id: string): DrafterRowCoverage {
+  const known = rows.get(id);
+  if (known !== undefined) {
+    return known;
+  }
+  const made = { covers: new Set<string>(), held: new Set<string>() };
+  rows.set(id, made);
+  return made;
+}
+
+/**
+ * Every operator message a drafter row covers (D-0071 rule 3.2 as `D-0131`
+ * narrows it): a row covers a message **only with the issue reads it held**.
+ *
+ * A row is a proposal whose snapshot lists the message under `covers`, or a
+ * drafter message citing it, exactly as rule 3.2 says. What it held is **the
+ * material's own membership**, not a time: a proposal's `$.material.thread`
+ * lists every message its run was handed, and a drafter message's `message:`
+ * bases are what the run that wrote it cited -- an unavailable run cites the
+ * reads it held beside the messages it covers (`drafter-host.ts`). A `forge`
+ * message answering the operator message that is **not in that membership** is
+ * material no covering row read, so the message is not covered and the thread
+ * is drafted again over it.
+ *
+ * Membership rather than a clock because both clocks lie in the same direction
+ * (`D-0131` rule 1): a summary is written *after* its run's material was
+ * assembled, so its write time would cover a read the draft never saw, and a
+ * read's `at_ms` is stamped *before* the repository is resolved and the forge
+ * answers, so it can precede a draft it landed after.
+ */
 function coveredMessageIds(connection: DatabaseSync, drafterPrefix: string): Set<string> {
-  const rows = connection
+  const rows = new Map<string, DrafterRowCoverage>();
+  // The CASE rather than a WHERE: the planner may run json_each before a
+  // filter, and a malformed document must read as empty, not raise.
+  const snapshot = "CASE WHEN json_valid(p.snapshot) THEN p.snapshot ELSE '{}' END";
+  for (const row of connection
     .prepare(
-      // The CASE rather than a WHERE: the planner may run json_each before a
-      // filter, and a malformed document must read as empty, not raise.
-      "SELECT j.value AS id FROM proposal p, " +
-        "json_each(CASE WHEN json_valid(p.snapshot) THEN p.snapshot ELSE '{}' END, '$.covers') j " +
-        "WHERE substr(p.drafter, 1, length(?)) = ? " +
-        "UNION SELECT json_extract(j.value, '$.messageId') AS id FROM conversation_message m, " +
+      `SELECT p.proposal_id AS row_id, j.value AS id FROM proposal p, json_each(${snapshot}, ` +
+        "'$.covers') j WHERE substr(p.drafter, 1, length(?)) = ?",
+    )
+    .all(drafterPrefix, drafterPrefix) as SqlRow[]) {
+    rowCoverage(rows, `proposal:${String(row["row_id"])}`).covers.add(String(row["id"]));
+  }
+  for (const row of connection
+    .prepare(
+      `SELECT p.proposal_id AS row_id, json_extract(j.value, '$.messageId') AS id FROM proposal p, ` +
+        `json_each(${snapshot}, '$.material.thread') j WHERE substr(p.drafter, 1, length(?)) = ? ` +
+        "AND json_type(j.value) = 'object'",
+    )
+    .all(drafterPrefix, drafterPrefix) as SqlRow[]) {
+    const id = row["id"];
+    if (typeof id === "string") {
+      rowCoverage(rows, `proposal:${String(row["row_id"])}`).held.add(id);
+    }
+  }
+  // A drafter message holds what it cites; only the operator messages among
+  // them are covered, so citing the reads a run held adds nothing to `covers`.
+  for (const row of connection
+    .prepare(
+      "SELECT m.message_id AS row_id, json_extract(j.value, '$.messageId') AS id, " +
+        "(SELECT c.author_kind FROM conversation_message c WHERE c.message_id = " +
+        "json_extract(j.value, '$.messageId')) AS cited_kind FROM conversation_message m, " +
         "json_each(CASE WHEN json_valid(m.bases) THEN m.bases ELSE '[]' END) j " +
         "WHERE m.author_kind = 'drafter' AND substr(m.author_id, 1, length(?)) = ? " +
         "AND json_type(j.value) = 'object' AND json_extract(j.value, '$.form') = 'message'",
     )
-    .all(drafterPrefix, drafterPrefix, drafterPrefix, drafterPrefix) as SqlRow[];
-  return new Set(rows.map((row) => String(row["id"])));
+    .all(drafterPrefix, drafterPrefix) as SqlRow[]) {
+    const id = row["id"];
+    if (typeof id !== "string") {
+      continue;
+    }
+    const coverage = rowCoverage(rows, `message:${String(row["row_id"])}`);
+    coverage.held.add(id);
+    if (row["cited_kind"] !== "forge") {
+      coverage.covers.add(id);
+    }
+  }
+  const reads = new Map<string, Set<string>>();
+  for (const row of connection
+    .prepare(
+      "SELECT message_id, in_reply_to FROM conversation_message " +
+        "WHERE author_kind = 'forge' AND in_reply_to IS NOT NULL",
+    )
+    .all() as SqlRow[]) {
+    const answered = String(row["in_reply_to"]);
+    const held = reads.get(answered) ?? new Set<string>();
+    held.add(String(row["message_id"]));
+    reads.set(answered, held);
+  }
+  const covered = new Set<string>();
+  for (const { covers, held } of rows.values()) {
+    for (const id of covers) {
+      if ([...(reads.get(id) ?? [])].every((read) => held.has(read))) {
+        covered.add(id);
+      }
+    }
+  }
+  return covered;
 }
 
 /** A flow ask's points read back; a row that will not read asks nothing. */

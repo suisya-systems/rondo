@@ -356,6 +356,84 @@ export function parseForgeRead(body: string): ForgeRead | null {
   return read === null ? null : { named, atMs, read };
 }
 
+/**
+ * How many bytes of one issue's own text -- its body and its comments together
+ * -- the drafter's document carries (`D-0131` rule 2). Well under
+ * {@link ISSUE_BOUND_BYTES} so several issues of one request fit beside the
+ * templates the same document holds.
+ */
+export const DRAFTER_ISSUE_BOUND_BYTES = 20_000;
+
+/** `text` cut to its first `bytes` bytes, never inside a character. */
+function headOfBytes(text: string, bytes: number): string {
+  const encoder = new TextEncoder();
+  if (bytes <= 0) {
+    return "";
+  }
+  if (encoder.encode(text).length <= bytes) {
+    return text;
+  }
+  let taken = 0;
+  let head = "";
+  for (const character of text) {
+    const size = encoder.encode(character).length;
+    if (taken + size > bytes) {
+      break;
+    }
+    head += character;
+    taken += size;
+  }
+  return head;
+}
+
+/**
+ * A `forge` message's body as the drafter's document carries it (`D-0131`
+ * rule 2): **the issue's body and comments, cut from the head** at
+ * {@link DRAFTER_ISSUE_BOUND_BYTES} when they are longer than that together.
+ *
+ * A cut read carries a `cut` sentence rondo wrote, so the model can tell a
+ * whole issue from part of one and ask rather than draft as if it had read the
+ * end. The worker's prompt is not cut (`issuesQuote`): the bound is the
+ * drafter's document's, not the read's. Anything that is not one of rondo's
+ * issue reads, and any read that failed, comes back unchanged.
+ */
+export function issueForDrafter(body: string, bound: number = DRAFTER_ISSUE_BOUND_BYTES): string {
+  const read = parseForgeRead(body);
+  if (read === null || !("read" in read)) {
+    return body;
+  }
+  const issue = read.read;
+  const encoder = new TextEncoder();
+  const size = (text: string): number => encoder.encode(text).length;
+  const whole = issue.comments.reduce((sum, one) => sum + size(one.body), size(issue.body));
+  if (whole <= bound) {
+    return body;
+  }
+  // **What is kept is one continuous head, never a head with a hole in it.**
+  // Once a part is cut the rest of the budget is spent, so a multibyte
+  // character that would not fit -- body "あ" under a bound of 2 -- leaves
+  // bytes no later comment may fill: a reader who sees a comment's first bytes
+  // knows everything before them is there too.
+  let left = bound;
+  const take = (text: string): string => {
+    const head = headOfBytes(text, left);
+    left = head === text ? left - size(head) : 0;
+    return head;
+  };
+  const cutBody = take(issue.body);
+  const cutComments = issue.comments.map((one) => ({ ...one, body: take(one.body) }));
+  return JSON.stringify({
+    rondo_issue_read: 1,
+    named: read.named,
+    at_ms: read.atMs,
+    read: { ...issue, body: cutBody, comments: cutComments },
+    cut:
+      `rondo cut this issue to its first ${String(bound)} of ${String(whole)} bytes of body and ` +
+      "comments: the rest of the body, and everything after it, is not here. Do not draft as if " +
+      "you had read the whole of it.",
+  });
+}
+
 function issueText(value: unknown): IssueText | null {
   if (!isRecord(value) || !Array.isArray(value["comments"])) {
     return null;
@@ -935,14 +1013,12 @@ export interface IssueReader {
    * ever. The lap's door keeps waiting on the whole of {@link unread}, so the
    * drafter asking is all that happens meanwhile.
    *
-   * ponytail: **the draft that settles the repository is composed before the
-   * read it settles**, and is not drafted again over it -- the store holds a
-   * thread whose every operator message a drafter row covers to be drafted and
-   * writes nothing twice (D-0071 rule 3.2). So in a store holding several
-   * repositories the issue reaches such a request at the lap's door, quoted
-   * (`withNamedIssues`) and on the scope screen, but not in the drafted
-   * prompt. Drafting again over a landed read is the upgrade, and it is
-   * rule 3.2's coverage to change, not this reader's.
+   * **The draft that settles the repository is composed before the read it
+   * settles, and the thread is drafted again once the read lands** (`D-0131`
+   * rule 1): a drafter row covers an operator message only with the issue reads
+   * it held, so a `forge` message written after it leaves the thread due again
+   * and the second run has the issue in its document. What the first run wrote
+   * stays; the second writes its own rows beside it.
    */
   unreadUnderway(
     messages: readonly ThreadMessageDraft[],

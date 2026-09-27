@@ -246,6 +246,8 @@ const INSTRUCTIONS = [
   '- A message "by forge" is what rondo read of an issue a person named: JSON holding its title,',
   "  state, body and comments, or why it could not be read. rondo quotes every such read into the",
   "  worker's prompt itself, after your prompt, so do not copy or retell an issue in a prompt.",
+  '  A read carrying "cut" holds only the start of that issue: the worker gets the whole of it, you',
+  "  do not, so do not write a prompt or a summary that turns on what the rest of it might say.",
   "",
   "You choose and you write words. You never invent a number, a template or an agent type:",
   '- Choose ONE act. "split": propose one or more plans. "ask": put one question to the person',

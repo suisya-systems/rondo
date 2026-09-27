@@ -11,6 +11,7 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import { type DrafterHostPorts, drafterHost } from "../../src/access/drafter-host.js";
+import { DRAFTER_ISSUE_BOUND_BYTES, forgeBody, ISSUE_READER } from "../../src/access/issue-read.js";
 import { draftRequest } from "../../src/access/model-draft/host.js";
 import type { DrafterRun } from "../../src/access/model-draft/judgement.js";
 import { planDigest } from "../../src/store/plan.js";
@@ -41,12 +42,16 @@ function hostOver(w: World, answer: (document: string, run: number) => Promise<D
   return { host: drafterHost(ports), handed, logged };
 }
 
-const split = (templateDigest: string, typeDigest: string): DrafterRun => ({
+const split = (
+  templateDigest: string,
+  typeDigest: string,
+  summary = "One plan: fix the flaky test.",
+): DrafterRun => ({
   kind: "answered",
   costUsd: 0.05,
   finalMessage: JSON.stringify({
     act: "split",
-    summary: { text: "One plan: fix the flaky test.", bases: ["r1"] },
+    summary: { text: summary, bases: ["r1"] },
     plans: [
       {
         template_plan_digest: templateDigest,
@@ -123,6 +128,122 @@ test("a run that goes stale is discarded and run again over the new thread (rule
   expect(await w.record.draftedMessageIds("rondo/drafter/")).toEqual(
     new Set(["r1", "r1-plan", "r1-more"]),
   );
+});
+
+/** One issue read landing in `r1`'s thread, as `issue-read.ts`'s reader writes it. */
+async function readLands(w: World, atMs: number, body: string) {
+  const outcome = await w.record.recordThreadMessage({
+    messageId: `forge-${String(atMs)}`,
+    body: forgeBody({
+      named: "#237",
+      atMs,
+      read: {
+        url: "https://github.com/o/r/issues/237",
+        number: 237,
+        pullRequest: false,
+        title: "The one flaky test",
+        state: "open",
+        author: "ada",
+        openedAt: "2026-09-01T00:00:00Z",
+        body,
+        comments: [{ author: "bob", at: "2026-09-02T00:00:00Z", body: "It is the timer." }],
+      },
+    }),
+    authorKind: "forge",
+    authorId: ISSUE_READER,
+    inReplyTo: "r1",
+    atMs,
+    bases: [],
+    asks: false,
+  });
+  if (outcome.kind !== "recorded") throw new Error(JSON.stringify(outcome));
+}
+
+test("a read that lands after the draft is drafted again, and the redraft writes a new split over the issue (D-0131 rule 1)", async () => {
+  const { w, templateDigest, typeDigest } = await requestWithPlan();
+  const handed: string[] = [];
+  let now = 10_000;
+  let n = 0;
+  const logged: string[] = [];
+  const host = drafterHost({
+    store: w.store,
+    record: w.record,
+    now: () => now,
+    language: null,
+    log: (line) => logged.push(line),
+    mintId: (kind) => {
+      n += 1;
+      return `${kind}-${String(n)}`;
+    },
+    runDrafter: async (_row, document) => {
+      handed.push(document);
+      return split(templateDigest, typeDigest, `Fix it: run ${String(handed.length)}.`);
+    },
+  });
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+  expect(handed[0]).not.toContain("The one flaky test");
+
+  // The read the first draft settled where to make lands after it.
+  await readLands(w, 20_000, "It fails one run in ten.");
+  now = 30_000;
+  host.kick();
+  await host.idle();
+
+  // **The redraft is not an empty loop**: it was handed the issue, and what it
+  // wrote is a new split and a new summary the person can read.
+  expect(handed).toHaveLength(2);
+  expect(handed[1]).toContain("The one flaky test");
+  expect(handed[1]).toContain("It fails one run in ten.");
+  expect(handed[1]).toContain("It is the timer.");
+  const said = await drafterMessages(w);
+  expect(said.map((m) => m.body)).toEqual(["Fix it: run 1.", "Fix it: run 2."]);
+  const latest = await w.record.latestSplitFor("r1", "rondo/drafter/");
+  expect(latest).not.toBeNull();
+  const written = await w.record.readProposal(latest as string);
+  expect(written.kind === "read" && (written.proposal.snapshot["document"] as string)).toContain(
+    "The one flaky test",
+  );
+
+  // And it stops there: the row it wrote was drafted over the read.
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(2);
+});
+
+test("an issue longer than the drafter's bound reaches it cut from the head, and says so (D-0131 rule 2)", async () => {
+  const { w, templateDigest, typeDigest } = await requestWithPlan();
+  const handed: string[] = [];
+  let n = 0;
+  const host = drafterHost({
+    store: w.store,
+    record: w.record,
+    now: () => 30_000,
+    language: null,
+    log: () => undefined,
+    mintId: (kind) => {
+      n += 1;
+      return `${kind}-${String(n)}`;
+    },
+    runDrafter: async (_row, document) => {
+      handed.push(document);
+      return split(templateDigest, typeDigest);
+    },
+  });
+  const head = "the head of it. ";
+  const tail = "THE TAIL OF IT.";
+  await readLands(w, 20_000, head + "x".repeat(DRAFTER_ISSUE_BOUND_BYTES) + tail);
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+  const document = handed[0] as string;
+  // The head is there, the tail is not, and the cut is named where it is read.
+  expect(document).toContain(head);
+  expect(document).not.toContain(tail);
+  expect(document).not.toContain("It is the timer.");
+  expect(document).toContain(`rondo cut this issue to its first ${DRAFTER_ISSUE_BOUND_BYTES}`);
+  expect(document).toContain('A read carrying "cut" holds only the start of that issue');
 });
 
 test("an unavailable run writes one drafter message citing what it could not draft, and is not retried (rule 1.5)", async () => {
