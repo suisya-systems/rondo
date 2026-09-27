@@ -182,6 +182,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0147 | The goal flow's open question is in the person's turn: its block stays on the empty centre while another request waits on them | accepted |
 | D-0148 | A budget stop under a paused goal scope offers no raise; its box says the work is paused and links to resuming it | accepted |
 | D-0149 | Carrying on at a lap's stop starts that lap again: a lap stopped at its budget or its time limit runs again from its branch on the answer's own press, with the person's words, and an answer to a stop rondo starts again is not drafted | accepted |
+| D-0150 | The gate says what happened on the way to it: the laps of its line, what each was asked and committed, and the request's other parts; the execution limits say what was stopped and that its impact is unknown; and a failing test run the latest clean whole-suite run supersedes does not withhold automatic approval | accepted |
 | D-0152 | A lap continuo refused before its cost was read holds its reserve at a lap's send, the number the page counts, and not its cap; reading a timed-out lap's cost is continuo's | accepted |
 
 ---
@@ -26854,6 +26855,93 @@ every press, and those stops still ask the person to look first.
 - **A split drafted from an answer to such a stop**: rule 3 is not holding.
 - **A retry started from such a stop that is not cut from where the line was** (supersedes null, or
   its branch not merged): rule 1's plan is not the one run.
+
+## D-0150 — The gate says what happened on the way to it: the laps of its line, what each was asked and committed, and the request's other parts; the execution limits say what was stopped and that its impact is unknown; and a failing test run the latest clean whole-suite run supersedes does not withhold automatic approval
+
+**Status:** accepted (2026-09-28, rondo#497; read from the owner's lap 18 walk of rondo#313's third
+lap, and taken through the secretary while the owner was away). Amends `D-0125` rule 1.3 (what
+counts as a green verification record) and `D-0104` (what the worker-ran block says). Refs
+`D-0079`, `D-0098` rule 8, `D-0106`, `D-0129`.
+
+### Context
+
+The owner opened the gate of rondo#313's third lap and asked whether a person could tell from it
+what happened. They could not:
+
+- **The auto-approval line gave a false reason**: *1 test failed*. The failing run was the worker's
+  deliberate check: it put the old implementation back to see the new test fail, then restored it.
+  The last `npm run verify` finished without error, but `workerRuns` reads the last run whose
+  output holds a runner summary, and a verify run with its output sent to a file holds none.
+- **The story of the three laps** (blockers raised, fixed, tests hardened) was only in the folded
+  record dump, as raw text.
+- **"Execution limits: 3 commands stopped"** said nothing about what, why, or whether it mattered.
+- **The request was drafted as two parts**, and the gate did not name the other one.
+
+### Decision
+
+1. **A failing run can be superseded, by a whole-suite run only** (`workerRuns`,
+   `src/access/page-logic/laps.ts`). Where the last readable run failed or ended in error, rondo
+   finds the latest command after it that is a whole-suite invocation (`wholeSuiteCommand`): after an
+   optional `cd <dir> &&` and with its output redirected or not, exactly one of `npm|pnpm|yarn|bun
+   [run] test|verify`, `[npx] vitest [run]`, `[npx] jest`, `pytest [-q]`, `python -m pytest`,
+   `cargo test`, `go test ./...`, `make test|check|verify`, **with no arguments**. A redirection
+   may name a variable and never substitute a command. If that command ended without error, it
+   supersedes the failure (`supersededBy`); if it ended in error, nothing does. So:
+   1. **An argument, a prefix or a joined command is not a whole-suite run** (`echo npm test`,
+      `! npm test`, `npm test -- --help`, `vitest run one.test.ts`, `npm test | tail`,
+      `npm test; echo`, `npm test || true`, `npm test && git status`): each can narrow the suite or
+      end at 0 whatever the suite did.
+   2. **The latest such command decides**, so a clean verify followed by a failed one supersedes
+      nothing (Codex's design review).
+   3. **`gateAuto` withholds for tests only where nothing superseded the failure.** This amends
+      `D-0125` rule 1.3: a verification record is the last readable run with no failure and no
+      error, *or* a failing one the latest whole-suite run superseded cleanly.
+   4. **The checks card and `rondo answer` still show the failing run**, with its counts no longer
+      red, and say under it that the worker ran the whole suite again at transcript line N and it
+      finished without error, so the failure is not the lap's result, and that it *may* have been a
+      check made on purpose. rondo cannot know it was.
+2. **The gate's box opens on what happened** (`storyView`, `src/access/web.tsx`; `lapStory`,
+   `src/access/page-logic/story.ts`), above the standing findings and the presses. For the laps of
+   the gated lap's own line (for a split, its part), oldest first: what the lap was asked (the
+   request; the words a revise at the gate before it added, quoted from its prompt by
+   `revisionInstruction`; or *not recorded*), what it committed (the checks' commit and file count,
+   and for the lap at the gate its first commit subjects, linked to the changes card), what its
+   model reading raised at `major` or above, and how it ended (sent back, approved, or its ending as
+   `endedWhy` says it). Above the laps, the drafter's own summary of the proposal the line was
+   started from, quoted as *what the request was drafted to change*, where one was written. The
+   record dump stays folded below the presses, as `D-0106` has it. **Nothing is summarised**: every
+   sentence is rondo's over a recorded fact, and quoted text is marked `lang=""`.
+3. **A split's gate names its other parts** (`D-0098` rule 8, `D-0129`): the story says which part
+   this gate is, and lists each other part by the words the right face's steps give it
+   (`partStepOf`), with the way to another part's gate where one waits.
+4. **The execution limits say what was stopped, why, and that the impact is unknown**
+   (`fenceView`): the stopped calls are listed open, under a sentence that they were stopped before
+   they ran because the lap's limits do not allow them, so they changed nothing, and that rondo
+   cannot tell whether the work needed them. It does not claim the result is complete.
+5. **Every new sentence is in both catalogues** (`D-0079`).
+
+**Options not taken.**
+
+- **Reading the tested tree against the reviewed tip.** A structured verification result (exit code,
+  tree identity, coverage) would be the real answer, and belongs at continuo's seam; the pinned
+  `lap_commands` carries only the command, its capped output and `is_error`. `D-0125`'s cost that a
+  run may predate the last commit stands.
+- **Commit subjects for every lap.** They need a `git` read per lap on a page that redraws every
+  five seconds; the checks' counts are already stored per lap.
+- **A model-written plain summary of what changed.** A summary would be a model's words presented as
+  the record (`D-0022`), so only the drafter's own summary, already written to the person, is quoted.
+
+### What it costs
+
+- **A runner or script rondo does not name supersedes nothing**, and the gate goes to the person as
+  before.
+- **The story card sits above the presses**, one more card between arrival and the answer bar.
+
+### What would falsify it
+
+- **A gate approved automatically whose superseding whole-suite run did not in fact pass** (an
+  `is_error: false` on a failed command, or a script named `test` that runs no tests).
+- **A story line that says something the lap's records do not hold.**
 
 ## D-0152 — A lap continuo refused before its cost was read holds its reserve at a lap's send, the number the page counts, and not its cap; reading a timed-out lap's cost is continuo's
 

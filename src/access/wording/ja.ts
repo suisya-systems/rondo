@@ -456,6 +456,26 @@ export const JA: Chrome = Object.freeze({
   checksNotMatched: "照合できず",
   modelNotTaken: "チェックだけが読みました。モデルレビューは取れていません。",
   neitherReadingTaken: "チェックもモデルレビューも、この作業を読めませんでした。",
+  storyHeading: "これまでの経緯",
+  storyLaps: (count) => `この作業はこれまでに ${String(count)} 周回しました。`,
+  storyPart: (part, parts) =>
+    `この依頼は ${String(parts)} つの別々の作業として起案されていて、このゲートは作業 ${String(part)} のものです。`,
+  storyLapName: (n, current) => (current ? `${String(n)} 周目 (今回)` : `${String(n)} 周目`),
+  storyToldRequest: "依頼の内容に取り組みました。",
+  storyToldAsked: "次の変更を求められました:",
+  storyToldNotRecorded: "前の周回から続けました。それ以上に何を求められたかは記録にありません。",
+  storyChanged: (commits, files) =>
+    `${String(commits)} 件のコミットで ${String(files)} ファイルを変更しました。`,
+  storyChangedUnread: "何をコミットしたかはまだ読み取れていません。",
+  storyNow: "いまあなたの回答を待っています。",
+  storyEnded: (answer, otherwise) =>
+    answer === "revise"
+      ? "ゲートで変更を求められ、差し戻されました。"
+      : answer === "approve"
+        ? "ゲートで承認されました。"
+        : `終わり方: ${otherwise}。`,
+  storyIntended: "この依頼が何を変えるものとして起案されたか (起案者の言葉):",
+  storyOthers: "ほかの作業:",
   recordsFold: (count) => `承認したときに記録される内容 (${String(count)} 項目) と記録全文`,
   denialUnreadable: "どのコマンドだったかを rondo は記録できませんでした。",
   modelMayArrive: "モデルレビューはこれから届くかもしれません。",
