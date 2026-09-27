@@ -65,6 +65,8 @@ export interface GoalScopeLine {
 /** The open points the flow asks before it starts a candidate (rondo#487). */
 export interface PointsAsk {
   readonly askId: string;
+  /** The candidate asked about: its card does not list the same points again. */
+  readonly candidate: string;
   readonly request: string;
   readonly points: readonly { readonly point: string; readonly recommendation: string }[];
 }
@@ -155,6 +157,7 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
           ? null
           : {
               askId: asked.askId,
+              candidate: asked.candidate,
               request:
                 payload?.ranked.find((one) => one.key === asked.candidate)?.request ??
                 asked.candidate,
@@ -392,7 +395,8 @@ function Block({
                   </a>
                 </p>
               </dd>
-              {block.first.openPoints.length === 0 ? null : (
+              {block.first.openPoints.length === 0 ||
+              block.goalScope.ask?.candidate === block.first.key ? null : (
                 <>
                   <dt>{wording.triageOpenPoints}</dt>
                   <dd>
@@ -495,15 +499,16 @@ function PointsAskForm({
   return (
     <form
       className="triage-flow-ask"
+      aria-label={wording.flowAskLead}
       method="post"
       action={`/flow-answer?lang=${encodeURIComponent(wording.lang)}`}
     >
       {token === null ? null : <input type="hidden" name="token" value={token} />}
       <input type="hidden" name="ask" value={ask.askId} />
-      <p className="triage-flow-ask-lead">{wording.flowAskLead}</p>
       <p className="triage-ask" lang="">
         {ask.request}
       </p>
+      <p className="triage-flow-ask-lead">{wording.flowAskLead}</p>
       <ol className="triage-flow-ask-points">
         {ask.points.map((point, at) => (
           <li key={String(at)}>
@@ -520,7 +525,6 @@ function PointsAskForm({
           </li>
         ))}
       </ol>
-      <p className="triage-read">{wording.flowAskHint}</p>
       {token === null ? null : (
         <div className="triage-acts">
           <button type="submit" className={`${PRIMARY} ${PRESS}`}>

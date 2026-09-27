@@ -442,8 +442,10 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
   if (standing.kind === "none") throw new Error("no goal scope");
   const askId = `flow-ask-${standing.scopeDecisionId}-issue:o/r#7`;
   const blockOf = (html: string) => html.slice(html.indexOf('class="triage"'));
-  // Nothing is drawn until the flow asks.
-  expect(blockOf(await w.page({ kind: "requests" }))).not.toContain("/flow-answer");
+  // Nothing is drawn until the flow asks, and the card lists the points.
+  const before = blockOf(await w.page({ kind: "requests" }));
+  expect(before).not.toContain("/flow-answer");
+  expect(before).toContain(EN.triageOpenPoints);
   expect(
     await w.record.recordFlowAsk({
       askId,
@@ -463,6 +465,8 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
   expect(block).toContain('action="/flow-answer?lang=en"');
   expect(hidden(block, "ask")).toBe(askId);
   expect(block).toContain(EN.flowAskLead);
+  // The card above does not list the same points a second time.
+  expect(block).not.toContain(EN.triageOpenPoints);
   expect(block).toContain(EN.flowAskAction);
   expect(block).toMatch(/name="answer-1"[^>]*>The keychain<\/textarea>/);
   expect(block).toMatch(/name="answer-2"[^>]*>Keep it one release<\/textarea>/);
