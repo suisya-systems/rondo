@@ -406,6 +406,8 @@ export interface PageWords extends DayWords {
   readonly evQuestionBuiltLink: string;
   /** What the revise press does once the question is answered (rule 8.4), and for which part. */
   readonly reviseAnswerStarts: (part: number | null) => string;
+  /** The note under a revise box that holds the question and the answer (rule 4.5). */
+  readonly reviseAnswerDrafted: string;
   /** The parts that wait for this one to be merged, which answering moves on (rule 8.4). */
   readonly reviseAnswerReleases: (parts: readonly number[]) => string;
   /** How long the question has waited; never a deadline (rule 8.4). */
@@ -754,6 +756,8 @@ export const PAGE_EN: PageWords = Object.freeze({
       parts.length === 1 ? "waits" : "wait"
     } for this part to be merged.`,
   questionWaited: (age) => `The question has waited ${age}.`,
+  reviseAnswerDrafted:
+    "rondo put the worker's question and your answer in the box, word for word. Add to it as you like: what you send is yours.",
   evTookIn: "This attempt first merged in what another part had merged.",
   evTakeInMissed: "This attempt did not merge in what another part had merged.",
   closingHeading: "Closing fix",
@@ -1087,8 +1091,10 @@ export const PAGE_JA: PageWords = Object.freeze({
       ? "質問に答えたあとにこれを押すと、あなたの返事を入れて次の回を始めます。"
       : `質問に答えたあとにこれを押すと、あなたの返事を入れて作業 ${String(part)} の次の回を始めます。`,
   reviseAnswerReleases: (parts) =>
-    `返事をすると、この作業のマージを待っている${parts.map((n) => `作業 ${String(n)}`).join("・")}も先へ進みます。`,
+    `返事をすると、この作業のマージを待っている${parts.map((n) => `作業 ${String(n)}`).join("・")} も先へ進みます。`,
   questionWaited: (age) => `この質問は ${age} 待っています。`,
+  reviseAnswerDrafted:
+    "作業者の質問とあなたの返事を、そのまま枠に入れました。自由に書き足してください。送る内容はあなたのものです。",
   evTookIn: "この回は、ほかの作業がマージした変更をまず取り込みました。",
   evTakeInMissed: "この回は、ほかの作業がマージした変更を取り込みませんでした。",
   closingHeading: "仕上げの修正",

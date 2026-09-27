@@ -195,7 +195,12 @@ import {
 } from "./page-logic/threads.js";
 import { waitsOnYou } from "./page-logic/waits.js";
 import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
-import { readWorkerQuestion } from "./question.js";
+import {
+  type AnsweredQuestion,
+  answeredQuestion,
+  questionRevise,
+  readWorkerQuestion,
+} from "./question.js";
 import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal } from "./scope.js";
@@ -977,7 +982,30 @@ type ReviseBox =
   | { readonly kind: "none" }
   | { readonly kind: "pending" }
   | { readonly kind: "unavailable"; readonly reason: string }
-  | { readonly kind: "drafted"; readonly text: string };
+  | {
+      readonly kind: "drafted";
+      readonly text: string;
+      /** The box holds a worker's question and the person's answer (D-0098 rule 4.5). */
+      readonly answer?: true;
+    };
+
+/**
+ * **The answer goes into the box, word for word** (D-0098 rule 4.5, D-0103
+ * rule 4.6): once the person has carried a worker's question on, the revise
+ * box opens holding the question and the answer as `questionRevise` quotes
+ * them, ahead of anything the reading drafted.
+ */
+function withAnswer(box: ReviseBox, answered: AnsweredQuestion | null): ReviseBox {
+  if (answered === null) {
+    return box;
+  }
+  const quoted = questionRevise(answered);
+  return {
+    kind: "drafted",
+    text: box.kind === "drafted" ? `${quoted}\n\n${box.text}` : quoted,
+    answer: true,
+  };
+}
 
 /** Read the revise box for one lap's readings (D-0077 rule 2.2's "drafted"). */
 async function reviseBox(
@@ -1561,7 +1589,9 @@ function reviseForm(
             class="note text-meta leading-5 text-muted-foreground"
           >
             {box.kind === "drafted"
-              ? wording.reviseDrafted
+              ? box.answer === true
+                ? wording.reviseAnswerDrafted
+                : wording.reviseDrafted
               : box.kind === "pending"
                 ? wording.reviseDrafting
                 : wording.reviseUndrafted}
@@ -1588,6 +1618,23 @@ function reviseForm(
             this line stands, so the press is drawn but not pressable. The box
             stays, and what is written in it is kept, so the change can be
             written now and sent once the question is answered. */}
+        {/* **What answering releases, and how long it has waited** (D-0098 rule
+            8.4, the gate's point 2 answer: on the revise box). No deadline,
+            because there is none: nothing here says what rondo will assume. */}
+        {framing.workerQuestion === null ? null : (
+          <p id="revise-answer" class="note text-meta leading-5 text-foreground">
+            {[
+              wording.reviseAnswerStarts(framing.workerQuestion.part),
+              ...(framing.workerQuestion.releases.length === 0
+                ? []
+                : [wording.reviseAnswerReleases(framing.workerQuestion.releases)]),
+              ...(framing.workerQuestion.waitedSaid === null
+                ? []
+                : [wording.questionWaited(framing.workerQuestion.waitedSaid)]),
+              // Japanese sentences run on with no space between them.
+            ].join(wording.lang === "ja" ? "" : " ")}
+          </p>
+        )}
         {framing.questionOpen === null ? null : (
           <p id="revise-waits" class="note text-meta leading-5 text-foreground">
             {framing.questionOpen.stopped
@@ -1662,6 +1709,23 @@ interface Shown {
    * (`askStandsOver`, D-0072 rule 3), so the form says so before the press.
    */
   readonly questionOpen: { readonly id: string; readonly stopped: boolean } | null;
+  /**
+   * The worker's question this lap put, as the revise box says it (D-0098
+   * rule 8.4, D-0103's gate point 2), or null where it put none.
+   */
+  readonly workerQuestion: WorkerQuestionBox | null;
+}
+
+/** What the revise box says about a worker's question (D-0098 rule 8.4). */
+interface WorkerQuestionBox {
+  /** The person's `carry_on` answer, with the question, or null while it stands. */
+  readonly answered: AnsweredQuestion | null;
+  /** How long it has waited, already said, while it stands; null once answered. */
+  readonly waitedSaid: string | null;
+  /** Which part the lap is, from 1, where the request runs as several lines. */
+  readonly part: number | null;
+  /** The parts that wait for this one to be merged, from 1. */
+  readonly releases: readonly number[];
 }
 
 /**
@@ -1777,6 +1841,8 @@ async function shownBeforePress(
   answeringLapId: string | null = null,
   /** The question over a lap's line that waits on the person, or null ({@link Shown.questionOpen}). */
   questionOver: (record: IterationRecord) => Promise<Shown["questionOpen"]> = async () => null,
+  /** The worker's question this lap put, or null ({@link Shown.workerQuestion}). */
+  workerQuestionOf: (record: IterationRecord) => WorkerQuestionBox | null = () => null,
 ): Promise<ReadonlyMap<string, Shown>> {
   const shown = new Map<string, Shown>();
   const wanted = answeringLapId;
@@ -1793,6 +1859,7 @@ async function shownBeforePress(
     // the fence block's standing sentences are inside these lines.
     const material = ports.material === null ? null : await ports.material(wording, record);
     const tip = await approvalTip(ports.record, record.id);
+    const workerQuestion = workerQuestionOf(record);
     shown.set(record.id, {
       claims: propose(snapshot).payload.claims,
       snapshot,
@@ -1802,8 +1869,12 @@ async function shownBeforePress(
       forked: tip.kind === "forked",
       closedBy:
         tip.kind === "tip" ? await budgetClosing(ports, tip.scopeDecisionId, ports.now()) : null,
-      revise: await reviseBox(ports, wording, record.id, readings),
+      revise: withAnswer(
+        await reviseBox(ports, wording, record.id, readings),
+        workerQuestion?.answered ?? null,
+      ),
       questionOpen: await questionOver(record),
+      workerQuestion,
     });
   }
   return shown;
@@ -3011,6 +3082,24 @@ export async function operatorPage(
                 ?.lapIds ?? [record.id],
             );
       return id === null ? null : { id, stopped: threads.stopped.has(id) };
+    },
+    (record) => {
+      const askId = `question-${record.id}`;
+      const ask = threads.byId.get(askId);
+      if (ask === undefined || !ask.asks) {
+        return null;
+      }
+      const parts = partsOfRequest(record.requestMessageId);
+      const mine = parts.find((part) => holdsLap(part, record.id));
+      return {
+        answered: answeredQuestion(threads.messages, record.id),
+        waitedSaid: threads.waiting.has(askId) ? wording.age(ago(ask.atMs, nowMs)) : null,
+        part: mine === undefined ? null : mine.index + 1,
+        releases:
+          mine === undefined
+            ? []
+            : parts.filter((part) => part.wait?.after === mine.index).map((part) => part.index + 1),
+      };
     },
   );
   /*

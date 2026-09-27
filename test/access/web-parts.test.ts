@@ -268,10 +268,12 @@ const QUESTION = {
 const RATIONALE = `Built the loader.\n\n\`\`\`rondo-question\n${JSON.stringify(QUESTION)}\n\`\`\`\n`;
 
 /** Part 1 at its gate with the worker's question put; part 2 still running. */
-async function questioned() {
-  const w = await split([undefined, undefined]);
+async function questioned(after: readonly (number | undefined)[] = [undefined, undefined]) {
+  const w = await split(after);
   await w.start(0, "lap-one");
-  await w.start(1, "lap-two");
+  if (after[1] === undefined) {
+    await w.start(1, "lap-two");
+  }
   await openGate(w.world as never, "lap-one");
   const carried = await w.world.store.transition(
     "lap-one",
@@ -307,6 +309,8 @@ const gatePage = async (w: Awaited<ReturnType<typeof split>>, wording = EN) =>
     { kind: "thread", messageId: "r1", to: null },
     wording,
     mint,
+    () => "scope-x",
+    () => "lap-next",
   );
 
 test("a worker's question: one line over the box says what was built and what waits, and the other parts keep their state under the title (D-0098 rule 8.3)", async () => {
@@ -325,4 +329,48 @@ test("a worker's question: one line over the box says what was built and what wa
   // The line under the title keeps the other part's state.
   expect(html).toContain('<span class="gov-parts">1 other part still running</span>');
   expect(await gatePage(w, JA)).toContain('<span class="gov-parts">ほかの作業 1 件は進行中</span>');
+});
+
+/** The revise box's sentence about the question, as text. */
+const answerSaid = (html: string) =>
+  (/<p id="revise-answer"[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "").replace(/<[^>]+>/g, "");
+
+test("the revise box says what answering releases and how long the question has waited, with no deadline; once answered it holds the answer (D-0098 rules 4.5 and 8.4)", async () => {
+  const w = await questioned([undefined, 0]);
+  const open = await gatePage(w);
+  expect(answerSaid(open)).toBe(
+    "Once the question is answered, this starts part 1's next attempt with your answer in it. " +
+      "Answering also moves on part 2, which waits for this part to be merged. " +
+      "The question has waited 1s.",
+  );
+  // Never a countdown, and never what rondo will assume.
+  expect(open).not.toMatch(/will assume|countdown|remaining|left to answer/i);
+
+  const answer = "The commit,\n  pinned exactly.  ";
+  const said = await w.world.record.recordThreadMessage({
+    messageId: "m-answer",
+    body: answer,
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "question-lap-one",
+    atMs: 4_500,
+    bases: [],
+    asks: false,
+    answerOutcome: "carry_on",
+  });
+  expect(said.kind).toBe("recorded");
+  const answered = await gatePage(w);
+  // Answered: no clock, and the box holds the question and the answer byte for byte.
+  expect(answerSaid(answered)).toBe(
+    "Once the question is answered, this starts part 1's next attempt with your answer in it. " +
+      "Answering also moves on part 2, which waits for this part to be merged.",
+  );
+  const box = /<textarea name="body"[^>]*>([\s\S]*?)<\/textarea>/.exec(answered)?.[1] ?? "";
+  expect(box).toContain(`---\n${answer}\n---`);
+  expect(box).toContain("Should the pin move to the tag or the commit?");
+  expect(answered).toContain(EN.reviseAnswerDrafted.replaceAll("'", "&#x27;").slice(0, 20));
+  expect(answerSaid(await gatePage(w, JA))).toBe(
+    "質問に答えたあとにこれを押すと、あなたの返事を入れて作業 1 の次の回を始めます。" +
+      "返事をすると、この作業のマージを待っている作業 2 も先へ進みます。",
+  );
 });
