@@ -16,7 +16,10 @@ import { drafterHost } from "../../src/access/drafter-host.js";
 import { draftedPlanRun } from "../../src/access/model-draft/host.js";
 import { unlandedBody, unlandedPrefix } from "../../src/access/order-host.js";
 import { partStepOf } from "../../src/access/page/thread-side.js";
+import { takeInFrom } from "../../src/access/page-logic/parts.js";
+import { lapEvents } from "../../src/access/page-logic/thread-events.js";
 import { relayQuestion } from "../../src/access/question.js";
+import { TAKE_IN_FINDING } from "../../src/access/review.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 
 import { allocate } from "../../src/refrain/allocator.js";
@@ -25,7 +28,7 @@ import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { agentTypeDigestOf, planDocument } from "./fixtures/drafter.js";
-import { EVIDENCE, mint, openGate, operatorPage, portsOver } from "./page-world.js";
+import { EVIDENCE, mint, openGate, operatorPage, portsOver, recordAnswer } from "./page-world.js";
 
 const ENV = { RONDO_APPROVER: "ada" };
 const JA = chromeFor("ja");
@@ -233,6 +236,7 @@ test("a wait on another repository names it and its pull request", () => {
     },
     pullRequest: null,
     laps: [],
+    claim: null,
   });
   expect(step).toEqual({
     name: "Part 2",
@@ -373,4 +377,128 @@ test("the revise box says what answering releases and how long the question has 
     "質問に答えたあとにこれを押すと、あなたの返事を入れて作業 1 の次の回を始めます。" +
       "返事をすると、この作業のマージを待っている作業 2 も先へ進みます。",
   );
+});
+
+/** Walk lap `id` to its gate, give it a clear reading, and close it approved. */
+async function approve(w: Awaited<ReturnType<typeof split>>, id: string) {
+  await openGate(w.world as never, id);
+  await recordAnswer(w.world as never, id);
+  const closed = await w.world.store.transition(
+    id,
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "answered_and_forwarded" },
+    3_650,
+  );
+  expect(closed.kind).toBe("transitioned");
+}
+
+async function report(w: Awaited<ReturnType<typeof split>>, messageId: string, body: string) {
+  const outcome = await w.world.record.recordThreadMessage({
+    messageId,
+    body,
+    authorKind: "drafter",
+    authorId: "rondo/deterministic/1",
+    inReplyTo: "r1",
+    atMs: 3_660,
+    bases: [{ form: "iteration", iterationId: "lap-one" }],
+    asks: false,
+  });
+  expect(outcome.kind, JSON.stringify(outcome)).toBe("recorded");
+}
+
+test("a part that must first take in another part's merge says so on its step and in its revise box, linking the merged pull request (D-0098 rule 8.5)", async () => {
+  const w = await split([undefined, undefined]);
+  await w.start(0, "lap-one");
+  await approve(w, "lap-one");
+  await report(
+    w,
+    "report-published-lap-one",
+    "Lap 'lap-one' was published: https://github.com/o/r/pull/7",
+  );
+  await report(w, "report-merged-lap-one", "Lap 'lap-one' went into 'main' by squash.");
+  await w.start(1, "lap-two");
+  await openGate(w.world as never, "lap-two");
+  // The gate's comparison: part 2 changed a file part 1 claimed.
+  const html = await operatorPage(
+    {
+      ...portsOver(w.world, "ada", []),
+      material: async () => ({
+        lines: [],
+        why: null,
+        work: null,
+        reach: { kind: "outside", collided: [], unheld: ["part0/loader.ts"] },
+      }),
+    },
+    "t",
+    { kind: "thread", messageId: "r1", to: null },
+    EN,
+    mint,
+    () => "scope-x",
+    () => "lap-next",
+  );
+  expect(partSteps(html)).toEqual([
+    "Part 1merged #7",
+    "[yours] Part 2waiting on you; another part changed these files and was merged; the next attempt starts by merging it in #7",
+  ]);
+  const box = /<p id="revise-take-in"[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
+  expect(box.replace(/<[^>]+>/g, "")).toBe(`${EN.reviseTakeIn} #7`);
+  expect(box).toContain('href="https://github.com/o/r/pull/7"');
+});
+
+test("a part whose files no merged part claimed is not told to take anything in", () => {
+  const merged = {
+    index: 0,
+    standing: "merged" as const,
+    wait: null,
+    pullRequest: { url: "https://github.com/o/r/pull/7", number: "7" },
+    laps: [],
+    claim: ["lib/"],
+  };
+  expect(takeInFrom([merged], "lap-two", ["docs/readme.md"])).toBeNull();
+  expect(takeInFrom([merged], "lap-two", ["lib/a.ts"])).toBe(merged);
+  // Not merged yet: nothing has landed to take in.
+  expect(takeInFrom([{ ...merged, standing: "finished" }], "lap-two", ["lib/a.ts"])).toBeNull();
+});
+
+test("the attempt's event line says whether the take-in happened (D-0098 rule 8.5)", async () => {
+  const w = await split([undefined]);
+  await w.start(0, "lap-one");
+  const read = await w.world.store.read("lap-one");
+  if (read.kind !== "read") throw new Error("no lap");
+  const record = {
+    ...read.record,
+    plan: {
+      ...read.record.plan,
+      take_in: {
+        commit: "c".repeat(40),
+        branch: "rondo/base/x",
+        remote_branch: "main",
+        paths: ["lib/"],
+        cause: "landed",
+      },
+    },
+  };
+  const lines = (findings: string[]) =>
+    lapEvents(
+      EN,
+      record,
+      [{ drafter: "rondo/deterministic/2", verdict: "concerns", findings, atMs: 4_000 }],
+      () => false,
+      () => "now",
+    )
+      .filter((event) => event.id.endsWith(":take-in"))
+      .map((event) => [event.kind, event.said]);
+  expect(lines([])).toEqual([["passed", EN.evTookIn]]);
+  expect(lines([`${TAKE_IN_FINDING} commit c`])).toEqual([["failed", EN.evTakeInMissed]]);
+  // A lap told nothing to take in says nothing of it.
+  expect(
+    lapEvents(
+      EN,
+      read.record,
+      [],
+      () => false,
+      () => "now",
+    ).some((event) => event.id.endsWith(":take-in")),
+  ).toBe(false);
 });

@@ -398,6 +398,10 @@ export interface PageWords extends DayWords {
   readonly partUnlandedLink: string;
   /** The next attempt merges in what another part landed on these files first (rule 8.5). */
   readonly partTakeIn: string;
+  /** A part's step with the take-in after it. */
+  readonly partThen: (said: string, more: string) => string;
+  /** The same, as a sentence inside the revise box (rule 8.5). */
+  readonly reviseTakeIn: string;
   /**
    * The event line over the answering box (rule 8.3): what the worker built and
    * committed before stopping, and what waits on the answer, in its words.
@@ -743,6 +747,9 @@ export const PAGE_EN: PageWords = Object.freeze({
   partUnlandedLink: "Answer the question",
   partTakeIn:
     "another part changed these files and was merged; the next attempt starts by merging it in",
+  partThen: (said, more) => `${said}; ${more}`,
+  reviseTakeIn:
+    "Another part changed these files and was merged; the next attempt starts by merging it in.",
   evQuestionBuilt: (commit, waits) =>
     `The worker built and committed ${commit} before stopping to ask.` +
     (waits === null ? "" : ` Waiting on your answer: ${waits}`),
@@ -1082,6 +1089,9 @@ export const PAGE_JA: PageWords = Object.freeze({
   partUnlandedLink: "質問に答える",
   partTakeIn:
     "ほかの作業がこのファイルを変更してマージされました。次の回は、まずその変更を取り込んでから始めます",
+  partThen: (said, more) => `${said}。${more}`,
+  reviseTakeIn:
+    "ほかの作業がこのファイルを変更してマージされました。次の回は、まずその変更を取り込んでから始めます。",
   evQuestionBuilt: (commit, waits) =>
     `作業者は質問する前に、ここまでを作って ${commit} にコミットしました。` +
     (waits === null ? "" : `返事を待っている部分: ${waits}`),

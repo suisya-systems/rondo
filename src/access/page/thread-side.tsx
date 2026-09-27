@@ -81,7 +81,31 @@ export interface PartStep {
  * pull request or the question that says why, with nothing to press here --
  * a part that waits on an earlier one's merge starts by itself.
  */
-export function partStepOf(wording: Chrome, view: PartView): PartStep {
+export function partStepOf(
+  wording: Chrome,
+  view: PartView,
+  /**
+   * The merged pull request the part's next attempt merges in first (rule
+   * 8.5, `takeInFrom`), or null.
+   */
+  takeIn: PartView["pullRequest"] = null,
+): PartStep {
+  const step = partStepAlone(wording, view);
+  return takeIn === null
+    ? step
+    : {
+        ...step,
+        said: wording.partThen(step.said, wording.partTakeIn),
+        links: [
+          ...step.links,
+          ...(takeIn.url === null
+            ? []
+            : [{ href: takeIn.url, said: wording.pullRequest(takeIn.number) }]),
+        ],
+      };
+}
+
+function partStepAlone(wording: Chrome, view: PartView): PartStep {
   const name = wording.partName(view.index + 1);
   const pullRequest = (pr: PartView["pullRequest"]): PartLink[] =>
     pr?.url == null ? [] : [{ href: pr.url, said: wording.pullRequest(pr.number) }];

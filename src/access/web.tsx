@@ -174,7 +174,14 @@ import {
   workerRuns,
 } from "./page-logic/laps.js";
 import { placeName, placeSaid, repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
-import { holdsLap, type PartView, partCounts, partViews } from "./page-logic/parts.js";
+import {
+  holdsLap,
+  type PartView,
+  type PullRequestLink,
+  partCounts,
+  partViews,
+  takeInFrom,
+} from "./page-logic/parts.js";
 import {
   askOverLine,
   asksOverLine,
@@ -1635,6 +1642,22 @@ function reviseForm(
             ].join(wording.lang === "ja" ? "" : " ")}
           </p>
         )}
+        {/* **A take-in is said inside the press's box** (D-0098 rule 8.5,
+            D-0082 rule 7): the attempt this starts first merges in what
+            another part landed on these files. */}
+        {framing.takeIn == null ? null : (
+          <p id="revise-take-in" class="note text-meta leading-5 text-foreground">
+            {wording.reviseTakeIn}
+            {framing.takeIn.url === null ? null : (
+              <>
+                {" "}
+                <a href={framing.takeIn.url} class="text-link hover:underline">
+                  {wording.pullRequest(framing.takeIn.number)}
+                </a>
+              </>
+            )}
+          </p>
+        )}
         {framing.questionOpen === null ? null : (
           <p id="revise-waits" class="note text-meta leading-5 text-foreground">
             {framing.questionOpen.stopped
@@ -1714,6 +1737,11 @@ interface Shown {
    * rule 8.4, D-0103's gate point 2), or null where it put none.
    */
   readonly workerQuestion: WorkerQuestionBox | null;
+  /**
+   * The merged pull request of another part this lap's next attempt merges in
+   * first (D-0098 rule 8.5, `takeInFrom`), or absent where none.
+   */
+  readonly takeIn?: PullRequestLink | null;
 }
 
 /** What the revise box says about a worker's question (D-0098 rule 8.4). */
@@ -3582,7 +3610,29 @@ export async function operatorPage(
    * approve, the finding quoted -- which
    * `test/access/gate-elements.test.ts` is the net under.
    */
-  const gateFraming = answeringLap === null ? undefined : shown.get(answeringLap);
+  /*
+   * **What the next attempt takes in first** (D-0098 rules 2.1 and 8.5): the
+   * gate's comparison says the lap reached files outside its own, and another
+   * part of the request that claimed them was merged. Said on the part's step
+   * and inside the revise box; the press decides it again with `git`.
+   */
+  const takeIn = (() => {
+    const framed = answeringLap === null ? undefined : shown.get(answeringLap);
+    const reach = framed?.material?.reach;
+    if (gatedLap === null || reach?.kind !== "outside") {
+      return null;
+    }
+    return (
+      takeInFrom(partsOfRequest(gatedLap.requestMessageId), gatedLap.id, [
+        ...reach.collided,
+        ...reach.unheld,
+      ])?.pullRequest ?? null
+    );
+  })();
+  const gateFraming = (() => {
+    const framed = answeringLap === null ? undefined : shown.get(answeringLap);
+    return framed === undefined ? undefined : { ...framed, takeIn };
+  })();
   /*
    * **A worker's question, and what it stopped on** (D-0098 rule 8.3): one
    * event line directly above the box, while the question the lap put
@@ -3890,7 +3940,13 @@ export async function operatorPage(
             parts:
               selectedRoot === null
                 ? []
-                : partsOfRequest(selectedRoot).map((part) => partStepOf(wording, part)),
+                : partsOfRequest(selectedRoot).map((part) =>
+                    partStepOf(
+                      wording,
+                      part,
+                      gatedLap !== null && holdsLap(part, gatedLap.id) ? takeIn : null,
+                    ),
+                  ),
           }),
         };
   const emptySide = !centreIsEmpty

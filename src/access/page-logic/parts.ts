@@ -13,6 +13,8 @@
  * earlier part that ended without being merged (rule 1.5), where rondo has
  * asked in the thread what becomes of this one.
  */
+
+import { pathsOverlap, WHOLE_REPOSITORY } from "../../store/lanes.js";
 import { approvedForPublication, type IterationRecord, isTerminal } from "../../store/records.js";
 import type { PartRead } from "../drafted-start.js";
 import type { LapResult } from "./result.js";
@@ -66,6 +68,8 @@ export interface PartView {
   readonly pullRequest: PullRequestLink | null;
   /** The part's laps, oldest first. */
   readonly laps: readonly IterationRecord[];
+  /** The paths the part asked to hold; null claims the whole repository. */
+  readonly claim: readonly string[] | null;
 }
 
 /** What {@link partViews} reads besides the parts: the rows the page already holds. */
@@ -105,10 +109,17 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
             : laps.at(-1)?.status === "closed"
               ? "finished"
               : "stopped";
-      return { index: part.index, standing, wait: null, pullRequest, laps };
+      return { index: part.index, standing, wait: null, pullRequest, laps, claim: part.claim };
     }
     if (part.order.kind !== "waiting") {
-      return { index: part.index, standing: "toStart", wait: null, pullRequest, laps };
+      return {
+        index: part.index,
+        standing: "toStart",
+        wait: null,
+        pullRequest,
+        laps,
+        claim: part.claim,
+      };
     }
     const after = part.order.after;
     const earlier = parts.find((other) => other.index === after);
@@ -132,6 +143,7 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
       },
       pullRequest,
       laps,
+      claim: part.claim,
     };
   });
 }
@@ -174,4 +186,29 @@ export function partCounts(views: readonly PartView[]): PartCounts {
 /** Whether `iterationId` is a lap of `view`'s part. */
 export function holdsLap(view: PartView, iterationId: string): boolean {
   return view.laps.some((lap) => lap.id === iterationId);
+}
+
+/**
+ * The merged part whose files the lap at `iterationId` reached outside its own
+ * (D-0098 rule 2.1, the case rule 8.5 says): the next attempt starts by merging
+ * what it landed. `reached` is the gate's comparison of the lap's changes with
+ * its claim -- the paths other work holds and the ones nobody holds. Read from
+ * the other part's claim, so it says what the revise press will decide with
+ * `git` (`revisionTakeIn`); null where no merged part claimed those paths.
+ */
+export function takeInFrom(
+  views: readonly PartView[],
+  iterationId: string,
+  reached: readonly string[],
+): PartView | null {
+  return (
+    views.find(
+      (view) =>
+        view.standing === "merged" &&
+        !holdsLap(view, iterationId) &&
+        reached.some((path) =>
+          (view.claim ?? [WHOLE_REPOSITORY]).some((held) => pathsOverlap(held, path)),
+        ),
+    ) ?? null
+  );
 }
