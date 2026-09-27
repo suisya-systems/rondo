@@ -356,8 +356,12 @@ export async function newerModelReading(
 export const REVISE_ANSWER = {
   lead: "Keep the retry budget, but make it end.",
   findings: [
-    { finding: 2, change: "Cap the backoff at 30 seconds." },
-    { finding: 1, change: "Stop after the budget's last try.\nSay so in the log." },
+    { finding: 2, change: "Cap the backoff at 30 seconds.", judgment: false },
+    {
+      finding: 1,
+      change: "Stop after the budget's last try.\nSay so in the log.",
+      judgment: false,
+    },
   ],
 };
 

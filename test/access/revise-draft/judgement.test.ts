@@ -6,16 +6,18 @@
 
 import { expect, test } from "vitest";
 import { isModelDrafterName } from "../../../src/access/model-draft/judgement.js";
+import { TAKE_IN_FINDING } from "../../../src/access/review.js";
 import {
   prepareRevise,
   type ReviseMaterial,
+  reviseBoxOf,
   reviseDocument,
   reviseDrafterName,
   reviseDraftOf,
   reviseText,
 } from "../../../src/access/revise-draft/judgement.js";
 import { drafterRow } from "../../../src/continuo/roles.js";
-import type { LapReading } from "../../../src/store/records.js";
+import { DETERMINISTIC_READING_DRAFTER, type LapReading } from "../../../src/store/records.js";
 
 const READING: LapReading = {
   iterationId: "i-1",
@@ -40,6 +42,7 @@ const LABELS = {
   finding: (severity: string, text: string) => `- [${severity}] ${text}`,
   bases: (bases: string) => `  where: ${bases}`,
   change: (words: string) => `  to change: ${words}`,
+  judgment: "  (judgment)",
 };
 
 const answered = (answer: unknown) =>
@@ -57,6 +60,8 @@ test("a draft that names every finding exactly once passes, in any order, and is
     kind: "drafted",
     lead: "Lead.",
     changes: ["change 1", "change 2", "change 0"],
+    // No mark is not a plain defect (D-0145 rule 4): it fails closed.
+    judgment: [0, 1, 2],
   });
   // No lead is a lead of null; the answer may sit in one code fence.
   expect(answered(`\`\`\`json\n${JSON.stringify({ findings: entries(1, 2, 3) })}\n\`\`\``)).toEqual(
@@ -64,8 +69,56 @@ test("a draft that names every finding exactly once passes, in any order, and is
       kind: "drafted",
       lead: null,
       changes: ["change 0", "change 1", "change 2"],
+      judgment: [0, 1, 2],
     },
   );
+});
+
+test("only an explicit false is a plain defect, and a mark that is not a boolean refuses the draft", () => {
+  const marked = (...marks: unknown[]) =>
+    answered({
+      findings: marks.map((judgment, i) => ({ finding: i + 1, change: "c", judgment })),
+    });
+  expect(marked(false, false, false)).toMatchObject({ kind: "drafted", judgment: [] });
+  expect(marked(false, true, false)).toMatchObject({ kind: "drafted", judgment: [1] });
+  expect(marked(false, undefined, false)).toMatchObject({ kind: "drafted", judgment: [1] });
+  expect(marked(false, "no", false)).toMatchObject({
+    kind: "unavailable",
+    reason: expect.stringContaining("judgment is not true or false"),
+  });
+});
+
+test("the box is plain only where no finding is a judgment call and every checks finding is quoted", () => {
+  const labels = { ...LABELS, takeIn: (f: string) => `take in: ${f}` };
+  const row = (judgment: unknown) => ({
+    payload: { kind: "drafted", lead: null, changes: ["a", "b", "c"], ...(judgment as object) },
+  });
+  const checks = (findings: string[]): LapReading => ({
+    iterationId: "i-1",
+    readAtMs: 3_000,
+    drafter: DETERMINISTIC_READING_DRAFTER,
+    verdict: findings.length === 0 ? "clear" : "concerns",
+    findings,
+    evidence: null,
+    unavailableReason: null,
+  });
+  const plain = reviseBoxOf([checks([]), READING], row({ judgment: [] }), labels);
+  expect(plain).toMatchObject({ kind: "drafted", plain: true });
+  // A row written before the mark existed is not sent by rondo.
+  expect(reviseBoxOf([READING], row({}), labels)).not.toHaveProperty("plain");
+  const judged = reviseBoxOf([READING], row({ judgment: [2] }), labels);
+  expect(judged).not.toHaveProperty("plain");
+  expect(judged.kind === "drafted" ? judged.text : "").toContain(
+    "- [nit] a nit\n  where: commit abc\n  (judgment)\n  to change: c",
+  );
+  // A checks finding the box does not quote keeps the press.
+  expect(
+    reviseBoxOf([checks(["lint failed"]), READING], row({ judgment: [] }), labels),
+  ).not.toHaveProperty("plain");
+  const takeIn = `x ${TAKE_IN_FINDING} y`;
+  const quoted = reviseBoxOf([checks([takeIn]), READING], row({ judgment: [] }), labels);
+  expect(quoted).toMatchObject({ kind: "drafted", plain: true });
+  expect(quoted.kind === "drafted" ? quoted.text : "").toMatch(/^take in: x /);
 });
 
 test.each([
@@ -203,6 +256,6 @@ test("nothing is run over a reading with no finding, or over material past the b
 
 test("the revise drafter's rows are named outside the scope drafter's prefix (D-0077 rule 1.2)", () => {
   const name = reviseDrafterName(drafterRow());
-  expect(name).toBe(`rondo/revise-drafter/1/${drafterRow().model}`);
+  expect(name).toBe(`rondo/revise-drafter/2/${drafterRow().model}`);
   expect(isModelDrafterName(name)).toBe(false);
 });

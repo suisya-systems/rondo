@@ -146,7 +146,10 @@ test("an unavailable run writes its reason and is not retried; the next reading 
 
   await newerModelReading(world, "the log is too loud", 6_000);
   expect(
-    await draftRevise(world, { lead: null, findings: [{ finding: 1, change: "Quieter." }] }),
+    await draftRevise(world, {
+      lead: null,
+      findings: [{ finding: 1, change: "Quieter.", judgment: false }],
+    }),
   ).toHaveLength(1);
   const html = await operatorPage(
     { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
@@ -611,7 +614,10 @@ test("a draft that misses a finding is not shown and not repaired: an empty box 
   await gateWithChecks(world);
   await modelFindings(world);
   // Addresses finding 1 only.
-  await draftRevise(world, { lead: null, findings: [{ finding: 1, change: "Stop it." }] });
+  await draftRevise(world, {
+    lead: null,
+    findings: [{ finding: 1, change: "Stop it.", judgment: false }],
+  });
   const html = await operatorPage(
     { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
     "t",

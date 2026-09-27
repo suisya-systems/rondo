@@ -68,11 +68,13 @@ import {
   answerUnderScope,
   recordScopeFromPage,
   reviseFromPage,
+  reviseUnderScope,
   startScopedFromPage,
 } from "../../src/access/cli.js";
 import { GATE_ACTOR } from "../../src/access/gate-host.js";
 import { agentTypeRecordOf } from "../../src/access/scope.js";
 import { newIterationId, newScopeId, type ScopeFormDraft } from "../../src/access/web-app.js";
+import { EN } from "../../src/access/wording.js";
 import { CLI_PATH_ENV, run, startContinuo } from "../../src/continuo/invoker.js";
 import { CONTINUO_REVISION } from "../../src/continuo/pin.js";
 import { DB_CREATE, GATE_SHOW } from "../../src/continuo/protocol.js";
@@ -632,6 +634,115 @@ test.skipIf(!available)(
     }
     expect(first.record.gateAnswer).toBe("revise");
     expect(approvedForPublication(first.record)).toBe(false);
+  },
+  PRESS_TIMEOUT_MS,
+);
+
+/** Wait for a lap rondo's own send started in the background to reach a status it stops at. */
+async function settledLap(world: PressWorld, iterationId: string) {
+  for (const deadline = Date.now() + PRESS_TIMEOUT_MS; Date.now() < deadline; ) {
+    const read = await world.store.read(iterationId);
+    if (
+      read.kind === "read" &&
+      !["planned", "classified", "admitting", "admitted", "performing"].includes(read.record.status)
+    ) {
+      return read.record;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`lap '${iterationId}' did not settle`);
+}
+
+test.skipIf(!available)(
+  `rondo's send of a drafted change answers the real gate as delegated and starts the next lap (D-0145)${skipNote}`,
+  async () => {
+    const world = await pressWorld("scoped-revise");
+    const { iterationId, gateId } = await startOnePress(world);
+    await readingAtTheGate(world, iterationId);
+    const read = await world.store.read(iterationId);
+    if (read.kind !== "read") {
+      throw new Error("the started lap would not read");
+    }
+    const successorId = newIterationId();
+    const sent = await reviseUnderScope(
+      environmentFor(),
+      world.store,
+      world.storePath,
+      "ada",
+      EN,
+      read.record,
+      {
+        successorId,
+        scopeDecisionId: world.scopeDecisionId,
+        body: "Cap the backoff at thirty seconds.",
+        delegation: { onBehalfOf: "ada", authorityRef: world.scopeDecisionId },
+        recheck: async () => true,
+      },
+    );
+    expect(sent).toEqual({ kind: "sent" });
+    const successor = await settledLap(world, successorId);
+    expect(successor.supersedesIterationId).toBe(iterationId);
+    expect(successor.status).toBe("awaiting_human");
+
+    // **continuo's record**: the change is a delegate's, never a human press.
+    const control = new DatabaseSync(world.db, { readOnly: true });
+    try {
+      expect(
+        control
+          .prepare(
+            "SELECT actor_kind, actor_id, on_behalf_of, authority_ref FROM gate_transition " +
+              "WHERE gate_id = ? AND to_stage = 'answered'",
+          )
+          .all(gateId),
+      ).toEqual([
+        {
+          actor_kind: "delegate",
+          actor_id: GATE_ACTOR,
+          on_behalf_of: "ada",
+          authority_ref: world.scopeDecisionId,
+        },
+      ]);
+    } finally {
+      control.close();
+    }
+    const first = await world.store.read(iterationId);
+    if (first.kind !== "read") {
+      throw new Error("the revised lap would not read");
+    }
+    expect(first.record.gateAnswer).toBe("revise");
+  },
+  PRESS_TIMEOUT_MS * 2,
+);
+
+test.skipIf(!available)(
+  `rondo's send whose re-test fails walks nothing and starts nothing (D-0145)${skipNote}`,
+  async () => {
+    const world = await pressWorld("scoped-revise-moved");
+    const { iterationId, gateId } = await startOnePress(world);
+    await readingAtTheGate(world, iterationId);
+    const read = await world.store.read(iterationId);
+    if (read.kind !== "read") {
+      throw new Error("the started lap would not read");
+    }
+    const successorId = newIterationId();
+    const sent = await reviseUnderScope(
+      environmentFor(),
+      world.store,
+      world.storePath,
+      "ada",
+      EN,
+      read.record,
+      {
+        successorId,
+        scopeDecisionId: world.scopeDecisionId,
+        body: "Cap the backoff at thirty seconds.",
+        delegation: { onBehalfOf: "ada", authorityRef: world.scopeDecisionId },
+        recheck: async () => false,
+      },
+    );
+    expect(sent).toMatchObject({ kind: "notSent", answered: false });
+    expect((await gateOf(world, gateId)).outcome).toBeNull();
+    expect((await world.store.read(successorId)).kind).toBe("absent");
   },
   PRESS_TIMEOUT_MS,
 );

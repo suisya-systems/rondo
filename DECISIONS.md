@@ -177,6 +177,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0142 | Carrying on at a worker's question is the gate's revise, on the same press; its answer is not drafted again, and a lap that asked is never approved by rondo | accepted |
 | D-0143 | A lap stopped at its time limit keeps what it had not committed, as one unverified commit in rondo's name on its own branch, and a retry of that lap merges it in as its first step; `D-0110` rule 1's option Z is narrowed | accepted |
 | D-0144 | The record's language is not what the reader sees: English-held text is read in the person's language on a press, stored by the original's digest beside it and never in its place, and drawn in place with the original one fold away | accepted |
+| D-0145 | Under a goal scope, rondo sends the drafted change itself when only plain review findings withhold the gate: every standing finding quoted, none marked a judgment call, a round and the budget left, no question on the lap | accepted |
 
 ---
 
@@ -26492,3 +26493,91 @@ as a proposal row: a proposal is an advisory's proposal (`D-0022`), and a readin
 - **Readings that drop or add content** measured against the original: the drafter row is then the
   wrong model for this, or the document needs a check.
 
+## D-0145 — Under a goal scope, rondo sends the drafted change itself when only plain review findings withhold the gate: every standing finding quoted, none marked a judgment call, a round and the budget left, no question on the lap
+
+**Status:** accepted (2026-09-28, rondo#517; the issue's recommendation, taken through the secretary
+while the owner was away). Amends `D-0125` rule 6 and the gate host's "it only approves" (the owner's
+decision of 2026-09-27), for goal scopes only; amends `D-0077` rule 1.2 (the drafter's instructions
+are version 2). Refs `D-0070`, `D-0098` rule 2.3, `D-0128`, `D-0142` rule 4.
+
+**Numbering.** `D-0145` was given to this lane; a parallel lane may renumber at merge.
+
+### Context
+
+**Read on 2026-09-28 from lap 19** (#290 under a goal scope, 3 review rounds, later 18 laps, outward
+acts push, open PR, merge). Laps 1 and 3 each ended with model-review blockers. Each time the revise
+drafter wrote the change request within a minute, and nothing moved until the person pressed *ask
+for a change*. There was nothing to decide: the findings were plain defects and the draft only told
+the worker to fix them. The goal's clause 6 is that, per request, the only presses are the scope
+approval and answers to disputed points. Two presses with nothing to decide break it.
+
+### Decision
+
+1. **Rondo sends the gate's revise itself** (`reviseToSend`, `src/access/gate-host.ts`) when all of
+   these hold, and otherwise the press stays the person's:
+   - the lap spends a **goal scope's** approval (`requestsGoal`), which reads, is approved, is not
+     superseded and has not expired. A scope that names its requests keeps the press;
+   - `gateAuto` withholds approval **only** for `model_raised`, and at most `checks_not_clear` over a
+     checks reading of `concerns`. A question on the lap (`D-0142` rule 4: put at all, answered or
+     not), a test run that failed or was not read, a closing lap, and a model reading pending,
+     unavailable or ungraded keep the press;
+   - the scope's own round decision over the reading (`reviewRoundDecision`, the redo test's) is
+     `revise`: a finding at or above **its** threshold and a round left. So a spent round keeps the
+     press, and so does a `major` under a `blocker` threshold, which `gateAuto`'s `major` floor raises
+     but the scope said to leave; and no budget closes (`budgetRefusal`: expiry, laps, cost);
+   - the revise box the gate would draw is a draft that **quotes every standing finding** (every
+     checks finding is a take-in, the only kind the box drafts, `D-0098` rule 2.3) and whose drafter
+     marked **none a judgment call** (rule 4).
+2. **What is sent is the box's text**, in the host operator's language: one function draws it for the
+   page and for this send (`reviseBoxOf`, `src/access/revise-draft/judgement.ts`), so rondo sends
+   nothing the gate would not have shown.
+3. **It is the revise press's own path, walked as the organisation's answer.** Claimed first on the
+   gate's one `gate_answer` row (`D-0125` rule 5), so rondo answers a gate once, approve or change.
+   Walked as `rondo/gate/1` for the scope's approver on the scope decision's authority (`continuo
+   D-1121`), recorded `revise` only where continuo holds rondo's delegated answer, then admitted as
+   the press's `redo` under the same approval tip (`reviseUnderScope`, `src/access/cli.ts`). It
+   answers once the next lap is reserved, so the host's pass does not wait out the lap. It is wired
+   only where the revise press is: an approver the allowlist accepts.
+4. **The drafter marks judgment calls, and the mark fails closed.** Its instructions (version 2) ask
+   for `"judgment": false` on each finding that is a plain defect with an evident fix, and `true` for
+   a trade-off, a disputable point, a finding that may be wrong or a fix that needs a choice, and
+   `true` when unsure. Only an explicit `false` counts as plain. The draft stores the other positions
+   (`judgment`), and the box shows each under its finding (`reviseDraftJudgment`). A draft written
+   before this carries no `judgment` field and is never sent by rondo.
+5. **Rondo says what it did** in the request's thread (`gate-revise-<gate>`, `sentBody`), naming the
+   scope, the approver and the conditions. Where the gate may hold the change but the next lap did not
+   start, the same message says so, and why.
+6. **Asked again right before the walk.** The whole of rule 1, and whether the host has room for one
+   more occupying lap, is asked again inside the act, just before the walk, and must give the same
+   text; otherwise nothing is walked. A host at its bound spends no claim, and a later pass sends it.
+   **Whose answer continuo holds decides who goes on**: a walk that finds the other side's answer
+   with the same words (a person's press before rondo's send, or rondo's send before a press) records
+   nothing and starts no second lap over it. The person's press gets this guard too.
+
+The person can still pause the goal scope: a paused approval is not in force, and the press stays.
+
+### Options not taken
+
+- **Sending on test failures or unread runs too.** The issue scopes this to review and check
+  findings, and the box carries no test failure.
+- **Sending a checks finding the box does not quote** by appending it. Rondo would then send words
+  the gate never showed; the press stays instead.
+- **Retrying a send that failed after the gate was answered.** The press has the same window
+  (`reviseRefusedAfterGate`); the room check before the claim and the re-test before the walk narrow
+  it, and the thread message says when it happened.
+
+### What it costs
+
+- **The drafter answers one more field per finding**, and an unsure drafter keeps the press.
+- **A send that fails after the gate took the change** leaves the lap answered and no next lap, as a
+  press's `reviseRefusedAfterGate` does; the message says so.
+- **The room check and the lap's reservation are two moments**: a start between them can still fill
+  the host.
+
+### What would falsify it
+
+- **A change rondo sent whose findings a person would have disputed**: then the drafter's mark is not
+  a safe test and the send needs a second reader.
+- **Goal-scoped gates whose drafts are plain but held for an unread test run** often enough that
+  the second press remains: then the test-run condition should be narrowed.
+- **Two laps started from one gate** by a send and a press together: rule 6's guard is not holding.

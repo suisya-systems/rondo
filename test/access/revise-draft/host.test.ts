@@ -36,7 +36,7 @@ test("the revise drafter writes one row per reading, under its own name, and is 
   expect(doc).toContain("BEGIN THE ATTEMPT'S PROMPT\ndo the thing\n");
   const [row, ...more] = reviseRows(world);
   expect(more).toHaveLength(0);
-  expect(row?.drafter).toMatch(/^rondo\/revise-drafter\/1\//);
+  expect(row?.drafter).toMatch(/^rondo\/revise-drafter\/2\//);
   expect(row?.payload).toEqual({
     kind: "drafted",
     lead: "Keep the retry budget, but make it end.",
@@ -44,6 +44,7 @@ test("the revise drafter writes one row per reading, under its own name, and is 
       "Stop after the budget's last try.\nSay so in the log.",
       "Cap the backoff at 30 seconds.",
     ],
+    judgment: [],
   });
   expect((row?.snapshot["reading"] as JsonRecord | undefined)?.["findings"]).toEqual([
     "the loop never stops",

@@ -803,6 +803,7 @@ export const JA: Chrome = Object.freeze({
   reviseDraftFinding: (severity, text) => `- ${severityJa(severity)}: ${text}`,
   reviseDraftBases: (bases) => `  場所: ${bases}`,
   reviseDraftChange: (words) => `  直すこと: ${words}`,
+  reviseDraftJudgment: "  (判断が要る点のため、送るかどうかはあなたに任せます)",
   reviseDraftTakeIn: (finding) =>
     `- ${finding}\n  直すこと: まずそのコミットを git merge --no-edit で取り込み、競合があれば解消して ` +
     "merge をコミットする。",

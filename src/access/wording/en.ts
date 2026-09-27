@@ -784,6 +784,7 @@ explanation you pressed on and then answers the gate.`,
   reviseDraftFinding: (severity, text) => `- [${severity}] ${text}`,
   reviseDraftBases: (bases) => `  where: ${bases}`,
   reviseDraftChange: (words) => `  to change: ${words}`,
+  reviseDraftJudgment: "  (a judgment call: rondo leaves sending this to you)",
   reviseDraftTakeIn: (finding) =>
     `- ${finding}\n  to change: bring that commit in with git merge --no-edit, settle any ` +
     "conflict and commit the merge, before anything else.",
