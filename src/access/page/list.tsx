@@ -72,6 +72,8 @@ function stateFor(wording: Chrome, row: RequestRow): string {
       return wording.rowFinished;
     case "stopped":
       return wording.rowStopped;
+    case "drafting":
+      return wording.rowDrafting;
     default:
       return wording.rowNotStarted;
   }

@@ -375,6 +375,28 @@ export function ThreadSide({
 }
 
 /**
+ * The right face of a request with no lap yet (rondo#495): the plan and its
+ * scope, then the steps still ahead. No agreement to show beside them -- none
+ * has been approved, or none has run.
+ */
+export function ScopeSide({
+  wording,
+  steps,
+}: {
+  readonly wording: Chrome;
+  readonly steps: readonly WorkStep[];
+}) {
+  return (
+    <div className="side">
+      <section className="side-gov">
+        <h2 className="side-heading">{wording.govStepsLabel}</h2>
+        <SideSteps wording={wording} steps={steps} />
+      </section>
+    </div>
+  );
+}
+
+/**
  * The right face of a split no part of which has started yet (D-0098 rule 8.2):
  * there is no lap to read an agreement or five steps from, and the parts' waits
  * are still what remains before the request ends.

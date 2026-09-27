@@ -194,6 +194,12 @@ export interface WebPorts extends InboxReadPorts {
     messages: readonly ThreadMessageDraft[],
   ) => Promise<ReadonlyMap<string, readonly NamedIssue[]>>;
   /**
+   * The requests the drafter host still owes a draft (rondo#495,
+   * `DrafterHost.owed`): while one is owed the scope is rondo's turn and not
+   * offered. Absent where no drafter runs, and then nothing is owed.
+   */
+  readonly draftsOwed?: () => Promise<ReadonlySet<string>>;
+  /**
    * Which repository a request's work runs in (rondo#383, D-0090), with the
    * held ones whose worker can run no build or test (`requestRepository`), or
    * absent where nothing reckons it, and then the thread says nothing of it.

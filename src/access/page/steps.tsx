@@ -5,14 +5,17 @@
  * **One component because it is one thing said twice.** Rule 4 puts these five
  * steps under each running request on the empty state's right face; rule 6 puts
  * *what remains before this ends* on the right face of a request being
- * answered. They are the same five steps read from the same lap, and two
- * copies of the row would be two answers to where the work stands.
+ * answered. They are the same steps read from the same lap, and two
+ * copies of the row would be two answers to where the work stands. Before any
+ * lap the same row leads with the plan and its scope (rondo#495).
  */
 import type { StepName, WorkStep } from "../page-logic/week.js";
 import type { Chrome } from "../wording.js";
 
 function stepSaid(wording: Chrome, name: StepName): string {
   switch (name) {
+    case "scope":
+      return wording.stepScope;
     case "work":
       return wording.stepWork;
     case "checks":
@@ -42,7 +45,7 @@ function stateSaid(wording: Chrome, step: WorkStep): string {
 }
 
 /**
- * The five steps, across the card.
+ * The steps, across the card.
  *
  * An ordered list because it is an order: what is done, what it is on, what is
  * still ahead. **No amber** -- the step a lap is on now is told by weight and

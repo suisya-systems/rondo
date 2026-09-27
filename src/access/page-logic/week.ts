@@ -181,7 +181,7 @@ export function finishedAt(
  * `publish` is opening the pull request (rondo#376), between the approval and
  * the merge: three acts a person could not tell apart on lap 11's screen.
  */
-export type StepName = "work" | "checks" | "reading" | "approval" | "publish" | "landing";
+export type StepName = "scope" | "work" | "checks" | "reading" | "approval" | "publish" | "landing";
 
 /**
  * The four rondo can be in the middle of, and then the one that is the
@@ -275,5 +275,25 @@ export function stepsOf(
       state: published ? "done" : approvedForPublication(record) ? "yours" : "ahead",
     },
     { name: "landing", state: merged ? "done" : "yours" },
+  ];
+}
+
+/**
+ * Where a request stands before any lap (rondo#495): the plan and its scope
+ * first, then the steps after it all still ahead.
+ *
+ * **Whose the first step is, is the thread's own reading** (`threadActs`):
+ * `waiting` while rondo still owes its draft, `yours` once the scope is the
+ * person's to set or approve, `done` once one is approved -- so the right face
+ * and the card at the top of the thread cannot disagree about whose turn it is.
+ */
+export function stepsBeforeLap(scope: "waiting" | "yours" | "done"): readonly WorkStep[] {
+  return [
+    { name: "scope", state: scope },
+    ...BEFORE_LANDING.map((name): WorkStep => ({ name, state: "ahead" })),
+    { name: "publish", state: "ahead" },
+    // Not yet, and not *yours*: with nothing drafted or run, a second step of
+    // the person's would compete with the one the thread is asking for.
+    { name: "landing", state: "ahead" },
   ];
 }

@@ -661,3 +661,22 @@ test("a request naming a repository rondo does not work in is not drafted until 
   await host.idle();
   expect(handed).toHaveLength(1);
 });
+
+test("what the host owes is due, drafting or reading an issue first, and nothing once a run covers it (rondo#495)", async () => {
+  const { w, templateDigest, typeDigest } = await requestWithPlan();
+  let reading = true;
+  const { host, handed } = hostOver(w, async () => split(templateDigest, typeDigest), {
+    issuesUnread: async () => new Map(reading ? [["r1", ["#1"]]] : []),
+  });
+  // An issue still being read: not drafted yet, and still rondo's turn.
+  expect([...(await host.owed())]).toEqual(["r1"]);
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(0);
+  expect([...(await host.owed())]).toEqual(["r1"]);
+  reading = false;
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+  expect([...(await host.owed())]).toEqual([]);
+});

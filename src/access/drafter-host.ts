@@ -95,6 +95,12 @@ export interface DrafterHost {
   kick(): void;
   /** Resolves once no scan or run is in flight: for tests and for a clean shutdown. */
   idle(): Promise<void>;
+  /**
+   * The requests this host still owes a draft (rondo#495): due, being drafted,
+   * or waiting on an issue read first. The page reads it so it does not offer a
+   * scope before rondo's plan exists. Throws where the threads cannot be read.
+   */
+  owed(): Promise<ReadonlySet<string>>;
 }
 
 export function drafterHost(ports: DrafterHostPorts): DrafterHost {
@@ -188,6 +194,7 @@ export function drafterHost(ports: DrafterHostPorts): DrafterHost {
   };
   return {
     kick,
+    owed: async () => (await scan(ports, givenUp)).owed,
     async idle() {
       while (running !== null) {
         await running;
@@ -209,7 +216,11 @@ interface Due {
 async function scan(
   ports: DrafterHostPorts,
   givenUp: ReadonlyMap<string, string>,
-): Promise<{ readonly due: readonly Due[]; readonly past: number }> {
+): Promise<{
+  readonly due: readonly Due[];
+  readonly owed: ReadonlySet<string>;
+  readonly past: number;
+}> {
   const read = await ports.record.threadMessages();
   if (read.kind !== "read") {
     throw new Error(read.reason);
@@ -263,17 +274,21 @@ async function scan(
     }
   }
   const due: Due[] = [];
+  const owed = new Set<string>();
   for (const root of uncovered) {
     const key = [...(operatorIds.get(root) ?? [])].sort().join("\n");
     if (
-      !reading.has(root) &&
       givenUp.get(root) !== key &&
       (ports.awaitsRepository === undefined || !(await ports.awaitsRepository(root)))
     ) {
-      due.push({ requestMessageId: root, operatorKey: key });
+      // Reading an issue first is still rondo's turn (rondo#495): owed, not yet due.
+      owed.add(root);
+      if (!reading.has(root)) {
+        due.push({ requestMessageId: root, operatorKey: key });
+      }
     }
   }
-  return { due, past: [...past].filter((root) => !uncovered.has(root)).length };
+  return { due, owed, past: [...past].filter((root) => !uncovered.has(root)).length };
 }
 
 /**

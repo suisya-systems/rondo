@@ -1289,6 +1289,14 @@ export interface Chrome extends PageWords {
   readonly nextStepHeading: string;
   readonly nextStepScope: string;
   readonly nextStepDrafted: string;
+  /**
+   * **rondo's turn, while its draft is still to come** (rondo#495): the
+   * heading and the line said in the scope card's place, with nothing to press.
+   */
+  readonly nextStepRondoHeading: string;
+  readonly nextStepDrafting: string;
+  /** The scope card where rondo's drafter ran and drafted nothing (rondo#495 item 2). */
+  readonly nextStepNoDraft: string;
   /** A question in the thread waits on the person: answering is the next step (rondo#431). */
   readonly nextStepAnswer: string;
   readonly nextStepStart: string;

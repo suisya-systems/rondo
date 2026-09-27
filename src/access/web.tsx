@@ -146,7 +146,7 @@ import { facesMarkup, heldMarkup } from "./page/render.js";
 import { ResultLine } from "./page/result.js";
 import { Raw } from "./page/shell.js";
 import { ThreadFace, type ThreadItem } from "./page/thread.js";
-import { type PartStep, PartsSide, partStepOf, ThreadSide } from "./page/thread-side.js";
+import { type PartStep, PartsSide, partStepOf, ScopeSide, ThreadSide } from "./page/thread-side.js";
 import {
   currentGoals,
   type GoalScopeState,
@@ -216,7 +216,14 @@ import {
   waitingAsk,
 } from "./page-logic/threads.js";
 import { waitsOnYou } from "./page-logic/waits.js";
-import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
+import {
+  type Allowance,
+  finishedAt,
+  stepsBeforeLap,
+  stepsOf,
+  WEEK_MS,
+  weekFigures,
+} from "./page-logic/week.js";
 import {
   type AnsweredQuestion,
   answeredQuestion,
@@ -2477,6 +2484,62 @@ async function ownApproval(
 }
 
 /**
+ * Where a request's scope stands: rondo's draft, or its approval, or else the
+ * person's own approval in force.
+ *
+ * **A scope the person set and approved themselves stands too** (Codex):
+ * `draftedStanding` follows rondo's drafts only, and saying *nothing has been
+ * set* over an approval already given would send them to approve again.
+ */
+async function scopeStanding(ports: WebPorts, requestMessageId: string) {
+  const drafted = await draftedStanding(ports, requestMessageId);
+  return drafted.kind !== "none"
+    ? drafted
+    : ((await ownApproval(ports, requestMessageId)) ?? drafted);
+}
+
+/**
+ * **rondo's turn while the draft its scope waits on is still to come**
+ * (rondo#495): owed, and no approval in force. A draft already shown yields
+ * to the one still owed, since that one is drafted over the newer message.
+ * One predicate, so the thread's card, the right face and the list's row
+ * cannot disagree about whose turn it is.
+ */
+function draftingOver(standing: Awaited<ReturnType<typeof scopeStanding>>, owed: boolean) {
+  return owed && (standing.kind === "none" || standing.kind === "drafted");
+}
+
+/**
+ * Which requests rondo still owes a draft, read once per drawing (rondo#495).
+ * **A read that fails withholds the scope, and does not offer it**: a draft
+ * may be on its way, and a scope pressed over it is the act this guards
+ * against (Codex). Absent where no drafter runs: nothing is owed.
+ */
+async function draftsOwedNow(ports: WebPorts): Promise<(requestMessageId: string) => boolean> {
+  if (ports.draftsOwed === undefined) {
+    return () => false;
+  }
+  try {
+    const owed = await ports.draftsOwed();
+    return (id) => owed.has(id);
+  } catch {
+    return () => true;
+  }
+}
+
+/** Whether this request's latest model drafter run drafted nothing (rondo#495 item 2). */
+function draftedNothing(threads: Threads, requestMessageId: string): boolean {
+  const runs = threads.messages.filter(
+    (message) =>
+      message.authorKind === "drafter" &&
+      isModelDrafterName(message.authorId) &&
+      threads.rootOf(message.messageId) === requestMessageId,
+  );
+  const latest = runs.at(-1);
+  return latest !== undefined && noDraft(latest);
+}
+
+/**
  * **Where this request can be taken next** (D-0083 rule 6's chain, as
  * addresses): setting its scope, and publishing a lap that is ready.
  *
@@ -2495,6 +2558,8 @@ async function threadActs(
   /** Oldest first, so the index is the try (`lapEvents`'s `tryAt`). */
   laps: readonly LapUnderRequest[],
   threads: Threads,
+  /** Whether rondo still owes this request a draft ({@link draftsOwedNow}). */
+  owes: (requestMessageId: string) => boolean,
   newIterationId: MintIterationId | null = null,
 ) {
   // **Where the work would run, before a scope is drafted** (rondo#383,
@@ -2628,15 +2693,11 @@ async function threadActs(
           base: result.conflictsWith ?? "",
           successor: newIterationId(),
         };
-  const drafted =
+  const standing =
     waitedOn || laps.length > 0 || unheld !== null
       ? null
-      : await draftedStanding(ports, requestMessageId);
-  // **A scope the person set and approved themselves stands too** (Codex):
-  // `draftedStanding` follows rondo's drafts only, and saying *nothing has
-  // been set* over an approval already given would send them to approve again.
-  const standing =
-    drafted?.kind !== "none" ? drafted : ((await ownApproval(ports, requestMessageId)) ?? drafted);
+      : await scopeStanding(ports, requestMessageId);
+  const drafting = standing !== null && draftingOver(standing, owes(requestMessageId));
   const scopeHref = (decisionId: string | null) =>
     viewHref(
       { kind: "scope", messageId: requestMessageId, rounds: null, decisionId, plan: null },
@@ -2661,8 +2722,14 @@ async function threadActs(
    * Not on the right face: that face holds no press (D-0083 rule 5) and drops
    * below the thread at 1280.
    */
+  // `data-can-act`: a card that appears, or says something else, on a redraw is
+  // washed (rondo#494 item 1) -- the scope card arriving once rondo's draft
+  // lands is exactly that change (rondo#495 item 4).
   const card = (id: string, href: string, said: string, label: string) => (
-    <section class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3">
+    <section
+      class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3"
+      data-can-act="next"
+    >
       <h2 class="text-meta leading-5 font-semibold text-wait-ink">{wording.nextStepHeading}</h2>
       <p class="mt-1 text-body leading-6">{said}</p>
       <a
@@ -2741,6 +2808,15 @@ async function threadActs(
       )}
     </section>
   );
+  // **rondo's turn while its draft is still to come** (rondo#495): a scope
+  // pressed now is one decided without rondo's plan, so nothing is offered, and
+  // nothing here is amber -- the neutral family is rondo working (D-0082 rule 3).
+  const draftingCard = (
+    <section class="next-step mb-4 rounded-lg border border-run/35 bg-run-wash px-4 py-3">
+      <h2 class="text-meta leading-5 font-semibold text-run-ink">{wording.nextStepRondoHeading}</h2>
+      <p class="mt-1 text-body leading-6">{wording.nextStepDrafting}</p>
+    </section>
+  );
   const next =
     unheld !== null
       ? unheldCard(unheld)
@@ -2772,23 +2848,29 @@ async function threadActs(
                 )
               : standing === null
                 ? null
-                : standing.kind === "decided" || standing.kind === "own"
-                  ? card(
-                      `scope-${requestMessageId}`,
-                      // A drafted approval's screen is reached without its decision,
-                      // which is how that screen also offers a newer draft beside it
-                      // (Codex); the person's own approval is named, since that
-                      // screen finds only rondo's drafts by itself.
-                      scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
-                      wording.nextStepStart,
-                      wording.nextStepStartAction,
-                    )
-                  : card(
-                      `scope-${requestMessageId}`,
-                      scopeHref(null),
-                      standing.kind === "drafted" ? wording.nextStepDrafted : wording.nextStepScope,
-                      wording.scopeAction,
-                    );
+                : drafting
+                  ? draftingCard
+                  : standing.kind === "decided" || standing.kind === "own"
+                    ? card(
+                        `scope-${requestMessageId}`,
+                        // A drafted approval's screen is reached without its decision,
+                        // which is how that screen also offers a newer draft beside it
+                        // (Codex); the person's own approval is named, since that
+                        // screen finds only rondo's drafts by itself.
+                        scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
+                        wording.nextStepStart,
+                        wording.nextStepStartAction,
+                      )
+                    : card(
+                        `scope-${requestMessageId}`,
+                        scopeHref(null),
+                        standing.kind === "drafted"
+                          ? wording.nextStepDrafted
+                          : draftedNothing(threads, requestMessageId)
+                            ? wording.nextStepNoDraft
+                            : wording.nextStepScope,
+                        wording.scopeAction,
+                      );
   const others = publishable.filter((lap) => lap !== nextPublish);
   // **The request's work is still under way** (rondo#437): a lap running or at
   // its gate, or any approved try whose pull request is not yet merged
@@ -2820,6 +2902,16 @@ async function threadActs(
     (standing !== null || unheld !== null || asked !== null || underWay);
   return {
     next,
+    // The right face's first step, off the same reading as the card (rondo#495
+    // item 3): null where the request has work, a question or no scope to set.
+    scopeStep:
+      standing === null
+        ? null
+        : drafting
+          ? ("waiting" as const)
+          : standing.kind === "decided" || standing.kind === "own"
+            ? ("done" as const)
+            : ("yours" as const),
     fixOffered: nextFix !== null && nextFix.closed === null,
     // Withheld by a question of this line the person owes (rondo#500): the
     // band says so rather than leaving only "resolve it by hand".
@@ -3553,6 +3645,8 @@ export async function operatorPage(
   const waits = waitsOnYou(threads, [...waiting, ...running]);
   /** The requests of those, which is the row the list draws and the person opens. */
   const turnsHere = new Set(waits.map((wait) => wait.root));
+  /** The drafts rondo still owes, read once for the thread, its right face and the list (rondo#495). */
+  const owes = await draftsOwedNow(ports);
   // **Only the ones an answer can settle** (D-0032 rule 5). `openProposals`
   // returns every proposal nobody has decided, and an explanation is
   // undecidable by construction -- `recordDecision` refuses the non-binding
@@ -3710,6 +3804,28 @@ export async function operatorPage(
   );
 
   /*
+   * **rondo's turn on the list as in the thread** (rondo#495 item 3): a request
+   * with no lap whose draft rondo still owes, by the thread card's own
+   * predicate. Asked only of the owed ones, so the rest cost nothing.
+   */
+  const drafting = new Set(
+    (
+      await Promise.all(
+        threads.messages
+          .filter(
+            (message) =>
+              message.inReplyTo === null &&
+              owes(message.messageId) &&
+              lapUnder(message.messageId) === null,
+          )
+          .map(async (root) =>
+            draftingOver(await scopeStanding(ports, root.messageId), true) ? [root.messageId] : [],
+          ),
+      )
+    ).flat(),
+  );
+
+  /*
    * **The left face's rows** (D-0083 rules 2, 5 and 7). Every request the
    * store holds, named by the person's own words, with the repository its
    * work is in and one sentence of state. What waits on the person is lifted
@@ -3727,7 +3843,11 @@ export async function operatorPage(
         title: firstLine(root.body),
         repository: placeOf(lap?.record ?? null),
         state: ((state) =>
-          state === "stopped" && unstarted.has(root.messageId) ? "notStarted" : state)(
+          state === "stopped" && unstarted.has(root.messageId)
+            ? "notStarted"
+            : state === "notStarted" && drafting.has(root.messageId)
+              ? "drafting"
+              : state)(
           rowStateOf(lap?.record ?? null, turnsHere.has(root.messageId), (record) =>
             isTerminal(record.status),
           ),
@@ -4543,6 +4663,7 @@ export async function operatorPage(
           selectedRoot,
           selectedLaps,
           threads,
+          owes,
           newIterationId,
         );
   const actsMarkup = acts?.acts == null ? null : ((await acts.acts.toString()) ?? null);
@@ -4823,7 +4944,11 @@ export async function operatorPage(
       ? // **An approved split with nothing started still has its parts' waits**
         // (D-0098 rule 8.2): no lap to read an agreement from, so the steps alone.
         selectedRoot === null || partsOfRequest(selectedRoot).length === 0
-        ? null
+        ? // **Before any lap, the plan and its scope are what remains**
+          // (rondo#495 item 3), read off the thread card's own standing.
+          acts?.scopeStep == null || selectedLaps.length > 0
+          ? null
+          : { react: ScopeSide({ wording, steps: stepsBeforeLap(acts.scopeStep) }) }
         : {
             react: PartsSide({
               wording,

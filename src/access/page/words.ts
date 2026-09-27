@@ -76,6 +76,8 @@ export interface PageWords extends DayWords {
   readonly rowFinished: string;
   readonly rowStopped: string;
   readonly rowNotStarted: string;
+  /** No lap yet, and rondo still owes its draft (rondo#495): rondo's turn, not the person's. */
+  readonly rowDrafting: string;
   /**
    * The event lines a lap produces (rule 7).
    *
@@ -368,6 +370,8 @@ export interface PageWords extends DayWords {
    * `stepPublish` is opening the pull request (rondo#376): approve, publish
    * and merge are three acts in that order, and the row says each apart.
    */
+  /** Before any lap (rondo#495): the plan rondo drafts and the scope the person approves. */
+  readonly stepScope: string;
   readonly stepWork: string;
   readonly stepChecks: string;
   readonly stepReading: string;
@@ -582,6 +586,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   rowFinished: "Finished",
   rowStopped: "Stopped",
   rowNotStarted: "Not started yet",
+  rowDrafting: "rondo is drafting a plan",
   evStarted: "Work started.",
   evFinished: "Finished.",
   evApproved: (published) =>
@@ -890,6 +895,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   runningHeading: "Work under way",
   runningNone: "Nothing is being worked on.",
   runningNote: "All of this carries on without you. rondo asks only when it has to.",
+  stepScope: "Plan and scope",
   stepWork: "Work",
   stepChecks: "Automatic checks",
   stepReading: "Read again",
@@ -1129,6 +1135,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   rowFinished: "終わりました",
   rowStopped: "取りやめました",
   rowNotStarted: "まだ始まっていません",
+  rowDrafting: "rondo が計画を下書きしています",
   evStarted: "作業を始めました。",
   evFinished: "終わりました。",
   evApproved: (published) =>
@@ -1412,6 +1419,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   runningHeading: "進んでいる仕事",
   runningNone: "いま進んでいる仕事はありません。",
   runningNote: "どれも、あなたの返事がなくても進みます。必要になったときだけお知らせします。",
+  stepScope: "計画と範囲",
   stepWork: "作業",
   stepChecks: "自動チェック",
   stepReading: "読み直し",

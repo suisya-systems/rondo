@@ -711,3 +711,33 @@ test("a bare #N two namings of one repository disagree about is not read, and th
       "a plan of /srv/a names o/new; nothing is read until they agree",
   ]);
 });
+
+test("a read the store refused is not still to come: the drafter is not held on it (rondo#495)", async () => {
+  const w = await world();
+  const { read } = fakeForge();
+  // The store refuses the `forge` message, so the reader gives the reference up.
+  const record = Object.create(w.record) as typeof w.record;
+  record.recordThreadMessage = async (draft) =>
+    draft.authorKind === "forge"
+      ? { kind: "refused" as const, reason: "the store said no" }
+      : await w.record.recordThreadMessage(draft);
+  const reader = issueReader({
+    record,
+    read,
+    bareRepository: async () => ({ repo: "o/r" }),
+    now: () => 50_000,
+    mintId: () => "forge-1",
+    log: () => {},
+    onRead: () => {},
+  });
+  await reader.unread([]);
+  await w.say("r1", "Fix o/r#237.", null, 1_000);
+  const thread = await w.record.threadMessages();
+  if (thread.kind !== "read") throw new Error(thread.reason);
+  expect((await reader.unreadUnderway(thread.messages)).has("r1")).toBe(true);
+  reader.kick();
+  await reader.idle();
+  // Still unread on the thread's own note, and no longer holding the draft.
+  expect((await reader.unread(thread.messages)).has("r1")).toBe(true);
+  expect(await reader.unreadUnderway(thread.messages)).toEqual(new Map());
+});
