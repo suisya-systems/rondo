@@ -212,6 +212,8 @@ export interface Chrome extends PageWords {
    */
   readonly answerRaiseAction: string;
   readonly answerRaiseLabel: string;
+  /** A scope stop on spent review rounds: the rounds' box beside the amount (rondo#512). */
+  readonly answerRaiseRoundsLabel: string;
   readonly answerRaiseLeft: (left: string, reserve: string, enough: boolean) => string;
   readonly newRequestHeading: string;
   readonly requestPlaceholder: string;

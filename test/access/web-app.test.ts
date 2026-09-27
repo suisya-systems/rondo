@@ -2552,6 +2552,38 @@ test("(answer) the press says which answer it is, and a stop leaves the question
   expect(await closed).toBe(0);
 });
 
+test("(answer) a press with the box left empty is the answer pressed, in the button's own words (rondo#512)", async () => {
+  // Lap 18: two presses of *carry on* on a scope stop never reached rondo --
+  // the box was `required`, so the browser would not send it empty.
+  const { ports, waitingAsks, record } = await askWaiting();
+  const { base, stop, closed } = await served(createApp(ports, TOKEN));
+  const answer = (outcome: string) => ({
+    token: TOKEN,
+    message_id: newMessageId("reply"),
+    in_reply_to: "ask",
+    body: " ",
+    outcome,
+  });
+  const stopped = answer("stop");
+  expect(
+    (await send(base, "/answer-ask?lang=ja", "POST", pressHeaders(base), stopped)).status,
+  ).toBe(303);
+  expect(await waitingAsks()).toEqual(["ask"]);
+  const carried = answer("carry_on");
+  expect(
+    (await send(base, "/answer-ask?lang=ja", "POST", pressHeaders(base), carried)).status,
+  ).toBe(303);
+  expect(await waitingAsks()).toEqual([]);
+  const read = await record.threadMessages();
+  const bodyOf = (id: string) =>
+    read.kind === "read" ? read.messages.find((one) => one.messageId === id)?.body : null;
+  const ja = chromeFor("ja");
+  expect(bodyOf(stopped.message_id)).toBe(ja.answerStopAction);
+  expect(bodyOf(carried.message_id)).toBe(ja.answerCarryOnAction);
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
 test("(answer) every shape that is not a person's press is refused, and the question keeps waiting", async () => {
   const { ports, waitingAsks, operatorRows } = await askWaiting();
   const app = createApp(ports, TOKEN);
@@ -2612,7 +2644,6 @@ test("(answer) every shape that is not a person's press is refused, and the ques
     ["a wrong token", "POST", person, { ...answer, token: "not-the-token" }, 403],
     ["a foreign Origin", "POST", { ...person, origin: "https://evil.example" }, answer, 403],
     ["no question named", "POST", person, { ...answer, in_reply_to: "" }, 400],
-    ["no words", "POST", person, { ...answer, body: " " }, 400],
   ];
   for (const [shape, method, headers, form, status] of refusals) {
     const answered = await send(base, "/answer-ask", method, headers, form);

@@ -275,6 +275,7 @@ explanation you pressed on and then answers the gate.`,
     "and you can carry on later.",
   answerRaiseAction: "Raise the budget and carry on",
   answerRaiseLabel: "Budget from here on (USD)",
+  answerRaiseRoundsLabel: "Review rounds for this line",
   answerRaiseLeft: (left, reserve, enough) =>
     `This approval has $${left} left, which ${enough ? "covers" : "does not cover"} the $${reserve} ` +
     `one more try holds. Raising records a new approval with only its budget changed, and what ` +

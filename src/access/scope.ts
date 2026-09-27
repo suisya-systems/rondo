@@ -1030,6 +1030,23 @@ async function holdingAsk(
  * act the scope never covered wants the work changed, or a successor that lists
  * it; a read that failed wants stopping until it is fixed.
  */
+/** The reason a spent round budget ends with (D-0065 4.3). */
+const ROUNDS_SPENT = "(D-0065 4.3)";
+
+/**
+ * What a raise-and-carry-on press on this stop would raise (rondo#512), read
+ * off the body `stopBody` wrote: `rounds` where the review rounds are spent,
+ * `cost` where the money is, and null for any other stop -- an expiry, the
+ * laps or the approval itself, which the answering box has no field to fix.
+ */
+export function stopRaises(body: string): "rounds" | "cost" | null {
+  return body.includes(" at the readings test.") && body.includes(ROUNDS_SPENT)
+    ? "rounds"
+    : body.includes(" at the cost test.")
+      ? "cost"
+      : null;
+}
+
 function recommendation(refusal: ScopeRefusal): string {
   if (refusal.verdict === "undecidable") {
     return (
@@ -1050,7 +1067,7 @@ function recommendation(refusal: ScopeRefusal): string {
     case "readings":
       // Only a spent round budget (D-0065 4.3) is an approval that ran out. An
       // unavailable or ungraded reading refuses a successor at the same test.
-      return refusal.reason.endsWith("(D-0065 4.3)")
+      return refusal.reason.endsWith(ROUNDS_SPENT)
         ? "a successor scope (D-0066 rule 1.4) with the review rounds this line needs: the " +
             "findings are open because the rounds the scope approved are spent"
         : "change the work so a model reading can be taken (a plan with a review criterion): " +

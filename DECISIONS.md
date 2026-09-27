@@ -173,6 +173,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0138 | Over-bound review material leaves out, by name, what only read before it is refused; `D-0105` rule 3.1 is withheld only by the conflicting lap's own line; and a model reading a second run could change can be taken again, once, as one more review round | accepted |
 | D-0139 | A lap is lost when, on this host, the rondo process that sent it and its `lap perform` child are both gone: it ends `failed` with the kind `lost`, holds no budget, and is started again once by itself under a goal scope or an approved split, or asked about | accepted |
 | D-0140 | A person's request starts from the goal scope's outward acts, a first-lap reserve with no history of its own is read from its repository's laps or guessed at a real lap's cost, and a budget stop offers raising the budget and carrying on first, on one press | accepted |
+| D-0141 | An answer is its press, a scope stop over a lap at its gate offers raising and carrying on, work approved and not begun outranks a stopped lap, and a resume keeps the paused approval's defaults | accepted |
 
 ---
 
@@ -26176,3 +26177,73 @@ lap that is not at a gate.
 - **Budget stops whose raise-and-carry-on is followed by another budget stop at the prefilled
   amount**: then the approval's own `cost_usd` is not a fitting prefill, and it should be drawn from
   the lap's measured costs instead.
+
+## D-0141 — An answer is its press, a scope stop over a lap at its gate offers raising and carrying on, work approved and not begun outranks a stopped lap, and a resume keeps the paused approval's defaults
+
+**Status:** accepted (2026-09-27, rondo#512; the audit of the lap 18 store was put to the owner through
+the secretary before any fix, and these four were confirmed as in scope). Amends `D-0072` rule 4 (an
+answer's words become optional), `D-0140` rule 3 (its press reaches a scope stop too) and rule 1's
+"the goal scope's own form keeps its empty default" (not for a resume). Refs `D-0065` 4.3, `D-0066`
+rules 1.4 and 4.4, `D-0074` section 4, `D-0098` rule 8.
+
+### Context
+
+**Read on 2026-09-27 from a copy of the lap 18 store** (the live store was only read):
+
+- **Two presses of *carry on* on #290's scope stop reached nothing.** The store has no reply to
+  `scope-stop-lap-72d4c0d2…`. The answering box's textarea was `required`, so a browser would not
+  send the form with the box empty, and the route refused an empty body too. The press is the
+  answer (`D-0072` rule 4). The words beside it were never the answer.
+- **The stop's words sent the person to a press that was not there.** The stop was on spent review
+  rounds (`D-0065` 4.3), and its option told the person to press "Raise the budget" at the waiting
+  lap. The gate draws that link only when laps, cost or the expiry close the change path, never for
+  rounds. The owner got past it by pausing the goal scope and approving it again, and the resume
+  form came back with every outward act unchecked.
+- **#494's list row said "stopped"** after its split was drafted again from the person's reply
+  and approved with $30 and all three outward acts. The row was read from the last lap, which had
+  stopped on its budget. The approved plan was not started because #290's line held the same
+  paths (`D-0073` rule 3.1), which is correct. Saying the request was given up was not.
+
+### Decision
+
+1. **An answer is its press.** The answering box's words are optional. An answer pressed with the box
+   empty records the pressed button's own label, in the page's language, as its body, so the
+   thread still reads what was said. A send (not an answer) still needs words.
+2. **A scope stop over a lap at its gate offers raising and carrying on** (`D-0140` rule 3). The
+   offer is made where the stop is on spent review rounds or on cost (`stopRaises`), the two the
+   box has a field for, and its `iteration` basis names a lap that is `awaiting_human` at a gate.
+   A stop on the expiry, the laps or the approval itself keeps its two answers, and its raise
+   stays the full raise screen's. The press, the successor
+   and the refusal are `D-0140` rule 3's, over the lap's approval tip, which for a goal-scoped lap is
+   the goal scope's newest approval. **Where the review rounds ran out** (`ROUNDS_SPENT`), the box also
+   draws the rounds, prefilled with one more than approved: rounds are counted along the line
+   (`D-0065` 4.1), so the approved number again would stop again. The stop's option says this
+   press, and that the person then asks again at the lap.
+3. **Work approved and not begun outranks a stopped lap.** A request whose newest drafted approval
+   has a plan no lap started from (`approvedUnstarted`) reads *not started* in the list, not *stopped*.
+   Other states are unchanged.
+4. **A resume keeps the paused approval's defaults.** The goal scope form drawn to resume a pause
+   starts from the paused approval's outward acts and severity. A first goal scope keeps the empty
+   default.
+
+**Options not taken.** For 1: a default answer when none is named. `D-0072` rule 4 refuses that, and it
+still does: only the words became optional. For 2: drawing the gate's raise link for rounds too. That
+keeps the two presses `D-0140` merged into one, on a question the person is already answering. For 3:
+a new row state naming the line the work waits on. That wording belongs to the parts view (`D-0098`
+rule 8), which does not cover a split with one plan. It is left for when that view does.
+
+### What it costs
+
+- **An empty answer's body is a label, not the person's words.** The thread says "Carry on" where
+  the person typed nothing. That is what they pressed.
+- **A raise on a paused goal scope carries its `laps: 0`.** Raising the rounds of a paused approval
+  does not resume it: resuming is the goal screen's press.
+- **The row reads the drafted rows on every redraw**, as `partsOf` already does. The ponytail
+  there covers this too.
+
+### What would falsify it
+
+- **Scope stops on rounds whose raise-and-carry-on stops again at the prefilled rounds**: then one
+  more round is not what these findings take, and the prefill should come from the findings.
+- **Requests reading *not started* that the person had meant to stop**: then an approval drawn after
+  a stop is not the person going on, and the row should say both.
