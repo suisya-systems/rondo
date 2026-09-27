@@ -8212,34 +8212,18 @@ export async function lapReport(
 
 /**
  * How the terminal's `publish` comes by the body's English (`D-0079` section 4,
- * rondo#290): the row a page's preview already recorded for this lap, and
- * otherwise this lap's report read and an English account composed from it.
+ * rondo#290): read this lap's report, then compose an English account of it.
  *
- * **The row is read first, so the body does not depend on which surface
- * published.** A person who looked at the publish screen and then typed
- * `rondo publish` has already been shown a body, and composing a second one here
- * would send the forge something nobody read. What the terminal does not do is
- * *write* the row: its body is compared against nothing, so a store that would
- * not take the row is no reason to publish without an account -- which is the one
- * place the two surfaces differ, and the reason they can
- * ({@link pagePublishBody} answers a press that must match a screen).
- *
- * **One composing per publish.** What it shares with the page is the ask itself
- * and the two legs it is handed, so both surfaces put one question to one
- * drafter.
+ * **One composing per publish, and no row.** The terminal's body is compared
+ * against nothing -- there is no earlier screen of it to disagree with -- so
+ * unlike the page's ({@link pagePublishBody}) this neither records nor reads a
+ * row. What it shares with the page is the two legs it is handed and the ask
+ * itself, so the two surfaces put the same question to the same drafter.
  */
 export function commandPublishBody(
-  ports: PublishBodyPorts & {
-    readonly report: () => Promise<string | null>;
-    /** Where a preview's row is looked for, or null for a lap that records no gate. */
-    readonly recorded: (() => Promise<ComposedBodyOutcome | null>) | null;
-  },
+  ports: PublishBodyPorts & { readonly report: () => Promise<string | null> },
 ): PublishBodyComposing {
   return async (reportLanguage) => {
-    const already = ports.recorded === null ? null : await ports.recorded();
-    if (already !== null) {
-      return already;
-    }
     const report = await ports.report();
     return report === null
       ? {
@@ -9270,14 +9254,12 @@ async function commandPublish(
     },
     environment,
     store,
-    advisory,
+    openAdvisoryRecord(storePath),
     // **The body's English, composed from the lap's report** (`D-0079` section
-    // 4, rondo#290). Every leg is reachable from here and from nowhere inside
-    // that function: continuo is this command's own, the drafter is the one
-    // `./forge.ts` runs for every other composed draft, and the row is the one a
-    // page's preview of this same lap would have recorded.
+    // 4, rondo#290). Both legs are reachable from here and from nowhere inside
+    // that function: continuo is this command's own, and the drafter is the one
+    // `./forge.ts` runs for every other composed draft.
     commandPublishBody({
-      recorded: pressedPublishBody(advisory, record),
       report: async () =>
         await lapReport(async (request) => await showGate(continuo, request), record),
       runDrafter: async (document) => await runDrafter(drafterRow(), document),
