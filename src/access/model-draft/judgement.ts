@@ -37,6 +37,7 @@ import {
 import type { DrafterRow } from "../../continuo/roles.js";
 import { normalizeClaim } from "../../store/lanes.js";
 import {
+  asksForWork,
   FINDING_SEVERITIES,
   type FindingSeverity,
   type JsonRecord,
@@ -78,6 +79,11 @@ export interface DraftMessage {
   readonly messageId: string;
   /** `forge` is what rondo read of an issue the person named (D-0078 section 3.2). */
   readonly authorKind: ThreadAuthorKind;
+  /**
+   * Who wrote it, which tells the flow host's opener from another drafter row
+   * (rondo#469). Absent in a snapshot written before it was carried.
+   */
+  readonly authorId?: string;
   readonly inReplyTo: string | null;
   readonly asks: boolean;
   /** The bytes as written (D-0009). */
@@ -464,7 +470,7 @@ export type DraftPreparation =
 
 export function prepareDraft(material: DrafterMaterial): DraftPreparation {
   const opening = material.thread.find((m) => m.messageId === material.requestMessageId);
-  if (opening === undefined || opening.inReplyTo !== null || opening.authorKind !== "operator") {
+  if (opening === undefined || opening.inReplyTo !== null || !asksForWork(opening)) {
     return {
       kind: "refused",
       reason: `'${material.requestMessageId}' is not an operator message that opens a request (D-0061 rule 1).`,
@@ -619,9 +625,7 @@ function checked(material: DrafterMaterial, answer: unknown): DraftOutcome {
     throw new DraftDefect(`'act' is ${JSON.stringify(act)}, not split, ask or none`);
   }
   const threadIds = new Set(material.thread.map((m) => m.messageId));
-  const operatorIds = new Set(
-    material.thread.filter((m) => m.authorKind === "operator").map((m) => m.messageId),
-  );
+  const operatorIds = new Set(material.thread.filter(asksForWork).map((m) => m.messageId));
   const bases = (value: unknown, what: string): string[] => {
     const ids = list(value, `${what}'s bases`).map((id, i) =>
       words(id, `${what} basis ${String(i)}`),

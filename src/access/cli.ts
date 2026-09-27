@@ -147,6 +147,7 @@ import {
 } from "./drafted-start.js";
 import { approvedSplits } from "./drafted-view.js";
 import { drafterHost } from "./drafter-host.js";
+import { flowHost } from "./flow-host.js";
 import {
   cloneRepository,
   fetchLapBase,
@@ -1549,12 +1550,17 @@ export async function main(
       pressing,
       // D-0126: a lap whose scope includes the merge is merged on green, through
       // the press's own path and holding the same `pressing` set.
-      mergeOnGreen: async (iterationId, head) =>
-        await mergeOnGreen(
+      mergeOnGreen: async (iterationId, head) => {
+        const merged = await mergeOnGreen(
           { store, record, now: Date.now, pressing, removeWorkspace },
           iterationId,
           head,
-        ),
+        );
+        // A merge closed out may be what the goal's next request waits on (rondo#469).
+        flow?.kick();
+        return merged;
+      },
+      closedOut: () => flow?.kick(),
       host: forgeHost(environment),
       now: Date.now,
       log: say,
@@ -1620,23 +1626,47 @@ export async function main(
                 proposalId: split.proposalId,
                 planIndex,
               };
+              const running = startSplitFromPage(
+                environment,
+                store,
+                opened.path,
+                sender.actorId,
+                bounds.policy,
+                input,
+              );
+              // The lap has ended when its start settles: the flow may ask
+              // for the goal's next request (rondo#469).
+              const ended = (): void => flow?.kick();
+              void running.then(ended, ended);
               return await answerOnceReserved(
                 store,
                 record,
                 chromeFor(selected.tag),
                 input,
-                startSplitFromPage(
-                  environment,
-                  store,
-                  opened.path,
-                  sender.actorId,
-                  bounds.policy,
-                  input,
-                ),
+                running,
               );
             },
             now: Date.now,
             log: say,
+          });
+    // **And the flow** (D-0128 rule 5, rondo#469): under a goal scope a person
+    // approved, the goal's next request is asked for here; the drafter drafts
+    // it and the order tick above starts it. Only where the tick runs, since
+    // nothing else would start what it asks for.
+    const flow =
+      order === null
+        ? null
+        : flowHost({
+            store,
+            record,
+            policy: bounds.policy,
+            now: Date.now,
+            log: say,
+            // Its issue is read first; the drafter waits on the read.
+            injected: () => {
+              issues.kick();
+              drafter.kick();
+            },
           });
     // **And the organisation's answer at a gate** (D-0125 rule 6, rondo#467):
     // a lap whose gate would be approved automatically is approved under its
@@ -1713,6 +1743,7 @@ export async function main(
         order?.kick();
         gates.kick();
         publisher?.kick();
+        flow?.kick();
         // **Reaching starts a minute in, and not in the burst above.** The
         // person who has just started rondo is looking at it this second, and
         // what was already waiting when the host was last stopped is on the
@@ -1727,6 +1758,7 @@ export async function main(
           order?.kick();
           gates.kick();
           publisher?.kick();
+          flow?.kick();
           // **Order on the tick buys nothing, and nothing here depends on
           // it**: every kick above returns before its own pass finishes, so
           // this reads what is committed when it runs and not what the same

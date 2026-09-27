@@ -25,7 +25,13 @@ import { drafterRow } from "../../continuo/roles.js";
 import { PRICED_MODEL_TIERS } from "../../refrain/classification.js";
 import { planPayload, type RunPlan, readPlan, readRunPlan } from "../../refrain/plan.js";
 import { canonicalJson, planDigest } from "../../store/plan.js";
-import type { IterationRecord, JsonRecord, JsonValue, LaneClaimAsk } from "../../store/records.js";
+import {
+  asksForWork,
+  type IterationRecord,
+  type JsonRecord,
+  type JsonValue,
+  type LaneClaimAsk,
+} from "../../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
 import type { runDrafter } from "../forge.js";
 import { hostFailure } from "../host-failure.js";
@@ -207,6 +213,7 @@ export async function gatherDrafterMaterial(
     .map((m) => ({
       messageId: m.messageId,
       authorKind: m.authorKind,
+      authorId: m.authorId,
       inReplyTo: m.inReplyTo,
       asks: m.asks,
       body: m.body,
@@ -238,7 +245,7 @@ export async function gatherDrafterMaterial(
   // plan here -- the drafter is held off it (`drafter-host.ts`) and a scope the
   // person writes themselves is their own explicit act.
   const work = workRepository(
-    thread.flatMap((m) => (m.authorKind === "operator" ? [m.body] : [])),
+    thread.flatMap((m) => (asksForWork(m) ? [m.body] : [])),
     everyChoice.map((t) => forgeRepositoryOf(t.plan)),
   );
   const offered =
@@ -382,9 +389,7 @@ export async function requestRepository(
     (a, b) => b.heldAtMs - a.heldAtMs,
   );
   const work = workRepository(
-    read.messages.flatMap((m) =>
-      m.authorKind === "operator" && inThread.has(m.messageId) ? [m.body] : [],
-    ),
+    read.messages.flatMap((m) => (asksForWork(m) && inThread.has(m.messageId) ? [m.body] : [])),
     held.map((t) => forgeRepositoryOf(t.plan)),
   );
   const unbuilt =

@@ -1742,6 +1742,39 @@ export type ScopeRequests = readonly string[] | { readonly from_goal: string };
 /** The `author_id` prefix of the flow host's request openers (D-0128 rule 1). */
 export const FLOW_AUTHOR_PREFIX = "rondo/flow/";
 
+/** The flow host's author id (rondo#469): its request openers are rondo's voice, never the person's. */
+export const FLOW_AUTHOR = `${FLOW_AUTHOR_PREFIX}1`;
+
+/**
+ * Whether a message is a request the flow host opened (rondo#469): a drafter
+ * row with no `in_reply_to` whose author starts with {@link FLOW_AUTHOR_PREFIX}.
+ * `authorId` is absent on a drafter snapshot written before it was carried.
+ */
+export function opensFlowRequest(message: {
+  readonly authorKind: string;
+  readonly authorId?: string;
+  readonly inReplyTo: string | null;
+}): boolean {
+  return (
+    message.authorKind === "drafter" &&
+    message.inReplyTo === null &&
+    (message.authorId ?? "").startsWith(FLOW_AUTHOR_PREFIX)
+  );
+}
+
+/**
+ * Whether a message asks for the work in its thread, as the split drafter reads
+ * a thread (D-0071 rule 3.2): the person's own words, or the flow host's
+ * opener, which a person's goal scope stands behind (D-0128 rule 5).
+ */
+export function asksForWork(message: {
+  readonly authorKind: string;
+  readonly authorId?: string;
+  readonly inReplyTo: string | null;
+}): boolean {
+  return message.authorKind === "operator" || opensFlowRequest(message);
+}
+
 /** A message that opens a request, as the scope's request test reads it. */
 export interface RequestOpener {
   readonly messageId: string;
@@ -1862,6 +1895,7 @@ export const SCOPE_ACT_KINDS = Object.freeze([
   "open_pull_request",
   "merge_default_branch",
   "gate_answer",
+  "triage_reading",
 ] as const);
 
 export type ScopeActKind = (typeof SCOPE_ACT_KINDS)[number];
@@ -1873,7 +1907,10 @@ export type ScopeActKind = (typeof SCOPE_ACT_KINDS)[number];
  * written before the merge is asked of the forge (D-0126); a gate answer's is
  * the gate id, written before the gate is walked (D-0125 rule 5, rondo#467); a
  * scoped publish's two are the iteration id, `push_branch` written before the
- * push and `open_pull_request` before the pull request is opened (rondo#470).
+ * push and `open_pull_request` before the pull request is opened (rondo#470); a
+ * triage reading's is the triage proposal id, written by the flow host before
+ * it injects a request that reading ranked, so the reading's model spend counts
+ * toward the goal scope's cost (rondo#469).
  */
 export const WRITABLE_SCOPE_ACT_KINDS = Object.freeze([
   "admission",
@@ -1881,6 +1918,7 @@ export const WRITABLE_SCOPE_ACT_KINDS = Object.freeze([
   "open_pull_request",
   "merge_default_branch",
   "gate_answer",
+  "triage_reading",
 ] as const satisfies readonly ScopeActKind[]);
 
 /** Who wrote a scope row (D-0066 rule 1.5, D-0061 rule 2.3's voice column). */
@@ -2054,7 +2092,11 @@ export interface StoredScopeDecision {
 export interface ScopeSpent {
   /** `admission` rows under the approval. */
   readonly admissions: number;
-  /** The sum of `lap_cost_usd` over the admitted iterations whose cost was read. */
+  /**
+   * The sum of `lap_cost_usd` over the admitted iterations whose cost was read,
+   * plus the model spend of every triage reading claimed under the approval
+   * (rondo#469).
+   */
   readonly readCostUsd: number;
   /** Admitted iterations whose `lap_cost_usd` is still null (D-0046: null is "not read"). */
   readonly unreadLaps: number;
@@ -2086,6 +2128,12 @@ export interface OpenAsk {
    * unproposed start of the request does not apply to it. Absent otherwise.
    */
   readonly lineOnly?: true;
+  /**
+   * The flow host's stop (rondo#469, author {@link FLOW_AUTHOR}): it holds the
+   * flow's next request and no act of the request it is asked in, whose parts
+   * carry on. Absent otherwise.
+   */
+  readonly holdsNothing?: true;
 }
 
 /**
@@ -2149,6 +2197,9 @@ export function askStandsOver(
   lineageIds: readonly string[],
   unproposedStart: boolean,
 ): boolean {
+  if (ask.holdsNothing === true) {
+    return false;
+  }
   if (unproposedStart && ask.lineOnly !== true) {
     return true;
   }
