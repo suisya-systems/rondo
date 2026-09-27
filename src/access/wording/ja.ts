@@ -443,6 +443,7 @@ export const JA: Chrome = Object.freeze({
   chimeAsk: "このタブに通知を許可",
   tabTitle: (count) => (count === 0 ? "rondo" : `(${String(count)}) rondo`),
   tabTitleTurn: "あなたの番 — rondo",
+  changedMark: "更新されました",
   liveLabel: "ライブ",
   keyMove: "移動",
   keyOpen: "開く",

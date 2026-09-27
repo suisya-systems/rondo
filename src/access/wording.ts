@@ -480,6 +480,20 @@ export interface Chrome extends PageWords {
    * count comes back with {@link tabTitle} once the tab is looked at.
    */
   readonly tabTitleTurn: string;
+  /**
+   * The mark on an element the redraw changed (rondo#494 item 1), for a person
+   * who asked their browser for no motion.
+   *
+   * Everyone else is told the same thing by a wash that fades over three
+   * seconds and carries no words at all (`page/app.css`); with
+   * `prefers-reduced-motion` there is no fade to read, so the change is said
+   * in one. **Two words at most**: it sits beside an ask, a stop, a candidate
+   * or a step, and it says only that this is not what it was -- what it now
+   * says is the element itself, right under it. It is resolved here and put on
+   * `#ledger` for `page/changed.js`, because a script choosing the word would
+   * be choosing it in one language.
+   */
+  readonly changedMark: string;
   readonly liveLabel: string;
   readonly keyMove: string;
   readonly keyOpen: string;
