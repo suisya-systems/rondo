@@ -1576,6 +1576,16 @@ async function planStart(
                   {wording.releaseLink}
                 </a>
               )}
+              {/* **Why so wide, where it said** (rondo#509): the words its
+                  drafter gave for claiming a directory, kept on its claim. */}
+              {holder.why === null || !holder.paths.some((path) => path.endsWith("/")) ? null : (
+                <span class="basis-full text-meta leading-5 text-muted-foreground">
+                  {wording.planHeldWhy(
+                    holder.paths.filter((path) => path.endsWith("/")),
+                    holder.why,
+                  )}
+                </span>
+              )}
             </p>
           ))}
           {finished ? (

@@ -223,8 +223,9 @@ test("a closed lap revised into a redo that failed owes nothing, so the redo's f
 });
 
 test("a released line retried asks back what it gave up, and is tested as a first admission (rule 2.6)", async () => {
-  const { store, claims } = fresh();
-  await reserved(store, input("a", { claim: asking(["src/store/"]) }));
+  const { connection, store, claims } = fresh();
+  const why = "every table may change";
+  await reserved(store, input("a", { claim: { ...asking(["src/store/"]), why } }));
   expect((await store.transition("a", "planned", "abandoned", {}, 5)).kind).toBe("transitioned");
   await reserved(store, input("b", { claim: asking(["src/"]) }));
   // `a` gave up src/store/, which `b` now holds: the retry is refused.
@@ -243,6 +244,31 @@ test("a released line retried asks back what it gave up, and is tested as a firs
     claim_id: "a:3",
     paths: '["src/store/"]',
     supersedes_claim_id: "a:2",
+  });
+  // The paths taken back keep the words that said why (rondo#509); the
+  // release between them, which holds nothing, says nothing.
+  expect(
+    connection.prepare("SELECT why FROM lane_claim WHERE lineage_id = 'a' ORDER BY rowid").all(),
+  ).toEqual([{ why }, { why: null }, { why }]);
+});
+
+test("a store from before a claim said why gains the column, and its rows say nothing (rondo#509)", async () => {
+  const connection = new DatabaseSync(":memory:");
+  connection.exec(
+    "CREATE TABLE lane_claim (claim_id TEXT PRIMARY KEY, lineage_id TEXT NOT NULL, " +
+      "repository TEXT NOT NULL, paths TEXT NOT NULL, supersedes_claim_id TEXT UNIQUE, " +
+      "author_kind TEXT NOT NULL, author_id TEXT NOT NULL, bases TEXT NOT NULL, " +
+      "created_at_ms INTEGER NOT NULL)",
+  );
+  connection
+    .prepare(
+      "INSERT INTO lane_claim VALUES ('old:1', 'old', ?, '[\"docs/\"]', NULL, 'drafter', 'x', '[]', 1)",
+    )
+    .run(REPOSITORY);
+  const store = storeWithRequest(connection, { maxOccupying: 100, maxLive: 100 });
+  expect((await store.laneLedger()).find((line) => line.lineageId === "old")).toMatchObject({
+    paths: ["docs/"],
+    why: null,
   });
 });
 
@@ -408,7 +434,7 @@ test("the ledger as the page reads it: what each line holds, whether it is in fl
   const { connection, store } = fresh();
   // Holding and in flight; holding and finished; landed (released by a
   // reading); released by a person; ended with nothing to land.
-  await reserved(store, input("run", { claim: asking(["src/run/"]) }));
+  await reserved(store, input("run", { claim: { ...asking(["src/run/"]), why: "it runs" } }));
   await reserved(store, input("kept", { claim: asking(["src/kept/"]) }));
   await walk(store, "kept", "closed");
   await reserved(store, input("landed", { claim: asking(["src/landed/"]) }));
@@ -446,6 +472,7 @@ test("the ledger as the page reads it: what each line holds, whether it is in fl
     repository: REPOSITORY,
     claimId: "run:1",
     paths: ["src/run/"],
+    why: "it runs",
     lapIds: ["run"],
     inFlight: true,
     closedTips: [],
@@ -470,6 +497,7 @@ test("the ledger as the page reads it: what each line holds, whether it is in fl
     repository: "/srv/other",
     claimId: null,
     paths: ["/"],
+    why: null,
     lapIds: ["old"],
     inFlight: true,
     closedTips: [],

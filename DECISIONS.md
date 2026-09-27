@@ -25748,6 +25748,38 @@ a new authority surface, and to help lap 18 it would have had to narrow the hold
 - **Drafted claims that still come back `/` for work the thread localises**: then the listing is not
   what the drafter needs, and the fault is in the instructions or the depth.
 
+> **Annotation (2026-09-27, from rondo#509).** Added after this entry was accepted, and **not
+> additive**: it replaces rule 1's "two levels deep, at most 400" and sharpens rule 2. Found in lap
+> 18: with two levels, #290 and #494's redrafted plan both claimed `src/access/` and `test/`. Most of
+> rondo lives under `src/access/`, so any page or host change collided, and rule 2 could not name a
+> file the listing never showed.
+>
+> 1. **The listing is cut by bytes, not by depth.** `readRepositoryPaths` reads the whole tree, and
+>    the drafter is shown at most 16,000 bytes of it: every path two levels deep, then everything
+>    three levels under each directory the thread, an issue it read or a lap's prompt names (a
+>    directory, or the directory of a named file), then each deeper level whole while it fits. A
+>    directory is listed whole or not at all. rondo's whole tree (about 360 paths, 10 KB) fits, so
+>    its drafter sees every file.
+> 2. **The drafter claims the files it will edit**, plus the tests, word lists and documents it
+>    changes with them, and not a whole top-level directory for work inside it. A directory is
+>    claimed only where the work adds files there or changes most of it, or where the listing does
+>    not show its files.
+> 3. **A claim naming a directory or `/` says why.** The plan carries `claim_why`, one sentence in
+>    the person's language. It is kept beside the claim in the lane ledger (`lane_claim.why`, a
+>    nullable column with no back-fill; a released line retried takes its why back with its paths),
+>    and the approved scope screen shows it under "Held by" where that claim holds a plan off. It is
+>    asked for and not required: a draft refused for a missing sentence would cost the person the
+>    whole draft, and the claim is safe without it. The drafter's instructions are version 9.
+>
+> **Measured** by replaying today's drafts through the new document (the lap-18 store, copied; each
+> draft's own thread, the tree at the `main` commit before it was drafted, `claude-opus-5`, one run
+> each). Plans of #313 (2), #494 (2) and #290 (1): **0 of 10 pairs** could run in parallel before,
+> **6 of 10** after. With #494's redrafted single plan instead: **0 of 6** before, **2 of 6** after.
+> The pairs that still wait share real files (`src/access/publish-host.ts`, the word lists), or
+> meet #494's redraft, which claims `test/access/` whole and says why: its inputs sit on many
+> screens. Every replayed claim names paths the tree held. One run per draft, so the counts carry the
+> model's variance.
+
 ## D-0137 — A bare `#N` is read in the repository its own request would publish to: `publishesTo` is the one rule both sides ask, and a reference the plans in play name two repositories for is not read at all; `D-0081` rule 3.4 is narrowed
 
 **Status:** accepted (2026-09-27, rondo#313 item 2; the operator's ask on lap 18). Narrows `D-0081`

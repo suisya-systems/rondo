@@ -51,7 +51,7 @@ import { optionLines } from "../question.js";
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
  * {@link INSTRUCTIONS} is a new version, a changed model a new table entry.
  */
-const DRAFTER_INSTRUCTIONS_VERSION = 8;
+const DRAFTER_INSTRUCTIONS_VERSION = 9;
 
 /** What every row a model drafter writes is named under (rule 1.4). */
 export const MODEL_DRAFTER_PREFIX = "rondo/drafter/";
@@ -113,11 +113,78 @@ export interface DraftTemplate {
   readonly heldAtMs: number;
 }
 
-/** One repository's tracked paths at a ref, two levels deep, or null when git would not list them. */
+/**
+ * One repository's tracked paths at a ref, as {@link drafterListing} cut them,
+ * or null when git would not list them.
+ */
 export interface DraftRepositoryPaths {
   readonly repository: string;
   readonly ref: string;
   readonly paths: readonly string[] | null;
+}
+
+/** The bytes {@link drafterListing} keeps of one repository: about 400 paths. */
+const LISTING_BYTES = 16_000;
+/** How far below a directory the words name {@link drafterListing} lists (rondo#509). */
+const NAMED_DEPTH = 3;
+
+/**
+ * What the drafter is shown of a repository's `paths` (D-0136, rondo#509),
+ * within {@link LISTING_BYTES} of UTF-8: every path two levels deep, then everything
+ * {@link NAMED_DEPTH} levels under each directory `words` name (a directory,
+ * or the directory of a file), then each deeper level whole while it fits. A
+ * directory is listed whole or not at all, so one whose files are missing is
+ * one the listing cut. At two levels every change to `src/access/` claimed it
+ * whole, and two plans in it never ran together.
+ */
+export function drafterListing(paths: readonly string[], words: readonly string[]): string[] {
+  const sorted = [...paths].sort();
+  const depth = (path: string) => path.replace(/\/$/, "").split("/").length;
+  const kept = new Set<string>();
+  let room = LISTING_BYTES;
+  const keep = (group: readonly string[]) => {
+    const fresh = group.filter((path) => !kept.has(path));
+    const bytes = fresh.reduce((sum, path) => sum + Buffer.byteLength(path) + 1, 0);
+    if (bytes > room) {
+      return false;
+    }
+    for (const path of fresh) {
+      kept.add(path);
+    }
+    room -= bytes;
+    return true;
+  };
+  // The top level path by path: only a repository with more than the bytes
+  // of top-level names is cut inside it. Its second level per directory.
+  for (const path of sorted.filter((p) => depth(p) === 1)) {
+    if (!keep([path])) {
+      break;
+    }
+  }
+  for (const top of sorted.filter((p) => depth(p) === 1 && kept.has(p) && p.endsWith("/"))) {
+    keep(sorted.filter((p) => depth(p) === 2 && p.startsWith(top)));
+  }
+  const tracked = new Set(sorted);
+  const named = new Set<string>();
+  for (const token of words.join("\n").match(/[\w.-]+(?:\/[\w.-]*)+/g) ?? []) {
+    const path = token.replace(/^\.\//, "").replace(/\/$/, "");
+    if (tracked.has(`${path}/`)) {
+      named.add(`${path}/`);
+    } else if (tracked.has(path) && path.includes("/")) {
+      named.add(path.slice(0, path.lastIndexOf("/") + 1));
+    }
+  }
+  for (const directory of [...named].sort()) {
+    keep(
+      sorted.filter((p) => p.startsWith(directory) && depth(p) - depth(directory) <= NAMED_DEPTH),
+    );
+  }
+  for (let level = 3; keep(sorted.filter((p) => depth(p) === level)); level++) {
+    if (!sorted.some((p) => depth(p) > level)) {
+      break;
+    }
+  }
+  return sorted.filter((path) => kept.has(path));
 }
 
 /**
@@ -300,12 +367,16 @@ const INSTRUCTIONS = [
   "  paths can run at the same time and plans that share one run one after the other. A path is",
   "  relative to the repository root and spelled with '/': a file ('README.md'), or a directory",
   "  ending in '/' ('src/store/') that covers everything under it. No patterns ('*', '?', '[').",
-  "  '/' alone is the whole repository. Claim the files and directories the work touches, read",
-  "  from the thread and from REPOSITORY PATHS: a directory from that list covers the files under",
-  "  it, and a plan that also changes shared files (tests, documents, word lists) claims those",
-  "  too. Claim '/' only when the work really spans the whole repository. A path a lap changes",
-  "  outside its claim is added to it when the lap finishes, or put to the person when another",
-  "  plan holds that path, so a claim naming the right directories is safe even if it misses one.",
+  "  '/' alone is the whole repository. Claim the files the work will edit, read from the thread",
+  "  and from REPOSITORY PATHS, plus the shared files it changes with them: the tests beside",
+  "  them, word lists, documents. Do not claim a whole top-level directory ('src/') for work",
+  "  inside it. Claim a directory only where the work adds files there or changes most of it,",
+  "  or where REPOSITORY PATHS does not list its files; claim '/' only when the work really",
+  "  spans the whole repository. A plan whose claim names a directory or '/' says why in",
+  '  "claim_why": one sentence the person reads when that claim holds another plan off, such as',
+  '  "the change reaches every screen under it". A path a lap changes outside its claim is',
+  "  added to it when the lap finishes, or put to the person when another plan holds that path,",
+  "  so a claim that misses a file is safe; one wider than the work makes other plans wait.",
   "- A plan that can only start once an earlier plan of this split has been merged names it by",
   '  "after": that plan\'s index in "plans", from 0 and earlier than its own. It then starts by',
   "  itself once that plan is merged. Use it for a chain across repositories: a change in one",
@@ -350,11 +421,11 @@ export function drafterDocument(material: DrafterMaterial): string {
   const language =
     material.language === null
       ? [
-          "Write the summary and the question in the language the request is written in.",
+          "Write the summary, the question and each claim_why in the language the request is written in.",
           "Write each prompt in the language its template's prompt is written in: the worker reads it.",
         ]
       : [
-          `Write the summary, the question and each prompt in the language tagged '${material.language}':`,
+          `Write the summary, the question, each prompt and each claim_why in the language tagged '${material.language}':`,
           "the person reads them all before approving. Think in that language from the start; do not",
           "compose in English and translate.",
         ];
@@ -376,7 +447,9 @@ export function drafterDocument(material: DrafterMaterial): string {
     '               "recommended": <option index from 0>, "recommendation": "why, in words",',
     '               "bases": ["<message id>"]},                              ("ask" only)',
     '  "plans": [{"template_plan_digest": "sha256:...", "agent_type_digest": "sha256:...",',
-    '             "prompt": "...", "claim": ["src/store/", "README.md"],',
+    '             "prompt": "...", "claim": ["src/store/lanes.ts", "README.md"],',
+    '             "claim_why": "...",                                    (only on a claim',
+    "                                                   naming a directory or '/')",
     '             "after": 0, "bases": ["<message id>"],',
     '             "grounds": [{"condition": "files_named", "text": "...",',
     '                          "bases": ["<message id>"]}]}],                 ("split" only;',
@@ -789,6 +862,7 @@ function plan(
       "agent_type_digest",
       "prompt",
       "claim",
+      "claim_why",
       "after",
       "entries",
       "bases",
@@ -854,6 +928,12 @@ function plan(
   if (claim.kind === "refused") {
     throw new DraftDefect(`${what}'s claim: ${claim.reason}`);
   }
+  // **Why a claim is wide** (rondo#509): the words the lane ledger keeps and
+  // the scope screen shows where it holds another plan off. Asked for, not
+  // required: a draft refused for a missing sentence would cost the person the
+  // whole draft, and the claim is safe without it.
+  const why =
+    p["claim_why"] === undefined ? undefined : words(p["claim_why"], `${what}'s claim_why`);
   return {
     template,
     agentType,
@@ -863,6 +943,7 @@ function plan(
       agent_type_digest: typeDigest,
       bases: cited.map((messageId) => ({ form: "message", messageId })),
       claim: claim.paths,
+      ...(why === undefined ? {} : { claim_why: why }),
       ...(after === undefined ? {} : { after }),
       ...(entries === undefined ? {} : { entries }),
       ...(grounds === null ? {} : { grounds }),

@@ -958,6 +958,7 @@ explanation you pressed on and then answers the gate.`,
     `Not yet: work that has finished still keeps ${filesEn(paths)}, because its pull request ` +
     "is not open yet. This can start once it is, or once its files are released.",
   planHeldBy: "Held by",
+  planHeldWhy: (paths, why) => `Why it holds ${filesEn(paths)}: ${why}`,
   planHeldTry:
     "That work has finished. Starting checks first whether its change is on the default branch.",
   startRefusedHeld:
