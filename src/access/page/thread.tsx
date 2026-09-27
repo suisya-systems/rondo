@@ -132,6 +132,12 @@ export interface ThreadProps {
    * in them.
    */
   readonly answering: ReactNode;
+  /**
+   * The one event line directly above the answering box where a worker's
+   * question stands (D-0098 rule 8.3): what it built and committed before
+   * stopping, and what waits on the answer. Null otherwise.
+   */
+  readonly answeringLead?: ThreadEvent | null;
   readonly adding: ReactNode;
   /**
    * The screens this request can be taken to next -- setting its scope,
@@ -245,6 +251,7 @@ export function ThreadFace({
   lastLookedAbove,
   lastLookedSaid,
   answering,
+  answeringLead = null,
   adding,
   acts,
   next,
@@ -279,6 +286,7 @@ export function ThreadFace({
        * so nobody scrolls past history to find what waits on them.
        */}
       {next}
+      {answeringLead === null ? null : <EventLine event={answeringLead} />}
       {answering}
       {acts}
       {adding}

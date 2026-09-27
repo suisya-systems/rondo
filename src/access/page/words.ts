@@ -402,7 +402,7 @@ export interface PageWords extends DayWords {
    * The event line over the answering box (rule 8.3): what the worker built and
    * committed before stopping, and what waits on the answer, in its words.
    */
-  readonly evQuestionBuilt: (commit: string, waits: string) => string;
+  readonly evQuestionBuilt: (commit: string, waits: string | null) => string;
   readonly evQuestionBuiltLink: string;
   /** What the revise press does once the question is answered (rule 8.4), and for which part. */
   readonly reviseAnswerStarts: (part: number | null) => string;
@@ -742,7 +742,8 @@ export const PAGE_EN: PageWords = Object.freeze({
   partTakeIn:
     "another part changed these files and was merged; the next attempt starts by merging it in",
   evQuestionBuilt: (commit, waits) =>
-    `The worker built and committed ${commit} before stopping to ask. Waiting on your answer: ${waits}`,
+    `The worker built and committed ${commit} before stopping to ask.` +
+    (waits === null ? "" : ` Waiting on your answer: ${waits}`),
   evQuestionBuiltLink: "What changed",
   reviseAnswerStarts: (part) =>
     part === null
@@ -1078,7 +1079,8 @@ export const PAGE_JA: PageWords = Object.freeze({
   partTakeIn:
     "ほかの作業がこのファイルを変更してマージされました。次の回は、まずその変更を取り込んでから始めます",
   evQuestionBuilt: (commit, waits) =>
-    `作業者は質問する前に、ここまでを作って ${commit} にコミットしました。返事を待っている部分: ${waits}`,
+    `作業者は質問する前に、ここまでを作って ${commit} にコミットしました。` +
+    (waits === null ? "" : `返事を待っている部分: ${waits}`),
   evQuestionBuiltLink: "変更内容",
   reviseAnswerStarts: (part) =>
     part === null

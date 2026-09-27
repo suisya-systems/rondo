@@ -16,6 +16,7 @@ import { drafterHost } from "../../src/access/drafter-host.js";
 import { draftedPlanRun } from "../../src/access/model-draft/host.js";
 import { unlandedBody, unlandedPrefix } from "../../src/access/order-host.js";
 import { partStepOf } from "../../src/access/page/thread-side.js";
+import { relayQuestion } from "../../src/access/question.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 
 import { allocate } from "../../src/refrain/allocator.js";
@@ -24,7 +25,7 @@ import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { agentTypeDigestOf, planDocument } from "./fixtures/drafter.js";
-import { mint, operatorPage, portsOver } from "./page-world.js";
+import { EVIDENCE, mint, openGate, operatorPage, portsOver } from "./page-world.js";
 
 const ENV = { RONDO_APPROVER: "ada" };
 const JA = chromeFor("ja");
@@ -252,4 +253,76 @@ test("the scope screen says what an ordered part waits on, and draws no press fo
   );
   expect(html).toContain("waiting until part 1 is merged; then it starts by itself");
   expect(html).not.toContain('name="plan_index" value="1"');
+});
+
+const QUESTION = {
+  question: "Should the pin move to the tag or the commit?",
+  options: [
+    { text: "The tag", gives_up: "an exact commit" },
+    { text: "The commit", gives_up: "a readable name" },
+  ],
+  recommended: 1,
+  recommendation: "The commit, since the tag can move.",
+  waits: "the pin bump in package.json",
+};
+const RATIONALE = `Built the loader.\n\n\`\`\`rondo-question\n${JSON.stringify(QUESTION)}\n\`\`\`\n`;
+
+/** Part 1 at its gate with the worker's question put; part 2 still running. */
+async function questioned() {
+  const w = await split([undefined, undefined]);
+  await w.start(0, "lap-one");
+  await w.start(1, "lap-two");
+  await openGate(w.world as never, "lap-one");
+  const carried = await w.world.store.transition(
+    "lap-one",
+    "awaiting_human",
+    "awaiting_human",
+    {},
+    3_700,
+    {
+      drafter: "rondo/deterministic/2",
+      verdict: "clear",
+      findings: [],
+      evidence: EVIDENCE,
+      unavailableReason: null,
+    },
+  );
+  expect(carried.kind).toBe("transitioned");
+  const put = await relayQuestion(
+    { record: w.world.record, store: w.world.store, rationale: async () => RATIONALE },
+    "lap-one",
+    3_800,
+  );
+  expect(put).toContain("question-lap-one");
+  return w;
+}
+
+const gatePage = async (w: Awaited<ReturnType<typeof split>>, wording = EN) =>
+  await operatorPage(
+    {
+      ...portsOver(w.world, "ada", []),
+      material: async () => ({ lines: [], why: RATIONALE, work: null }),
+    },
+    "t",
+    { kind: "thread", messageId: "r1", to: null },
+    wording,
+    mint,
+  );
+
+test("a worker's question: one line over the box says what was built and what waits, and the other parts keep their state under the title (D-0098 rule 8.3)", async () => {
+  const w = await questioned();
+  const html = await gatePage(w);
+  const lead =
+    "The worker built and committed bbbbbbb before stopping to ask. Waiting on your answer: the pin bump in package.json";
+  expect(html).toContain(lead);
+  // Directly above the box: nothing of the thread's record comes between.
+  const at = html.indexOf(lead);
+  const box = html.indexOf('id="answering"');
+  expect(at).toBeGreaterThan(-1);
+  expect(box).toBeGreaterThan(at);
+  expect(html.slice(at, box)).not.toContain('class="msg ');
+  expect(html.slice(at, box)).toContain('href="#changed"');
+  // The line under the title keeps the other part's state.
+  expect(html).toContain('<span class="gov-parts">1 other part still running</span>');
+  expect(await gatePage(w, JA)).toContain('<span class="gov-parts">ほかの作業 1 件は進行中</span>');
 });

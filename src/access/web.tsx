@@ -97,6 +97,7 @@ import {
   findingBasisText,
   type IterationRecord,
   isApprovableKind,
+  isDeterministicReadingDrafter,
   isModelReadingDrafter,
   isTerminal,
   type LapReading,
@@ -173,7 +174,7 @@ import {
   workerRuns,
 } from "./page-logic/laps.js";
 import { placeName, placeSaid, repositoryOf, requestList, rowStateOf } from "./page-logic/list.js";
-import { type PartView, partCounts, partViews } from "./page-logic/parts.js";
+import { holdsLap, type PartView, partCounts, partViews } from "./page-logic/parts.js";
 import {
   askOverLine,
   asksOverLine,
@@ -194,6 +195,7 @@ import {
 } from "./page-logic/threads.js";
 import { waitsOnYou } from "./page-logic/waits.js";
 import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "./page-logic/week.js";
+import { readWorkerQuestion } from "./question.js";
 import { denialLine, LIST_LIMIT, TAKE_IN_FINDING } from "./review.js";
 import { reviseText } from "./revise-draft/judgement.js";
 import { approvalTip, budgetRefusal } from "./scope.js";
@@ -3492,6 +3494,45 @@ export async function operatorPage(
    * `test/access/gate-elements.test.ts` is the net under.
    */
   const gateFraming = answeringLap === null ? undefined : shown.get(answeringLap);
+  /*
+   * **A worker's question, and what it stopped on** (D-0098 rule 8.3): one
+   * event line directly above the box, while the question the lap put
+   * (`question-<lap>`, `src/access/question.ts`) stands. The commit is the one
+   * rondo measured, the reading's tip, as the question itself carries it; what
+   * waits on the answer is the worker's own words, read from the block in its
+   * report where the report was read. The link is the right face's card of what
+   * changed: the commit is not on the forge until it is published.
+   */
+  const questionLead = (() => {
+    if (gatedLap === null) {
+      return null;
+    }
+    const askId = `question-${gatedLap.id}`;
+    const ask = threads.byId.get(askId);
+    if (ask === undefined || !threads.waiting.has(askId)) {
+      return null;
+    }
+    const tip = latestReading(readingsByLap.get(gatedLap.id) ?? [], isDeterministicReadingDrafter)
+      ?.evidence?.tipCommit;
+    if (tip === undefined) {
+      return null;
+    }
+    const why = gateFraming?.material?.why ?? null;
+    const read = why === null ? null : readWorkerQuestion(why);
+    return {
+      id: `${askId}:built`,
+      kind: "other" as const,
+      said: wording.evQuestionBuilt(
+        tip.slice(0, 7),
+        read?.kind === "question" ? read.question.waits : null,
+      ),
+      at: wording.age(ago(ask.atMs, nowMs)),
+      atMs: ask.atMs,
+      ...(gateFraming?.material == null
+        ? {}
+        : { href: "#changed", linkSaid: wording.evQuestionBuiltLink }),
+    };
+  })();
   const answeringBox =
     gatedLap === null || gateFraming === undefined
       ? null
@@ -3588,6 +3629,17 @@ export async function operatorPage(
                               wording.age(ago(selectedGovernance.askedAtMs, endedAtMs)),
                               selectedResult?.merged == null ? "closed" : "merged",
                             ),
+                      // **The other parts keep their state here** (D-0098
+                      // rule 8.3): answering one part is not all there is.
+                      others: (() => {
+                        const parts = partsOfRequest(selectedRoot);
+                        const others = parts.filter(
+                          (part) => governedLap === null || !holdsLap(part, governedLap.id),
+                        );
+                        return parts.length === 0 || others.length === 0
+                          ? null
+                          : wording.partsSaid(partCounts(others), true);
+                      })(),
                     }),
               // **What became of the work, as a state** (rondo#376): approved,
               // the pull request and its checks, and the merge that is the
@@ -3611,6 +3663,7 @@ export async function operatorPage(
               acts: actsMarkup === null ? null : Raw({ html: actsMarkup }),
               next: nextMarkup === null ? null : Raw({ html: nextMarkup }),
               answering: answeringBox === null ? null : Raw({ html: answeringBox }),
+              answeringLead: answeringBox === null ? null : questionLead,
               adding: addBox === null || addBox === undefined ? null : Raw({ html: addBox }),
             }),
           };
