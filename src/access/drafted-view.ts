@@ -17,9 +17,21 @@ import {
   type ScopeBudgets,
 } from "../advisory/budget.js";
 import { readSplitPayload, type SplitPlan } from "../advisory/proposal.js";
-import { type JsonRecord, namedRequests, type StoredScope } from "../store/records.js";
+import {
+  type JsonRecord,
+  namedRequests,
+  opensFlowRequest,
+  requestsGoal,
+  type ScopeRequests,
+  type StoredScope,
+  scopeCoversRequest,
+} from "../store/records.js";
 import type { AdvisoryRecord, ApprovedSplit } from "../store/sqlite.js";
-import { type DrafterMaterial, isModelDrafterName } from "./model-draft/judgement.js";
+import {
+  type DrafterMaterial,
+  isModelDrafterName,
+  MODEL_DRAFTER_PREFIX,
+} from "./model-draft/judgement.js";
 
 /** One drafted plan as the screen shows it: its words, where it runs, and its agent type. */
 export interface DraftedPlanShown {
@@ -160,25 +172,60 @@ async function undecided(
  * Every split an approval in force covers, once per request its scope names
  * (D-0127): approving a split's scope is the go, so these are the splits the
  * order tick starts, whether or not a part was pressed. A scope nothing was
- * drafted for is not a split and is not here.
+ * drafted for is not a split and is not here. A goal scope covers the newest
+ * split drafted for each request the flow host injected from its goal
+ * (rondo#469, D-0128 rule 5).
  */
 export async function approvedSplits(
-  ports: Ports & { readonly record: Pick<AdvisoryRecord, "readScope" | "approvalsInForce"> },
+  ports: Ports & {
+    readonly record: Pick<
+      AdvisoryRecord,
+      "readScope" | "approvalsInForce" | "threadMessages" | "latestSplitFor"
+    >;
+  },
 ): Promise<readonly ApprovedSplit[]> {
   const splits: ApprovedSplit[] = [];
   for (const approval of await ports.record.approvalsInForce()) {
     const read = await ports.record.readScope(approval.scopeId);
+    if (read.kind === "read" && requestsGoal(read.scope.payload.requests) !== null) {
+      splits.push(
+        ...(await goalSplits(ports, approval.scopeDecisionId, read.scope.payload.requests)),
+      );
+      continue;
+    }
     const drafted = read.kind === "read" ? await draftedPlansUnder(ports, read.scope) : null;
     if (read.kind !== "read" || drafted === null) {
       continue;
     }
-    // A goal scope names no split: nothing is drafted for it (D-0128).
     for (const requestMessageId of namedRequests(read.scope.payload.requests)) {
       splits.push({
         scopeDecisionId: approval.scopeDecisionId,
         proposalId: drafted.proposalId,
         requestMessageId,
       });
+    }
+  }
+  return splits;
+}
+
+/** The injected requests a goal scope covers, each with the newest split drafted for it. */
+async function goalSplits(
+  ports: { readonly record: Pick<AdvisoryRecord, "threadMessages" | "latestSplitFor"> },
+  scopeDecisionId: string,
+  requests: ScopeRequests,
+): Promise<readonly ApprovedSplit[]> {
+  const read = await ports.record.threadMessages();
+  if (read.kind !== "read") {
+    throw new Error(read.reason);
+  }
+  const splits: ApprovedSplit[] = [];
+  for (const message of read.messages) {
+    if (!opensFlowRequest(message) || !scopeCoversRequest(requests, message)) {
+      continue;
+    }
+    const proposalId = await ports.record.latestSplitFor(message.messageId, MODEL_DRAFTER_PREFIX);
+    if (proposalId !== null) {
+      splits.push({ scopeDecisionId, proposalId, requestMessageId: message.messageId });
     }
   }
   return splits;

@@ -3379,6 +3379,13 @@ surface that replaces all of that, and it is deliberately the smallest one that 
    > additive**. **"Never merges" no longer holds for a merge on green under a scope that includes
    > `merge_default_branch`**: the checks host merges such a lap through the press's own path. The
    > command line still never merges. Nothing below is edited.
+   > **Annotation (2026-09-27, from rondo#470).** Added after this entry was accepted, and **not
+   > additive**. **"Nothing here runs unless a person typed `publish`" and "no automatic path into
+   > it" no longer hold for a lap whose scope includes `push_branch` and `open_pull_request`**: the
+   > resident host publishes such a lap after its gate is answered `approve`, through the page
+   > press's own path (`D-0126`'s annotation from rondo#470). The authority `D-0010` places with the
+   > person is given where they approve the scope that includes both acts; the credential is still
+   > the operator's own `git` and `gh`. Nothing below is edited.
 
    **A closed iteration is not an approved one, and `publish` checks which it has.** `withdrawn`,
    `expired` and `unanswerable` each close a gate and therefore close the iteration, and none of
@@ -14565,6 +14572,10 @@ number.
    - `push_branch` and `open_pull_request` are **named and not writable** until the entry that
      supersedes `D-0025` rule 6 lets the organisation publish (`D-0064` section 6). Until then
      `publish` is typed by a person and writes no consumption.
+     > **Annotation (2026-09-27, from rondo#470).** Additive: both are writable, each claimed once
+     > per lap (subject the iteration id) before its leg of a publish under a scope
+     > (`D-0126`'s annotation from rondo#470). A person's `publish`, on the command line or the
+     > page, still writes no consumption.
    - A gate answer (`D-0064` O6) and `revise` get their kinds from the entry that opens O6, since
      both wait on continuo's delegated answer (`D-0064` rule 3.6).
 3. **`proposal_id` names the split proposal the admitted plan came from**, and is null for an
@@ -24962,6 +24973,30 @@ The expiry test in rule 2.1 is `D-0066` rule 1.2.4's, read as it is for every ac
 - **A person who opted in and then went to the forge to merge anyway**, for a reason rondo could have
   met: rule 2 is drawn on the wrong conditions.
 
+> **Annotation (2026-09-27, from rondo#470).** Added after this entry was accepted, and additive:
+> part 2, scoped publish, is built, and "What this does not do"'s first item is carried out.
+> `push_branch` and `open_pull_request` are writable act kinds. The resident host's publish pass
+> (`src/access/publish-host.ts`) runs on the one-minute tick and right after rondo answers a gate
+> under a scope (`D-0125`); it publishes a lap where all of these hold: the gate was answered
+> `approve`, by a person or by rondo (`approvedForPublication`, `D-0092`); the approved tip of the
+> lap's scope chain includes **both** acts and has not expired (the same reader as rule 2.1, with
+> both acts in place of the merge); nothing in the thread says it was published; its line still
+> holds it as the line's one closed tip; and `D-0066` rule 4.2's test for an act that carries a
+> lap's result onward holds -- no question waits over the line, and the latest model reading of the
+> lap's tip is there, readable and has no finding at or above the line an automatic approval keeps
+> (`D-0125`). The act is the page press's own path (`publishUnderScope`, `src/access/cli.ts`), in
+> the approver's name (`RONDO_APPROVER`, as the press), with nothing shown and nothing overruled:
+> every refusal of the press holds -- uncommitted work (`D-0060`), an unreadable `git status`
+> (`D-0099`) and the review's verdict, which only a person's `--despite-review` or second press
+> passes. **Claim, then act** as rule 3: the `push_branch` row (subject the iteration id) is
+> written after every read and right before the push, and the `open_pull_request` row right before
+> the pull request is opened, each asking rule 2.1 and 2.2 again first; one per lap whichever
+> approval claims it. A lap is tried once per process; a refusal or a failure is the person's press
+> from then on. The thread's published line reads "published by rondo under scope `<scope id>`",
+> the checks host is woken, and a green head then merges under rule 2 where the scope includes the
+> merge too, so the chain runs from approval to merge without a press. The text above is not
+> edited.
+
 ## D-0127 — Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended
 
 **Status:** accepted (2026-09-27, rondo#463; the owner's decision through the secretary: a request
@@ -25120,6 +25155,35 @@ the newest goal: an edit would widen an approval nobody re-read.
   picker's order is not the person's, and the goal scope is wider than it reads.
 - **Goal scopes paused more often than they run.** Then one approval per goal is still too coarse,
   and the pause is the per-request approval with more steps.
+
+> **Annotation (2026-09-27, from rondo#469).** Added after this entry was accepted, and additive:
+> rule 5's flow host is built (`src/access/flow-host.ts`). It runs in the resident host on the
+> one-minute tick, when a lap it started settles and when a merge is closed out, and only where
+> `D-0127`'s tick runs. Per repository it takes the newest approval in force over a goal of it, and
+> asks `pickNext`; on `inject` it writes the opener under the pick's id with author kind `drafter`
+> and author `rondo/flow/1` -- rondo's voice, never the person's -- body the ranked request followed
+> by "rondo started this because it goes against clause N of the goal", and bases the triage
+> proposal and the goal (no basis form locates an issue, so the issue is named in the body, and
+> the issue reader reads and quotes it as it does a person's: `D-0078` section 3.1's "a read answers
+> only an operator message" is widened by this one opener). **The
+> triage reading's model spend is the approval's**: the flow host claims it as a `scope_consumption`
+> row of a new act kind, `triage_reading` (subject the triage proposal id, one per reading whichever
+> approval claims it), before it writes the opener, and the scope's spend adds that reading's
+> `cost_usd` to what was read, for `reserve()`'s cost test and the lap's cap alike; the budgets are
+> asked again once the reading is counted, so a reading that leaves no room writes no request. What
+> the flow injected from the goal under an approval it replaced (a widening, a resume) is not asked
+> for again, and an earlier approval's failures do not stop the new one. The split
+> drafter treats the flow's opener as it treats a person's message (due, covered, stale) and, where
+> a goal scope covers it, drafts the split and no scope; `approvedSplits` gives the tick the newest
+> split drafted for each opener a goal scope in force covers, so the last bullet of *What it costs*
+> no longer holds. The flow host starts nothing. A stop -- the scope past its expiry, laps or cost, a
+> newer goal, two injected requests ended `failed` or `abandoned`, nothing left it may start -- is
+> one ask in the thread of the flow's latest request (widen, a new goal scope, or stop), named by
+> the approval, the reason and that request, written as `rondo/flow/1` so that it holds the flow and
+> no part of that request (`D-0066` rule 4.4's hold does not apply to it), and said on the terminal
+> where there is no request
+> yet. **A pause is not asked about**: `laps: 0` is already the person's answer. Nothing above is
+> edited.
 
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 

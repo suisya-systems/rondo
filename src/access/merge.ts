@@ -32,6 +32,8 @@ import {
   type JsonValue,
   latestReading,
   planField,
+  type ScopeOutwardAct,
+  type ScopePayload,
 } from "../store/records.js";
 import {
   type AdvisoryRecord,
@@ -160,7 +162,7 @@ export async function mergeOnGreen(
   if (ports.pressing?.has(iterationId) === true) {
     return null;
   }
-  const authority = await mergeAuthority(ports, iterationId);
+  const authority = await scopedAuthority(ports, iterationId, MERGE_ACTS);
   if (authority === null) {
     return null;
   }
@@ -175,7 +177,7 @@ export async function mergeOnGreen(
         // take time, and a scope that expired or an approved successor
         // without the merge in between authorises nothing.
         claim: async () => {
-          const now = await mergeAuthority(ports, iterationId);
+          const now = await scopedAuthority(ports, iterationId, MERGE_ACTS);
           if (now?.scopeDecisionId !== authority.scopeDecisionId) {
             return {
               kind: "refused",
@@ -197,19 +199,34 @@ export async function mergeOnGreen(
   }
 }
 
+const MERGE_ACTS: readonly ScopeOutwardAct[] = ["merge_default_branch"];
+
 /**
- * The approval a merge on green is made under, or null where there is none:
- * the lap's gate answered `approve`, and the approved tip of its scope chain
- * including the merge and not expired (D-0126 rules 2.1 and 2.2).
+ * The approval an act under a scope is made under, or null where there is
+ * none: the lap's gate answered `approve`, and the approved tip of its scope
+ * chain including every one of `acts` and not expired (D-0126 rules 2.1 and
+ * 2.2; a scoped publish's too, rondo#470).
  *
  * ponytail: read in steps and not in the claim's own statement, so an
  * approval written between the last read and the claim is not seen; the
  * window is one tick of the event loop. One query in the claim is the upgrade.
  */
-async function mergeAuthority(
-  ports: MergeOnGreenPorts,
+export async function scopedAuthority(
+  ports: {
+    readonly store: Pick<IterationStore, "read">;
+    readonly record: Pick<
+      AdvisoryRecord,
+      "scopeDecisionAdmitting" | "scopeTip" | "readScopeDecision" | "readScope"
+    >;
+    readonly now: () => number;
+  },
   iterationId: string,
-): Promise<{ readonly scopeDecisionId: string; readonly scopeId: string } | null> {
+  acts: readonly ScopeOutwardAct[],
+): Promise<{
+  readonly scopeDecisionId: string;
+  readonly scopeId: string;
+  readonly payload: ScopePayload;
+} | null> {
   const found = await ports.store.read(iterationId);
   if (found.kind !== "read" || !approvedForPublication(found.record)) {
     return null;
@@ -224,11 +241,15 @@ async function mergeAuthority(
   }
   const stored = await ports.record.readScope(decided.decision.scopeId);
   return stored.kind !== "read" ||
-    !stored.scope.payload.outward_acts.includes("merge_default_branch") ||
+    !acts.every((act) => stored.scope.payload.outward_acts.includes(act)) ||
     // D-0066 rule 1.2.4: an expired scope authorises nothing.
     stored.scope.payload.budgets.expires_at_ms <= ports.now()
     ? null
-    : { scopeDecisionId: tip.scopeDecisionId, scopeId: decided.decision.scopeId };
+    : {
+        scopeDecisionId: tip.scopeDecisionId,
+        scopeId: decided.decision.scopeId,
+        payload: stored.scope.payload,
+      };
 }
 
 /** The scope a merge on green is made under (D-0126). */
