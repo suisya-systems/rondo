@@ -84,6 +84,9 @@ test("what was agreed is on the face in full: the allowance, what is left, the t
   for (const said of [EN.stepWork, EN.stepChecks, EN.stepReading, EN.stepApproval, EN.stepLanding])
     expect(html).toContain(said);
   expect(html).toContain("side-step side-step-waiting");
+  // **A step is one of the things a redraw may move under a person** (rondo#494
+  // item 1), so it is marked for the wash `page/changed.js` draws.
+  expect(html).toContain('data-can-act="step"');
 });
 
 test("what is held for the try in progress is said beside the spend, and is not left", () => {
