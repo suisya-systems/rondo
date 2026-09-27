@@ -419,6 +419,8 @@ export function conductorPorts(
       const outcome = await performLap(
         continuo,
         lapRequestOf(plan, modelTier, budgetCapUsd),
+        // A failed write leaves no child pid, which the host reads as unknown
+        // and leaves to the plan's ceiling rather than calling the lap lost.
         (pid) => void store.markLapProcess(iterationId, { lapPid: pid }).catch(() => undefined),
       );
       return asEffect(outcome.result, (payload) => ({

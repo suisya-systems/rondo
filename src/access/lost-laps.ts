@@ -9,8 +9,9 @@
  * perform` child ({@link thisDriver}, `markLapProcess`); it is lost when that
  * host is this one and both pids are gone. A row that names another host, or
  * either pid still alive, is left as it is: that is D-0019 rule 12's hold, kept.
- * A row sent before the pids were written names none, and it is lost once it
- * has performed past its plan's `invocation_ceiling_ms`, which is as long as
+ * A row with no child pid (none spawned, or its write failed) or none at all
+ * (sent before the pids were written) is lost only once its driver is gone and
+ * it has performed past its plan's `invocation_ceiling_ms`, which is as long as
  * any rondo process would have waited for it.
  *
  * A lost lap ends `failed` with the kind `lost`: it holds no budget and is not
@@ -59,7 +60,12 @@ export function lapLost(
   if (lap.driverHost !== host || alive(lap.driverPid)) {
     return false;
   }
-  return lap.lapPid === null || !alive(lap.lapPid);
+  // No child recorded: none was spawned, or its pid was never written. Which
+  // one cannot be told, so the ceiling decides, as for a row with no pids.
+  if (lap.lapPid === null) {
+    return ceilingMs !== null && nowMs - lap.updatedAtMs > ceilingMs;
+  }
+  return !alive(lap.lapPid);
 }
 
 /** The id the one start again of a lost lap runs as, so a second pass finds it. */
@@ -157,7 +163,7 @@ async function endTheLost(ports: LostLapPorts): Promise<void> {
           "past its plan's invocation ceiling, and no process of it was recorded (D-0139)"
         : `the rondo process that sent the lap (pid ${String(lap.driverPid)} on ` +
           `${String(lap.driverHost)}) and its lap perform child ` +
-          `(${lap.lapPid === null ? "never recorded" : `pid ${String(lap.lapPid)}`}) are both ` +
+          `(${lap.lapPid === null ? "never recorded, and past its ceiling" : `pid ${String(lap.lapPid)}`}) are both ` +
           "gone, so nothing will record its answer (D-0139)";
     const status = await ports.end(lap.iterationId, reason);
     ports.log(`lost     lap '${lap.iterationId}' was lost: ${reason}`);
@@ -199,8 +205,8 @@ async function settleTheLost(ports: LostLapPorts, said: Set<string>): Promise<vo
     if ((await ports.store.read(againId(lap.id))).kind === "read") {
       continue;
     }
-    const asked = read.messages.some((message) => message.messageId === lostAskId(lap.id));
-    if (!asked) {
+    const asked = stopsOf(read.messages, lap.id);
+    if (asked.length === 0) {
       const started =
         ports.restart !== null && (await firstLoss(ports, lap)) && (await ports.byItself(lap))
           ? await ports.restart(lap)
@@ -219,13 +225,20 @@ async function settleTheLost(ports: LostLapPorts, said: Set<string>): Promise<vo
       }
       if (started !== null) {
         ports.log(`lost     lap '${lap.id}' was not started again: ${started.note}`);
+        // A scope that refused it has asked already, and one stop is enough:
+        // its *carry on* starts the lap again as the lost ask's would.
+        const now = await ports.record.threadMessages();
+        if (now.kind === "read" && stopsOf(now.messages, lap.id).length > 0) {
+          continue;
+        }
       }
       await tell(ports, lap, lostAskId(lap.id), true, ports.words.lapLostAsk);
       continue;
     }
     const carriedOn = read.messages.some(
       (message) =>
-        message.inReplyTo === lostAskId(lap.id) &&
+        message.inReplyTo !== null &&
+        asked.includes(message.inReplyTo) &&
         message.authorKind === "operator" &&
         message.answerOutcome === "carry_on",
     );
@@ -239,6 +252,31 @@ async function settleTheLost(ports: LostLapPorts, said: Set<string>): Promise<vo
       ports.log(line);
     }
   }
+}
+
+/**
+ * The stops standing for a lost lap: its own ask, and a scope's stop over its
+ * start again, which names it as the redo's predecessor (`stopTheLine`).
+ */
+function stopsOf(
+  messages: readonly {
+    readonly messageId: string;
+    readonly asks: boolean;
+    readonly bases: readonly Readonly<Record<string, unknown>>[];
+  }[],
+  lapId: string,
+): readonly string[] {
+  return messages
+    .filter(
+      (message) =>
+        message.messageId === lostAskId(lapId) ||
+        (message.asks &&
+          message.messageId.startsWith("scope-stop-") &&
+          message.bases.some(
+            (basis) => basis["form"] === "iteration" && basis["iterationId"] === lapId,
+          )),
+    )
+    .map((message) => message.messageId);
 }
 
 async function tell(

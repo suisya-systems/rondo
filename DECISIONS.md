@@ -25988,9 +25988,11 @@ nothing of it ran.
    sends it (`driver_host`, `driver_pid`), and then the pid of its `lap perform` child (`lap_pid`),
    through `markLapProcess`. **A `performing` lap is lost when its host is this host and both pids are
    gone** (a signal-0 probe; `EPERM` counts as alive). A row that names another host, or either pid
-   still alive, is left as it is: that is rule 12's hold, kept, and it fails closed. **A row sent
-   before these columns** names no pids. It is lost once it has performed past its plan's
-   `invocation_ceiling_ms` (option B), which is as long as any rondo process would have waited for it.
+   still alive, is left as it is: that is rule 12's hold, kept, and it fails closed. **A row with no
+   child pid** cannot tell a child that never spawned from one whose pid failed to be written. **A row
+   sent before these columns** names no pids at all. Either is lost only once its driver is gone
+   (where one is named) and it has performed past its plan's `invocation_ceiling_ms` (option B),
+   which is as long as any rondo process would have waited for it.
    The resident host reads for lost laps when it starts and on its minute tick (`lost-laps.ts`).
 2. **A lost lap ends `failed` with the failure kind `lost`** (`endLost`, the path `D-0109` rule 3's
    `endFaulted` takes). **It holds no budget and is not counted as unread** (`lapBudgetCapFor`,
@@ -26005,7 +26007,11 @@ nothing of it ran.
    2. **Otherwise, or when that start is refused**, the stop is asked in the thread, under `D-0110`
       rule 2's id (`lap-stopped-<id>`), with three options: start this part again (answer *carry on*;
       recommended), change the work (answer *stop*, then ask again with the change), or stop. A
-      *carry on* starts it again on the next tick.
+      *carry on* starts it again on the next tick. **Where the scope refused the start and asked its
+      own stop** (`stopTheLine`, which names the lost lap as the redo's predecessor), that stop is the
+      one asked: a *carry on* to it starts the lap again the same way, and no second ask is written.
+      The tick reads these from the rows, so a pass cut short between the end and the ask is finished
+      by the next.
    3. **The scope still decides.** A redo of a lost lap has no model reading to test, so `scopeVerdict`
       lets it past `Q-a`'s "no round to test" only for a lost predecessor and never for a closing lap.
       The laps and cost budgets before it still bound it.

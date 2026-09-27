@@ -43,8 +43,10 @@ test("a lap is lost only when, on this host, its driver and its child are both g
   expect(lapLost(lap({}), CEILING, 1, HOST, only(11))).toBe(false);
   // Another host's pids say nothing here.
   expect(lapLost(lap({ driverHost: "elsewhere" }), CEILING, 1, HOST, dead)).toBe(false);
-  // The driver died before it spawned anything.
-  expect(lapLost(lap({ lapPid: null }), CEILING, 1, HOST, dead)).toBe(true);
+  // No child recorded: none spawned, or its pid was never written. The ceiling decides.
+  expect(lapLost(lap({ lapPid: null }), CEILING, CEILING, HOST, dead)).toBe(false);
+  expect(lapLost(lap({ lapPid: null }), CEILING, CEILING + 1, HOST, dead)).toBe(true);
+  expect(lapLost(lap({ lapPid: null }), CEILING, CEILING + 1, HOST, only(10))).toBe(false);
   // Sent before the pids were written: its ceiling decides.
   const unmarked = lap({ driverHost: null, driverPid: null, lapPid: null });
   expect(lapLost(unmarked, CEILING, CEILING, HOST, dead)).toBe(false);
@@ -133,6 +135,7 @@ test("a restart while a lap performs: the lap is lost, holds nothing, and the st
   w.lap("lap-2", null);
   await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
   await w.store.markLapProcess("lap-2", { lapPid: 999_002 });
+  await w.store.markLapProcess("lap-2", { lapPid: 999_002 });
   await pass(portsOf(w));
   const ended = await row(w, "lap-2");
   expect(ended.status).toBe("failed");
@@ -149,6 +152,7 @@ test("a lap still driven, or of another host, is left performing", async () => {
   const w = await world(true);
   w.lap("lap-2", null);
   await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
+  await w.store.markLapProcess("lap-2", { lapPid: 999_002 });
   await pass(portsOf(w, { alive: (pid) => pid === 999_001 }));
   expect((await row(w, "lap-2")).status).toBe("performing");
   await w.store.markLapProcess("lap-2", { driverHost: "elsewhere", driverPid: 999_001 });
@@ -178,6 +182,7 @@ test("under a goal scope or an approved split it starts again by itself, once, a
     },
   });
   await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
+  await w.store.markLapProcess("lap-2", { lapPid: 999_002 });
   await pass(ports);
   expect(restarted).toEqual(["lap-2"]);
   const said = await messages(w);
@@ -188,6 +193,7 @@ test("under a goal scope or an approved split it starts again by itself, once, a
   // Its start again is lost too: not a second time by itself; the stop is asked.
   w.lap(againId("lap-2"), "lap-2");
   await w.store.markLapProcess(againId("lap-2"), { driverHost: HOST, driverPid: 999_003 });
+  await w.store.markLapProcess(againId("lap-2"), { lapPid: 999_004 });
   await pass(ports);
   expect(restarted).toEqual(["lap-2"]);
   expect((await messages(w)).map((m) => m.messageId)).toContain(lostAskId(againId("lap-2")));
@@ -197,6 +203,7 @@ test("a start again that is refused falls back to the stop ask", async () => {
   const w = await world(true);
   w.lap("lap-2", null);
   await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
+  await w.store.markLapProcess("lap-2", { lapPid: 999_002 });
   const ports = portsOf(w, {
     byItself: async () => true,
     restart: async () => ({ ok: false, note: "the budget is spent" }),
@@ -210,6 +217,7 @@ test("a person's carry on starts a lost lap again", async () => {
   const w = await world(true);
   w.lap("lap-2", null);
   await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
+  await w.store.markLapProcess("lap-2", { lapPid: 999_002 });
   const restarted: string[] = [];
   const ports = portsOf(w, {
     restart: async (lap) => {
@@ -247,4 +255,57 @@ test("a pass cut short after the end is finished by the next: the lost row is as
   // Asked once, not a second time on the next pass.
   await pass(portsOf(w));
   expect((await messages(w)).filter((m) => m.messageId === lostAskId("lap-2"))).toHaveLength(1);
+});
+
+test("a scope that refuses the start again asks once, and its carry on starts the lap", async () => {
+  const w = await world(true);
+  w.lap("lap-2", null);
+  await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
+  await w.store.markLapProcess("lap-2", { lapPid: 999_002 });
+  let refuse = true;
+  const tried: string[] = [];
+  const ports = portsOf(w, {
+    byItself: async () => true,
+    restart: async (lap) => {
+      tried.push(lap.id);
+      if (!refuse) return { ok: true, note: "admitted" };
+      // What `stopTheLine` writes for a refused redo: an ask naming the predecessor.
+      await w.record.recordThreadMessage({
+        messageId: "scope-stop-lap-2-again-20",
+        body: "Stopped: the scope's laps are spent.",
+        authorKind: "drafter",
+        authorId: "rondo/advisory/deterministic",
+        inReplyTo: "req-1",
+        atMs: 20,
+        bases: [
+          { form: "message", messageId: "req-1" },
+          { form: "iteration", iterationId: "lap-2" },
+        ],
+        asks: true,
+      });
+      return { ok: false, note: "the laps are spent" };
+    },
+  });
+  await pass(ports);
+  const ids = (await messages(w)).map((m) => m.messageId);
+  expect(ids).toContain("scope-stop-lap-2-again-20");
+  expect(ids).not.toContain(lostAskId("lap-2"));
+  // Standing: not tried again every minute.
+  await pass(ports);
+  expect(tried).toEqual(["lap-2"]);
+  refuse = false;
+  const answered = await w.record.recordThreadMessage({
+    messageId: "m-carry",
+    body: "Raised.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "scope-stop-lap-2-again-20",
+    atMs: 30,
+    bases: [],
+    asks: false,
+    answerOutcome: "carry_on",
+  });
+  expect(answered.kind).toBe("recorded");
+  await pass(ports);
+  expect(tried).toEqual(["lap-2", "lap-2"]);
 });
