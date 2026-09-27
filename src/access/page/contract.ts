@@ -44,6 +44,8 @@ export interface WebPorts extends InboxReadPorts {
     | "laneLedger"
     // D-0098 rule 1: whether a drafted plan's `first` has landed.
     | "landingOf"
+    // D-0125: a closing lap is never approved automatically.
+    | "closingLapOf"
   >;
   readonly record: InboxReadPorts["record"] &
     Pick<
