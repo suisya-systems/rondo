@@ -436,6 +436,46 @@ test("a successor approval keeps the goal's requests: nothing is asked for twice
   expect((await w.messages()).filter((m) => m.asks)).toEqual([]);
 });
 
+test("a successor approval's stop in an inherited thread holds it too", async () => {
+  const w = await world({}, [ranked(7)]);
+  await w.pass();
+  await w.drafted("split-1", first, 1);
+  w.lap("lap-1", first, "closed", 1);
+  const payload = goalPayload({ laps: 9 });
+  expect(
+    await w.record.recordScope({
+      scopeId: "s-wide",
+      payload,
+      supersedesScopeId: "s-goal",
+      authorKind: "operator",
+      authorId: "oidc|operator-1",
+      bases: [],
+      createdAtMs: 4,
+      agentTypeRecords: [],
+    }),
+  ).toEqual({ kind: "recorded" });
+  expect(
+    await w.record.recordScopeDecision({
+      scopeDecisionId: "sd-wide",
+      scopeId: "s-wide",
+      scopeDigest: contentDigest(payload),
+      outcome: "approved",
+      actorId: "oidc|operator-1",
+      recordedBy: "rondo/cli",
+      decidedAtMs: 5,
+    }),
+  ).toEqual({ kind: "recorded" });
+  // Nothing left: the successor asks in the thread the earlier approval opened.
+  await w.pass();
+  expect((await w.messages()).filter((m) => m.asks).map((m) => m.messageId)).toEqual([
+    `flow-stop-sd-wide-nothing_eligible-${first}`,
+  ]);
+  // A new candidate is ranked; the stop still stands unanswered.
+  await w.triage("t-2", 0, [ranked(7), ranked(8)]);
+  await w.pass();
+  expect((await w.messages()).filter((m) => m.inReplyTo === null)).toHaveLength(1);
+});
+
 test("the flow's opener names an issue the reader reads, as a person's message does", () => {
   const opener = {
     messageId: first,

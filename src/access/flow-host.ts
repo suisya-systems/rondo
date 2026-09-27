@@ -215,7 +215,11 @@ async function flowOne(
     }
     const own = opener.messageId.startsWith(prefix);
     const asked = asks.asks.length > 0;
-    ownOpenAsk ||= own && asked;
+    // This approval's own stop holds it in whichever request's thread it was
+    // asked, an inherited one included.
+    ownOpenAsk ||=
+      (own && asked) ||
+      asks.asks.some((ask) => ask.messageId.startsWith(stopPrefix(scopeDecisionId)));
     const state = await injectionState(ports, seen, opener.messageId, asked);
     injections.push({
       candidateKey: candidateKeyOf(opener.messageId),
@@ -352,6 +356,11 @@ function flowPrefix(scopeDecisionId: string): string {
   return `flow-${scopeDecisionId}-`;
 }
 
+/** How the stops an approval raises are named (`askStop`). */
+function stopPrefix(scopeDecisionId: string): string {
+  return `flow-stop-${scopeDecisionId}-`;
+}
+
 /**
  * The candidate an opener was injected for, read back from its id
  * (`flowMessageId`). The picker injects only issues, whose keys begin
@@ -435,7 +444,7 @@ async function askStop(
   if (latest === null) {
     return sayOnce(`stopped before its first request: ${detail}`);
   }
-  const messageId = `flow-stop-${flow.scopeDecisionId}-${reason}-${latest.messageId}`;
+  const messageId = `${stopPrefix(flow.scopeDecisionId)}${reason}-${latest.messageId}`;
   const outcome = await ports.record.recordThreadMessage({
     messageId,
     body: flowStopBody(flow, repository, reason, detail),
