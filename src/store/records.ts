@@ -563,7 +563,10 @@ export interface LapBudgetBasis {
   readonly readCostUsd: number;
   /** The sum of the caps of the unread laps that were sent with one: each holds its cap. */
   readonly heldCapsUsd: number;
-  /** Unread laps sent with no cap, or not sent yet: each holds `cost_reserve_usd`. */
+  /**
+   * Unread laps sent with no cap, not sent yet, or refused by continuo after
+   * they were sent (D-0152): each holds `cost_reserve_usd`.
+   */
   readonly unreadUncappedLaps: number;
   /** Laps running now (`performing`). */
   readonly runningLaps: number;

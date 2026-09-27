@@ -182,6 +182,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0147 | The goal flow's open question is in the person's turn: its block stays on the empty centre while another request waits on them | accepted |
 | D-0148 | A budget stop under a paused goal scope offers no raise; its box says the work is paused and links to resuming it | accepted |
 | D-0149 | Carrying on at a lap's stop starts that lap again: a lap stopped at its budget or its time limit runs again from its branch on the answer's own press, with the person's words, and an answer to a stop rondo starts again is not drafted | accepted |
+| D-0152 | A lap continuo refused before its cost was read holds its reserve at a lap's send, the number the page counts, and not its cap; reading a timed-out lap's cost is continuo's | accepted |
 
 ---
 
@@ -25625,6 +25626,11 @@ and a lap beside it is refused, so parallel work under one approval stops.
 - **An approval whose laps are usually run one at a time on a host with a second lane**: then the
   reserve kept for a partner is room nobody uses, and the free-lane count should read the queue.
 
+> **Annotation (2026-09-28, from D-0152).** Added after this entry was accepted, and additive. Rule
+> 2's "an unread lap holds its cap once it was sent with one" is narrowed by `D-0152`: a lap that
+> ended `failed` with failure kind `refusal` and no cost read holds its reserve instead. A running
+> lap, and every other unread lap sent with a cap, still holds its cap. Nothing above is edited.
+
 ## D-0131 — A drafter row covers an operator message only with the issue reads it held, so a read that lands after a draft makes its thread due again; and an issue reaches the drafter's document as its body and comments, cut from the head with the cut named
 
 **Status:** accepted (2026-09-27, rondo#313 point 1; the owner's answer through the secretary).
@@ -26913,3 +26919,62 @@ every press, and those stops still ask the person to look first.
 - **A split drafted from an answer to such a stop**: rule 3 is not holding.
 - **A retry started from such a stop that is not cut from where the line was** (supersedes null, or
   its branch not merged): rule 1's plan is not the one run.
+
+## D-0152 — A lap continuo refused before its cost was read holds its reserve at a lap's send, the number the page counts, and not its cap; reading a timed-out lap's cost is continuo's
+
+**Status:** accepted (2026-09-28, rondo#530; the recommended option, taken by the secretary while
+the owner was away). Narrows `D-0130` rule 2 by annotation. Refs `D-0066` rule 3.4.2, `D-0121`
+(option B), `D-0130`, `D-0139`, `continuo D-1112`.
+
+**Why an entry is needed.** On lap-19 (2026-09-28, rondo `1742c80`) lap-0734b1ca was sent with a
+cap of $171.70 under a $181.80 scope and stopped at continuo's 30-minute turn ceiling with no cost
+read. Its row ended `failed`, failure kind `refusal`, `lap_cost_usd` null, the cap still on it. By
+`D-0130` rule 2 it held that cap at every later send, so its retry was refused at once with $0 of
+room, while the page, which counts `cost_reserve_usd` per unread lap (`D-0066` rule 3.4.2), said
+$161.60 was left. Earlier the same night lap-9c0887f1 did the same with a $37.80 cap, and the next
+lap was sent with $2.18. Since each cap is what the budget leaves, one timed-out lap can take the
+rest of the budget from every lap after it.
+
+### What was measured
+
+At rondo `1742c80` and continuo `1894e08` on **2026-09-28**, in lap-19's store:
+
+- **A turn ceiling ends the lap as a refusal with its session named.** Both rows read "session …
+  did not finish its turn within 1800000ms", `status = 'failed'`, `failure_kind = 'refusal'`.
+- **continuo stops a session it still owns before it answers a refusal** (the interpreter's
+  `performStep`, which releases the single-flight lock on that ground). So a refused lap spends no
+  more. rondo's own ceiling firing is `noAnswer` and keeps the row `performing`; a lap failed as
+  rondo's `defect` may end without anything proving its worker stopped.
+- **The killed turn wrote no `result` event**, the only place its `total_cost_usd` is. Its cost
+  could be had only by pricing the transcript's token usage.
+
+### Decision
+
+1. **At a lap's send, an unread lap that ended `failed` with failure kind `refusal` holds
+   `cost_reserve_usd`**, the number the page counts for it, not its cap. A read lap counts what was
+   read; a lost lap holds nothing (`D-0139`); every other unread lap sent with a cap still holds
+   its cap, running or not (`D-0130` rule 2). That includes a `defect`, an `abandoned` lap whose
+   fenced child may still run, and a lap at its gate whose cost was not read.
+2. **rondo does not read a timed-out lap's cost from its transcript.** That is pricing
+   `stream-json` token usage in rondo, which `D-0121` option B declined and `continuo D-1112` moved
+   out. The follow-up is continuo's: to report a turn's spend on the ceiling's refusal, which rondo
+   would then read into `lap_cost_usd` as `D-0130` rule 5 does for a budget stop.
+
+**Options not taken.** Every `failed` or `closed` unread lap holds its reserve (Codex design
+review): a `failed` `defect` can come from a host exception with the worker not proven stopped.
+Keep the cap and change the page to show it: the page would then agree with a hold that starves the
+scope, which is what the issue is about.
+
+### What it costs
+
+- **The budget can be passed.** A refused lap may have spent anything up to its cap; holding only
+  its reserve gives the rest to the next lap again. With $50, a $5 reserve and two lanes, a lap sent
+  with $45 that spends $40 and times out leaves the next lap $40. Until continuo reports a stopped
+  turn's spend, the scope's budget is as good as the reserve is for such a lap, the same bound the
+  page and the admission (`D-0066` rule 3.4.2) already accept.
+
+### What would falsify it
+
+- **A refused lap whose worker kept spending** after continuo answered.
+- **Scopes passed by more than their reserves because of timed-out laps.** Then continuo's report of
+  a stopped turn's spend is needed before this rule is safe.
