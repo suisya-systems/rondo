@@ -66,6 +66,8 @@ interface World {
   kicked: number;
   /** What the press's path does with the claim (the real one claims before each leg). */
   legs: readonly ("push_branch" | "open_pull_request")[];
+  /** Run when the press's path starts, after the pass chose the lap. */
+  beforeLegs?: () => void;
 }
 
 const world = (laps: IterationRecord[]): World => ({
@@ -159,6 +161,7 @@ function host(w: World) {
     } as never,
     publish: async (iterationId: string, scoped: ScopedPublish) => {
       expect(scoped.scopeId).toBe("scope-1");
+      w.beforeLegs?.();
       for (const leg of w.legs) {
         const claimed = await scoped.claim(leg);
         if (claimed.kind !== "recorded") {
@@ -262,5 +265,16 @@ describe("publishHost (rondo#470)", () => {
       expect(w.claims).toEqual([]);
       expect(w.publishedIds).toEqual([]);
     }
+  });
+
+  test("a line the person releases while the push is read is not published (Codex round 1)", async () => {
+    const w = world([lap("i-1")]);
+    w.beforeLegs = () => {
+      w.released = true;
+    };
+    await pass(w);
+    expect(w.claims).toEqual([]);
+    expect(w.publishedIds).toEqual([]);
+    expect(w.lines[0]).toContain("no longer rondo's to publish");
   });
 });

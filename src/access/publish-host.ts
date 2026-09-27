@@ -99,72 +99,85 @@ export function publishHost(ports: PublishHostPorts): PublishHost {
 }
 
 async function publishDue(ports: PublishHostPorts, tried: Set<string>): Promise<void> {
-  const read = await ports.record.threadMessages();
-  if (read.kind !== "read") {
-    return;
-  }
-  const threads = threadsOf(read.messages, new Set(), new Map());
-  const ledger = await ports.store.laneLedger();
   for (const found of await ports.store.terminalIterations()) {
-    if (found.kind !== "read") {
+    if (found.kind !== "read" || tried.has(found.record.id)) {
       continue;
     }
-    const lap = found.record;
-    const line = ledger.find(
-      (held) =>
-        held.releasedBy === null && held.closedTips.length === 1 && held.closedTips[0] === lap.id,
-    );
-    if (
-      line === undefined ||
-      tried.has(lap.id) ||
-      !approvedForPublication(lap) ||
-      resultOf(threads.byId, lap.id) !== null ||
-      // D-0066 rule 4.2: no question waits on the person over the act's line.
-      (lap.requestMessageId !== null &&
-        askOverLine(threads, lap.requestMessageId, line.lapIds) !== null)
-    ) {
-      continue;
-    }
-    const authority = await scopedAuthority(ports, lap.id, PUBLISH_ACTS);
+    const lapId = found.record.id;
+    const authority = await publishable(ports, lapId);
     if (authority === null) {
       continue;
     }
-    // D-0066 rule 4.2: a push or a pull request is inside the scope only where
-    // the lap's model reading of its tip is there, readable and below the line,
-    // as for an automatic approval. A person's approval over a finding is
-    // theirs to publish on, with the press.
-    const readings = await ports.store.readingsFor(lap.id);
-    if (modelReason(readings, reviewedReading(readings), { payload: authority.payload }) !== null) {
-      continue;
-    }
-    tried.add(lap.id);
-    const published = await ports.publish(lap.id, {
+    tried.add(lapId);
+    const published = await ports.publish(lapId, {
       scopeId: authority.scopeId,
+      // **Everything is asked again at each claim** (Codex round 1): a line
+      // released, a question asked or a scope replaced while git and the
+      // forge were read authorises nothing.
       claim: async (actKind) => {
-        const now = await scopedAuthority(ports, lap.id, PUBLISH_ACTS);
+        const now = await publishable(ports, lapId);
         if (now?.scopeDecisionId !== authority.scopeDecisionId) {
           return {
             kind: "refused",
-            reason: "the scope that allowed the publish no longer does, or has been replaced",
+            reason: "it is no longer rondo's to publish under the scope that allowed it",
           };
         }
         return await ports.record.claimScopedAct({
           actKind,
           scopeDecisionId: authority.scopeDecisionId,
-          subjectId: lap.id,
+          subjectId: lapId,
           nowMs: ports.now(),
         });
       },
     });
     if (published.ok) {
-      ports.log(`publish  ${lap.id}: published by rondo under scope '${authority.scopeId}'`);
+      ports.log(`publish  ${lapId}: published by rondo under scope '${authority.scopeId}'`);
       ports.published();
     } else {
-      ports.log(
-        `publish  ${lap.id}: not published by rondo, left for the press: ${published.note}`,
-      );
+      ports.log(`publish  ${lapId}: not published by rondo, left for the press: ${published.note}`);
     }
   }
+}
+
+/** The approval a lap is published under now, or null where it is not rondo's to publish. */
+async function publishable(
+  ports: PublishHostPorts,
+  lapId: string,
+): Promise<Awaited<ReturnType<typeof scopedAuthority>>> {
+  const found = await ports.store.read(lapId);
+  if (found.kind !== "read" || !approvedForPublication(found.record)) {
+    return null;
+  }
+  const lap = found.record;
+  const line = (await ports.store.laneLedger()).find(
+    (held) =>
+      held.releasedBy === null && held.closedTips.length === 1 && held.closedTips[0] === lap.id,
+  );
+  const read = await ports.record.threadMessages();
+  if (line === undefined || read.kind !== "read") {
+    return null;
+  }
+  const threads = threadsOf(read.messages, new Set(), new Map());
+  if (
+    resultOf(threads.byId, lap.id) !== null ||
+    // D-0066 rule 4.2: no question waits on the person over the act's line.
+    (lap.requestMessageId !== null &&
+      askOverLine(threads, lap.requestMessageId, line.lapIds) !== null)
+  ) {
+    return null;
+  }
+  const authority = await scopedAuthority(ports, lap.id, PUBLISH_ACTS);
+  if (authority === null) {
+    return null;
+  }
+  // D-0066 rule 4.2: a push or a pull request is inside the scope only where
+  // the lap's model reading of its tip is there, readable and below the line,
+  // as for an automatic approval. A person's approval over a finding is
+  // theirs to publish on, with the press.
+  const readings = await ports.store.readingsFor(lap.id);
+  return modelReason(readings, reviewedReading(readings), { payload: authority.payload }) === null
+    ? authority
+    : null;
 }
 
 function describe(error: unknown): string {
