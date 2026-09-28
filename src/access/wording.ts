@@ -1426,6 +1426,14 @@ export interface Chrome extends PageWords {
    */
   readonly lapLostAsk: string;
   /**
+   * What the goal flow leaves in an injected request's thread when the drafter
+   * wrote no split for it (rondo#549): rondo could not draft the request's
+   * plan, nothing of its work has started, and it does not draft it again by
+   * itself. Asked, so the request stays the person's turn rather than
+   * disappearing while the flow asks for the goal's next one.
+   */
+  readonly flowDraftRefusedAsk: string;
+  /**
    * The same stop, when rondo could not end the lap either (D-0109 rule 3):
    * said as itself, because inviting somebody to start again over work that is
    * still holding its place would be the page lying about its own state.

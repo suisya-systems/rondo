@@ -16,6 +16,9 @@ import { type FlowHostPorts, flowHost } from "../../src/access/flow-host.js";
 import { flowStopOf } from "../../src/access/flow-stop.js";
 import { unreadIssues } from "../../src/access/issue-read.js";
 import { MODEL_DRAFTER_PREFIX } from "../../src/access/model-draft/judgement.js";
+import { threadsOf } from "../../src/access/page-logic/threads.js";
+import { waitsOnYou } from "../../src/access/page-logic/waits.js";
+import { JA } from "../../src/access/wording/ja.js";
 import { flowMessageId } from "../../src/advisory/flow.js";
 import { type TriagePayload, triagePayloadDocument } from "../../src/advisory/triage.js";
 import { contentDigest } from "../../src/store/plan.js";
@@ -164,6 +167,7 @@ async function world(budgets: Record<string, number> = {}, ranking = [ranked(7),
     },
     record,
     policy: { maxOccupying: 2, maxLive: 3 },
+    words: JA,
     now: () => nowMs,
     log: (line) => log.push(line),
     injected: () => {
@@ -415,15 +419,52 @@ test("rondo#549: two refused drafts are not two failures; the flow asks for the 
     second,
     third,
   ]);
-  expect(messages.filter((m) => m.asks)).toEqual([]);
+  // Each is said in its own thread instead (the test below), and neither is a
+  // stop of the flow.
+  expect(messages.filter((m) => m.asks).map((m) => m.messageId)).toEqual([
+    `flow-draft-refused-${first}`,
+    `flow-draft-refused-${second}`,
+  ]);
   // One that really failed beside them is one failure and not two: what stops
   // the flow here is the ranking running out, not the bound.
   await w.drafted("split-3", third, 1);
   w.lap("lap-3", third, "failed", 3);
   await w.pass();
   expect((await w.messages()).filter((m) => m.asks).map((m) => m.messageId)).toEqual([
+    `flow-draft-refused-${first}`,
+    `flow-draft-refused-${second}`,
     `flow-stop-sd-goal-nothing_eligible-${third}`,
   ]);
+});
+
+test("rondo#549: a refused draft is said in the request's thread, and stays the person's turn", async () => {
+  const w = await world({}, [ranked(7), ranked(8)]);
+  await w.pass();
+  await w.refused(first);
+  await w.pass();
+  const messages = await w.messages();
+  // Said in the request's own thread, in the operator's language (this host
+  // reads `ja`), and asking -- which is what puts the request under *your
+  // turn* (`waitsOnYou`), so it does not drop off the page unanswered.
+  const note = messages.find((m) => m.messageId === `flow-draft-refused-${first}`);
+  expect(note?.inReplyTo).toBe(first);
+  expect(note?.asks).toBe(true);
+  expect(note?.authorId).toBe(FLOW_AUTHOR);
+  expect(note?.body).toBe(JA.flowDraftRefusedAsk);
+  expect(note?.body).toContain("rondo はこの依頼の計画を下書きできませんでした");
+  expect(
+    waitsOnYou(threadsOf(messages, new Set(), new Map()), []).map((wait) => wait.root),
+  ).toEqual([first]);
+  // The flow went on to the goal's next request rather than stopping there,
+  // and the note is not written twice.
+  expect(messages.filter((m) => m.inReplyTo === null).map((m) => m.messageId)).toEqual([
+    first,
+    second,
+  ]);
+  await w.pass();
+  expect((await w.messages()).filter((m) => m.messageId.startsWith("flow-draft-refused-"))).toEqual(
+    [note],
+  );
 });
 
 test("rondo#549: a lap lost to a restart is not a failure; its start again says how the line ended", async () => {

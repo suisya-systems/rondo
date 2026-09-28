@@ -29,6 +29,12 @@
  * terminal. A pause is the person's own answer (`laps: 0`, D-0128 rule 4) and
  * is not asked about.
  *
+ * **A refused draft is said in its own thread** (rondo#549, `tellDraftRefused`):
+ * a request the drafter wrote no split for is not counted as a failure, and it
+ * is not passed over in silence either -- one message goes into its thread, in
+ * the operator's language, and asks, so the request stays the person's turn
+ * while the flow asks for the goal's next one.
+ *
  * **Open points are asked first** (rondo#487): when the candidate it would
  * inject has open points nobody answered, it records one ask with rondo's
  * suggestion for each (`flow_ask`), which the page draws beside the goal scope,
@@ -58,6 +64,7 @@ import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { type FlowStop, type FlowStopFacts, stopPrefix } from "./flow-stop.js";
 import { hostFailure } from "./host-failure.js";
 import { MODEL_DRAFTER_PREFIX } from "./model-draft/judgement.js";
+import type { Chrome } from "./wording.js";
 
 export interface FlowHostPorts {
   readonly store: Pick<IterationStore, "readLive" | "terminalIterations" | "occupancy">;
@@ -82,6 +89,8 @@ export interface FlowHostPorts {
     | "recordFlowAsk"
   >;
   readonly policy: Pick<HostPolicy, "maxOccupying" | "maxLive">;
+  /** The operator's own language, for the prose the flow leaves in a thread (D-0055). */
+  readonly words: Chrome;
   readonly now: () => number;
   readonly log: (line: string) => void;
   /** Called once a request is injected: the drafter's kick, so it is drafted now. */
@@ -223,12 +232,23 @@ async function flowOne(
     }
     const own = opener.messageId.startsWith(prefix);
     const asked = asks.asks.length > 0;
+    // **The refused draft's own note is not an ask that holds the flow**
+    // (rondo#549, the gate's second reading). It is written so the request
+    // stays the person's turn rather than vanishing, and the flow is free to
+    // ask for the goal's next request meanwhile -- exactly what `draft_refused`
+    // not being a failure says. Every other ask in an own thread holds it.
+    const holds = asks.asks.filter(
+      (ask) => ask.messageId !== draftRefusedNoteId(opener.messageId),
+    );
     // This approval's own stop holds it in whichever request's thread it was
     // asked, an inherited one included.
     ownOpenAsk ||=
-      (own && asked) ||
+      (own && holds.length > 0) ||
       asks.asks.some((ask) => ask.messageId.startsWith(stopPrefix(scopeDecisionId)));
     const state = await injectionState(ports, seen, opener.messageId, asked);
+    if (state === "draft_refused") {
+      await tellDraftRefused(ports, flow, repository, opener);
+    }
     injections.push({
       candidateKey: candidateKeyOf(opener.messageId),
       messageId: opener.messageId,
@@ -399,6 +419,62 @@ async function flowOne(
       `under scope '${scope.scopeId}'`,
   );
   ports.injected?.();
+}
+
+/**
+ * The id of the note rondo leaves when a request's draft was refused: one per
+ * request, so a pass that reads the same refusal again writes nothing.
+ */
+export function draftRefusedNoteId(requestMessageId: string): string {
+  return `flow-draft-refused-${requestMessageId}`;
+}
+
+/**
+ * **A request whose draft was refused is said, and stays the person's turn**
+ * (rondo#549, the gate's second reading).
+ *
+ * `draft_refused` is not counted as a failure, and that alone would leave the
+ * request where nobody looks: the flow would ask for the next candidate and
+ * this one would sit in the list as a request that never started, with nothing
+ * said about why. So one message goes into its thread, in the operator's own
+ * language (D-0055), asking -- which is what puts the request under *your turn*
+ * (`waitsOnYou`) -- and the flow carries on with the goal's other requests.
+ *
+ * It is written in the flow's own voice, so it holds no part of the request
+ * (`holdsNothing`), and it is skipped when `ownOpenAsk` is read, so the note
+ * does not become the stop it exists instead of. Drafting the request again by
+ * itself is rondo#554's and is deliberately not done here.
+ */
+async function tellDraftRefused(
+  ports: FlowHostPorts,
+  flow: Flow,
+  repository: string,
+  opener: ThreadMessageDraft,
+): Promise<void> {
+  const outcome = await ports.record.recordThreadMessage({
+    messageId: draftRefusedNoteId(opener.messageId),
+    body: ports.words.flowDraftRefusedAsk,
+    authorKind: "drafter",
+    authorId: FLOW_AUTHOR,
+    inReplyTo: opener.messageId,
+    atMs: ports.now(),
+    bases: [
+      { form: "message", messageId: opener.messageId },
+      { form: "goal", goalId: flow.goal.goalId },
+    ],
+    asks: true,
+  });
+  if (outcome.kind === "recorded") {
+    ports.log(
+      `flow     ${repository}: the draft of '${opener.messageId}' was refused; the person is told`,
+    );
+    return;
+  }
+  if (outcome.kind !== "duplicate") {
+    ports.log(
+      `flow     ${repository}: the refused draft of '${opener.messageId}' was not said: ${outcome.reason}`,
+    );
+  }
 }
 
 /** How a flow's request ids begin: `flowMessageId` without the candidate. */

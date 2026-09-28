@@ -1812,6 +1812,9 @@ export async function main(
             store,
             record,
             policy: bounds.policy,
+            // What it leaves in a request's thread is read by the person, so it
+            // is written in their language (D-0055, rondo#549).
+            words: chromeFor(selected.tag),
             now: Date.now,
             log: say,
             // Its issue is read first; the drafter waits on the read.

@@ -1256,6 +1256,17 @@ explanation you pressed on and then answers the gate.`,
     "Recommended: starting this part again.",
     "This line stays stopped until this message is answered.",
   ].join("\n"),
+  flowDraftRefusedAsk: [
+    "rondo could not draft a plan for this request, so none of its work has started. What was " +
+      "refused is the draft rondo wrote, and not your request.",
+    "Options:",
+    "- Saying the request another way and asking again. Gives up: nothing; this request stays as " +
+      "it is.",
+    "- Stopping this request (answer stop). Gives up: this request's work.",
+    "Recommended: saying the request another way and asking again.",
+    "rondo goes on asking for the goal's other requests, and does not draft this one again by " +
+      "itself.",
+  ].join("\n"),
   startStoppedSaid: [
     "Stopped: the work you started could not be kept running, so rondo has ended it.",
     "Nothing of it is running now, and the room it took on this host, the money held for it and " +
