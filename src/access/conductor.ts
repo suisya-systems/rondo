@@ -1481,8 +1481,9 @@ export type LapEvent =
  *   on the person; answering it lets rondo merge by itself.
  * - `notInScope` / `expired`: the approval the lap works under does not
  *   include the merge, or has run out; a press merges it.
- * - `claim`: the approval changed, or was already used, between the reads and
- *   the claim.
+ * - `claim`: the claim was refused: the approval was already used.
+ * - `scopeChanged`: the approval expired or was replaced between the reads and
+ *   the claim, which consumed nothing: a new approval merges on green again.
  * - `refused`: the forge or the pull request refused, as the press would.
  */
 export type MergeWithheld =
@@ -1490,16 +1491,21 @@ export type MergeWithheld =
   | { readonly why: "notInScope"; readonly scopeId: string }
   | { readonly why: "expired"; readonly scopeId: string; readonly expiresAtMs: number }
   | { readonly why: "claim"; readonly reason: string }
+  | { readonly why: "scopeChanged"; readonly reason: string }
   | { readonly why: "refused"; readonly refusal: MergeRefusal; readonly note: string };
 
 /**
  * What became of the one re-run of a red head's failed checks (rondo#551), one
  * arm per reason it was not made (AGENTS.md, rondo#348): `notActions` names
  * the failing checks no Actions run holds, `noScope` is no approval that
- * includes the merge, and `refused` is the forge's answer for one run.
+ * includes the merge, and `refused` is the forge's answer where it took no run.
  */
 export type ChecksRerun =
-  | { readonly kind: "ran" }
+  | {
+      readonly kind: "ran";
+      /** The runs the forge refused where it took others (rondo#551). */
+      readonly refused: readonly { readonly runId: number; readonly reason: string }[];
+    }
   | { readonly kind: "notActions"; readonly names: readonly string[] }
   | { readonly kind: "noScope" }
   | { readonly kind: "refused"; readonly runId: number; readonly reason: string };
@@ -2031,12 +2037,19 @@ function worktreeClause(one: WorktreeOutcome): string {
 function rerunBody(iterationId: string, event: Extract<LapEvent, { kind: "rerun" }>): string {
   const { outcome } = event;
   if (outcome.kind === "ran") {
-    const ids = event.failing.map((one) => String(one.checkRunId)).join(", ");
+    const refused = outcome.refused.map((one) => one.runId);
+    const ran = event.failing.filter((one) => one.runId !== null && !refused.includes(one.runId));
+    const ids = ran.map((one) => String(one.checkRunId)).join(", ");
     return (
       `Lap '${iterationId}' failed its checks, so rondo re-ran the failed checks ` +
-      `${named(event.failing.map((one) => one.name))} of pull request ${event.pullRequestUrl} ` +
+      `${named([...new Set(ran.map((one) => one.name))])} of pull request ${event.pullRequestUrl} ` +
       `on commit '${event.head}' once (check runs ${ids}). A re-run changes no code. If they ` +
-      "fail again, the thread offers the repair."
+      "fail again, the thread offers the repair." +
+      outcome.refused
+        .map(
+          (one) => ` The forge refused to re-run workflow run ${String(one.runId)}: ${one.reason}.`,
+        )
+        .join("")
     );
   }
   const why =
@@ -2074,6 +2087,7 @@ export function withheldSentence(withheld: MergeWithheld): string {
         press
       );
     case "claim":
+    case "scopeChanged":
       return `the approval did not allow the merge when it was claimed: ${withheld.reason}. ${press}`;
     default:
       return `${withheld.refusal}: ${withheld.note}. ${press}`;

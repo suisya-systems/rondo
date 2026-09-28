@@ -191,6 +191,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0156 | Only a judgment call at or above the scope's threshold keeps rondo from sending the drafted change; one below it is left out of what is sent, and the note names it | accepted |
 | D-0157 | A typed `revise` spends the approval the lap it revises was admitted under: `--scope-decision-id` overrides it, nothing to draw refuses, and no `revise` runs outside every approval | accepted |
 | D-0158 | A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press | accepted |
+| D-0159 | A red check on rondo's own pull request is rondo's to re-run once and the person's to have repaired on that pull request: the first red re-runs the failed Actions jobs once, a repair is a redo of the published lap pushed onto its head branch under the same approval, it is approved automatically only once its own runs showed the failure and then a pass, and a merge on green waits only on its own line and says when it waits | accepted |
 | D-0160 | Claims that let two lines run: a finished line nothing will publish gives its files up, a refused draft is drafted once more, and a start with no drafted claim claims nothing until its gate claims what it changed | accepted |
 
 ---
@@ -21966,6 +21967,10 @@ re-measure the claim.
 - **A verdict in the thread that `ci show` for the same pull request does not give**: rondo is
   judging again.
 
+> **Annotation (2026-09-29, from rondo#551).** Added after this entry was accepted, and additive:
+> the checks host also makes one `POST` per head, a re-run of the failed Actions jobs of the
+> first red on the lap's own head, under an approval that includes the merge (`D-0159` rule 1).
+
 ## D-0096 — The header's "Requests" link is closed, and a thread's `Esc` goes to the bare address: the link led to the new-request view the list already reaches, and the way back it carried on a thread moves to the logo
 
 **Status:** accepted (2026-09-22, rondo's owner, through the window, on a screenshot of the running
@@ -23389,6 +23394,11 @@ admitted, and this entry says so in one line (rule 1.2).
   `D-0042` rule 3's refusal of rebase is reopened there.
 - **A landed trigger that fires on the decision record**, or never fires on a real hand-over:
   rule 2.2's reading of "landed paths" is wrong.
+
+> **Annotation (2026-09-29, from rondo#551).** Added after this entry was accepted, and additive:
+> rule 3's press also repairs a red check on the lap's own head (`D-0159` rules 3 and 4). A red's
+> repair takes nothing in, names the failing checks and asks the worker to reproduce them first. A
+> red on a moved head is not offered.
 
 ## D-0106 — What a person acts on sits at the top of every screen, and the thread runs newest first: presses, boxes and decisions come before any history or long content, nothing is stuck to the window's foot, and the answering box keeps every element it inherited
 
@@ -25101,6 +25111,10 @@ At rondo `a8181d1` on **2026-09-27**, by reading:
 > the organisation's answer only, and a gate so answered leaves the person's list (`D-0036` rule 5).
 > Nothing above is edited.
 
+> **Annotation (2026-09-29, from rondo#551).** Added after this entry was accepted, and additive:
+> a repair lap adds two conditions, `repair_not_reproduced` and `tests_all_skipped` (`D-0159`
+> rule 5).
+
 ## D-0126 — Merge on green, opted into per scope: a scope may include `merge_default_branch`, and the checks host then merges a lap of it through the press's own path right after continuo reads the lap's own head green; `D-0064` rule 3.4's merge transition is taken, and `D-0025` rule 6's "never merges" gives way for such a merge
 
 **Status:** accepted (2026-09-27, rondo#465; the owner's decision of 2026-09-27, written in the
@@ -25228,6 +25242,13 @@ The expiry test in rule 2.1 is `D-0066` rule 1.2.4's, read as it is for every ac
 > the checks host is woken, and a green head then merges under rule 2 where the scope includes the
 > merge too, so the chain runs from approval to merge without a press. The text above is not
 > edited.
+
+> **Annotation (2026-09-29, from rondo#551).** Added after this entry was accepted, and **not
+> additive**: "a merge on green is tried once" and rule 5's "only the terminal says why" no longer
+> hold. The merge is asked on every scan while green stands on the lap's own head, until the claim
+> is spent or a refusal only a person or a new head changes is recorded. Each withheld merge is
+> written in the thread once per head and reason. Rule 3's one claim per lap is unchanged
+> (`D-0159` rule 7).
 
 ## D-0127 — Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended
 
@@ -26888,6 +26909,10 @@ picking one silently is what this issue is about.
   earlier line's changes are then wider than its claim, and the claim should come from its claim
   rows rather than its diff.
 
+> **Annotation (2026-09-29, from rondo#551).** Added after this entry was accepted, and additive:
+> a change request typed after a line is published still starts its own line under rule 3. Only
+> the repair press reaches the published pull request (`D-0159` rule 4).
+
 ## D-0147 — The goal flow's open question is in the person's turn: its block stays on the empty centre while another request waits on them
 
 **Status:** accepted (2026-09-28, rondo#522; observed on lap 19). Narrows `D-0097` point 4.1 (d)
@@ -27421,6 +27446,11 @@ merging past it is not what they were asked.
 - **A person who stopped one line and still expected a sibling line's merge to wait for them.**
   Then a stop over one line has to ask whether the request's other lines may still merge.
 
+> **Annotation (2026-09-29, from rondo#551).** Added after this entry was accepted, and **not
+> additive**: rules 1 and 2 are narrowed to the line. A question over another line no longer
+> holds the merge, answered or not, and neither does the flow host's stop. Only a lap of the same
+> line at its gate holds it, not a gate anywhere in the request (`D-0159` rule 6).
+
 ## D-0156 — Only a judgment call at or above the scope's threshold keeps rondo from sending the drafted change; one below it is left out of what is sent, and the note names it
 
 **Status:** accepted (2026-09-28, rondo#543; the issue's recommendation, taken through the secretary
@@ -27714,6 +27744,163 @@ At rondo `e72045f` on **2026-09-28**, by reading the code:
   lines have all released or ended. The tick or the row's key is then wrong.
 - **People pressing start again anyway**: then the waiting sentence is not being read as a wait,
   and the start form should say it in place, not only on the press's answer.
+
+## D-0159 — A red check on rondo's own pull request is rondo's to re-run once and the person's to have repaired on that pull request: the first red re-runs the failed Actions jobs once, a repair is a redo of the published lap pushed onto its head branch under the same approval, it is approved automatically only once its own runs showed the failure and then a pass, and a merge on green waits only on its own line and says when it waits
+
+**Status:** accepted (2026-09-29, rondo#551). Widens `D-0105` rules 3.1 to 3.3 from a conflict to
+a red check. Narrows `D-0155` rules 1 and 2 to the line. Replaces `D-0126`'s "tried once" and rule
+5's "only the terminal says why". Adds one `POST` to `D-0095` rule 1's reads. Adds two reasons to
+`D-0125`'s conditions. Refs `D-0027`, `D-0070`, `D-0072` rule 3, `D-0102`, `D-0104`, `D-0143`,
+`D-0146`, `D-0149`, rondo#469, rondo#548, rondo#555.
+
+### Context
+
+On lap 19 (2026-09-28, `~/rondo-lap-19`) rondo published pull request #548 and its checks went red.
+The checks host wrote the red into the thread, but the page gave it no next step and did not name
+the failing checks. The only way to act from the page was to type a change request, and that started
+lap-2c98 and lap-4350 on their own topic branches, as a later split does (`D-0146` rule 3). Nothing
+reached #548. When #548 went green later, the merge on green was withheld because a lap of another
+line of the same request was waiting at its gate: `mergeOnce` counted any gate of the request. It
+was said only on the terminal (`D-0126` rule 5) and never tried again (`D-0126`'s "tried once"). On
+#555 the green merge was held in the same silent way by the flow host's unanswered *failed twice*
+question (rondo#469). That question holds only the goal's next request.
+
+### Decision
+
+1. **A red on the lap's own head is re-run once, under the merge's approval** (`rerunOnce`,
+   `src/access/checks-host.ts`). The checks host writes the red answer as before. If the approved
+   tip of the lap's scope includes `merge_default_branch` and has not expired (`scopedAuthority`),
+   it asks the forge to re-run failed jobs (`POST .../actions/runs/<id>/rerun-failed-jobs`,
+   `rerunFailedJobs` in `src/access/forge.ts`) once for each distinct Actions run behind a failing
+   check run. A re-run changes no code, so no `scope_consumption` row is claimed. **One line per
+   head** (`report-rerun-<lap>-<head>`) records what happened:
+   1. `ran`: it names the re-run checks and the check-run ids that were red, and one sentence for
+      each run the forge refused where it took others.
+   2. `notActions`: a red check name that no failing Actions check run carries (a commit status or
+      another app's check), or no Actions run at all. Nothing is posted.
+   3. `noScope`: no approval that includes the merge. Nothing is posted.
+   4. `refused`: the forge refused every run.
+
+   Any line already written for that head ends the re-run for it. If an Actions run still has an
+   unfinished check run, the checks host asks again on the next scan, because the forge re-runs only
+   a finished run. A moved head (`D-0102`) is not re-run.
+2. **While a re-run is pending, the red is not said again and the repair is not offered.** The red
+   counts as not reached yet when all of these hold (`staleAfterRerun`): the `ran` line is on this
+   head and less than 30 minutes old (`RERUN_PATIENCE_MS`), every failing check run is one it named,
+   and no red check outside Actions stands. In that case the result reads `rerunning` and the fix
+   block reads `nothingToFix`. A new red on the new attempts, or the same red after 30 minutes, is
+   said again as a retold answer, and then the repair is offered.
+3. **A red check is the thread's next step, and the repair is the conflict fix's press** (`D-0105`
+   rule 3, `/fix-conflict`, `conflictFixBlock`):
+   1. The result band names the failing, cancelled and timed-out checks. It also says whether the
+      re-run was made, and if not, why. In the fold, the red answer is the person's while nothing
+      merged or closed the pull request and no later try is built on the lap.
+   2. The press is offered under the same conditions as a conflict fix: the line holds, no attempt
+      follows the lap, and no gate or question over this line waits. There is one more block,
+      `moved`: a red on a head the lap did not push is the person's to fix by hand, because a repair
+      cut from the lap's branch could not be pushed onto it.
+   3. The form carries the `cause` its card offered (`conflict` or `red`). The press reads the result
+      again (`fixCauseOf`) and starts nothing if the cause has changed.
+4. **A repair is a redo of the published lap, and it is pushed onto its pull request** (`D-0027`,
+   `D-0070`'s `redo`, `D-0105` rules 3.2 and 3.4). It is admitted under the approval the lap ran
+   under and counted against its budgets. It starts from the lap's own branch, which is the pull
+   request's head, and nothing is taken in (`takeIn: null`). Its prompt section (`--- The pull
+   request's checks failed ---`, `checksRepairSection` in `src/refrain/revision.ts`) names the
+   checks in rondo's words and tells the worker three things: reproduce the failure first, a run in
+   which every test is skipped reproduces nothing, and change nothing else. The repair stops at its
+   gate. Once approved, publishing it pushes onto the same pull request and opens none. The checks
+   host then reads that pull request for the repair, and rule 7 merges it on green.
+5. **A repair lap is approved automatically only if its own runs showed the failure and then a
+   pass** (`repairRuns` in `src/access/page-logic/laps.ts`, `gateAuto`). It is read from the
+   commands rondo recorded, with the same runner summaries as `D-0104`. `reproduced` means a test
+   run failed and a later run passed with at least one test that ran and did not end in error. A
+   last run that passed nothing and failed nothing adds `tests_all_skipped`. No readable run, or a
+   pass with no earlier failure, adds `repair_not_reproduced`. Every other `D-0125` condition still
+   applies. **A lap is a repair when the last lap-kind section of its prompt is the failing-checks
+   one** (`asksChecksRepair`). A revise or conflict fix after a repair adds its own section below
+   it, so it is not a repair. A retry of a stopped repair (`D-0143`, `D-0149`) adds a retry section
+   of another kind, so it still is one.
+6. **Only a lap of the same line waiting at its gate, or a question over that line, holds a merge**
+   (`mergeHold` in `src/access/merge.ts`, `askHoldingMerge` in `src/access/page-logic/result.ts`).
+   The press, the merge on green, the thread's merge card and the merge screen all ask the same
+   test. A question that names laps holds the merge only if one of them is in the line, whether it
+   was stopped or not answered. A question that names no lap holds the merge unless the flow host
+   asked it (`isFlowAuthor`).
+7. **A merge on green is asked on every scan while green stands on the lap's own head**, and a
+   withheld merge is said in the thread (`mergeOnGreen`, `withhold`). Each withheld merge writes one
+   line per head and reason, `report-withheld-<lap>-<head>-<token>` (`MergeWithheld`): `asked`
+   (naming the gate lap or the question), `notInScope`, `expired`, `claim`, `scopeChanged` (the
+   approval expired or was replaced between the reads and the claim, so nothing was consumed), or
+   the press's refusal key. A merge that did merge, a pull request that was merged or closed, and a
+   press already in flight write nothing. **The retry stops once the claim is spent, or once a
+   refusal only a person or a new head can change is recorded.** Those are `claim`,
+   `mergeRefusedFailed`, `mergeRefusedUnconfirmed`, `mergeRefusedQueue`, `mergeRefusedRetargeted`
+   and `mergeRefusedMethod` (`NOT_RETRIED`). The same head is then the press's. `D-0126` rule 3's
+   one claim per lap is unchanged. While the green stands, the withheld line is the person's in the
+   fold, except `notInScope`.
+
+### Options not taken
+
+- **A repair as a new request.** This is what happened on #548: it becomes a new line with its own
+  branch and its own pull request (`D-0146` rule 3), while the red one stays open. A change request
+  typed after a publish still starts a new request. Only the press reaches the pull request.
+- **A repair lap started without a press.** A repair spends budget and changes code on a pull
+  request the person approved as it was. The re-run changes no code and is automatic. The repair
+  stays a press, as the conflict fix is (`D-0105` rule 3.2).
+- **The re-run on the press.** The forge's own button already does that. A red that one re-run
+  clears is noise the person should not have to look at, and a re-run changes nothing a merge on
+  green would not already be trusted with.
+- **An outward act kind for the re-run** (`rerun_checks` in `SCOPE_OUTWARD_ACTS`). Every scope would
+  need a new digest and a new approval to opt in. A scope that may merge on green may already ask
+  for a green.
+
+### What it costs
+
+- **The re-run's hold is fixed at half an hour.** If the forge queues nothing, the red and the
+  repair wait up to 30 minutes. If a workflow runs longer than that, the red is said again and the
+  repair is offered while the re-run is still going. The workflow's own timeout is the upgrade.
+- **A red that mixes Actions and a commit status is not re-run at all** (`notActions`). Red checks
+  are matched to Actions check runs by name, so a commit status that shares a name with an Actions
+  job is missed.
+- **One re-run per head, not per lap.** Each head a repair pushes gets its own first re-run.
+- **A green is read again on every scan while it stands under a scope with the merge.** A refusal
+  that is retried, such as a transient `mergeRefusedForge` or `scopeChanged`, asks the forge again
+  on each scan until it merges or a person presses. A claim that failed with a database defect is
+  recorded as `claim`, so that retry stops.
+- **A repair reproduces only what the runner summaries show.** A failure outside a test runner rondo
+  reads (lint, type-check, build) cannot be shown reproduced, so such a repair's gate is always the
+  person's (`repair_not_reproduced`).
+- **A withheld merge from before this change is not written into the thread.** The next scan asks
+  it again and writes it then.
+
+### Annotations this entry adds
+
+- **`D-0105` rule 3**: the fix press also repairs a red check on the lap's own head. For a red it
+  takes nothing in and names the checks (this entry, rules 3 and 4).
+- **`D-0155` rules 1 and 2**: a question over another line no longer holds the merge, answered or
+  not, and neither does the flow host's stop. Only a gate of the same line holds it, not any gate of
+  the request (this entry, rule 6).
+- **`D-0126`**: "tried once" and rule 5's "only the terminal says why" no longer hold. The merge on
+  green is asked on every scan while green stands until the claim is spent, and a withheld merge is
+  said in the thread (this entry, rule 7).
+- **`D-0095` rule 1**: the checks host also makes one `POST` per head, the re-run of failed Actions
+  jobs, under the merge's approval (this entry, rule 1).
+- **`D-0125`**: a repair lap adds `repair_not_reproduced` and `tests_all_skipped` to the conditions
+  (this entry, rule 5).
+- **`D-0146` rule 3**: a change request typed after a line is published still starts its own line.
+  Only the repair press reaches the published pull request (this entry, rule 4).
+
+### What would falsify it
+
+- **A repair lap approved automatically whose recorded runs show no failure before its passing
+  run**, or a repair pushed anywhere other than the pull request it repairs: rules 4 and 5 are not
+  holding.
+- **Two re-run `POST`s for one head**, or a re-run under an approval without the merge: rule 1 is
+  not holding.
+- **A green on the lap's own head that nothing of its line holds, and that stays unmerged across
+  scans with no withheld line said**: rule 7 is not holding.
+- **Reds that one re-run does not clear but a second would**, often enough that people press the
+  forge's re-run before the repair: one re-run per head is then too few.
 
 ## D-0160 — Claims that let two lines run: a finished line nothing will publish gives its files up, a refused draft is drafted once more, and a start with no drafted claim claims nothing until its gate claims what it changed
 

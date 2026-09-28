@@ -757,6 +757,13 @@ test("D-0126: a scope that stops allowing the merge while the forge is read clai
   expect(await asking).toContain("no longer does");
   expect(world.claims).toEqual([]);
   expect(world.asked).toEqual([`view ${PR}`, "methods github.com/owner/name"]);
+  // rondo#551: nothing was consumed, so it is not the spent claim's arm, and
+  // a new approval on the same head merges on green again.
+  expect(
+    world.messages
+      .filter((message) => message.messageId.startsWith("report-withheld-"))
+      .map((message) => message.messageId),
+  ).toEqual([`report-withheld-lap-1-${TIP}-scopeChanged`]);
 });
 
 test("D-0126: a merge already claimed is not asked of the forge again", async () => {

@@ -184,6 +184,9 @@ export async function mergeOnGreen(
     return await withhold(ports, iterationId, head, { why: "expired", scopeId, expiresAtMs });
   }
   const authority = scope;
+  // A claim refused here consumed nothing (rondo#551): its own arm, so a new
+  // approval on the same head still merges on green.
+  let scopeChanged = false;
   ports.pressing?.add(iterationId);
   let merged: Merged & { readonly hold?: MergeHold };
   try {
@@ -198,6 +201,7 @@ export async function mergeOnGreen(
         claim: async () => {
           const now = await scopedAuthority(ports, iterationId, MERGE_ACTS);
           if (now?.scopeDecisionId !== authority.scopeDecisionId) {
+            scopeChanged = true;
             return {
               kind: "refused",
               reason: "the scope that allowed the merge no longer does, or has been replaced",
@@ -239,7 +243,7 @@ export async function mergeOnGreen(
     iterationId,
     head,
     merged.why === undefined
-      ? { why: "claim", reason: merged.note }
+      ? { why: scopeChanged ? "scopeChanged" : "claim", reason: merged.note }
       : { why: "refused", refusal: merged.why, note: merged.note },
   );
 }

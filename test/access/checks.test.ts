@@ -188,6 +188,8 @@ async function hostOver(options: {
     readonly pullRequest?: PullRequestFacts;
     readonly failing?: readonly FailingCheck[];
     readonly unfinishedRuns?: readonly number[];
+    /** The host's clock on this pass, where it is not `100 * (pass + 1)`. */
+    readonly atMs?: number;
   }[];
   /** The failing check runs the forge's document lists (rondo#551). */
   readonly failing?: readonly FailingCheck[];
@@ -196,7 +198,11 @@ async function hostOver(options: {
    * Given, the host re-runs failed checks (rondo#551): whether the lap's scope
    * allows it, and whether the forge refuses the `POST`.
    */
-  readonly rerun?: { readonly authorised: boolean; readonly refuse?: boolean };
+  readonly rerun?: {
+    readonly authorised: boolean;
+    /** Every `POST` refused, or only these run ids'. */
+    readonly refuse?: boolean | readonly number[];
+  };
   /** Run while the forge is being read, as a press starting then would. */
   readonly duringRead?: () => void;
   /** A message's body, where it is not the one the fixture composes. */
@@ -340,7 +346,8 @@ async function hostOver(options: {
             authorised: async () => options.rerun?.authorised === true,
             rerunFailedJobs: async (request: { readonly runId: number }) => {
               posts.push(request.runId);
-              return options.rerun?.refuse === true
+              const refuse = options.rerun?.refuse;
+              return refuse === true || (Array.isArray(refuse) && refuse.includes(request.runId))
                 ? {
                     kind: "refused" as const,
                     runId: request.runId,
@@ -355,7 +362,7 @@ async function hostOver(options: {
     log: () => {},
   });
   for (tick = 0; tick < (options.steps?.length ?? options.passes ?? 1); tick += 1) {
-    clock = 100 * (tick + 1);
+    clock = options.steps?.[tick]?.atMs ?? 100 * (tick + 1);
     host.kick();
     await host.idle();
   }
@@ -882,7 +889,7 @@ test("rondo#551: a first red under a merge scope re-runs each failed run once, a
     "report-checks-lap-1-green",
   ]);
   expect(over.written[1]?.body).toContain(
-    "rondo re-ran the failed checks 'build', 'lint', 'build' of pull request " +
+    "rondo re-ran the failed checks 'build', 'lint' of pull request " +
       "https://github.com/owner/name/pull/1 on commit 'commit-of-lap-1' once " +
       "(check runs 111, 222, 333)",
   );
@@ -916,6 +923,7 @@ test("rondo#551: a red that is not rondo's to re-run says why once, and is never
     {
       // Another app's check has no Actions run.
       options: {
+        reading: { ...RED, failed: ["ci/jenkins"] },
         failing: [{ checkRunId: 1, runId: null, name: "ci/jenkins" }],
         rerun: { authorised: true },
       },
@@ -940,7 +948,7 @@ test("rondo#551: a red that is not rondo's to re-run says why once, and is never
       options: { failing: FAILING, rerun: { authorised: true, refuse: true } },
       id: "refused",
       said: "the forge refused to re-run workflow run 9: HTTP 403 from the forge",
-      posts: [9],
+      posts: [9, 10],
     },
   ] as const;
   for (const one of cases) {
@@ -987,4 +995,105 @@ test("rondo#551: a run still going is re-run once it finishes, and a moved head 
   });
   expect(moved.posts).toEqual([]);
   expect(moved.written.some((one) => one.messageId.startsWith("report-rerun-"))).toBe(false);
+});
+
+test("rondo#551: a red commit status beside a failing Actions job is not re-run, and names the status", async () => {
+  const over = await hostOver({
+    reading: { ...RED, failed: ["build", "lint", "ci/status"] } as ChecksReading,
+    pullRequest: OPEN,
+    messageIds: PUBLISHED,
+    failing: FAILING,
+    rerun: { authorised: true },
+  });
+  expect(over.posts).toEqual([]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-1-red",
+    "report-rerun-lap-1-commit-of-lap-1-notActions",
+  ]);
+  expect(over.written[1]?.body).toContain("'ci/status' is not a GitHub Actions job");
+});
+
+test("rondo#551: a re-run the forge takes for some runs and refuses for others ran, and the refused run's red is said", async () => {
+  const over = await hostOver({
+    reading: RED,
+    pullRequest: OPEN,
+    messageIds: PUBLISHED,
+    rerun: { authorised: true, refuse: [10] },
+    steps: [
+      { reading: RED, pullRequest: OPEN, failing: FAILING },
+      { reading: RED, pullRequest: OPEN, failing: FAILING },
+    ],
+  });
+  expect(over.posts).toEqual([9, 10]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-1-red",
+    "report-rerun-lap-1-commit-of-lap-1",
+    // Check run 333 was in the refused run, so its red is not the re-run's.
+    "report-checks-lap-1-red-t200",
+  ]);
+  expect(over.written[1]?.body).toContain("(check runs 111, 222)");
+  expect(over.written[1]?.body).toContain(
+    "The forge refused to re-run workflow run 10: HTTP 403 from the forge.",
+  );
+});
+
+test("rondo#551: a re-run's red unanswered for half an hour is said red again, and the repair offered", async () => {
+  const over = await hostOver({
+    reading: RED,
+    pullRequest: OPEN,
+    messageIds: PUBLISHED,
+    rerun: { authorised: true },
+    steps: [
+      { reading: RED, pullRequest: OPEN, failing: FAILING },
+      { reading: RED, pullRequest: OPEN, failing: FAILING, atMs: 200 + 29 * 60 * 1000 },
+      { reading: RED, pullRequest: OPEN, failing: FAILING, atMs: 100 + 30 * 60 * 1000 },
+    ],
+  });
+  expect(over.posts).toEqual([9, 10]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-1-red",
+    "report-rerun-lap-1-commit-of-lap-1",
+    `report-checks-lap-1-red-t${String(100 + 30 * 60 * 1000)}`,
+  ]);
+});
+
+test("rondo#551: a re-run already on record for this head is not posted again after a restart", async () => {
+  const over = await hostOver({
+    reading: RED,
+    pullRequest: OPEN,
+    messageIds: [...PUBLISHED, "report-checks-lap-1-red", "report-rerun-lap-1-commit-of-lap-1"],
+    bodies: {
+      "report-rerun-lap-1-commit-of-lap-1":
+        "Lap 'lap-1' failed its checks, so rondo re-ran the failed checks 'build', 'lint' of " +
+        "pull request https://github.com/owner/name/pull/1 on commit 'commit-of-lap-1' once " +
+        "(check runs 111, 222, 333).",
+    },
+    failing: FAILING,
+    rerun: { authorised: true },
+  });
+  expect(over.posts).toEqual([]);
+  expect(over.written).toEqual([]);
+});
+
+test("rondo#551: a merge refusal only a person or a new head changes is not asked again each scan", async () => {
+  const said = ["request-1", "report-published-lap-1", "report-checks-lap-1-green"];
+  for (const token of ["mergeRefusedQueue", "mergeRefusedRetargeted", "mergeRefusedMethod"]) {
+    const over = await hostOver({
+      reading: GREEN,
+      pullRequest: OPEN,
+      messageIds: [...said, `report-withheld-lap-1-commit-of-lap-1-${token}`],
+      mergeOnGreen: null,
+    });
+    expect(over.mergesAsked).toEqual([]);
+  }
+  // A transient forge refusal, and an approval replaced before the claim, are.
+  for (const token of ["mergeRefusedForge", "scopeChanged"]) {
+    const over = await hostOver({
+      reading: GREEN,
+      pullRequest: OPEN,
+      messageIds: [...said, `report-withheld-lap-1-commit-of-lap-1-${token}`],
+      mergeOnGreen: null,
+    });
+    expect(over.mergesAsked).toEqual(["lap-1 commit-of-lap-1"]);
+  }
 });

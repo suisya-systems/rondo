@@ -679,6 +679,43 @@ test("rondo#551: a withheld merge's id names the lap at its gate, and the page r
   });
 });
 
+test("rondo#551: a re-run's head is read off its id, whatever its checks are called", () => {
+  const byId = new Map([
+    [
+      "report-rerun-i-1-abc1234",
+      {
+        body:
+          "Lap 'i-1' failed its checks, so rondo re-ran the failed checks 'deploy on commit 'zzz'' " +
+          `of pull request ${PR} on commit 'abc1234' once (check runs 111).`,
+        atMs: 5,
+      },
+    ],
+    [
+      "report-published-i-1",
+      { body: `Lap 'i-1' was published: pull request ${PR} was opened.`, atMs: 1 },
+    ],
+  ]);
+  expect(resultOf(byId, "i-1")?.rerun).toEqual({
+    head: "abc1234",
+    ran: true,
+    why: null,
+    checkRunIds: [111],
+    atMs: 5,
+  });
+  const notMade = new Map([
+    ...byId,
+    [
+      "report-rerun-i-1-abc1234-noScope",
+      { body: "Lap 'i-1' failed its checks on commit 'zzz'", atMs: 6 },
+    ],
+  ]);
+  expect(resultOf(notMade, "i-1")?.rerun).toMatchObject({
+    head: "abc1234",
+    ran: false,
+    why: "noScope",
+  });
+});
+
 test("rondo#551: only the flow host's own stop holds nothing; another rondo/flow/ author's question holds the merge", () => {
   const threads = (authorId: string) => ({
     waiting: new Set(["q-1"]),
@@ -1086,7 +1123,7 @@ test("rondo#551: while the one re-run stands, the page says so and offers no rep
   const world = await approved();
   await published(world);
   await checked(world, { kind: "red", failed: ["build"], cancelled: [], timedOut: [] });
-  await rerunOn(world, { kind: "ran" });
+  await rerunOn(world, { kind: "ran", refused: [] });
   const said = (html: string) => html.replaceAll("&#x27;", "'").replaceAll("&#39;", "'");
   const japanese = said(await fixing(world));
   expect(japanese).not.toContain("/fix-conflict?");

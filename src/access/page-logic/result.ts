@@ -207,10 +207,12 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
         };
       }
     } else if (id.startsWith(`report-rerun-${iterationId}-`)) {
-      // `<head>` where it ran, `<head>-<arm>` where it did not; the head is
-      // the one its sentence names.
-      const head = /on commit '([^']+)'/.exec(said.body)?.[1] ?? "";
-      const why = id.slice(`report-rerun-${iterationId}-${head}-`.length) || null;
+      // `<head>` where it ran, `<head>-<arm>` where it did not: read off the
+      // id, which a check's name in the body cannot reach.
+      const [, head = "", why = null] =
+        /^(.*?)(?:-(notActions|noScope|refused))?$/.exec(
+          id.slice(`report-rerun-${iterationId}-`.length),
+        ) ?? [];
       if (rerun === null || said.atMs >= rerun.atMs) {
         rerun = {
           head,

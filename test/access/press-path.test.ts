@@ -126,6 +126,7 @@ import { planDigest } from "../../src/store/plan.js";
 import { approvedForPublication, type JsonRecord } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { EVIDENCE, PLAN } from "./page-world.js";
+import { COMMITTING_WORKER, repairScenario } from "./repair-path.js";
 
 /** Whether this is a CI run, spelled as `vitest.config.ts` spells it (D-0003). */
 function inContinuousIntegration(): boolean {
@@ -1446,4 +1447,27 @@ publishPress(
     expect(await publishedLine(lap)).toBeUndefined();
   },
   PRESS_TIMEOUT_MS,
+);
+
+/**
+ * rondo#551's completion bar over the pinned build: a published pull request's
+ * check goes red, the thread says so, and the repair press lands a commit on
+ * that pull request's head branch, with no second pull request. The scenario
+ * is `repair-path.ts`'s, shared with `repair-path.test.ts`, which drives it over
+ * a stand-in continuo wherever this file cannot run; here every continuo verb
+ * is the pinned build's own. The worker's turn is continuo's fake worker behind
+ * `fixtures/committing-worker.mjs`, which commits once in the worktree first --
+ * the one thing the fake worker does not do, and what makes the lap's head the
+ * one its gate reading read (see that file's header).
+ */
+publishPress(
+  `a red check on rondo's own pull request is repaired from the page onto that pull request's head branch, over the real continuo (rondo#551)${publishSkipNote}`,
+  async () => {
+    await repairScenario({
+      label: "press-path",
+      environment: environmentFor(),
+      claudeCommand: [process.execPath, COMMITTING_WORKER, fakeWorker ?? ""],
+    });
+  },
+  PRESS_TIMEOUT_MS * 3,
 );

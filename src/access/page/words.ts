@@ -694,6 +694,8 @@ export const PAGE_EN: PageWords = Object.freeze({
         return `rondo did not merge ${pullRequest} by itself: the approval it works under has run out. ${press}`;
       case "claim":
         return `rondo did not merge ${pullRequest}: the approval changed, or was already used, while it was merging. ${press}`;
+      case "scopeChanged":
+        return `rondo did not merge ${pullRequest}: the approval ran out or was replaced while it was merging. ${press}`;
       default:
         return (
           `rondo did not merge ${pullRequest}, though its checks are green. ` +
@@ -1319,6 +1321,8 @@ export const PAGE_JA: PageWords = Object.freeze({
         return `${pullRequest} を rondo は自分ではマージしませんでした。いまの承認の期限が切れています。${press}`;
       case "claim":
         return `${pullRequest} を rondo はマージしませんでした。マージの途中で承認が変わったか、すでに使われていました。${press}`;
+      case "scopeChanged":
+        return `${pullRequest} を rondo はマージしませんでした。マージの途中で承認の期限が切れたか、置き換えられました。${press}`;
       default:
         return (
           `${pullRequest} のチェックは通っていますが、rondo はマージしませんでした。` +
