@@ -967,6 +967,17 @@ test("(fix-conflict) a person's press starts the fix once; a script, a stale for
     successor: "NOT AN ID",
   });
   expect(stale.status).toBe(400);
+  // The refusal is named for what the card offered (rondo#551).
+  expect(stale.body).toContain(EN.checksFixAction);
+  expect(stale.body).not.toContain(EN.conflictFixAction);
+  const staleConflict = await send(base, "/fix-conflict", "POST", person, {
+    ...form,
+    cause: "conflict",
+    successor: "NOT AN ID",
+  });
+  expect(staleConflict.status).toBe(400);
+  expect(staleConflict.body).toContain(EN.conflictFixAction);
+  expect(staleConflict.body).not.toContain(EN.checksFixAction);
   expect(fixed).toHaveLength(1);
   stop.abort();
   expect(await closed).toBe(0);

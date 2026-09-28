@@ -1058,21 +1058,50 @@ test("rondo#551: a re-run's red unanswered for half an hour is said red again, a
 });
 
 test("rondo#551: a re-run already on record for this head is not posted again after a restart", async () => {
+  // The stored re-run named other check runs, so the red now is not the one it
+  // is waiting on: said again, and only the re-run's own guard keeps it from a
+  // second `POST`.
   const over = await hostOver({
     reading: RED,
     pullRequest: OPEN,
     messageIds: [...PUBLISHED, "report-checks-lap-1-red", "report-rerun-lap-1-commit-of-lap-1"],
     bodies: {
       "report-rerun-lap-1-commit-of-lap-1":
-        "Lap 'lap-1' failed its checks, so rondo re-ran the failed checks 'build', 'lint' of " +
+        "Lap 'lap-1' failed its checks, so rondo re-ran the failed checks 'build' of " +
         "pull request https://github.com/owner/name/pull/1 on commit 'commit-of-lap-1' once " +
-        "(check runs 111, 222, 333).",
+        "(check runs 999).",
     },
     failing: FAILING,
     rerun: { authorised: true },
   });
   expect(over.posts).toEqual([]);
-  expect(over.written).toEqual([]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    expect.stringMatching(/^report-checks-lap-1-red-t\d+$/),
+  ]);
+});
+
+test("rondo#551: a red check outside Actions beside the re-run's own runs is said again at once", async () => {
+  const over = await hostOver({
+    reading: RED,
+    pullRequest: OPEN,
+    messageIds: PUBLISHED,
+    rerun: { authorised: true },
+    steps: [
+      { reading: RED, pullRequest: OPEN, failing: FAILING },
+      // The same check runs, and now a commit status no re-run reaches.
+      {
+        reading: { ...RED, failed: ["build", "lint", "ci/status"] } as ChecksReading,
+        pullRequest: OPEN,
+        failing: FAILING,
+      },
+    ],
+  });
+  expect(over.posts).toEqual([9, 10]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-1-red",
+    "report-rerun-lap-1-commit-of-lap-1",
+    "report-checks-lap-1-red-t200",
+  ]);
 });
 
 test("rondo#551: a merge refusal only a person or a new head changes is not asked again each scan", async () => {

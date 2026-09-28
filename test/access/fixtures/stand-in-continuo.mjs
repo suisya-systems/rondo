@@ -1,18 +1,19 @@
 // A stand-in for the pinned continuo's CLI, for the one page-path test that
 // has to run where the real one cannot (rondo#551, `repair-path.test.ts`).
 //
-// **What it is not.** It is not continuo: there is no control plane, no fence,
-// no lease and no worker. It answers the verbs rondo drives, in the documents
+// **What it is not.** It is not continuo: there is no control plane, no fence
+// and no lease. It answers the verbs rondo drives, in the documents
 // `src/continuo/protocol.ts` decodes, over a JSON file beside `--db`, and it
 // does the two things a lap does that rondo reads back afterwards: it cuts the
-// worktree from the base branch `run admit` named, and -- standing in for the
-// worker's turn -- commits one file there. Everything rondo does around it is
-// rondo's own code. `test/access/press-path.test.ts` drives the same scenario
+// worktree from the base branch `run admit` named, and runs the plan's worker
+// command (`--claude-command`) there for the worker's turn -- the test's
+// `committing-worker.mjs`, which is what commits. Everything rondo does
+// around it is rondo's own code. `test/access/press-path.test.ts` drives the same scenario
 // over the real pinned build, where CI provides one.
 //
 // Run by rondo's invoker as `node <this file> <verb> <noun> ...` once copied to
 // `<dir>/dist/cli.js`, which is the path shape the invoker accepts.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 // Written in by the test when it copies this file: the pinned build's own
@@ -123,7 +124,7 @@ switch (verb) {
     // spawns it (`cwd` is the workspace). Its exit is not read: a lap whose
     // worker did nothing is the test's to notice, as it is with continuo.
     const [program, ...prefix] = claudeCommand;
-    execFileSync(program, [...prefix, "-p", "the turn"], { cwd: run.workspace, stdio: "ignore" });
+    spawnSync(program, [...prefix, "-p", "the turn"], { cwd: run.workspace, stdio: "ignore" });
     run.status = "running";
     const gateId = `gate-${runId}`;
     state.gates[gateId] = { gateId, runId, stage: "received", outcome: null };

@@ -3219,16 +3219,18 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     const form = await c.req.parseBody();
     const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
     const request = typeof form["request"] === "string" ? form["request"] : "";
+    const cause = form["cause"];
+    // A red's repair is refused under its own name (rondo#551).
+    const red = cause === "red";
     if (revise === null || !revise.fixesConflicts) {
-      return conflictFixRefused(c, 403, "conflictFixRefusedNoApprover", request);
+      return conflictFixRefused(c, 403, "conflictFixRefusedNoApprover", request, red);
     }
     const minting = mintPress(c, form["token"]);
     if (!("press" in minting)) {
-      return conflictFixRefused(c, minting.status, "conflictFixRefusedPress", request);
+      return conflictFixRefused(c, minting.status, "conflictFixRefusedPress", request, red);
     }
     const successorId = form["successor"];
     const decision = typeof form["scope_decision"] === "string" ? form["scope_decision"] : "";
-    const cause = form["cause"];
     if (
       typeof successorId !== "string" ||
       !PAGE_ITERATION_ID.test(successorId) ||
@@ -3236,7 +3238,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       decision === "" ||
       (cause !== "conflict" && cause !== "red")
     ) {
-      return conflictFixRefused(c, 400, "conflictFixRefusedForm", request);
+      return conflictFixRefused(c, 400, "conflictFixRefusedForm", request, red);
     }
     const fixed = await revise.fixConflict(minting.press, {
       iterationId,
@@ -3250,6 +3252,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         409,
         fixed.why ?? "conflictFixRefusedNotStarted",
         request,
+        red,
         fixed.test ?? null,
         fixed.note,
       );
@@ -3494,6 +3497,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       | "conflictFixRefusedForm"
       | ConflictFixRefusal,
     requestMessageId: string,
+    red: boolean,
     test: string | null = null,
     note: string | null = null,
   ) {
@@ -3505,7 +3509,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     return pressRefused(
       c,
       status,
-      wording.conflictFixAction,
+      red ? wording.checksFixAction : wording.conflictFixAction,
       line,
       viewHref(
         requestMessageId === ""
