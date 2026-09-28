@@ -280,6 +280,24 @@ export interface ClosingLap extends ClosingLapSpend {
   readonly predecessorId: string;
 }
 
+/** A `held_start` outcome naming the wait a form joined (`joinHeldStart`). */
+const JOINED = "joined:";
+
+/**
+ * A person's scoped start refused by files another line holds, waiting to be
+ * attempted again by the resident host's tick (rondo#284, D-0158). Keyed by the
+ * iteration id the form minted, so the attempt is the press's own lap.
+ */
+export interface HeldStart {
+  readonly iterationId: string;
+  readonly requestMessageId: string;
+  readonly scopeDecisionId: string;
+  readonly planDigest: string;
+  /** The plan's repository as the ledger compares it ({@link repositoryKey}). */
+  readonly repository: string;
+  readonly heldAtMs: number;
+}
+
 /**
  * One approval, as the admission that spends it names it.
  *
@@ -743,6 +761,26 @@ export interface IterationStore {
    * null when it is an ordinary lap. Writes nothing.
    */
   closingLapOf(iterationId: string): Promise<ClosingLap | null>;
+  /**
+   * rondo#284: keep a start refused by held files as waiting, and say whether
+   * it waits. **A second refusal of the same form keeps the one row**, and one
+   * whose wait ended without a start waits again. **None is kept while another
+   * form of the same plan waits, or once one of them started it** (two tabs,
+   * two forms), or the tick would start the plan twice by itself.
+   */
+  recordHeldStart(held: HeldStart): Promise<boolean>;
+  /**
+   * Keep that `held`'s form joined the wait `joinedTo` (Codex round 4): a
+   * settled row under the form's own id, so the form sent again resolves to
+   * the wait's lap rather than starting the work under an id nothing reserved.
+   */
+  joinHeldStart(held: HeldStart, joinedTo: string): Promise<void>;
+  /** The wait a form joined ({@link joinHeldStart}), or null. Writes nothing. */
+  heldStartJoin(iterationId: string): Promise<string | null>;
+  /** The held starts still waiting, oldest first. Writes nothing. */
+  heldStarts(): Promise<readonly HeldStart[]>;
+  /** End a held start's wait with what its attempt came to; a settled one is left as it is. */
+  settleHeldStart(iterationId: string, outcome: string, nowMs: number): Promise<void>;
 }
 
 /** One split under an approval in force, and the request it answers (D-0127). */
@@ -1805,6 +1843,23 @@ CREATE TABLE IF NOT EXISTS closing_lap (
   reading_read_at_ms          INTEGER NOT NULL,
   findings                    TEXT    NOT NULL,
   created_at_ms               INTEGER NOT NULL
+);
+
+-- rondo#284, D-0158. A person's scoped start that the lane ledger refused
+-- because another line holds its files: kept here, by the iteration id its
+-- form minted, and attempted again by the resident host's tick until its
+-- files are free. settled_at_ms is null while it waits; outcome is 'started'
+-- or rondo's own sentence for the refusal that ended the wait. The one row
+-- written on a second refusal of the same form is the first.
+CREATE TABLE IF NOT EXISTS held_start (
+  iteration_id                TEXT    PRIMARY KEY,
+  request_message_id          TEXT    NOT NULL,
+  scope_decision_id           TEXT    NOT NULL,
+  plan_digest                 TEXT    NOT NULL,
+  repository                  TEXT    NOT NULL,
+  held_at_ms                  INTEGER NOT NULL,
+  settled_at_ms               INTEGER,
+  outcome                     TEXT
 );
 `;
 
@@ -2907,6 +2962,99 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       });
     },
 
+    async recordHeldStart(held: HeldStart): Promise<boolean> {
+      const key = [held.requestMessageId, held.scopeDecisionId, held.planDigest];
+      // Another row of the plan that waits, or whose wait already started it.
+      const taken =
+        "EXISTS (SELECT 1 FROM held_start WHERE request_message_id = ? AND " +
+        "scope_decision_id = ? AND plan_digest = ? AND iteration_id <> ? AND " +
+        "(settled_at_ms IS NULL OR outcome = 'started'))";
+      return immediateTransaction(connection, () => {
+        // Its own wait, ended without a start, waits again (Codex round 2).
+        connection
+          .prepare(
+            "UPDATE held_start SET settled_at_ms = NULL, outcome = NULL, held_at_ms = ? " +
+              "WHERE iteration_id = ? AND settled_at_ms IS NOT NULL AND outcome <> 'started' " +
+              `AND NOT ${taken}`,
+          )
+          .run(held.heldAtMs, held.iterationId, ...key, held.iterationId);
+        connection
+          .prepare(
+            "INSERT OR IGNORE INTO held_start (iteration_id, request_message_id, " +
+              "scope_decision_id, plan_digest, repository, held_at_ms) " +
+              `SELECT ?, ?, ?, ?, ?, ? WHERE NOT ${taken}`,
+          )
+          .run(held.iterationId, ...key, held.repository, held.heldAtMs, ...key, held.iterationId);
+        return (
+          connection
+            .prepare("SELECT 1 FROM held_start WHERE iteration_id = ? AND settled_at_ms IS NULL")
+            .get(held.iterationId) !== undefined
+        );
+      });
+    },
+
+    async joinHeldStart(held: HeldStart, joinedTo: string): Promise<void> {
+      connection
+        .prepare(
+          "INSERT INTO held_start (iteration_id, request_message_id, " +
+            "scope_decision_id, plan_digest, repository, held_at_ms, settled_at_ms, outcome) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
+            // The form's own wait ended without a start (Codex round 5): it
+            // joins now. One still waiting, or one that started, is left.
+            "ON CONFLICT(iteration_id) DO UPDATE SET settled_at_ms = excluded.settled_at_ms, " +
+            "outcome = excluded.outcome WHERE held_start.settled_at_ms IS NOT NULL AND " +
+            "held_start.outcome <> 'started'",
+        )
+        .run(
+          held.iterationId,
+          held.requestMessageId,
+          held.scopeDecisionId,
+          held.planDigest,
+          held.repository,
+          held.heldAtMs,
+          held.heldAtMs,
+          `${JOINED}${joinedTo}`,
+        );
+    },
+
+    async heldStartJoin(iterationId: string): Promise<string | null> {
+      const row = connection
+        .prepare("SELECT outcome FROM held_start WHERE iteration_id = ?")
+        .get(iterationId) as SqlRow | undefined;
+      const outcome = row === undefined ? "" : String(row["outcome"] ?? "");
+      return outcome.startsWith(JOINED) ? outcome.slice(JOINED.length) : null;
+    },
+
+    async heldStarts(): Promise<readonly HeldStart[]> {
+      return (
+        connection
+          .prepare(
+            "SELECT iteration_id, request_message_id, scope_decision_id, plan_digest, repository, " +
+              "held_at_ms FROM held_start WHERE settled_at_ms IS NULL " +
+              "ORDER BY held_at_ms, iteration_id",
+          )
+          .all() as SqlRow[]
+      ).map((row) =>
+        Object.freeze({
+          iterationId: String(row["iteration_id"]),
+          requestMessageId: String(row["request_message_id"]),
+          scopeDecisionId: String(row["scope_decision_id"]),
+          planDigest: String(row["plan_digest"]),
+          repository: String(row["repository"]),
+          heldAtMs: Number(row["held_at_ms"]),
+        }),
+      );
+    },
+
+    async settleHeldStart(iterationId: string, outcome: string, nowMs: number): Promise<void> {
+      connection
+        .prepare(
+          "UPDATE held_start SET settled_at_ms = ?, outcome = ? " +
+            "WHERE iteration_id = ? AND settled_at_ms IS NULL",
+        )
+        .run(nowMs, outcome, iterationId);
+    },
+
     async landingOf(iterationId: string): Promise<LineLanding | null> {
       const root = lineageOf(connection, iterationId)?.[0];
       if (root === undefined) {
@@ -3823,6 +3971,15 @@ const CHANGE_SOURCES = Object.freeze([
   },
   { kind: "setup_plan", table: "setup_plan", id: "setup_id", at: "recorded_at_ms" },
   { kind: "lane_claim", table: "lane_claim", id: "claim_id", at: "created_at_ms" },
+  // rondo#284: a held start's wait, and its end, which redraws the scope
+  // screen's start where the tick's attempt was refused for another reason.
+  // Mutable like `iteration`, so it contributes its latest clock.
+  {
+    kind: "held_start",
+    table: "held_start",
+    id: "iteration_id",
+    at: "COALESCE(settled_at_ms, held_at_ms)",
+  },
 ] as const);
 
 /**

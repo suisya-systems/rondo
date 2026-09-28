@@ -29,6 +29,7 @@ import { approvedSplits } from "../../src/access/drafted-view.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { draftedPlanRun } from "../../src/access/model-draft/host.js";
 import { type OrderHostPorts, orderHost } from "../../src/access/order-host.js";
+import type { Started } from "../../src/access/web-app.js";
 import type { SplitPayload } from "../../src/advisory/proposal.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan } from "../../src/refrain/plan.js";
@@ -126,6 +127,7 @@ function tick(after: readonly (number | undefined)[], answers: DraftedStartReadi
       started.push(index);
       return { ok: true, note: "" };
     },
+    held: null,
     now: () => 5,
     log: (line) => log.push(line),
   };
@@ -392,6 +394,201 @@ test("a held plan is attempted only when every holder has finished", async () =>
   expect(t.started).toEqual([1]);
 });
 
+test("a part the files hold again waits, said once rather than every minute (rondo#284)", async () => {
+  const run = { kind: "runnable" } as never;
+  const t = tick(
+    [undefined],
+    [
+      [
+        { kind: "ready", run },
+        { kind: "ready", run },
+      ],
+    ],
+  );
+  const host = orderHost({
+    ...t.ports,
+    start: async () => ({ ok: false, why: "startWaitsHeld", note: "Refused: held." }),
+  });
+  for (let n = 0; n < 2; n += 1) {
+    host.kick();
+    await host.settled();
+  }
+  expect(t.log).toEqual(["order    p-1 plan 0 waits: other work still holds its files"]);
+});
+
+test("a held start is attempted only where no line holding files in its repository runs, and a refusal other than held files ends its wait (rondo#284)", async () => {
+  const t = tick([], []);
+  const held = (iterationId: string, repository: string) => ({
+    iterationId,
+    requestMessageId: "r1",
+    scopeDecisionId: "sd-1",
+    planDigest: "sha256:p",
+    repository,
+    heldAtMs: 1,
+  });
+  const waiting = [
+    held("lap-busy", "/srv/a"),
+    held("lap-throws", "/srv/b"),
+    held("lap-no", "/srv/b"),
+  ];
+  const settled: [string, string][] = [];
+  const attempted: string[] = [];
+  const host = orderHost({
+    ...t.ports,
+    held: {
+      store: {
+        // No lap under a waiting id yet: the press has not started one.
+        read: async () => ({ kind: "absent" }) as never,
+        heldStarts: async () =>
+          waiting.filter((one) => !settled.some(([id]) => id === one.iterationId)),
+        settleHeldStart: async (id, outcome) => {
+          settled.push([id, outcome]);
+        },
+        laneLedger: async () => [
+          { repository: "/srv/a", paths: ["src/"], inFlight: true } as never,
+          // Finished, still holding: the attempt is where its landing is read.
+          { repository: "/srv/b", paths: ["/"], inFlight: false } as never,
+        ],
+        occupancy: async () => ({ live: 0, occupying: 0 }) as never,
+      },
+      policy: { maxOccupying: 2, maxLive: 6 },
+      retired: async () => null,
+      start: async (one) => {
+        attempted.push(one.iterationId);
+        if (one.iterationId === "lap-throws") throw new Error("the store is locked");
+        return { ok: false, why: "startRefusedOutside", note: "outside the scope" };
+      },
+    },
+  });
+  host.kick();
+  await host.settled();
+  // One start's failure does not stop the pass; the running line's start is not attempted.
+  expect(attempted).toEqual(["lap-throws", "lap-no"]);
+  expect(settled).toEqual([["lap-no", "outside the scope"]]);
+  expect(t.log).toEqual([
+    "order    lap-busy waits: other work in flight holds files it needs",
+    "order    lap-throws: the store is locked",
+    "order    lap-no: not started: outside the scope",
+  ]);
+  // The wait on a running line is said once, not every minute.
+  host.kick();
+  await host.settled();
+  expect(t.log.filter((line) => line.includes("lap-busy"))).toHaveLength(1);
+});
+
+test("a held start waits through a full host and a continuo not usable now, and ends only on a refusal waiting does not change (rondo#284)", async () => {
+  const t = tick([], []);
+  let occupying = 2;
+  // Each attempt's answer, and what the host holds once it has answered.
+  const answers: [Started, number][] = [];
+  const settled: [string, string][] = [];
+  let attempts = 0;
+  const one = {
+    iterationId: "lap-b",
+    requestMessageId: "r1",
+    scopeDecisionId: "sd-1",
+    planDigest: "sha256:p",
+    repository: "/srv/b",
+    heldAtMs: 1,
+  };
+  const host = orderHost({
+    ...t.ports,
+    held: {
+      store: {
+        // No lap under a waiting id yet: the press has not started one.
+        read: async () => ({ kind: "absent" }) as never,
+        heldStarts: async () => (settled.length === 0 ? [one] : []),
+        settleHeldStart: async (id, outcome) => {
+          settled.push([id, outcome]);
+        },
+        laneLedger: async () => [],
+        occupancy: async () => ({ live: occupying, occupying }) as never,
+      },
+      policy: { maxOccupying: 2, maxLive: 6 },
+      retired: async () => null,
+      start: async () => {
+        attempts += 1;
+        const [answer, after] = answers.shift() ?? [{ ok: true, note: "" }, occupying];
+        occupying = after;
+        return answer;
+      },
+    },
+  });
+  const pass = async () => {
+    host.kick();
+    await host.settled();
+  };
+  // Full: not attempted at all, and said once.
+  await pass();
+  await pass();
+  expect(attempts).toBe(0);
+  // Room, but continuo is not usable now: it waits on.
+  occupying = 1;
+  answers.push([{ ok: false, why: "startRefusedNoContinuo", note: "continuo is not usable" }, 1]);
+  await pass();
+  // Room when it looked, refused as another lap took the slot: it waits on.
+  answers.push([{ ok: false, why: "startRefusedNotAdmitted", note: "Refused: 2 of 2." }, 2]);
+  occupying = 1;
+  await pass();
+  expect(attempts).toBe(2);
+  expect(settled).toEqual([]);
+  // Room, and refused for a reason waiting does not change: the wait ends.
+  occupying = 1;
+  answers.push([{ ok: false, why: "startRefusedNoPlan", note: "no such plan" }, 1]);
+  await pass();
+  expect(settled).toEqual([["lap-b", "no such plan"]]);
+  expect(t.log).toEqual([
+    "order    lap-b waits: this host has no room for another lap",
+    "order    lap-b waits: continuo is not usable now",
+    "order    lap-b: not started: no such plan",
+  ]);
+});
+
+test("a held start whose approval was retired ends its wait even behind a line in flight, and is not attempted (rondo#284)", async () => {
+  const t = tick([], []);
+  const settled: [string, string][] = [];
+  let attempts = 0;
+  const host = orderHost({
+    ...t.ports,
+    held: {
+      store: {
+        read: async () => ({ kind: "absent" }) as never,
+        heldStarts: async () =>
+          settled.length === 0
+            ? [
+                {
+                  iterationId: "lap-old",
+                  requestMessageId: "r1",
+                  scopeDecisionId: "sd-old",
+                  planDigest: "sha256:p",
+                  repository: "/srv/b",
+                  heldAtMs: 1,
+                },
+              ]
+            : [],
+        settleHeldStart: async (id, outcome) => {
+          settled.push([id, outcome]);
+        },
+        // A line holding files in its repository runs: that alone would wait.
+        laneLedger: async () => [{ repository: "/srv/b", paths: ["/"], inFlight: true }] as never,
+        occupancy: async () => ({ live: 0, occupying: 0 }) as never,
+      },
+      policy: { maxOccupying: 2, maxLive: 6 },
+      retired: async () => "the approval 'sd-old' it waited under is no longer in force",
+      start: async () => {
+        attempts += 1;
+        return { ok: true, note: "" };
+      },
+    },
+  });
+  host.kick();
+  await host.settled();
+  expect(attempts).toBe(0);
+  expect(settled).toEqual([
+    ["lap-old", "the approval 'sd-old' it waited under is no longer in force"],
+  ]);
+});
+
 // ---------------------------------------------------------------------------
 // Over a real store: readiness, the press's refusal, and the admission on a landing.
 
@@ -588,6 +785,7 @@ test(
       start: async () => {
         throw new Error("nothing starts behind a first that did not land");
       },
+      held: null,
       now: () => 16_500,
       log: (said) => {
         throw new Error(said);

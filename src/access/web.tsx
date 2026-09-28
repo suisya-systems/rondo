@@ -2687,6 +2687,17 @@ async function threadActs(
       ? null
       : await scopeStanding(ports, requestMessageId);
   const drafting = standing !== null && draftingOver(standing, owes(requestMessageId));
+  // **A start that other work's files hold is waiting** (rondo#284, D-0158):
+  // the host's tick starts it by itself, so the step is not the person's.
+  // Under the approval in force only: a wait kept under one since replaced
+  // will not start, and must not hide the new approval's start (Codex).
+  const waitsHeld =
+    (standing?.kind === "decided" || standing?.kind === "own") &&
+    (await ports.store.heldStarts()).some(
+      (held) =>
+        held.requestMessageId === requestMessageId &&
+        held.scopeDecisionId === standing.scopeDecisionId,
+    );
   const scopeHref = (decisionId: string | null) =>
     viewHref(
       { kind: "scope", messageId: requestMessageId, rounds: null, decisionId, plan: null },
@@ -2806,6 +2817,13 @@ async function threadActs(
       <p class="mt-1 text-body leading-6">{wording.nextStepDrafting}</p>
     </section>
   );
+  // The same neutral card for a start rondo keeps waiting (rondo#284).
+  const waitsCard = (
+    <section class="next-step mb-4 rounded-lg border border-run/35 bg-run-wash px-4 py-3">
+      <h2 class="text-meta leading-5 font-semibold text-run-ink">{wording.nextStepRondoHeading}</h2>
+      <p class="mt-1 text-body leading-6">{wording.startWaitsHeld}</p>
+    </section>
+  );
   const next =
     unheld !== null
       ? unheldCard(unheld)
@@ -2839,27 +2857,29 @@ async function threadActs(
                 ? null
                 : drafting
                   ? draftingCard
-                  : standing.kind === "decided" || standing.kind === "own"
-                    ? card(
-                        `scope-${requestMessageId}`,
-                        // A drafted approval's screen is reached without its decision,
-                        // which is how that screen also offers a newer draft beside it
-                        // (Codex); the person's own approval is named, since that
-                        // screen finds only rondo's drafts by itself.
-                        scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
-                        wording.nextStepStart,
-                        wording.nextStepStartAction,
-                      )
-                    : card(
-                        `scope-${requestMessageId}`,
-                        scopeHref(null),
-                        standing.kind === "drafted"
-                          ? wording.nextStepDrafted
-                          : draftedNothing(threads, requestMessageId)
-                            ? wording.nextStepNoDraft
-                            : wording.nextStepScope,
-                        wording.scopeAction,
-                      );
+                  : waitsHeld
+                    ? waitsCard
+                    : standing.kind === "decided" || standing.kind === "own"
+                      ? card(
+                          `scope-${requestMessageId}`,
+                          // A drafted approval's screen is reached without its decision,
+                          // which is how that screen also offers a newer draft beside it
+                          // (Codex); the person's own approval is named, since that
+                          // screen finds only rondo's drafts by itself.
+                          scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
+                          wording.nextStepStart,
+                          wording.nextStepStartAction,
+                        )
+                      : card(
+                          `scope-${requestMessageId}`,
+                          scopeHref(null),
+                          standing.kind === "drafted"
+                            ? wording.nextStepDrafted
+                            : draftedNothing(threads, requestMessageId)
+                              ? wording.nextStepNoDraft
+                              : wording.nextStepScope,
+                          wording.scopeAction,
+                        );
   const others = publishable.filter((lap) => lap !== nextPublish);
   // **The request's work is still under way** (rondo#437): a lap running or at
   // its gate, or any approved try whose pull request is not yet merged

@@ -47,6 +47,8 @@ export interface WebPorts extends InboxReadPorts {
     // D-0098 rule 8.6: a closing fix, which the merge press names.
     // D-0125: a closing lap is never approved automatically.
     | "closingLapOf"
+    // rondo#284: a start held by files waits, and the scope screen says so.
+    | "heldStarts"
   >;
   readonly record: InboxReadPorts["record"] &
     Pick<

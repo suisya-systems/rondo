@@ -1225,10 +1225,16 @@ export interface Chrome extends PageWords {
   readonly planHeldWhy: (paths: readonly string[], why: string) => string;
   /** {@link planHeld} where every work holding them has finished. */
   readonly planHeldFinished: (paths: readonly string[]) => string;
-  /** Where that work has finished: starting reads whether it landed first. */
-  readonly planHeldTry: string;
-  /** A start refused because other work holds the files (D-0073 rule 3.1). */
+  /**
+   * A start refused because other work holds the files (D-0073 rule 3.1),
+   * where rondo could not keep it waiting: the person starts it again.
+   */
   readonly startRefusedHeld: string;
+  /**
+   * A start held by other work's files, which rondo starts by itself once they
+   * are free (rondo#284): the press's answer, and the scope screen's line.
+   */
+  readonly startWaitsHeld: string;
   readonly publishHeading: string;
   readonly publishLead: string;
   /** The lead where there is no press: the same fact, without the button's half. */

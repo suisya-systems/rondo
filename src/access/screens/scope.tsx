@@ -1542,10 +1542,10 @@ async function planStart(
     case "ready":
       return startForm();
     case "held": {
-      // **Who holds the files, by their request** (D-0076 rule 3.3), and the
-      // press only where every holder has finished: the attempt is where its
-      // landing is read (D-0073 rule 7), and a running holder cannot have landed.
-      // By the words the person wrote for the holding request (rondo#439).
+      // **Who holds the files, by their request** (D-0076 rule 3.3), and **no
+      // press**: the host's tick attempts it once every holder has finished,
+      // which is where its landing is read (D-0073 rule 7, rondo#284). By the
+      // words the person wrote for the holding request (rondo#439).
       const read = await ports.record.threadMessages();
       const messages = read.kind === "read" ? read.messages : [];
       const holders = await Promise.all(
@@ -1588,12 +1588,6 @@ async function planStart(
               )}
             </p>
           ))}
-          {finished ? (
-            <>
-              <p class="text-meta leading-5 text-muted-foreground">{wording.planHeldTry}</p>
-              {startForm()}
-            </>
-          ) : null}
         </div>
       );
     }
@@ -1722,6 +1716,32 @@ async function scopeApproved(
   // said, and the choice put again -- never swapped for another plan silently.
   const gone = view.plan !== null && (drawn === null || !allowedBy(payload, drawn));
   const runsOn = gone ? null : (drawn ?? (allowed.length === 1 ? (allowed[0] as HeldPlan) : null));
+  // **A start of this plan that other work's files hold waits** (rondo#284,
+  // D-0158): the host's tick starts it once they are free, so the screen says
+  // so, names the work in its way, and draws no second press.
+  const waits =
+    runsOn === null
+      ? undefined
+      : (await ports.store.heldStarts()).find(
+          (held) =>
+            held.requestMessageId === view.messageId &&
+            held.scopeDecisionId === decisionId &&
+            held.planDigest === runsOn.planDigest,
+        );
+  const threads = waits === undefined ? null : await ports.record.threadMessages();
+  const holding =
+    waits === undefined
+      ? []
+      : await Promise.all(
+          (await ports.store.laneLedger())
+            .filter((line) => line.repository === waits.repository && line.paths.length > 0)
+            .map(async (line) => {
+              const root = await ports.store.read(line.lineageId);
+              return root.kind === "read" && threads?.kind === "read"
+                ? requestWords(threads.messages, root.record)
+                : null;
+            }),
+        );
   return (
     <>
       {/* **That it is approved comes first** (D-0136, rondo#496): on lap 18 a
@@ -1756,6 +1776,18 @@ async function scopeApproved(
           {gone ? note(wording.scopePlanGone) : null}
           {planChoice(wording, view, allowed, null)}
         </>
+      ) : waits !== undefined ? (
+        <div id="start-waits" class="space-y-1.5">
+          {note(wording.startWaitsHeld)}
+          {holding.map((request) => (
+            <p class="flex flex-wrap items-baseline gap-x-2 text-body leading-5">
+              <span class="text-muted-foreground">{wording.planHeldBy}</span>
+              <span class="min-w-0 truncate" lang="">
+                {request === null ? "" : firstLine(request)}
+              </span>
+            </p>
+          ))}
+        </div>
       ) : (
         <form
           id="start-form"

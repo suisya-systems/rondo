@@ -526,6 +526,8 @@ export function post(
   base: string,
   form: Record<string, string>,
   headers: Record<string, string | undefined> = {},
+  /** The route pressed; the approve press's own by default. */
+  path = "/",
 ): Promise<{ status: number; body: string; location: string | undefined }> {
   const encoded = new URLSearchParams(form).toString();
   const sent = Object.fromEntries(
@@ -539,7 +541,7 @@ export function post(
   );
   return new Promise((resolve, reject) => {
     const request = httpRequest(
-      `${base}/`,
+      `${base}${path}`,
       {
         method: "POST",
         headers: {

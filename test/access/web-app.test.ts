@@ -2793,21 +2793,26 @@ function draftedPorts(
   } as unknown as ServedPorts;
 }
 
-test("(start-plan) rondo#439: a start refused by held files names the holding request and offers its release, with no terminal", async () => {
+test("(start-plan) rondo#439, rondo#284: a start held by files names the holding request and offers its release, with no terminal; one rondo keeps waiting is a 202 with no second press", async () => {
   const notThis = async () => await Promise.resolve({ ok: false, note: "not this route" });
-  const held = (release: boolean): ServedPorts =>
+  const held = (release: boolean, why: "startRefusedHeld" | "startWaitsHeld"): ServedPorts =>
     ({
       ...draftedPorts([], []),
       scope: new ScopePort(notThis, notThis, notThis, async () => ({
         ok: false,
         note: "Refused: held by line lap-14.",
-        why: "startRefusedHeld" as const,
+        why,
         holders: [{ lineageId: "lap-14", request: "Fix issue 200\nso the gate's report is kept" }],
       })),
       release: release ? new ReleasePort(async () => ({ ok: true, note: "" })) : null,
     }) as unknown as ServedPorts;
-  for (const release of [true, false]) {
-    const { base, stop, closed } = await served(createApp(held(release), TOKEN));
+  for (const [release, why, status] of [
+    [true, "startRefusedHeld", 409],
+    [false, "startRefusedHeld", 409],
+    [true, "startWaitsHeld", 202],
+    [false, "startWaitsHeld", 202],
+  ] as const) {
+    const { base, stop, closed } = await served(createApp(held(release, why), TOKEN));
     const refused = await send(
       base,
       "/start-plan?lang=ja",
@@ -2815,9 +2820,13 @@ test("(start-plan) rondo#439: a start refused by held files names the holding re
       pressHeaders(base),
       planStartForm(),
     );
-    expect(refused.status).toBe(409);
+    expect(refused.status).toBe(status);
     const body = refused.body.replaceAll("&#39;", "'");
-    expect(body).toContain(chromeFor("ja").startRefusedHeld);
+    expect(body).toContain(chromeFor("ja")[why]);
+    if (why === "startWaitsHeld") {
+      // It waits: nothing tells the person to start it again.
+      expect(body).not.toContain(chromeFor("ja").startRefusedHeld);
+    }
     // In the page's own frame: its stylesheet and its header (rondo#439).
     expect(body).toContain('<link rel="stylesheet" href="/app.css"/>');
     // The holder by the first line of the person's words for its request.
