@@ -19,6 +19,7 @@ import { MODEL_DRAFTER_PREFIX } from "../../src/access/model-draft/judgement.js"
 import { threadsOf } from "../../src/access/page-logic/threads.js";
 import { waitsOnYou } from "../../src/access/page-logic/waits.js";
 import { JA } from "../../src/access/wording/ja.js";
+import { type Chrome, EN } from "../../src/access/wording.js";
 import { flowMessageId } from "../../src/advisory/flow.js";
 import { type TriagePayload, triagePayloadDocument } from "../../src/advisory/triage.js";
 import { contentDigest } from "../../src/store/plan.js";
@@ -85,7 +86,11 @@ const proposal = (parts: Partial<ProposalDraft>): ProposalDraft => ({
   ...parts,
 });
 
-async function world(budgets: Record<string, number> = {}, ranking = [ranked(7), ranked(8)]) {
+async function world(
+  budgets: Record<string, number> = {},
+  ranking = [ranked(7), ranked(8)],
+  words: Chrome = EN,
+) {
   const connection = new DatabaseSync(":memory:");
   const record = advisoryRecord(connection);
   const laps: IterationRecord[] = [];
@@ -167,7 +172,7 @@ async function world(budgets: Record<string, number> = {}, ranking = [ranked(7),
     },
     record,
     policy: { maxOccupying: 2, maxLive: 3 },
-    words: JA,
+    words,
     now: () => nowMs,
     log: (line) => log.push(line),
     injected: () => {
@@ -400,8 +405,46 @@ test("two failed injections stop the flow, and the person is asked once in the l
   expect(asks.map((m) => [m.messageId, m.inReplyTo])).toEqual([
     [`flow-stop-sd-goal-failed_twice-${second}`, second],
   ]);
-  expect(asks[0]?.body).toContain("Stopped: rondo starts no further request toward the goal");
-  expect(asks[0]?.body).toContain("Recommended: stop");
+  expect(asks[0]?.body).toContain(EN.flowStopReason("failed_twice"));
+  expect(asks[0]?.body).toContain(`Recommended: ${EN.flowStopAskRecommended("failed_twice")}`);
+});
+
+test("the stop is asked in the person's language, and the terminal line stays English", async () => {
+  // rondo#549: the flow stops outside any request to the page, so the ask is
+  // written in the host's operator language (D-0079) and read as written.
+  const w = await world({}, [ranked(7), ranked(8), ranked(9)], JA);
+  await w.pass();
+  await w.drafted("split-1", first, 1);
+  w.lap("lap-1", first, "failed", 1);
+  await w.pass();
+  await w.drafted("split-2", second, 1);
+  w.lap("lap-2", second, "abandoned", 2);
+  await w.pass();
+  await w.pass();
+  const ask = (await w.messages()).find((m) => m.asks);
+  expect(ask?.messageId).toBe(`flow-stop-sd-goal-failed_twice-${second}`);
+  expect(ask?.body).toContain(JA.flowStopReason("failed_twice"));
+  expect(ask?.body).toContain(`おすすめ: ${JA.flowStopAskRecommended("failed_twice")}`);
+  expect(ask?.body).toContain(`${REPO} の目標に向けて`);
+  // Not a word of the English set is in it: the body is composed, not translated.
+  expect(ask?.body).not.toContain("Stopped");
+  expect(ask?.body).not.toContain(EN.flowStopReason("failed_twice"));
+  expect(w.log).toContain("flow     o/r: stopped (failed_twice); the person is asked");
+});
+
+test("a stop with facts says them in the person's language too", async () => {
+  // The cost, spent: the ask carries the figures as the goal's own screen
+  // carries them, from the same words, and the figures themselves are tokens.
+  const w = await world({}, [ranked(7), ranked(8)], JA);
+  await w.pass();
+  await w.drafted("split-1", first, 1);
+  w.lap("lap-1", first, "closed", 1);
+  await w.triage("t-2", 9);
+  await w.pass();
+  const ask = (await w.messages()).find((m) => m.asks);
+  expect(ask?.messageId).toBe(`flow-stop-sd-goal-cost-${first}`);
+  expect(ask?.body).toContain(JA.flowStopReason("cost"));
+  expect(ask?.body).toContain(JA.flowStopCostOver("10.50", "12.50", "10.00"));
 });
 
 test("rondo#549: two refused drafts are not two failures; the flow asks for the next request", async () => {
@@ -438,7 +481,7 @@ test("rondo#549: two refused drafts are not two failures; the flow asks for the 
 });
 
 test("rondo#549: a refused draft is said in the request's thread, and stays the person's turn", async () => {
-  const w = await world({}, [ranked(7), ranked(8)]);
+  const w = await world({}, [ranked(7), ranked(8)], JA);
   await w.pass();
   await w.refused(first);
   await w.pass();
@@ -507,8 +550,8 @@ test("the scope's cost, triage readings included, stops the flow before the requ
   expect(messages.filter((m) => m.inReplyTo === null).map((m) => m.messageId)).toEqual([first]);
   const asks = messages.filter((m) => m.asks);
   expect(asks.map((m) => m.messageId)).toEqual([`flow-stop-sd-goal-cost-${first}`]);
-  expect(asks[0]?.body).toContain("triage readings included");
-  expect(asks[0]?.body).toContain("Recommended: widen the scope");
+  expect(asks[0]?.body).toContain(EN.flowStopCostOver("10.50", "12.50", "10.00"));
+  expect(asks[0]?.body).toContain(`Recommended: ${EN.flowStopAskRecommended("cost")}`);
 });
 
 test("a successor approval keeps the goal's requests: nothing is asked for twice, and an old failure does not stop it", async () => {
@@ -704,7 +747,7 @@ test("a newer goal stops the flow: an edited goal is approved again", async () =
   await w.pass();
   const asks = (await w.messages()).filter((m) => m.asks);
   expect(asks.map((m) => m.messageId)).toEqual([`flow-stop-sd-goal-newer_goal-${first}`]);
-  expect(asks[0]?.body).toContain("a new goal scope over the newest goal");
+  expect(asks[0]?.body).toContain(`Recommended: ${EN.flowStopAskRecommended("newer_goal")}`);
 });
 
 test("nothing eligible stops the flow once, and the ask holds it", async () => {

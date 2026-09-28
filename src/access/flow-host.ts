@@ -61,7 +61,7 @@ import {
   type ThreadMessageDraft,
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
-import { type FlowStop, type FlowStopFacts, stopPrefix } from "./flow-stop.js";
+import { type FlowStopFacts, flowStopBody, stopPrefix } from "./flow-stop.js";
 import { hostFailure } from "./host-failure.js";
 import { MODEL_DRAFTER_PREFIX } from "./model-draft/judgement.js";
 import type { Chrome } from "./wording.js";
@@ -89,7 +89,18 @@ export interface FlowHostPorts {
     | "recordFlowAsk"
   >;
   readonly policy: Pick<HostPolicy, "maxOccupying" | "maxLive">;
-  /** The operator's own language, for the prose the flow leaves in a thread (D-0055). */
+  /**
+   * The operator's own language, for the prose the flow leaves in a thread
+   * (D-0055, D-0079): the host's operator language, since no request of the
+   * page is being answered when the flow writes. The terminal lines stay
+   * English.
+   *
+   * **The stop is said again where it is read** (rondo#549, the gate's third
+   * reading): what is written here is the record, and the page draws the stop
+   * from its `flow_stop` row in the language of whoever is looking
+   * (`flowStopView`), so a host that reads English does not force an English
+   * ask onto a person reading the page in Japanese.
+   */
   readonly words: Chrome;
   readonly now: () => number;
   readonly log: (line: string) => void;
@@ -619,9 +630,30 @@ async function askStop(
     );
   }
   const messageId = `${stopPrefix(flow.scopeDecisionId)}${reason}-${latest.messageId}`;
+  // **The stop's facts are kept beside the ask, under the ask's own id**
+  // (rondo#549, the gate's third reading). The body below is one language's
+  // wording of them -- the host's -- and the person reading the thread may have
+  // chosen another, so the page says the stop again from these fields
+  // (`flowStopAskedFacts`). Recorded first, so an ask is never on the page
+  // without the facts it would be re-said from; a row whose ask then fails to
+  // write is read by nothing, since `flowStopOf` reads rows only before the
+  // approval's first request and one exists here.
+  const kept = await ports.record.recordFlowStop({
+    stopId: messageId,
+    scopeDecisionId: flow.scopeDecisionId,
+    repository,
+    facts: facts as unknown as JsonRecord,
+    atMs: ports.now(),
+  });
+  // `refused` here is the id already spoken for -- the flow stops again on
+  // every pass until the ask is answered -- and is this caller's success, as
+  // `duplicate` is for the message below.
+  if (kept.kind === "defect") {
+    sayOnce(`stopped (${reason}), and its facts were not kept: ${kept.reason}`);
+  }
   const outcome = await ports.record.recordThreadMessage({
     messageId,
-    body: flowStopBody(flow, repository, reason, detail),
+    body: flowStopBody(ports.words, repository, facts),
     authorKind: "drafter",
     // The flow's own voice, so the ask holds the flow and no part of the
     // request it is asked in (`holdsNothing`).
@@ -641,41 +673,5 @@ async function askStop(
   }
   if (outcome.kind !== "duplicate") {
     sayOnce(`stopped (${reason}), and the question was not written: ${outcome.reason}`);
-  }
-}
-
-/** The stop's words, in the scope stop's layout (`stopBody`, D-0066 rule 4.4). */
-export function flowStopBody(
-  flow: Flow,
-  repository: string,
-  reason: FlowStop,
-  detail: string,
-): string {
-  return [
-    `Stopped: rondo starts no further request toward the goal for ${repository} under scope ` +
-      `'${flow.scope.scopeId}' (decision '${flow.scopeDecisionId}'): ${detail}.`,
-    "Options:",
-    "- Widen the scope (a successor scope, D-0066 rule 1.4). Gives up: nothing of the goal; " +
-      "rondo waits until a person approves the new budget or expiry.",
-    "- A new goal scope. Gives up: this approval; the flow starts again under the new one, " +
-      "with its own budget.",
-    "- Stop. Gives up: the rest of the goal's work; requests already started carry on.",
-    `Recommended: ${stopRecommendation(reason)}.`,
-    "Nothing further is started toward the goal until this message is answered.",
-  ].join("\n");
-}
-
-function stopRecommendation(reason: FlowStop): string {
-  switch (reason) {
-    case "newer_goal":
-      return "a new goal scope over the newest goal: an edited goal is approved again (D-0128 rule 3)";
-    case "expiry":
-    case "laps":
-    case "cost":
-      return "widen the scope: what ran out is the approval, not the goal's work";
-    case "failed_twice":
-      return "stop, and read why the two requests failed before rondo starts another";
-    case "nothing_eligible":
-      return "stop: nothing left in the ranking is one rondo may start by itself";
   }
 }

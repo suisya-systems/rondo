@@ -7,11 +7,21 @@
  * records the stop as a `flow_stop` row with its facts as fields, and the page
  * reads the newest row of the approval in force.
  *
+ * **The facts are kept either way** (rondo#549): an ask in a thread has a
+ * `flow_stop` row of its own beside it, named after the ask, which is what lets
+ * the page say the ask again rather than draw the sentence the host wrote
+ * ({@link flowStopAskedFacts}). Rows are read as the stop itself only while the
+ * approval has written no request.
+ *
  * **Green only while the flow can start or is running**: a goal scope in force
  * is drawn as stopped when either of the two stands, and running otherwise.
  *
  * Nothing here is a sentence (D-0055 rule 3): the facts travel as fields, and
- * the words for them are in the wording catalogues (D-0079).
+ * the words for them are in the wording catalogues (D-0079). {@link flowStopBody}
+ * is the one composer over those words, and it is here rather than in the host
+ * because **both sides of the stop say it**: the host writes it into the
+ * request's thread, and the page says it again to whoever is reading
+ * (rondo#549).
  */
 
 import type { Skipped, SkipReason } from "../advisory/flow.js";
@@ -19,10 +29,12 @@ import {
   type JsonRecord,
   type JsonValue,
   opensFlowRequest,
+  type StoredFlowStop,
   scopeCoversRequest,
   type ThreadMessageDraft,
 } from "../store/records.js";
 import type { AdvisoryRecord } from "../store/sqlite.js";
+import type { Chrome } from "./wording.js";
 
 /** Why the flow stops and asks the person (rondo#469). */
 export type FlowStop =
@@ -187,4 +199,90 @@ export async function flowStopOf(
     .at(-1);
   const facts = row === undefined ? null : readFlowStopFacts(row.facts);
   return row === undefined || facts === null ? null : { kind: "recorded", facts, atMs: row.atMs };
+}
+
+/**
+ * The stop's words, in the scope stop's layout (`stopBody`, D-0066 rule 4.4)
+ * and **in the language of whoever reads them** (D-0079, rondo#549).
+ *
+ * The host composes this once, in the host operator's words (`hostWords`), and
+ * writes it into the request's thread as the record. The page composes it again
+ * from the same facts in the language of the person looking at it
+ * (`flowStopView`), because the host's language is the machine's setting and
+ * the page's is the reader's own (`?lang`, the cookie, the browser). One
+ * composer, so the two never drift apart.
+ *
+ * Everything the ask cites by name stays as it is: what a person reads is a
+ * sentence, and a repository, a scope id or a decision id is not one (D-0076).
+ */
+export function flowStopBody(words: Chrome, repository: string, facts: FlowStopFacts): string {
+  return words.flowStopAsk({
+    repository,
+    why: flowStopWhy(words, facts),
+    recommended: words.flowStopAskRecommended(facts.reason),
+  });
+}
+
+/**
+ * Why the flow stopped, as the person reads it: the reason, and under it the
+ * facts that reason turns on, each its own line.
+ *
+ * The keys are the goal screen's own (`flowStopSaid`), so a stop says the same
+ * thing wherever it is read; the numbers are formatted as that screen formats
+ * them (`money`, `localTime`), which is a token and not prose (D-0055 rule 3).
+ */
+function flowStopWhy(words: Chrome, facts: FlowStopFacts): string {
+  const reason = words.flowStopReason(facts.reason);
+  switch (facts.reason) {
+    case "expiry":
+      return [
+        reason,
+        words.flowStopExpiredAt(
+          new Date(facts.expiresAtMs).toISOString().slice(0, 16).replace("T", " "),
+        ),
+      ].join("\n");
+    case "laps":
+      return [reason, words.flowStopLapsUsed(facts.admissions, facts.laps)].join("\n");
+    case "cost":
+      return [
+        reason,
+        words.flowStopCostOver(
+          facts.spentUsd.toFixed(2),
+          facts.committedUsd.toFixed(2),
+          facts.budgetUsd.toFixed(2),
+        ),
+      ].join("\n");
+    case "nothing_eligible":
+      return [
+        reason,
+        ...(facts.skipped.length === 0
+          ? [words.flowStopRankingEmpty]
+          : [
+              words.flowStopSkippedHeading,
+              ...facts.skipped.map((one) => `- ${one.request}: ${words.flowStopSkipped(one.why)}`),
+            ]),
+      ].join("\n");
+    default:
+      return reason;
+  }
+}
+
+/**
+ * The facts behind a stop the flow asked in a thread, for the page to say it
+ * again (rondo#549).
+ *
+ * The host records a `flow_stop` row under the ask's own message id whenever it
+ * asks, so the reason and the figures a person acts on are fields the page can
+ * read rather than a sentence it would have to parse back out (AGENTS.md's rule
+ * on refusals, D-0015 rule 7). A row this build cannot read, or an ask written
+ * before the row was kept, gives null -- and then the thread draws the words as
+ * they were written, which is what it always did.
+ */
+export function flowStopAskedFacts(
+  stops: readonly StoredFlowStop[],
+  messageId: string,
+): { readonly facts: FlowStopFacts; readonly repository: string } | null {
+  const row = stops.find((one) => one.stopId === messageId);
+  const facts = row === undefined ? null : readFlowStopFacts(row.facts);
+  return row === undefined || facts === null ? null : { facts, repository: row.repository };
 }
