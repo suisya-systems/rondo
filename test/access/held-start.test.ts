@@ -487,6 +487,47 @@ test(
 );
 
 test(
+  "a second tab's press held by the line its first tab started does not wait, so the work never runs twice by itself (rondo#284)",
+  async () => {
+    const w = await lines();
+    try {
+      // Two tabs, each with its own form, drawn while A still holds the files.
+      const forms = [await w.screen(), await w.screen()].map((page) => {
+        const form = page.slice(page.indexOf('id="start-form"'));
+        const field = (name: string) =>
+          new RegExp(`name="${name}" value="([^"]+)"`).exec(form)?.[1] ?? "";
+        return {
+          token: tokenIn(page),
+          request: field("request"),
+          scope_decision: field("scope_decision"),
+          plan: field("plan"),
+          iteration: field("iteration"),
+        };
+      });
+      await w.closeA();
+      expect(await releasePublished(w.store, "lap-a", "https://example.invalid/pr/1", 3_000)).toBe(
+        "Its files were released: its pull request is open.",
+      );
+      const [first, second] = forms;
+      if (first === undefined || second === undefined) throw new Error("no forms");
+      expect(first.iteration).not.toBe(second.iteration);
+      // The first tab starts at once: nothing holds the files now.
+      expect((await post(w.base, first, {}, "/start?lang=en")).status).toBe(303);
+      expect((await w.store.read(first.iteration)).kind).toBe("read");
+      // The second is held by the line the first started: told to start again,
+      // and no wait is kept for the tick to run the same work by itself.
+      const again = await post(w.base, second, {}, "/start?lang=en");
+      expect(again.status).toBe(409);
+      expect(again.body.replaceAll("&#39;", "'")).toContain(EN.startRefusedHeld);
+      expect(await w.store.heldStarts()).toEqual([]);
+    } finally {
+      await w.stop();
+    }
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
   "a start that waited under an approval since retired ends its wait without asking admission, so no stop is written (rondo#284)",
   async () => {
     const w = await lines();

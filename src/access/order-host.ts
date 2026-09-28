@@ -74,6 +74,12 @@ export interface OrderHostPorts {
       "read" | "heldStarts" | "settleHeldStart" | "laneLedger" | "occupancy"
     >;
     readonly policy: Pick<HostPolicy, "maxOccupying" | "maxLive">;
+    /**
+     * Why the approval it waited under is no longer in force, or null. Asked
+     * before anything else, so a retired wait ends without asking admission
+     * (no stop written) and never outlasts its approval behind a holder.
+     */
+    readonly retired: (held: HeldStart) => Promise<string | null>;
     readonly start: (held: HeldStart) => Promise<Started>;
   } | null;
   readonly now: () => number;
@@ -251,6 +257,12 @@ async function readHeldStarts(
       if ((await held.store.read(id)).kind !== "absent") {
         await held.store.settleHeldStart(id, "started", ports.now());
         ports.log(`order    ${id}: started by a press`);
+        continue;
+      }
+      const retired = await held.retired(one);
+      if (retired !== null) {
+        await held.store.settleHeldStart(id, retired, ports.now());
+        ports.log(`order    ${id}: not started: ${retired}`);
         continue;
       }
       // Read again for each: a start this pass made holds files and a slot.

@@ -2689,9 +2689,15 @@ async function threadActs(
   const drafting = standing !== null && draftingOver(standing, owes(requestMessageId));
   // **A start that other work's files hold is waiting** (rondo#284, D-0157):
   // the host's tick starts it by itself, so the step is not the person's.
+  // Under the approval in force only: a wait kept under one since replaced
+  // will not start, and must not hide the new approval's start (Codex).
   const waitsHeld =
     (standing?.kind === "decided" || standing?.kind === "own") &&
-    (await ports.store.heldStarts()).some((held) => held.requestMessageId === requestMessageId);
+    (await ports.store.heldStarts()).some(
+      (held) =>
+        held.requestMessageId === requestMessageId &&
+        held.scopeDecisionId === standing.scopeDecisionId,
+    );
   const scopeHref = (decisionId: string | null) =>
     viewHref(
       { kind: "scope", messageId: requestMessageId, rounds: null, decisionId, plan: null },

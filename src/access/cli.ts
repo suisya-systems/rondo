@@ -5987,22 +5987,17 @@ export function heldStartPort(
   return {
     store,
     policy,
-    start: async (held) => {
-      const inForce = await record.approvalsInForce();
-      if (!inForce.some((one) => one.scopeDecisionId === held.scopeDecisionId)) {
-        return {
-          ok: false,
-          why: "startRefusedNotAdmitted",
-          note: `the approval '${held.scopeDecisionId}' it waited under is no longer in force`,
-        };
-      }
-      return await scopedStartPress(environment, store, storePath, approver, record, words, {
+    retired: async (held) =>
+      (await record.approvalsInForce()).some((one) => one.scopeDecisionId === held.scopeDecisionId)
+        ? null
+        : `the approval '${held.scopeDecisionId}' it waited under is no longer in force`,
+    start: async (held) =>
+      await scopedStartPress(environment, store, storePath, approver, record, words, {
         iterationId: held.iterationId,
         requestMessageId: held.requestMessageId,
         scopeDecisionId: held.scopeDecisionId,
         planDigest: held.planDigest,
-      });
-    },
+      }),
   };
 }
 
@@ -7131,6 +7126,16 @@ async function startScoped(
   );
   if (started.why !== "startWaitsHeld") {
     return started;
+  }
+  // **Held by a line of this very request, it does not wait** (Codex round 3):
+  // another tab's form of the same plan started it at once, and a wait would
+  // run the same work again by itself once that line's files were free. So the
+  // press is told to start again, as before rondo#284.
+  for (const { lineageId } of started.holders ?? []) {
+    const holder = await store.read(lineageId);
+    if (holder.kind === "read" && holder.record.requestMessageId === input.requestMessageId) {
+      return { ...started, why: "startRefusedHeld" };
+    }
   }
   // **Refused by files another line holds, so it waits** (rondo#284, D-0157):
   // kept by the id its form minted, and attempted again by the resident host's

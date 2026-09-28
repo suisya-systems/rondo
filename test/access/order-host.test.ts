@@ -452,6 +452,7 @@ test("a held start is attempted only where no line holding files in its reposito
         occupancy: async () => ({ live: 0, occupying: 0 }) as never,
       },
       policy: { maxOccupying: 2, maxLive: 6 },
+      retired: async () => null,
       start: async (one) => {
         attempted.push(one.iterationId);
         if (one.iterationId === "lap-throws") throw new Error("the store is locked");
@@ -504,6 +505,7 @@ test("a held start waits through a full host and a continuo not usable now, and 
         occupancy: async () => ({ live: occupying, occupying }) as never,
       },
       policy: { maxOccupying: 2, maxLive: 6 },
+      retired: async () => null,
       start: async () => {
         attempts += 1;
         const [answer, after] = answers.shift() ?? [{ ok: true, note: "" }, occupying];
@@ -539,6 +541,51 @@ test("a held start waits through a full host and a continuo not usable now, and 
     "order    lap-b waits: this host has no room for another lap",
     "order    lap-b waits: continuo is not usable now",
     "order    lap-b: not started: no such plan",
+  ]);
+});
+
+test("a held start whose approval was retired ends its wait even behind a line in flight, and is not attempted (rondo#284)", async () => {
+  const t = tick([], []);
+  const settled: [string, string][] = [];
+  let attempts = 0;
+  const host = orderHost({
+    ...t.ports,
+    held: {
+      store: {
+        read: async () => ({ kind: "absent" }) as never,
+        heldStarts: async () =>
+          settled.length === 0
+            ? [
+                {
+                  iterationId: "lap-old",
+                  requestMessageId: "r1",
+                  scopeDecisionId: "sd-old",
+                  planDigest: "sha256:p",
+                  repository: "/srv/b",
+                  heldAtMs: 1,
+                },
+              ]
+            : [],
+        settleHeldStart: async (id, outcome) => {
+          settled.push([id, outcome]);
+        },
+        // A line holding files in its repository runs: that alone would wait.
+        laneLedger: async () => [{ repository: "/srv/b", paths: ["/"], inFlight: true }] as never,
+        occupancy: async () => ({ live: 0, occupying: 0 }) as never,
+      },
+      policy: { maxOccupying: 2, maxLive: 6 },
+      retired: async () => "the approval 'sd-old' it waited under is no longer in force",
+      start: async () => {
+        attempts += 1;
+        return { ok: true, note: "" };
+      },
+    },
+  });
+  host.kick();
+  await host.settled();
+  expect(attempts).toBe(0);
+  expect(settled).toEqual([
+    ["lap-old", "the approval 'sd-old' it waited under is no longer in force"],
   ]);
 });
 

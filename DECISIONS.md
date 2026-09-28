@@ -27548,11 +27548,14 @@ At rondo `e72045f` on **2026-09-28**, by reading the code:
    **Once a form of the plan started it, no form of that plan waits again** (a stale tab sent
    again is told to start again, as before this entry), and **a form whose own wait ended without
    a start waits again** when held files refuse it once more, rather than being told it waits on
-   a row nothing reads.
+   a row nothing reads. **A start held by a line of its own request does not wait either**: that
+   line is the same work, started from another tab, so the press is told to start again.
    **If rondo cannot write the row, the press says `startRefusedHeld` as before** (start
    again), because a wait nothing will end is worse than an honest refusal.
 3. **The resident host's tick attempts it** (`D-0073` rule 7): each pass of the order tick reads the
-   waiting rows. While a line holding files in the start's repository is in flight, the start is not
+   waiting rows. **A wait whose approval is no longer in force ends first**, before any other test,
+   so it neither asks the admission (no stop is written) nor outlasts its approval behind a holder;
+   the thread's next step shows a wait only under the approval in force. While a line holding files in the start's repository is in flight, the start is not
    attempted, because that line cannot have landed. Otherwise the tick attempts it through the
    press's own path, with the row's input and id, in the approver's name, answered once reserved
    (`D-0109`). **A full host is waited through too**: the tick tests the host's occupancy against
