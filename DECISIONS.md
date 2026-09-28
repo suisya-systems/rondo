@@ -27545,6 +27545,10 @@ At rondo `e72045f` on **2026-09-28**, by reading the code:
    the wait. **A press of the same plan joins a wait already kept**: it starts under the wait's id,
    not its own form's, so a second tab pressed once the files are free starts the one lap, and the
    tick finds that lap there and ends the wait rather than reading its line as the work it waits on.
+   **Once a form of the plan started it, no form of that plan waits again** (a stale tab sent
+   again is told to start again, as before this entry), and **a form whose own wait ended without
+   a start waits again** when held files refuse it once more, rather than being told it waits on
+   a row nothing reads.
    **If rondo cannot write the row, the press says `startRefusedHeld` as before** (start
    again), because a wait nothing will end is worse than an honest refusal.
 3. **The resident host's tick attempts it** (`D-0073` rule 7): each pass of the order tick reads the

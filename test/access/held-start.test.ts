@@ -461,6 +461,24 @@ test(
       await w.pass();
       expect(seams.admitted.length).toBe(before);
       expect(await w.store.heldStarts()).toEqual([]);
+      // The other tab's form sent again while that lap holds the files: the
+      // plan's wait already started it, so no new wait -- the tick will not
+      // start the plan a second time by itself (Codex round 2).
+      const again = await post(
+        w.base,
+        {
+          token: tokenIn(other),
+          request: field("request"),
+          scope_decision: field("scope_decision"),
+          plan: field("plan"),
+          iteration: otherId,
+        },
+        {},
+        "/start?lang=en",
+      );
+      expect(again.status).toBe(409);
+      expect(again.body.replaceAll("&#39;", "'")).toContain(EN.startRefusedHeld);
+      expect(await w.store.heldStarts()).toEqual([]);
     } finally {
       await w.stop();
     }

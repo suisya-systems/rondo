@@ -759,13 +759,13 @@ export interface IterationStore {
    */
   closingLapOf(iterationId: string): Promise<ClosingLap | null>;
   /**
-   * rondo#284: keep a start refused by held files as waiting. **A second
-   * refusal of the same form keeps the one row**, waiting or settled, and **a
-   * second form of the same plan writes none while one waits** (two tabs, two
-   * forms): one waiting start per request, approval and plan, or the tick
-   * would start the plan twice by itself.
+   * rondo#284: keep a start refused by held files as waiting, and say whether
+   * it waits. **A second refusal of the same form keeps the one row**, and one
+   * whose wait ended without a start waits again. **None is kept while another
+   * form of the same plan waits, or once one of them started it** (two tabs,
+   * two forms), or the tick would start the plan twice by itself.
    */
-  recordHeldStart(held: HeldStart): Promise<void>;
+  recordHeldStart(held: HeldStart): Promise<boolean>;
   /** The held starts still waiting, oldest first. Writes nothing. */
   heldStarts(): Promise<readonly HeldStart[]>;
   /** End a held start's wait with what its attempt came to; a settled one is left as it is. */
@@ -2951,26 +2951,35 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       });
     },
 
-    async recordHeldStart(held: HeldStart): Promise<void> {
-      connection
-        .prepare(
-          "INSERT OR IGNORE INTO held_start (iteration_id, request_message_id, " +
-            "scope_decision_id, plan_digest, repository, held_at_ms) " +
-            "SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM held_start " +
-            "WHERE request_message_id = ? AND scope_decision_id = ? AND plan_digest = ? " +
-            "AND settled_at_ms IS NULL)",
-        )
-        .run(
-          held.iterationId,
-          held.requestMessageId,
-          held.scopeDecisionId,
-          held.planDigest,
-          held.repository,
-          held.heldAtMs,
-          held.requestMessageId,
-          held.scopeDecisionId,
-          held.planDigest,
+    async recordHeldStart(held: HeldStart): Promise<boolean> {
+      const key = [held.requestMessageId, held.scopeDecisionId, held.planDigest];
+      // Another row of the plan that waits, or whose wait already started it.
+      const taken =
+        "EXISTS (SELECT 1 FROM held_start WHERE request_message_id = ? AND " +
+        "scope_decision_id = ? AND plan_digest = ? AND iteration_id <> ? AND " +
+        "(settled_at_ms IS NULL OR outcome = 'started'))";
+      return immediateTransaction(connection, () => {
+        // Its own wait, ended without a start, waits again (Codex round 2).
+        connection
+          .prepare(
+            "UPDATE held_start SET settled_at_ms = NULL, outcome = NULL, held_at_ms = ? " +
+              "WHERE iteration_id = ? AND settled_at_ms IS NOT NULL AND outcome <> 'started' " +
+              `AND NOT ${taken}`,
+          )
+          .run(held.heldAtMs, held.iterationId, ...key, held.iterationId);
+        connection
+          .prepare(
+            "INSERT OR IGNORE INTO held_start (iteration_id, request_message_id, " +
+              "scope_decision_id, plan_digest, repository, held_at_ms) " +
+              `SELECT ?, ?, ?, ?, ?, ? WHERE NOT ${taken}`,
+          )
+          .run(held.iterationId, ...key, held.repository, held.heldAtMs, ...key, held.iterationId);
+        return (
+          connection
+            .prepare("SELECT 1 FROM held_start WHERE iteration_id = ? AND settled_at_ms IS NULL")
+            .get(held.iterationId) !== undefined
         );
+      });
     },
 
     async heldStarts(): Promise<readonly HeldStart[]> {

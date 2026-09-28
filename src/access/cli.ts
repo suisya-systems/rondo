@@ -7135,9 +7135,11 @@ async function startScoped(
   // **Refused by files another line holds, so it waits** (rondo#284, D-0157):
   // kept by the id its form minted, and attempted again by the resident host's
   // tick (`orderHost`) once they are free. A row rondo could not write would be
-  // a wait nothing ends, so that press is told to start again, as it was.
+  // a wait nothing ends, so that press is told to start again, as it was --
+  // and so is one no row waits for: another form of this plan already started
+  // it (Codex round 2), and the tick would not start it again.
   try {
-    await store.recordHeldStart({
+    const waits = await store.recordHeldStart({
       iterationId: input.iterationId,
       requestMessageId: input.requestMessageId,
       scopeDecisionId: input.scopeDecisionId,
@@ -7145,7 +7147,7 @@ async function startScoped(
       repository: repositoryKey(planned.plan.repository) ?? planned.plan.repository,
       heldAtMs: Date.now(),
     });
-    return started;
+    return waits ? started : { ...started, why: "startRefusedHeld" };
   } catch (error) {
     consoleSeams.writeError(
       `${asciiEscape(`lap '${input.iterationId}': its wait was not kept: ${error instanceof Error ? error.message : String(error)}`)}\n`,
