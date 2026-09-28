@@ -120,12 +120,7 @@ import {
 import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
 import { approvedUnstarted, partsOf } from "./drafted-start.js";
 import { draftedStanding } from "./drafted-view.js";
-import {
-  flowStopAskedFacts,
-  flowStopBody,
-  type FlowStopFacts,
-  flowStopOf,
-} from "./flow-stop.js";
+import { type FlowStopFacts, flowStopAskedFacts, flowStopBody, flowStopOf } from "./flow-stop.js";
 import type { LapWorkInspection } from "./forge.js";
 import { type GateAuto, gateAuto } from "./gate-auto.js";
 import { gateScope } from "./gate-host.js";
@@ -2479,9 +2474,7 @@ function scopeStopView(wording: Chrome, message: ThreadMessageDraft, reads: Held
  */
 function flowStopAsked(message: ThreadMessageDraft): boolean {
   return (
-    message.authorId === FLOW_AUTHOR &&
-    message.messageId.startsWith("flow-stop-") &&
-    message.asks
+    message.authorId === FLOW_AUTHOR && message.messageId.startsWith("flow-stop-") && message.asks
   );
 }
 

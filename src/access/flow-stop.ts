@@ -23,8 +23,8 @@ import {
   type JsonRecord,
   type JsonValue,
   opensFlowRequest,
-  scopeCoversRequest,
   type StoredFlowStop,
+  scopeCoversRequest,
   type ThreadMessageDraft,
 } from "../store/records.js";
 import type { AdvisoryRecord } from "../store/sqlite.js";
