@@ -54,9 +54,10 @@ import {
   type ThreadMessageDraft,
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
-import { type FlowStop, type FlowStopFacts, stopPrefix } from "./flow-stop.js";
+import { type FlowStopFacts, stopPrefix } from "./flow-stop.js";
 import { hostFailure } from "./host-failure.js";
 import { MODEL_DRAFTER_PREFIX } from "./model-draft/judgement.js";
+import type { Chrome } from "./wording.js";
 
 export interface FlowHostPorts {
   readonly store: Pick<IterationStore, "readLive" | "terminalIterations" | "occupancy">;
@@ -81,6 +82,12 @@ export interface FlowHostPorts {
     | "recordFlowAsk"
   >;
   readonly policy: Pick<HostPolicy, "maxOccupying" | "maxLive">;
+  /**
+   * The person's words for the stop the flow asks in a thread (D-0079): the
+   * host's operator language, since no request of the page is being answered
+   * when the flow stops (`hostWords`). The terminal lines stay English.
+   */
+  readonly words: Chrome;
   readonly now: () => number;
   readonly log: (line: string) => void;
   /** Called once a request is injected: the drafter's kick, so it is drafted now. */
@@ -526,7 +533,7 @@ async function askStop(
   const messageId = `${stopPrefix(flow.scopeDecisionId)}${reason}-${latest.messageId}`;
   const outcome = await ports.record.recordThreadMessage({
     messageId,
-    body: flowStopBody(flow, repository, reason, detail),
+    body: flowStopBody(ports.words, repository, facts),
     authorKind: "drafter",
     // The flow's own voice, so the ask holds the flow and no part of the
     // request it is asked in (`holdsNothing`).
@@ -549,38 +556,66 @@ async function askStop(
   }
 }
 
-/** The stop's words, in the scope stop's layout (`stopBody`, D-0066 rule 4.4). */
-export function flowStopBody(
-  flow: Flow,
-  repository: string,
-  reason: FlowStop,
-  detail: string,
-): string {
-  return [
-    `Stopped: rondo starts no further request toward the goal for ${repository} under scope ` +
-      `'${flow.scope.scopeId}' (decision '${flow.scopeDecisionId}'): ${detail}.`,
-    "Options:",
-    "- Widen the scope (a successor scope, D-0066 rule 1.4). Gives up: nothing of the goal; " +
-      "rondo waits until a person approves the new budget or expiry.",
-    "- A new goal scope. Gives up: this approval; the flow starts again under the new one, " +
-      "with its own budget.",
-    "- Stop. Gives up: the rest of the goal's work; requests already started carry on.",
-    `Recommended: ${stopRecommendation(reason)}.`,
-    "Nothing further is started toward the goal until this message is answered.",
-  ].join("\n");
+/**
+ * The stop's words, in the scope stop's layout (`stopBody`, D-0066 rule 4.4)
+ * and **in the person's language** (D-0079, rondo#549).
+ *
+ * The flow stops on the minute, outside any request to the page, so the words
+ * are the host operator's (`hostWords`) and the thread draws the body as it was
+ * written. The terminal line beside it stays English (D-0079 rule 3.2), and so
+ * does everything the ask cites by name: what a person reads is a sentence, and
+ * a scope id or a decision id is not one (D-0076). The `detail` the caller
+ * composed for the terminal is not translated here -- the same facts are said
+ * from the catalogue, so this ask and the goal's screen say one thing.
+ */
+export function flowStopBody(words: Chrome, repository: string, facts: FlowStopFacts): string {
+  return words.flowStopAsk({
+    repository,
+    why: flowStopWhy(words, facts),
+    recommended: words.flowStopAskRecommended(facts.reason),
+  });
 }
 
-function stopRecommendation(reason: FlowStop): string {
-  switch (reason) {
-    case "newer_goal":
-      return "a new goal scope over the newest goal: an edited goal is approved again (D-0128 rule 3)";
+/**
+ * Why the flow stopped, as the person reads it: the reason, and under it the
+ * facts that reason turns on, each its own line.
+ *
+ * The keys are the goal screen's own (`flowStopSaid`), so a stop says the same
+ * thing wherever it is read; the numbers are formatted as that screen formats
+ * them (`money`, `localTime`), which is a token and not prose (D-0055 rule 3).
+ */
+function flowStopWhy(words: Chrome, facts: FlowStopFacts): string {
+  const reason = words.flowStopReason(facts.reason);
+  switch (facts.reason) {
     case "expiry":
+      return [
+        reason,
+        words.flowStopExpiredAt(
+          new Date(facts.expiresAtMs).toISOString().slice(0, 16).replace("T", " "),
+        ),
+      ].join("\n");
     case "laps":
+      return [reason, words.flowStopLapsUsed(facts.admissions, facts.laps)].join("\n");
     case "cost":
-      return "widen the scope: what ran out is the approval, not the goal's work";
-    case "failed_twice":
-      return "stop, and read why the two requests failed before rondo starts another";
+      return [
+        reason,
+        words.flowStopCostOver(
+          facts.spentUsd.toFixed(2),
+          facts.committedUsd.toFixed(2),
+          facts.budgetUsd.toFixed(2),
+        ),
+      ].join("\n");
     case "nothing_eligible":
-      return "stop: nothing left in the ranking is one rondo may start by itself";
+      return [
+        reason,
+        ...(facts.skipped.length === 0
+          ? [words.flowStopRankingEmpty]
+          : [
+              words.flowStopSkippedHeading,
+              ...facts.skipped.map((one) => `- ${one.request}: ${words.flowStopSkipped(one.why)}`),
+            ]),
+      ].join("\n");
+    default:
+      return reason;
   }
 }

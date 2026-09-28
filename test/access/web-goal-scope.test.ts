@@ -337,6 +337,7 @@ test("a flow stopped before its first request is said on the front and the scree
     store: w.store,
     record: w.record,
     policy: { maxOccupying: 4, maxLive: 6 },
+    words: EN,
     now: () => BUDGETS.expires_at_ms + 1,
     log: () => undefined,
   });

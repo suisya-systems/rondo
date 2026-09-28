@@ -1812,6 +1812,9 @@ export async function main(
             store,
             record,
             policy: bounds.policy,
+            // Its stop is an ask a person reads, so it is written in their
+            // language (D-0079), as the lost lap's ask above is.
+            words: chromeFor(selected.tag),
             now: Date.now,
             log: say,
             // Its issue is read first; the drafter waits on the read.

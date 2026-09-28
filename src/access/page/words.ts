@@ -334,6 +334,24 @@ export interface PageWords extends DayWords {
   readonly flowStopNext: (reason: FlowStop) => string;
   readonly flowStopAsked: string;
   readonly flowStopAskedLink: string;
+  /**
+   * The same stop as the ask rondo writes into the request's thread, whole
+   * (rondo#549): D-0066 rule 4.4's layout -- what stopped, the options, one
+   * recommendation, and that nothing moves until it is answered.
+   *
+   * **Written by the host and not by a face**, which is why it is a body and
+   * not a heading: the flow stops on the minute, outside any request to the
+   * page, so the words are the host's operator's (`hostWords`, D-0079) and the
+   * thread draws them as they were written. `why` is composed from the keys
+   * above, so the thread and the goal's screen say one thing.
+   */
+  readonly flowStopAsk: (said: {
+    readonly repository: string;
+    readonly why: string;
+    readonly recommended: string;
+  }) => string;
+  /** The one option that stop recommends (D-0064 rule 4.1), as a sentence. */
+  readonly flowStopAskRecommended: (reason: FlowStop) => string;
   readonly evProposal: string;
   readonly evProposalLink: string;
   /**
@@ -881,6 +899,37 @@ export const PAGE_EN: PageWords = Object.freeze({
     "rondo asked you what to do next, in the thread of the last request it sent. Nothing more is " +
     "sent until you answer there.",
   flowStopAskedLink: "Go to the question",
+  flowStopAsk: ({ repository, why, recommended }) =>
+    [
+      `Stopped: rondo sends no further request toward the goal for ${repository}.`,
+      why,
+      "Options:",
+      "- Approve more room: pause this approval, then approve it again with the budget or the " +
+        "time the rest of the goal needs. Gives up: nothing of the goal; rondo waits until you " +
+        "have approved.",
+      "- Approve the goal afresh. Gives up: this approval; rondo works toward the goal as it " +
+        "reads now, under a budget of its own.",
+      "- Stop (answer stop). Gives up: the rest of the goal's work; requests already sent carry " +
+        "on to their end.",
+      `Recommended: ${recommended}`,
+      "Nothing more is sent toward the goal until you answer this message.",
+    ].join("\n"),
+  flowStopAskRecommended: (reason) => {
+    switch (reason) {
+      case "newer_goal":
+        return "approve the goal as it reads now: an edited goal is approved again.";
+      case "expiry":
+      case "laps":
+      case "cost":
+        return "approve more room: what ran out is the approval, not the goal's work.";
+      case "failed_twice":
+        return (
+          "read why the last two requests ended, in their threads, before rondo sends another."
+        );
+      case "nothing_eligible":
+        return "stop: nothing left in the ranking is one rondo may send by itself.";
+    }
+  },
   evProposal: "rondo has a proposal for what to ask next.",
   evProposalLink: "See it",
   sevenDays: "The last seven days",
@@ -1405,6 +1454,32 @@ export const PAGE_JA: PageWords = Object.freeze({
   flowStopAsked:
     "rondo は、最後に送った依頼のスレッドで、次にどうするかをあなたに聞いています。そこで答えるまで、新しい依頼は送りません。",
   flowStopAskedLink: "質問を見る",
+  flowStopAsk: ({ repository, why, recommended }) =>
+    [
+      `${repository} の目標に向けて、rondo はこれ以上の依頼を送りません。`,
+      why,
+      "選べること:",
+      "- 枠を増やして承認する（承認をいったん一時停止し、残りの作業に要る予算や期限であらためて承認する）。" +
+        "あきらめるもの: ありません。あなたが承認するまで rondo は待ちます。",
+      "- 目標をあらためて承認する。あきらめるもの: いまの承認。rondo は、いまの目標に向けて別の枠で動きます。",
+      "- 止める（「止める」で答える）。あきらめるもの: 目標の残りの作業。すでに送った依頼は最後まで進みます。",
+      `おすすめ: ${recommended}`,
+      "このメッセージに答えるまで、目標に向けた依頼はもう送りません。",
+    ].join("\n"),
+  flowStopAskRecommended: (reason) => {
+    switch (reason) {
+      case "newer_goal":
+        return "いまの目標をあらためて承認する。書き換えた目標は、承認し直してから使います。";
+      case "expiry":
+      case "laps":
+      case "cost":
+        return "枠を増やして承認する。尽きたのは承認であって、目標の作業ではありません。";
+      case "failed_twice":
+        return "直前の 2 件がどう終わったのかを、それぞれのスレッドで先に確かめる。";
+      case "nothing_eligible":
+        return "止める。順位付けに残っているのは、rondo が自分で送ってよい依頼ではありません。";
+    }
+  },
   evProposal: "次に頼むことについて、rondo に提案があります。",
   evProposalLink: "見る",
   sevenDays: "この 7 日間",
