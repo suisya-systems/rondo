@@ -1427,7 +1427,7 @@ explanation you pressed on and then answers the gate.`,
   conflictFixBusy: "Starting the fix...",
   conflictFixBack: "Back to the request",
   nextStepChecksFix: (pullRequest, checks) =>
-    `The checks on ${pullRequest} did not pass (${checks}). rondo can reproduce the failure on ` +
+    `The checks on ${pullRequest} did not pass${checks === null ? "" : ` (${checks})`}. rondo can reproduce the failure on ` +
     "the pull request's branch and fix it, changing nothing else; the result comes back here " +
     "for you to check before anything is pushed.",
   checksFixAction: "Have rondo reproduce and fix the failing checks",

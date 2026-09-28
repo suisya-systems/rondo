@@ -976,6 +976,8 @@ export interface ConflictFixInput {
   readonly iterationId: string;
   readonly successorId: string;
   readonly scopeDecisionId: string;
+  /** What the card offered to fix (rondo#551): the press starts nothing where it changed. */
+  readonly cause: "conflict" | "red";
 }
 
 /** Why a conflict-fix press started nothing, as the wording key the page says it in. */
@@ -3226,11 +3228,13 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     }
     const successorId = form["successor"];
     const decision = typeof form["scope_decision"] === "string" ? form["scope_decision"] : "";
+    const cause = form["cause"];
     if (
       typeof successorId !== "string" ||
       !PAGE_ITERATION_ID.test(successorId) ||
       iterationId === "" ||
-      decision === ""
+      decision === "" ||
+      (cause !== "conflict" && cause !== "red")
     ) {
       return conflictFixRefused(c, 400, "conflictFixRefusedForm", request);
     }
@@ -3238,6 +3242,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       iterationId,
       successorId,
       scopeDecisionId: decision,
+      cause,
     });
     if (!fixed.ok) {
       return conflictFixRefused(

@@ -13,7 +13,7 @@
  * The caller asks only of a lap at `awaiting_human`; the status is not
  * re-tested here.
  */
-import { CHECKS_REPAIR_HEAD } from "../refrain/revision.js";
+import { asksChecksRepair } from "../refrain/revision.js";
 import {
   FINDING_SEVERITIES,
   type FindingSeverity,
@@ -87,12 +87,11 @@ export interface GateAutoInput {
 
 /**
  * How a repair lap's runs read (rondo#551), or null for a lap that is not one:
- * a repair is the lap whose prompt carries the failing-checks section.
+ * a repair is the lap whose own section is the failing-checks one
+ * ({@link asksChecksRepair}), not every later lap that carries it above theirs.
  */
 export function repairOf(record: IterationRecord): RepairRuns | null {
-  return planField(record, "prompt").includes(CHECKS_REPAIR_HEAD)
-    ? repairRuns(record.lapCommands)
-    : null;
+  return asksChecksRepair(planField(record, "prompt")) ? repairRuns(record.lapCommands) : null;
 }
 
 /**

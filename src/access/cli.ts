@@ -233,7 +233,7 @@ import type {
   WebPorts,
 } from "./page/contract.js";
 import { workerRuns } from "./page-logic/laps.js";
-import { asksOverLine, conflictFixBlock, resultOf } from "./page-logic/result.js";
+import { asksOverLine, conflictFixBlock, fixCauseOf, resultOf } from "./page-logic/result.js";
 import { requestWords, threadsOf } from "./page-logic/threads.js";
 import {
   type ComposedBodyOutcome,
@@ -6636,6 +6636,16 @@ async function conflictFixPage(
       note: `fixing the pull request is not offered on '${record.id}': ${block}`,
     };
   }
+  // The fix the card offered, asked again: a card drawn for a conflict starts
+  // nothing once the checks are red instead, and the other way round (rondo#551).
+  const cause = fresh === null ? null : fixCauseOf(fresh.checks);
+  if (cause?.kind !== input.cause) {
+    return {
+      ok: false,
+      why: "conflictFixRefusedGone",
+      note: `the pull request of '${record.id}' is no longer ${input.cause === "red" ? "red" : "conflicting"}`,
+    };
+  }
   // The approval the lap ran under, re-read and only compared with the form's,
   // for `revisePage`'s reason (D-0070 section 1.2, D-0074 section 2).
   const tip = await approvalTip(advisory, record.id);
@@ -6669,9 +6679,8 @@ async function conflictFixPage(
   // The forge's default branch as it is at this press (D-0105; the one
   // exception to D-0100 rule 4), taken in with cause `conflict`. A red check's
   // repair (rondo#551) takes nothing in: it names the failing checks instead.
-  const red = fresh?.checks.kind === "red" ? fresh.checks : null;
   const decided =
-    red === null
+    cause.kind === "conflict"
       ? await revisionTakeIn(record, input.successorId, store, "conflict")
       : { takeIn: null };
   const successor =
@@ -6682,10 +6691,7 @@ async function conflictFixPage(
           iterationId: input.successorId,
           instruction: null,
           takeIn: decided.takeIn,
-          failedChecks:
-            red === null
-              ? null
-              : { failed: red.failed, cancelled: red.cancelled, timedOut: red.timedOut },
+          failedChecks: cause.kind === "red" ? cause.failedChecks : null,
         });
   if (successor.kind === "refused") {
     refuse(successor.reason);

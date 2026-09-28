@@ -322,10 +322,42 @@ export function mergeBlock(
  * - `landed`: the line was released, so its work is on the default branch.
  * - `fixing`: an attempt after this one already exists, running, at its gate,
  *   or approved and not yet on the pull request.
+ * - `moved`: the checks are red on a head the lap did not push (rondo#412):
+ *   a repair cut from the lap's own branch could not be pushed onto it
+ *   without discarding what moved it, so it is the person's to fix by hand.
+ *   A conflict's fix takes the default branch in and is offered as before.
  * - `asked`: a gate of the request, or a question about this line
  *   ({@link asksOverLine}), waits on the person.
  */
-export type ConflictFixBlock = "nothingToFix" | "landed" | "fixing" | "asked";
+export type ConflictFixBlock = "nothingToFix" | "landed" | "fixing" | "moved" | "asked";
+
+/**
+ * What a fix press asks of the attempt it starts (rondo#551): a conflict's
+ * takes the default branch in; a red check's names the checks that did not
+ * pass and takes nothing in. The page's form carries the kind, and the press
+ * starts nothing where it is not the fresh one's.
+ */
+export function fixCauseOf(checks: ChecksState):
+  | { readonly kind: "conflict" }
+  | {
+      readonly kind: "red";
+      readonly failedChecks: {
+        readonly failed: readonly string[];
+        readonly cancelled: readonly string[];
+        readonly timedOut: readonly string[];
+      };
+    } {
+  return checks.kind === "red"
+    ? {
+        kind: "red",
+        failedChecks: {
+          failed: checks.failed,
+          cancelled: checks.cancelled,
+          timedOut: checks.timedOut,
+        },
+      }
+    : { kind: "conflict" };
+}
 
 /**
  * Whether a question waiting in `requestMessageId`'s thread is about the line
@@ -426,6 +458,9 @@ export function conflictFixBlock(
   }
   if (facts.succeeded) {
     return "fixing";
+  }
+  if (result.checks.kind === "red" && result.moved !== null) {
+    return "moved";
   }
   return facts.asksWaiting ? "asked" : null;
 }

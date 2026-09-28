@@ -329,8 +329,15 @@ export function lapEvents(
         atMs: result.checksAtMs,
         tryAt,
         // A red check on rondo's own pull request is the person's to act on
-        // (the repair press, rondo#551), so the fold leaves it on the axis.
-        ...(result.checks.kind === "red" ? { yours: true as const } : {}),
+        // (the repair press, rondo#551), so the fold leaves it on the axis --
+        // while it still is: not once merged or closed, nor once a later try
+        // was built on this one (the repair itself, or a revise).
+        ...(result.checks.kind === "red" &&
+        result.merged === null &&
+        result.closedAtMs === null &&
+        !after.revised
+          ? { yours: true as const }
+          : {}),
       });
     }
   }

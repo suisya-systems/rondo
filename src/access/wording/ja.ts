@@ -1429,7 +1429,7 @@ export const JA: Chrome = Object.freeze({
   conflictFixBusy: "解消を始めています…",
   conflictFixBack: "依頼に戻る",
   nextStepChecksFix: (pullRequest, checks) =>
-    `${pullRequest} のチェックが通りませんでした（${checks}）。rondo がプルリクエストのブランチで` +
+    `${pullRequest} のチェックが通りませんでした${checks === null ? "" : `（${checks}）`}。rondo がプルリクエストのブランチで` +
     "失敗を再現して直せます（ほかは変えません）。push の前に、その結果をここで確認してもらいます。",
   checksFixAction: "rondo に失敗したチェックを再現して直してもらう",
   checksFixBusy: "修正を始めています…",

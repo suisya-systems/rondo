@@ -935,14 +935,25 @@ test("(fix-conflict) a person's press starts the fix once; a script, a stale for
   };
   const { base, stop, closed } = await served(createApp(withFix(true), TOKEN));
   const person = pressHeaders(base);
-  const { body: _words, ...form } = reviseForm();
+  const { body: _words, ...rest } = reviseForm();
+  const form: Record<string, string> = { ...rest, cause: "red" };
 
   const pressed = await send(base, "/fix-conflict", "POST", person, form);
   expect(pressed.status).toBe(303);
   expect(pressed.location).toBe("/?thread=req-1&lang=en");
   expect(fixed).toEqual([
-    { iterationId: "i-0001", successorId: form["successor"], scopeDecisionId: "decision-1" },
+    {
+      iterationId: "i-0001",
+      successorId: form["successor"],
+      scopeDecisionId: "decision-1",
+      cause: "red",
+    },
   ]);
+  // A form that does not say what it fixes starts nothing (rondo#551).
+  const { cause: _cause, ...unsaid } = form;
+  for (const sent of [unsaid, { ...form, cause: "green" }]) {
+    expect((await send(base, "/fix-conflict", "POST", person, sent)).status).toBe(400);
+  }
   const script = await send(
     base,
     "/fix-conflict",

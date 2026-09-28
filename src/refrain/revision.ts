@@ -124,6 +124,27 @@ export interface FailedChecks {
  */
 export const CHECKS_REPAIR_HEAD = "--- The pull request's checks failed ---";
 
+const REVISED_HEAD = "--- Revision requested at the gate ---";
+const CONFLICT_HEAD = "--- The pull request conflicts with its base ---";
+const TAKE_IN_HEAD = "--- Bring the default branch in first ---";
+
+/**
+ * Whether a lap's prompt asks it to repair red checks (rondo#551). **Decided by
+ * the section this lap added, not by any the prompt carries**: a revision's
+ * prompt starts with its predecessor's whole prompt, so a revise or a conflict
+ * fix after a repair still holds the repair's section, above its own. The lap
+ * is a repair only where that section is the last lap-kind head. A retry of a
+ * stopped repair (D-0143, D-0149) appends a retry head of another kind, so it
+ * is still one.
+ */
+export function asksChecksRepair(prompt: string): boolean {
+  const at = prompt.lastIndexOf(CHECKS_REPAIR_HEAD);
+  return (
+    at !== -1 &&
+    [REVISED_HEAD, CONFLICT_HEAD, TAKE_IN_HEAD].every((head) => prompt.lastIndexOf(head) < at)
+  );
+}
+
 /**
  * The successor's plan, or the first reason there is not one.
  *
@@ -282,7 +303,7 @@ function revisionPrompt(plan: AdmittedPlan, input: RevisionRequest): string {
       ? checksRepairSection(plan.runId, input.predecessor.id, input.failedChecks)
       : input.instruction === null
         ? [
-            "--- The pull request conflicts with its base ---",
+            CONFLICT_HEAD,
             "",
             `A previous lap (run '${plan.runId}', iteration '${input.predecessor.id}') did this work.` +
               " A person approved it and it was published as a pull request, which now conflicts" +
@@ -336,7 +357,7 @@ function checksRepairSection(
 /** What comes before the person's words in a revise's prompt, up to the blank line above them. */
 function revisedHead(runId: string, predecessorId: string): string {
   return [
-    "--- Revision requested at the gate ---",
+    REVISED_HEAD,
     "",
     `A previous lap (run '${runId}', iteration '${predecessorId}') did this work and` +
       " stopped at a gate. A person read it and asked for a change:",
@@ -400,7 +421,7 @@ export function takeInSection(takeIn: TakeIn): string {
       ? `It holds a change another line landed on paths this lap now takes: ${takeIn.paths.map((path) => `'${path}'`).join(", ")}.`
       : "The pull request this line opened conflicts with it.";
   return [
-    "--- Bring the default branch in first ---",
+    TAKE_IN_HEAD,
     "",
     `The default branch '${takeIn.remoteBranch}' has moved to commit ${takeIn.commit}. The local` +
       ` branch '${takeIn.branch}' holds it. ${why}`,

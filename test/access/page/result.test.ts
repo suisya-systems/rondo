@@ -8,12 +8,17 @@
  * the page reads back is the sentence rondo actually records, not a copy of it
  * kept here.
  */
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
-import { pullRequestUpdated } from "../../../src/access/cli.js";
+import { conflictFixFromPage, pullRequestUpdated } from "../../../src/access/cli.js";
 import { reportToRequest } from "../../../src/access/conductor.js";
 import { basisWord } from "../../../src/access/page/vocabulary.js";
 import {
   conflictFixBlock,
+  fixCauseOf,
   type LapResult,
   resultOf,
 } from "../../../src/access/page-logic/result.js";
@@ -21,6 +26,7 @@ import { lapEvents } from "../../../src/access/page-logic/thread-events.js";
 import { threadsOf } from "../../../src/access/page-logic/threads.js";
 import { chromeFor, EN } from "../../../src/access/wording.js";
 import type { IterationRecord } from "../../../src/store/records.js";
+import { advisoryRecord, iterationStore } from "../../../src/store/sqlite.js";
 import { ownLane } from "../../lane-claims.js";
 import {
   fresh,
@@ -36,8 +42,7 @@ import {
 const PR = "https://github.com/suisya-systems/rondo/pull/372";
 
 /** One request whose one lap was answered at its gate, and nothing after. */
-async function approved(answer: "approve" | "revise" | null = "approve") {
-  const world = fresh();
+async function approved(answer: "approve" | "revise" | null = "approve", world = fresh()) {
   await openRequest(world, "req-r", "#291 の文言を分けて", 1_000);
   await reserve(world, "i-r", "#291 の文言を分けて", null, "req-r");
   await openGate(world, "i-r");
@@ -318,7 +323,11 @@ test("an answered gate says what was answered: approved, a change asked for, or 
 });
 
 test("a red check on the thread is the person's and does not fold; green is not (rondo#551)", () => {
-  const checksEvent = (checks: LapResult["checks"]) =>
+  const checksEvent = (
+    checks: LapResult["checks"],
+    revised = false,
+    ended: Partial<Pick<LapResult, "merged" | "closedAtMs">> = {},
+  ) =>
     lapEvents(
       EN,
       lap({}),
@@ -327,7 +336,7 @@ test("a red check on the thread is the person's and does not fold; green is not 
       () => "now",
       null,
       {
-        revised: false,
+        revised,
         result: {
           url: PR,
           number: "372",
@@ -335,9 +344,17 @@ test("a red check on the thread is the person's and does not fold; green is not 
           pushedOnto: false,
           checks,
           checksAtMs: 6_000,
+          merged: null,
+          closedAtMs: null,
+          ...ended,
         } as LapResult,
       },
     ).find((event) => event.id.endsWith(":checks"));
+  const red = { kind: "red", failed: ["build"], cancelled: [], timedOut: [] } as const;
+  // No longer the person's once a later try was built on it, or it closed.
+  expect(checksEvent(red, true)).toMatchObject({ kind: "failed" });
+  expect(checksEvent(red, true)?.yours).toBeUndefined();
+  expect(checksEvent(red, false, { closedAtMs: 7_000 })?.yours).toBeUndefined();
   expect(
     checksEvent({ kind: "red", failed: ["build"], cancelled: [], timedOut: [] }),
   ).toMatchObject({
@@ -350,12 +367,29 @@ test("a red check on the thread is the person's and does not fold; green is not 
 test("the fix is offered for a red check as for a conflict, and for nothing else (rondo#551)", () => {
   const facts = { asksWaiting: false, holding: true, succeeded: false };
   const at = (checks: LapResult["checks"]) =>
-    conflictFixBlock({ merged: null, closedAtMs: null, checks } as LapResult, facts);
+    conflictFixBlock({ merged: null, closedAtMs: null, checks, moved: null } as LapResult, facts);
   expect(at({ kind: "red", failed: ["build"], cancelled: [], timedOut: [] })).toBeNull();
   expect(at({ kind: "conflict" })).toBeNull();
   expect(at({ kind: "green", counted: 1, passed: 1, skipped: 0 })).toBe("nothingToFix");
   expect(at({ kind: "running" })).toBe("nothingToFix");
   expect(conflictFixBlock(null, facts)).toBe("nothingToFix");
+  // A head the lap did not push: a repair cut from the lap's branch could not
+  // be pushed onto it, so red is the person's; a conflict's fix is unchanged.
+  const moved: LapResult["moved"] = { from: "a", to: "b", commits: [], more: 0 };
+  const movedAt = (checks: LapResult["checks"]) =>
+    conflictFixBlock({ merged: null, closedAtMs: null, checks, moved } as LapResult, facts);
+  expect(movedAt({ kind: "red", failed: ["build"], cancelled: [], timedOut: [] })).toBe("moved");
+  expect(movedAt({ kind: "conflict" })).toBeNull();
+});
+
+test("a fix press brings the base in for a conflict and names the checks for red (rondo#551)", () => {
+  expect(fixCauseOf({ kind: "conflict" })).toEqual({ kind: "conflict" });
+  expect(
+    fixCauseOf({ kind: "red", failed: ["build"], cancelled: ["lint"], timedOut: ["e2e"] }),
+  ).toEqual({
+    kind: "red",
+    failedChecks: { failed: ["build"], cancelled: ["lint"], timedOut: ["e2e"] },
+  });
 });
 
 test("a basis is named by what it is, and never by the id it is stored under (D-0076)", () => {
@@ -774,6 +808,7 @@ test("a conflicting pull request is offered rondo's fix at the top, as a press u
   expect(japanese).toContain('name="iteration" value="i-r"');
   expect(japanese).toContain('name="scope_decision" value="dec-1"');
   expect(japanese).toContain('name="successor" value="i-fix"');
+  expect(japanese).toContain('name="cause" value="conflict"');
   expect(japanese).toContain("rondo に競合を解消してもらう");
   expect(japanese).toContain("#372 は main と競合していて、チェックが動きません。");
   // The band names both ways while the press is there (D-0106: the press is above it).
@@ -817,6 +852,7 @@ test("a red pull request is offered the same press in its own words, and the ban
   expect(japanese).toContain('action="/fix-conflict?lang=ja"');
   expect(japanese).toContain('name="iteration" value="i-r"');
   expect(japanese).toContain('name="scope_decision" value="dec-1"');
+  expect(japanese).toContain('name="cause" value="red"');
   expect(japanese).toContain("rondo に失敗したチェックを再現して直してもらう");
   expect(japanese).not.toContain("rondo に競合を解消してもらう");
   expect(japanese).toContain(
@@ -840,6 +876,75 @@ test("a red pull request is offered the same press in its own words, and the ban
   const bare = await merging(world);
   expect(bare).not.toContain("/fix-conflict?");
   expect(head(bare)).toContain("プルリクエストのブランチ側で直して push してください。");
+});
+
+test("a press whose card offered another fix than the pull request needs now starts nothing (rondo#551)", async () => {
+  const storePath = join(mkdtempSync(join(tmpdir(), "rondo-fix-cause-")), "store.db");
+  const connection = new DatabaseSync(storePath);
+  const world = await approved("approve", {
+    connection,
+    store: iterationStore(connection, { maxOccupying: 4, maxLive: 6 }),
+    record: advisoryRecord(connection),
+  });
+  await published(world);
+  await checked(world, { kind: "red", failed: ["build"], cancelled: [], timedOut: [] });
+  const press = async (cause: "conflict" | "red") =>
+    await conflictFixFromPage({ RONDO_APPROVER: "ada" }, world.store, storePath, "ada", {
+      iterationId: "i-r",
+      successorId: "i-fix",
+      scopeDecisionId: "dec-1",
+      cause,
+    });
+  const stale = await press("conflict");
+  expect(stale).toMatchObject({ ok: false, why: "conflictFixRefusedGone" });
+  expect(stale.note).toContain("no longer conflicting");
+  // The card's own cause gets past that test, to what comes after it.
+  expect((await press("red")).why).not.toBe("conflictFixRefusedGone");
+  expect((await world.store.read("i-fix")).kind).toBe("absent");
+});
+
+test("a red check with no names says so without empty brackets (rondo#551)", async () => {
+  const world = await approved();
+  await published(world);
+  await checked(world, { kind: "red", failed: [], cancelled: [], timedOut: [] });
+  const japanese = await fixing(world);
+  expect(japanese).toContain('name="cause" value="red"');
+  expect(japanese).toContain("#372 のチェックが通りませんでした。rondo が");
+  expect(japanese).not.toContain("（）");
+  const english = await fixing(world, "en");
+  expect(english).toContain("The checks on #372 did not pass. rondo can");
+  expect(english).not.toContain("()");
+});
+
+test("a red check on a head the lap did not push is the person's to fix by hand (rondo#551)", async () => {
+  const world = await approved();
+  await published(world);
+  await reportToRequest(
+    threadOf(world),
+    "i-r",
+    {
+      kind: "moved",
+      pullRequestUrl: PR,
+      from: "abc1234",
+      to: "fff0000aa",
+      commits: [{ sha: "fff0000aa", subject: "someone else's push" }],
+    },
+    8_000,
+  );
+  await reportToRequest(
+    threadOf(world),
+    "i-r",
+    {
+      kind: "checks",
+      commit: "fff0000aa",
+      reading: { kind: "red", failed: ["build"], cancelled: [], timedOut: [] },
+      moved: true,
+    },
+    9_000,
+  );
+  const japanese = await fixing(world);
+  expect(japanese).not.toContain("/fix-conflict?");
+  expect(head(japanese)).toContain("プルリクエストのブランチ側で直して push してください。");
 });
 
 test("while the fix's attempt runs, no press is drawn and the band says rondo is settling it", async () => {

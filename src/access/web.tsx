@@ -2845,7 +2845,7 @@ async function threadActs(
       <p class="mt-1 text-body leading-6">
         {fix.red === null
           ? wording.nextStepConflictFix(fix.pullRequest, fix.base)
-          : wording.nextStepChecksFix(fix.pullRequest, wording.checksDetail(fix.red) ?? "")}
+          : wording.nextStepChecksFix(fix.pullRequest, wording.checksDetail(fix.red))}
       </p>
       {fix.closed !== null ? (
         <div class="mt-3">
@@ -2863,6 +2863,7 @@ async function threadActs(
           <input type="hidden" name="request" value={requestMessageId} />
           <input type="hidden" name="scope_decision" value={fix.scopeDecisionId} />
           <input type="hidden" name="successor" value={fix.successor} />
+          <input type="hidden" name="cause" value={fix.red === null ? "conflict" : "red"} />
           <button
             type="submit"
             data-busy={fix.red === null ? wording.conflictFixBusy : wording.checksFixBusy}

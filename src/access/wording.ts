@@ -1535,7 +1535,7 @@ export interface Chrome extends PageWords {
    * rondo#551: the same card and press where the pull request's checks are red
    * -- the checks by name, and a repair that reproduces the failure first.
    */
-  readonly nextStepChecksFix: (pullRequest: string, checks: string) => string;
+  readonly nextStepChecksFix: (pullRequest: string, checks: string | null) => string;
   readonly checksFixAction: string;
   readonly checksFixBusy: string;
   readonly conflictFixRefusedNoApprover: string;
