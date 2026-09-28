@@ -285,7 +285,7 @@ const JOINED = "joined:";
 
 /**
  * A person's scoped start refused by files another line holds, waiting to be
- * attempted again by the resident host's tick (rondo#284, D-0157). Keyed by the
+ * attempted again by the resident host's tick (rondo#284, D-0158). Keyed by the
  * iteration id the form minted, so the attempt is the press's own lap.
  */
 export interface HeldStart {
@@ -1845,7 +1845,7 @@ CREATE TABLE IF NOT EXISTS closing_lap (
   created_at_ms               INTEGER NOT NULL
 );
 
--- rondo#284, D-0157. A person's scoped start that the lane ledger refused
+-- rondo#284, D-0158. A person's scoped start that the lane ledger refused
 -- because another line holds its files: kept here, by the iteration id its
 -- form minted, and attempted again by the resident host's tick until its
 -- files are free. settled_at_ms is null while it waits; outcome is 'started'

@@ -23,7 +23,7 @@
  * while they run.
  *
  * **And a person's own start that other work's files held** (rondo#284,
- * D-0157): kept as a `held_start` row by the press, and attempted again here
+ * D-0158): kept as a `held_start` row by the press, and attempted again here
  * through the press's own path and id once no line holding files in its
  * repository is in flight -- a scoped start asks for the whole repository
  * (D-0073 rule 2.5), so every such line is in its way. The attempt reads the

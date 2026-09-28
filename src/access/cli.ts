@@ -5967,7 +5967,7 @@ const starting = new Map<string, Promise<Started>>();
 
 /**
  * **The order tick's port for a person's start that held files kept waiting**
- * (rondo#284, D-0157): the press's own path, id and input, in the approver's
+ * (rondo#284, D-0158): the press's own path, id and input, in the approver's
  * name, answered once reserved for the split start's reason.
  *
  * **An approval no longer in force ends the wait without asking** admission:
@@ -7154,7 +7154,7 @@ async function startScoped(
       return { ...started, why: "startRefusedHeld" };
     }
   }
-  // **Refused by files another line holds, so it waits** (rondo#284, D-0157):
+  // **Refused by files another line holds, so it waits** (rondo#284, D-0158):
   // kept by the id its form minted, and attempted again by the resident host's
   // tick (`orderHost`) once they are free. A row rondo could not write would be
   // a wait nothing ends, so that press is told to start again, as it was --

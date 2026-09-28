@@ -190,7 +190,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0155 | A merge waits only on the questions that hold its line: a question over another line the person answered with a stop no longer withholds the merge, on the page or on green | accepted |
 | D-0156 | Only a judgment call at or above the scope's threshold keeps rondo from sending the drafted change; one below it is left out of what is sent, and the note names it | accepted |
 | D-0157 | A typed `revise` spends the approval the lap it revises was admitted under: `--scope-decision-id` overrides it, nothing to draw refuses, and no `revise` runs outside every approval | accepted |
-| D-0157 | A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press | accepted |
+| D-0158 | A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press | accepted |
 
 ---
 
@@ -24393,10 +24393,10 @@ At rondo `2de3190` on **2026-09-26**, by reading `DECISIONS.md`, `git log` and t
 > repository's own paths since rondo#496: before it, the drafter claimed `/` for nearly every plan,
 > so lines of one repository ran one at a time whatever `maxOccupying` allowed. The row is unedited.
 
-> **Annotation (2026-09-28, from D-0157).** The **Refuse** and **Defer** rows' open cells are
+> **Annotation (2026-09-28, from D-0158).** The **Refuse** and **Defer** rows' open cells are
 > closed by rondo#284: a start the ledger refuses for held files now waits and is attempted again
 > by the resident host's tick until the paths are free, with no second press. `D-0067`'s
-> `sequence` and `D-0068`'s wait readings stay unbuilt; `D-0157` says why this is enough. The rows
+> `sequence` and `D-0068`'s wait readings stay unbuilt; `D-0158` says why this is enough. The rows
 > are unedited.
 
 3. **rondo#250 is done with this entry.** Its ask, a decision naming the layer and its authorities,
@@ -27499,7 +27499,7 @@ none. So what was left, and what this entry decides, is the terminal.
 - **`docs/operations/lap-9-dogfood.md` N-33's remaining half** -- the unscoped `revise` -- is
   answered by this entry once built.
 
-## D-0157 — A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press
+## D-0158 — A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press
 
 **Status:** accepted (2026-09-28, rondo#284). Builds `D-0073` rules 3.4, 3.5, 7 and 7.1 for the
 starts a person presses. Refs `D-0067`, `D-0068` rule 2.1, `D-0098` rule 1.4, `D-0109`, `D-0114`,

@@ -1717,7 +1717,7 @@ async function scopeApproved(
   const gone = view.plan !== null && (drawn === null || !allowedBy(payload, drawn));
   const runsOn = gone ? null : (drawn ?? (allowed.length === 1 ? (allowed[0] as HeldPlan) : null));
   // **A start of this plan that other work's files hold waits** (rondo#284,
-  // D-0157): the host's tick starts it once they are free, so the screen says
+  // D-0158): the host's tick starts it once they are free, so the screen says
   // so, names the work in its way, and draws no second press.
   const waits =
     runsOn === null

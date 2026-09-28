@@ -1,5 +1,5 @@
 /**
- * rondo#284 (D-0157): a person's start that another line's files hold waits,
+ * rondo#284 (D-0158): a person's start that another line's files hold waits,
  * and starts by itself once they are free -- with no second press.
  *
  * Driven through the page: the scope screen is fetched over HTTP, its own start
