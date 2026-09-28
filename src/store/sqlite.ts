@@ -2996,9 +2996,14 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
     async joinHeldStart(held: HeldStart, joinedTo: string): Promise<void> {
       connection
         .prepare(
-          "INSERT OR IGNORE INTO held_start (iteration_id, request_message_id, " +
+          "INSERT INTO held_start (iteration_id, request_message_id, " +
             "scope_decision_id, plan_digest, repository, held_at_ms, settled_at_ms, outcome) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
+            // The form's own wait ended without a start (Codex round 5): it
+            // joins now. One still waiting, or one that started, is left.
+            "ON CONFLICT(iteration_id) DO UPDATE SET settled_at_ms = excluded.settled_at_ms, " +
+            "outcome = excluded.outcome WHERE held_start.settled_at_ms IS NOT NULL AND " +
+            "held_start.outcome <> 'started'",
         )
         .run(
           held.iterationId,

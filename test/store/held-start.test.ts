@@ -58,3 +58,17 @@ test("a form that joined a wait resolves to it after the wait ends, and joining 
   expect(await store.heldStartJoin("lap-a")).toBeNull();
   expect(await store.heldStartJoin("lap-none")).toBeNull();
 });
+
+test("a form whose own wait ended without a start joins a later wait of the plan, and a started one is left", async () => {
+  const store = iterationStore(new DatabaseSync(":memory:"), { maxOccupying: 2, maxLive: 3 });
+  expect(await store.recordHeldStart(held("lap-a"))).toBe(true);
+  await store.settleHeldStart("lap-a", "continuo stopped with an error", 2_000);
+  expect(await store.recordHeldStart(held("lap-b"))).toBe(true);
+  await store.joinHeldStart(held("lap-a"), "lap-b");
+  expect(await store.heldStartJoin("lap-a")).toBe("lap-b");
+  expect(await waiting(store)).toEqual(["lap-b"]);
+  // A wait that started is that form's lap; a join never overwrites it.
+  await store.settleHeldStart("lap-b", "started", 3_000);
+  await store.joinHeldStart(held("lap-b"), "lap-z");
+  expect(await store.heldStartJoin("lap-b")).toBeNull();
+});
