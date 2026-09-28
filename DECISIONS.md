@@ -25525,6 +25525,31 @@ the newest goal: an edit would widen an approval nobody re-read.
 > waits for a slot, the page still reads an open ask over another candidate as the one the flow
 > waits on. Nothing above is edited.
 
+> **Annotation (2026-09-28, from rondo#549).** Added after this entry was accepted, and **not
+> additive**: it narrows the rondo#469 annotation's stop "two injected requests ended `failed` or
+> `abandoned`" to the requests whose **work** ended that way. Observed in the lap-19 store on
+> 2026-09-28: the flow for rondo stopped as `failed_twice` over rondo#462, whose drafter's draft was
+> refused (`D-0071` rule 7.1), and the rondo#228 lap the morning host restart lost (`D-0139`) --
+> and seven seconds later the drafter split rondo#194 without trouble, so nothing of the goal was
+> failing. Both had been read as `failed` because the flow host read "no split drafted" and "the
+> latest lap's status" with no room for either fact.
+>
+> **Two injection states are added to the picker's reading, and neither is counted.**
+> `draft_refused` is a drafter run over the request that wrote no split -- refused, or unavailable:
+> no lap of the request ever ran, so there is no work to call failed, and the flow asks for the next
+> request. `lost` is a lap that ended `failed` with the kind `lost` and whose start again is not
+> reserved yet: it answered nothing and holds no budget, so `D-0139` rule 3's successor is what says
+> how the line ended, and until it stands the injection **holds** the flow (`injection_pending`) in
+> place of ending it. Once the successor is reserved it is the latest lap, and its own end is read.
+>
+> **Neither takes a place in the window either**, so two lines that really failed still stop the
+> flow with a refused draft or a lost lap between them, and the bound is still two
+> (`FAILURES_TO_STOP`). Options not taken: holding the flow on a refused draft (nothing retries it,
+> so the goal would stop dead), and counting a refused draft as an end that merely is not a failure
+> (two real failures either side of one would then not be two). Known limit: a refused draft is not
+> retried and not asked about, which is `D-0071` rule 1.5's "not retried" as it stands; the flow
+> moves on to the next candidate. Nothing above is edited.
+
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 
 **Status:** accepted (2026-09-27, rondo#452). The issue records `D-0098`'s gate (2026-09-22, point
