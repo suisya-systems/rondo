@@ -1812,8 +1812,9 @@ export async function main(
             store,
             record,
             policy: bounds.policy,
-            // Its stop is an ask a person reads, so it is written in their
-            // language (D-0079), as the lost lap's ask above is.
+            // What it leaves in a request's thread -- a refused draft's note,
+            // its stop -- is read by the person, so it is written in their
+            // language (D-0055, D-0079, rondo#549).
             words: chromeFor(selected.tag),
             now: Date.now,
             log: say,

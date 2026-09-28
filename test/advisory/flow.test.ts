@@ -238,6 +238,10 @@ test("an earlier injection still drafting or waiting to start holds the flow; a 
   expect(picked({ injections: [injection(9, "drafting")] })).toBe("injection_pending");
   expect(picked({ injections: [injection(9, "waiting_to_start")] })).toBe("injection_pending");
   expect(picked({ injections: [injection(9, "running")] })).toBe("inject issue:o/r#1");
+  // A lost lap is owed a start again (D-0139 rule 3), so its line is not over.
+  expect(picked({ injections: [injection(9, "lost")] })).toBe("injection_pending");
+  // A refused draft is owed nothing by itself: the flow asks for the next one.
+  expect(picked({ injections: [injection(9, "draft_refused")] })).toBe("inject issue:o/r#1");
 });
 
 test("an open ask on the flow's own requests holds it; a free slot is required", () => {
@@ -254,4 +258,19 @@ test("two consecutive ended injections failed or abandoned stop the flow", () =>
   expect(ended("failed", "closed", "failed")).toBe("inject issue:o/r#1");
   expect(ended("failed")).toBe("inject issue:o/r#1");
   expect(ended("failed", "failed", "closed")).toBe("inject issue:o/r#1");
+});
+
+test("a refused draft and a lost lap are not ends the flow counts (rondo#549)", () => {
+  const ended = (...states: InjectionState[]) =>
+    picked({ injections: states.map((state, at) => injection(10 + at, state)) });
+  // Neither is a request whose work failed, so two of them are not two failures.
+  expect(ended("draft_refused", "draft_refused")).toBe("inject issue:o/r#1");
+  expect(ended("failed", "draft_refused")).toBe("inject issue:o/r#1");
+  // A lost line still holds the flow, so it is the pending wait and not a stop.
+  expect(ended("failed", "lost")).toBe("injection_pending");
+  // And neither takes a place in the window: two real failures still stop it.
+  expect(ended("failed", "draft_refused", "failed")).toBe("failed_twice");
+  expect(ended("failed", "lost", "failed")).toBe("failed_twice");
+  // The bound is still two (FAILURES_TO_STOP): one failure beside them is not enough.
+  expect(ended("closed", "draft_refused", "failed")).toBe("inject issue:o/r#1");
 });
