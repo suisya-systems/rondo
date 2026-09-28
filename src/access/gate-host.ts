@@ -37,7 +37,7 @@ import {
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
-import { autoThreshold, type GateScope, gateAuto } from "./gate-auto.js";
+import { autoThreshold, type GateScope, gateAuto, repairOf } from "./gate-auto.js";
 import {
   reviewPolicyOf,
   reviewRoundDecision,
@@ -203,6 +203,7 @@ async function answerOne(ports: GateHostPorts, record: IterationRecord): Promise
   const auto = gateAuto({
     readings: await ports.store.readingsFor(record.id),
     runs: workerRuns(record.lapCommands),
+    repair: repairOf(record),
     questionOpen: await questionOpen(ports, record),
     closing: (await ports.store.closingLapOf(record.id)) !== null,
     scope,
@@ -312,6 +313,7 @@ export async function reviseToSend(
   const auto = gateAuto({
     readings,
     runs: workerRuns(record.lapCommands),
+    repair: repairOf(record),
     questionOpen: await questionOpen(ports, record),
     closing: (await ports.store.closingLapOf(record.id)) !== null,
     scope,

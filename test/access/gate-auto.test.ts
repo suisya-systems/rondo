@@ -58,6 +58,7 @@ const scope = (over: Partial<GateScope> = {}, threshold: FindingSeverity = "majo
 const input = (over: Partial<GateAutoInput> = {}): GateAutoInput => ({
   readings: [checks(), model(["minor", "nit"])],
   runs: green,
+  repair: null,
   questionOpen: false,
   closing: false,
   scope: scope(),
@@ -159,6 +160,25 @@ describe("gateAuto (D-0125)", () => {
     );
     expect(JA.gateAuto(auto)).toBe(
       "自動では承認しません: 阻害 1 件と重大 2 件の指摘、rondo が読み取れるテスト実行がありません、質問が開いています。",
+    );
+  });
+
+  test("a repair lap (rondo#551) is sent to the person unless it showed the failure and then a pass", () => {
+    expect(reasons({ repair: "reproduced" })).toEqual([]);
+    expect(reasons({ repair: "notReproduced" })).toEqual(["repair_not_reproduced"]);
+    expect(reasons({ repair: "unrecorded" })).toEqual(["repair_not_reproduced"]);
+    expect(reasons({ repair: "allSkipped" })).toEqual(["tests_all_skipped"]);
+    // A lap that is not a repair is read as it always was.
+    expect(reasons({ repair: null })).toEqual([]);
+    const auto = gateAuto(input({ repair: "allSkipped" }));
+    expect(EN.gateAuto(auto)).toBe(
+      "Not approved automatically: every test in the last run was skipped, so it shows nothing.",
+    );
+    expect(JA.gateAuto(auto)).toBe(
+      "自動では承認しません: 最後の実行ではテストがすべてスキップされ、何も確かめていません。",
+    );
+    expect(EN.gateAuto(gateAuto(input({ repair: "notReproduced" })))).toBe(
+      "Not approved automatically: the repair did not show the failing checks fail and then a run that passed.",
     );
   });
 });

@@ -54,6 +54,10 @@ function gateAutoReasonJa(reason: GateAutoReason): string {
       return `テストが ${String(reason.failed)} 件失敗しています`;
     case "tests_errored":
       return "テストのコマンドがエラーで終わっています";
+    case "repair_not_reproduced":
+      return "修正の回が、失敗の再現とそのあとの通った実行を示していません";
+    case "tests_all_skipped":
+      return "最後の実行ではテストがすべてスキップされ、何も確かめていません";
     case "question_open":
       return "質問が開いています";
     case "closing_lap":
@@ -1385,7 +1389,7 @@ export const JA: Chrome = Object.freeze({
     "マージしていません。プルリクエストの最新のコミットで、チェックが緑だと rondo はまだ" +
     "読めていません。終わるのを待ってから、もう一度押してください。",
   mergeRefusedAsked:
-    "マージしていません。この依頼には、あなたの回答を待っている質問や確認が残っています。" +
+    "マージしていません。この作業には、あなたの回答を待っている質問や確認が残っています。" +
     "先に答えてください。",
   mergeRefusedMerged: "もう一度はマージしていません。このプルリクエストはマージ済みです。",
   mergeRefusedLanded:
@@ -1424,6 +1428,11 @@ export const JA: Chrome = Object.freeze({
   conflictFixAction: "rondo に競合を解消してもらう",
   conflictFixBusy: "解消を始めています…",
   conflictFixBack: "依頼に戻る",
+  nextStepChecksFix: (pullRequest, checks) =>
+    `${pullRequest} のチェックが通りませんでした${checks === null ? "" : `（${checks}）`}。rondo がプルリクエストのブランチで` +
+    "失敗を再現して直せます（ほかは変えません）。push の前に、その結果をここで確認してもらいます。",
+  checksFixAction: "rondo に失敗したチェックを再現して直してもらう",
+  checksFixBusy: "修正を始めています…",
   conflictFixRefusedNoApprover:
     "何も始めていません。この端末の rondo はまだあなたが誰かを知らないので、ここでは" +
     "あなたとして何も決められません。",

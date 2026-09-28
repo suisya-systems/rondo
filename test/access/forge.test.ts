@@ -24,6 +24,7 @@ import {
   readChangedPaths,
   readLanding,
   readRepositoryPaths,
+  rerunFailedJobs,
   runReviewer,
 } from "../../src/access/forge.js";
 import { evidenceOf, materialDigestOf, readingOf } from "../../src/access/review.js";
@@ -1039,3 +1040,41 @@ test("D-0143: the kept commit is rondo's even where the host's environment names
   }
   expect(gitOut(work, "log", "-1", "--format=%an <%ae>")).toBe("rondo <rondo@localhost>");
 });
+
+posix(
+  "rondo#551: a re-run is one POST of the run's failed jobs, and a refusal says why",
+  async () => {
+    // A stand-in `gh` first on PATH: records its argv, and fails for run 13.
+    const bin = mkdtempSync(join(tmpdir(), "rondo-fake-gh-"));
+    const seen = join(bin, "argv");
+    writeFileSync(
+      join(bin, "gh"),
+      `#!/bin/sh\nprintf '%s\\n' "$@" > '${seen}'\ncase "$*" in *runs/13/*) echo 'HTTP 403: no' >&2; exit 1;; esac\n`,
+      { mode: 0o755 },
+    );
+    const before = process.env["PATH"];
+    process.env["PATH"] = `${bin}:${before ?? ""}`;
+    try {
+      expect(await rerunFailedJobs({ host: "ghe.example", repo: "o/n", runId: 12 })).toEqual({
+        kind: "rerun",
+        runId: 12,
+      });
+      expect(readFileSync(seen, "utf8").split("\n")).toEqual([
+        "api",
+        "--hostname",
+        "ghe.example",
+        "--method",
+        "POST",
+        "repos/o/n/actions/runs/12/rerun-failed-jobs",
+        "",
+      ]);
+      const refused = await rerunFailedJobs({ host: null, repo: "o/n", runId: 13 });
+      expect(refused).toMatchObject({ kind: "refused", runId: 13 });
+      expect(refused.kind === "refused" ? refused.reason : "").toContain("exited 1: HTTP 403: no");
+      expect(readFileSync(seen, "utf8").split("\n")[1]).toBe("--method");
+    } finally {
+      if (before === undefined) delete process.env["PATH"];
+      else process.env["PATH"] = before;
+    }
+  },
+);

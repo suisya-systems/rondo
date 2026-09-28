@@ -200,8 +200,11 @@ test("the presses that start a lap carry their busy label and what a lap waits o
   // *Ask for a change* starts the second lap, and waits on it as a start does.
   const revise = source("src/access/web.tsx");
   expect(revise).toContain("data-busy={wording.reviseBusy}");
-  // And so does the conflict fix's attempt (rondo#417, D-0105).
-  expect(revise).toContain("data-busy={wording.conflictFixBusy}");
+  // And so does the conflict fix's attempt (rondo#417, D-0105), or the red
+  // checks' repair (rondo#551) that the same press starts.
+  expect(revise).toContain(
+    "data-busy={fix.red === null ? wording.conflictFixBusy : wording.checksFixBusy}",
+  );
   expect(revise.match(/\{wording\.lapBusyNote\}/g)).toHaveLength(2);
   const scope = source("src/access/screens/scope.tsx");
   // Both starts -- the plan's own and the one under an approval -- and every

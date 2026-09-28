@@ -935,14 +935,25 @@ test("(fix-conflict) a person's press starts the fix once; a script, a stale for
   };
   const { base, stop, closed } = await served(createApp(withFix(true), TOKEN));
   const person = pressHeaders(base);
-  const { body: _words, ...form } = reviseForm();
+  const { body: _words, ...rest } = reviseForm();
+  const form: Record<string, string> = { ...rest, cause: "red" };
 
   const pressed = await send(base, "/fix-conflict", "POST", person, form);
   expect(pressed.status).toBe(303);
   expect(pressed.location).toBe("/?thread=req-1&lang=en");
   expect(fixed).toEqual([
-    { iterationId: "i-0001", successorId: form["successor"], scopeDecisionId: "decision-1" },
+    {
+      iterationId: "i-0001",
+      successorId: form["successor"],
+      scopeDecisionId: "decision-1",
+      cause: "red",
+    },
   ]);
+  // A form that does not say what it fixes starts nothing (rondo#551).
+  const { cause: _cause, ...unsaid } = form;
+  for (const sent of [unsaid, { ...form, cause: "green" }]) {
+    expect((await send(base, "/fix-conflict", "POST", person, sent)).status).toBe(400);
+  }
   const script = await send(
     base,
     "/fix-conflict",
@@ -956,6 +967,17 @@ test("(fix-conflict) a person's press starts the fix once; a script, a stale for
     successor: "NOT AN ID",
   });
   expect(stale.status).toBe(400);
+  // The refusal is named for what the card offered (rondo#551).
+  expect(stale.body).toContain(EN.checksFixAction);
+  expect(stale.body).not.toContain(EN.conflictFixAction);
+  const staleConflict = await send(base, "/fix-conflict", "POST", person, {
+    ...form,
+    cause: "conflict",
+    successor: "NOT AN ID",
+  });
+  expect(staleConflict.status).toBe(400);
+  expect(staleConflict.body).toContain(EN.conflictFixAction);
+  expect(staleConflict.body).not.toContain(EN.checksFixAction);
   expect(fixed).toHaveLength(1);
   stop.abort();
   expect(await closed).toBe(0);

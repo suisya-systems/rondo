@@ -43,6 +43,8 @@ import {
   runPlan,
 } from "../../src/refrain/plan.js";
 import {
+  asksChecksRepair,
+  CHECKS_REPAIR_HEAD,
   KEPT_WORK_SUBJECT,
   revisionInstruction,
   revisionPlan,
@@ -567,6 +569,84 @@ test("the words sent with a change are read back off the lap they started", () =
     revisionInstruction(PREDECESSOR, successor(revised({ instruction: null, takeIn }).prompt)),
   ).toBeNull();
   expect(revisionInstruction(PREDECESSOR, PREDECESSOR)).toBeNull();
+});
+
+test("rondo#551: a repair of red checks names them, asks for the failure first, and reads no words back", () => {
+  const plan = revised({
+    instruction: null,
+    takeIn: null,
+    failedChecks: {
+      failed: ["double-green (ubuntu-latest, node 22)"],
+      cancelled: ["lint"],
+      timedOut: [],
+    },
+  });
+  expect(plan.prompt).toContain(CHECKS_REPAIR_HEAD);
+  expect(plan.prompt).toContain(
+    "'double-green (ubuntu-latest, node 22)' failed; 'lint' was cancelled",
+  );
+  expect(plan.prompt).toContain("First reproduce the failure here");
+  expect(plan.prompt).toContain("A run in which every test is skipped reproduces nothing");
+  expect(plan.prompt).toContain("Change nothing else");
+  expect(plan.prompt).not.toContain("conflicts with its base");
+  expect(plan.prompt).not.toContain("Bring the default branch in first");
+  expect(plan.baseBranch).toBe(FIRST.topicBranch);
+  expect(/^[\x20-\x7e\n]*$/.test(plan.prompt)).toBe(true);
+  expect(
+    revisionInstruction(PREDECESSOR, {
+      ...PREDECESSOR,
+      id: FRESH_ITERATION_ID,
+      plan: { ...PREDECESSOR.plan, prompt: plan.prompt },
+    }),
+  ).toBeNull();
+  // Every other revision carries no such section.
+  expect(revised().prompt).not.toContain(CHECKS_REPAIR_HEAD);
+});
+
+test("rondo#551: a lap is a repair by the section it added, so a later lap on a repaired line is not one", () => {
+  const RED = { failed: ["build"], cancelled: [], timedOut: [] };
+  const repair = revised({ instruction: null, takeIn: null, failedChecks: RED });
+  expect(asksChecksRepair(repair.prompt)).toBe(true);
+  // The repair lap as the store holds it, for what comes after it.
+  const repaired: IterationRecord = {
+    ...PREDECESSOR,
+    id: FRESH_ITERATION_ID,
+    plan: { ...PREDECESSOR.plan, prompt: repair.prompt },
+  };
+  const after = (overrides: Partial<Parameters<typeof revisionPlan>[0]>): string => {
+    const outcome = revisionPlan({
+      predecessor: repaired,
+      iterationId: "iter-3",
+      instruction: "keep the helper",
+      takeIn: null,
+      ...overrides,
+    });
+    if (outcome.kind !== "planned") {
+      throw new Error(`expected a successor plan, got a refusal: ${outcome.reason}`);
+    }
+    return outcome.plan.prompt;
+  };
+  // A revise after the model's review: the repair's section is above its own.
+  const revise = after({});
+  expect(revise).toContain(CHECKS_REPAIR_HEAD);
+  expect(asksChecksRepair(revise)).toBe(false);
+  // A conflict fix, with the default branch taken in after it.
+  const conflict = after({
+    instruction: null,
+    takeIn: {
+      cause: "conflict",
+      remoteBranch: "origin/main",
+      branch: "rondo/take-in",
+      commit: "c".repeat(40),
+      paths: [],
+    },
+  });
+  expect(asksChecksRepair(conflict)).toBe(false);
+  // A retry of a stopped repair keeps the stored plan and appends a retry head.
+  const stopped = { ...repaired, status: "failed" as const, failureKind: "budget" as const };
+  expect(asksChecksRepair(stoppedRetryPlan(repair, stopped, "go on").prompt)).toBe(true);
+  expect(asksChecksRepair(stoppedRetryPlan(repair, stopped).prompt)).toBe(true);
+  expect(asksChecksRepair(revised().prompt)).toBe(false);
 });
 
 // --- D-0143: a retry of a lap stopped at its time limit starts where it stopped --

@@ -14,6 +14,7 @@ import {
 import { JA } from "../../src/access/wording/ja.js";
 import { type Chrome, EN } from "../../src/access/wording.js";
 import type { GateDelegation } from "../../src/continuo/invoker.js";
+import { CHECKS_REPAIR_HEAD } from "../../src/refrain/revision.js";
 import type {
   FindingSeverity,
   IterationRecord,
@@ -66,6 +67,7 @@ const lap = (id: string, gateId: string, over: Partial<IterationRecord> = {}): I
     gateId,
     lapCommands: GREEN_RUN,
     requestMessageId: "msg-1",
+    plan: { prompt: "do the work" },
     ...over,
   }) as unknown as IterationRecord;
 
@@ -218,6 +220,31 @@ describe("gateHost (D-0125 rule 6)", () => {
     expect(GATE_ACTOR).toBe("rondo/gate/1");
   });
 
+  test("a repair lap (rondo#551) is approved only once it showed the failure and then a pass", async () => {
+    const repair = { prompt: `do the work\n\n${CHECKS_REPAIR_HEAD}\n` };
+    const unreproduced = world([lap("i-1", "g-1", { plan: repair })]);
+    await pass(unreproduced);
+    expect(unreproduced.claims.size).toBe(0);
+    expect(unreproduced.answered).toEqual([]);
+    const reproduced = world([
+      lap("i-2", "g-2", {
+        plan: repair,
+        lapCommands: JSON.stringify([
+          {
+            index: 0,
+            command: "npm test",
+            output: " Tests  1 failed | 9 passed (10)",
+            output_omitted_chars: 0,
+            is_error: true,
+          },
+          ...(JSON.parse(GREEN_RUN) as unknown[]),
+        ]),
+      }),
+    ]);
+    await pass(reproduced);
+    expect([...reproduced.claims]).toEqual(["gate_answer g-2"]);
+  });
+
   test("a gate that would not be approved is left alone, and nothing is claimed", async () => {
     const w = world([lap("i-1", "g-1")]);
     w.readings = [checks, model(["major"])];
@@ -336,6 +363,12 @@ describe("rondo sends the drafted change under a goal scope (D-0145)", () => {
         w.laps[0] = lap("i-1", "g-1", {
           lapCommands: GREEN_RUN.replace('"is_error":false', '"is_error":true'),
         });
+      },
+    ],
+    [
+      "a repair lap that never showed the failure (rondo#551)",
+      (w) => {
+        w.laps[0] = lap("i-1", "g-1", { plan: { prompt: `x\n\n${CHECKS_REPAIR_HEAD}\n` } });
       },
     ],
     [

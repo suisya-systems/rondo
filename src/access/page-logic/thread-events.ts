@@ -27,6 +27,7 @@ import {
 } from "../../store/records.js";
 import type { ThreadEvent } from "../page/events.js";
 import { TAKE_IN_FINDING } from "../review.js";
+import type { MergeRefusal } from "../web-app.js";
 import type { Chrome } from "../wording.js";
 import { refusalSaid } from "./laps.js";
 import type { LapResult } from "./result.js";
@@ -328,6 +329,59 @@ export function lapEvents(
         at: at(result.checksAtMs),
         atMs: result.checksAtMs,
         tryAt,
+        // A red check on rondo's own pull request is the person's to act on
+        // (the repair press, rondo#551), so the fold leaves it on the axis --
+        // while it still is: not once merged or closed, nor once a later try
+        // was built on this one (the repair itself, or a revise).
+        ...(result.checks.kind === "red" &&
+        result.merged === null &&
+        result.closedAtMs === null &&
+        !after.revised
+          ? { yours: true as const }
+          : {}),
+      });
+    }
+    // **The one re-run of a red head's failed checks, or why not** (rondo#551).
+    const rerun = result.rerun;
+    if (rerun !== null) {
+      events.push({
+        id: `${record.id}:rerun`,
+        kind: "other",
+        said: said(wording.evRerun(pullRequest, rerun)),
+        at: at(rerun.atMs),
+        atMs: rerun.atMs,
+        tryAt,
+      });
+    }
+    // **A merge on green rondo withheld** (rondo#551): what holds it and what
+    // the person can do, theirs while it stands -- the green it was withheld
+    // on is still the answer, and nothing merged or closed the pull request.
+    const withheld = result.withheld;
+    if (withheld !== null) {
+      const refused = withheld.why.startsWith("mergeRefused")
+        ? wording[withheld.why as MergeRefusal]
+        : null;
+      events.push({
+        id: `${record.id}:withheld`,
+        kind: "other",
+        said: said(
+          wording.evMergeWithheld(
+            pullRequest,
+            withheld,
+            typeof refused === "string" ? refused : null,
+          ),
+        ),
+        at: at(withheld.atMs),
+        atMs: withheld.atMs,
+        tryAt,
+        // An approval without the merge is not something waiting on the person.
+        ...(withheld.why !== "notInScope" &&
+        result.merged === null &&
+        result.closedAtMs === null &&
+        result.checks.kind === "green" &&
+        result.checksCommit === withheld.head
+          ? { yours: true as const }
+          : {}),
       });
     }
   }

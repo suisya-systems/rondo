@@ -13,11 +13,14 @@ import {
   type ChecksReaders,
   type ChecksReading,
   checksHost,
+  type FailingCheck,
+  failingChecksOf,
   type PullRequestFacts,
   pullRequestFactsOf,
   pullRequestIn,
   readChecks,
   readingOf,
+  unfinishedRunsOf,
 } from "../../src/access/checks-host.js";
 import type { CiScope, CiShown } from "../../src/continuo/protocol.js";
 
@@ -129,6 +132,8 @@ test("fetch, observe and show, and the head is ci show's", async () => {
     reading: { kind: "green", counted: 1, skipped: 0 },
     head: "abc1234",
     pullRequest: null,
+    failing: [],
+    unfinishedRuns: [],
   });
   expect(calls).toEqual(["fetch", "observe o/n#12 /state/control.db", "show o/n#12"]);
 });
@@ -181,7 +186,23 @@ async function hostOver(options: {
     readonly reading: ChecksReading;
     readonly head?: string;
     readonly pullRequest?: PullRequestFacts;
+    readonly failing?: readonly FailingCheck[];
+    readonly unfinishedRuns?: readonly number[];
+    /** The host's clock on this pass, where it is not `100 * (pass + 1)`. */
+    readonly atMs?: number;
   }[];
+  /** The failing check runs the forge's document lists (rondo#551). */
+  readonly failing?: readonly FailingCheck[];
+  readonly unfinishedRuns?: readonly number[];
+  /**
+   * Given, the host re-runs failed checks (rondo#551): whether the lap's scope
+   * allows it, and whether the forge refuses the `POST`.
+   */
+  readonly rerun?: {
+    readonly authorised: boolean;
+    /** Every `POST` refused, or only these run ids'. */
+    readonly refuse?: boolean | readonly number[];
+  };
   /** Run while the forge is being read, as a press starting then would. */
   readonly duringRead?: () => void;
   /** A message's body, where it is not the one the fixture composes. */
@@ -191,6 +212,8 @@ async function hostOver(options: {
 }): Promise<{
   /** Each merge on green asked, as `lap head` (D-0126). */
   readonly mergesAsked: readonly string[];
+  /** Each re-run `POST`, as its run id (rondo#551). */
+  readonly posts: readonly number[];
   readonly written: readonly Recorded[];
   /** The run ids whose `rondo/base/` branch the close-out deleted (D-0119). */
   readonly deletedBases: readonly string[];
@@ -202,6 +225,7 @@ async function hostOver(options: {
   const askedIds: string[] = [];
   const deletedBases: string[] = [];
   const mergesAsked: string[] = [];
+  const posts: number[] = [];
   let tick = 0;
   let clock = 100;
   const messages: {
@@ -297,6 +321,8 @@ async function hostOver(options: {
         reading: options.readings?.[id] ?? step.reading,
         head: step.head ?? `commit-of-${id}`,
         pullRequest: step.pullRequest ?? null,
+        failing: step.failing ?? options.failing ?? [],
+        unfinishedRuns: step.unfinishedRuns ?? options.unfinishedRuns ?? [],
       };
     },
     readCommits: async (request) => ({
@@ -313,16 +339,34 @@ async function hostOver(options: {
             return options.mergeOnGreen ?? null;
           },
         }),
+    ...(options.rerun === undefined
+      ? {}
+      : {
+          rerun: {
+            authorised: async () => options.rerun?.authorised === true,
+            rerunFailedJobs: async (request: { readonly runId: number }) => {
+              posts.push(request.runId);
+              const refuse = options.rerun?.refuse;
+              return refuse === true || (Array.isArray(refuse) && refuse.includes(request.runId))
+                ? {
+                    kind: "refused" as const,
+                    runId: request.runId,
+                    reason: "HTTP 403 from the forge",
+                  }
+                : { kind: "rerun" as const, runId: request.runId };
+            },
+          },
+        }),
     host: "github.com",
     now: () => clock,
     log: () => {},
   });
   for (tick = 0; tick < (options.steps?.length ?? options.passes ?? 1); tick += 1) {
-    clock = 100 * (tick + 1);
+    clock = options.steps?.[tick]?.atMs ?? 100 * (tick + 1);
     host.kick();
     await host.idle();
   }
-  return { written, deletedBases, asked: askedIds.length, askedIds, mergesAsked };
+  return { written, deletedBases, asked: askedIds.length, askedIds, mergesAsked, posts };
 }
 
 test("a published lap whose line still holds is read, and its answer is one message", async () => {
@@ -333,7 +377,7 @@ test("a published lap whose line still holds is read, and its answer is one mess
   expect(over.asked).toBe(1);
   expect(over.written).toHaveLength(1);
   expect(over.written[0]?.messageId).toBe("report-checks-lap-1-red");
-  // Every answer says rondo did nothing else with the pull request.
+  // Every answer says what rondo does not do with the pull request.
   expect(over.written[0]?.body).toContain("does not merge");
   expect(over.written[0]?.body).toContain("'build'");
 });
@@ -548,25 +592,20 @@ test("merged or closed on the forge ends the reading, and only a merge is closed
   }
 });
 
-test("D-0126: a green just written on the lap's own head asks for a merge on green, once", async () => {
+test("D-0126: a green just written on the lap's own head asks for a merge on green", async () => {
   const green = { kind: "green", counted: 1, skipped: 0 } as const;
   const once = await hostOver({
     reading: green,
     pullRequest: OPEN,
     messageIds: ["request-1", "report-published-lap-1"],
     mergeOnGreen: "merged",
-    passes: 2,
   });
   expect(once.mergesAsked).toEqual(["lap-1 commit-of-lap-1"]);
-  // Not on a red, a pending, a conflict, or a green already said.
+  // Not on a red, a pending, or a conflict.
   for (const options of [
     { reading: { kind: "red", failed: ["build"], cancelled: [], timedOut: [] } },
     { reading: { kind: "pending", pending: ["build"] } },
     { reading: green, pullRequest: { ...OPEN, conflicting: true } },
-    {
-      reading: green,
-      messageIds: ["request-1", "report-published-lap-1", "report-checks-lap-1-green"],
-    },
   ] as const) {
     const over = await hostOver({
       pullRequest: OPEN,
@@ -585,6 +624,44 @@ test("D-0126: a green just written on the lap's own head asks for a merge on gre
     mergeOnGreen: "merged",
   });
   expect(moved.mergesAsked).toEqual([]);
+});
+
+test("rondo#551: a merge on green is asked again on each scan while the lap's own head reads green", async () => {
+  const green = { kind: "green", counted: 1, skipped: 0 } as const;
+  const said = ["request-1", "report-published-lap-1", "report-checks-lap-1-green"];
+  // A green said before -- a restart, a throw, a deploy since -- with nothing
+  // withheld on record, and one withheld on this head or another.
+  for (const messageIds of [
+    said,
+    [...said, "report-withheld-lap-1-commit-of-lap-1-asked-question-ask-1"],
+    [...said, "report-withheld-lap-1-0ther00-claim"],
+  ]) {
+    const again = await hostOver({
+      reading: green,
+      pullRequest: OPEN,
+      messageIds,
+      mergeOnGreen: null,
+      passes: 2,
+    });
+    // Nothing new is written: the green stands, and the merge is asked again.
+    expect(again.written).toEqual([]);
+    expect(again.mergesAsked).toEqual(["lap-1 commit-of-lap-1", "lap-1 commit-of-lap-1"]);
+  }
+  // Not once the checks are no longer green, and not once the claim on this
+  // head is spent: that is the person's press.
+  for (const options of [
+    {
+      reading: { kind: "red", failed: ["build"], cancelled: [], timedOut: [] },
+      messageIds: said,
+    },
+    ...["claim", "mergeRefusedFailed", "mergeRefusedUnconfirmed"].map((token) => ({
+      reading: green,
+      messageIds: [...said, `report-withheld-lap-1-commit-of-lap-1-${token}`],
+    })),
+  ] as const) {
+    const over = await hostOver({ pullRequest: OPEN, mergeOnGreen: null, ...options });
+    expect(over.mergesAsked).toEqual([]);
+  }
 });
 
 test("a lap a merge press holds is left alone", async () => {
@@ -715,4 +792,337 @@ test("rondo#417: a pull request a conflict fix was pushed onto is read for the f
   expect(over.written.map((one) => one.messageId)).toEqual([
     expect.stringMatching(/^report-checks-lap-2-green/),
   ]);
+});
+
+// --- rondo#551: the first red on a head re-runs its failed Actions jobs once --
+
+test("rondo#551: failing check runs are read off the forge's document, with the Actions run each is in", () => {
+  const job = (run: number, job: number) =>
+    `https://github.com/o/n/actions/runs/${String(run)}/job/${String(job)}`;
+  const printed = JSON.stringify([
+    {
+      total_count: 3,
+      check_runs: [
+        {
+          id: 111,
+          name: "build",
+          status: "completed",
+          conclusion: "failure",
+          details_url: job(9, 1),
+        },
+        {
+          id: 112,
+          name: "lint",
+          status: "completed",
+          conclusion: "success",
+          details_url: job(9, 2),
+        },
+        {
+          id: 113,
+          name: "ci/jenkins",
+          status: "completed",
+          conclusion: "failure",
+          details_url: "https://jenkins.example/job/7",
+        },
+      ],
+    },
+    {
+      total_count: 3,
+      check_runs: [
+        {
+          id: 114,
+          name: "slow",
+          status: "completed",
+          conclusion: "timed_out",
+          details_url: job(10, 3),
+        },
+        {
+          id: 115,
+          name: "gone",
+          status: "completed",
+          conclusion: "cancelled",
+          details_url: job(10, 4),
+        },
+        { id: 116, name: "e2e", status: "in_progress", conclusion: null, details_url: job(11, 5) },
+      ],
+    },
+  ]);
+  expect(failingChecksOf(printed)).toEqual([
+    { checkRunId: 111, runId: 9, name: "build" },
+    { checkRunId: 113, runId: null, name: "ci/jenkins" },
+    { checkRunId: 114, runId: 10, name: "slow" },
+    { checkRunId: 115, runId: 10, name: "gone" },
+  ]);
+  expect(unfinishedRunsOf(printed)).toEqual([11]);
+  // A commit status document has no check runs; nothing unreadable is guessed.
+  expect(failingChecksOf(JSON.stringify([{ state: "failure", statuses: [] }]))).toEqual([]);
+  expect(failingChecksOf("not json")).toEqual([]);
+});
+
+const RED: ChecksReading = { kind: "red", failed: ["build", "lint"], cancelled: [], timedOut: [] };
+const FAILING: readonly FailingCheck[] = [
+  { checkRunId: 111, runId: 9, name: "build" },
+  { checkRunId: 222, runId: 9, name: "lint" },
+  { checkRunId: 333, runId: 10, name: "build" },
+];
+const PUBLISHED = ["request-1", "report-published-lap-1"];
+
+test("rondo#551: a first red under a merge scope re-runs each failed run once, and its stale red is not said again", async () => {
+  const over = await hostOver({
+    reading: RED,
+    pullRequest: OPEN,
+    messageIds: PUBLISHED,
+    rerun: { authorised: true },
+    mergeOnGreen: null,
+    steps: [
+      { reading: RED, pullRequest: OPEN, failing: FAILING },
+      // The forge has not queued new attempts yet: the same runs fail.
+      { reading: RED, pullRequest: OPEN, failing: FAILING },
+      { reading: { kind: "pending", pending: ["build"] }, pullRequest: OPEN },
+      { reading: GREEN, pullRequest: OPEN },
+    ],
+  });
+  expect(over.posts).toEqual([9, 10]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-1-red",
+    "report-rerun-lap-1-commit-of-lap-1",
+    "report-checks-lap-1-green",
+  ]);
+  expect(over.written[1]?.body).toContain(
+    "rondo re-ran the failed checks 'build', 'lint' of pull request " +
+      "https://github.com/owner/name/pull/1 on commit 'commit-of-lap-1' once " +
+      "(check runs 111, 222, 333)",
+  );
+  // Green after the re-run is the merge on green, as ever.
+  expect(over.mergesAsked).toEqual(["lap-1 commit-of-lap-1"]);
+});
+
+test("rondo#551: still red on new attempts after the re-run is said red again, and not re-run twice", async () => {
+  const again = [{ checkRunId: 444, runId: 9, name: "build" }];
+  const over = await hostOver({
+    reading: RED,
+    pullRequest: OPEN,
+    messageIds: PUBLISHED,
+    rerun: { authorised: true },
+    steps: [
+      { reading: RED, pullRequest: OPEN, failing: FAILING },
+      { reading: RED, pullRequest: OPEN, failing: again },
+      { reading: RED, pullRequest: OPEN, failing: again },
+    ],
+  });
+  expect(over.posts).toEqual([9, 10]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-1-red",
+    "report-rerun-lap-1-commit-of-lap-1",
+    "report-checks-lap-1-red-t200",
+  ]);
+});
+
+test("rondo#551: a red that is not rondo's to re-run says why once, and is never posted", async () => {
+  const cases = [
+    {
+      // Another app's check has no Actions run.
+      options: {
+        reading: { ...RED, failed: ["ci/jenkins"] },
+        failing: [{ checkRunId: 1, runId: null, name: "ci/jenkins" }],
+        rerun: { authorised: true },
+      },
+      id: "notActions",
+      said: "'ci/jenkins' is not a GitHub Actions job",
+      posts: [],
+    },
+    {
+      // A commit status is red and no check run failed.
+      options: { failing: [], rerun: { authorised: true } },
+      id: "notActions",
+      said: "'build', 'lint' are not GitHub Actions jobs",
+      posts: [],
+    },
+    {
+      options: { failing: FAILING, rerun: { authorised: false } },
+      id: "noScope",
+      said: "no approved scope of this lap includes merging",
+      posts: [],
+    },
+    {
+      options: { failing: FAILING, rerun: { authorised: true, refuse: true } },
+      id: "refused",
+      said: "the forge refused to re-run workflow run 9: HTTP 403 from the forge",
+      posts: [9, 10],
+    },
+  ] as const;
+  for (const one of cases) {
+    const over = await hostOver({
+      reading: RED,
+      pullRequest: OPEN,
+      messageIds: PUBLISHED,
+      passes: 2,
+      ...one.options,
+    });
+    expect(over.posts).toEqual(one.posts);
+    expect(over.written.map((written) => written.messageId)).toEqual([
+      "report-checks-lap-1-red",
+      `report-rerun-lap-1-commit-of-lap-1-${one.id}`,
+    ]);
+    expect(over.written[1]?.body).toContain(one.said);
+    expect(over.written[1]?.body).toContain("The thread offers the repair");
+  }
+});
+
+test("rondo#551: a run still going is re-run once it finishes, and a moved head is not rondo's to re-run", async () => {
+  const over = await hostOver({
+    reading: RED,
+    pullRequest: OPEN,
+    messageIds: PUBLISHED,
+    rerun: { authorised: true },
+    steps: [
+      { reading: RED, pullRequest: OPEN, failing: FAILING, unfinishedRuns: [10] },
+      { reading: RED, pullRequest: OPEN, failing: FAILING },
+    ],
+  });
+  expect(over.posts).toEqual([9, 10]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-1-red",
+    "report-rerun-lap-1-commit-of-lap-1",
+  ]);
+  const moved = await hostOver({
+    reading: RED,
+    head: "fff0000",
+    pullRequest: OPEN,
+    messageIds: PUBLISHED,
+    failing: FAILING,
+    rerun: { authorised: true },
+  });
+  expect(moved.posts).toEqual([]);
+  expect(moved.written.some((one) => one.messageId.startsWith("report-rerun-"))).toBe(false);
+});
+
+test("rondo#551: a red commit status beside a failing Actions job is not re-run, and names the status", async () => {
+  const over = await hostOver({
+    reading: { ...RED, failed: ["build", "lint", "ci/status"] } as ChecksReading,
+    pullRequest: OPEN,
+    messageIds: PUBLISHED,
+    failing: FAILING,
+    rerun: { authorised: true },
+  });
+  expect(over.posts).toEqual([]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-1-red",
+    "report-rerun-lap-1-commit-of-lap-1-notActions",
+  ]);
+  expect(over.written[1]?.body).toContain("'ci/status' is not a GitHub Actions job");
+});
+
+test("rondo#551: a re-run the forge takes for some runs and refuses for others ran, and the refused run's red is said", async () => {
+  const over = await hostOver({
+    reading: RED,
+    pullRequest: OPEN,
+    messageIds: PUBLISHED,
+    rerun: { authorised: true, refuse: [10] },
+    steps: [
+      { reading: RED, pullRequest: OPEN, failing: FAILING },
+      { reading: RED, pullRequest: OPEN, failing: FAILING },
+    ],
+  });
+  expect(over.posts).toEqual([9, 10]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-1-red",
+    "report-rerun-lap-1-commit-of-lap-1",
+    // Check run 333 was in the refused run, so its red is not the re-run's.
+    "report-checks-lap-1-red-t200",
+  ]);
+  expect(over.written[1]?.body).toContain("(check runs 111, 222)");
+  expect(over.written[1]?.body).toContain(
+    "The forge refused to re-run workflow run 10: HTTP 403 from the forge.",
+  );
+});
+
+test("rondo#551: a re-run's red unanswered for half an hour is said red again, and the repair offered", async () => {
+  const over = await hostOver({
+    reading: RED,
+    pullRequest: OPEN,
+    messageIds: PUBLISHED,
+    rerun: { authorised: true },
+    steps: [
+      { reading: RED, pullRequest: OPEN, failing: FAILING },
+      { reading: RED, pullRequest: OPEN, failing: FAILING, atMs: 200 + 29 * 60 * 1000 },
+      { reading: RED, pullRequest: OPEN, failing: FAILING, atMs: 100 + 30 * 60 * 1000 },
+    ],
+  });
+  expect(over.posts).toEqual([9, 10]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-1-red",
+    "report-rerun-lap-1-commit-of-lap-1",
+    `report-checks-lap-1-red-t${String(100 + 30 * 60 * 1000)}`,
+  ]);
+});
+
+test("rondo#551: a re-run already on record for this head is not posted again after a restart", async () => {
+  // The stored re-run named other check runs, so the red now is not the one it
+  // is waiting on: said again, and only the re-run's own guard keeps it from a
+  // second `POST`.
+  const over = await hostOver({
+    reading: RED,
+    pullRequest: OPEN,
+    messageIds: [...PUBLISHED, "report-checks-lap-1-red", "report-rerun-lap-1-commit-of-lap-1"],
+    bodies: {
+      "report-rerun-lap-1-commit-of-lap-1":
+        "Lap 'lap-1' failed its checks, so rondo re-ran the failed checks 'build' of " +
+        "pull request https://github.com/owner/name/pull/1 on commit 'commit-of-lap-1' once " +
+        "(check runs 999).",
+    },
+    failing: FAILING,
+    rerun: { authorised: true },
+  });
+  expect(over.posts).toEqual([]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    expect.stringMatching(/^report-checks-lap-1-red-t\d+$/),
+  ]);
+});
+
+test("rondo#551: a red check outside Actions beside the re-run's own runs is said again at once", async () => {
+  const over = await hostOver({
+    reading: RED,
+    pullRequest: OPEN,
+    messageIds: PUBLISHED,
+    rerun: { authorised: true },
+    steps: [
+      { reading: RED, pullRequest: OPEN, failing: FAILING },
+      // The same check runs, and now a commit status no re-run reaches.
+      {
+        reading: { ...RED, failed: ["build", "lint", "ci/status"] } as ChecksReading,
+        pullRequest: OPEN,
+        failing: FAILING,
+      },
+    ],
+  });
+  expect(over.posts).toEqual([9, 10]);
+  expect(over.written.map((one) => one.messageId)).toEqual([
+    "report-checks-lap-1-red",
+    "report-rerun-lap-1-commit-of-lap-1",
+    "report-checks-lap-1-red-t200",
+  ]);
+});
+
+test("rondo#551: a merge refusal only a person or a new head changes is not asked again each scan", async () => {
+  const said = ["request-1", "report-published-lap-1", "report-checks-lap-1-green"];
+  for (const token of ["mergeRefusedQueue", "mergeRefusedRetargeted", "mergeRefusedMethod"]) {
+    const over = await hostOver({
+      reading: GREEN,
+      pullRequest: OPEN,
+      messageIds: [...said, `report-withheld-lap-1-commit-of-lap-1-${token}`],
+      mergeOnGreen: null,
+    });
+    expect(over.mergesAsked).toEqual([]);
+  }
+  // A transient forge refusal, and an approval replaced before the claim, are.
+  for (const token of ["mergeRefusedForge", "scopeChanged"]) {
+    const over = await hostOver({
+      reading: GREEN,
+      pullRequest: OPEN,
+      messageIds: [...said, `report-withheld-lap-1-commit-of-lap-1-${token}`],
+      mergeOnGreen: null,
+    });
+    expect(over.mergesAsked).toEqual(["lap-1 commit-of-lap-1"]);
+  }
 });

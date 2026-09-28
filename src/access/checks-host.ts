@@ -22,7 +22,9 @@
  * request is not an act a scope can include (`SCOPE_OUTWARD_ACTS`), so it is
  * not reachable from here. Merging is, since D-0126: right after a `green`
  * answer on the lap's own head, through `mergeOnGreen`, which merges only where
- * the lap's scope includes `merge_default_branch`.
+ * the lap's scope includes `merge_default_branch`. Under that same approval,
+ * and without spending its claim, the first red on the lap's own head re-runs
+ * its failed Actions jobs once (rondo#551): a re-run changes no code.
  *
  * **Nobody is woken by it.** Whether a person who is not looking at the page
  * should be told is rondo#311's question, and its mechanism is where that
@@ -45,7 +47,7 @@ import {
 import type { CiObserved, CiShown, ContinuoResult } from "../continuo/protocol.js";
 import { isDeterministicReadingDrafter, latestReading, planField } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
-import { checksAnswerId, type LapEvent, reportToRequest } from "./conductor.js";
+import { type ChecksRerun, checksAnswerId, type LapEvent, reportToRequest } from "./conductor.js";
 import {
   type CommitsBetween,
   type CommitsBetweenRequest,
@@ -53,10 +55,13 @@ import {
   fetchPullRequestChecks,
   type PullRequestChecksFetch,
   type PullRequestChecksRequest,
+  type RerunOutcome,
+  type RerunRequest,
 } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
 import { closeOutMerged, type RemoveLapWorkspace } from "./merge.js";
 import { type LapResult, resultOf } from "./page-logic/result.js";
+import type { MergeRefusal } from "./web-app.js";
 
 /**
  * What continuo's verdict on one pull request comes to, as rondo writes it
@@ -111,6 +116,21 @@ export interface ChecksRead {
    * null where nothing was fetched, or continuo refused the fetch.
    */
   readonly pullRequest: PullRequestFacts | null;
+  /** The check runs that did not pass, off the forge's own document ({@link failingChecksOf}). */
+  readonly failing: readonly FailingCheck[];
+  /** The Actions runs with a check run not finished yet ({@link unfinishedRunsOf}). */
+  readonly unfinishedRuns: readonly number[];
+}
+
+/**
+ * One check run that failed, timed out or was cancelled (rondo#551): its id,
+ * the GitHub Actions run it belongs to -- null for a check another app ran,
+ * which rondo cannot re-run -- and its name.
+ */
+export interface FailingCheck {
+  readonly checkRunId: number;
+  readonly runId: number | null;
+  readonly name: string;
 }
 
 /**
@@ -167,6 +187,15 @@ export interface ChecksHostPorts {
    * Absent, nothing is merged here.
    */
   readonly mergeOnGreen?: (iterationId: string, head: string) => Promise<string | null>;
+  /**
+   * Re-run failed Actions jobs once per head (rondo#551), under the same
+   * approval a merge on green is (`scopedAuthority` with the merge): a re-run
+   * changes no code. Absent, nothing is re-run and nothing is said about it.
+   */
+  readonly rerun?: {
+    readonly authorised: (iterationId: string) => Promise<boolean>;
+    readonly rerunFailedJobs: (request: RerunRequest) => Promise<RerunOutcome>;
+  };
   /** Called after a merge made outside rondo is closed out: the flow host's kick (rondo#469). */
   readonly closedOut?: () => void;
   /** The forge host, as `publish` reads it (`GH_HOST`), or null for `gh`'s own. */
@@ -398,7 +427,7 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
   if (db === "") {
     return once("its plan names no control-plane database, so its checks have nowhere to go");
   }
-  const { reading, head, pullRequest } = await ports.readChecks({
+  const { reading, head, pullRequest, failing, unfinishedRuns } = await ports.readChecks({
     host: ports.host,
     repo: address.repo,
     number: address.number,
@@ -515,16 +544,51 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
         baseCommit: pullRequest.baseCommit,
       },
     );
-  } else if (reading.kind !== "pending") {
-    const told = await say(
+  } else if (
+    reading.kind !== "pending" &&
+    // **A red the re-run has not reached yet is still pending** (rondo#551):
+    // until the forge queues new attempts, the check runs that failed are the
+    // same ones the re-run was asked for, and saying them red again would
+    // offer the repair over a re-run still to come.
+    !(
+      reading.kind === "red" &&
+      !moved &&
+      staleAfterRerun(shown, head, reading, failing, ports.now())
+    )
+  ) {
+    await say(
       checksAnswerId(iterationId, reading.kind, head, moved),
       shown?.checks.kind === reading.kind &&
         (shown.checksCommit === null || shown.checksCommit === head),
       { kind: "checks", commit: head, reading, moved },
     );
-    // D-0126: a green just said on the lap's own head is where a scope that
-    // includes the merge merges. The rest of the test is `mergeOnGreen`'s.
-    if (told && reading.kind === "green" && !moved && ports.mergeOnGreen !== undefined) {
+    if (reading.kind === "red" && !moved && ports.rerun !== undefined) {
+      const line = await rerunOnce(ports, ports.rerun, due, address.url, head, {
+        reading,
+        failing,
+        unfinishedRuns,
+        repo: address.repo,
+      });
+      if (line !== null) {
+        lines.push(line);
+      }
+    }
+    // D-0126: green on the lap's own head is where a scope that includes the
+    // merge merges. The rest of the test is `mergeOnGreen`'s. **Asked on every
+    // scan while that green stands** (rondo#551), not only when it was just
+    // said: a hold -- a question answered since, say -- may have cleared, and a
+    // green said before a host restart or a throw was never asked at all.
+    // `mergeOnGreen` is quiet where there is nothing new: no scope is local
+    // reads only, and a withheld merge is said once per head and reason.
+    // **Not once its claim is spent** (a claim refused, or a merge the forge
+    // failed or did not confirm after it), nor after a refusal nothing but a
+    // person or a new head changes: that is the person's press.
+    // ponytail: a transient forge refusal before the claim is read again every
+    // scan; a cleared-hold test before asking is the upgrade.
+    const spent = NOT_RETRIED.some((token) =>
+      due.said.has(`report-withheld-${iterationId}-${head}-${token}`),
+    );
+    if (reading.kind === "green" && !moved && !spent && ports.mergeOnGreen !== undefined) {
       const merged = await ports.mergeOnGreen(iterationId, head);
       if (merged !== null) {
         lines.push(merged);
@@ -533,6 +597,128 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
   }
   return { line: lines.length === 0 ? null : lines.join(" "), halt: false };
 }
+
+/**
+ * Whether the red on `head` is the one a re-run was asked for (rondo#551): the
+ * re-run on this head ran less than {@link RERUN_PATIENCE_MS} ago, every
+ * check run failing now is one it named, and nothing else is red -- a commit
+ * status, say, which no re-run reaches.
+ */
+function staleAfterRerun(
+  shown: LapResult | null,
+  head: string,
+  reading: Extract<ChecksReading, { kind: "red" }>,
+  failing: readonly FailingCheck[],
+  nowMs: number,
+): boolean {
+  const rerun = shown?.rerun;
+  return (
+    rerun?.ran === true &&
+    rerun.head === head &&
+    nowMs - rerun.atMs < RERUN_PATIENCE_MS &&
+    failing.length > 0 &&
+    failing.every((one) => rerun.checkRunIds.includes(one.checkRunId)) &&
+    notActionsOf(reading, failing).length === 0
+  );
+}
+
+/**
+ * How long a re-run's red may stand unanswered before it is said red again and
+ * the repair offered (rondo#551): the forge may never queue the new attempts.
+ * ponytail: a fixed half hour; the workflow's own timeout is the upgrade.
+ */
+const RERUN_PATIENCE_MS = 30 * 60 * 1000;
+
+/** The red check names no failing Actions check run carries: another app's, or a commit status. */
+function notActionsOf(
+  reading: Extract<ChecksReading, { kind: "red" }>,
+  failing: readonly FailingCheck[],
+): readonly string[] {
+  const actions = new Set(failing.flatMap((one) => (one.runId === null ? [] : [one.name])));
+  const { failed, cancelled, timedOut } = reading;
+  return [...new Set([...failed, ...cancelled, ...timedOut])].filter((name) => !actions.has(name));
+}
+
+/**
+ * **The first red on the lap's own head re-runs its failed Actions jobs, once**
+ * (rondo#551): one `POST` per workflow run, then one line in the thread, so a
+ * crash in between costs a second `POST` and nothing worse. Any line already
+ * written about a re-run on this head -- made, or not made and why -- ends it:
+ * a second red on the same head is the repair's.
+ *
+ * Not made, and said why: a red check no Actions run holds, no approval that
+ * includes the merge, or the forge refusing every run. A run still going is
+ * asked about again on the next scan, since the forge re-runs only a finished
+ * one. Where the forge takes some runs and refuses others, it ran, and the
+ * line names the refused ones.
+ */
+async function rerunOnce(
+  ports: ChecksHostPorts,
+  rerun: NonNullable<ChecksHostPorts["rerun"]>,
+  due: Due,
+  pullRequestUrl: string,
+  head: string,
+  read: {
+    readonly reading: Extract<ChecksReading, { kind: "red" }>;
+    readonly failing: readonly FailingCheck[];
+    readonly unfinishedRuns: readonly number[];
+    readonly repo: string;
+  },
+): Promise<string | null> {
+  const iterationId = due.iterationId;
+  const id = `report-rerun-${iterationId}-${head}`;
+  if ([...due.said].some((one) => one === id || one.startsWith(`${id}-`))) {
+    return null;
+  }
+  const { failing } = read;
+  const write = async (outcome: ChecksRerun): Promise<string | null> =>
+    await reportToRequest(
+      ports,
+      iterationId,
+      { kind: "rerun", pullRequestUrl, head, failing, outcome },
+      ports.now(),
+    );
+  const others = notActionsOf(read.reading, failing);
+  const runIds = [...new Set(failing.flatMap((one) => (one.runId === null ? [] : [one.runId])))];
+  if (others.length > 0 || runIds.length === 0) {
+    const names = others.length > 0 ? others : [...new Set(failing.map((one) => one.name))];
+    return await write({ kind: "notActions", names });
+  }
+  if (runIds.some((runId) => read.unfinishedRuns.includes(runId))) {
+    return null;
+  }
+  if (!(await rerun.authorised(iterationId))) {
+    return await write({ kind: "noScope" });
+  }
+  const refused: { readonly runId: number; readonly reason: string }[] = [];
+  for (const runId of runIds) {
+    const posted = await rerun.rerunFailedJobs({ host: ports.host, repo: read.repo, runId });
+    if (posted.kind === "refused") {
+      refused.push({ runId, reason: posted.reason });
+    }
+  }
+  const [first] = refused;
+  return await write(
+    first !== undefined && refused.length === runIds.length
+      ? { kind: "refused", runId: first.runId, reason: first.reason }
+      : { kind: "ran", refused },
+  );
+}
+
+/**
+ * The withheld-merge tokens after which a scan does not ask to merge the same
+ * head again (rondo#551): the merge's claim was made -- `claim`, a merge the
+ * forge failed or did not confirm -- or the forge refused for a reason only a
+ * person or a new head changes.
+ */
+const NOT_RETRIED = [
+  "claim",
+  "mergeRefusedFailed",
+  "mergeRefusedUnconfirmed",
+  "mergeRefusedQueue",
+  "mergeRefusedRetargeted",
+  "mergeRefusedMethod",
+] as const satisfies readonly (MergeRefusal | "claim")[];
 
 /** The address, `OWNER/NAME` and the number of the pull request a text names, or null. */
 export function pullRequestIn(text: string): { url: string; repo: string; number: number } | null {
@@ -572,6 +758,78 @@ export function pullRequestFactsOf(printed: string): PullRequestFacts | null {
     mergedBy: merged ? text(at(at(json, "merged_by"), "login")) : null,
     mergeCommit: merged ? text(at(json, "merge_commit_sha")) : null,
   };
+}
+
+interface CheckRun {
+  readonly id: number;
+  readonly name: string;
+  readonly status: unknown;
+  readonly conclusion: unknown;
+  /** The Actions run its `details_url` names, or null for another app's check. */
+  readonly runId: number | null;
+}
+
+/**
+ * The check runs in the forge's check-runs document, as
+ * `gh api --paginate --slurp` prints it (a list of pages, each with
+ * `check_runs`); one page alone reads too. Anything unreadable is left out.
+ */
+function checkRunsOf(printed: string): readonly CheckRun[] {
+  let json: unknown;
+  try {
+    json = JSON.parse(printed);
+  } catch {
+    return [];
+  }
+  return (Array.isArray(json) ? json : [json]).flatMap((page: unknown) => {
+    const runs =
+      typeof page === "object" && page !== null
+        ? (page as Record<string, unknown>)["check_runs"]
+        : null;
+    return (Array.isArray(runs) ? runs : []).flatMap((run: unknown) => {
+      if (typeof run !== "object" || run === null) {
+        return [];
+      }
+      const { id, name, status, conclusion, details_url } = run as Record<string, unknown>;
+      if (typeof id !== "number" || typeof name !== "string") {
+        return [];
+      }
+      const actions =
+        typeof details_url === "string"
+          ? /\/actions\/runs\/(\d+)\/job\/(\d+)/.exec(details_url)
+          : null;
+      return [
+        { id, name, status, conclusion, runId: actions === null ? null : Number(actions[1]) },
+      ];
+    });
+  });
+}
+
+/**
+ * The check runs that failed, timed out or were cancelled (rondo#551), with
+ * the Actions run each belongs to where its `details_url` names one. A commit
+ * status has no run and is not in this document at all.
+ */
+export function failingChecksOf(checkRuns: string): readonly FailingCheck[] {
+  return checkRunsOf(checkRuns)
+    .filter(
+      (run) =>
+        run.conclusion === "failure" ||
+        run.conclusion === "timed_out" ||
+        run.conclusion === "cancelled",
+    )
+    .map((run) => ({ checkRunId: run.id, runId: run.runId, name: run.name }));
+}
+
+/** The Actions runs with a check run that has not completed. */
+export function unfinishedRunsOf(checkRuns: string): readonly number[] {
+  return [
+    ...new Set(
+      checkRunsOf(checkRuns).flatMap((run) =>
+        run.status !== "completed" && run.runId !== null ? [run.runId] : [],
+      ),
+    ),
+  ];
 }
 
 /**
@@ -640,6 +898,8 @@ export async function readChecks(
     reading: { kind: "undetermined", reason },
     head: null,
     pullRequest: null,
+    failing: [],
+    unfinishedRuns: [],
   });
   const fetched = await readers.forge(request);
   if (fetched.kind !== "fetched") {
@@ -693,6 +953,8 @@ export async function readChecks(
     // What continuo recorded is the same document, so it is read only once
     // `observe` took it.
     pullRequest: pullRequestFactsOf(fetched.pullRequest),
+    failing: failingChecksOf(fetched.checkRuns),
+    unfinishedRuns: unfinishedRunsOf(fetched.checkRuns),
   };
 }
 
@@ -713,6 +975,8 @@ export function continuoChecksReader(
           reading: { kind: "undetermined", reason: `continuo is not usable: ${startup.reason}` },
           head: null,
           pullRequest: null,
+          failing: [],
+          unfinishedRuns: [],
         };
       }
       verified = startup.continuo;

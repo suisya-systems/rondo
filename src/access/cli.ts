@@ -180,6 +180,7 @@ import {
   readRecordAdditions,
   readRecordFloor,
   readRepositoryPaths,
+  rerunFailedJobs,
   runDrafter,
   stoppedShort,
 } from "./forge.js";
@@ -211,7 +212,13 @@ import {
   stoppedLapOf,
   thisDriver,
 } from "./lost-laps.js";
-import { continuoWorkspaceRemover, mergeOnGreen, mergePress, releasePublished } from "./merge.js";
+import {
+  continuoWorkspaceRemover,
+  mergeOnGreen,
+  mergePress,
+  releasePublished,
+  scopedAuthority,
+} from "./merge.js";
 import {
   type DrafterPorts,
   draftedPlanRun,
@@ -233,7 +240,7 @@ import type {
   WebPorts,
 } from "./page/contract.js";
 import { workerRuns } from "./page-logic/laps.js";
-import { asksOverLine, conflictFixBlock, resultOf } from "./page-logic/result.js";
+import { asksOverLine, conflictFixBlock, fixCauseOf, resultOf } from "./page-logic/result.js";
 import { requestWords, threadsOf } from "./page-logic/threads.js";
 import {
   type ComposedBodyOutcome,
@@ -1668,6 +1675,16 @@ export async function main(
         flow?.kick();
         order?.kick();
         return merged;
+      },
+      // rondo#551: the first red on a head re-runs its failed Actions jobs once,
+      // under the approval a merge on green is made under, whose claim it
+      // does not spend: a re-run changes no code.
+      rerun: {
+        authorised: async (iterationId) =>
+          (await scopedAuthority({ store, record, now: Date.now }, iterationId, [
+            "merge_default_branch",
+          ])) !== null,
+        rerunFailedJobs,
       },
       closedOut: () => flow?.kick(),
       host: forgeHost(environment),
@@ -6615,9 +6632,10 @@ async function conflictFixPage(
       live.record.status === "awaiting_human" &&
       lineIds.includes(live.record.id),
   );
+  const fresh = resultOf(threads.byId, record.id);
   const block = !approvedForPublication(record)
-    ? "notConflicting"
-    : conflictFixBlock(resultOf(threads.byId, record.id), {
+    ? "nothingToFix"
+    : conflictFixBlock(fresh, {
         // A gate waiting, or a question about this line (D-0105); a question
         // about the request as a whole does not withhold the fix.
         asksWaiting: gated || asksOverLine(threads, record.requestMessageId, lineIds),
@@ -6632,7 +6650,17 @@ async function conflictFixPage(
     return {
       ok: false,
       why: "conflictFixRefusedGone",
-      note: `resolving the conflict is not offered on '${record.id}': ${block}`,
+      note: `fixing the pull request is not offered on '${record.id}': ${block}`,
+    };
+  }
+  // The fix the card offered, asked again: a card drawn for a conflict starts
+  // nothing once the checks are red instead, and the other way round (rondo#551).
+  const cause = fresh === null ? null : fixCauseOf(fresh.checks);
+  if (cause?.kind !== input.cause) {
+    return {
+      ok: false,
+      why: "conflictFixRefusedGone",
+      note: `the pull request of '${record.id}' is no longer ${input.cause === "red" ? "red" : "conflicting"}`,
     };
   }
   // The approval the lap ran under, re-read and only compared with the form's,
@@ -6666,8 +6694,12 @@ async function conflictFixPage(
   }
   const continuo = startup.continuo;
   // The forge's default branch as it is at this press (D-0105; the one
-  // exception to D-0100 rule 4), taken in with cause `conflict`.
-  const decided = await revisionTakeIn(record, input.successorId, store, "conflict");
+  // exception to D-0100 rule 4), taken in with cause `conflict`. A red check's
+  // repair (rondo#551) takes nothing in: it names the failing checks instead.
+  const decided =
+    cause.kind === "conflict"
+      ? await revisionTakeIn(record, input.successorId, store, "conflict")
+      : { takeIn: null };
   const successor =
     "refusal" in decided
       ? { kind: "refused" as const, reason: decided.refusal }
@@ -6676,6 +6708,7 @@ async function conflictFixPage(
           iterationId: input.successorId,
           instruction: null,
           takeIn: decided.takeIn,
+          failedChecks: cause.kind === "red" ? cause.failedChecks : null,
         });
   if (successor.kind === "refused") {
     refuse(successor.reason);

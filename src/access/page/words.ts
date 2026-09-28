@@ -32,6 +32,29 @@ export interface DayWords {
   readonly dayOlder: string;
 }
 
+/** Why rondo did not re-run a red head's failed checks (rondo#551), by `ChecksRerun`'s arm. */
+function rerunWhyEn(why: string): string {
+  return (
+    {
+      notActions: "a failing check is not a GitHub Actions job, which is all rondo can re-run",
+      noScope:
+        "the approval it works under does not include merging, which a re-run is taken under",
+      refused: "the forge refused the re-run",
+    }[why] ?? "it could not"
+  );
+}
+
+function rerunWhyJa(why: string): string {
+  return (
+    {
+      notActions:
+        "失敗したチェックに GitHub Actions 以外のものがあり、rondo が再実行できるのは Actions だけです",
+      noScope: "作業の承認にマージが含まれておらず、再実行はその承認のもとで行うためです",
+      refused: "GitHub が再実行を断りました",
+    }[why] ?? "再実行できませんでした"
+  );
+}
+
 /** The kinds of report rondo writes on a lap, as their `report-<kind>-` ids name them. */
 export const LAP_REPORT_KINDS = Object.freeze([
   "gate",
@@ -45,6 +68,8 @@ export const LAP_REPORT_KINDS = Object.freeze([
   "moved",
   "closing",
   "lost",
+  "withheld",
+  "rerun",
 ] as const);
 export type LapReportKind = (typeof LAP_REPORT_KINDS)[number] | "other";
 
@@ -119,6 +144,28 @@ export interface PageWords extends DayWords {
   readonly evPushedOnto: string;
   /** The line a checks answer is said as: the pull request, and what its checks came to. */
   readonly evChecks: (pullRequest: string, word: string, detail: string | null) => string;
+  /**
+   * A merge on green rondo did not make (rondo#551), by why: `asked` (naming
+   * the question or the lap at its gate that holds it), `notInScope`,
+   * `expired`, `claim`, or a press's refusal key, whose own sentence is
+   * `refused` where it is one.
+   */
+  readonly evMergeWithheld: (
+    pullRequest: string,
+    withheld: {
+      readonly why: string;
+      readonly askId: string | null;
+      readonly gateLapId: string | null;
+    },
+    refused: string | null,
+  ) => string;
+  /**
+   * The one re-run of a red head's failed checks (rondo#551): made, or not
+   * made by `why` -- `notActions`, `noScope` or `refused` (`ChecksRerun`).
+   */
+  readonly evRerun: (pullRequest: string, rerun: { readonly why: string | null }) => string;
+  /** Beside a red the re-run was not made for: why, and that the repair is offered. */
+  readonly resultRerunNot: (why: string) => string;
   readonly evStopped: string;
   /**
    * The two ways an attempt can fail, which are not one line (rondo#348).
@@ -439,6 +486,15 @@ export interface PageWords extends DayWords {
   readonly resultConflictDoOffered: (base: string) => string;
   readonly resultConflictFixing: (base: string) => string;
   readonly resultConflictWaits: (base: string) => string;
+  /**
+   * rondo#551: a red check on the pull request, by name, and the same four
+   * states of rondo's repair as the conflict's above.
+   */
+  readonly resultRed: (pullRequest: string, names: readonly string[]) => string;
+  readonly resultRedDo: string;
+  readonly resultRedDoOffered: string;
+  readonly resultRedFixing: string;
+  readonly resultRedWaits: string;
   readonly resultMoved: (from: string, to: string, count: number) => string;
   readonly resultMovedNone: (from: string, to: string) => string;
   readonly resultMovedMore: (count: number) => string;
@@ -619,8 +675,41 @@ export const PAGE_EN: PageWords = Object.freeze({
   evClosedUnapproved: "The confirmation closed without an approval.",
   evPublished: "Published, and a pull request was opened:",
   evPushedOnto: "Published onto the pull request already open:",
+  evMergeWithheld: (pullRequest, { why, askId, gateLapId }, refused) => {
+    const press = "Press merge to merge it.";
+    switch (why) {
+      case "asked":
+        return (
+          `rondo did not merge ${pullRequest}, though its checks are green: ` +
+          (gateLapId !== null
+            ? `the try ${gateLapId} of this work is waiting at its confirmation.`
+            : askId !== null
+              ? `the question ${askId} about this work is waiting on you.`
+              : "a question or a confirmation about this work is waiting on you.") +
+          " Answer it and rondo merges it by itself, or press merge."
+        );
+      case "notInScope":
+        return `rondo did not merge ${pullRequest} by itself: the approval it works under does not include merging. ${press}`;
+      case "expired":
+        return `rondo did not merge ${pullRequest} by itself: the approval it works under has run out. ${press}`;
+      case "claim":
+        return `rondo did not merge ${pullRequest}: the approval changed, or was already used, while it was merging. ${press}`;
+      case "scopeChanged":
+        return `rondo did not merge ${pullRequest}: the approval ran out or was replaced while it was merging. ${press}`;
+      default:
+        return (
+          `rondo did not merge ${pullRequest}, though its checks are green. ` +
+          (refused ?? `Look at the pull request, then press merge.`)
+        );
+    }
+  },
   evChecks: (pullRequest, word, detail) =>
     `The checks on ${pullRequest}: ${word}${detail === null ? "" : ` (${detail})`}.`,
+  evRerun: (pullRequest, { why }) =>
+    why === null
+      ? `The checks on ${pullRequest} failed, so rondo re-ran the failed checks once.`
+      : `The checks on ${pullRequest} failed, and rondo did not re-run them: ${rerunWhyEn(why)}.`,
+  resultRerunNot: (why) => `rondo did not re-run them: ${rerunWhyEn(why)}.`,
   evStopped: "Stopped.",
   evRefused: (said) => `Stopped, because this was turned down: ${said}`,
   evBudgetStopped: (spent, left) =>
@@ -648,6 +737,8 @@ export const PAGE_EN: PageWords = Object.freeze({
       moved: "rondo recorded that the pull request moved.",
       closing: "rondo recorded the closing fix.",
       lost: "rondo recorded that this try was lost when rondo restarted.",
+      withheld: "rondo recorded why it did not merge on green checks.",
+      rerun: "rondo recorded re-running the failed checks once, or why it did not.",
       other: "rondo recorded something about this try.",
     })[kind],
   evChecksPassed: "The automatic checks all passed.",
@@ -957,6 +1048,7 @@ export const PAGE_EN: PageWords = Object.freeze({
       red: "red",
       none: "none reported",
       conflict: "not run",
+      rerunning: "re-running",
     })[checks.kind],
   checksDetail: (checks) => {
     switch (checks.kind) {
@@ -989,6 +1081,8 @@ export const PAGE_EN: PageWords = Object.freeze({
         return "the forge has reported no check yet";
       case "conflict":
         return null;
+      case "rerunning":
+        return "rondo re-ran the failed checks once; waiting for them";
       default:
         return "not finished yet";
     }
@@ -1017,6 +1111,18 @@ export const PAGE_EN: PageWords = Object.freeze({
     `Press the button under Your next step, below, and rondo resolves it here, or resolve it yourself on the pull request's branch (merge ${base} in, or rebase) and push. Either way rondo reads the checks again once they run.`,
   resultConflictFixing: (base) =>
     `rondo is settling the conflict in a new attempt that brings ${base} in. Its result is yours to check here before anything is pushed.`,
+  resultRed: (pullRequest, names) =>
+    names.length === 0
+      ? `The checks on ${pullRequest} did not pass.`
+      : `The checks on ${pullRequest} did not pass: ${names.map((name) => `'${name}'`).join(", ")}.`,
+  resultRedDo:
+    "Fix it on the pull request's branch and push. rondo reads the checks again once they run.",
+  resultRedDoOffered:
+    "Press the button under Your next step, below, and rondo reproduces the failure and fixes it on the same pull request, or fix it yourself on the pull request's branch and push. Either way rondo reads the checks again once they run.",
+  resultRedFixing:
+    "rondo is reproducing the failure and fixing it in a new attempt on the same pull request. Its result is yours to check here before anything is pushed.",
+  resultRedWaits:
+    "rondo has not started fixing it: a question about this work is waiting on you. Once you answer it, rondo can fix it here; or fix it yourself on the pull request's branch and push.",
   resultConflictWaits: (base) =>
     `rondo has not started resolving it: a question about this work is waiting on you. Once you answer it, rondo can resolve it here; or resolve it yourself on the pull request's branch (merge ${base} in, or rebase) and push.`,
   resultMoved: (from, to, count) =>
@@ -1196,8 +1302,41 @@ export const PAGE_JA: PageWords = Object.freeze({
   evClosedUnapproved: "承認されないまま、確認が閉じました。",
   evPublished: "公開しました。プルリクエストを開きました:",
   evPushedOnto: "公開しました。開いているプルリクエストに push しました:",
+  evMergeWithheld: (pullRequest, { why, askId, gateLapId }, refused) => {
+    const press = "マージするには、マージのボタンを押してください。";
+    switch (why) {
+      case "asked":
+        return (
+          `${pullRequest} のチェックは通っていますが、rondo はマージしませんでした。` +
+          (gateLapId !== null
+            ? `この作業の回 ${gateLapId} が確認を待っています。`
+            : askId !== null
+              ? `この作業についての質問 ${askId} が、あなたの回答を待っています。`
+              : "この作業についての質問か確認が、あなたの回答を待っています。") +
+          "答えると rondo が自分でマージします。マージのボタンを押してもかまいません。"
+        );
+      case "notInScope":
+        return `${pullRequest} を rondo は自分ではマージしませんでした。いまの承認にマージが含まれていません。${press}`;
+      case "expired":
+        return `${pullRequest} を rondo は自分ではマージしませんでした。いまの承認の期限が切れています。${press}`;
+      case "claim":
+        return `${pullRequest} を rondo はマージしませんでした。マージの途中で承認が変わったか、すでに使われていました。${press}`;
+      case "scopeChanged":
+        return `${pullRequest} を rondo はマージしませんでした。マージの途中で承認の期限が切れたか、置き換えられました。${press}`;
+      default:
+        return (
+          `${pullRequest} のチェックは通っていますが、rondo はマージしませんでした。` +
+          (refused ?? "プルリクエストを確かめてから、マージのボタンを押してください。")
+        );
+    }
+  },
   evChecks: (pullRequest, word, detail) =>
     `${pullRequest} のチェック: ${word}${detail === null ? "" : `（${detail}）`}`,
+  evRerun: (pullRequest, { why }) =>
+    why === null
+      ? `${pullRequest} のチェックが通らなかったため、失敗したチェックを rondo が 1 回だけ再実行しました。`
+      : `${pullRequest} のチェックが通りませんでしたが、rondo は再実行しませんでした: ${rerunWhyJa(why)}。`,
+  resultRerunNot: (why) => `rondo は再実行しませんでした: ${rerunWhyJa(why)}。`,
   evStopped: "取りやめました。",
   evRefused: (said) => `断られたため、ここで止まりました: ${said}`,
   evBudgetStopped: (spent, left) =>
@@ -1224,6 +1363,9 @@ export const PAGE_JA: PageWords = Object.freeze({
       moved: "プルリクエストが動いたことを rondo が記録しました。",
       closing: "仕上げの修正を rondo が記録しました。",
       lost: "rondo の再起動でこの回が失われたことを記録しました。",
+      withheld: "チェックが通っていてもマージしなかった理由を rondo が記録しました。",
+      rerun:
+        "失敗したチェックを 1 回だけ再実行したこと、またはしなかった理由を rondo が記録しました。",
       other: "この回について rondo が記録しました。",
     })[kind],
   evChecksPassed: "自動チェックはすべて通りました。",
@@ -1501,9 +1643,14 @@ export const PAGE_JA: PageWords = Object.freeze({
   stepLanding: "取り込み（マージ）",
   pullRequest: (number) => (number === null ? "プルリクエスト" : `#${number}`),
   checksWord: (checks) =>
-    ({ running: "実行中", green: "緑", red: "赤", none: "報告なし", conflict: "未実行" })[
-      checks.kind
-    ],
+    ({
+      running: "実行中",
+      green: "緑",
+      red: "赤",
+      none: "報告なし",
+      conflict: "未実行",
+      rerunning: "再実行中",
+    })[checks.kind],
   checksDetail: (checks) => {
     switch (checks.kind) {
       case "green":
@@ -1533,6 +1680,8 @@ export const PAGE_JA: PageWords = Object.freeze({
         return "まだチェックが報告されていません";
       case "conflict":
         return null;
+      case "rerunning":
+        return "失敗したチェックを rondo が 1 回だけ再実行しました。結果を待っています";
       default:
         return "終わるのを待っています";
     }
@@ -1561,6 +1710,18 @@ export const PAGE_JA: PageWords = Object.freeze({
     `すぐ下の「次にやること」のボタンで rondo に解消させるか、プルリクエストのブランチ側で自分で解消して（${base} を取り込むか、リベースする）push してください。どちらでも、チェックが動けば rondo が読み直します。`,
   resultConflictFixing: (base) =>
     `rondo が ${base} を取り込む新しい回で、競合を解消しています。その結果は、push の前にここで確認してもらいます。`,
+  resultRed: (pullRequest, names) =>
+    names.length === 0
+      ? `${pullRequest} のチェックが通りませんでした。`
+      : `${pullRequest} のチェックが通りませんでした: ${names.map((name) => `'${name}'`).join("、")}。`,
+  resultRedDo:
+    "プルリクエストのブランチ側で直して push してください。チェックが動けば rondo が読み直します。",
+  resultRedDoOffered:
+    "すぐ下の「次にやること」のボタンで rondo に失敗を再現して同じプルリクエストの上で直させるか、プルリクエストのブランチ側で自分で直して push してください。どちらでも、チェックが動けば rondo が読み直します。",
+  resultRedFixing:
+    "rondo が同じプルリクエストの上の新しい回で、失敗を再現して直しています。その結果は、push の前にここで確認してもらいます。",
+  resultRedWaits:
+    "rondo はまだ直し始めていません。この作業についての質問が、あなたの答えを待っているためです。それに答えれば、rondo がここで直せます。自分で直す場合は、プルリクエストのブランチ側で直して push してください。",
   resultConflictWaits: (base) =>
     `rondo はまだ解消を始めていません。この作業についての質問が、あなたの答えを待っているためです。それに答えれば、rondo がここで解消できます。自分で解消する場合は、プルリクエストのブランチ側で ${base} を取り込むかリベースして、push してください。`,
   resultMoved: (from, to, count) =>

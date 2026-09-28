@@ -16,6 +16,8 @@
  * figures unknown rather than guessed.
  */
 
+import { isFlowAuthor } from "../../store/records.js";
+
 /** What the forge last said about a published lap's checks. */
 export type ChecksState =
   /** Published, and no answer yet: the checks are still going, or not read yet. */
@@ -48,7 +50,12 @@ export type ChecksState =
    * The pull request conflicts with its base, so the forge runs no check on
    * it (rondo#411): nothing will come until somebody resolves it.
    */
-  | { readonly kind: "conflict" };
+  | { readonly kind: "conflict" }
+  /**
+   * rondo re-ran the failed checks of the red head once (rondo#551), and no
+   * answer has come on that head since: the repair is not offered yet.
+   */
+  | { readonly kind: "rerunning" };
 
 export interface LapResult {
   /** The pull request's address, or null where the report printed none. */
@@ -100,6 +107,31 @@ export interface LapResult {
   /** The base it conflicts with, where that is why no check runs now (rondo#411). */
   readonly conflictsWith: string | null;
   /**
+   * The newest merge on green rondo withheld (rondo#551), or null: the head it
+   * was green on, and the token its id ends in -- `MergeWithheld`'s arm, or
+   * the press's refusal key (`withheldToken`, `conductor.ts`) -- with, for
+   * `asked`, the question or the lap at its gate that holds it.
+   */
+  readonly withheld: {
+    readonly head: string;
+    readonly why: string;
+    readonly askId: string | null;
+    readonly gateLapId: string | null;
+    readonly atMs: number;
+  } | null;
+  /**
+   * The newest re-run line (rondo#551), or null: the head it was about,
+   * whether it ran, the reason's arm where it did not (`ChecksRerun`,
+   * `conductor.ts`), and the check runs that were red before it ran.
+   */
+  readonly rerun: {
+    readonly head: string;
+    readonly ran: boolean;
+    readonly why: string | null;
+    readonly checkRunIds: readonly number[];
+    readonly atMs: number;
+  } | null;
+  /**
    * Where the pull request moved to after rondo read it (rondo#412), or null:
    * the head the lap pushed, the head it is at now, and what that carries. The
    * checks above are then the new head's.
@@ -135,6 +167,8 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
   const answers: { kind: "green" | "red" | "none"; commit: string | null; said: Said }[] = [];
   let movedSaid: Said | undefined;
   let conflictSaid: Said | undefined;
+  let withheld: LapResult["withheld"] = null;
+  let rerun: LapResult["rerun"] = null;
   const newest = (left: Said | undefined, right: Said): Said =>
     left === undefined || right.atMs >= left.atMs ? right : left;
   // **Only this lap's lines**: its id may be the start of another lap's.
@@ -158,6 +192,39 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
       movedSaid = newest(movedSaid, said);
     } else if (id.startsWith(`report-conflict-${iterationId}-`)) {
       conflictSaid = newest(conflictSaid, said);
+    } else if (id.startsWith(`report-withheld-${iterationId}-`)) {
+      // `<head>-<token>`: a head is hex, so the token is after its first dash.
+      const [head = "", ...rest] = id.slice(`report-withheld-${iterationId}-`.length).split("-");
+      const why = rest.join("-");
+      const asked = /^asked-(lap|question)-(.+)$/.exec(why);
+      if (withheld === null || said.atMs >= withheld.atMs) {
+        withheld = {
+          head,
+          why: asked === null ? why : "asked",
+          askId: asked?.[1] === "question" ? (asked[2] ?? null) : null,
+          gateLapId: asked?.[1] === "lap" ? (asked[2] ?? null) : null,
+          atMs: said.atMs,
+        };
+      }
+    } else if (id.startsWith(`report-rerun-${iterationId}-`)) {
+      // `<head>` where it ran, `<head>-<arm>` where it did not: read off the
+      // id, which a check's name in the body cannot reach.
+      const [, head = "", why = null] =
+        /^(.*?)(?:-(notActions|noScope|refused))?$/.exec(
+          id.slice(`report-rerun-${iterationId}-`.length),
+        ) ?? [];
+      if (rerun === null || said.atMs >= rerun.atMs) {
+        rerun = {
+          head,
+          ran: why === null,
+          why,
+          checkRunIds: (/\(check runs ([\d, ]+)\)/.exec(said.body)?.[1] ?? "")
+            .split(", ")
+            .filter((one) => one !== "")
+            .map(Number),
+          atMs: said.atMs,
+        };
+      }
     }
   }
   const moved = movedOf(movedSaid);
@@ -179,6 +246,16 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
     conflictHead !== null &&
     (at === null || conflictHead === at) &&
     !answers.some((one) => one.commit === conflictHead && one.said.atMs > conflictSaid.atMs);
+  // **A re-run stands on the head its answer is about until one comes after
+  // it there** (rondo#551): the checks host writes no red while the check
+  // runs that failed are the ones it re-ran.
+  const standing: LapResult["rerun"] = rerun;
+  const rerunning =
+    !conflicting &&
+    standing !== null &&
+    standing.ran &&
+    latest?.commit === standing.head &&
+    !answers.some((one) => one.commit === standing.head && one.said.atMs > standing.atMs);
   return {
     url,
     number: url === null ? null : (/\/pull\/(\d+)/.exec(url)?.[1] ?? null),
@@ -186,10 +263,16 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
     pushedOnto: published.body.includes("were pushed onto"),
     checks: conflicting
       ? { kind: "conflict" }
-      : latest === undefined
-        ? { kind: "running" }
-        : checksOf(latest.kind, latest.said.body),
-    checksAtMs: conflicting ? (conflictSaid?.atMs ?? null) : (latest?.said.atMs ?? null),
+      : rerunning
+        ? { kind: "rerunning" }
+        : latest === undefined
+          ? { kind: "running" }
+          : checksOf(latest.kind, latest.said.body),
+    checksAtMs: conflicting
+      ? (conflictSaid?.atMs ?? null)
+      : rerunning
+        ? (standing?.atMs ?? null)
+        : (latest?.said.atMs ?? null),
     checksCommit: conflicting ? null : (latest?.commit ?? null),
     merged: mergedOf(byId.get(`report-merged-${iterationId}`)),
     closedAtMs: byId.get(`report-closed-${iterationId}`)?.atMs ?? null,
@@ -198,6 +281,8 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
       ? (/its base '([^']+)'/.exec(conflictSaid?.body ?? "")?.[1] ?? "")
       : null,
     moved,
+    withheld,
+    rerun,
   };
 }
 
@@ -280,7 +365,8 @@ function movedOf(said: Said | undefined): LapResult["moved"] {
  * - `notGreen`: rondo's own latest reading is not green, or names no commit.
  * - `asked`: a question in the request's thread still waits on the person --
  *   `D-0064`'s "no P2 to P4 item open" -- and holds this line
- *   ({@link askHoldsMerge}), or another lap of the request is at its gate.
+ *   ({@link askHoldingMerge}), or another lap of this line is at its gate
+ *   (rondo#551: a gate on another line of the request does not hold it).
  * - `merged`: it is merged, by a press or outside rondo.
  * - `closed`: it was closed on the forge without a merge (rondo#413).
  * - `landed`: the line was released, so its work is on the default branch by
@@ -312,20 +398,52 @@ export function mergeBlock(
 }
 
 /**
- * Why rondo does not offer to fix a pull request's conflict, or null where it
- * does (rondo#417, D-0105). **One test for the page and for the press**, as
+ * Why rondo does not offer to fix a pull request's conflict, or its red checks
+ * (rondo#551), or null where it does (rondo#417, D-0105). **One test for the page and for the press**, as
  * {@link mergeBlock} is: the card is drawn where this is null, and the press
  * asks it again over fresh rows.
  *
- * - `notConflicting`: nothing to fix -- unpublished, merged, closed, or the
- *   forge no longer says it conflicts.
+ * - `nothingToFix`: unpublished, merged, closed, or the forge no longer says
+ *   it conflicts or that its checks failed.
  * - `landed`: the line was released, so its work is on the default branch.
  * - `fixing`: an attempt after this one already exists, running, at its gate,
  *   or approved and not yet on the pull request.
+ * - `moved`: the checks are red on a head the lap did not push (rondo#412):
+ *   a repair cut from the lap's own branch could not be pushed onto it
+ *   without discarding what moved it, so it is the person's to fix by hand.
+ *   A conflict's fix takes the default branch in and is offered as before.
  * - `asked`: a gate of the request, or a question about this line
  *   ({@link asksOverLine}), waits on the person.
  */
-export type ConflictFixBlock = "notConflicting" | "landed" | "fixing" | "asked";
+export type ConflictFixBlock = "nothingToFix" | "landed" | "fixing" | "moved" | "asked";
+
+/**
+ * What a fix press asks of the attempt it starts (rondo#551): a conflict's
+ * takes the default branch in; a red check's names the checks that did not
+ * pass and takes nothing in. The page's form carries the kind, and the press
+ * starts nothing where it is not the fresh one's.
+ */
+export function fixCauseOf(checks: ChecksState):
+  | { readonly kind: "conflict" }
+  | {
+      readonly kind: "red";
+      readonly failedChecks: {
+        readonly failed: readonly string[];
+        readonly cancelled: readonly string[];
+        readonly timedOut: readonly string[];
+      };
+    } {
+  return checks.kind === "red"
+    ? {
+        kind: "red",
+        failedChecks: {
+          failed: checks.failed,
+          cancelled: checks.cancelled,
+          timedOut: checks.timedOut,
+        },
+      }
+    : { kind: "conflict" };
+}
 
 /**
  * Whether a question waiting in `requestMessageId`'s thread is about the line
@@ -365,32 +483,50 @@ export function askOverLine(
 }
 
 /**
- * Whether a question waiting in `requestMessageId`'s thread holds the merge of
- * the line `lineIds` (rondo#539, D-0155): `mergeBlock`'s `asked`, for the page
- * and for the press alike.
+ * The question waiting in `requestMessageId`'s thread that holds the merge of
+ * the line `lineIds`, or null (rondo#539, D-0155; rondo#551): `mergeBlock`'s
+ * `asked`, for the page and for the press alike.
  *
- * **Every waiting question holds it but one the person answered by stopping
- * another line.** A question about the request as a whole, or about this line,
- * holds it, stopped or not (a stop holds its own line, D-0072 rule 3); so does
- * one about another line nobody has answered yet. A stopped line's question
- * waits for ever -- only a `carry_on` closes it -- and on lap 19 it withheld
- * the green merge of the line the person had started in its place. A question
+ * **A question about this line holds it, stopped or not** (a stop holds its
+ * own line, D-0072 rule 3), and so does one about the request as a whole. **A
+ * question about another line does not** (rondo#551): on lap 19 a change
+ * request's own line waited at its gate and withheld the green merge of the
+ * line published before it, and a stopped line's question waits for ever. **Nor
+ * does the flow's stop** (`FLOW_AUTHOR`, rondo#469): it holds the goal's next
+ * request and no act of the request it is asked in (`holdsNothing`), and on lap
+ * 19 its unanswered *failed twice* withheld the green merge of #555. A question
  * carried on to a successor is not waiting at all.
  */
+export function askHoldingMerge(
+  threads: Omit<WaitingThreads, "byId"> & {
+    readonly byId: ReadonlyMap<
+      string,
+      { readonly bases: readonly unknown[]; readonly authorId?: string | null }
+    >;
+  },
+  requestMessageId: string,
+  lineIds: readonly string[],
+): string | null {
+  return (
+    [...threads.waiting].find((id) => {
+      if (threads.rootOf(id) !== requestMessageId) {
+        return false;
+      }
+      const laps = lapsNamed(threads, id);
+      return laps.length === 0
+        ? !isFlowAuthor(threads.byId.get(id)?.authorId)
+        : laps.some((lap) => lineIds.includes(lap));
+    }) ?? null
+  );
+}
+
+/** Whether {@link askHoldingMerge} names a question. */
 export function askHoldsMerge(
-  threads: WaitingThreads & { readonly stopped: ReadonlySet<string> },
+  threads: Parameters<typeof askHoldingMerge>[0],
   requestMessageId: string,
   lineIds: readonly string[],
 ): boolean {
-  return [...threads.waiting].some((id) => {
-    if (threads.rootOf(id) !== requestMessageId) {
-      return false;
-    }
-    const laps = lapsNamed(threads, id);
-    return (
-      laps.length === 0 || !threads.stopped.has(id) || laps.some((lap) => lineIds.includes(lap))
-    );
-  });
+  return askHoldingMerge(threads, requestMessageId, lineIds) !== null;
 }
 
 /** The laps a message's bases name. */
@@ -417,15 +553,18 @@ export function conflictFixBlock(
     result === null ||
     result.merged !== null ||
     result.closedAtMs !== null ||
-    result.checks.kind !== "conflict"
+    (result.checks.kind !== "conflict" && result.checks.kind !== "red")
   ) {
-    return "notConflicting";
+    return "nothingToFix";
   }
   if (!facts.holding) {
     return "landed";
   }
   if (facts.succeeded) {
     return "fixing";
+  }
+  if (result.checks.kind === "red" && result.moved !== null) {
+    return "moved";
   }
   return facts.asksWaiting ? "asked" : null;
 }

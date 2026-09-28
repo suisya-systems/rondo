@@ -13,18 +13,21 @@
  * The caller asks only of a lap at `awaiting_human`; the status is not
  * re-tested here.
  */
+import { asksChecksRepair } from "../refrain/revision.js";
 import {
   FINDING_SEVERITIES,
   type FindingSeverity,
+  type IterationRecord,
   isModelReadingDrafter,
   type LapReading,
   latestReading,
+  planField,
   reviewedReading,
   type ScopePayload,
   severityAtOrAbove,
 } from "../store/records.js";
 import { reviewPolicyOf } from "./model-review/judgement.js";
-import type { WorkerRuns } from "./page-logic/laps.js";
+import { type RepairRuns, repairRuns, type WorkerRuns } from "./page-logic/laps.js";
 import { reviewScopeOf } from "./scope.js";
 
 /** One reason a gate goes to the person rather than being approved automatically. */
@@ -50,6 +53,13 @@ export type GateAutoReason =
   | { readonly kind: "tests_unread" }
   | { readonly kind: "tests_failed"; readonly failed: number }
   | { readonly kind: "tests_errored" }
+  /**
+   * A repair lap (rondo#551) that did not show the failing run and then a
+   * passing one, or whose runs were never recorded.
+   */
+  | { readonly kind: "repair_not_reproduced" }
+  /** A repair lap whose last test run skipped every test. */
+  | { readonly kind: "tests_all_skipped" }
   | { readonly kind: "question_open" }
   | { readonly kind: "closing_lap" };
 
@@ -67,10 +77,21 @@ export interface GateScope {
 export interface GateAutoInput {
   readonly readings: readonly LapReading[];
   readonly runs: WorkerRuns;
+  /** How a repair lap's runs read (`repairRuns`), or null for any other lap. */
+  readonly repair: RepairRuns | null;
   readonly questionOpen: boolean;
   readonly closing: boolean;
   readonly scope: GateScope | null;
   readonly nowMs: number;
+}
+
+/**
+ * How a repair lap's runs read (rondo#551), or null for a lap that is not one:
+ * a repair is the lap whose own section is the failing-checks one
+ * ({@link asksChecksRepair}), not every later lap that carries it above theirs.
+ */
+export function repairOf(record: IterationRecord): RepairRuns | null {
+  return asksChecksRepair(planField(record, "prompt")) ? repairRuns(record.lapCommands) : null;
 }
 
 /**
@@ -117,6 +138,11 @@ export function gateAuto(input: GateAutoInput): GateAuto {
     if (runs.last.isError) {
       reasons.push({ kind: "tests_errored" });
     }
+  }
+  if (input.repair === "allSkipped") {
+    reasons.push({ kind: "tests_all_skipped" });
+  } else if (input.repair === "notReproduced" || input.repair === "unrecorded") {
+    reasons.push({ kind: "repair_not_reproduced" });
   }
   if (input.questionOpen) {
     reasons.push({ kind: "question_open" });

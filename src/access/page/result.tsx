@@ -37,7 +37,8 @@ export function ResultLine({
   /** The approved lap's publish, or null where it has not been published. */
   readonly result: LapResult | null;
   /**
-   * Where rondo's fix of a conflict stands (rondo#417, D-0105): offered by the
+   * Where rondo's fix of a conflict, or of red checks (rondo#551), stands
+   * (rondo#417, D-0105): offered by the
    * card above, an attempt at it running, or withheld while a question of its
    * line waits on the person (rondo#500); null for none.
    */
@@ -87,6 +88,33 @@ export function ResultLine({
             {wording.resultChecks} <b>{wording.checksWord(result.checks)}</b>
             {detail === null ? null : <span> {detail}</span>}
           </li>
+          {result.checks.kind !== "red" ? null : (
+            <>
+              <li className="result-note">
+                {wording.resultRed(wording.pullRequest(result.number), [
+                  ...result.checks.failed,
+                  ...result.checks.cancelled,
+                  ...result.checks.timedOut,
+                ])}
+              </li>
+              {/* rondo#551: the one re-run was not made for this red, and why. */}
+              {result.rerun === null ||
+              result.rerun.ran ||
+              result.rerun.why === null ||
+              result.rerun.head !== result.checksCommit ? null : (
+                <li className="result-note">{wording.resultRerunNot(result.rerun.why)}</li>
+              )}
+              <li className="result-note result-act">
+                {conflictFix === "running"
+                  ? wording.resultRedFixing
+                  : conflictFix === "offered"
+                    ? wording.resultRedDoOffered
+                    : conflictFix === "waits"
+                      ? wording.resultRedWaits
+                      : wording.resultRedDo}
+              </li>
+            </>
+          )}
           {result.conflictsWith === null ? null : (
             <>
               <li className="result-note">

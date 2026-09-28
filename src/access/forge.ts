@@ -874,6 +874,42 @@ export async function fetchPullRequestChecks(
   };
 }
 
+/** Which GitHub Actions run's failed jobs to run again (rondo#551). */
+export interface RerunRequest {
+  readonly host: string | null;
+  /** `OWNER/NAME`, the pull request's base repository. */
+  readonly repo: string;
+  readonly runId: number;
+}
+
+export type RerunOutcome =
+  | { readonly kind: "rerun"; readonly runId: number }
+  | { readonly kind: "refused"; readonly runId: number; readonly reason: string };
+
+/**
+ * Run a workflow run's failed jobs again, once, through the operator's own
+ * `gh` (rondo#551): one `POST` that changes no code, the forge's own *re-run
+ * failed jobs*. Whether rondo may is the checks host's question, not this one's.
+ */
+export async function rerunFailedJobs(request: RerunRequest): Promise<RerunOutcome> {
+  const host = request.host === null ? [] : ["--hostname", request.host];
+  const posted = await runCommand(
+    "gh",
+    [
+      "api",
+      ...host,
+      "--method",
+      "POST",
+      `repos/${request.repo}/actions/runs/${String(request.runId)}/rerun-failed-jobs`,
+    ],
+    CHECKS_READ_TIMEOUT_MS,
+  );
+  const failure = queryFailure(posted);
+  return failure === null
+    ? { kind: "rerun", runId: request.runId }
+    : { kind: "refused", runId: request.runId, reason: failure };
+}
+
 /** The commits a pull request's head carries past another commit (rondo#412). */
 export interface CommitsBetweenRequest {
   readonly host: string | null;
