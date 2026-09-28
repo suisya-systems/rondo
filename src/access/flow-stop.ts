@@ -7,6 +7,12 @@
  * records the stop as a `flow_stop` row with its facts as fields, and the page
  * reads the newest row of the approval in force.
  *
+ * **The facts are kept either way** (rondo#549): an ask in a thread has a
+ * `flow_stop` row of its own beside it, named after the ask, which is what lets
+ * the page say the ask again rather than draw the sentence the host wrote
+ * ({@link flowStopAskedFacts}). Rows are read as the stop itself only while the
+ * approval has written no request.
+ *
  * **Green only while the flow can start or is running**: a goal scope in force
  * is drawn as stopped when either of the two stands, and running otherwise.
  *

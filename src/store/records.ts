@@ -2125,9 +2125,15 @@ export interface StoredTriageDecline extends TriageDeclineDraft {
 }
 
 /**
- * A stop the flow host met before its goal scope's first request (rondo#488):
- * with no request there is no thread to ask in, so the stop is a row the page
- * reads. `facts` holds the reason and what a person acts on, as fields.
+ * A stop the flow host met, with the reason and what a person acts on held in
+ * `facts` as fields rather than as a sentence.
+ *
+ * **Before its goal scope's first request** (rondo#488) there is no thread to
+ * ask in, and the row *is* the stop: the page reads the approval's newest one.
+ * **From its first request on** (rondo#549) the stop is an ask in that
+ * request's thread and the row is kept beside it, under the ask's own message
+ * id, so the page can say the ask again in the language of whoever is reading
+ * instead of the one the host happened to write it in.
  */
 export interface FlowStopDraft {
   readonly stopId: string;
