@@ -308,6 +308,17 @@ export interface HeldStart {
   /** The plan's repository as the ledger compares it ({@link repositoryKey}). */
   readonly repository: string;
   readonly heldAtMs: number;
+  /**
+   * The worker provider the press that waits chose, or null for the host's
+   * default (rondo#462).
+   *
+   * **Kept with the wait because the wait starts the lap.** The tick that
+   * attempts a held start again builds the press's input out of this row, and a
+   * row that did not carry the choice would start the work on the host's
+   * default -- silently moving a person's request onto another worker because
+   * another line happened to hold its files.
+   */
+  readonly workerProvider?: string | null;
 }
 
 /**
@@ -1878,7 +1889,11 @@ CREATE TABLE IF NOT EXISTS held_start (
   repository                  TEXT    NOT NULL,
   held_at_ms                  INTEGER NOT NULL,
   settled_at_ms               INTEGER,
-  outcome                     TEXT
+  outcome                     TEXT,
+  -- rondo#462. The provider the waiting press chose, or NULL for the host's
+  -- default: the tick that starts the wait builds the press's input from this
+  -- row, so a wait that lost it would start the work on another worker.
+  worker_provider             TEXT
 );
 `;
 
@@ -2098,6 +2113,8 @@ function migrate(connection: DatabaseSync): void {
     addMissingColumns(connection, "lap_reading", LAP_READING_ADDED_COLUMNS);
     addMissingColumns(connection, "conversation_message", CONVERSATION_ADDED_COLUMNS);
     addMissingColumns(connection, "admission_refusal", { holders: "TEXT" });
+    // rondo#462: nullable, no back-fill -- no wait before it chose a provider.
+    addMissingColumns(connection, "held_start", { worker_provider: "TEXT" });
     // rondo#509: nullable, no back-fill -- no claim before it said why.
     addMissingColumns(connection, "lane_claim", { why: "TEXT" });
     addFlowWords(connection);
@@ -3011,10 +3028,18 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
         connection
           .prepare(
             "INSERT OR IGNORE INTO held_start (iteration_id, request_message_id, " +
-              "scope_decision_id, plan_digest, repository, held_at_ms) " +
-              `SELECT ?, ?, ?, ?, ?, ? WHERE NOT ${taken}`,
+              "scope_decision_id, plan_digest, repository, held_at_ms, worker_provider) " +
+              `SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT ${taken}`,
           )
-          .run(held.iterationId, ...key, held.repository, held.heldAtMs, ...key, held.iterationId);
+          .run(
+            held.iterationId,
+            ...key,
+            held.repository,
+            held.heldAtMs,
+            held.workerProvider ?? null,
+            ...key,
+            held.iterationId,
+          );
         return (
           connection
             .prepare("SELECT 1 FROM held_start WHERE iteration_id = ? AND settled_at_ms IS NULL")
@@ -3027,8 +3052,9 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       connection
         .prepare(
           "INSERT INTO held_start (iteration_id, request_message_id, " +
-            "scope_decision_id, plan_digest, repository, held_at_ms, settled_at_ms, outcome) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
+            "scope_decision_id, plan_digest, repository, held_at_ms, settled_at_ms, outcome, " +
+            "worker_provider) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
             // The form's own wait ended without a start (Codex round 5): it
             // joins now. One still waiting, or one that started, is left.
             "ON CONFLICT(iteration_id) DO UPDATE SET settled_at_ms = excluded.settled_at_ms, " +
@@ -3044,6 +3070,7 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           held.heldAtMs,
           held.heldAtMs,
           `${JOINED}${joinedTo}`,
+          held.workerProvider ?? null,
         );
     },
 
@@ -3060,7 +3087,7 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
         connection
           .prepare(
             "SELECT iteration_id, request_message_id, scope_decision_id, plan_digest, repository, " +
-              "held_at_ms FROM held_start WHERE settled_at_ms IS NULL " +
+              "held_at_ms, worker_provider FROM held_start WHERE settled_at_ms IS NULL " +
               "ORDER BY held_at_ms, iteration_id",
           )
           .all() as SqlRow[]
@@ -3072,6 +3099,7 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           planDigest: String(row["plan_digest"]),
           repository: String(row["repository"]),
           heldAtMs: Number(row["held_at_ms"]),
+          workerProvider: optionalText(row, "worker_provider"),
         }),
       );
     },

@@ -6060,6 +6060,10 @@ export function heldStartPort(
         requestMessageId: held.requestMessageId,
         scopeDecisionId: held.scopeDecisionId,
         planDigest: held.planDigest,
+        // rondo#462: the worker the press that waits chose. A wait that fell
+        // back to the host's default would move the work onto another provider
+        // because another line happened to hold its files.
+        workerProvider: held.workerProvider ?? null,
       }),
   };
 }
@@ -7231,6 +7235,9 @@ async function startScoped(
       planDigest: input.planDigest,
       repository: repositoryKey(planned.plan.repository) ?? planned.plan.repository,
       heldAtMs: Date.now(),
+      // rondo#462: kept with the wait, so the tick's attempt starts the lap on
+      // the worker this press chose and not on the host's default.
+      workerProvider: input.workerProvider ?? null,
     });
     return waits ? started : { ...started, why: "startRefusedHeld" };
   } catch (error) {
