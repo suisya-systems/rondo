@@ -39,6 +39,10 @@ function gateAutoReasonEn(reason: GateAutoReason): string {
       return `${String(reason.failed)} test${reason.failed === 1 ? "" : "s"} failed`;
     case "tests_errored":
       return "the test command ended in error";
+    case "repair_not_reproduced":
+      return "the repair did not show the failing checks fail and then a run that passed";
+    case "tests_all_skipped":
+      return "every test in the last run was skipped, so it shows nothing";
     case "question_open":
       return "a question is open";
     case "closing_lap":
@@ -1422,6 +1426,12 @@ explanation you pressed on and then answers the gate.`,
   conflictFixAction: "Have rondo resolve the conflict",
   conflictFixBusy: "Starting the fix...",
   conflictFixBack: "Back to the request",
+  nextStepChecksFix: (pullRequest, checks) =>
+    `The checks on ${pullRequest} did not pass (${checks}). rondo can reproduce the failure on ` +
+    "the pull request's branch and fix it, changing nothing else; the result comes back here " +
+    "for you to check before anything is pushed.",
+  checksFixAction: "Have rondo reproduce and fix the failing checks",
+  checksFixBusy: "Starting the repair...",
   conflictFixRefusedNoApprover:
     "Nothing was started: rondo on this machine does not yet know who you are, so nothing here " +
     "can be decided as you.",

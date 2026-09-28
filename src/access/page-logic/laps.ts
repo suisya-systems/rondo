@@ -16,6 +16,7 @@ import {
   decodeLapCommands,
   isNestedSandboxRefusal,
   isTurnTimeoutRefusal,
+  type LapCommand,
 } from "../../continuo/protocol.js";
 import type { IterationRecord } from "../../store/records.js";
 import { ago } from "../inbox.js";
@@ -220,12 +221,7 @@ export function workerRuns(lapCommands: string | null): WorkerRuns {
   if (decoded === null || decoded.kind !== "read") {
     return { kind: "unrecorded" };
   }
-  const runs = decoded.commands.flatMap((c) => {
-    const counts = testSummary(c.output);
-    return counts === null
-      ? []
-      : [{ index: c.index, command: c.command, ...counts, isError: c.isError }];
-  });
+  const runs = testRuns(decoded.commands);
   const last = runs.at(-1);
   if (last === undefined) {
     return { kind: "none", commandCount: decoded.commands.length };
@@ -243,6 +239,47 @@ export function workerRuns(lapCommands: string | null): WorkerRuns {
     supersededBy:
       later === undefined || later.isError ? null : { index: later.index, command: later.command },
   };
+}
+
+/** Every command that printed a test summary rondo reads, in order. */
+function testRuns(commands: readonly LapCommand[]): WorkerTestRun[] {
+  return commands.flatMap((c) => {
+    const counts = testSummary(c.output);
+    return counts === null
+      ? []
+      : [{ index: c.index, command: c.command, ...counts, isError: c.isError }];
+  });
+}
+
+/**
+ * Whether a repair lap (rondo#551) showed the failure it was sent to fix and
+ * then a passing run, read off its commands as {@link workerRuns} reads them:
+ *
+ * - `reproduced`: a test run that failed, and after it one that passed with at
+ *   least one test that ran and did not end in error.
+ * - `allSkipped`: the last test run passed nothing and failed nothing -- every
+ *   test skipped, which proves nothing either way.
+ * - `unrecorded`: no test run rondo can read.
+ * - `notReproduced`: anything else, a pass never preceded by the failure
+ *   included.
+ */
+export type RepairRuns = "reproduced" | "notReproduced" | "allSkipped" | "unrecorded";
+
+export function repairRuns(lapCommands: string | null): RepairRuns {
+  const decoded = lapCommands === null ? null : decodeLapCommands(lapCommands);
+  const runs = decoded?.kind === "read" ? testRuns(decoded.commands) : [];
+  const last = runs.at(-1);
+  if (last === undefined) {
+    return "unrecorded";
+  }
+  if (last.passed === 0 && last.failed === 0) {
+    return "allSkipped";
+  }
+  const failedAt = runs.findIndex((run) => run.failed > 0);
+  return failedAt !== -1 &&
+    runs.slice(failedAt + 1).some((run) => run.failed === 0 && run.passed > 0 && !run.isError)
+    ? "reproduced"
+    : "notReproduced";
 }
 
 /**

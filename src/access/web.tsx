@@ -122,7 +122,7 @@ import { approvedUnstarted, partsOf } from "./drafted-start.js";
 import { draftedStanding } from "./drafted-view.js";
 import { type FlowStopFacts, flowStopAskedFacts, flowStopBody, flowStopOf } from "./flow-stop.js";
 import type { LapWorkInspection } from "./forge.js";
-import { type GateAuto, gateAuto } from "./gate-auto.js";
+import { type GateAuto, gateAuto, repairOf } from "./gate-auto.js";
 import { gateScope } from "./gate-host.js";
 import { goalScopeStanding } from "./goal-scope.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
@@ -2187,6 +2187,7 @@ async function shownBeforePress(
       auto: gateAuto({
         readings,
         runs: workerRuns(record.lapCommands),
+        repair: repairOf(record),
         // A lap that put a worker's question is never rondo's to approve (D-0142).
         questionOpen: questionOpen !== null || workerQuestion !== null,
         closing: (await ports.store.closingLapOf(record.id)) !== null,
@@ -2742,7 +2743,10 @@ async function threadActs(
           scopeDecisionId: fixTip.scopeDecisionId,
           closed: await budgetClosing(ports, fixTip.scopeDecisionId, ports.now()),
           pullRequest: wording.pullRequest(result.number),
+          // The base is brought in for a conflict only; a red check's repair
+          // takes nothing in (rondo#551), so its card names the checks.
           base: result.conflictsWith ?? "",
+          red: result.checks.kind === "red" ? result.checks : null,
           successor: newIterationId(),
         };
   const standing =
@@ -2834,11 +2838,14 @@ async function threadActs(
   const updating = openedResult === null ? null : wording.pullRequest(openedResult.number);
   // The conflict fix (rondo#417, D-0105): a press, since the attempt it starts
   // is counted against the approval and nothing is between it and the act.
+  // A red check's repair (rondo#551) is the same press, in its own words.
   const fixCard = (fix: NonNullable<typeof nextFix>) => (
     <section class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3">
       <h2 class="text-meta leading-5 font-semibold text-wait-ink">{wording.nextStepHeading}</h2>
       <p class="mt-1 text-body leading-6">
-        {wording.nextStepConflictFix(fix.pullRequest, fix.base)}
+        {fix.red === null
+          ? wording.nextStepConflictFix(fix.pullRequest, fix.base)
+          : wording.nextStepChecksFix(fix.pullRequest, wording.checksDetail(fix.red) ?? "")}
       </p>
       {fix.closed !== null ? (
         <div class="mt-3">
@@ -2858,10 +2865,10 @@ async function threadActs(
           <input type="hidden" name="successor" value={fix.successor} />
           <button
             type="submit"
-            data-busy={wording.conflictFixBusy}
+            data-busy={fix.red === null ? wording.conflictFixBusy : wording.checksFixBusy}
             class={`${PRIMARY} h-10 justify-center self-start px-6 text-sm`}
           >
-            {wording.conflictFixAction}
+            {fix.red === null ? wording.conflictFixAction : wording.checksFixAction}
           </button>
           <p
             data-busy-note=""
@@ -4151,9 +4158,11 @@ export async function operatorPage(
   // person to resolve it by hand over the top of it. Only an attempt that
   // descends from that lap is its fix (rondo#500): another part of the same
   // request is later too, and reading it as the fix claimed work nobody did.
+  // A red check's repair is one too (rondo#551).
   const fixRunning = (() => {
     const lap = resultLap(selectedLaps.map((each) => each.record));
-    if (lap === null || selectedResult?.checks.kind !== "conflict") {
+    const kind = selectedResult?.checks.kind;
+    if (lap === null || (kind !== "conflict" && kind !== "red")) {
       return false;
     }
     const line = new Set([lap.id]);

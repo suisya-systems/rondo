@@ -101,7 +101,28 @@ export interface RevisionRequest {
    * `revise` press passes null.
    */
   readonly takeIn: TakeIn | null;
+  /**
+   * The checks that failed on the published pull request this lap repairs
+   * (rondo#551), or null/absent for every other revision. Set only by the
+   * repair press, which is the conflict-fix press widened to a red check: no
+   * words, no take-in, the same scope and the same pull request.
+   */
+  readonly failedChecks?: FailedChecks | null;
 }
+
+/** The names the forge reported under each outcome that is not a pass. */
+export interface FailedChecks {
+  readonly failed: readonly string[];
+  readonly cancelled: readonly string[];
+  readonly timedOut: readonly string[];
+}
+
+/**
+ * The head of the section a repair lap's prompt carries (rondo#551). The gate
+ * reads a lap as a repair by finding it in the prompt, so it is exported
+ * rather than spelled twice.
+ */
+export const CHECKS_REPAIR_HEAD = "--- The pull request's checks failed ---";
 
 /**
  * The successor's plan, or the first reason there is not one.
@@ -257,16 +278,18 @@ export function stoppedRetryPlan(
  */
 function revisionPrompt(plan: AdmittedPlan, input: RevisionRequest): string {
   const asked =
-    input.instruction === null
-      ? [
-          "--- The pull request conflicts with its base ---",
-          "",
-          `A previous lap (run '${plan.runId}', iteration '${input.predecessor.id}') did this work.` +
-            " A person approved it and it was published as a pull request, which now conflicts" +
-            " with the branch it merges into. The person asked rondo to settle the conflict." +
-            " Change nothing else: the work itself was already approved.",
-        ]
-      : [revisedHead(plan.runId, input.predecessor.id), input.instruction];
+    input.failedChecks !== undefined && input.failedChecks !== null
+      ? checksRepairSection(plan.runId, input.predecessor.id, input.failedChecks)
+      : input.instruction === null
+        ? [
+            "--- The pull request conflicts with its base ---",
+            "",
+            `A previous lap (run '${plan.runId}', iteration '${input.predecessor.id}') did this work.` +
+              " A person approved it and it was published as a pull request, which now conflicts" +
+              " with the branch it merges into. The person asked rondo to settle the conflict." +
+              " Change nothing else: the work itself was already approved.",
+          ]
+        : [revisedHead(plan.runId, input.predecessor.id), input.instruction];
   return [
     plan.prompt,
     "",
@@ -275,6 +298,39 @@ function revisionPrompt(plan: AdmittedPlan, input: RevisionRequest): string {
     revisedTail(plan.topicBranch),
     ...(input.takeIn === null ? [] : ["", takeInSection(input.takeIn)]),
   ].join("\n");
+}
+
+/**
+ * What a repair lap is asked (rondo#551): the failing checks by name, and
+ * **reproduce first** -- a lap that "fixes" a failure it never saw has shown
+ * nothing, and a run in which every test skipped is not a reproduction.
+ */
+function checksRepairSection(
+  runId: string,
+  predecessorId: string,
+  checks: FailedChecks,
+): readonly string[] {
+  const named = (names: readonly string[], as: string): string[] =>
+    names.length === 0 ? [] : [`${names.map((name) => `'${name}'`).join(", ")} ${as}`];
+  const listed = [
+    ...named(checks.failed, "failed"),
+    ...named(checks.cancelled, "was cancelled"),
+    ...named(checks.timedOut, "timed out"),
+  ];
+  return [
+    CHECKS_REPAIR_HEAD,
+    "",
+    `A previous lap (run '${runId}', iteration '${predecessorId}') did this work.` +
+      " A person approved it and it was published as a pull request, whose checks now fail:" +
+      ` ${listed.length === 0 ? "the forge named no check" : listed.join("; ")}.` +
+      " The person asked rondo to repair them on the same pull request.",
+    "",
+    "First reproduce the failure here: run what the failing check runs (the repository's CI" +
+      " workflow says what) and see it fail. A run in which every test is skipped reproduces" +
+      " nothing -- provide what the tests need so that they actually run. Then fix the cause," +
+      " run it again until it passes with tests that ran, and commit." +
+      " Change nothing else: the work itself was already approved.",
+  ];
 }
 
 /** What comes before the person's words in a revise's prompt, up to the blank line above them. */

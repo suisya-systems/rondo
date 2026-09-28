@@ -12,7 +12,11 @@ import { expect, test } from "vitest";
 import { pullRequestUpdated } from "../../../src/access/cli.js";
 import { reportToRequest } from "../../../src/access/conductor.js";
 import { basisWord } from "../../../src/access/page/vocabulary.js";
-import { resultOf } from "../../../src/access/page-logic/result.js";
+import {
+  conflictFixBlock,
+  type LapResult,
+  resultOf,
+} from "../../../src/access/page-logic/result.js";
 import { lapEvents } from "../../../src/access/page-logic/thread-events.js";
 import { threadsOf } from "../../../src/access/page-logic/threads.js";
 import { chromeFor, EN } from "../../../src/access/wording.js";
@@ -311,6 +315,47 @@ test("an answered gate says what was answered: approved, a change asked for, or 
   );
   // The person's own answer is ink, not the green a passing check gets.
   expect(ended(lap({}), false)?.kind).toBe("person");
+});
+
+test("a red check on the thread is the person's and does not fold; green is not (rondo#551)", () => {
+  const checksEvent = (checks: LapResult["checks"]) =>
+    lapEvents(
+      EN,
+      lap({}),
+      [],
+      () => true,
+      () => "now",
+      null,
+      {
+        revised: false,
+        result: {
+          url: PR,
+          number: "372",
+          atMs: 5_000,
+          pushedOnto: false,
+          checks,
+          checksAtMs: 6_000,
+        } as LapResult,
+      },
+    ).find((event) => event.id.endsWith(":checks"));
+  expect(
+    checksEvent({ kind: "red", failed: ["build"], cancelled: [], timedOut: [] }),
+  ).toMatchObject({
+    kind: "failed",
+    yours: true,
+  });
+  expect(checksEvent({ kind: "green", counted: 1, passed: 1, skipped: 0 })?.yours).toBeUndefined();
+});
+
+test("the fix is offered for a red check as for a conflict, and for nothing else (rondo#551)", () => {
+  const facts = { asksWaiting: false, holding: true, succeeded: false };
+  const at = (checks: LapResult["checks"]) =>
+    conflictFixBlock({ merged: null, closedAtMs: null, checks } as LapResult, facts);
+  expect(at({ kind: "red", failed: ["build"], cancelled: [], timedOut: [] })).toBeNull();
+  expect(at({ kind: "conflict" })).toBeNull();
+  expect(at({ kind: "green", counted: 1, passed: 1, skipped: 0 })).toBe("nothingToFix");
+  expect(at({ kind: "running" })).toBe("nothingToFix");
+  expect(conflictFixBlock(null, facts)).toBe("nothingToFix");
 });
 
 test("a basis is named by what it is, and never by the id it is stored under (D-0076)", () => {
@@ -757,6 +802,44 @@ test("a conflicting pull request is offered rondo's fix at the top, as a press u
   await published(green);
   await checked(green, { kind: "green", counted: 2, skipped: 0 });
   expect(await fixing(green)).not.toContain("/fix-conflict?");
+});
+
+test("a red pull request is offered the same press in its own words, and the band names the checks (rondo#551)", async () => {
+  const world = await approved();
+  await published(world);
+  await checked(world, {
+    kind: "red",
+    failed: ["double-green (ubuntu-latest, node 22)"],
+    cancelled: [],
+    timedOut: [],
+  });
+  const japanese = await fixing(world);
+  expect(japanese).toContain('action="/fix-conflict?lang=ja"');
+  expect(japanese).toContain('name="iteration" value="i-r"');
+  expect(japanese).toContain('name="scope_decision" value="dec-1"');
+  expect(japanese).toContain("rondo に失敗したチェックを再現して直してもらう");
+  expect(japanese).not.toContain("rondo に競合を解消してもらう");
+  expect(japanese).toContain(
+    "#372 のチェックが通りませんでした（失敗: double-green (ubuntu-latest, node 22)）。",
+  );
+  const said = (html: string) => head(html).replaceAll("&#x27;", "'").replaceAll("&#39;", "'");
+  expect(said(japanese)).toContain(
+    "#372 のチェックが通りませんでした: 'double-green (ubuntu-latest, node 22)'。",
+  );
+  expect(said(japanese)).toContain("すぐ下の「次にやること」のボタンで rondo に失敗を再現して");
+  const english = await fixing(world, "en");
+  expect(english).toContain("Have rondo reproduce and fix the failing checks");
+  expect(english).toContain('data-busy="Starting the repair..."');
+  expect(said(english)).toContain(
+    "The checks on #372 did not pass: 'double-green (ubuntu-latest, node 22)'.",
+  );
+  expect(said(english)).toContain(
+    "Press the button under Your next step, below, and rondo reproduces",
+  );
+  // No port: no press, and the band says the way by hand.
+  const bare = await merging(world);
+  expect(bare).not.toContain("/fix-conflict?");
+  expect(head(bare)).toContain("プルリクエストのブランチ側で直して push してください。");
 });
 
 test("while the fix's attempt runs, no press is drawn and the band says rondo is settling it", async () => {

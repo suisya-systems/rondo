@@ -43,6 +43,7 @@ import {
   runPlan,
 } from "../../src/refrain/plan.js";
 import {
+  CHECKS_REPAIR_HEAD,
   KEPT_WORK_SUBJECT,
   revisionInstruction,
   revisionPlan,
@@ -567,6 +568,38 @@ test("the words sent with a change are read back off the lap they started", () =
     revisionInstruction(PREDECESSOR, successor(revised({ instruction: null, takeIn }).prompt)),
   ).toBeNull();
   expect(revisionInstruction(PREDECESSOR, PREDECESSOR)).toBeNull();
+});
+
+test("rondo#551: a repair of red checks names them, asks for the failure first, and reads no words back", () => {
+  const plan = revised({
+    instruction: null,
+    takeIn: null,
+    failedChecks: {
+      failed: ["double-green (ubuntu-latest, node 22)"],
+      cancelled: ["lint"],
+      timedOut: [],
+    },
+  });
+  expect(plan.prompt).toContain(CHECKS_REPAIR_HEAD);
+  expect(plan.prompt).toContain(
+    "'double-green (ubuntu-latest, node 22)' failed; 'lint' was cancelled",
+  );
+  expect(plan.prompt).toContain("First reproduce the failure here");
+  expect(plan.prompt).toContain("A run in which every test is skipped reproduces nothing");
+  expect(plan.prompt).toContain("Change nothing else");
+  expect(plan.prompt).not.toContain("conflicts with its base");
+  expect(plan.prompt).not.toContain("Bring the default branch in first");
+  expect(plan.baseBranch).toBe(FIRST.topicBranch);
+  expect(/^[\x20-\x7e\n]*$/.test(plan.prompt)).toBe(true);
+  expect(
+    revisionInstruction(PREDECESSOR, {
+      ...PREDECESSOR,
+      id: FRESH_ITERATION_ID,
+      plan: { ...PREDECESSOR.plan, prompt: plan.prompt },
+    }),
+  ).toBeNull();
+  // Every other revision carries no such section.
+  expect(revised().prompt).not.toContain(CHECKS_REPAIR_HEAD);
 });
 
 // --- D-0143: a retry of a lap stopped at its time limit starts where it stopped --

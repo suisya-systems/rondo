@@ -328,6 +328,9 @@ export function lapEvents(
         at: at(result.checksAtMs),
         atMs: result.checksAtMs,
         tryAt,
+        // A red check on rondo's own pull request is the person's to act on
+        // (the repair press, rondo#551), so the fold leaves it on the axis.
+        ...(result.checks.kind === "red" ? { yours: true as const } : {}),
       });
     }
   }

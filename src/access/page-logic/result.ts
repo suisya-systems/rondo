@@ -312,20 +312,20 @@ export function mergeBlock(
 }
 
 /**
- * Why rondo does not offer to fix a pull request's conflict, or null where it
- * does (rondo#417, D-0105). **One test for the page and for the press**, as
+ * Why rondo does not offer to fix a pull request's conflict, or its red checks
+ * (rondo#551), or null where it does (rondo#417, D-0105). **One test for the page and for the press**, as
  * {@link mergeBlock} is: the card is drawn where this is null, and the press
  * asks it again over fresh rows.
  *
- * - `notConflicting`: nothing to fix -- unpublished, merged, closed, or the
- *   forge no longer says it conflicts.
+ * - `nothingToFix`: unpublished, merged, closed, or the forge no longer says
+ *   it conflicts or that its checks failed.
  * - `landed`: the line was released, so its work is on the default branch.
  * - `fixing`: an attempt after this one already exists, running, at its gate,
  *   or approved and not yet on the pull request.
  * - `asked`: a gate of the request, or a question about this line
  *   ({@link asksOverLine}), waits on the person.
  */
-export type ConflictFixBlock = "notConflicting" | "landed" | "fixing" | "asked";
+export type ConflictFixBlock = "nothingToFix" | "landed" | "fixing" | "asked";
 
 /**
  * Whether a question waiting in `requestMessageId`'s thread is about the line
@@ -417,9 +417,9 @@ export function conflictFixBlock(
     result === null ||
     result.merged !== null ||
     result.closedAtMs !== null ||
-    result.checks.kind !== "conflict"
+    (result.checks.kind !== "conflict" && result.checks.kind !== "red")
   ) {
-    return "notConflicting";
+    return "nothingToFix";
   }
   if (!facts.holding) {
     return "landed";

@@ -4,7 +4,7 @@
  * readable record is never a zero.
  */
 import { expect, test } from "vitest";
-import { testSummary, workerRuns } from "../../../src/access/page-logic/laps.js";
+import { repairRuns, testSummary, workerRuns } from "../../../src/access/page-logic/laps.js";
 
 const command = (index: number, cmd: string, output: string, isError = false) => ({
   index,
@@ -141,4 +141,22 @@ test("no readable record is `unrecorded`, and no summary is `none` -- never a ze
     kind: "none",
     commandCount: 1,
   });
+});
+
+test("a repair lap (rondo#551) is reproduced only by a failing run and a later passing one that ran tests", () => {
+  const red = command(3, "npm test", "      Tests  1 failed | 9 passed (10)", true);
+  const pass = command(8, "npm test", "      Tests  10 passed (10)");
+  const skipped = command(9, "npm test", "      Tests  10 skipped (10)");
+  expect(repairRuns(JSON.stringify([red, pass]))).toBe("reproduced");
+  // A pass that no failure came before shows nothing was reproduced.
+  expect(repairRuns(JSON.stringify([pass]))).toBe("notReproduced");
+  // The failure and nothing after it that passed.
+  expect(repairRuns(JSON.stringify([pass, red]))).toBe("notReproduced");
+  // A later pass that ended in error does not count.
+  expect(repairRuns(JSON.stringify([red, { ...pass, is_error: true }]))).toBe("notReproduced");
+  // A last run that skipped everything proves nothing, whatever came before.
+  expect(repairRuns(JSON.stringify([red, pass, skipped]))).toBe("allSkipped");
+  expect(repairRuns(JSON.stringify([skipped]))).toBe("allSkipped");
+  expect(repairRuns(JSON.stringify([command(1, "ls", "a b")]))).toBe("unrecorded");
+  expect(repairRuns(null)).toBe("unrecorded");
 });

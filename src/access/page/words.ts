@@ -439,6 +439,15 @@ export interface PageWords extends DayWords {
   readonly resultConflictDoOffered: (base: string) => string;
   readonly resultConflictFixing: (base: string) => string;
   readonly resultConflictWaits: (base: string) => string;
+  /**
+   * rondo#551: a red check on the pull request, by name, and the same four
+   * states of rondo's repair as the conflict's above.
+   */
+  readonly resultRed: (pullRequest: string, names: readonly string[]) => string;
+  readonly resultRedDo: string;
+  readonly resultRedDoOffered: string;
+  readonly resultRedFixing: string;
+  readonly resultRedWaits: string;
   readonly resultMoved: (from: string, to: string, count: number) => string;
   readonly resultMovedNone: (from: string, to: string) => string;
   readonly resultMovedMore: (count: number) => string;
@@ -1017,6 +1026,18 @@ export const PAGE_EN: PageWords = Object.freeze({
     `Press the button under Your next step, below, and rondo resolves it here, or resolve it yourself on the pull request's branch (merge ${base} in, or rebase) and push. Either way rondo reads the checks again once they run.`,
   resultConflictFixing: (base) =>
     `rondo is settling the conflict in a new attempt that brings ${base} in. Its result is yours to check here before anything is pushed.`,
+  resultRed: (pullRequest, names) =>
+    names.length === 0
+      ? `The checks on ${pullRequest} did not pass.`
+      : `The checks on ${pullRequest} did not pass: ${names.map((name) => `'${name}'`).join(", ")}.`,
+  resultRedDo:
+    "Fix it on the pull request's branch and push. rondo reads the checks again once they run.",
+  resultRedDoOffered:
+    "Press the button under Your next step, below, and rondo reproduces the failure and fixes it on the same pull request, or fix it yourself on the pull request's branch and push. Either way rondo reads the checks again once they run.",
+  resultRedFixing:
+    "rondo is reproducing the failure and fixing it in a new attempt on the same pull request. Its result is yours to check here before anything is pushed.",
+  resultRedWaits:
+    "rondo has not started fixing it: a question about this work is waiting on you. Once you answer it, rondo can fix it here; or fix it yourself on the pull request's branch and push.",
   resultConflictWaits: (base) =>
     `rondo has not started resolving it: a question about this work is waiting on you. Once you answer it, rondo can resolve it here; or resolve it yourself on the pull request's branch (merge ${base} in, or rebase) and push.`,
   resultMoved: (from, to, count) =>
@@ -1561,6 +1582,18 @@ export const PAGE_JA: PageWords = Object.freeze({
     `すぐ下の「次にやること」のボタンで rondo に解消させるか、プルリクエストのブランチ側で自分で解消して（${base} を取り込むか、リベースする）push してください。どちらでも、チェックが動けば rondo が読み直します。`,
   resultConflictFixing: (base) =>
     `rondo が ${base} を取り込む新しい回で、競合を解消しています。その結果は、push の前にここで確認してもらいます。`,
+  resultRed: (pullRequest, names) =>
+    names.length === 0
+      ? `${pullRequest} のチェックが通りませんでした。`
+      : `${pullRequest} のチェックが通りませんでした: ${names.map((name) => `'${name}'`).join("、")}。`,
+  resultRedDo:
+    "プルリクエストのブランチ側で直して push してください。チェックが動けば rondo が読み直します。",
+  resultRedDoOffered:
+    "すぐ下の「次にやること」のボタンで rondo に失敗を再現して同じプルリクエストの上で直させるか、プルリクエストのブランチ側で自分で直して push してください。どちらでも、チェックが動けば rondo が読み直します。",
+  resultRedFixing:
+    "rondo が同じプルリクエストの上の新しい回で、失敗を再現して直しています。その結果は、push の前にここで確認してもらいます。",
+  resultRedWaits:
+    "rondo はまだ直し始めていません。この作業についての質問が、あなたの答えを待っているためです。それに答えれば、rondo がここで直せます。自分で直す場合は、プルリクエストのブランチ側で直して push してください。",
   resultConflictWaits: (base) =>
     `rondo はまだ解消を始めていません。この作業についての質問が、あなたの答えを待っているためです。それに答えれば、rondo がここで解消できます。自分で解消する場合は、プルリクエストのブランチ側で ${base} を取り込むかリベースして、push してください。`,
   resultMoved: (from, to, count) =>
