@@ -46,6 +46,17 @@
  * command, are stood in for.** Nothing rondo does is faked, and no press is
  * given a seam it does not have in `rondo web`.
  *
+ * ## One thing here is not a press (rondo#228)
+ *
+ * The two `revise` cases at the end of the file are typed at the terminal rather
+ * than pressed: `main` is the entry point, and the argv is what a person writes.
+ * They are here because what they have to say needs the same thing the presses
+ * need -- **a gate that really stands** -- and a gate exists only where a real
+ * lap opened one. A typed `revise` that draws its approval from the record
+ * charges that approval and says which one before it walks the gate; the
+ * refusals that cost nothing are over a store in
+ * `test/access/scope-stop.test.ts`, where no seam is reached at all.
+ *
  * ## Mandatory in CI, capability-gated locally
  *
  * `test/continuo/smoke.test.ts`'s rule and its spelling: every double-green
@@ -86,13 +97,16 @@ import { expect, test } from "vitest";
 import {
   answerFromPage,
   answerUnderScope,
+  main,
   publishFromPage,
   publishingForPage,
+  raiseScopeFromPage,
   recordScopeFromPage,
   reviseFromPage,
   reviseUnderScope,
   startScopedFromPage,
 } from "../../src/access/cli.js";
+import { consoleSeams } from "../../src/access/console.js";
 import { GATE_ACTOR } from "../../src/access/gate-host.js";
 import { agentTypeRecordOf } from "../../src/access/scope.js";
 import { newIterationId, newScopeId, type ScopeFormDraft } from "../../src/access/web-app.js";
@@ -765,6 +779,212 @@ test.skipIf(!available)(
     expect(sent).toMatchObject({ kind: "notSent", answered: false });
     expect((await gateOf(world, gateId)).outcome).toBeNull();
     expect((await world.store.read(successorId)).kind).toBe("absent");
+  },
+  PRESS_TIMEOUT_MS,
+);
+
+// --- rondo#228: the approval a typed `revise` draws, over a real gate ----------
+
+/**
+ * `rondo revise` as a person types it, with stdout and stderr captured.
+ *
+ * `main` and not `commandRevise`: what the two cases below are about is the
+ * command's own order -- the approval drawn from the record before anything is
+ * read from the seam, the line said before the gate is walked, the refusal that
+ * is the command's exit -- and dispatch is part of that.
+ */
+async function typed(
+  world: PressWorld,
+  argv: readonly string[],
+): Promise<{ readonly code: number; readonly text: string }> {
+  const out: string[] = [];
+  const write = consoleSeams.write;
+  const writeError = consoleSeams.writeError;
+  consoleSeams.write = (text: string) => void out.push(text);
+  consoleSeams.writeError = (text: string) => void out.push(text);
+  try {
+    const code = await main([...argv], {
+      ...environmentFor(),
+      RONDO_STORE: world.storePath,
+      // The bounds `pressWorld`'s own store was opened with, so the second lap
+      // is not refused by a narrower default than the fixture's.
+      RONDO_MAX_OCCUPYING: "4",
+      RONDO_MAX_LIVE: "6",
+    });
+    return { code, text: out.join("") };
+  } finally {
+    consoleSeams.write = write;
+    consoleSeams.writeError = writeError;
+  }
+}
+
+/** The questions a refusal wrote into the request's thread, as the drafter asks them. */
+function asked(world: PressWorld): Record<string, unknown>[] {
+  return world.connection
+    .prepare(
+      "SELECT message_id, in_reply_to, author_kind, asks, body FROM conversation_message " +
+        "WHERE asks = 1 ORDER BY at_ms, message_id",
+    )
+    .all() as Record<string, unknown>[];
+}
+
+/**
+ * The success side of the draw (`D-0157` rules 2 and 4), driven as the terminal
+ * drives it.
+ *
+ * **Why it is here and not beside the draw's own tests.** What the gate feedback
+ * on rondo#228 asked for is proof of the wiring: that the approval the record
+ * names is the one actually charged, and that the line naming it is said *before*
+ * the gate is walked. Both need a gate that really stands, and a gate exists only
+ * because a real lap opened one -- this file's ground (see the header). A test of
+ * `reviseApproval`'s return value, or of the command over a store with no gate,
+ * cannot say either thing.
+ */
+test.skipIf(!available)(
+  `a typed revise with no --scope-decision-id charges the approval the lap was admitted under, and says which before the walk (rondo#228)${skipNote}`,
+  async () => {
+    const world = await pressWorld("revise-drawn");
+    const { iterationId, gateId } = await startOnePress(world);
+    await readingAtTheGate(world, iterationId);
+    // The record the draw reads: the lap's `admission` row names the approval,
+    // and one admission stands under it.
+    expect(await world.record.scopeDecisionAdmitting(iterationId)).toBe(world.scopeDecisionId);
+    expect((await world.record.scopeSpent(world.scopeDecisionId)).admissions).toBe(1);
+
+    const successorId = newIterationId();
+    const { code, text } = await typed(world, [
+      "revise",
+      "--actor-id",
+      "ada",
+      "--body=Cap the backoff at thirty seconds.",
+      "--iteration-id",
+      successorId,
+    ]);
+    expect(code, text).toBe(0);
+
+    // **(2) The line comes before the walk.** Both are said by this command, so
+    // their order in what it printed is the order they happened in: the person
+    // reads which approval is being spent, and why, ahead of the first
+    // irreversible step.
+    const said = text.indexOf(
+      `spending approval '${world.scopeDecisionId}', the approval iteration '${iterationId}' ` +
+        "was admitted under",
+    );
+    expect(said, text).toBeGreaterThanOrEqual(0);
+    const walked = text.indexOf(`gate ${gateId} is at stage`);
+    expect(walked, text).toBeGreaterThan(said);
+
+    // **(1) The drawn approval is charged.** A second `admission` row, under the
+    // approval nobody typed, with the second lap as its subject -- which is the
+    // round the scope exists to count, and the one lap 9's N-33 lost.
+    expect(await world.record.scopeDecisionAdmitting(successorId)).toBe(world.scopeDecisionId);
+    expect((await world.record.scopeSpent(world.scopeDecisionId)).admissions).toBe(2);
+
+    // And the lap it charged for really ran: the gate carried the instruction,
+    // the first row says it was asked to change, and the second stands at a gate
+    // of its own.
+    expect((await gateOf(world, gateId)).outcome).toBe("answered_and_forwarded");
+    const first = await world.store.read(iterationId);
+    if (first.kind !== "read") {
+      throw new Error("the revised lap would not read");
+    }
+    expect(first.record.gateAnswer).toBe("revise");
+    const successor = await world.store.read(successorId);
+    if (successor.kind !== "read") {
+      throw new Error(`the revision would not read: ${JSON.stringify(successor)}`);
+    }
+    expect(successor.record.supersedesIterationId).toBe(iterationId);
+    expect(successor.record.status).toBe("awaiting_human");
+    expect(successor.record.gateId).not.toBe(gateId);
+  },
+  PRESS_TIMEOUT_MS * 2,
+);
+
+/**
+ * The drawn approval that is no longer usable (`D-0157` rules 2 and 4), over the
+ * command and over a real gate.
+ *
+ * **The case rondo must not be clever about.** A raise is a successor approval
+ * of a *rewritten* scope, and it is standing right there, one walk away
+ * (`approvalTip`, `D-0074` section 2). Spending it would be rondo picking a
+ * budget nobody gave this correction, so the recorded approval is resolved as it
+ * is, its supersession is the verdict's own refusal, and the refusal stops the
+ * command and asks the person in the request's thread (`D-0066` rule 4.4).
+ */
+test.skipIf(!available)(
+  `a typed revise whose drawn approval was superseded stops, asks in the request's thread, and leaves the gate where it stood (rondo#228)${skipNote}`,
+  async () => {
+    const world = await pressWorld("revise-superseded");
+    const { iterationId, gateId } = await startOnePress(world);
+    await readingAtTheGate(world, iterationId);
+
+    // The person raises the budget on the page while the lap waits: a successor
+    // scope, approved, which retires the approval the lap was admitted under
+    // (D-0074 section 4). The admission row still names the old one.
+    const raised = await raiseScopeFromPage(environmentFor(), world.store, world.storePath, "ada", {
+      scopeId: newScopeId(),
+      requestMessageId: world.requestMessageId,
+      scopeDecisionId: world.scopeDecisionId,
+      iterationId,
+      budgets: {
+        laps: 8,
+        review_rounds: 2,
+        cost_usd: 50,
+        cost_reserve_usd: 5,
+        expires_at_ms: 9_999_999_999_999,
+      },
+    });
+    expect(raised.ok, `${raised.why ?? ""}: ${raised.note}`).toBe(true);
+    const successorApproval = raised.scopeDecisionId ?? "";
+    expect(successorApproval).not.toBe("");
+    expect(await world.record.scopeDecisionAdmitting(iterationId)).toBe(world.scopeDecisionId);
+
+    const successorId = newIterationId();
+    const asksBefore = asked(world).length;
+    const { code, text } = await typed(world, [
+      "revise",
+      "--actor-id",
+      "ada",
+      "--body=Cap the backoff at thirty seconds.",
+      "--iteration-id",
+      successorId,
+    ]);
+
+    // **(1) It stops there**, at the verdict's own `superseded` test, and the
+    // approval it drew is the one on the record: the successor's id appears
+    // nowhere, because rondo never went looking for it.
+    expect(code, text).toBe(2);
+    expect(text).toContain(`spending approval '${world.scopeDecisionId}'`);
+    expect(text).not.toContain(successorApproval);
+    expect(text).toContain("at the superseded test");
+    expect(text).toContain("nothing was admitted and nothing was spent");
+    expect(text).toContain("The gate was not touched: your instruction was not sent.");
+
+    // **(2) The person is asked**, in the request's thread, and the command says
+    // which message holds the line.
+    const questions = asked(world);
+    expect(questions).toHaveLength(asksBefore + 1);
+    const stop = questions[questions.length - 1];
+    expect(stop).toMatchObject({
+      in_reply_to: world.requestMessageId,
+      author_kind: "drafter",
+      asks: 1,
+    });
+    expect(String(stop?.["body"])).toContain("superseded test");
+    expect(text).toContain(`The line is stopped by message '${String(stop?.["message_id"])}'`);
+
+    // **(3) The gate is where it stood**, nothing was charged to either
+    // approval, and there is no second lap.
+    expect((await gateOf(world, gateId)).outcome).toBeNull();
+    const first = await world.store.read(iterationId);
+    if (first.kind !== "read") {
+      throw new Error("the gated lap would not read");
+    }
+    expect(first.record.status).toBe("awaiting_human");
+    expect(first.record.gateAnswer).toBeNull();
+    expect((await world.store.read(successorId)).kind).toBe("absent");
+    expect((await world.record.scopeSpent(world.scopeDecisionId)).admissions).toBe(1);
+    expect((await world.record.scopeSpent(successorApproval)).admissions).toBe(0);
   },
   PRESS_TIMEOUT_MS,
 );
