@@ -27,8 +27,12 @@
  * silently run the work on the host's default.
  */
 import { DatabaseSync } from "node:sqlite";
+import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "vitest";
 
+import { ThreadSide } from "../../src/access/page/thread-side.js";
+import { governanceOf } from "../../src/access/page-logic/governance.js";
+import { EN } from "../../src/access/wording.js";
 import type { HostPolicy } from "../../src/refrain/policy.js";
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
@@ -53,8 +57,16 @@ const reserveOne = async (
   id: string,
   workerProvider: string | null | undefined,
   supersedesIterationId: string | null = null,
+  /**
+   * The worker this host runs when the request chooses none, as the
+   * composition root resolved it at the start (rondo#462). Absent in the cases
+   * that are about the choice itself, which is what leaves the row's provider
+   * null there.
+   */
+  hostWorkerProvider: string | null | undefined = undefined,
 ) =>
   store.reserve({
+    ...(hostWorkerProvider === undefined ? {} : { hostWorkerProvider }),
     numbers: null,
     id,
     request: `do ${id}`,
@@ -262,4 +274,105 @@ test("a database written before the wait carried a provider gains the column", a
   `);
   const { store } = storeUnder(connection);
   expect((await store.heldStarts()).map((one) => one.workerProvider ?? null)).toEqual([null]);
+});
+
+// ---------------------------------------------------------------------------
+// 5. From the row to the thread: what a lap ran on stays what it ran on.
+// ---------------------------------------------------------------------------
+
+/**
+ * The provider a lap ran on, as the thread's right face says it -- through the
+ * real store, the page's own reading and the page's own markup, with nothing
+ * injected between them (rondo#462, the gate's second point).
+ *
+ * `governanceOf` takes no host default now, which is the fix: there is no
+ * argument by which the setting a host runs *today* could reach a line about a
+ * lap that ran yesterday. This renders to markup rather than asserting on the
+ * reading, so the claim is about what a person sees.
+ */
+const threadSays = async (
+  store: ReturnType<typeof storeUnder>["store"],
+  id: string,
+): Promise<string> => {
+  const read = await store.read(id);
+  if (read.kind !== "read") {
+    throw new Error(`iteration '${id}' did not read: ${read.kind}`);
+  }
+  return renderToStaticMarkup(
+    ThreadSide({
+      wording: EN,
+      asking: false,
+      material: null,
+      governance: governanceOf(read.record, "o/r", 1_000, null, false, [], [read.record]),
+      steps: [],
+      parts: [],
+    }),
+  );
+};
+
+/** An apostrophe is an HTML entity by the time the sentence is markup. */
+const said = (text: string) => text.replaceAll("'", "&#x27;");
+
+test("a request that chose nothing records the host's default, and the thread names it as the default", async () => {
+  const { store } = storeUnder();
+  expect((await reserveOne(store, "plain", null, null, "claude")).kind).toBe("reserved");
+
+  // The name is on the row, settled at the start -- not left for a screen to
+  // derive from whatever the host is set to when the screen is drawn.
+  expect(await providerOf(store, "plain")).toBe("claude");
+  const drawn = await threadSays(store, "plain");
+  expect(drawn).toContain(EN.workerProviderLabel);
+  expect(drawn).toContain(said(EN.workerProviderRan("claude", false)));
+
+  // And a chosen provider is drawn as the person's own, over the same default.
+  expect((await reserveOne(store, "chosen", "codex", null, "claude")).kind).toBe("reserved");
+  expect(await providerOf(store, "chosen")).toBe("codex");
+  const chose = await threadSays(store, "chosen");
+  expect(chose).toContain(said(EN.workerProviderRan("codex", true)));
+  expect(chose).not.toContain("claude");
+});
+
+test("moving the host's default afterwards does not relabel a lap that already ran", async () => {
+  // **The blocker this issue came back for.** The thread used to read the
+  // host's current default for a request that chose none, so a host restarted
+  // onto Codex restated every past Claude lap as a Codex one. The row settles
+  // it at the start, so the second host below changes nothing a person reads.
+  const { store } = storeUnder();
+  expect((await reserveOne(store, "before", null, null, "claude")).kind).toBe("reserved");
+  const first = await threadSays(store, "before");
+
+  // The host's default moves. Nothing about the lap moved with it.
+  expect((await reserveOne(store, "after", null, null, "codex")).kind).toBe("reserved");
+  expect(await providerOf(store, "before")).toBe("claude");
+  expect(await threadSays(store, "before")).toBe(first);
+  expect(first).toContain(said(EN.workerProviderRan("claude", false)));
+  // The observed-red control: the later lap does read the later default, so
+  // the case above is not passing against a store that ignores the host.
+  expect(await providerOf(store, "after")).toBe("codex");
+});
+
+test("a lap from before rondo recorded any of this is drawn as unknown, not as today's default", async () => {
+  const { store } = storeUnder();
+  expect((await reserveOne(store, "old", undefined)).kind).toBe("reserved");
+  expect(await providerOf(store, "old")).toBeNull();
+
+  const drawn = await threadSays(store, "old");
+  expect(drawn).toContain(EN.workerProviderUnknown);
+  expect(drawn).not.toContain(said(EN.workerProviderRan("claude", false)));
+});
+
+test("a successor inherits a choice and never a resolved default", async () => {
+  const { store } = storeUnder();
+  // A choice is the person's, for the request, so it carries across a revise.
+  expect((await reserveOne(store, "chose", "codex", null, "claude")).kind).toBe("reserved");
+  expect((await reserveOne(store, "again", null, "chose", "claude")).kind).toBe("reserved");
+  expect(await providerOf(store, "again")).toBe("codex");
+
+  // A default is a record of what one lap ran on rather than an instruction
+  // about the next, so the successor resolves the host's default again -- and
+  // the row still says it was the default and not a pick.
+  expect((await reserveOne(store, "fell", null, null, "claude")).kind).toBe("reserved");
+  expect((await reserveOne(store, "later", null, "fell", "codex")).kind).toBe("reserved");
+  expect(await providerOf(store, "later")).toBe("codex");
+  expect(await threadSays(store, "later")).toContain(said(EN.workerProviderRan("codex", false)));
 });
