@@ -27,6 +27,7 @@ import {
 } from "../../store/records.js";
 import type { ThreadEvent } from "../page/events.js";
 import { TAKE_IN_FINDING } from "../review.js";
+import type { MergeRefusal } from "../web-app.js";
 import type { Chrome } from "../wording.js";
 import { refusalSaid } from "./laps.js";
 import type { LapResult } from "./result.js";
@@ -336,6 +337,35 @@ export function lapEvents(
         result.merged === null &&
         result.closedAtMs === null &&
         !after.revised
+          ? { yours: true as const }
+          : {}),
+      });
+    }
+    // **A merge on green rondo withheld** (rondo#551): what holds it and what
+    // the person can do, theirs while it stands -- the green it was withheld
+    // on is still the answer, and nothing merged or closed the pull request.
+    const withheld = result.withheld;
+    if (withheld !== null) {
+      const refused = withheld.why.startsWith("mergeRefused")
+        ? wording[withheld.why as MergeRefusal]
+        : null;
+      events.push({
+        id: `${record.id}:withheld`,
+        kind: "other",
+        said: said(
+          wording.evMergeWithheld(
+            pullRequest,
+            withheld.why,
+            typeof refused === "string" ? refused : null,
+          ),
+        ),
+        at: at(withheld.atMs),
+        atMs: withheld.atMs,
+        tryAt,
+        ...(result.merged === null &&
+        result.closedAtMs === null &&
+        result.checks.kind === "green" &&
+        result.checksCommit === withheld.head
           ? { yours: true as const }
           : {}),
       });

@@ -2689,9 +2689,13 @@ async function threadActs(
       ? null
       : mergeBlock(
             result,
-            // Only the questions that hold this line (rondo#539), as the press asks.
-            gated ||
-              askHoldsMerge(threads, requestMessageId, resultLine?.lapIds ?? [resultRecord.id]),
+            // Only the questions and the gates that hold this line (rondo#539,
+            // rondo#551), as the press asks (`mergeHold`).
+            laps.some(
+              (lap) =>
+                lap.question === "waiting" &&
+                (resultLine?.lapIds ?? [resultRecord.id]).includes(lap.record.id),
+            ) || askHoldsMerge(threads, requestMessageId, resultLine?.lapIds ?? [resultRecord.id]),
             resultLine !== undefined,
           ) === null
         ? {

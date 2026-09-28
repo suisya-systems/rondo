@@ -346,6 +346,7 @@ test("a red check on the thread is the person's and does not fold; green is not 
           checksAtMs: 6_000,
           merged: null,
           closedAtMs: null,
+          withheld: null,
           ...ended,
         } as LapResult,
       },
@@ -500,8 +501,9 @@ test("a question over another line the person stopped leaves the merge press on 
       asks: true,
     });
   expect(await ask("lap-stopped-i-other", "i-other")).toMatchObject({ kind: "recorded" });
-  // Nobody has answered it yet: it holds the merge.
-  expect(await merging(world)).not.toMatch(MERGE_WAY);
+  // Nobody has answered it yet, and it is still another line's: it does not
+  // hold this one's merge (rondo#551).
+  expect(await merging(world)).toMatch(MERGE_WAY);
   expect(
     await world.record.recordThreadMessage({
       messageId: "reply-stop",
@@ -534,15 +536,103 @@ test("a question over another line the person stopped leaves the merge press on 
   expect(await mergeScreen(world)).not.toContain('action="/merge?');
 });
 
-test("another lap of the request at its gate keeps the merge screen's press away, as the port refuses it (rondo#437)", async () => {
+test("a lap of this line at its gate keeps the merge screen's press away, as the port refuses it (rondo#437, rondo#551)", async () => {
   const world = await approved();
   await published(world);
   await checked(world, { kind: "green", counted: 2, skipped: 0 });
+  // rondo#551: another line of the request at its gate -- a change request's
+  // own line -- is answered there, and does not hold this line's merge.
   await reserve(world, "i-g", "#291 の文言を分けて", null, "req-r");
   await openGate(world, "i-g");
-  const screen = await mergeScreen(world);
+  expect(await merging(world)).toMatch(MERGE_WAY);
+  expect(await mergeScreen(world)).toContain('action="/merge?');
+  // A lap of this line at its gate holds it.
+  const same = await approved();
+  await published(same);
+  await checked(same, { kind: "green", counted: 2, skipped: 0 });
+  const next = await same.store.reserve({
+    numbers: null,
+    id: "i-next",
+    request: "#291 の文言を分けて",
+    plan: planFor("i-next"),
+    spend: null,
+    scopeSpend: null,
+    claim: null,
+    nowMs: 8_000,
+    supersedesIterationId: "i-r",
+    requestMessageId: "req-r",
+    runId: "rondo-i-next",
+    topicBranch: "rondo/i-next",
+    workspace: "/srv/work/i-next",
+  });
+  expect(next.kind).toBe("reserved");
+  await openGate(same, "i-next");
+  expect(await merging(same)).not.toMatch(MERGE_WAY);
+  const screen = await mergeScreen(same);
   expect(screen).not.toContain('action="/merge?');
   expect(screen).toContain(chromeFor("ja").mergeConfirmNotNow);
+});
+
+test("a merge on green rondo withheld is on the thread in the person's words, theirs while it stands (rondo#551)", async () => {
+  const world = await approved();
+  await published(world);
+  await checked(world, { kind: "green", counted: 2, skipped: 0 });
+  const withhold = async (why: "asked" | "mergeRefusedQueue", atMs: number) =>
+    await reportToRequest(
+      threadOf(world),
+      "i-r",
+      {
+        kind: "mergeWithheld",
+        head: "abc1234",
+        withheld:
+          why === "asked"
+            ? { why, askId: "ask-1", gateLapId: null }
+            : { why: "refused", refusal: why, note: "the base branch merges through a queue" },
+      },
+      atMs,
+    );
+  expect(await withhold("asked", 8_000)).toContain("report-withheld-i-r-abc1234-asked");
+  const japanese = await merging(world);
+  expect(japanese).toContain(chromeFor("ja").evMergeWithheld("#372", "asked", null));
+  expect(japanese).toContain(chromeFor("ja").lapReportSaid("withheld"));
+  expect(await merging(world, "en")).toContain(
+    "rondo did not merge #372, though its checks are green: a question or a confirmation about " +
+      "this work is waiting on you.",
+  );
+  // The newest reason is the one said; a refusal's own words are relayed.
+  await withhold("mergeRefusedQueue", 9_000);
+  expect(await merging(world, "en")).toContain(
+    `rondo did not merge #372, though its checks are green. ${EN.mergeRefusedQueue}`,
+  );
+  const read = await world.record.threadMessages();
+  expect(read.kind).toBe("read");
+  const result =
+    read.kind === "read"
+      ? resultOf(threadsOf(read.messages, new Set(), new Map()).byId, "i-r")
+      : null;
+  expect(result?.withheld).toEqual({ head: "abc1234", why: "mergeRefusedQueue", atMs: 9_000 });
+  const event = (after: LapResult | null) =>
+    lapEvents(
+      EN,
+      lap({}),
+      [],
+      () => true,
+      () => "now",
+      null,
+      {
+        revised: false,
+        result: after,
+      },
+    ).find((one) => one.id.endsWith(":withheld"));
+  expect(event(result)?.yours).toBe(true);
+  // Not the person's once merged, or once the checks are no longer green on that head.
+  if (result !== null) {
+    expect(
+      event({ ...result, merged: { into: "main", method: null, outside: true, by: null, atMs: 1 } })
+        ?.yours,
+    ).toBeUndefined();
+    expect(event({ ...result, checksCommit: "fff0000" })?.yours).toBeUndefined();
+  }
 });
 
 test("once merged, the strip says where it went and how, and the press is gone", async () => {

@@ -16,6 +16,8 @@
  * figures unknown rather than guessed.
  */
 
+import { FLOW_AUTHOR_PREFIX } from "../../store/records.js";
+
 /** What the forge last said about a published lap's checks. */
 export type ChecksState =
   /** Published, and no answer yet: the checks are still going, or not read yet. */
@@ -100,6 +102,16 @@ export interface LapResult {
   /** The base it conflicts with, where that is why no check runs now (rondo#411). */
   readonly conflictsWith: string | null;
   /**
+   * The newest merge on green rondo withheld (rondo#551), or null: the head it
+   * was green on, and the token its id ends in -- `MergeWithheld`'s arm, or
+   * the press's refusal key (`withheldToken`, `conductor.ts`).
+   */
+  readonly withheld: {
+    readonly head: string;
+    readonly why: string;
+    readonly atMs: number;
+  } | null;
+  /**
    * Where the pull request moved to after rondo read it (rondo#412), or null:
    * the head the lap pushed, the head it is at now, and what that carries. The
    * checks above are then the new head's.
@@ -135,6 +147,7 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
   const answers: { kind: "green" | "red" | "none"; commit: string | null; said: Said }[] = [];
   let movedSaid: Said | undefined;
   let conflictSaid: Said | undefined;
+  let withheld: LapResult["withheld"] = null;
   const newest = (left: Said | undefined, right: Said): Said =>
     left === undefined || right.atMs >= left.atMs ? right : left;
   // **Only this lap's lines**: its id may be the start of another lap's.
@@ -158,6 +171,12 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
       movedSaid = newest(movedSaid, said);
     } else if (id.startsWith(`report-conflict-${iterationId}-`)) {
       conflictSaid = newest(conflictSaid, said);
+    } else if (id.startsWith(`report-withheld-${iterationId}-`)) {
+      // `<head>-<token>`: a head is hex, so the token is after its first dash.
+      const [head = "", ...why] = id.slice(`report-withheld-${iterationId}-`.length).split("-");
+      if (withheld === null || said.atMs >= withheld.atMs) {
+        withheld = { head, why: why.join("-"), atMs: said.atMs };
+      }
     }
   }
   const moved = movedOf(movedSaid);
@@ -198,6 +217,7 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
       ? (/its base '([^']+)'/.exec(conflictSaid?.body ?? "")?.[1] ?? "")
       : null,
     moved,
+    withheld,
   };
 }
 
@@ -280,7 +300,8 @@ function movedOf(said: Said | undefined): LapResult["moved"] {
  * - `notGreen`: rondo's own latest reading is not green, or names no commit.
  * - `asked`: a question in the request's thread still waits on the person --
  *   `D-0064`'s "no P2 to P4 item open" -- and holds this line
- *   ({@link askHoldsMerge}), or another lap of the request is at its gate.
+ *   ({@link askHoldingMerge}), or another lap of this line is at its gate
+ *   (rondo#551: a gate on another line of the request does not hold it).
  * - `merged`: it is merged, by a press or outside rondo.
  * - `closed`: it was closed on the forge without a merge (rondo#413).
  * - `landed`: the line was released, so its work is on the default branch by
@@ -397,32 +418,50 @@ export function askOverLine(
 }
 
 /**
- * Whether a question waiting in `requestMessageId`'s thread holds the merge of
- * the line `lineIds` (rondo#539, D-0155): `mergeBlock`'s `asked`, for the page
- * and for the press alike.
+ * The question waiting in `requestMessageId`'s thread that holds the merge of
+ * the line `lineIds`, or null (rondo#539, D-0155; rondo#551): `mergeBlock`'s
+ * `asked`, for the page and for the press alike.
  *
- * **Every waiting question holds it but one the person answered by stopping
- * another line.** A question about the request as a whole, or about this line,
- * holds it, stopped or not (a stop holds its own line, D-0072 rule 3); so does
- * one about another line nobody has answered yet. A stopped line's question
- * waits for ever -- only a `carry_on` closes it -- and on lap 19 it withheld
- * the green merge of the line the person had started in its place. A question
+ * **A question about this line holds it, stopped or not** (a stop holds its
+ * own line, D-0072 rule 3), and so does one about the request as a whole. **A
+ * question about another line does not** (rondo#551): on lap 19 a change
+ * request's own line waited at its gate and withheld the green merge of the
+ * line published before it, and a stopped line's question waits for ever. **Nor
+ * does the flow's stop** (`FLOW_AUTHOR`, rondo#469): it holds the goal's next
+ * request and no act of the request it is asked in (`holdsNothing`), and on lap
+ * 19 its unanswered *failed twice* withheld the green merge of #555. A question
  * carried on to a successor is not waiting at all.
  */
+export function askHoldingMerge(
+  threads: Omit<WaitingThreads, "byId"> & {
+    readonly byId: ReadonlyMap<
+      string,
+      { readonly bases: readonly unknown[]; readonly authorId?: string | null }
+    >;
+  },
+  requestMessageId: string,
+  lineIds: readonly string[],
+): string | null {
+  return (
+    [...threads.waiting].find((id) => {
+      if (threads.rootOf(id) !== requestMessageId) {
+        return false;
+      }
+      const laps = lapsNamed(threads, id);
+      return laps.length === 0
+        ? !(threads.byId.get(id)?.authorId ?? "").startsWith(FLOW_AUTHOR_PREFIX)
+        : laps.some((lap) => lineIds.includes(lap));
+    }) ?? null
+  );
+}
+
+/** Whether {@link askHoldingMerge} names a question. */
 export function askHoldsMerge(
-  threads: WaitingThreads & { readonly stopped: ReadonlySet<string> },
+  threads: Parameters<typeof askHoldingMerge>[0],
   requestMessageId: string,
   lineIds: readonly string[],
 ): boolean {
-  return [...threads.waiting].some((id) => {
-    if (threads.rootOf(id) !== requestMessageId) {
-      return false;
-    }
-    const laps = lapsNamed(threads, id);
-    return (
-      laps.length === 0 || !threads.stopped.has(id) || laps.some((lap) => lineIds.includes(lap))
-    );
-  });
+  return askHoldingMerge(threads, requestMessageId, lineIds) !== null;
 }
 
 /** The laps a message's bases name. */

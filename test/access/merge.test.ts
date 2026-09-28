@@ -38,8 +38,12 @@ interface Options {
   readonly method?: MergeMethodReading;
   readonly outcome?: Partial<CommandOutcome>;
   readonly tip?: string;
-  /** Another lap of the same request standing at its gate. */
+  /** Another lap of the same request standing at its gate, on another line. */
   readonly gated?: boolean;
+  /** That lap is in this lap's line in the lane ledger (rondo#551). */
+  readonly gatedInLine?: boolean;
+  /** The goal flow's stop asked in the request's thread (rondo#469), over these laps. */
+  readonly flowStop?: { readonly laps: readonly string[] };
   /** The pull request moved to this head after the green (rondo#412). */
   readonly movedTo?: string;
   /** And the moved head was read green. */
@@ -130,7 +134,7 @@ async function over(options: Options = {}) {
         },
       ] as never,
     readLive: async () =>
-      (options.gated === true
+      (options.gated === true || options.gatedInLine === true
         ? [
             {
               kind: "read",
@@ -140,7 +144,11 @@ async function over(options: Options = {}) {
         : []) as never,
     laneLedger: async () =>
       [
-        { lineageId: "lap-1", lapIds: ["lap-1"], releasedBy: options.released ? "rondo" : null },
+        {
+          lineageId: "lap-1",
+          lapIds: options.gatedInLine === true ? ["lap-1", "lap-2"] : ["lap-1"],
+          releasedBy: options.released ? "rondo" : null,
+        },
       ] as never,
     closingLapOf: async (id: string) =>
       options.closing === true
@@ -194,6 +202,10 @@ async function over(options: Options = {}) {
     },
     threadMessages: async () => ({ kind: "read", messages }) as never,
     recordThreadMessage: async (draft: ThreadMessageDraft) => {
+      // The store refuses an id it holds, as `alreadyRecorded` does.
+      if (messages.some((message) => message.messageId === draft.messageId)) {
+        return { kind: "duplicate", messageId: draft.messageId } as never;
+      }
       messages.push(draft);
       return { kind: "recorded" } as never;
     },
@@ -251,6 +263,25 @@ async function over(options: Options = {}) {
       inReplyTo: "request-1",
       atMs: 4,
       bases: [],
+      asks: true,
+    } as ThreadMessageDraft);
+  }
+  if (options.flowStop !== undefined) {
+    // As `askStop` writes it (flow-host.ts): the flow's voice, and bases that
+    // name the request, the scope and the goal -- no lap of its own.
+    messages.push({
+      messageId: "flow-stop-sd-1-failed_twice-request-1",
+      body: "Stopped: rondo starts no further request toward the goal.",
+      authorKind: "drafter",
+      authorId: "rondo/flow/1",
+      inReplyTo: "request-1",
+      atMs: 4,
+      bases: [
+        { form: "message", messageId: "request-1" },
+        { form: "scope", scopeId: "scope-2" },
+        { form: "goal", goalId: "goal-1" },
+        ...options.flowStop.laps.map((iterationId) => ({ form: "iteration", iterationId })),
+      ],
       asks: true,
     } as ThreadMessageDraft);
   }
@@ -404,7 +435,7 @@ test("nothing is asked of the forge where the button would not be drawn", async 
     [{ checks: null }, "mergeRefusedNotGreen"],
     [{ checks: "red" }, "mergeRefusedNotGreen"],
     [{ asking: true }, "mergeRefusedAsked"],
-    [{ gated: true }, "mergeRefusedAsked"],
+    [{ gatedInLine: true }, "mergeRefusedAsked"],
     [{ released: true }, "mergeRefusedLanded"],
     // The lap pushed another commit than the one rondo read green.
     [{ tip: "fff0000" }, "mergeRefusedMoved"],
@@ -429,9 +460,12 @@ test("rondo#539: a question over another line the person stopped does not hold t
   const onGreen = await over({ lineAsk: { laps: ["lap-other"], stopped: true } });
   await onGreen.onGreen();
   expect(onGreen.asked).toContain(`merge ${PR} --squash ${TIP}`);
-  // Nobody has answered the other line's question yet, or the stop is this line's own.
+  // rondo#551: nor one nobody has answered yet -- it is still another line's.
+  const unanswered = await over({ lineAsk: { laps: ["lap-other"], stopped: false } });
+  expect(await unanswered.press(input)).toMatchObject({ ok: true });
+  // The stop, or the question, is this line's own.
   for (const lineAsk of [
-    { laps: ["lap-other"], stopped: false },
+    { laps: ["lap-1"], stopped: false },
     { laps: ["lap-1"], stopped: true },
     { laps: ["lap-other", "lap-1"], stopped: true },
   ]) {
@@ -680,8 +714,6 @@ test("D-0126: a scope that includes the merge merges on green, claimed before th
 
 test("D-0126: nothing is merged on green, and nothing asked, unless every condition holds", async () => {
   for (const options of [
-    { acts: ["push_branch", "open_pull_request"] },
-    { expiresAtMs: 9 },
     { scopeTip: "forked" },
     { scopeTip: "none" },
     { answer: "revise" },
@@ -692,7 +724,14 @@ test("D-0126: nothing is merged on green, and nothing asked, unless every condit
     expect(world.claims).toEqual([]);
   }
   // mergeBlock, asked again inside the press's path: nothing reaches the forge.
-  for (const options of [{ asking: true }, { gated: true }, { checks: "red" }] as const) {
+  // An approved scope without the merge, or an expired one, is said (rondo#551).
+  for (const options of [
+    { acts: ["push_branch", "open_pull_request"] },
+    { expiresAtMs: 9 },
+    { asking: true },
+    { gatedInLine: true },
+    { checks: "red" },
+  ] as const) {
     const world = await over(options);
     expect(await world.onGreen()).toContain("left for the press");
     expect(world.asked).toEqual([]);
@@ -739,4 +778,105 @@ test("D-0126: the forge's refusals are left for the press, and a press waits out
   expect(await world.press(input)).toMatchObject({ ok: false, why: "mergeRefusedInFlight" });
   expect(await world.onGreen()).toBe(null);
   expect(world.asked).toEqual([]);
+});
+
+// --- A merge on green withheld, and why (rondo#551) -------------------------
+
+test("rondo#551: another line's lap at its gate does not hold this line's merge; one of this line does", async () => {
+  // Lap 19, #548: a change request's own line waited at its gate.
+  const other = await over({ gated: true });
+  expect(await other.press(input)).toMatchObject({ ok: true });
+  const onGreen = await over({ gated: true });
+  expect(await onGreen.onGreen()).toContain("merged");
+  expect(onGreen.asked).toContain(`merge ${PR} --squash ${TIP}`);
+  const inLine = await over({ gatedInLine: true });
+  expect(await inLine.press(input)).toMatchObject({ ok: false, why: "mergeRefusedAsked" });
+  expect(await inLine.onGreen()).toContain("lap 'lap-2' of the same line waits at its gate");
+  expect(inLine.asked).toEqual([]);
+});
+
+test("rondo#551: the flow's unanswered stop holds no merge of the request it is asked in, unless it names this line", async () => {
+  // Lap 19, #555: green on the lap's own head, and the goal flow's *failed
+  // twice* waiting unanswered in the same thread.
+  const flowLevel = await over({ flowStop: { laps: [] } });
+  expect(await flowLevel.onGreen()).toContain("merged");
+  expect(flowLevel.asked).toContain(`merge ${PR} --squash ${TIP}`);
+  expect(await (await over({ flowStop: { laps: ["lap-other"] } })).press(input)).toMatchObject({
+    ok: true,
+  });
+  // One about this line holds it; a question about the request as a whole still does.
+  expect(await (await over({ flowStop: { laps: ["lap-1"] } })).press(input)).toMatchObject({
+    ok: false,
+    why: "mergeRefusedAsked",
+  });
+  expect(await (await over({ asking: true })).press(input)).toMatchObject({
+    ok: false,
+    why: "mergeRefusedAsked",
+  });
+});
+
+test("rondo#551: a withheld merge on green is one thread message per head and reason, naming what holds it", async () => {
+  const world = await over({ asking: true });
+  const first = await world.onGreen();
+  expect(first).toContain("question 'ask-1' about this work waits on the person");
+  const withheld = world.messages.filter((message) =>
+    message.messageId.startsWith("report-withheld-"),
+  );
+  expect(withheld.map((message) => message.messageId)).toEqual([
+    `report-withheld-lap-1-${TIP}-asked`,
+  ]);
+  expect(withheld[0]?.body).toBe(
+    `Lap 'lap-1' was not merged by rondo on checks read green on commit '${TIP}': question ` +
+      "'ask-1' about this work waits on the person. rondo merges it by itself once that is " +
+      "answered and the checks are still green. A person's press of merge on the page merges it.",
+  );
+  expect(withheld[0]?.asks).toBe(false);
+  expect(withheld[0]?.inReplyTo).toBe("request-1");
+  // Asked again while it stands: nothing new in the thread, nothing for the terminal.
+  expect(await world.onGreen()).toBeNull();
+  expect(
+    world.messages.filter((message) => message.messageId.startsWith("report-withheld-")),
+  ).toHaveLength(1);
+  // Each of the other reasons has its own id.
+  for (const [options, id] of [
+    [{ acts: ["push_branch", "open_pull_request"] }, `report-withheld-lap-1-${TIP}-notInScope`],
+    [{ expiresAtMs: 9 }, `report-withheld-lap-1-${TIP}-expired`],
+    [{ before: { ...open, mergeQueue: true } }, `report-withheld-lap-1-${TIP}-mergeRefusedQueue`],
+    [{ claimed: true }, `report-withheld-lap-1-${TIP}-claim`],
+  ] as const) {
+    const other = await over(options as Options);
+    expect(await other.onGreen()).toContain("left for the press");
+    expect(
+      other.messages
+        .filter((message) => message.messageId.startsWith("report-withheld-"))
+        .map((message) => message.messageId),
+    ).toEqual([id]);
+  }
+  // Nothing on offer, or merged already, is not a withheld merge.
+  for (const options of [{ scopeTip: "none" }, { before: { ...open, state: "MERGED" } }] as const) {
+    const quiet = await over(options as Options);
+    await quiet.onGreen();
+    expect(quiet.messages.some((message) => message.messageId.startsWith("report-withheld-"))).toBe(
+      false,
+    );
+  }
+});
+
+test("rondo#551: asked again once the question is answered, a withheld merge on green merges", async () => {
+  const world = await over({ asking: true });
+  expect(await world.onGreen()).toContain("left for the press");
+  world.messages.push({
+    messageId: "reply-1",
+    body: "The first one.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "ask-1",
+    atMs: 10,
+    bases: [],
+    asks: false,
+    answerOutcome: "carry_on",
+  } as ThreadMessageDraft);
+  expect(await world.onGreen()).toContain("merged");
+  expect(world.asked).toContain(`merge ${PR} --squash ${TIP}`);
+  expect(world.claims).toHaveLength(1);
 });

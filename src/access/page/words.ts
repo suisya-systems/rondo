@@ -45,6 +45,7 @@ export const LAP_REPORT_KINDS = Object.freeze([
   "moved",
   "closing",
   "lost",
+  "withheld",
 ] as const);
 export type LapReportKind = (typeof LAP_REPORT_KINDS)[number] | "other";
 
@@ -119,6 +120,12 @@ export interface PageWords extends DayWords {
   readonly evPushedOnto: string;
   /** The line a checks answer is said as: the pull request, and what its checks came to. */
   readonly evChecks: (pullRequest: string, word: string, detail: string | null) => string;
+  /**
+   * A merge on green rondo did not make (rondo#551), by why: `asked`,
+   * `notInScope`, `expired`, `claim`, or a press's refusal key, whose own
+   * sentence is `refused` where it is one.
+   */
+  readonly evMergeWithheld: (pullRequest: string, why: string, refused: string | null) => string;
   readonly evStopped: string;
   /**
    * The two ways an attempt can fail, which are not one line (rondo#348).
@@ -628,6 +635,28 @@ export const PAGE_EN: PageWords = Object.freeze({
   evClosedUnapproved: "The confirmation closed without an approval.",
   evPublished: "Published, and a pull request was opened:",
   evPushedOnto: "Published onto the pull request already open:",
+  evMergeWithheld: (pullRequest, why, refused) => {
+    const press = "Press merge to merge it.";
+    switch (why) {
+      case "asked":
+        return (
+          `rondo did not merge ${pullRequest}, though its checks are green: a question or a ` +
+          "confirmation about this work is waiting on you. Answer it and rondo merges it by " +
+          "itself, or press merge."
+        );
+      case "notInScope":
+        return `rondo did not merge ${pullRequest} by itself: the approval it works under does not include merging. ${press}`;
+      case "expired":
+        return `rondo did not merge ${pullRequest} by itself: the approval it works under has run out. ${press}`;
+      case "claim":
+        return `rondo did not merge ${pullRequest}: the approval changed, or was already used, while it was merging. ${press}`;
+      default:
+        return (
+          `rondo did not merge ${pullRequest}, though its checks are green. ` +
+          (refused ?? `Look at the pull request, then press merge.`)
+        );
+    }
+  },
   evChecks: (pullRequest, word, detail) =>
     `The checks on ${pullRequest}: ${word}${detail === null ? "" : ` (${detail})`}.`,
   evStopped: "Stopped.",
@@ -657,6 +686,7 @@ export const PAGE_EN: PageWords = Object.freeze({
       moved: "rondo recorded that the pull request moved.",
       closing: "rondo recorded the closing fix.",
       lost: "rondo recorded that this try was lost when rondo restarted.",
+      withheld: "rondo recorded why it did not merge on green checks.",
       other: "rondo recorded something about this try.",
     })[kind],
   evChecksPassed: "The automatic checks all passed.",
@@ -1217,6 +1247,28 @@ export const PAGE_JA: PageWords = Object.freeze({
   evClosedUnapproved: "承認されないまま、確認が閉じました。",
   evPublished: "公開しました。プルリクエストを開きました:",
   evPushedOnto: "公開しました。開いているプルリクエストに push しました:",
+  evMergeWithheld: (pullRequest, why, refused) => {
+    const press = "マージするには、マージのボタンを押してください。";
+    switch (why) {
+      case "asked":
+        return (
+          `${pullRequest} のチェックは通っていますが、rondo はマージしませんでした。` +
+          "この作業についての質問か確認が、あなたの回答を待っています。答えると rondo が自分でマージします。" +
+          "マージのボタンを押してもかまいません。"
+        );
+      case "notInScope":
+        return `${pullRequest} を rondo は自分ではマージしませんでした。いまの承認にマージが含まれていません。${press}`;
+      case "expired":
+        return `${pullRequest} を rondo は自分ではマージしませんでした。いまの承認の期限が切れています。${press}`;
+      case "claim":
+        return `${pullRequest} を rondo はマージしませんでした。マージの途中で承認が変わったか、すでに使われていました。${press}`;
+      default:
+        return (
+          `${pullRequest} のチェックは通っていますが、rondo はマージしませんでした。` +
+          (refused ?? "プルリクエストを確かめてから、マージのボタンを押してください。")
+        );
+    }
+  },
   evChecks: (pullRequest, word, detail) =>
     `${pullRequest} のチェック: ${word}${detail === null ? "" : `（${detail}）`}`,
   evStopped: "取りやめました。",
@@ -1245,6 +1297,7 @@ export const PAGE_JA: PageWords = Object.freeze({
       moved: "プルリクエストが動いたことを rondo が記録しました。",
       closing: "仕上げの修正を rondo が記録しました。",
       lost: "rondo の再起動でこの回が失われたことを記録しました。",
+      withheld: "チェックが通っていてもマージしなかった理由を rondo が記録しました。",
       other: "この回について rondo が記録しました。",
     })[kind],
   evChecksPassed: "自動チェックはすべて通りました。",

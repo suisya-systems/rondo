@@ -1390,7 +1390,7 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was merged: rondo has not read the checks green on the pull request's latest " +
     "commit. Wait for them, then press again.",
   mergeRefusedAsked:
-    "Nothing was merged: a question or a confirmation in this request is still waiting on you. " +
+    "Nothing was merged: a question or a confirmation about this work is still waiting on you. " +
     "Answer it first.",
   mergeRefusedMerged: "Nothing was merged again: this pull request is already merged.",
   mergeRefusedLanded:

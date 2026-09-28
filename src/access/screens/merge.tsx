@@ -44,16 +44,17 @@ export async function mergeView(
   const held = (await ports.store.laneLedger()).find(
     (line) => line.releasedBy === null && line.lapIds.includes(record.id),
   );
-  // A question that holds this line (rondo#539), or another lap of the request
-  // at its gate, as the port asks it (`mergeOnce` in `src/access/merge.ts`), so
-  // no press is drawn it would refuse.
+  // A question that holds this line (rondo#539), or a lap of this line at its
+  // gate (rondo#551), as the port asks it (`mergeHold` in `src/access/merge.ts`),
+  // so no press is drawn it would refuse.
+  const lineIds = held?.lapIds ?? [record.id];
   const gated = (await ports.store.readLive()).some(
     (live) =>
       live.kind === "read" &&
       live.record.status === "awaiting_human" &&
-      live.record.requestMessageId === request,
+      lineIds.includes(live.record.id),
   );
-  const asksWaiting = gated || askHoldsMerge(threads, request, held?.lapIds ?? [record.id]);
+  const asksWaiting = gated || askHoldsMerge(threads, request, lineIds);
   if (result === null || mergeBlock(result, asksWaiting, held !== undefined) !== null) {
     return framed(note(wording.mergeConfirmNotNow));
   }

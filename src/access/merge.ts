@@ -41,7 +41,13 @@ import {
   LANE_LEDGER_AUTHOR,
   type RecordOutcome,
 } from "../store/sqlite.js";
-import { reportToRequest, type WorktreeOutcome } from "./conductor.js";
+import {
+  type MergeWithheld,
+  reportToRequest,
+  type WorktreeOutcome,
+  withheldSentence,
+  writeReport,
+} from "./conductor.js";
 import {
   type CommandOutcome,
   deleteLapBase,
@@ -51,8 +57,8 @@ import {
   readMergeMethod,
   readPullRequest,
 } from "./forge.js";
-import { askHoldsMerge, type MergeBlock, mergeBlock, resultOf } from "./page-logic/result.js";
-import { threadsOf } from "./page-logic/threads.js";
+import { askHoldingMerge, type MergeBlock, mergeBlock, resultOf } from "./page-logic/result.js";
+import { type Threads, threadsOf } from "./page-logic/threads.js";
 import { approvalTip } from "./scope.js";
 import type { Merged, MergeInput, MergeRefusal } from "./web-app.js";
 
@@ -151,8 +157,12 @@ export interface MergeOnGreenPorts extends MergePorts {
  * conditions are not asked again.
  *
  * Returns a line for the terminal, or null where it is not rondo's to merge.
- * A refusal after that -- a queue, a retarget, the forge -- is left for the
- * person's press, which is unchanged.
+ * A refusal after that -- a question or a gate of this line, a queue, a
+ * retarget, the forge -- is left for the person's press, which is unchanged,
+ * and **said in the thread** (rondo#551), as are an approved scope without the
+ * merge and an expired one: on lap 19 a withheld merge was one terminal line
+ * nobody read, and nothing asked again once its hold cleared. Null again where
+ * the same head and reason were already said.
  */
 export async function mergeOnGreen(
   ports: MergeOnGreenPorts,
@@ -162,13 +172,22 @@ export async function mergeOnGreen(
   if (ports.pressing?.has(iterationId) === true) {
     return null;
   }
-  const authority = await scopedAuthority(ports, iterationId, MERGE_ACTS);
-  if (authority === null) {
+  const scope = await scopeReading(ports, iterationId, MERGE_ACTS);
+  if (scope.kind === "none") {
     return null;
   }
+  if (scope.kind === "notInScope") {
+    return await withhold(ports, iterationId, head, { why: "notInScope", scopeId: scope.scopeId });
+  }
+  if (scope.kind === "expired") {
+    const { scopeId, expiresAtMs } = scope;
+    return await withhold(ports, iterationId, head, { why: "expired", scopeId, expiresAtMs });
+  }
+  const authority = scope;
   ports.pressing?.add(iterationId);
+  let merged: Merged;
   try {
-    const merged = await mergeOnce(
+    merged = await mergeOnce(
       ports,
       { iterationId, head },
       {
@@ -193,10 +212,64 @@ export async function mergeOnGreen(
         },
       },
     );
-    return merged.ok ? merged.note : `not merged on green, left for the press: ${merged.note}`;
   } finally {
     ports.pressing?.delete(iterationId);
   }
+  if (merged.ok) {
+    return merged.note;
+  }
+  // Merged or closed is the checks host's to say, and a press in flight its own.
+  if (
+    merged.why === "mergeRefusedMerged" ||
+    merged.why === "mergeRefusedClosed" ||
+    merged.why === "mergeRefusedInFlight"
+  ) {
+    return `not merged on green, left for the press: ${merged.note}`;
+  }
+  if (merged.why === "mergeRefusedAsked") {
+    const found = await ports.store.read(iterationId);
+    const read = await ports.record.threadMessages();
+    const hold =
+      found.kind === "read" && read.kind === "read"
+        ? await mergeHold(ports.store, threadsOf(read.messages, new Set(), new Map()), found.record)
+        : null;
+    return await withhold(ports, iterationId, head, {
+      why: "asked",
+      askId: hold?.askId ?? null,
+      gateLapId: hold?.gateLapId ?? null,
+    });
+  }
+  return await withhold(
+    ports,
+    iterationId,
+    head,
+    merged.why === undefined
+      ? { why: "claim", reason: merged.note }
+      : { why: "refused", refusal: merged.why, note: merged.note },
+  );
+}
+
+/**
+ * **A merge on green that did not merge is said in the thread** (rondo#551):
+ * once per head and reason, so the checks host's retry does not say it again,
+ * and the page draws it as the person's while it stands. Null where it was
+ * said before, so the terminal is not told every scan either.
+ */
+async function withhold(
+  ports: MergeOnGreenPorts,
+  iterationId: string,
+  head: string,
+  withheld: MergeWithheld,
+): Promise<string | null> {
+  const written = await writeReport(
+    ports,
+    iterationId,
+    { kind: "mergeWithheld", head, withheld },
+    ports.now(),
+  );
+  return written.kind === "alreadyReported"
+    ? null
+    : `not merged on green, left for the press: ${withheldSentence(withheld)}\n${written.line}`;
 }
 
 const MERGE_ACTS: readonly ScopeOutwardAct[] = ["merge_default_branch"];
@@ -212,14 +285,7 @@ const MERGE_ACTS: readonly ScopeOutwardAct[] = ["merge_default_branch"];
  * window is one tick of the event loop. One query in the claim is the upgrade.
  */
 export async function scopedAuthority(
-  ports: {
-    readonly store: Pick<IterationStore, "read">;
-    readonly record: Pick<
-      AdvisoryRecord,
-      "scopeDecisionAdmitting" | "scopeTip" | "readScopeDecision" | "readScope"
-    >;
-    readonly now: () => number;
-  },
+  ports: ScopePorts,
   iterationId: string,
   acts: readonly ScopeOutwardAct[],
 ): Promise<{
@@ -227,29 +293,97 @@ export async function scopedAuthority(
   readonly scopeId: string;
   readonly payload: ScopePayload;
 } | null> {
+  const read = await scopeReading(ports, iterationId, acts);
+  return read.kind === "authorised" ? read : null;
+}
+
+type ScopePorts = {
+  readonly store: Pick<IterationStore, "read">;
+  readonly record: Pick<
+    AdvisoryRecord,
+    "scopeDecisionAdmitting" | "scopeTip" | "readScopeDecision" | "readScope"
+  >;
+  readonly now: () => number;
+};
+
+/**
+ * {@link scopedAuthority}'s reading, with the two answers a person acts on
+ * apart (rondo#551): an approved scope that does not include `acts`, and one
+ * that expired. `none` is no approved scope at all: nothing was on offer.
+ */
+async function scopeReading(
+  ports: ScopePorts,
+  iterationId: string,
+  acts: readonly ScopeOutwardAct[],
+): Promise<
+  | { readonly kind: "none" }
+  | { readonly kind: "notInScope"; readonly scopeId: string }
+  | { readonly kind: "expired"; readonly scopeId: string; readonly expiresAtMs: number }
+  | {
+      readonly kind: "authorised";
+      readonly scopeDecisionId: string;
+      readonly scopeId: string;
+      readonly payload: ScopePayload;
+    }
+> {
+  const none = { kind: "none" } as const;
   const found = await ports.store.read(iterationId);
   if (found.kind !== "read" || !approvedForPublication(found.record)) {
-    return null;
+    return none;
   }
   const tip = await approvalTip(ports.record, iterationId);
   if (tip.kind !== "tip") {
-    return null;
+    return none;
   }
   const decided = await ports.record.readScopeDecision(tip.scopeDecisionId);
   if (decided.kind !== "read" || decided.decision.outcome !== "approved") {
-    return null;
+    return none;
   }
-  const stored = await ports.record.readScope(decided.decision.scopeId);
-  return stored.kind !== "read" ||
-    !acts.every((act) => stored.scope.payload.outward_acts.includes(act)) ||
-    // D-0066 rule 1.2.4: an expired scope authorises nothing.
-    stored.scope.payload.budgets.expires_at_ms <= ports.now()
-    ? null
-    : {
-        scopeDecisionId: tip.scopeDecisionId,
-        scopeId: decided.decision.scopeId,
-        payload: stored.scope.payload,
-      };
+  const scopeId = decided.decision.scopeId;
+  const stored = await ports.record.readScope(scopeId);
+  if (stored.kind !== "read") {
+    return none;
+  }
+  const { payload } = stored.scope;
+  if (!acts.every((act) => payload.outward_acts.includes(act))) {
+    return { kind: "notInScope", scopeId };
+  }
+  // D-0066 rule 1.2.4: an expired scope authorises nothing.
+  const expiresAtMs = payload.budgets.expires_at_ms;
+  return expiresAtMs <= ports.now()
+    ? { kind: "expired", scopeId, expiresAtMs }
+    : { kind: "authorised", scopeDecisionId: tip.scopeDecisionId, scopeId, payload };
+}
+
+/**
+ * What holds the merge of `record`'s line, or null where nothing does
+ * (rondo#539, rondo#551): a question about this line or the request
+ * ({@link askHoldingMerge}), or a lap of this line at its gate. A gate on
+ * another line of the request -- a change request's own line -- is answered
+ * there and does not hold this one. Also `held`: the line in the ledger.
+ */
+export async function mergeHold(
+  store: Pick<IterationStore, "laneLedger" | "readLive">,
+  threads: Threads,
+  record: { readonly id: string; readonly requestMessageId: string },
+): Promise<{
+  readonly held: boolean;
+  readonly askId: string | null;
+  readonly gateLapId: string | null;
+}> {
+  const line = (await store.laneLedger()).find(
+    (one) => one.releasedBy === null && one.lapIds.includes(record.id),
+  );
+  const lineIds = line?.lapIds ?? [record.id];
+  const gate = (await store.readLive()).find(
+    (live) =>
+      live.kind === "read" &&
+      live.record.status === "awaiting_human" &&
+      lineIds.includes(live.record.id),
+  );
+  const gateLapId = gate?.kind === "read" ? gate.record.id : null;
+  const askId = askHoldingMerge(threads, record.requestMessageId, lineIds);
+  return { held: line !== undefined, askId, gateLapId };
 }
 
 /** The scope a merge on green is made under (D-0126). */
@@ -276,23 +410,10 @@ async function mergeOnce(
   }
   const threads = threadsOf(read.messages, new Set(), new Map());
   const result = resultOf(threads.byId, record.id);
-  const held = (await ports.store.laneLedger()).find(
-    (line) => line.releasedBy === null && line.lapIds.includes(record.id),
-  );
-  // **A question or a gate of this request still waiting on the person** is
-  // `D-0064`'s P2 to P4 item open: an ask nobody carried on that holds this
-  // line (rondo#539), or another lap of the same request standing at its gate.
-  const gated = (await ports.store.readLive()).some(
-    (live) =>
-      live.kind === "read" &&
-      live.record.status === "awaiting_human" &&
-      live.record.requestMessageId === record.requestMessageId,
-  );
-  const block = mergeBlock(
-    result,
-    gated || askHoldsMerge(threads, record.requestMessageId, held?.lapIds ?? [record.id]),
-    held !== undefined,
-  );
+  // **A question or a gate of this line still waiting on the person** is
+  // `D-0064`'s P2 to P4 item open (rondo#539, rondo#551).
+  const hold = await mergeHold(ports.store, threads, record);
+  const block = mergeBlock(result, hold.askId !== null || hold.gateLapId !== null, hold.held);
   if (block !== null || result === null || result.url === null) {
     return refused(REFUSED_BY[block ?? "notPublished"], `the merge is not offered: ${block}`);
   }

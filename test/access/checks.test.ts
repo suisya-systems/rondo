@@ -587,6 +587,32 @@ test("D-0126: a green just written on the lap's own head asks for a merge on gre
   expect(moved.mergesAsked).toEqual([]);
 });
 
+test("rondo#551: a merge on green withheld on the head still read green is asked again on each scan", async () => {
+  const green = { kind: "green", counted: 1, skipped: 0 } as const;
+  const said = ["request-1", "report-published-lap-1", "report-checks-lap-1-green"];
+  const again = await hostOver({
+    reading: green,
+    pullRequest: OPEN,
+    messageIds: [...said, "report-withheld-lap-1-commit-of-lap-1-asked"],
+    mergeOnGreen: null,
+    passes: 2,
+  });
+  // Nothing new is written: the green stands, and the withheld merge is asked again.
+  expect(again.written).toEqual([]);
+  expect(again.mergesAsked).toEqual(["lap-1 commit-of-lap-1", "lap-1 commit-of-lap-1"]);
+  // Not where it was withheld on another head, and not once the checks are no longer green.
+  for (const options of [
+    { reading: green, messageIds: [...said, "report-withheld-lap-1-0ther00-asked"] },
+    {
+      reading: { kind: "red", failed: ["build"], cancelled: [], timedOut: [] },
+      messageIds: [...said, "report-withheld-lap-1-commit-of-lap-1-asked"],
+    },
+  ] as const) {
+    const over = await hostOver({ pullRequest: OPEN, mergeOnGreen: null, ...options });
+    expect(over.mergesAsked).toEqual([]);
+  }
+});
+
 test("a lap a merge press holds is left alone", async () => {
   const over = await hostOver({
     reading: { kind: "green", counted: 1, skipped: 0 },

@@ -114,6 +114,7 @@ import { modelReadingLines } from "./model-review/judgement.js";
 import { refusalSaid } from "./page-logic/laps.js";
 import { relayQuestion } from "./question.js";
 import { LIST_LIMIT, READING_REMOTE, type ReadingOptions, readingOf } from "./review.js";
+import type { MergeRefusal } from "./web-app.js";
 import type { Chrome } from "./wording.js";
 
 export type { ConductorReport };
@@ -1445,6 +1446,11 @@ export type LapEvent =
    * rondo read (rondo#412): somebody pushed to its branch outside rondo.
    * `commits` are what `to` carries that `from` does not.
    */
+  /**
+   * A merge on green did not merge the pull request, green on `head`
+   * (rondo#551): once per head and reason, so a scan does not say it again.
+   */
+  | { readonly kind: "mergeWithheld"; readonly head: string; readonly withheld: MergeWithheld }
   | {
       readonly kind: "moved";
       readonly pullRequestUrl: string;
@@ -1455,6 +1461,30 @@ export type LapEvent =
       readonly total?: number;
       readonly retold?: number;
     };
+
+/**
+ * Why a merge on green left a green pull request unmerged (rondo#551, D-0126),
+ * one arm per next move the person has (AGENTS.md, rondo#348):
+ *
+ * - `asked`: a question (`askId`) or a gate (`gateLapId`) of this line waits
+ *   on the person; answering it lets rondo merge by itself.
+ * - `notInScope` / `expired`: the approval the lap works under does not
+ *   include the merge, or has run out; a press merges it.
+ * - `claim`: the approval changed, or was already used, between the reads and
+ *   the claim.
+ * - `refused`: the forge or the pull request refused, as the press would.
+ */
+export type MergeWithheld =
+  | { readonly why: "asked"; readonly askId: string | null; readonly gateLapId: string | null }
+  | { readonly why: "notInScope"; readonly scopeId: string }
+  | { readonly why: "expired"; readonly scopeId: string; readonly expiresAtMs: number }
+  | { readonly why: "claim"; readonly reason: string }
+  | { readonly why: "refused"; readonly refusal: MergeRefusal; readonly note: string };
+
+/** The token a withheld merge's message id ends in: the arm, or the refusal's key. */
+export function withheldToken(withheld: MergeWithheld): string {
+  return withheld.why === "refused" ? withheld.refusal : withheld.why;
+}
 
 /**
  * The message a checks answer is written under: one per answer, and per head
@@ -1802,6 +1832,11 @@ export async function writeReport(
       "one more attempt, offered on the page, that merges the base in and stops for the " +
       "person's approval before it is pushed onto this pull request (D-0105); the person may " +
       "also resolve it on the branch and push.";
+  } else if (event.kind === "mergeWithheld") {
+    messageId = `report-withheld-${iterationId}-${event.head}-${withheldToken(event.withheld)}`;
+    body =
+      `Lap '${iterationId}' was not merged by rondo on checks read green on commit ` +
+      `'${event.head}': ${withheldSentence(event.withheld)}`;
   } else if (event.kind === "moved") {
     messageId = `report-moved-${iterationId}-${event.to}`;
     body = movedBody(iterationId, event);
@@ -1944,6 +1979,32 @@ function worktreeClause(one: WorktreeOutcome): string {
       return `already gone '${one.workspace}'`;
     default:
       return `kept for run '${one.runId}': ${one.reason}`;
+  }
+}
+
+/** Why a merge on green was withheld and what the person can do, for the record. */
+export function withheldSentence(withheld: MergeWithheld): string {
+  const press = "A person's press of merge on the page merges it.";
+  switch (withheld.why) {
+    case "asked":
+      return (
+        (withheld.gateLapId !== null
+          ? `lap '${withheld.gateLapId}' of the same line waits at its gate`
+          : `question '${withheld.askId ?? "(none named)"}' about this work waits on the person`) +
+        ". rondo merges it by itself once that is answered and the checks are still green. " +
+        press
+      );
+    case "notInScope":
+      return `scope '${withheld.scopeId}' does not include merging. ${press}`;
+    case "expired":
+      return (
+        `scope '${withheld.scopeId}' expired at ${new Date(withheld.expiresAtMs).toISOString()}. ` +
+        press
+      );
+    case "claim":
+      return `the approval did not allow the merge when it was claimed: ${withheld.reason}. ${press}`;
+    default:
+      return `${withheld.refusal}: ${withheld.note}. ${press}`;
   }
 }
 

@@ -524,7 +524,21 @@ async function readOne(ports: ChecksHostPorts, due: Due, said: Set<string>): Pro
     );
     // D-0126: a green just said on the lap's own head is where a scope that
     // includes the merge merges. The rest of the test is `mergeOnGreen`'s.
-    if (told && reading.kind === "green" && !moved && ports.mergeOnGreen !== undefined) {
+    // **And asked again while that green stands and a merge on it was
+    // withheld** (rondo#551): the hold -- a question answered since, say --
+    // may have cleared, and nothing else would ask. `mergeOnGreen` says a
+    // withheld merge once per head and reason, so a hold that stands is quiet.
+    // ponytail: asked every scan while it stands, the forge's reads included
+    // for a forge refusal; a cleared-hold test before asking is the upgrade.
+    const withheld = [...due.said].some((id) =>
+      id.startsWith(`report-withheld-${iterationId}-${head}-`),
+    );
+    if (
+      (told || withheld) &&
+      reading.kind === "green" &&
+      !moved &&
+      ports.mergeOnGreen !== undefined
+    ) {
       const merged = await ports.mergeOnGreen(iterationId, head);
       if (merged !== null) {
         lines.push(merged);
