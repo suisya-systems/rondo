@@ -25550,6 +25550,22 @@ the newest goal: an edit would widen an approval nobody re-read.
 > retried and not asked about, which is `D-0071` rule 1.5's "not retried" as it stands; the flow
 > moves on to the next candidate. Nothing above is edited.
 
+> **Annotation (2026-09-29, from rondo#549's gate).** Added at the person's reading of the
+> annotation above, and **additive to it**: what it records as the known limit "a refused draft is
+> not retried **and not asked about**" is now half true, because the second half was the flow
+> passing a request over in silence. **A refused draft is said in its own request's thread**: one
+> message under the opener, in the operator's language (`D-0055`,
+> `Chrome.flowDraftRefusedAsk`) and asking, so `waitsOnYou` lifts the request under *your turn* and
+> it cannot sit in the list as a request that never started with nothing said about why. It is
+> written in the flow's own voice (`FLOW_AUTHOR`), so it holds no part of the request, and it is
+> **skipped where `ownOpenAsk` is read**, so it does not become the stop it exists instead of: the
+> flow goes on asking for the goal's other requests, which is what `draft_refused` not being a
+> failure says. One message per request (`draftRefusedNoteId`), so a later pass that reads the same
+> refusal writes nothing. Option not taken: letting the note hold the flow as any other ask does --
+> nothing drafts the request again yet, so the goal would stop dead on a refused model output, which
+> is this issue's own complaint arriving as a wait instead of a stop. Still not taken here: drafting
+> the request again by itself, which is rondo#554's. Nothing above is edited.
+
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 
 **Status:** accepted (2026-09-27, rondo#452). The issue records `D-0098`'s gate (2026-09-22, point

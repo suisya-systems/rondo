@@ -237,9 +237,7 @@ async function flowOne(
     // stays the person's turn rather than vanishing, and the flow is free to
     // ask for the goal's next request meanwhile -- exactly what `draft_refused`
     // not being a failure says. Every other ask in an own thread holds it.
-    const holds = asks.asks.filter(
-      (ask) => ask.messageId !== draftRefusedNoteId(opener.messageId),
-    );
+    const holds = asks.asks.filter((ask) => ask.messageId !== draftRefusedNoteId(opener.messageId));
     // This approval's own stop holds it in whichever request's thread it was
     // asked, an inherited one included.
     ownOpenAsk ||=
