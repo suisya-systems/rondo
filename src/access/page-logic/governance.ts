@@ -93,15 +93,20 @@ export interface Governance {
   /** What remains, as rule 6's chain. */
   readonly chain: readonly ChainLink[];
   /**
-   * **Which worker did this request's work** (rondo#462): the provider, and
-   * whether the person chose it or the host's default supplied it.
+   * **Which worker did this request's work** (rondo#462): the provider the row
+   * records, and whether the person chose it or the host's default supplied
+   * it.
    *
-   * Derived, as everything here is: `chosen` is the lap row's own
-   * `workerProvider`, written at reservation and by nothing afterwards, and the
-   * name it falls back to is the host's default as the caller read it. Null is
-   * a row with no choice on it *and* a caller that could not say what the host
-   * runs -- and then the screen says nothing rather than naming a worker
-   * neither the row nor the host stands behind.
+   * **Read off the row and from nothing else.** Both halves are the lap's own
+   * `workerProvider` and `workerProviderChosen`, written at reservation and by
+   * nothing afterwards. This used to fall back to the host's default *as the
+   * caller read it at drawing time*, which meant moving `RONDO_WORKER_PROVIDER`
+   * relabelled every past lap as having run on the new worker -- a thread
+   * saying a lap ran on something it never ran on. So the default's name is
+   * settled onto the row at the start instead, and this reads it back.
+   *
+   * Null is a row written before rondo recorded either, and the screen says so
+   * rather than naming a worker nothing stands behind.
    */
   readonly worker: { readonly provider: string; readonly chosen: boolean } | null;
   /**
@@ -210,13 +215,6 @@ export function governanceOf(
    * and the request's total read across all of them (rondo#378).
    */
   laps: readonly Pick<IterationRecord, "status" | "lapCostUsd">[] = [record],
-  /**
-   * The worker this host runs when a request chooses none (rondo#462), as the
-   * caller read it off the host's settings -- null where it could not, and then
-   * a lap that chose nothing says nothing rather than naming a default this
-   * module made up.
-   */
-  hostWorker: string | null = null,
 ): Governance {
   const answered = record.gateOutcome !== null;
   const atGate = record.status === "awaiting_human";
@@ -244,11 +242,9 @@ export function governanceOf(
         ? null
         : { at: approval.spent.admissions, of: approval.payload.budgets.laps },
     worker:
-      record.workerProvider !== null
-        ? { provider: record.workerProvider, chosen: true }
-        : hostWorker === null
-          ? null
-          : { provider: hostWorker, chosen: false },
+      record.workerProvider === null
+        ? null
+        : { provider: record.workerProvider, chosen: record.workerProviderChosen },
     chain: [
       { step: "answer", state: answered ? "done" : atGate ? "waiting" : "ahead" },
       { step: "proposal", state: proposed ? "done" : mayPropose ? "ahead" : "yours" },

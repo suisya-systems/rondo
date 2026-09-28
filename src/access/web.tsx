@@ -4121,10 +4121,6 @@ export async function operatorPage(
           // Every try of the request, so its cost is read across all of them
           // and each try's stays as the detail (rondo#378).
           selectedLaps.map((lap) => lap.record),
-          // rondo#462: the worker this host runs when a request chose none, so
-          // the thread names the default by its name instead of leaving the
-          // person to find it on the host.
-          ports.workers?.fallback ?? null,
         );
   // The merge is done where rondo has seen it made, by a press or on the
   // forge (rondo#413), and is no step at all once the pull request was closed

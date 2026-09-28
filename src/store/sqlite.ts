@@ -201,6 +201,19 @@ export interface ReserveInput {
    */
   readonly workerProvider?: string | null;
   /**
+   * The worker this host runs when a request chooses none, as the caller
+   * resolved it at the start (rondo#462) -- absent only where the caller could
+   * not say.
+   *
+   * **Resolved by the caller and settled here.** The store cannot read a
+   * host's settings and must not try; what it contributes is that the name is
+   * fixed onto the row in the row's own transaction, so a later change to the
+   * host's default cannot rewrite what a past lap is said to have run on. A
+   * caller that leaves it absent leaves `worker_provider` NULL, which the page
+   * reads as unknown.
+   */
+  readonly hostWorkerProvider?: string | null;
+  /**
    * The approval this admission spends, or null when nobody approved anything
    * (D-0022 rule 9).
    *
@@ -1115,13 +1128,28 @@ CREATE TABLE IF NOT EXISTS iteration (
   -- that adds this column to a store written before it impossible -- ALTER
   -- TABLE ADD COLUMN NOT NULL has no value to give the rows already there.
   request_message_id    TEXT,
-  -- The worker provider this request chose, or NULL for the host's default
-  -- (rondo#462). Written by reserve() and by nothing afterwards: the choice is
-  -- made before the lap starts, which is the answer the person gave to "can it
-  -- be changed part way through". Nullable with no back-fill, as every column
-  -- added after a row could exist is: a row written before this ran on the
-  -- host's default, which is what NULL says.
+  -- The worker provider this lap runs on (rondo#462): the one the person
+  -- chose, or the host's default *resolved at reservation* when they chose
+  -- none. Written by reserve() and by nothing afterwards: the choice is made
+  -- before the lap starts, which is the answer the person gave to "can it be
+  -- changed part way through".
+  --
+  -- **The resolved name and not the choice alone.** A row that kept only an
+  -- explicit choice left the page to name the default it fell back to, and the
+  -- page could only read the default the host runs *now* -- so moving
+  -- RONDO_WORKER_PROVIDER relabelled every past lap as having run on the new
+  -- worker. The name is therefore settled once, at the start, and the screen
+  -- reads this column and nothing else.
+  --
+  -- Nullable with no back-fill, as every column added after a row could exist
+  -- is: a row written before this recorded nothing, and NULL reads as
+  -- "unknown" rather than as a provider rondo would be inventing.
   worker_provider       TEXT,
+  -- Whether the provider beside it is the person's own choice (1) or the
+  -- host's default resolved for them (0), for rows written since rondo
+  -- recorded it (rondo#462). NULL beside a NULL provider is a row from before
+  -- either.
+  worker_provider_chosen INTEGER,
   continuo_revision     TEXT,
   agent_type_digest     TEXT,
   config_digest         TEXT,
@@ -1995,9 +2023,13 @@ const ADDED_COLUMNS = Object.freeze({
   // recorded where it pushed, so a null is the truth about such a row and the
   // landing reading answers `undetermined` over it.
   published_remote: "TEXT",
-  // rondo#462: nullable, no back-fill -- no lap before it could choose, so a
-  // null is the truth about such a row and reads as the host's default.
+  // rondo#462: nullable, no back-fill -- no lap before it recorded which
+  // worker ran it, so a null is the truth about such a row and the page says
+  // it is unknown rather than naming today's default over yesterday's lap.
   worker_provider: "TEXT",
+  // rondo#462: nullable, no back-fill -- it says what `worker_provider` is,
+  // and a row with no provider has no answer to give.
+  worker_provider_chosen: "INTEGER",
   // D-0139: nullable, no back-fill -- no lap before it recorded its processes.
   driver_host: "TEXT",
   driver_pid: "INTEGER",
@@ -2204,6 +2236,7 @@ const SELECT_COLUMNS = [
   "supersedes_iteration_id",
   "request_message_id",
   "worker_provider",
+  "worker_provider_chosen",
   "continuo_revision",
   "agent_type_digest",
   "config_digest",
@@ -2581,12 +2614,24 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
               return refusal;
             }
           }
+          // rondo#462: the choice, and then the name the lap actually runs
+          // under. The successor of a lap that chose a provider keeps that
+          // choice, exactly as it keeps the request link -- a revision or a
+          // retry is the same request continued, and the choice was the
+          // person's for the request rather than for one lap of it. The caller
+          // may still name one, which is what lets a re-lap be put on the
+          // other provider. Where nobody chose, the host's default is settled
+          // onto the row *now*, so that what this lap ran on stays readable
+          // after the host's default moves.
+          const chosenWorker = input.workerProvider ?? inheritedWorkerProvider(connection, input);
+          const ranOnWorker = chosenWorker ?? input.hostWorkerProvider ?? null;
           connection
             .prepare(
               "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, " +
                 "run_id, topic_branch, workspace, identifiers_spent, supersedes_iteration_id, " +
-                "request_message_id, worker_provider, created_at_ms, updated_at_ms) " +
-                "VALUES (?, 'planned', ?, ?, ?, 1, ?, ?, ?, 0, ?, ?, ?, ?, ?)",
+                "request_message_id, worker_provider, worker_provider_chosen, created_at_ms, " +
+                "updated_at_ms) " +
+                "VALUES (?, 'planned', ?, ?, ?, 1, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)",
             )
             // One attempt, not zero: the row exists because an attempt is being
             // made. `nextStep` compares the policy's ceiling against a *fresh*
@@ -2608,13 +2653,11 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
               input.workspace,
               input.supersedesIterationId,
               linked.requestMessageId,
-              // rondo#462: the successor of a lap that chose a provider keeps
-              // that choice, exactly as it keeps the request link above -- a
-              // revision or a retry is the same request continued, and the
-              // choice was the person's for the request rather than for one
-              // lap of it. The caller may still name one, which is what lets a
-              // re-lap be put on the other provider.
-              input.workerProvider ?? inheritedWorkerProvider(connection, input),
+              ranOnWorker,
+              // NULL and not 0 where no name was settled at all: the column
+              // says what the provider beside it is, and there is nothing
+              // beside it to say anything about.
+              ranOnWorker === null ? null : chosenWorker === null ? 0 : 1,
               input.nowMs,
               input.nowMs,
             );
@@ -8060,16 +8103,26 @@ function lineageDefect(connection: DatabaseSync, input: ReserveInput): string | 
  * provider half way through a request, and the person who chose one chose it
  * for the work rather than for its first lap. Naming one explicitly still
  * wins, which is what lets a re-lap be put on the other provider on purpose.
+ *
+ * **A choice is inherited; a default is resolved again.** The predecessor's
+ * row now also carries the name the host's default resolved to when nobody
+ * chose (see the schema), and that name is a record of what that lap ran on
+ * rather than an instruction about the next one. Inheriting it would pin a
+ * request to whatever the host happened to run the first time, which is a
+ * choice nobody made -- so only `worker_provider_chosen` rows are carried.
  */
 function inheritedWorkerProvider(connection: DatabaseSync, input: ReserveInput): string | null {
   if (input.supersedesIterationId === null) {
     return null;
   }
   const row = connection
-    .prepare("SELECT worker_provider FROM iteration WHERE id = ?")
+    .prepare("SELECT worker_provider, worker_provider_chosen FROM iteration WHERE id = ?")
     .get(input.supersedesIterationId) as SqlRow | undefined;
   // A predecessor that is not there is `lineageDefect`'s to answer, as above.
-  return row === undefined ? null : optionalText(row, "worker_provider");
+  if (row === undefined || optionalNumber(row, "worker_provider_chosen") !== 1) {
+    return null;
+  }
+  return optionalText(row, "worker_provider");
 }
 
 function inheritedRequest(connection: DatabaseSync, input: ReserveInput): string {
@@ -8239,6 +8292,7 @@ function toRecord(row: SqlRow): IterationRecord {
     supersedesIterationId: optionalText(row, "supersedes_iteration_id"),
     requestMessageId: requireText(row, "request_message_id"),
     workerProvider: optionalText(row, "worker_provider"),
+    workerProviderChosen: optionalNumber(row, "worker_provider_chosen") === 1,
     continuoRevision: optionalText(row, "continuo_revision"),
     agentTypeDigest: optionalText(row, "agent_type_digest"),
     configDigest: optionalText(row, "config_digest"),

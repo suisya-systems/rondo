@@ -615,6 +615,12 @@ export async function admit(
   numbers: readonly number[] | null = null,
   /** The worker provider this request chose, or null for the host's default (rondo#462). */
   workerProvider: string | null = null,
+  /**
+   * The worker this host runs when a request chooses none, resolved here where
+   * continuo's own settings were read (rondo#462), so the row records the name
+   * the lap ran on and not the name a screen would guess later.
+   */
+  hostWorkerProvider: string | null = null,
 ): Promise<ConductorReport> {
   const attempt = () =>
     admitIteration(
@@ -629,6 +635,7 @@ export async function admit(
       claim,
       numbers,
       workerProvider,
+      hostWorkerProvider,
     );
   let report = await attempt();
   // **A refusal by a line whose work may have landed reads that landing now**

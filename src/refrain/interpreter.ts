@@ -205,6 +205,14 @@ export async function admit(
    * been: a caller with nothing to say about it says nothing.
    */
   workerProvider: string | null = null,
+  /**
+   * The worker this host runs when a request chooses none, as the composition
+   * root resolved it (rondo#462). Carried beside the choice and read no more
+   * than it is: the loop does not know what a host is equipped for, and what
+   * it contributes is that the name reaches `reserve()` and is settled onto
+   * the row there rather than guessed at from a screen later.
+   */
+  hostWorkerProvider: string | null = null,
 ): Promise<ConductorReport> {
   const lines: string[] = [];
   const admission = nextStep(null, policy);
@@ -280,6 +288,7 @@ export async function admit(
     // Carried, never read, for `spend`'s reason (rondo#462): which providers
     // this host is equipped for is not the loop's to know.
     workerProvider,
+    hostWorkerProvider,
     // **Carried, never read** (D-0022 rule 17). The comparison this authorises
     // is the store's, against the digest the composition root composed from
     // this very plan; the loop's part is that the two writes are one.

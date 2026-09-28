@@ -373,17 +373,32 @@ export interface IterationRecord {
    */
   readonly requestMessageId: string;
   /**
-   * The worker provider the person chose for this request, or null for the
-   * host's default (rondo#462).
+   * The worker provider this lap runs on (rondo#462): the person's choice, or
+   * the host's default as it was **resolved at the start** when they made
+   * none. Null only on a row written before rondo recorded it at all, which
+   * the page says is unknown.
    *
    * **Written at reservation and by nothing afterwards**, which is the whole of
    * "only before it starts": there is no transition that sets it, so a lap that
    * is running cannot be moved onto another provider, and the row a person
-   * reads is the choice the work actually ran under. Null is not "unknown" --
-   * it is "the person did not choose", and the page draws the host's default's
-   * name beside it so the two are never confused.
+   * reads is the provider the work actually ran under.
+   *
+   * **The resolved name, not the choice alone.** Keeping only an explicit
+   * choice left the page to name the fallback, and the only fallback a page
+   * can read is the default the host runs *now* -- so changing the host's
+   * default relabelled every past lap. A lap's provider is a fact about that
+   * lap, so it is settled once, at the start, and read back from here.
    */
   readonly workerProvider: string | null;
+  /**
+   * Whether {@link workerProvider} is the person's own choice, rather than the
+   * host's default resolved for them (rondo#462).
+   *
+   * False beside a null provider, which is the row that recorded neither: the
+   * page reads the pair, and "unknown" is what it says about that row rather
+   * than "the default", which would be a claim nothing here supports.
+   */
+  readonly workerProviderChosen: boolean;
   /**
    * The continuo revision `startContinuo` **observed**, not the one the pin
    * expected.
@@ -730,6 +745,7 @@ export type IterationFields = Partial<
     // could write it would be a lap able to change which worker it ran on
     // while it ran, and the row would then describe a choice nobody made.
     | "workerProvider"
+    | "workerProviderChosen"
     | "gateAnswer"
     | "gateAnswerActor"
     // rondo#286: written by `markPublishedRemote` at the push and by nothing

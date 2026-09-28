@@ -420,6 +420,13 @@ export interface ReserveInput {
    */
   readonly workerProvider?: string | null;
   /**
+   * The worker this host runs when a request chooses none, resolved by the
+   * composition root (rondo#462). Carried and never read, for
+   * {@link ReserveInput.workerProvider}'s reason -- and here rather than left
+   * to the page so that what a lap ran on is settled at its start.
+   */
+  readonly hostWorkerProvider?: string | null;
+  /**
    * The approval this admission spends, or null when nobody approved anything.
    *
    * **The loop carries it and never reads it** (D-0022 rule 17): whose

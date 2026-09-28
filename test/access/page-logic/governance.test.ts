@@ -250,25 +250,29 @@ test("a lap whose cost reached the room it was sent with is marked, and only the
   expect(at(7.5, null)).toBeNull();
 });
 
-test("the worker line is the row's own choice, or the host's default named as such (rondo#462)", () => {
-  // Derived, like everything here: the row's `workerProvider` is written at
-  // reservation and by nothing afterwards, so this is a record of what ran.
-  const chosen = lap({ workerProvider: "codex" });
-  const chose = governanceOf(chosen, null, 1, null, false, [], [chosen], "claude");
-  expect(chose.worker).toEqual({ provider: "codex", chosen: true });
+test("the worker line is the row's own record, and reads no host setting (rondo#462)", () => {
+  // Written at reservation and by nothing afterwards, so this is a record of
+  // what ran rather than a reading of what the host runs today.
+  const chosen = lap({ workerProvider: "codex", workerProviderChosen: true });
+  expect(governanceOf(chosen, null, 1, null, false, [], [chosen]).worker).toEqual({
+    provider: "codex",
+    chosen: true,
+  });
 
-  // A row that chose nothing names the host's default *as* the default -- the
-  // observed-red control against a reading that made the two one fact.
-  const plain = lap({ workerProvider: null });
-  const fell = governanceOf(plain, null, 1, null, false, [], [plain], "claude");
-  expect(fell.worker).toEqual({ provider: "claude", chosen: false });
+  // A row that chose nothing still names the worker it ran on, because the
+  // host's default was resolved onto the row at its start -- and says it was
+  // the default rather than the person's pick.
+  const fell = lap({ workerProvider: "claude", workerProviderChosen: false });
+  expect(governanceOf(fell, null, 1, null, false, [], [fell]).worker).toEqual({
+    provider: "claude",
+    chosen: false,
+  });
 
-  // A caller that could not read the host's default says nothing, rather than
-  // naming a worker neither the row nor the host stands behind.
-  const silent = governanceOf(plain, null, 1, null, false, []);
-  expect(silent.worker).toBeNull();
-
-  // And a chosen provider is drawn even where the host's default is unknown.
-  const anyway = governanceOf(chosen, null, 1, null, false, []);
-  expect(anyway.worker).toEqual({ provider: "codex", chosen: true });
+  // **The observed-red control on the fix** (rondo#462 gate): this function
+  // takes no host default at all now, so there is no argument by which today's
+  // `RONDO_WORKER_PROVIDER` could relabel either row above. A row from before
+  // rondo recorded any of this is the only null, and the screen says unknown.
+  const older = lap({ workerProvider: null, workerProviderChosen: false });
+  expect(governanceOf(older, null, 1, null, false, [], [older]).worker).toBeNull();
+  expect(governanceOf.length).toBeLessThanOrEqual(7);
 });

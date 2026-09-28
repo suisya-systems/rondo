@@ -31,6 +31,7 @@ import { allowedCommandsFor } from "../cadenza/facade.js";
 import {
   ackGate,
   answerGate,
+  CLAUDE_ONLY,
   closeRun,
   deliverGate,
   type GateDelegation,
@@ -41,6 +42,7 @@ import {
   showRun,
   startContinuo,
   type VerifiedContinuo,
+  type WorkerHosts,
 } from "../continuo/invoker.js";
 import {
   type ContinuoResult,
@@ -705,6 +707,26 @@ export function hostWorkers(
           ready: resolved.workers.ready.map((worker) => worker.provider),
         },
       };
+}
+
+/**
+ * The worker a lap runs on when its request chose none, read off the continuo
+ * a start has already settled (rondo#462).
+ *
+ * **Read at the start and written onto the row**, which is the whole point:
+ * the thread used to name the default the host runs *at the moment it is
+ * drawn*, so moving `RONDO_WORKER_PROVIDER` restated every past lap as having
+ * run on the new worker. The name a lap ran on is a fact about that lap, so it
+ * is taken here -- at the one place that both knows the host's settings and is
+ * about to write the row -- and read back from the row afterwards.
+ *
+ * **`CLAUDE_ONLY` is the same fallback the spawn takes**, and it is written
+ * this way on purpose: `workerFor` resolves an unnamed provider against
+ * `continuo.workers ?? CLAUDE_ONLY`, so recording anything else here would
+ * record a name the lap did not run under.
+ */
+function hostFallbackWorker(continuo: { readonly workers?: WorkerHosts }): string {
+  return (continuo.workers ?? CLAUDE_ONLY).fallback;
 }
 
 /**
@@ -2504,8 +2526,11 @@ export async function commandStart(
             null,
             // rondo#462: `--worker-provider` is the terminal's half of the
             // start form's select, and it reaches `reserve()` by the same
-            // argument the page's press does.
+            // argument the page's press does. Beside it, the worker this host
+            // runs when nothing is named -- read off the continuo this start
+            // just settled, so the row records what the lap ran on.
             parsed.workerProvider,
+            hostFallbackWorker(continuo),
           ),
       },
       parsed.scopeDecisionId,
@@ -2541,8 +2566,10 @@ export async function commandStart(
     null,
     // rondo#462: an unscoped start chooses its worker the same way a scoped one
     // does. A `start` naming no provider runs on the host's default, as every
-    // start did before one could be named.
+    // start did before one could be named -- and that default's name is
+    // settled onto the row here rather than left for a screen to guess.
     parsed.workerProvider,
+    hostFallbackWorker(continuo),
   );
   sayReport(report);
   if (report.status === "awaiting_human") {
@@ -7454,8 +7481,11 @@ async function admitScopedPlan(
             numbers,
             // rondo#462: the request's own choice, down to `reserve()` in the
             // same transaction as the row, so the lap the person reads back
-            // names the worker their press chose.
+            // names the worker their press chose -- and beside it the host's
+            // default, so a press that chose nothing still records the name
+            // its lap ran on instead of leaving the thread to infer one.
             input.workerProvider ?? null,
+            hostFallbackWorker(continuo),
           ),
         ),
     },

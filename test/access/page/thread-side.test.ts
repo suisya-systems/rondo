@@ -123,9 +123,14 @@ test("the worker that did the work is named, and whether the person chose it (ro
   expect(fell).toContain(said(EN.workerProviderRan("claude", false)));
   expect(EN.workerProviderRan("claude", false)).not.toBe(EN.workerProviderRan("claude", true));
 
-  // The observed-red control: nothing said where neither the row nor the host
-  // could say it, rather than a worker the page made up.
-  expect(side()).not.toContain(EN.workerProviderLabel);
+  // A lap whose row recorded nothing says so. The page never names the host's
+  // current default over it: a lap's worker is a fact about that lap, and
+  // rondo does not know this one's.
+  const older = side();
+  expect(older).toContain(EN.workerProviderLabel);
+  expect(older).toContain(said(EN.workerProviderUnknown));
+  expect(older).not.toContain(said(EN.workerProviderRan("claude", false)));
+  expect(older).not.toContain(said(EN.workerProviderRan("codex", false)));
 });
 
 test("a lap that spent all the room the budget left it says so, and one that did not says nothing (D-0121)", () => {
