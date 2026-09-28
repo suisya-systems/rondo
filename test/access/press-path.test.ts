@@ -941,6 +941,14 @@ test.skipIf(!available)(
 
     const successorId = newIterationId();
     const asksBefore = asked(world).length;
+    // **Where the gate stands before the command runs.** A null outcome is not
+    // enough to say the gate was untouched: the walk's first steps -- `gate
+    // present` and `gate deliver` -- move the stage and leave the outcome null,
+    // so a command that got that far and only then refused would pass on the
+    // outcome alone. continuo's own `stage`, read before and after, is what
+    // says the walk never started.
+    const stageBefore = (await gateOf(world, gateId)).stage;
+
     const { code, text } = await typed(world, [
       "revise",
       "--actor-id",
@@ -973,9 +981,12 @@ test.skipIf(!available)(
     expect(String(stop?.["body"])).toContain("superseded test");
     expect(text).toContain(`The line is stopped by message '${String(stop?.["message_id"])}'`);
 
-    // **(3) The gate is where it stood**, nothing was charged to either
+    // **(3) The gate is where it stood** -- the same stage continuo reported
+    // before the command, and still no outcome -- nothing was charged to either
     // approval, and there is no second lap.
-    expect((await gateOf(world, gateId)).outcome).toBeNull();
+    const gate = await gateOf(world, gateId);
+    expect(gate.stage, text).toBe(stageBefore);
+    expect(gate.outcome).toBeNull();
     const first = await world.store.read(iterationId);
     if (first.kind !== "read") {
       throw new Error("the gated lap would not read");
