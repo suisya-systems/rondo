@@ -174,6 +174,10 @@ class FakeStore implements StorePort {
       // omission of the field look like a detail.
       supersedesIterationId: input.supersedesIterationId,
       requestMessageId: input.requestMessageId,
+      // rondo#462: carried here for `supersedesIterationId`'s reason above. A
+      // fake that dropped the choice would let every case about it pass while
+      // the row the loop reads it back off never had it.
+      workerProvider: input.workerProvider ?? null,
       createdAtMs: input.nowMs,
       updatedAtMs: input.nowMs,
     };
@@ -426,11 +430,20 @@ interface Harness {
   /** Store operations and effect calls, interleaved, in the order they happened. */
   readonly calls: string[];
   readonly answers: Answers;
+  /**
+   * The worker provider each `performLap` was handed (rondo#462), in order.
+   *
+   * Beside `calls` rather than inside it: the cases that assert the order of
+   * the walk compare against the literal `performLap`, and a call line carrying
+   * the provider would make every one of them about this feature.
+   */
+  readonly lapProviders: (string | null)[];
 }
 
 function harness(overrides: Partial<Answers> = {}): Harness {
   const calls: string[] = [];
   const store = new FakeStore(calls);
+  const lapProviders: (string | null)[] = [];
   const answers: Answers = { ...successfulAnswers(), ...overrides };
   const ports: ConductorPorts = {
     store,
@@ -447,8 +460,9 @@ function harness(overrides: Partial<Answers> = {}): Harness {
       calls.push(`admitRun:${neutralRoleName}`);
       return Promise.resolve(answers.admitRun);
     },
-    performLap: () => {
+    performLap: (_plan, _modelTier, _iterationId, workerProvider) => {
       calls.push("performLap");
+      lapProviders.push(workerProvider);
       return Promise.resolve(answers.performLap);
     },
     showGate: (_plan: AdmittedPlan, gateId: string) => {
@@ -460,7 +474,7 @@ function harness(overrides: Partial<Answers> = {}): Harness {
       return Promise.resolve(answers.readLapWork);
     },
   };
-  return { ports, store, calls, answers };
+  return { ports, store, calls, answers, lapProviders };
 }
 
 /** The five effect names, for asserting that none of them was driven. */
@@ -648,6 +662,46 @@ test("a whole successful admission commits the arc's states in order", async () 
   expect(report.status).toBe("awaiting_human");
   expect(report.iterationId).toBe("i-0001");
   expect(says(report, "suspending")).toBe(true);
+});
+
+test("the provider a request chose rides from the admission through the row to the lap", async () => {
+  // rondo#462, end to end through the layer that carries it: `admit()` is given
+  // the request's choice, `reserve()` writes it onto the row, and `performLap`
+  // is handed what the row says -- read back off the row rather than kept in a
+  // variable, so a successor's inherited choice reaches the seam the same way.
+  const h = harness();
+  await admit(h.ports, PLAN, PERMISSIVE, "i-0001", null, null, REQUEST, null, null, null, "codex");
+
+  expect((await readRow(h.store, "i-0001"))?.workerProvider).toBe("codex");
+  expect(h.lapProviders).toEqual(["codex"]);
+});
+
+test("a request that chose no provider hands the seam null, and the host's default answers it", async () => {
+  // The observed-red control on the case above: without it, that one passes
+  // against an interpreter that hands `codex` to every lap it walks.
+  const h = harness();
+  await admitOnce(h);
+
+  expect((await readRow(h.store, "i-0001"))?.workerProvider).toBeNull();
+  expect(h.lapProviders).toEqual([null]);
+});
+
+test("the choice the row carries is what reaches the lap, not the one the caller repeated", async () => {
+  // **The row is the authority** (rondo#462): the value `performLap` is given
+  // is read off the reserved record, so a store that inherited a predecessor's
+  // choice -- which the caller did not name -- still runs the lap on it. Modelled
+  // here by the row disagreeing with the call, which is exactly the shape
+  // inheritance takes.
+  const h = harness();
+  const store = h.store;
+  const reserve = store.reserve.bind(store);
+  store.reserve = async (input) => {
+    const outcome = await reserve({ ...input, workerProvider: "codex" });
+    return outcome;
+  };
+  await admit(h.ports, PLAN, PERMISSIVE, "i-0001", null, null, REQUEST, null, null, null, null);
+
+  expect(h.lapProviders).toEqual(["codex"]);
 });
 
 test("the conductor returns at the open gate and does not observe it", async () => {

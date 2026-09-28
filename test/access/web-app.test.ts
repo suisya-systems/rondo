@@ -668,8 +668,40 @@ test("(start) a person's native press starts one lap under the scope, once", asy
       requestMessageId: "req-1",
       scopeDecisionId: "decision-1",
       planDigest: PLAN_DIGEST,
+      // rondo#462: the form posted no provider, so the request chose none and
+      // the host's default runs it.
+      workerProvider: null,
     },
   ]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(start) the worker provider the form chose reaches the port, and an empty field is the host's default", async () => {
+  // rondo#462: the screen's entry, at the route. The value travels as posted --
+  // this surface matches it against no list, because `workerFor` refuses an
+  // unknown provider at the seam by name and a route that dropped it would run
+  // the lap on the default without saying so.
+  const started: Started = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], [], [], started), TOKEN));
+
+  const chose = startForm({ worker_provider: "codex" });
+  expect((await send(base, "/start", "POST", pressHeaders(base), chose)).status).toBe(303);
+  // The observed-red control: the same press with the select left on its first
+  // option chooses nothing, so the case above cannot pass against a route that
+  // forwards `codex` whatever was posted.
+  const left = startForm({ worker_provider: "" });
+  expect((await send(base, "/start", "POST", pressHeaders(base), left)).status).toBe(303);
+  // Whitespace is the same silence, not a provider named " ".
+  const blank = startForm({ worker_provider: "   " });
+  expect((await send(base, "/start", "POST", pressHeaders(base), blank)).status).toBe(303);
+  // A name this host cannot run is *not* dropped here: the refusal is the
+  // seam's, and it names what the host is equipped for.
+  const unknown = startForm({ worker_provider: "gemini" });
+  expect((await send(base, "/start", "POST", pressHeaders(base), unknown)).status).toBe(303);
+
+  expect(started.map((one) => one.workerProvider)).toEqual(["codex", null, null, "gemini"]);
 
   stop.abort();
   expect(await closed).toBe(0);

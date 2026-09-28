@@ -1625,3 +1625,118 @@ test("while a question of the drafter's waits, the scope screen offers no form, 
   expect(answered).toContain('id="scope-form"');
   expect(answered).not.toContain("to=ask-431");
 });
+
+test("the start form offers the workers this host is equipped for and names the default it would use (rondo#462)", async () => {
+  // **The screen's entry, asserted as what the page draws** (rondo#462): before
+  // this, moving a request onto another worker meant editing the host's
+  // environment, which is a terminal -- the thing the goal's clause 3 forbids.
+  const world = fresh();
+  const requestId = "request-scope-worker";
+  await seedScopeRequest(world, requestId, "Please compare the two workers.");
+  const plan = await seedScopePlan(world.record, requestId);
+  await world.record.recordScope({
+    scopeId: "scope-worker",
+    payload: scopePayloadWithDefaults({
+      requests: [requestId],
+      workspaces: [
+        { repository: SCOPE_PLAN.repository, workspace_root: SCOPE_PLAN.workspaceRoot },
+      ],
+      agent_types: [plan.agentTypeDigest],
+      budgets: {
+        laps: 1,
+        review_rounds: 1,
+        cost_usd: 5,
+        cost_reserve_usd: 1,
+        expires_at_ms: 9_999_999_999,
+      },
+      severity_threshold: "major",
+      outward_acts: [],
+      irreversible_additions: [],
+    }),
+    supersedesScopeId: null,
+    authorKind: "operator",
+    authorId: "ada",
+    bases: [],
+    createdAtMs: 1_000,
+    agentTypeRecords: [
+      {
+        agentTypeDigest: plan.agentTypeDigest,
+        agentTypeInput: SCOPE_AGENT_TYPE_INPUT,
+        planDigest: plan.planDigest,
+      },
+    ],
+  });
+  const stored = await world.record.readScope("scope-worker");
+  if (stored.kind !== "read") throw new Error(JSON.stringify(stored));
+  await world.record.recordScopeDecision({
+    scopeDecisionId: "decision-worker",
+    scopeId: "scope-worker",
+    scopeDigest: stored.scope.scopeDigest,
+    outcome: "approved",
+    actorId: "ada",
+    recordedBy: "rondo/page",
+    decidedAtMs: 1_500,
+  });
+  const view = {
+    kind: "scope",
+    messageId: requestId,
+    rounds: null,
+    decisionId: "decision-worker",
+    plan: null,
+  } as const;
+  const screen = async (
+    workers: { readonly fallback: string; readonly ready: readonly string[] } | undefined,
+    wording: Chrome = EN,
+  ) =>
+    await operatorPage(
+      { ...portsOver(world, "ada", []), ...(workers === undefined ? {} : { workers }) },
+      "t",
+      view,
+      wording,
+      mint,
+      () => "x",
+      () => "y",
+    );
+
+  // A host equipped for both: the choice is a select, its first option names the
+  // host's own default out loud, and the other provider is offered beside it.
+  const both = await screen({ fallback: "claude", ready: ["claude", "codex"] });
+  const form = both.slice(both.indexOf('id="start-form"'));
+  expect(form).toContain('<select name="worker_provider"');
+  expect(form).toContain(EN.workerProviderDefault("claude"));
+  expect(form).toContain('<option value="codex">codex</option>');
+  // Only before the work starts, said on the form as the person asked.
+  expect(form).toContain(EN.workerProviderBefore);
+  // **Only what the host can run** is offered, so nothing drawn here can reach
+  // the seam's refusal: a provider the host has no home or command for is absent.
+  expect(form).not.toContain('value="gemini"');
+
+  // A host whose default is Codex offers Claude as the other, and names Codex.
+  const codexFirst = await screen({ fallback: "codex", ready: ["claude", "codex"] });
+  const codexForm = codexFirst.slice(codexFirst.indexOf('id="start-form"'));
+  expect(codexForm).toContain(EN.workerProviderDefault("codex"));
+  expect(codexForm).toContain('<option value="claude">claude</option>');
+  expect(codexForm).not.toContain('<option value="codex">codex</option>');
+
+  // A host equipped for one: no select -- a list of one is not a choice -- and
+  // the default is still named, which is the whole point of drawing it at all.
+  const only = await screen({ fallback: "claude", ready: ["claude"] });
+  const onlyForm = only.slice(only.indexOf('id="start-form"'));
+  expect(onlyForm).not.toContain('<select name="worker_provider"');
+  expect(onlyForm).toContain('name="worker_provider"');
+  expect(onlyForm).toContain(EN.workerProviderDefault("claude"));
+
+  // A host that said nothing draws neither: the observed-red control, and the
+  // rule that a screen never invents a provider the host does not stand behind.
+  const silent = await screen(undefined);
+  const silentForm = silent.slice(silent.indexOf('id="start-form"'));
+  expect(silentForm).toContain('id="start-form"');
+  expect(silentForm).not.toContain("worker_provider");
+
+  // And it is the person's language where the page is in it (D-0055).
+  const ja = chromeFor("ja");
+  const japanese = await screen({ fallback: "claude", ready: ["claude", "codex"] }, ja);
+  expect(japanese.slice(japanese.indexOf('id="start-form"'))).toContain(
+    ja.workerProviderDefault("claude"),
+  );
+});
