@@ -22,9 +22,21 @@ import type { Ranked, TriagePayload } from "./triage.js";
 export type InjectionState =
   /** Its request was sent and no plan is drafted yet. */
   | "drafting"
+  /**
+   * The drafter ran over it and wrote no split: its draft was refused, or its
+   * run was unavailable (rondo#549). One refused model output is not the
+   * request's work, and nothing of the request has run.
+   */
+  | "draft_refused"
   /** Its plan is drafted and it has not started: a person has not answered, or no slot was free. */
   | "waiting_to_start"
   | "running"
+  /**
+   * Its latest lap was lost to a restart of rondo (D-0139) and the start again
+   * that lap is owed has not been reserved yet (rondo#549). The lap answered
+   * nothing, so how the line ends is the successor's to say.
+   */
+  | "lost"
   | "closed"
   | "failed"
   | "abandoned";
@@ -86,7 +98,11 @@ export type WaitReason =
   /** The proposal was ranked against a goal that is no longer the newest. */
   | "stale_triage"
   | "triage_unavailable"
-  /** The last two injections that ended, ended `failed` or `abandoned`. */
+  /**
+   * The last two injections whose work ended, ended `failed` or `abandoned`.
+   * A refused draft and a lost lap are not among them (rondo#549): see
+   * {@link ENDED}.
+   */
   | "failed_twice"
   | "injection_pending"
   | "open_ask"
@@ -130,6 +146,37 @@ export type FlowPick =
 /** How many injected lines in a row may end `failed` or `abandoned` before the flow stops. */
 export const FAILURES_TO_STOP = 2;
 
+/**
+ * The states in which an injection's **work** ended, and the only ones
+ * `failed_twice` counts over (rondo#549).
+ *
+ * Two states are deliberately not here, because neither is an end the
+ * request's work reached:
+ *
+ *  - `draft_refused` -- one model output rondo refused (`D-0071` rule 7.1) or
+ *    could not obtain. No lap of the request ever ran, so there is no work to
+ *    call failed; the next move is another draft or a question, not a stop.
+ *  - `lost` -- the host restarted and took the lap's driver with it
+ *    (`D-0139`). The lap answered nothing and holds no budget, and it is
+ *    started again; the successor is what says how the line ended.
+ *
+ * They are not counted **and take no place in the window**, so two lines that
+ * really failed still stop the flow with a refused draft or a lost lap
+ * between them.
+ */
+const ENDED: readonly InjectionState[] = ["closed", "failed", "abandoned"];
+
+/** Of {@link ENDED}, the ends that are the request's own work failing. */
+const FAILED: readonly InjectionState[] = ["failed", "abandoned"];
+
+/**
+ * The states in which an injection is still on its way to a lap, and so holds
+ * the flow: nothing further is asked for while one of its own requests has yet
+ * to start. `lost` is one of them because the lap it is owed is started again
+ * (`D-0139` rule 3), or the person is asked at the stop.
+ */
+const PENDING: readonly InjectionState[] = ["drafting", "waiting_to_start", "lost"];
+
 /** The request id an injection is sent under: the same pick always names the same message. */
 export function flowMessageId(scopeDecisionId: string, candidateKey: string): string {
   return `flow-${scopeDecisionId}-${candidateKey}`;
@@ -161,19 +208,12 @@ export function pickNext(input: FlowInput): FlowPick {
   if (input.triage.unavailable !== null) {
     return wait("triage_unavailable");
   }
-  const ended = input.injections.filter(
-    (one) => one.state === "closed" || one.state === "failed" || one.state === "abandoned",
-  );
+  const ended = input.injections.filter((one) => ENDED.includes(one.state));
   const last = ended.slice(-FAILURES_TO_STOP);
-  if (
-    last.length === FAILURES_TO_STOP &&
-    last.every((one) => one.state === "failed" || one.state === "abandoned")
-  ) {
+  if (last.length === FAILURES_TO_STOP && last.every((one) => FAILED.includes(one.state))) {
     return wait("failed_twice");
   }
-  if (
-    input.injections.some((one) => one.state === "drafting" || one.state === "waiting_to_start")
-  ) {
+  if (input.injections.some((one) => PENDING.includes(one.state))) {
     return wait("injection_pending");
   }
   if (input.ownOpenAsk) {

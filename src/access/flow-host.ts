@@ -19,14 +19,21 @@
  * what the approval has read.
  *
  * **A stop is asked, once** (D-0066 rule 4.4's layout): the scope run out
- * (expiry, laps or cost), a newer goal, two injected lines that ended failed,
- * or nothing left the ranking would start. The ask sits in the thread of the
+ * (expiry, laps or cost), a newer goal, two injected lines whose work ended
+ * failed -- a refused draft and a lap lost to a restart are neither (rondo#549,
+ * `injectionState`) -- or nothing left the ranking would start. The ask sits in the thread of the
  * flow's latest request, so the flow waits on it (`ownOpenAsk`), and in the
  * flow's own voice, so it holds no part of that request (`holdsNothing`); with no
  * request yet there is no thread, so the stop is a `flow_stop` row with its
  * facts, which the page reads (`flow-stop.ts`, rondo#488), and is said on the
  * terminal. A pause is the person's own answer (`laps: 0`, D-0128 rule 4) and
  * is not asked about.
+ *
+ * **A refused draft is said in its own thread** (rondo#549, `tellDraftRefused`):
+ * a request the drafter wrote no split for is not counted as a failure, and it
+ * is not passed over in silence either -- one message goes into its thread, in
+ * the operator's language, and asks, so the request stays the person's turn
+ * while the flow asks for the goal's next one.
  *
  * **Open points are asked first** (rondo#487): when the candidate it would
  * inject has open points nobody answered, it records one ask with rondo's
@@ -57,6 +64,7 @@ import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { type FlowStop, type FlowStopFacts, stopPrefix } from "./flow-stop.js";
 import { hostFailure } from "./host-failure.js";
 import { MODEL_DRAFTER_PREFIX } from "./model-draft/judgement.js";
+import type { Chrome } from "./wording.js";
 
 export interface FlowHostPorts {
   readonly store: Pick<IterationStore, "readLive" | "terminalIterations" | "occupancy">;
@@ -81,6 +89,8 @@ export interface FlowHostPorts {
     | "recordFlowAsk"
   >;
   readonly policy: Pick<HostPolicy, "maxOccupying" | "maxLive">;
+  /** The operator's own language, for the prose the flow leaves in a thread (D-0055). */
+  readonly words: Chrome;
   readonly now: () => number;
   readonly log: (line: string) => void;
   /** Called once a request is injected: the drafter's kick, so it is drafted now. */
@@ -222,12 +232,21 @@ async function flowOne(
     }
     const own = opener.messageId.startsWith(prefix);
     const asked = asks.asks.length > 0;
+    // **The refused draft's own note is not an ask that holds the flow**
+    // (rondo#549, the gate's second reading). It is written so the request
+    // stays the person's turn rather than vanishing, and the flow is free to
+    // ask for the goal's next request meanwhile -- exactly what `draft_refused`
+    // not being a failure says. Every other ask in an own thread holds it.
+    const holds = asks.asks.filter((ask) => ask.messageId !== draftRefusedNoteId(opener.messageId));
     // This approval's own stop holds it in whichever request's thread it was
     // asked, an inherited one included.
     ownOpenAsk ||=
-      (own && asked) ||
+      (own && holds.length > 0) ||
       asks.asks.some((ask) => ask.messageId.startsWith(stopPrefix(scopeDecisionId)));
     const state = await injectionState(ports, seen, opener.messageId, asked);
+    if (state === "draft_refused") {
+      await tellDraftRefused(ports, flow, repository, opener);
+    }
     injections.push({
       candidateKey: candidateKeyOf(opener.messageId),
       messageId: opener.messageId,
@@ -400,6 +419,62 @@ async function flowOne(
   ports.injected?.();
 }
 
+/**
+ * The id of the note rondo leaves when a request's draft was refused: one per
+ * request, so a pass that reads the same refusal again writes nothing.
+ */
+export function draftRefusedNoteId(requestMessageId: string): string {
+  return `flow-draft-refused-${requestMessageId}`;
+}
+
+/**
+ * **A request whose draft was refused is said, and stays the person's turn**
+ * (rondo#549, the gate's second reading).
+ *
+ * `draft_refused` is not counted as a failure, and that alone would leave the
+ * request where nobody looks: the flow would ask for the next candidate and
+ * this one would sit in the list as a request that never started, with nothing
+ * said about why. So one message goes into its thread, in the operator's own
+ * language (D-0055), asking -- which is what puts the request under *your turn*
+ * (`waitsOnYou`) -- and the flow carries on with the goal's other requests.
+ *
+ * It is written in the flow's own voice, so it holds no part of the request
+ * (`holdsNothing`), and it is skipped when `ownOpenAsk` is read, so the note
+ * does not become the stop it exists instead of. Drafting the request again by
+ * itself is rondo#554's and is deliberately not done here.
+ */
+async function tellDraftRefused(
+  ports: FlowHostPorts,
+  flow: Flow,
+  repository: string,
+  opener: ThreadMessageDraft,
+): Promise<void> {
+  const outcome = await ports.record.recordThreadMessage({
+    messageId: draftRefusedNoteId(opener.messageId),
+    body: ports.words.flowDraftRefusedAsk,
+    authorKind: "drafter",
+    authorId: FLOW_AUTHOR,
+    inReplyTo: opener.messageId,
+    atMs: ports.now(),
+    bases: [
+      { form: "message", messageId: opener.messageId },
+      { form: "goal", goalId: flow.goal.goalId },
+    ],
+    asks: true,
+  });
+  if (outcome.kind === "recorded") {
+    ports.log(
+      `flow     ${repository}: the draft of '${opener.messageId}' was refused; the person is told`,
+    );
+    return;
+  }
+  if (outcome.kind !== "duplicate") {
+    ports.log(
+      `flow     ${repository}: the refused draft of '${opener.messageId}' was not said: ${outcome.reason}`,
+    );
+  }
+}
+
 /** How a flow's request ids begin: `flowMessageId` without the candidate. */
 function flowPrefix(scopeDecisionId: string): string {
   return `flow-${scopeDecisionId}-`;
@@ -420,10 +495,17 @@ function candidateKeyOf(messageId: string): string {
 
 /**
  * Where one injected request stands, for the picker: drafting until a split is
- * drafted for it (failed when the drafter wrote no draft), running while any
- * lap of it is open, waiting to start while a plan of its split has no line,
- * and otherwise as its latest lap ended. A split of no plans waits on the
- * person when the drafter asked, and is abandoned when it did not.
+ * drafted for it (`draft_refused` when the drafter ran and wrote no draft),
+ * running while any lap of it is open, waiting to start while a plan of its
+ * split has no line, and otherwise as its latest lap ended. A split of no
+ * plans waits on the person when the drafter asked, and is abandoned when it
+ * did not.
+ *
+ * **Two of those are ends the flow does not count against the goal**
+ * (rondo#549). A drafter run that wrote no split is one refused model output
+ * and not the request's work failing, and a lap the host's restart lost
+ * (`D-0139`) answered nothing at all: it is `lost` until the start again it is
+ * owed is reserved, and then that successor's own end is read here instead.
  */
 async function injectionState(
   ports: FlowHostPorts,
@@ -433,7 +515,7 @@ async function injectionState(
 ): Promise<InjectionState> {
   const proposalId = await ports.record.latestSplitFor(requestMessageId, MODEL_DRAFTER_PREFIX);
   if (proposalId === null) {
-    return seen.drafted.has(requestMessageId) ? "failed" : "drafting";
+    return seen.drafted.has(requestMessageId) ? "draft_refused" : "drafting";
   }
   const read = await ports.record.readProposal(proposalId);
   const split = read.kind === "read" ? readSplitPayload(read.proposal.payload) : null;
@@ -450,7 +532,19 @@ async function injectionState(
   if (laps.filter((lap) => lap.supersedesIterationId === null).length < plans) {
     return "waiting_to_start";
   }
-  return laps.at(-1)?.status as "closed" | "failed" | "abandoned";
+  const latest = laps.at(-1);
+  // D-0139: a lost lap ends `failed`, and that row is the restart's record and
+  // not an answer. It reads as `lost` only while no successor stands for it --
+  // once one is reserved the successor is the latest lap, and says the end.
+  if (
+    latest !== undefined &&
+    latest.status === "failed" &&
+    latest.failureKind === "lost" &&
+    !laps.some((lap) => lap.supersedesIterationId === latest.id)
+  ) {
+    return "lost";
+  }
+  return latest?.status as "closed" | "failed" | "abandoned";
 }
 
 /**
