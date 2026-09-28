@@ -44,6 +44,7 @@ const governance = (over: Partial<Governance> = {}): Governance => ({
   byTry: [{ costUsd: 5, running: false }],
   atBudgetCap: null,
   tries: { at: 1, of: 4 },
+  worker: null,
   chain: [
     { step: "answer", state: "waiting" },
     { step: "proposal", state: "yours" },
@@ -103,6 +104,33 @@ test("what is held for the try in progress is said beside the spend, and is not 
   });
   expect(html).toContain("$0.79 of $25.00, with $2.50 held for the try in progress");
   expect(html).toContain("$21.71");
+});
+
+test("the worker that did the work is named, and whether the person chose it (rondo#462)", () => {
+  // The record of the choice, where what was agreed for the request is read.
+  // Before rondo#462 the answer lived only in the host's environment, which is
+  // the terminal the goal's clause 3 is about.
+  // An apostrophe in the sentence is an HTML entity by the time it is markup,
+  // which is the renderer doing its job rather than anything about this case.
+  const said = (text: string) => text.replaceAll("'", "&#x27;");
+  const chosen = side({ worker: { provider: "codex", chosen: true } });
+  expect(chosen).toContain(EN.workerProviderLabel);
+  expect(chosen).toContain(said(EN.workerProviderRan("codex", true)));
+
+  // A lap that chose nothing names the host's default *as* the default, so the
+  // two are never read as the same thing.
+  const fell = side({ worker: { provider: "claude", chosen: false } });
+  expect(fell).toContain(said(EN.workerProviderRan("claude", false)));
+  expect(EN.workerProviderRan("claude", false)).not.toBe(EN.workerProviderRan("claude", true));
+
+  // A lap whose row recorded nothing says so. The page never names the host's
+  // current default over it: a lap's worker is a fact about that lap, and
+  // rondo does not know this one's.
+  const older = side();
+  expect(older).toContain(EN.workerProviderLabel);
+  expect(older).toContain(said(EN.workerProviderUnknown));
+  expect(older).not.toContain(said(EN.workerProviderRan("claude", false)));
+  expect(older).not.toContain(said(EN.workerProviderRan("codex", false)));
 });
 
 test("a lap that spent all the room the budget left it says so, and one that did not says nothing (D-0121)", () => {

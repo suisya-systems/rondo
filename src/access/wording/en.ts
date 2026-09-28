@@ -796,6 +796,13 @@ explanation you pressed on and then answers the gate.`,
   startAgainSafe:
     "Pressing this button twice is one lap and not two: the second press joins the first and " +
     "starts nothing more.",
+  workerProviderLabel: "Which worker does the work",
+  workerProviderDefault: (provider) => `This host's default (${provider})`,
+  workerProviderBefore:
+    "This is chosen before the work starts and does not change once it is running.",
+  workerProviderRan: (provider, chosen) =>
+    chosen ? `${provider} (chosen for this request)` : `${provider} (this host's default)`,
+  workerProviderUnknown: "Not recorded: this lap started before rondo wrote the worker down.",
   scopeRefusedNoApprover:
     "Nothing was recorded: RONDO_APPROVER is not set, so there is nobody this page could " +
     "approve a scope as.",

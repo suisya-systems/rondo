@@ -968,6 +968,38 @@ export interface Chrome extends PageWords {
    */
   readonly startAgainSafe: string;
   /**
+   * Which worker runs this request's work (rondo#462): the label over the
+   * choice on the start form, the option that leaves it to the host with the
+   * host's own default named in it, and the line the thread draws once a lap
+   * has one recorded.
+   *
+   * **The default is named rather than left blank** (the person's answer to
+   * "what happens when nothing is chosen"): a select whose first option said
+   * only *the host's default* would be a screen keeping the answer to itself,
+   * and the whole point of the choice is that nobody has to open a terminal to
+   * find out what it is.
+   *
+   * **Said only before the work starts**, which is the other half of that
+   * answer: {@link workerProviderBefore} is what the form says about it, and the
+   * thread's line is a record of what ran rather than a field to change.
+   */
+  readonly workerProviderLabel: string;
+  readonly workerProviderDefault: (provider: string) => string;
+  readonly workerProviderBefore: string;
+  /** The thread's record: the provider, and whether the person chose it. */
+  readonly workerProviderRan: (provider: string, chosen: boolean) => string;
+  /**
+   * The same line for a lap whose row recorded no provider at all -- a lap
+   * started before rondo wrote one down (rondo#462).
+   *
+   * **Said rather than left out.** The alternative was naming the host's
+   * current default over it, which is the reading this issue removed: a lap's
+   * worker is a fact about that lap, and rondo does not know this one's. Not
+   * knowing is the honest line, and it is a line rather than a blank so that a
+   * reader can tell "rondo has no record" from "this section does not say".
+   */
+  readonly workerProviderUnknown: string;
+  /**
    * Why a press recorded or started nothing, one sentence each, with no id and
    * no D-number in front of a person -- {@link sendRefusedForm}'s rule applied
    * to this screen's two presses.

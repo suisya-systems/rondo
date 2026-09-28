@@ -94,17 +94,71 @@ export interface VerifiedContinuo {
   readonly cliPath: string;
   readonly revision: string;
   /**
-   * The worker every lap on this host runs on (D-0123), read by
-   * {@link startContinuo} with the rest of the host's facts. Absent is the
-   * Claude CLI, which is what every lap ran on before the host could say.
+   * The workers this host can run a lap on and which of them it runs by
+   * default (D-0123, rondo#462), read by {@link startContinuo} with the rest of
+   * the host's facts. Absent is the Claude CLI alone, which is what every lap
+   * ran on before the host could say.
    */
-  readonly worker?: WorkerHost;
+  readonly workers?: WorkerHosts;
 }
 
 /** The host's worker CLI (D-0123): the provider, and what Codex needs besides. */
 export type WorkerHost =
   | { readonly provider: "claude" }
   | { readonly provider: "codex"; readonly codexHome: string; readonly codexCommand: string };
+
+/**
+ * Every worker CLI this host is equipped for, and the one it uses when a
+ * request does not choose (rondo#462).
+ *
+ * **Readiness is a host fact and it is read once, at start** (D-0123's reason
+ * for reading the provider there): what a request picks from is what the host
+ * was already equipped with, so a request naming a provider this host cannot
+ * run is refused by a lookup in `ready` rather than by a lap finding out after
+ * its run was admitted. That is the issue's point 3, answered without a second
+ * probe of the environment per request.
+ */
+export interface WorkerHosts {
+  /** The provider a request that chooses nothing runs on. */
+  readonly fallback: WorkerProvider;
+  /** Every worker this host can run, `fallback`'s first, in {@link WORKER_PROVIDERS} order. */
+  readonly ready: readonly WorkerHost[];
+}
+
+/** The workers of a host that said nothing: the Claude CLI, as before D-0123. */
+export const CLAUDE_ONLY: WorkerHosts = Object.freeze({
+  fallback: "claude" as WorkerProvider,
+  ready: Object.freeze([Object.freeze({ provider: "claude" as const })]),
+});
+
+/**
+ * The host's worker for `provider`, or rondo's reason this host has none.
+ *
+ * **Total, and a value rather than a throw**, for {@link mapNeutralRole}'s
+ * reason: the provider arrives on a request a person filled in, and refusing it
+ * is an ordinary answer with a name in it. `null` is "the request chose
+ * nothing", which is {@link WorkerHosts.fallback}.
+ */
+export function workerFor(
+  workers: WorkerHosts,
+  provider: string | null,
+):
+  | { readonly kind: "ready"; readonly worker: WorkerHost }
+  | { readonly kind: "refused"; readonly reason: string } {
+  const wanted = provider === null || provider === "" ? workers.fallback : provider;
+  const worker = workers.ready.find((host) => host.provider === wanted);
+  if (worker !== undefined) {
+    return { kind: "ready", worker };
+  }
+  const ready = workers.ready.map((host) => host.provider).join(", ");
+  return {
+    kind: "refused",
+    reason:
+      `this request asks for the worker provider '${wanted}', and this host is equipped for ` +
+      `${ready}. Set ${CODEX_HOME_ENV} and ${CODEX_COMMAND_ENV} on the host to run a Codex lap, ` +
+      "or choose a provider the host is equipped for.",
+  };
+}
 
 /** Which worker CLI runs the laps on this host: `claude` (the default) or `codex`. */
 export const WORKER_PROVIDER_ENV = "RONDO_WORKER_PROVIDER";
@@ -114,36 +168,71 @@ export const CODEX_HOME_ENV = "RONDO_CODEX_HOME";
 export const CODEX_COMMAND_ENV = "RONDO_CODEX_COMMAND";
 
 /**
- * The host's worker, or why this host cannot run the one it names (D-0123).
+ * The workers this host is equipped for, or why it cannot run the one it names
+ * (D-0123, rondo#462).
  *
- * **A host setting, read where the host's other settings are read**, so every
- * lap on the host runs on one worker CLI and switching is a restart; a choice
- * per request is rondo#462. `RONDO_CODEX_HOME` and `RONDO_CODEX_COMMAND` are
- * required with `codex` and absolute, and **win32 refuses `codex` here**,
- * before anything is admitted or spawned: continuo refuses a Codex lap on
- * Windows (continuo D-1120), and a host that says so at start is one no lap
- * finds out about after its run was admitted.
+ * **Read where the host's other settings are read, and read for every provider
+ * rather than only the named one.** `RONDO_WORKER_PROVIDER` still says which
+ * worker a request that chooses nothing runs on -- that half is D-0123's and is
+ * unchanged -- but the host now also works out which *other* providers it is
+ * equipped for, so that a request may choose one without a restart. The Claude
+ * CLI needs nothing beyond the plan's own command and is therefore always ready;
+ * Codex needs `RONDO_CODEX_HOME` and `RONDO_CODEX_COMMAND`, both absolute, and a
+ * platform other than win32.
+ *
+ * **Two refusals and one silence, and the difference is which half asked.**
+ * A Codex home that is missing or relative *while `RONDO_WORKER_PROVIDER` says
+ * `codex`* is a refusal to start, as it was: the host cannot run the laps it
+ * says it runs. The same environment under the Claude default is not a refusal
+ * -- it is a host that is simply not equipped for Codex, and `ready` says so by
+ * omitting it, which is what the request form then offers. **win32 refuses
+ * `codex` here**, before anything is admitted or spawned: continuo refuses a
+ * Codex lap on Windows (continuo D-1120), and a host that says so at start is
+ * one no lap finds out about after its run was admitted.
  */
-export function resolveWorker(
+export function resolveWorkers(
   environment: Readonly<Record<string, string | undefined>>,
   platform: string = process.platform,
 ):
-  | { readonly kind: "resolved"; readonly worker: WorkerHost }
+  | { readonly kind: "resolved"; readonly workers: WorkerHosts }
   | { readonly kind: "refused"; readonly reason: string } {
   const named = environment[WORKER_PROVIDER_ENV]?.trim() ?? "";
-  const provider = named === "" ? "claude" : named;
-  if (!(WORKER_PROVIDERS as readonly string[]).includes(provider)) {
+  const fallback = named === "" ? "claude" : named;
+  if (!(WORKER_PROVIDERS as readonly string[]).includes(fallback)) {
     return {
       kind: "refused",
-      reason: `${WORKER_PROVIDER_ENV} is '${provider}', and the worker CLIs rondo runs are ${WORKER_PROVIDERS.join(", ")}.`,
+      reason: `${WORKER_PROVIDER_ENV} is '${fallback}', and the worker CLIs rondo runs are ${WORKER_PROVIDERS.join(", ")}.`,
     };
   }
-  if ((provider as WorkerProvider) === "claude") {
-    return { kind: "resolved", worker: { provider: "claude" } };
+  const codex = resolveCodexWorker(environment, platform);
+  if (fallback === "codex" && codex.kind !== "ready") {
+    // The host says every lap runs on Codex, so a host that cannot is refused
+    // rather than started with a fallback nobody asked for.
+    return { kind: "refused", reason: codex.reason };
   }
+  const ready: WorkerHost[] = [{ provider: "claude" }];
+  if (codex.kind === "ready") {
+    ready.push(codex.worker);
+  }
+  return {
+    kind: "resolved",
+    workers: {
+      fallback: fallback as WorkerProvider,
+      ready: Object.freeze(ready),
+    },
+  };
+}
+
+/** The Codex worker this host is equipped for, or rondo's reason it is not. */
+function resolveCodexWorker(
+  environment: Readonly<Record<string, string | undefined>>,
+  platform: string,
+):
+  | { readonly kind: "ready"; readonly worker: WorkerHost }
+  | { readonly kind: "unequipped"; readonly reason: string } {
   if (platform === "win32") {
     return {
-      kind: "refused",
+      kind: "unequipped",
       reason:
         `${WORKER_PROVIDER_ENV} is 'codex', and continuo refuses a Codex lap on Windows ` +
         "(continuo D-1120), so no lap on this host could run. Unset it to run laps on the " +
@@ -155,7 +244,7 @@ export function resolveWorker(
     const value = environment[name]?.trim() ?? "";
     if (!isAbsolutePath(value)) {
       return {
-        kind: "refused",
+        kind: "unequipped",
         reason:
           value === ""
             ? `${WORKER_PROVIDER_ENV} is 'codex', and ${name} is not set; a Codex lap needs it as an absolute path.`
@@ -165,7 +254,7 @@ export function resolveWorker(
     paths[name] = value;
   }
   return {
-    kind: "resolved",
+    kind: "ready",
     worker: {
       provider: "codex",
       codexHome: paths[CODEX_HOME_ENV] as string,
@@ -299,9 +388,9 @@ export async function startContinuo(
   if (located.path === null) {
     return { kind: "refused", reason: located.reason };
   }
-  const worker = resolveWorker(environment);
-  if (worker.kind === "refused") {
-    return { kind: "refused", reason: worker.reason };
+  const workers = resolveWorkers(environment);
+  if (workers.kind === "refused") {
+    return { kind: "refused", reason: workers.reason };
   }
   const output = await runProcess(located.path, ["--version"], VERSION_TIMEOUT_MS);
   if (output.kind === "failed" || output.kind === "timedOut") {
@@ -326,7 +415,7 @@ export async function startContinuo(
   const continuo: VerifiedContinuo = {
     cliPath: located.path,
     revision: verdict.revision,
-    worker: worker.worker,
+    workers: workers.workers,
   };
   verifiedHandles.add(continuo);
   return { kind: "ready", continuo };
@@ -969,6 +1058,19 @@ export interface PerformLapRequest {
    * continuo's roles.
    */
   readonly modelTier: string;
+  /**
+   * The worker provider this request chose, or null for the host's default
+   * (rondo#462).
+   *
+   * **A string and not a {@link WorkerProvider}**, for `modelTier`'s reason and
+   * one of its own: the value comes off a row a person filled in on the page,
+   * travels through a store column and a layer that may not import this one, so
+   * the only place it can honestly be narrowed is here -- {@link workerFor}
+   * looks it up among the workers the host is equipped for and refuses
+   * everything else by name. A caller that had already narrowed it would be a
+   * caller that had decided the host's readiness somewhere else.
+   */
+  readonly workerProvider?: string | null;
   readonly interlockRoot: string;
   readonly claudeOrgPath: string;
   readonly endpointDb: string | null;
@@ -1068,7 +1170,15 @@ export async function performLap(
   /** Told the `lap perform` child's pid once it is spawned (rondo#506). */
   spawned?: (pid: number) => void,
 ): Promise<PerformLapOutcome> {
-  const worker: WorkerHost = continuo.worker ?? { provider: "claude" };
+  // rondo#462: the request's own choice first, the host's default behind it.
+  // Refused here, before the argv and before the spawn, for the unpriced
+  // tier's reason: a provider this host is not equipped for is rondo's own
+  // policy gap, and continuo would never be asked.
+  const chosen = workerFor(continuo.workers ?? CLAUDE_ONLY, request.workerProvider ?? null);
+  if (chosen.kind === "refused") {
+    return { result: { kind: "invokerDefect", reason: chosen.reason }, model: null };
+  }
+  const worker: WorkerHost = chosen.worker;
   const selection = mapModelTier(request.modelTier, worker.provider);
   if (selection.kind === "unknown") {
     // Before the argv and before the spawn: the reason names the tier and the

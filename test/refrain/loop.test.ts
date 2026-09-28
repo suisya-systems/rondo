@@ -57,6 +57,8 @@ const recordWith = (status: IterationStatus, attempts = 1): IterationRecord => (
   identifiersSpent: 0,
   supersedesIterationId: null,
   requestMessageId: REQUEST,
+  workerProvider: null,
+  workerProviderChosen: false,
   continuoRevision: null,
   agentTypeDigest: null,
   configDigest: null,

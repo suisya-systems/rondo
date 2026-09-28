@@ -709,6 +709,18 @@ export interface ScopedStartInput {
   readonly scopeDecisionId: string;
   /** The held plan the lap runs on, by digest (rondo#238): read again in the port, never posted whole. */
   readonly planDigest: string;
+  /**
+   * The worker provider this request chose, or null for the host's default
+   * (rondo#462).
+   *
+   * **The one field of this shape a person types**, in the sense that every
+   * other was minted or read by rondo -- so it is the one field that is
+   * validated against what the host is equipped for rather than trusted. That
+   * lookup is `workerFor`'s at the seam, which refuses a provider this host
+   * cannot run before the argv and before the spawn; the route's part is only
+   * that an empty field is null and not the empty string.
+   */
+  readonly workerProvider?: string | null;
 }
 
 /** Why a scoped start admitted nothing, as the wording key the page says it in. */
@@ -1714,6 +1726,27 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   RETAKE_REVIEW_ROUTE,
   READ_IN_ROUTE,
 ]);
+
+/**
+ * The worker provider one start form posted (rondo#462), or null where it chose
+ * none: an unset field, an empty one, or a browser that posted no field at all.
+ *
+ * **Trimmed and nothing else, and above all not matched against a list here.**
+ * Whether the name is one this host can run is `workerFor`'s lookup at the
+ * seam, which refuses it by name with the providers the host *is* equipped for
+ * in the reason -- and a route that matched it first would answer the host's
+ * readiness in a second place, and would answer it silently: a name this
+ * surface dropped would start the lap on the default, which is the one outcome
+ * a person who chose a provider must never get. The body is already bounded by
+ * {@link MAX_FORM_BYTES}, this being a press route.
+ */
+function chosenWorker(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const named = value.trim();
+  return named === "" ? null : named;
+}
 
 /** A whole count of at least 0, as a form posts one, or null when it is not one. */
 function wholeNumber(value: unknown): number | null {
@@ -2786,6 +2819,11 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       requestMessageId: request,
       scopeDecisionId: decision,
       planDigest: plan,
+      // rondo#462: the form's own field, empty for the host's default. Passed
+      // on and never matched here -- which providers this host is equipped for
+      // is the seam's fact, and a route that checked it would be a second
+      // answer to the host's readiness.
+      workerProvider: chosenWorker(form["worker_provider"]),
     });
     if (!started.ok) {
       return startRefused(

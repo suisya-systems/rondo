@@ -214,6 +214,21 @@ export interface WebPorts extends InboxReadPorts {
    * port is not null, as {@link releasable} is. Absent is false.
    */
   readonly addable?: boolean;
+  /**
+   * The worker providers this host is equipped for, and the one it runs when a
+   * request chooses none (rondo#462, `resolveWorkers`).
+   *
+   * **Names and not the seam's own record**, for `triageRepositories`' reason:
+   * what the screen draws is a list to choose from and a default to say out
+   * loud, and a Codex home is neither. Absent is a host that said nothing, and
+   * then the start form offers no choice and the thread names no default --
+   * rather than a screen inventing one provider because that is what rondo
+   * used to run.
+   */
+  readonly workers?: {
+    readonly fallback: string;
+    readonly ready: readonly string[];
+  };
 }
 
 /**

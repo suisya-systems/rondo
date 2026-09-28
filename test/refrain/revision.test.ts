@@ -171,6 +171,8 @@ function closedRecord(id: string, plan: AdmittedPlan): IterationRecord {
     identifiersSpent: 1,
     supersedesIterationId: null,
     requestMessageId: REQUEST,
+    workerProvider: null,
+    workerProviderChosen: false,
     continuoRevision: "38c667b",
     agentTypeDigest: null,
     configDigest: null,

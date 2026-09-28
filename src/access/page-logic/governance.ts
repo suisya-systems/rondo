@@ -93,6 +93,23 @@ export interface Governance {
   /** What remains, as rule 6's chain. */
   readonly chain: readonly ChainLink[];
   /**
+   * **Which worker did this request's work** (rondo#462): the provider the row
+   * records, and whether the person chose it or the host's default supplied
+   * it.
+   *
+   * **Read off the row and from nothing else.** Both halves are the lap's own
+   * `workerProvider` and `workerProviderChosen`, written at reservation and by
+   * nothing afterwards. This used to fall back to the host's default *as the
+   * caller read it at drawing time*, which meant moving `RONDO_WORKER_PROVIDER`
+   * relabelled every past lap as having run on the new worker -- a thread
+   * saying a lap ran on something it never ran on. So the default's name is
+   * settled onto the row at the start instead, and this reads it back.
+   *
+   * Null is a row written before rondo recorded either, and the screen says so
+   * rather than naming a worker nothing stands behind.
+   */
+  readonly worker: { readonly provider: string; readonly chosen: boolean } | null;
+  /**
    * **Where a lap may touch** (rule 6): the repositories and workspace roots
    * the approval names, and the outward acts it permits.
    *
@@ -224,6 +241,10 @@ export function governanceOf(
       approval === null
         ? null
         : { at: approval.spent.admissions, of: approval.payload.budgets.laps },
+    worker:
+      record.workerProvider === null
+        ? null
+        : { provider: record.workerProvider, chosen: record.workerProviderChosen },
     chain: [
       { step: "answer", state: answered ? "done" : atGate ? "waiting" : "ahead" },
       { step: "proposal", state: proposed ? "done" : mayPropose ? "ahead" : "yours" },

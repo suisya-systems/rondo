@@ -210,11 +210,31 @@ function Agreed({
   readonly steps: readonly WorkStep[];
   readonly parts: readonly PartStep[];
 }) {
-  const { allowance, atBudgetCap, byTry, tries, touches, decided } = governance;
+  const { allowance, atBudgetCap, byTry, tries, touches, decided, worker } = governance;
   return (
     <section className="side-gov">
       <h2 className="side-heading">{wording.sideAgreed}</h2>
       <dl className="side-week">
+        {/*
+         * **Which worker did the work** (rondo#462), and whether the person
+         * chose it: the record of the choice, where what was agreed for the
+         * request is read. Before rondo#462 the answer lived only in the host's
+         * environment, which is the terminal the goal's clause 3 is about.
+         *
+         * **Read off the row and off nothing else.** The name comes from the
+         * lap's own `workerProvider`, which reservation settles -- the person's
+         * pick, or the host's default resolved at the start. A null is a lap
+         * from before rondo recorded either, and that says so rather than
+         * naming the default the host runs now over a lap that ran on another.
+         */}
+        <div className="side-week-wide">
+          <dt>{wording.workerProviderLabel}</dt>
+          <dd>
+            {worker === null
+              ? wording.workerProviderUnknown
+              : wording.workerProviderRan(worker.provider, worker.chosen)}
+          </dd>
+        </div>
         {/*
          * **Both figures or neither, and the tries with them** (rule 6). One
          * sentence stands for the whole approval where none reads, rather than
