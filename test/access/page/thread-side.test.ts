@@ -44,6 +44,7 @@ const governance = (over: Partial<Governance> = {}): Governance => ({
   byTry: [{ costUsd: 5, running: false }],
   atBudgetCap: null,
   tries: { at: 1, of: 4 },
+  worker: null,
   chain: [
     { step: "answer", state: "waiting" },
     { step: "proposal", state: "yours" },

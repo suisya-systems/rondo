@@ -35,6 +35,7 @@ import {
   deliverGate,
   type GateDelegation,
   presentGate,
+  resolveWorkers,
   type ShowGateRequest,
   showGate,
   showRun,
@@ -226,6 +227,7 @@ import type {
   PublishBlock,
   PublishShown,
   ReviewBlock,
+  WebPorts,
 } from "./page/contract.js";
 import { workerRuns } from "./page-logic/laps.js";
 import { asksOverLine, conflictFixBlock, resultOf } from "./page-logic/result.js";
@@ -319,7 +321,7 @@ export const USAGE = `rondo - the operator surface for delegated work
 
   rondo start --plan FILE --iteration-id ID [--prompt TEXT]
               [--prompt-file FILE] [--message-id ID]
-              [--scope-decision-id ID]
+              [--scope-decision-id ID] [--worker-provider claude|codex]
                           take one request and run a lap, and stop at the gate.
                           --prompt-file reads the request from a file, byte for
                           byte, for a request too long or too many paragraphs
@@ -334,7 +336,13 @@ export const USAGE = `rondo - the operator surface for delegated work
                           scope instead of asking: it needs --message-id, and
                           is refused with the test that refused it, spending
                           nothing, unless every test of the scope passes. An
-                          unanswered question in the request's thread holds it
+                          unanswered question in the request's thread holds it.
+                          --worker-provider runs this one request's work on the
+                          worker it names, over whatever RONDO_WORKER_PROVIDER
+                          set for the host; left off, the host's default runs
+                          it. A provider this host is not equipped for is
+                          refused before the lap spawns, with the ones it is
+                          equipped for named
   rondo request --actor-id ID --message-id ID --body=TEXT
                           open a request: your words, stored as written, as a
                           message in the conversation that replies to nothing.
@@ -666,6 +674,37 @@ export function operatorLanguage(
 function hostWords(environment: Readonly<Record<string, string | undefined>>): Chrome {
   const selected = operatorLanguage(environment);
   return chromeFor("tag" in selected ? selected.tag : null);
+}
+
+/**
+ * The workers this host is equipped for, as the page names them (rondo#462),
+ * ready to be spread into the ports -- and **empty**, so the field is absent,
+ * where the host's own settings refuse.
+ *
+ * **Names and not the seam's record**, which is `WebPorts.workers`' own reason:
+ * the page draws a list to choose from and a default to say out loud, and a
+ * Codex home is neither its business nor safe to put on a screen.
+ *
+ * **Nothing on a refusal rather than a fallback.** `rondo web` does not start
+ * continuo, so the settings are read here without one; a host whose
+ * `RONDO_WORKER_PROVIDER` names a worker it cannot run is refused by the start
+ * that does start continuo, with its reason, and a page that had quietly
+ * offered `claude` instead would be answering a question the start answers
+ * differently. Spread rather than assigned because
+ * `exactOptionalPropertyTypes` makes absence and `undefined` two things.
+ */
+export function hostWorkers(
+  environment: Readonly<Record<string, string | undefined>>,
+): Pick<WebPorts, "workers"> {
+  const resolved = resolveWorkers(environment);
+  return resolved.kind === "refused"
+    ? {}
+    : {
+        workers: {
+          fallback: resolved.workers.fallback,
+          ready: resolved.workers.ready.map((worker) => worker.provider),
+        },
+      };
 }
 
 /**
@@ -2158,6 +2197,17 @@ export async function main(
         // rondo#288), null on `revise`'s condition: a release is recorded as
         // the person's judgement, so it needs an actor the allowlist accepts.
         releasable: sender !== null && !("refusal" in sender),
+        // **The workers this host is equipped for** (rondo#462): read here,
+        // where the host's other settings are read, and handed to the page as
+        // names so the start form can offer the choice and say which worker
+        // runs the work when nobody makes one. A host whose own settings refuse
+        // hands nothing rather than a guess: `rondo web` has not started
+        // continuo, so the refusal belongs to the start that does, and a screen
+        // that drew `claude` over it would be inventing the fact.
+        // Spread and not assigned: `exactOptionalPropertyTypes` tells "the host
+        // said nothing" from "this field is undefined", and the page reads the
+        // first as *offer no choice* rather than as a provider.
+        ...hostWorkers(environment),
         // **The merge press** (rondo#380, `D-0091`): a person's press per act,
         // on `release`'s condition -- an approver the allowlist accepts -- and
         // through the operator's own forge CLI, as publish is (`D-0010`).
@@ -2450,6 +2500,12 @@ export async function commandStart(
             null,
             requestMessageId,
             scopeSpend,
+            null,
+            null,
+            // rondo#462: `--worker-provider` is the terminal's half of the
+            // start form's select, and it reaches `reserve()` by the same
+            // argument the page's press does.
+            parsed.workerProvider,
           ),
       },
       parsed.scopeDecisionId,
@@ -2480,6 +2536,13 @@ export async function commandStart(
     null,
     null,
     messageId,
+    null,
+    null,
+    null,
+    // rondo#462: an unscoped start chooses its worker the same way a scoped one
+    // does. A `start` naming no provider runs on the host's default, as every
+    // start did before one could be named.
+    parsed.workerProvider,
   );
   sayReport(report);
   if (report.status === "awaiting_human") {
@@ -7330,6 +7393,13 @@ async function admitScopedPlan(
     readonly iterationId: string;
     readonly requestMessageId: string;
     readonly scopeDecisionId: string;
+    /**
+     * The worker provider this request chose, or null/absent for the host's
+     * default (rondo#462). Absent is what a caller with no choice to pass says:
+     * a drafted split's plan carries none of its own, so it runs on the host's
+     * default exactly as it did before a request could choose.
+     */
+    readonly workerProvider?: string | null;
   },
   unquoted: RunPlan,
   proposalId: string | null,
@@ -7375,6 +7445,10 @@ async function admitScopedPlan(
             scopeSpend,
             claim,
             numbers,
+            // rondo#462: the request's own choice, down to `reserve()` in the
+            // same transaction as the row, so the lap the person reads back
+            // names the worker their press chose.
+            input.workerProvider ?? null,
           ),
         ),
     },

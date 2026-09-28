@@ -1637,6 +1637,62 @@ async function planStart(
 }
 
 /** State B: the approval the press recorded, read back, and the start it allows. */
+/**
+ * **Which worker this request's work runs on, chosen on the start form**
+ * (rondo#462): the providers this host is equipped for, with the host's own
+ * default named in the option that leaves the choice to it.
+ *
+ * **Only what the host can run is offered** (the person's answer to "what may
+ * be chosen from"): the list is `resolveWorkers`' `ready`, so the refusal
+ * `workerFor` would compose for a provider this host has no home or command
+ * for is one nobody can reach from here. A host equipped for one provider gets
+ * no select at all -- a list with one entry is not a choice, and the default
+ * line below it says which worker will run the work either way.
+ *
+ * **Nothing at all where the host said nothing**: absent `workers` is a caller
+ * that does not know, and a screen that drew `claude` for it would be inventing
+ * a fact the person came here to read.
+ */
+function workerChoice(wording: Chrome, workers: WebPorts["workers"]) {
+  if (workers === undefined) {
+    return null;
+  }
+  const others = workers.ready.filter((provider) => provider !== workers.fallback);
+  return (
+    <label class="flex flex-col gap-1">
+      <span class="text-meta leading-5 font-medium text-muted-foreground">
+        {wording.workerProviderLabel}
+      </span>
+      {others.length === 0 ? (
+        // The one worker this host has, said and not offered. The field is
+        // still posted so a form drawn on a host with one provider and pressed
+        // after a second arrived is read the same way: empty is the default.
+        <>
+          <input type="hidden" name="worker_provider" value="" />
+          <p class="text-body leading-5 text-muted-foreground">
+            {wording.workerProviderDefault(workers.fallback)}
+          </p>
+        </>
+      ) : (
+        <select name="worker_provider" class={BOX}>
+          {/* The default first and selected, so a person who reads nothing here
+              gets what the host would have run anyway -- with its name in the
+              option rather than behind a terminal. */}
+          <option value="" selected>
+            {wording.workerProviderDefault(workers.fallback)}
+          </option>
+          {others.map((provider) => (
+            <option value={provider}>{provider}</option>
+          ))}
+        </select>
+      )}
+      <span class="note text-meta leading-5 text-muted-foreground">
+        {wording.workerProviderBefore}
+      </span>
+    </label>
+  );
+}
+
 async function scopeApproved(
   ports: WebPorts,
   wording: Chrome,
@@ -1803,6 +1859,7 @@ async function scopeApproved(
             {`${wording.scopePlanAsk}: ${planLine(wording, runsOn, allowed)}`}
           </p>
           {planDone(wording, runsOn.document)}
+          {workerChoice(wording, ports.workers)}
           {/* Minted at render, as the scope id is, and for its reason: rondo
               names the lap (D-0023) and a double press is one lap. */}
           <input type="hidden" name="iteration" value={newIterationId()} />

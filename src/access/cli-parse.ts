@@ -69,6 +69,12 @@ export interface ParsedCommand {
   readonly scopeId: string | null;
   readonly scopeDigest: string | null;
   readonly scopeDecisionId: string | null;
+  /**
+   * The worker provider this request chooses, over the host's default
+   * (rondo#462). Null is "it chose none", which is the host's default -- the
+   * same silence `POST /start`'s empty field means.
+   */
+  readonly workerProvider: string | null;
   readonly port: number | null;
   readonly dryRun: boolean;
   readonly allowRemoteMismatch: boolean;
@@ -109,6 +115,7 @@ const FLAGS = {
   "scope-id": { type: "string" },
   "scope-digest": { type: "string" },
   "scope-decision-id": { type: "string" },
+  "worker-provider": { type: "string" },
   port: { type: "string" },
   "dry-run": { type: "boolean" },
   "allow-remote-mismatch": { type: "boolean" },
@@ -158,7 +165,18 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // `revise` because no allocator existed when it was written.
   // `--scope-decision-id` spends a scope on a first admission (D-0069 section
   // 2), through the same call site as `retry`'s, and needs `--message-id`.
-  start: ["plan", "prompt", "prompt-file", "iteration-id", "message-id", "scope-decision-id"],
+  // `--worker-provider` is the request's own choice of worker (rondo#462),
+  // the terminal's half of the start form's select: read only by `start`,
+  // because it is the command that admits a lap for a request.
+  start: [
+    "plan",
+    "prompt",
+    "prompt-file",
+    "iteration-id",
+    "message-id",
+    "scope-decision-id",
+    "worker-provider",
+  ],
   // `answer` gained `--iteration-id` because more than one iteration may be
   // waiting at once now, which is the whole point of D-0023.
   answer: ["actor-id", "body", "iteration-id", "verified"],
@@ -429,6 +447,7 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       scopeId: text("scope-id"),
       scopeDigest: text("scope-digest"),
       scopeDecisionId: text("scope-decision-id"),
+      workerProvider: text("worker-provider"),
       port,
       dryRun: values["dry-run"] === true,
       allowRemoteMismatch: values["allow-remote-mismatch"] === true,
@@ -466,6 +485,7 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     scopeId: null,
     scopeDigest: null,
     scopeDecisionId: null,
+    workerProvider: null,
     port: null,
     dryRun: false,
     allowRemoteMismatch: false,

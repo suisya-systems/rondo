@@ -93,6 +93,18 @@ export interface Governance {
   /** What remains, as rule 6's chain. */
   readonly chain: readonly ChainLink[];
   /**
+   * **Which worker did this request's work** (rondo#462): the provider, and
+   * whether the person chose it or the host's default supplied it.
+   *
+   * Derived, as everything here is: `chosen` is the lap row's own
+   * `workerProvider`, written at reservation and by nothing afterwards, and the
+   * name it falls back to is the host's default as the caller read it. Null is
+   * a row with no choice on it *and* a caller that could not say what the host
+   * runs -- and then the screen says nothing rather than naming a worker
+   * neither the row nor the host stands behind.
+   */
+  readonly worker: { readonly provider: string; readonly chosen: boolean } | null;
+  /**
    * **Where a lap may touch** (rule 6): the repositories and workspace roots
    * the approval names, and the outward acts it permits.
    *
@@ -198,6 +210,13 @@ export function governanceOf(
    * and the request's total read across all of them (rondo#378).
    */
   laps: readonly Pick<IterationRecord, "status" | "lapCostUsd">[] = [record],
+  /**
+   * The worker this host runs when a request chooses none (rondo#462), as the
+   * caller read it off the host's settings -- null where it could not, and then
+   * a lap that chose nothing says nothing rather than naming a default this
+   * module made up.
+   */
+  hostWorker: string | null = null,
 ): Governance {
   const answered = record.gateOutcome !== null;
   const atGate = record.status === "awaiting_human";
@@ -224,6 +243,12 @@ export function governanceOf(
       approval === null
         ? null
         : { at: approval.spent.admissions, of: approval.payload.budgets.laps },
+    worker:
+      record.workerProvider !== null
+        ? { provider: record.workerProvider, chosen: true }
+        : hostWorker === null
+          ? null
+          : { provider: hostWorker, chosen: false },
     chain: [
       { step: "answer", state: answered ? "done" : atGate ? "waiting" : "ahead" },
       { step: "proposal", state: proposed ? "done" : mayPropose ? "ahead" : "yours" },
