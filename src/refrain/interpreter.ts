@@ -296,7 +296,7 @@ export async function admit(
     // Carried, never read, for `spend`'s reason (D-0066 rule 3.1).
     scopeSpend,
     // Carried, never read, for `spend`'s reason (D-0073 rule 2.3): a drafted
-    // split's claim, or null for the whole repository (rule 2.5).
+    // split's claim, or null for none until its gate (D-0160).
     claim,
     // Carried, never read, for `spend`'s reason (D-0098 rule 3.3).
     numbers,

@@ -855,6 +855,49 @@ export function latestReads(
 }
 
 /**
+ * **Whether every issue a request named reads closed on its forge now**
+ * (rondo#553): a finished line whose request's issues are all closed will
+ * never be published, so its files are free. The thread's reads are as old as
+ * the request, so each issue is read again; pull requests it named are not its
+ * issues, and neither is one already closed when it was read, which the request
+ * named for context. False where it named none, where a read of one failed then
+ * or fails now, and where one is open: a line is released on this only when it
+ * is sure.
+ */
+export async function issuesClosedNow(
+  messages: readonly ThreadMessageDraft[],
+  requestMessageId: string,
+  readState: (request: IssueReadRequest) => Promise<CommandOutcome>,
+): Promise<boolean> {
+  const reads = latestReads(messages, requestMessageId);
+  if (reads.length === 0 || reads.some((read) => !("read" in read))) {
+    return false;
+  }
+  const issues = reads.flatMap((read) =>
+    "read" in read && !read.read.pullRequest && read.read.state === "open" ? [read.read] : [],
+  );
+  if (issues.length === 0) {
+    return false;
+  }
+  for (const issue of issues) {
+    const at = /^https?:\/\/([^/\s]+)\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)$/.exec(issue.url);
+    if (at === null) {
+      return false;
+    }
+    let state: CommandOutcome;
+    try {
+      state = await readState({ host: String(at[1]), repo: String(at[2]), number: Number(at[3]) });
+    } catch {
+      return false;
+    }
+    if (commandFailure(state) !== null || state.stdout.trim() !== "closed") {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * The operator messages with a reference not yet answered by a `forge` reply,
  * and which references (sections 2.4 and 3.3). `before` is what the reader does
  * not read unasked: messages written before it first ran on this store.

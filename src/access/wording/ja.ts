@@ -216,6 +216,7 @@ export const JA: Chrome = Object.freeze({
     "rondo はこの依頼の下書きを作れなかったので、まだ何も提案されていません。範囲はご自身で" +
     "決められます。",
   drafterNoDraftWhy: "止まった理由",
+  drafterRedrafted: "rondo の最初の下書きは通らなかったので、もう一度下書きしました。",
   issueRead: (pullRequest, comments) =>
     `rondo がこの${pullRequest ? "プルリクエストの会話" : "イシュー"}` +
     `${comments === 0 ? "" : `とコメント ${String(comments)} 件`}を読みました。` +
@@ -814,6 +815,8 @@ export const JA: Chrome = Object.freeze({
     chosen ? `${provider} (この依頼で選ばれたもの)` : `${provider} (このホストの既定値)`,
   workerProviderUnknown:
     "不明です。この周回は、rondo が提供元を記録するようになる前に始まりました。",
+  startBeside:
+    "計画が無いので、ほかの作業と並べて始めます。ぶつかったら、rondo が直す作業をボタン一つで出します。",
   startNote:
     "依頼に書いた言葉が、そのまま作業への指示になります。周回の名前は rondo が付けるので、" +
     "あなたが決める必要はありません。",

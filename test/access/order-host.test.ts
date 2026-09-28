@@ -914,8 +914,10 @@ test("a then drafted with no claim still carries its landing as a claim basis (D
     commit: COMMIT,
   };
   const run = { kind: "runnable", plan: { prompt: "p" }, claim: null } as never;
+  // D-0160: with no drafted claim the ask holds no paths (it no longer claims
+  // "/"), but it still carries the landing basis.
   expect(onLanding(run, landing).claim).toEqual({
-    paths: ["/"],
+    paths: [],
     authorKind: "drafter",
     authorId: LANE_LEDGER_AUTHOR,
     bases: [{ form: "landing", ...landing }],

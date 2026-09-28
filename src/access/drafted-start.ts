@@ -270,9 +270,10 @@ export function orderSection(landing: OrderLanding): string {
  * `run`'s plan and claim as a `then` is admitted on `first`'s landing (D-0098
  * rule 1.6): the section after the prompt, and the landing as a basis of the
  * claim row `reserve()` writes in the admission's transaction. A split drafted
- * with no claim is admitted claiming the whole repository (D-0073 rule 2.5),
- * asked here in the lane ledger's name so the landing is a basis of that row
- * too: every admitted `then` records the commit it was admitted on.
+ * with no claim is admitted claiming nothing yet (D-0160, replacing D-0073 rule
+ * 2.5's `/`), asked here with no paths in the lane ledger's name so the landing
+ * is a basis of that row too: every admitted `then` records the commit it was
+ * admitted on.
  */
 export function onLanding(
   run: Extract<DraftedPlanRun, { kind: "runnable" }>,
@@ -283,7 +284,7 @@ export function onLanding(
     claim:
       run.claim === null
         ? {
-            paths: [WHOLE_REPOSITORY],
+            paths: [],
             authorKind: "drafter",
             authorId: LANE_LEDGER_AUTHOR,
             bases: [{ form: "landing", ...landing }],
@@ -526,14 +527,29 @@ export function asPart(
         ]);
   return {
     plan: { ...plan, baseBranch: earlier.branch, pullRequestBaseBranch: plan.baseBranch },
+    // No drafted claim is none still (D-0160); a drafted one whose inherited
+    // paths cannot be read asks for the whole repository, as rule 4 says.
     claim:
-      admitted.claim === null || widened?.kind !== "claim"
+      admitted.claim === null
         ? null
-        : {
-            ...admitted.claim,
-            paths: widened.paths,
-            bases: [...admitted.claim.bases, { form: "iteration", iterationId: earlier.lineageId }],
-          },
+        : widened?.kind !== "claim"
+          ? {
+              paths: [WHOLE_REPOSITORY],
+              authorKind: "drafter",
+              authorId: LANE_LEDGER_AUTHOR,
+              bases: [
+                ...admitted.claim.bases,
+                { form: "iteration", iterationId: earlier.lineageId },
+              ],
+            }
+          : {
+              ...admitted.claim,
+              paths: widened.paths,
+              bases: [
+                ...admitted.claim.bases,
+                { form: "iteration", iterationId: earlier.lineageId },
+              ],
+            },
   };
 }
 
@@ -634,7 +650,8 @@ function heldBy(
   run: Extract<DraftedPlanRun, { kind: "runnable" }>,
 ): readonly { readonly line: LedgerLine; readonly paths: readonly string[] }[] {
   const repository = repositoryKey(run.repository);
-  const asked = run.claim?.paths ?? [WHOLE_REPOSITORY];
+  // A plan with no drafted claim asks for nothing yet (D-0160): nothing holds it.
+  const asked = run.claim?.paths ?? [];
   return ledger.flatMap((line) => {
     // The decision record is shared-append (D-0098 rule 3.5): never held.
     const paths =

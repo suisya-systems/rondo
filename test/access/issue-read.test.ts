@@ -25,6 +25,7 @@ import {
   ISSUES_QUOTE_OPENING,
   issueForDrafter,
   issueReader,
+  issuesClosedNow,
   issuesQuote,
   namedIssues,
   parseForgeRead,
@@ -258,9 +259,12 @@ test("the drafter waits until every named issue has its read, and is then handed
   await reader.idle();
   drafter.kick();
   await drafter.idle();
-  expect(handed).toHaveLength(1);
-  expect(handed[0]).toContain("by forge");
-  expect(handed[0]).toContain(JSON.stringify(ISSUE.title));
+  // The failed run and the one more it is given (rondo#554), both over the read.
+  expect(handed).toHaveLength(2);
+  for (const document of handed) {
+    expect(document).toContain("by forge");
+    expect(document).toContain(JSON.stringify(ISSUE.title));
+  }
 });
 
 test("the prompt ends with rondo's quote of every read, byte for byte, after the request's own words (section 3.4)", async () => {
@@ -651,7 +655,8 @@ test("a bare #N still in dispute waits for the person: it holds the lap's door a
   });
   drafter.kick();
   await drafter.idle();
-  expect(handed).toHaveLength(1);
+  // The failed run and the one more it is given (rondo#554).
+  expect(handed).toHaveLength(2);
 
   // **And rondo starts nothing meanwhile**: the door waits on the whole read.
   const planned = readRunPlan({ ...planDocument(), prompt: "Fix #237." });
@@ -674,11 +679,12 @@ test("a bare #N still in dispute waits for the person: it holds the lap's door a
   // issue in its document.
   drafter.kick();
   await drafter.idle();
-  expect(handed).toHaveLength(2);
-  // The first run had only the read that needed no settling; the second has both.
-  expect(handed[0]?.match(/"rondo_issue_read"/g)).toHaveLength(1);
-  expect(handed[1]?.match(/"rondo_issue_read"/g)).toHaveLength(2);
-  expect(handed[1]).toContain('"named":"#237"');
+  // Once, with no second go: the request was drafted once more already.
+  expect(handed).toHaveLength(3);
+  // The first runs had only the read that needed no settling; the last has both.
+  expect(handed[1]?.match(/"rondo_issue_read"/g)).toHaveLength(1);
+  expect(handed[2]?.match(/"rondo_issue_read"/g)).toHaveLength(2);
+  expect(handed[2]).toContain('"named":"#237"');
 });
 
 test("a bare #N two namings of one repository disagree about is not read, and the host says both (D-0137 rules 2, 3)", async () => {
@@ -740,4 +746,77 @@ test("a read the store refused is not still to come: the drafter is not held on 
   // Still unread on the thread's own note, and no longer holding the draft.
   expect((await reader.unread(thread.messages)).has("r1")).toBe(true);
   expect(await reader.unreadUnderway(thread.messages)).toEqual(new Map());
+});
+
+test("rondo#553: a request's issues read closed only when every one it named is closed on the forge now", async () => {
+  const message = (messageId: string, body: string, inReplyTo: string | null) => ({
+    messageId,
+    body,
+    authorKind: inReplyTo === null ? ("operator" as const) : ("forge" as const),
+    authorId: inReplyTo === null ? "ada" : ISSUE_READER,
+    inReplyTo,
+    atMs: 1_000,
+    bases: [],
+    asks: false,
+  });
+  const read = (named: string, number: number, pullRequest = false, state = "open") =>
+    forgeBody({
+      named,
+      atMs: 1_000,
+      read: {
+        url: `https://github.com/suisya-systems/rondo/${pullRequest ? "pull" : "issues"}/${String(number)}`,
+        number,
+        pullRequest,
+        title: "t",
+        // As first read: the state then says nothing about now.
+        state,
+        author: "ada",
+        openedAt: "2026-09-01T00:00:00Z",
+        body: "",
+        comments: [],
+      },
+    });
+  const states = new Map([
+    [237, "closed"],
+    [238, "open"],
+  ]);
+  const asked: string[] = [];
+  const readState = async (request: { host: string | null; repo: string; number: number }) => {
+    asked.push(`${String(request.host)} ${request.repo}#${String(request.number)}`);
+    return ran(`${states.get(request.number) ?? "open"}\n`);
+  };
+  const thread = [
+    message("r1", "Fix #237.", null),
+    message("f1", read("#237", 237), "r1"),
+    message("r2", "Fix #237 and #238.", null),
+    message("f2", read("#237", 237), "r2"),
+    message("f3", read("#238", 238), "r2"),
+    message("r3", "Nothing named.", null),
+    message("r4", "Look at #9.", null),
+    message("f4", read("#9", 9, true), "r4"),
+    message("r5", "Fix #237.", null),
+    message(
+      "f5",
+      forgeBody({ named: "#237", atMs: 1, failed: { why: "failed", detail: "x" } }),
+      "r5",
+    ),
+  ];
+  expect(await issuesClosedNow(thread, "r1", readState)).toBe(true);
+  // Read again now, not taken from the thread's read.
+  expect(asked).toEqual(["github.com suisya-systems/rondo#237"]);
+  expect(await issuesClosedNow(thread, "r2", readState)).toBe(false);
+  expect(await issuesClosedNow(thread, "r3", readState)).toBe(false);
+  // A pull request named is not the request's issue.
+  expect(await issuesClosedNow(thread, "r4", readState)).toBe(false);
+  // A read that failed says nothing, and neither does one failing now.
+  expect(await issuesClosedNow(thread, "r5", readState)).toBe(false);
+  // One already closed when the request read it was named for context.
+  const context = [
+    message("r6", "Like #237.", null),
+    message("f6", read("#237", 237, false, "closed"), "r6"),
+  ];
+  expect(await issuesClosedNow(context, "r6", readState)).toBe(false);
+  expect(
+    await issuesClosedNow(thread, "r1", async () => await Promise.resolve(ran("", 1, "HTTP 502"))),
+  ).toBe(false);
 });

@@ -1611,8 +1611,9 @@ export interface AdmissionRefusal {
  *
  * **Not a plan field**, so D-0063 rule 4.2's "two fields may differ" stands:
  * it travels beside the plan into `reserve()`, which tests it and writes it as
- * the line's first `lane_claim` row. Null in its place is rule 2.5: the line
- * claims the whole repository.
+ * the line's first `lane_claim` row. Null in its place, or no paths, is a
+ * line that claims nothing until its gate claims what it changed (D-0160,
+ * replacing D-0073 rule 2.5's whole repository).
  */
 export interface LaneClaimAsk {
   readonly paths: readonly string[];

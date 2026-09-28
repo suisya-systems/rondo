@@ -36,7 +36,7 @@ import type { AdvisoryRecord } from "../store/sqlite.js";
 import { hostFailure } from "./host-failure.js";
 import type { DrafterPorts, DrafterRunResult } from "./model-draft/host.js";
 import { draftRequest } from "./model-draft/host.js";
-import { MODEL_DRAFTER_PREFIX } from "./model-draft/judgement.js";
+import { MODEL_DRAFTER_PREFIX, REDRAFT_AUTHOR } from "./model-draft/judgement.js";
 
 const DRAFTER_PREFIX = MODEL_DRAFTER_PREFIX;
 
@@ -398,6 +398,55 @@ async function write(
   };
 
   if (result.outcome.kind === "unavailable") {
+    // **A run the model answered or failed is drafted once more** (rondo#554,
+    // D-0160, narrowing D-0071 rule 1.5): a refused draft otherwise leaves the
+    // request with no drafted claim, and its start would take the whole
+    // repository. A refusal before the model (`document` null: material over
+    // the bound, not an opener) would only come out the same. Counted in the
+    // store, by the note under the latest operator message, so a restart
+    // does not draft it a third time.
+    const thread = await ports.record.threadMessages();
+    const retried =
+      thread.kind !== "read" ||
+      thread.messages.some(
+        (m) =>
+          m.authorKind === "drafter" &&
+          m.authorId === REDRAFT_AUTHOR &&
+          m.inReplyTo === latestOperatorMessageId,
+      );
+    if (result.document !== null && !retried) {
+      const outcome = await ports.record.recordDraft({
+        requestMessageId: material.requestMessageId,
+        operatorMessageIds: operatorIds,
+        drafterPrefix: DRAFTER_PREFIX,
+        proposal: null,
+        scope: null,
+        messages: [
+          {
+            messageId: ports.mintId("drafter"),
+            body: `rondo's drafter wrote no draft for this, so rondo drafts it once more: ${result.outcome.reason}`,
+            authorKind: "drafter",
+            authorId: REDRAFT_AUTHOR,
+            inReplyTo: latestOperatorMessageId,
+            atMs: nowMs,
+            bases: [{ form: "message", messageId: latestOperatorMessageId }],
+            asks: false,
+          },
+        ],
+      });
+      if (outcome.kind === "recorded") {
+        ports.log(
+          `drafter  ${material.requestMessageId}: no draft (${cost}), drafted once more: ${result.outcome.reason}`,
+        );
+        // Run again now: the note covers nothing, so the request is still due.
+        return "stale";
+      }
+      if (outcome.kind === "stale" || outcome.kind === "covered") {
+        return outcome.kind === "stale" ? "stale" : "written";
+      }
+      ports.log(`drafter  ${material.requestMessageId}: nothing was written: ${outcome.reason}`);
+      return "failed";
+    }
     return await unavailable(result.outcome.reason);
   }
   const drafted = result.outcome;

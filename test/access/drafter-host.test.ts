@@ -13,7 +13,7 @@ import { expect, test } from "vitest";
 import { type DrafterHostPorts, drafterHost } from "../../src/access/drafter-host.js";
 import { DRAFTER_ISSUE_BOUND_BYTES, forgeBody, ISSUE_READER } from "../../src/access/issue-read.js";
 import { draftRequest } from "../../src/access/model-draft/host.js";
-import type { DrafterRun } from "../../src/access/model-draft/judgement.js";
+import { type DrafterRun, REDRAFT_AUTHOR } from "../../src/access/model-draft/judgement.js";
 import { planDigest } from "../../src/store/plan.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { agentTypeDigestOf, planDocument, world } from "./fixtures/drafter.js";
@@ -346,10 +346,10 @@ test("an issue longer than the drafter's bound reaches it cut from the head, and
   expect(document).toContain('A read carrying "cut" holds only the start of that issue');
 });
 
-test("an unavailable run writes one drafter message citing what it could not draft, and is not retried (rule 1.5)", async () => {
+test("an unavailable run is drafted once more, and the second writes one drafter message citing what it could not draft and is not retried (rule 1.5, rondo#554)", async () => {
   const w = await world();
   await w.say("r1", "Fix the flaky test.", null, 1_000);
-  const { host, handed } = hostOver(w, async () => ({
+  const { host, handed, logged } = hostOver(w, async () => ({
     kind: "failed",
     reason: "claude exited 1",
   }));
@@ -357,9 +357,18 @@ test("an unavailable run writes one drafter message citing what it could not dra
   await host.idle();
   host.kick();
   await host.idle();
-  expect(handed).toHaveLength(1);
+  // Once more straight away, and never a third time (D-0160).
+  expect(handed).toHaveLength(2);
+  expect(logged[0]).toBe(
+    "drafter  r1: no draft (cost not reported), drafted once more: claude exited 1",
+  );
   const said = await drafterMessages(w);
   expect(said).toEqual([
+    expect.objectContaining({
+      body: "rondo's drafter wrote no draft for this, so rondo drafts it once more: claude exited 1",
+      authorId: REDRAFT_AUTHOR,
+      inReplyTo: "r1",
+    }),
     expect.objectContaining({
       body: "rondo's drafter wrote no draft for this: claude exited 1",
       asks: false,
@@ -453,7 +462,8 @@ test("a run that throws is logged and costs only its own request; the host goes 
   host.kick();
   await host.idle();
   expect(logged).toContain("drafter  r1: the disk is full; tried again on the next scan");
-  expect((await drafterMessages(w)).map((m) => m.inReplyTo)).toEqual(["r2"]);
+  // r2's note that it is drafted once more, then its no-draft (rondo#554).
+  expect((await drafterMessages(w)).map((m) => m.inReplyTo)).toEqual(["r2", "r2"]);
 });
 
 test("a thread another host is drafting is left to it: nothing runs and nothing is given up", async () => {
@@ -467,7 +477,8 @@ test("a thread another host is drafting is left to it: nothing runs and nothing 
   await w.record.releaseDraft("r1", "the-other-host");
   host.kick();
   await host.idle();
-  expect(handed).toHaveLength(1);
+  // Its first run, and the one more a failed run is given (rondo#554).
+  expect(handed).toHaveLength(2);
 });
 
 test("a thread drafted by another host while this one worked through its list is not run again", async () => {
@@ -501,7 +512,9 @@ test("a thread drafted by another host while this one worked through its list is
   });
   host.kick();
   await host.idle();
-  expect(handed).toHaveLength(1);
+  // r1 twice (drafted once more, rondo#554), and r2 never.
+  expect(handed).toHaveLength(2);
+  expect(handed.every((document) => document.includes("First."))).toBe(true);
 });
 
 test("a lease that cannot be taken for a moment leaves the request due for the next scan", async () => {
@@ -535,7 +548,8 @@ test("a lease that cannot be taken for a moment leaves the request due for the n
   busy = false;
   host.kick();
   await host.idle();
-  expect(handed).toHaveLength(1);
+  // Its run, and the one more a failed run is given (rondo#554).
+  expect(handed).toHaveLength(2);
 });
 
 test("starting a host on a store with history spends nothing on the past; a reply in an old thread drafts that thread, and nothing else", async () => {
@@ -585,7 +599,8 @@ test("starting a host on a store with history spends nothing on the past; a repl
   await say("old-1-reply", "Picking this back up.", "old-1", 21_000);
   host.kick();
   await host.idle();
-  expect(handed).toHaveLength(2);
+  // Each drafted twice: a failed run is drafted once more (rondo#554).
+  expect(handed).toHaveLength(4);
   expect(
     handed.some((d) => d.includes("An old request.") && d.includes("Picking this back up.")),
   ).toBe(true);
@@ -627,7 +642,8 @@ test("a run whose material could not be read is tried again on the next scan, no
   unreadable = false;
   host.kick();
   await host.idle();
-  expect(handed).toHaveLength(1);
+  // Its run, and the one more a failed run is given (rondo#554).
+  expect(handed).toHaveLength(2);
 });
 
 test("a request naming a repository rondo does not work in is not drafted until it is added (rondo#383)", async () => {
@@ -679,4 +695,18 @@ test("what the host owes is due, drafting or reading an issue first, and nothing
   await host.idle();
   expect(handed).toHaveLength(1);
   expect([...(await host.owed())]).toEqual([]);
+});
+
+test("a request refused before the model is not drafted once more: it would come out the same (rondo#554)", async () => {
+  const w = await world();
+  // Over the drafter's input bound, so nothing is handed to the model.
+  await w.say("r1", `Fix it. ${"x".repeat(450_000)}`, null, 1_000);
+  const { host, handed } = hostOver(w, async () => ({ kind: "failed", reason: "unused" }));
+  host.kick();
+  await host.idle();
+  expect(handed).toEqual([]);
+  const said = await drafterMessages(w);
+  expect(said).toHaveLength(1);
+  expect(said[0]?.authorId).not.toBe(REDRAFT_AUTHOR);
+  expect(said[0]?.body).toContain("rondo's drafter wrote no draft for this: ");
 });

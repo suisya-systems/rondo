@@ -1260,7 +1260,7 @@ export function readPayload(document: JsonRecord): PayloadReading {
  * `claim` is the paths the plan's line asks to hold (D-0073 rule 2.3): **beside
  * the plan, not a field of it**, so rule 4.2's two fields stand. Normalised as
  * the store normalises it, and absent on a split drafted before claims were,
- * which is admitted claiming the whole repository (rule 2.5).
+ * which is admitted claiming nothing until its gate (D-0160).
  */
 export interface SplitPlan {
   readonly template_plan_digest: string;

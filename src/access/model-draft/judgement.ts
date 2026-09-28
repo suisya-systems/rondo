@@ -61,6 +61,13 @@ export function isModelDrafterName(id: string): boolean {
   return id.startsWith(MODEL_DRAFTER_PREFIX);
 }
 
+/**
+ * **Who says a refused draft is drafted again** (rondo#554, D-0160): rondo,
+ * under a name outside {@link MODEL_DRAFTER_PREFIX}, so its message covers no
+ * operator message (rule 3.2) and the request stays due for the second run.
+ */
+export const REDRAFT_AUTHOR = "rondo/redraft/1";
+
 /** The row name a drafter run writes under: `rondo/drafter/1/<model-id>` (rule 1.4). */
 export function modelDrafterName(row: DrafterRow): string {
   return `${MODEL_DRAFTER_PREFIX}${String(DRAFTER_INSTRUCTIONS_VERSION)}/${row.model}`;
