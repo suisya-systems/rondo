@@ -180,6 +180,7 @@ import {
   readRecordAdditions,
   readRecordFloor,
   readRepositoryPaths,
+  rerunFailedJobs,
   runDrafter,
   stoppedShort,
 } from "./forge.js";
@@ -211,7 +212,13 @@ import {
   stoppedLapOf,
   thisDriver,
 } from "./lost-laps.js";
-import { continuoWorkspaceRemover, mergeOnGreen, mergePress, releasePublished } from "./merge.js";
+import {
+  continuoWorkspaceRemover,
+  mergeOnGreen,
+  mergePress,
+  releasePublished,
+  scopedAuthority,
+} from "./merge.js";
 import {
   type DrafterPorts,
   draftedPlanRun,
@@ -1668,6 +1675,16 @@ export async function main(
         flow?.kick();
         order?.kick();
         return merged;
+      },
+      // rondo#551: the first red on a head re-runs its failed Actions jobs once,
+      // under the approval a merge on green is made under, whose claim it
+      // does not spend: a re-run changes no code.
+      rerun: {
+        authorised: async (iterationId) =>
+          (await scopedAuthority({ store, record, now: Date.now }, iterationId, [
+            "merge_default_branch",
+          ])) !== null,
+        rerunFailedJobs,
       },
       closedOut: () => flow?.kick(),
       host: forgeHost(environment),

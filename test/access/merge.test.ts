@@ -793,6 +793,11 @@ test("rondo#551: another line's lap at its gate does not hold this line's merge;
   expect(await inLine.press(input)).toMatchObject({ ok: false, why: "mergeRefusedAsked" });
   expect(await inLine.onGreen()).toContain("lap 'lap-2' of the same line waits at its gate");
   expect(inLine.asked).toEqual([]);
+  expect(
+    inLine.messages
+      .filter((message) => message.messageId.startsWith("report-withheld-"))
+      .map((message) => message.messageId),
+  ).toEqual([`report-withheld-lap-1-${TIP}-asked-lap-lap-2`]);
 });
 
 test("rondo#551: the flow's unanswered stop holds no merge of the request it is asked in, unless it names this line", async () => {
@@ -823,7 +828,7 @@ test("rondo#551: a withheld merge on green is one thread message per head and re
     message.messageId.startsWith("report-withheld-"),
   );
   expect(withheld.map((message) => message.messageId)).toEqual([
-    `report-withheld-lap-1-${TIP}-asked`,
+    `report-withheld-lap-1-${TIP}-asked-question-ask-1`,
   ]);
   expect(withheld[0]?.body).toBe(
     `Lap 'lap-1' was not merged by rondo on checks read green on commit '${TIP}': question ` +
@@ -855,11 +860,50 @@ test("rondo#551: a withheld merge on green is one thread message per head and re
   // Nothing on offer, or merged already, is not a withheld merge.
   for (const options of [{ scopeTip: "none" }, { before: { ...open, state: "MERGED" } }] as const) {
     const quiet = await over(options as Options);
-    await quiet.onGreen();
+    // Nor a line for the terminal: the checks host asks on every scan.
+    expect(await quiet.onGreen()).toBeNull();
     expect(quiet.messages.some((message) => message.messageId.startsWith("report-withheld-"))).toBe(
       false,
     );
   }
+});
+
+test("rondo#551: a new question holding the same green head is said as its own withheld merge", async () => {
+  const world = await over({ asking: true });
+  expect(await world.onGreen()).toContain("question 'ask-1'");
+  world.messages.push(
+    {
+      messageId: "reply-1",
+      body: "The first one.",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: "ask-1",
+      atMs: 10,
+      bases: [],
+      asks: false,
+      answerOutcome: "carry_on",
+    } as ThreadMessageDraft,
+    {
+      messageId: "ask-2",
+      body: "And which base?",
+      authorKind: "drafter",
+      authorId: "rondo/model/drafter",
+      inReplyTo: "request-1",
+      atMs: 11,
+      bases: [],
+      asks: true,
+    } as ThreadMessageDraft,
+  );
+  expect(await world.onGreen()).toContain("question 'ask-2'");
+  expect(
+    world.messages
+      .filter((message) => message.messageId.startsWith("report-withheld-"))
+      .map((message) => message.messageId),
+  ).toEqual([
+    `report-withheld-lap-1-${TIP}-asked-question-ask-1`,
+    `report-withheld-lap-1-${TIP}-asked-question-ask-2`,
+  ]);
+  expect(world.asked).toEqual([]);
 });
 
 test("rondo#551: asked again once the question is answered, a withheld merge on green merges", async () => {

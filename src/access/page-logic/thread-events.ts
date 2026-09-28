@@ -341,6 +341,18 @@ export function lapEvents(
           : {}),
       });
     }
+    // **The one re-run of a red head's failed checks, or why not** (rondo#551).
+    const rerun = result.rerun;
+    if (rerun !== null) {
+      events.push({
+        id: `${record.id}:rerun`,
+        kind: "other",
+        said: said(wording.evRerun(pullRequest, rerun)),
+        at: at(rerun.atMs),
+        atMs: rerun.atMs,
+        tryAt,
+      });
+    }
     // **A merge on green rondo withheld** (rondo#551): what holds it and what
     // the person can do, theirs while it stands -- the green it was withheld
     // on is still the answer, and nothing merged or closed the pull request.
@@ -355,14 +367,16 @@ export function lapEvents(
         said: said(
           wording.evMergeWithheld(
             pullRequest,
-            withheld.why,
+            withheld,
             typeof refused === "string" ? refused : null,
           ),
         ),
         at: at(withheld.atMs),
         atMs: withheld.atMs,
         tryAt,
-        ...(result.merged === null &&
+        // An approval without the merge is not something waiting on the person.
+        ...(withheld.why !== "notInScope" &&
+        result.merged === null &&
         result.closedAtMs === null &&
         result.checks.kind === "green" &&
         result.checksCommit === withheld.head

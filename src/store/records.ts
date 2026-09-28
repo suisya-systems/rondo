@@ -1840,6 +1840,15 @@ export const FLOW_AUTHOR_PREFIX = "rondo/flow/";
 export const FLOW_AUTHOR = `${FLOW_AUTHOR_PREFIX}1`;
 
 /**
+ * Whether a question is the flow host's own (rondo#469): its stop holds the
+ * flow's next request and no act of the request it is asked in
+ * (`holdsNothing`). The one test the store and the page both ask.
+ */
+export function isFlowAuthor(authorId: unknown): boolean {
+  return authorId === FLOW_AUTHOR;
+}
+
+/**
  * Whether a message is a request the flow host opened (rondo#469): a drafter
  * row with no `in_reply_to` whose author starts with {@link FLOW_AUTHOR_PREFIX}.
  * `authorId` is absent on a drafter snapshot written before it was carried.

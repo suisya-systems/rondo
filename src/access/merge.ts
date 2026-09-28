@@ -185,7 +185,7 @@ export async function mergeOnGreen(
   }
   const authority = scope;
   ports.pressing?.add(iterationId);
-  let merged: Merged;
+  let merged: Merged & { readonly hold?: MergeHold };
   try {
     merged = await mergeOnce(
       ports,
@@ -218,25 +218,20 @@ export async function mergeOnGreen(
   if (merged.ok) {
     return merged.note;
   }
-  // Merged or closed is the checks host's to say, and a press in flight its own.
+  // Merged or closed is the checks host's to say, and a press in flight its
+  // own: quiet, as the checks host asks on every scan while green stands.
   if (
     merged.why === "mergeRefusedMerged" ||
     merged.why === "mergeRefusedClosed" ||
     merged.why === "mergeRefusedInFlight"
   ) {
-    return `not merged on green, left for the press: ${merged.note}`;
+    return null;
   }
   if (merged.why === "mergeRefusedAsked") {
-    const found = await ports.store.read(iterationId);
-    const read = await ports.record.threadMessages();
-    const hold =
-      found.kind === "read" && read.kind === "read"
-        ? await mergeHold(ports.store, threadsOf(read.messages, new Set(), new Map()), found.record)
-        : null;
     return await withhold(ports, iterationId, head, {
       why: "asked",
-      askId: hold?.askId ?? null,
-      gateLapId: hold?.gateLapId ?? null,
+      askId: merged.hold?.askId ?? null,
+      gateLapId: merged.hold?.gateLapId ?? null,
     });
   }
   return await withhold(
@@ -366,11 +361,7 @@ export async function mergeHold(
   store: Pick<IterationStore, "laneLedger" | "readLive">,
   threads: Threads,
   record: { readonly id: string; readonly requestMessageId: string },
-): Promise<{
-  readonly held: boolean;
-  readonly askId: string | null;
-  readonly gateLapId: string | null;
-}> {
+): Promise<MergeHold> {
   const line = (await store.laneLedger()).find(
     (one) => one.releasedBy === null && one.lapIds.includes(record.id),
   );
@@ -386,6 +377,13 @@ export async function mergeHold(
   return { held: line !== undefined, askId, gateLapId };
 }
 
+/** What holds a line's merge, as {@link mergeHold} reads it. */
+export interface MergeHold {
+  readonly held: boolean;
+  readonly askId: string | null;
+  readonly gateLapId: string | null;
+}
+
 /** The scope a merge on green is made under (D-0126). */
 interface ScopedMerge {
   readonly scopeId: string;
@@ -397,7 +395,7 @@ async function mergeOnce(
   ports: MergePorts,
   input: MergeInput,
   scoped: ScopedMerge | null = null,
-): Promise<Merged> {
+): Promise<Merged & { readonly hold?: MergeHold }> {
   const forge = ports.forge ?? { readPullRequest, readMergeMethod, mergePullRequest };
   const found = await ports.store.read(input.iterationId);
   if (found.kind !== "read") {
@@ -415,7 +413,11 @@ async function mergeOnce(
   const hold = await mergeHold(ports.store, threads, record);
   const block = mergeBlock(result, hold.askId !== null || hold.gateLapId !== null, hold.held);
   if (block !== null || result === null || result.url === null) {
-    return refused(REFUSED_BY[block ?? "notPublished"], `the merge is not offered: ${block}`);
+    return {
+      ...refused(REFUSED_BY[block ?? "notPublished"], `the merge is not offered: ${block}`),
+      // What holds it, for the withheld merge's record to name (rondo#551).
+      ...(block === "asked" ? { hold } : {}),
+    };
   }
   // **The head the button was drawn for, the head rondo read green and the
   // head `publish` pushed are one commit**, or this press is about something

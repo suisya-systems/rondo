@@ -16,7 +16,7 @@
  * figures unknown rather than guessed.
  */
 
-import { FLOW_AUTHOR_PREFIX } from "../../store/records.js";
+import { isFlowAuthor } from "../../store/records.js";
 
 /** What the forge last said about a published lap's checks. */
 export type ChecksState =
@@ -50,7 +50,12 @@ export type ChecksState =
    * The pull request conflicts with its base, so the forge runs no check on
    * it (rondo#411): nothing will come until somebody resolves it.
    */
-  | { readonly kind: "conflict" };
+  | { readonly kind: "conflict" }
+  /**
+   * rondo re-ran the failed checks of the red head once (rondo#551), and no
+   * answer has come on that head since: the repair is not offered yet.
+   */
+  | { readonly kind: "rerunning" };
 
 export interface LapResult {
   /** The pull request's address, or null where the report printed none. */
@@ -104,11 +109,26 @@ export interface LapResult {
   /**
    * The newest merge on green rondo withheld (rondo#551), or null: the head it
    * was green on, and the token its id ends in -- `MergeWithheld`'s arm, or
-   * the press's refusal key (`withheldToken`, `conductor.ts`).
+   * the press's refusal key (`withheldToken`, `conductor.ts`) -- with, for
+   * `asked`, the question or the lap at its gate that holds it.
    */
   readonly withheld: {
     readonly head: string;
     readonly why: string;
+    readonly askId: string | null;
+    readonly gateLapId: string | null;
+    readonly atMs: number;
+  } | null;
+  /**
+   * The newest re-run line (rondo#551), or null: the head it was about,
+   * whether it ran, the reason's arm where it did not (`ChecksRerun`,
+   * `conductor.ts`), and the check runs that were red before it ran.
+   */
+  readonly rerun: {
+    readonly head: string;
+    readonly ran: boolean;
+    readonly why: string | null;
+    readonly checkRunIds: readonly number[];
     readonly atMs: number;
   } | null;
   /**
@@ -148,6 +168,7 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
   let movedSaid: Said | undefined;
   let conflictSaid: Said | undefined;
   let withheld: LapResult["withheld"] = null;
+  let rerun: LapResult["rerun"] = null;
   const newest = (left: Said | undefined, right: Said): Said =>
     left === undefined || right.atMs >= left.atMs ? right : left;
   // **Only this lap's lines**: its id may be the start of another lap's.
@@ -173,9 +194,34 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
       conflictSaid = newest(conflictSaid, said);
     } else if (id.startsWith(`report-withheld-${iterationId}-`)) {
       // `<head>-<token>`: a head is hex, so the token is after its first dash.
-      const [head = "", ...why] = id.slice(`report-withheld-${iterationId}-`.length).split("-");
+      const [head = "", ...rest] = id.slice(`report-withheld-${iterationId}-`.length).split("-");
+      const why = rest.join("-");
+      const asked = /^asked-(lap|question)-(.+)$/.exec(why);
       if (withheld === null || said.atMs >= withheld.atMs) {
-        withheld = { head, why: why.join("-"), atMs: said.atMs };
+        withheld = {
+          head,
+          why: asked === null ? why : "asked",
+          askId: asked?.[1] === "question" ? (asked[2] ?? null) : null,
+          gateLapId: asked?.[1] === "lap" ? (asked[2] ?? null) : null,
+          atMs: said.atMs,
+        };
+      }
+    } else if (id.startsWith(`report-rerun-${iterationId}-`)) {
+      // `<head>` where it ran, `<head>-<arm>` where it did not; the head is
+      // the one its sentence names.
+      const head = /on commit '([^']+)'/.exec(said.body)?.[1] ?? "";
+      const why = id.slice(`report-rerun-${iterationId}-${head}-`.length) || null;
+      if (rerun === null || said.atMs >= rerun.atMs) {
+        rerun = {
+          head,
+          ran: why === null,
+          why,
+          checkRunIds: (/\(check runs ([\d, ]+)\)/.exec(said.body)?.[1] ?? "")
+            .split(", ")
+            .filter((one) => one !== "")
+            .map(Number),
+          atMs: said.atMs,
+        };
       }
     }
   }
@@ -198,6 +244,16 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
     conflictHead !== null &&
     (at === null || conflictHead === at) &&
     !answers.some((one) => one.commit === conflictHead && one.said.atMs > conflictSaid.atMs);
+  // **A re-run stands on the head its answer is about until one comes after
+  // it there** (rondo#551): the checks host writes no red while the check
+  // runs that failed are the ones it re-ran.
+  const standing: LapResult["rerun"] = rerun;
+  const rerunning =
+    !conflicting &&
+    standing !== null &&
+    standing.ran &&
+    latest?.commit === standing.head &&
+    !answers.some((one) => one.commit === standing.head && one.said.atMs > standing.atMs);
   return {
     url,
     number: url === null ? null : (/\/pull\/(\d+)/.exec(url)?.[1] ?? null),
@@ -205,10 +261,16 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
     pushedOnto: published.body.includes("were pushed onto"),
     checks: conflicting
       ? { kind: "conflict" }
-      : latest === undefined
-        ? { kind: "running" }
-        : checksOf(latest.kind, latest.said.body),
-    checksAtMs: conflicting ? (conflictSaid?.atMs ?? null) : (latest?.said.atMs ?? null),
+      : rerunning
+        ? { kind: "rerunning" }
+        : latest === undefined
+          ? { kind: "running" }
+          : checksOf(latest.kind, latest.said.body),
+    checksAtMs: conflicting
+      ? (conflictSaid?.atMs ?? null)
+      : rerunning
+        ? (standing?.atMs ?? null)
+        : (latest?.said.atMs ?? null),
     checksCommit: conflicting ? null : (latest?.commit ?? null),
     merged: mergedOf(byId.get(`report-merged-${iterationId}`)),
     closedAtMs: byId.get(`report-closed-${iterationId}`)?.atMs ?? null,
@@ -218,6 +280,7 @@ export function resultOf(byId: ReadonlyMap<string, Said>, iterationId: string): 
       : null,
     moved,
     withheld,
+    rerun,
   };
 }
 
@@ -449,7 +512,7 @@ export function askHoldingMerge(
       }
       const laps = lapsNamed(threads, id);
       return laps.length === 0
-        ? !(threads.byId.get(id)?.authorId ?? "").startsWith(FLOW_AUTHOR_PREFIX)
+        ? !isFlowAuthor(threads.byId.get(id)?.authorId)
         : laps.some((lap) => lineIds.includes(lap));
     }) ?? null
   );

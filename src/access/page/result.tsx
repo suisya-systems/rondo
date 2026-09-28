@@ -97,6 +97,13 @@ export function ResultLine({
                   ...result.checks.timedOut,
                 ])}
               </li>
+              {/* rondo#551: the one re-run was not made for this red, and why. */}
+              {result.rerun === null ||
+              result.rerun.ran ||
+              result.rerun.why === null ||
+              result.rerun.head !== result.checksCommit ? null : (
+                <li className="result-note">{wording.resultRerunNot(result.rerun.why)}</li>
+              )}
               <li className="result-note result-act">
                 {conflictFix === "running"
                   ? wording.resultRedFixing

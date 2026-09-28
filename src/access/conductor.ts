@@ -87,7 +87,7 @@ import {
 } from "../store/sqlite.js";
 
 import { DETERMINISTIC_DRAFTER, proposeAfterAbandon, type UnpromptedPorts } from "./advisory.js";
-import type { ChecksReading } from "./checks-host.js";
+import type { ChecksReading, FailingCheck } from "./checks-host.js";
 import { discard, writeDelegationRecord } from "./delegation.js";
 import {
   type ChangedPathsReading,
@@ -1451,6 +1451,17 @@ export type LapEvent =
    * (rondo#551): once per head and reason, so a scan does not say it again.
    */
   | { readonly kind: "mergeWithheld"; readonly head: string; readonly withheld: MergeWithheld }
+  /**
+   * The first red on `head` had its failed Actions jobs re-run once, or did
+   * not and why (rondo#551): once per head, so a scan does not ask again.
+   */
+  | {
+      readonly kind: "rerun";
+      readonly pullRequestUrl: string;
+      readonly head: string;
+      readonly failing: readonly FailingCheck[];
+      readonly outcome: ChecksRerun;
+    }
   | {
       readonly kind: "moved";
       readonly pullRequestUrl: string;
@@ -1481,8 +1492,31 @@ export type MergeWithheld =
   | { readonly why: "claim"; readonly reason: string }
   | { readonly why: "refused"; readonly refusal: MergeRefusal; readonly note: string };
 
-/** The token a withheld merge's message id ends in: the arm, or the refusal's key. */
+/**
+ * What became of the one re-run of a red head's failed checks (rondo#551), one
+ * arm per reason it was not made (AGENTS.md, rondo#348): `notActions` names
+ * the failing checks no Actions run holds, `noScope` is no approval that
+ * includes the merge, and `refused` is the forge's answer for one run.
+ */
+export type ChecksRerun =
+  | { readonly kind: "ran" }
+  | { readonly kind: "notActions"; readonly names: readonly string[] }
+  | { readonly kind: "noScope" }
+  | { readonly kind: "refused"; readonly runId: number; readonly reason: string };
+
+/**
+ * The token a withheld merge's message id ends in: the arm, or the refusal's
+ * key. An `asked` names what holds it -- `asked-lap-<id>` or
+ * `asked-question-<id>` -- so a new hold on the same head is said too.
+ */
 export function withheldToken(withheld: MergeWithheld): string {
+  if (withheld.why === "asked") {
+    return withheld.gateLapId !== null
+      ? `asked-lap-${withheld.gateLapId}`
+      : withheld.askId !== null
+        ? `asked-question-${withheld.askId}`
+        : "asked";
+  }
   return withheld.why === "refused" ? withheld.refusal : withheld.why;
 }
 
@@ -1837,6 +1871,13 @@ export async function writeReport(
     body =
       `Lap '${iterationId}' was not merged by rondo on checks read green on commit ` +
       `'${event.head}': ${withheldSentence(event.withheld)}`;
+  } else if (event.kind === "rerun") {
+    // `report-rerun-<lap>-<head>` where it ran, with the reason's arm after
+    // where it did not; the page reads both back (`page-logic/result.ts`).
+    messageId =
+      `report-rerun-${iterationId}-${event.head}` +
+      (event.outcome.kind === "ran" ? "" : `-${event.outcome.kind}`);
+    body = rerunBody(iterationId, event);
   } else if (event.kind === "moved") {
     messageId = `report-moved-${iterationId}-${event.to}`;
     body = movedBody(iterationId, event);
@@ -1910,9 +1951,9 @@ function checksBody(
 ): string {
   const on = `on commit '${commit}'`;
   const nothingElse =
-    "rondo read this and did nothing else with the pull request: it does not comment on or retry " +
-    "one, and it does not merge one unless a person presses merge or the approved scope " +
-    "includes merging (D-0126).";
+    "rondo read this and does not comment on the pull request. It re-runs failed GitHub Actions " +
+    "jobs once per commit only where the approved scope includes merging (rondo#551), and it " +
+    "does not merge one unless a person presses merge or that scope includes merging (D-0126).";
   if (reading.kind === "green") {
     // **A skipped check is not said to have passed** (rondo#376): the forge's
     // `skipped` and `neutral` do not fail the reading, and the sentence says
@@ -1980,6 +2021,37 @@ function worktreeClause(one: WorktreeOutcome): string {
     default:
       return `kept for run '${one.runId}': ${one.reason}`;
   }
+}
+
+/**
+ * What the thread says about a red head's one re-run (rondo#551). The check
+ * run ids in brackets are the ones that were red before it, which the checks
+ * host reads back so a red the re-run has not reached is not said again.
+ */
+function rerunBody(iterationId: string, event: Extract<LapEvent, { kind: "rerun" }>): string {
+  const { outcome } = event;
+  if (outcome.kind === "ran") {
+    const ids = event.failing.map((one) => String(one.checkRunId)).join(", ");
+    return (
+      `Lap '${iterationId}' failed its checks, so rondo re-ran the failed checks ` +
+      `${named(event.failing.map((one) => one.name))} of pull request ${event.pullRequestUrl} ` +
+      `on commit '${event.head}' once (check runs ${ids}). A re-run changes no code. If they ` +
+      "fail again, the thread offers the repair."
+    );
+  }
+  const why =
+    outcome.kind === "noScope"
+      ? "no approved scope of this lap includes merging, which a re-run is taken under"
+      : outcome.kind === "refused"
+        ? `the forge refused to re-run workflow run ${String(outcome.runId)}: ${outcome.reason}`
+        : outcome.names.length === 0
+          ? "the forge named no failing check rondo can re-run"
+          : `${named(outcome.names)} ${outcome.names.length === 1 ? "is not a GitHub Actions job" : "are not GitHub Actions jobs"}, which rondo cannot re-run`;
+  return (
+    `Lap '${iterationId}' failed its checks on commit '${event.head}' of pull request ` +
+    `${event.pullRequestUrl} and rondo did not re-run them: ${why}. The thread offers the ` +
+    "repair, and a person may also re-run or fix them on the forge."
+  );
 }
 
 /** Why a merge on green was withheld and what the person can do, for the record. */

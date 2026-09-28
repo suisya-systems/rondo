@@ -71,7 +71,6 @@ import {
   FINDING_SEVERITIES,
   type FindingBasis,
   type FindingSeverity,
-  FLOW_AUTHOR,
   FLOW_AUTHOR_PREFIX,
   type FlowAnswerDraft,
   type FlowAskDraft,
@@ -84,6 +83,7 @@ import {
   type IterationRecord,
   type IterationStatus,
   isApprovableKind,
+  isFlowAuthor,
   isModelReadingDrafter,
   type JsonRecord,
   type JsonValue,
@@ -8119,7 +8119,7 @@ function openAsksIn(connection: DatabaseSync, requestMessageId: string): OpenAsk
         iterationIds: Object.freeze(iterationIds),
         answeredStop: Number(row["answered_stop"]) === 1,
         ...(row["author_id"] === WORKER_QUESTION_AUTHOR ? { lineOnly: true as const } : {}),
-        ...(row["author_id"] === FLOW_AUTHOR ? { holdsNothing: true as const } : {}),
+        ...(isFlowAuthor(row["author_id"]) ? { holdsNothing: true as const } : {}),
       }),
     );
   }
