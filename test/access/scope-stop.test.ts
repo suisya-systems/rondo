@@ -1918,8 +1918,9 @@ test(
  * that says how far the command got: `run()` refuses such a handle inside
  * itself, so a case that never mentions it never reached the seam
  * (`test/continuo/invoker.test.ts`'s argument). The success side and the
- * verdict's own refusal need a real gate, which only a real lap opens; they are
- * `test/access/press-path.test.ts`'s ground.
+ * verdict's own refusal for a superseded approval need a real gate, which only a
+ * real lap opens: both are driven as this same command in
+ * `test/access/press-path.test.ts`.
  */
 test(
   "D-0157: a typed revise over a lap with no approval refuses before the seam, and touches nothing",

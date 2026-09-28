@@ -2840,6 +2840,17 @@ test("a request that names one issue here closes it, and nothing else does (rond
   );
 });
 
+/**
+ * The draw itself, over the one function (`D-0157` rules 1, 2 and 3).
+ *
+ * **What it does not say, and where that is said.** These are the values
+ * `reviseApproval` answers with; whether the command charges them, prints them
+ * before the walk and stops on a refusal is the wiring, and a test here would
+ * pass with the call absent. The refusal that never reaches the seam is driven as
+ * a command in `test/access/scope-stop.test.ts`, and the charged approval, the
+ * line before the walk and the supersession stop are driven as one in
+ * `test/access/press-path.test.ts`, where a real lap opens the gate they need.
+ */
 test("D-0157: revise draws the approval its predecessor was admitted under, and refuses when it cannot", async () => {
   // `i-scoped` ran under sd-1 and nothing raised it; `i-raised`'s approval was
   // replaced by an approved successor, sd-2, and `scopeTip` would say so;
