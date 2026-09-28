@@ -12266,6 +12266,17 @@ nowhere to write if it were built first.
       the second premise made structural**: a sentence rondo composes about a request can always be
       followed back to the words it rests on, and a sentence resting on nothing cannot be written.
       The refusal is proved by a planted case, as `D-0036` rule 4's is.
+
+      > **Annotation (2026-09-28, from rondo's human gate of 2026-09-13, recorded on rondo#194).**
+      > Added after this entry was accepted, and additive. **This refusal has no exception**, and in
+      > particular `D-0067` rule 4 is not one. A `drafter` message with `asks` set about **a plan
+      > drafted but not yet admitted** -- which has no `iteration_id` to point at until its admission
+      > writes one -- rests on a **`proposal:` basis naming the split proposal the plan was drafted
+      > in** (`D-0063` rule 4, `D-0067` rule 3.2), which is the form this message uses; `D-0067` rule
+      > 4 carries the matching annotation and its "with none" does not stand. No basis form is added
+      > by either note: `proposal:ID` is already in `D-0032` rule 2's union. The list above is
+      > unedited.
+
    7. **`asks`** -- whether the message asks the person for an answer, written once. **A drafter's
       report and a drafter's unanswered question are otherwise the same rows** -- same author, no
       reply -- so without this column *waiting on you* could only be told from the prose, which is
@@ -15126,6 +15137,26 @@ names. Line numbers drift; re-measure the claim, not the number.
    message with `asks` set, with the held lineage's `iteration_id` as a basis or, for a plan not yet
    admitted, with none, which holds the line as a P3 through `D-0066` rule 4.2's `asks` test and rule
    4.4's reading of which line a message stands over.
+
+   > **Annotation (2026-09-28, from rondo's human gate of 2026-09-13, recorded on rondo#194), and the
+   > one part that is not additive.** Added after this entry was accepted, and before anything of this
+   > rule is built. **"or, for a plan not yet admitted, with none" above does not stand.** That message
+   > carries a **`proposal:` basis naming the split proposal the plan was drafted in** (`D-0063` rule
+   > 4) -- the row rule 3.2 above already names such a plan by, and the material the question rests on.
+   > The plan's position within that row, which rule 3.2 also names, travels in what the message says;
+   > it is not a second locator and no form carries it. **So every asking message this rule describes
+   > carries a basis**, whether the line it holds has an iteration yet or not, and `D-0061` rule 2.6 --
+   > `bases` required and non-empty on every `drafter` message, refused by the writer otherwise --
+   > **stands unchanged and is not excepted here**. **No basis form is added.** `proposal:ID`
+   > (`{ form: "proposal", proposalId }`) is already a member of `D-0032` rule 2's closed union, gained
+   > by `D-0071`'s annotation for rondo#238's stage 2 build, and the thread writer already refuses it
+   > when it names no proposal row. **`D-0066` rule 4.2's `asks` test and rule 4.4's reading are
+   > unchanged by it**: which line a message stands over is read off whether it carries an
+   > `iteration_id` basis, a `proposal:` basis is not one, so such a message still stands over the
+   > request's acts that continue no lineage, and `D-0073` rule 8's residual ("an ask about one plan
+   > not yet admitted holds its request's other plans", which naming a *plan* in a basis would
+   > change) is left exactly where that entry leaves it. `D-0061` rule 2.6 carries the matching note.
+   > Nothing else in this rule is edited.
 
 5. **What the organisation decides about order, and what reaches the person (answering the third
    question).**
