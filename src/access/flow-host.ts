@@ -19,8 +19,9 @@
  * what the approval has read.
  *
  * **A stop is asked, once** (D-0066 rule 4.4's layout): the scope run out
- * (expiry, laps or cost), a newer goal, two injected lines that ended failed,
- * or nothing left the ranking would start. The ask sits in the thread of the
+ * (expiry, laps or cost), a newer goal, two injected lines whose work ended
+ * failed -- a refused draft and a lap lost to a restart are neither (rondo#549,
+ * `injectionState`) -- or nothing left the ranking would start. The ask sits in the thread of the
  * flow's latest request, so the flow waits on it (`ownOpenAsk`), and in the
  * flow's own voice, so it holds no part of that request (`holdsNothing`); with no
  * request yet there is no thread, so the stop is a `flow_stop` row with its
@@ -420,10 +421,17 @@ function candidateKeyOf(messageId: string): string {
 
 /**
  * Where one injected request stands, for the picker: drafting until a split is
- * drafted for it (failed when the drafter wrote no draft), running while any
- * lap of it is open, waiting to start while a plan of its split has no line,
- * and otherwise as its latest lap ended. A split of no plans waits on the
- * person when the drafter asked, and is abandoned when it did not.
+ * drafted for it (`draft_refused` when the drafter ran and wrote no draft),
+ * running while any lap of it is open, waiting to start while a plan of its
+ * split has no line, and otherwise as its latest lap ended. A split of no
+ * plans waits on the person when the drafter asked, and is abandoned when it
+ * did not.
+ *
+ * **Two of those are ends the flow does not count against the goal**
+ * (rondo#549). A drafter run that wrote no split is one refused model output
+ * and not the request's work failing, and a lap the host's restart lost
+ * (`D-0139`) answered nothing at all: it is `lost` until the start again it is
+ * owed is reserved, and then that successor's own end is read here instead.
  */
 async function injectionState(
   ports: FlowHostPorts,
@@ -433,7 +441,7 @@ async function injectionState(
 ): Promise<InjectionState> {
   const proposalId = await ports.record.latestSplitFor(requestMessageId, MODEL_DRAFTER_PREFIX);
   if (proposalId === null) {
-    return seen.drafted.has(requestMessageId) ? "failed" : "drafting";
+    return seen.drafted.has(requestMessageId) ? "draft_refused" : "drafting";
   }
   const read = await ports.record.readProposal(proposalId);
   const split = read.kind === "read" ? readSplitPayload(read.proposal.payload) : null;
@@ -450,7 +458,19 @@ async function injectionState(
   if (laps.filter((lap) => lap.supersedesIterationId === null).length < plans) {
     return "waiting_to_start";
   }
-  return laps.at(-1)?.status as "closed" | "failed" | "abandoned";
+  const latest = laps.at(-1);
+  // D-0139: a lost lap ends `failed`, and that row is the restart's record and
+  // not an answer. It reads as `lost` only while no successor stands for it --
+  // once one is reserved the successor is the latest lap, and says the end.
+  if (
+    latest !== undefined &&
+    latest.status === "failed" &&
+    latest.failureKind === "lost" &&
+    !laps.some((lap) => lap.supersedesIterationId === latest.id)
+  ) {
+    return "lost";
+  }
+  return latest?.status as "closed" | "failed" | "abandoned";
 }
 
 /**

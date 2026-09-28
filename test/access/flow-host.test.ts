@@ -205,14 +205,39 @@ async function world(budgets: Record<string, number> = {}, ranking = [ranked(7),
         messages: [],
       }),
     ).toEqual({ kind: "recorded" });
-  const lap = (id: string, requestMessageId: string, status: string, at: number) =>
+  const lap = (
+    id: string,
+    requestMessageId: string,
+    status: string,
+    at: number,
+    over: { failureKind?: string; supersedesIterationId?: string } = {},
+  ) =>
     laps.push({
       id,
       requestMessageId,
       status,
+      failureKind: null,
       supersedesIterationId: null,
       updatedAtMs: at,
+      ...over,
     } as unknown as IterationRecord);
+  /**
+   * A drafter run over `requestMessageId` that wrote no split: its draft was
+   * refused (D-0071 rule 7.1), so the row covering it is its own message.
+   */
+  const refused = async (requestMessageId: string) =>
+    expect(
+      await record.recordThreadMessage({
+        messageId: `drafter-refused-${requestMessageId}`,
+        body: "the draft was refused (D-0071 rule 7.1)",
+        authorKind: "drafter",
+        authorId: `${MODEL_DRAFTER_PREFIX}1/m`,
+        inReplyTo: requestMessageId,
+        atMs: 1,
+        bases: [{ form: "message", messageId: requestMessageId }],
+        asks: false,
+      }),
+    ).toEqual({ kind: "recorded" });
   return {
     connection,
     record,
@@ -221,6 +246,7 @@ async function world(budgets: Record<string, number> = {}, ranking = [ranked(7),
     pass,
     messages,
     drafted,
+    refused,
     lap,
     triage,
     injectedCount: () => injected,
@@ -232,6 +258,7 @@ async function world(budgets: Record<string, number> = {}, ranking = [ranked(7),
 
 const first = flowMessageId("sd-goal", `issue:${REPO}#7`);
 const second = flowMessageId("sd-goal", `issue:${REPO}#8`);
+const third = flowMessageId("sd-goal", `issue:${REPO}#9`);
 
 test("the flow writes the goal's next request as rondo/flow/1, once, and counts the triage reading", async () => {
   const w = await world();
@@ -371,6 +398,58 @@ test("two failed injections stop the flow, and the person is asked once in the l
   ]);
   expect(asks[0]?.body).toContain("Stopped: rondo starts no further request toward the goal");
   expect(asks[0]?.body).toContain("Recommended: stop");
+});
+
+test("rondo#549: two refused drafts are not two failures; the flow asks for the next request", async () => {
+  const w = await world({}, [ranked(7), ranked(8), ranked(9)]);
+  await w.pass();
+  // The drafter ran over the first request and wrote no split: one refused
+  // model output, and no lap of the request ever ran.
+  await w.refused(first);
+  await w.pass();
+  await w.refused(second);
+  await w.pass();
+  const messages = await w.messages();
+  expect(messages.filter((m) => m.inReplyTo === null).map((m) => m.messageId)).toEqual([
+    first,
+    second,
+    third,
+  ]);
+  expect(messages.filter((m) => m.asks)).toEqual([]);
+  // One that really failed beside them is one failure and not two: what stops
+  // the flow here is the ranking running out, not the bound.
+  await w.drafted("split-3", third, 1);
+  w.lap("lap-3", third, "failed", 3);
+  await w.pass();
+  expect((await w.messages()).filter((m) => m.asks).map((m) => m.messageId)).toEqual([
+    `flow-stop-sd-goal-nothing_eligible-${third}`,
+  ]);
+});
+
+test("rondo#549: a lap lost to a restart is not a failure; its start again says how the line ended", async () => {
+  const w = await world({}, [ranked(7), ranked(8), ranked(9)]);
+  await w.pass();
+  await w.drafted("split-1", first, 1);
+  w.lap("lap-1", first, "failed", 1);
+  await w.pass();
+  await w.drafted("split-2", second, 1);
+  // The host restarted and took the lap's driver with it (D-0139): the row ends
+  // `failed` with the kind `lost`, and nothing of it answered.
+  w.lap("lap-2", second, "failed", 2, { failureKind: "lost" });
+  await w.pass();
+  // Not a second failure, and not an end either: the start again it is owed
+  // holds the flow rather than stopping it.
+  expect((await w.messages()).filter((m) => m.asks)).toEqual([]);
+  expect(w.log).toContain("flow     o/r: waiting (injection_pending)");
+  // Started again as D-0139 rule 3 says, and this time it closed.
+  w.lap("lap-2-again-1", second, "closed", 3, { supersedesIterationId: "lap-2" });
+  await w.pass();
+  expect((await w.messages()).filter((m) => m.inReplyTo === null).map((m) => m.messageId)).toEqual([
+    first,
+    second,
+    third,
+  ]);
+  expect((await w.messages()).filter((m) => m.asks)).toEqual([]);
 });
 
 test("the scope's cost, triage readings included, stops the flow before the request is written", async () => {
