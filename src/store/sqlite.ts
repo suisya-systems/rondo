@@ -189,6 +189,18 @@ export interface ReserveInput {
    */
   readonly requestMessageId: string;
   /**
+   * The worker provider this request chose, or null for the host's default
+   * (rondo#462).
+   *
+   * **Carried and never read here**: whether the host is equipped for it is
+   * `src/continuo`'s answer and is given at the spawn, so what the store
+   * contributes is that the choice lands on the row in the same transaction as
+   * the row, and can therefore be shown beside the lap for ever. A successor
+   * that names none inherits its predecessor's, as it inherits the request
+   * link ({@link inheritedWorkerProvider}).
+   */
+  readonly workerProvider?: string | null;
+  /**
    * The approval this admission spends, or null when nobody approved anything
    * (D-0022 rule 9).
    *
@@ -1092,6 +1104,13 @@ CREATE TABLE IF NOT EXISTS iteration (
   -- that adds this column to a store written before it impossible -- ALTER
   -- TABLE ADD COLUMN NOT NULL has no value to give the rows already there.
   request_message_id    TEXT,
+  -- The worker provider this request chose, or NULL for the host's default
+  -- (rondo#462). Written by reserve() and by nothing afterwards: the choice is
+  -- made before the lap starts, which is the answer the person gave to "can it
+  -- be changed part way through". Nullable with no back-fill, as every column
+  -- added after a row could exist is: a row written before this ran on the
+  -- host's default, which is what NULL says.
+  worker_provider       TEXT,
   continuo_revision     TEXT,
   agent_type_digest     TEXT,
   config_digest         TEXT,
@@ -1961,6 +1980,9 @@ const ADDED_COLUMNS = Object.freeze({
   // recorded where it pushed, so a null is the truth about such a row and the
   // landing reading answers `undetermined` over it.
   published_remote: "TEXT",
+  // rondo#462: nullable, no back-fill -- no lap before it could choose, so a
+  // null is the truth about such a row and reads as the host's default.
+  worker_provider: "TEXT",
   // D-0139: nullable, no back-fill -- no lap before it recorded its processes.
   driver_host: "TEXT",
   driver_pid: "INTEGER",
@@ -2164,6 +2186,7 @@ const SELECT_COLUMNS = [
   "identifiers_spent",
   "supersedes_iteration_id",
   "request_message_id",
+  "worker_provider",
   "continuo_revision",
   "agent_type_digest",
   "config_digest",
@@ -2545,8 +2568,8 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
             .prepare(
               "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, " +
                 "run_id, topic_branch, workspace, identifiers_spent, supersedes_iteration_id, " +
-                "request_message_id, created_at_ms, updated_at_ms) " +
-                "VALUES (?, 'planned', ?, ?, ?, 1, ?, ?, ?, 0, ?, ?, ?, ?)",
+                "request_message_id, worker_provider, created_at_ms, updated_at_ms) " +
+                "VALUES (?, 'planned', ?, ?, ?, 1, ?, ?, ?, 0, ?, ?, ?, ?, ?)",
             )
             // One attempt, not zero: the row exists because an attempt is being
             // made. `nextStep` compares the policy's ceiling against a *fresh*
@@ -2568,6 +2591,13 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
               input.workspace,
               input.supersedesIterationId,
               linked.requestMessageId,
+              // rondo#462: the successor of a lap that chose a provider keeps
+              // that choice, exactly as it keeps the request link above -- a
+              // revision or a retry is the same request continued, and the
+              // choice was the person's for the request rather than for one
+              // lap of it. The caller may still name one, which is what lets a
+              // re-lap be put on the other provider.
+              input.workerProvider ?? inheritedWorkerProvider(connection, input),
               input.nowMs,
               input.nowMs,
             );
@@ -7992,6 +8022,28 @@ function lineageDefect(connection: DatabaseSync, input: ReserveInput): string | 
  * `lineageDefect` has already found: a revision or a retry continues that
  * request, and the request's report must not lose track of it.
  */
+/**
+ * The predecessor's worker provider, for a successor that named none
+ * (rondo#462).
+ *
+ * **Inherited rather than re-defaulted**, which is {@link inheritedRequest}'s
+ * argument applied to the other thing a lineage carries: a revision that fell
+ * back to the host's default would silently move the work onto another
+ * provider half way through a request, and the person who chose one chose it
+ * for the work rather than for its first lap. Naming one explicitly still
+ * wins, which is what lets a re-lap be put on the other provider on purpose.
+ */
+function inheritedWorkerProvider(connection: DatabaseSync, input: ReserveInput): string | null {
+  if (input.supersedesIterationId === null) {
+    return null;
+  }
+  const row = connection
+    .prepare("SELECT worker_provider FROM iteration WHERE id = ?")
+    .get(input.supersedesIterationId) as SqlRow | undefined;
+  // A predecessor that is not there is `lineageDefect`'s to answer, as above.
+  return row === undefined ? null : optionalText(row, "worker_provider");
+}
+
 function inheritedRequest(connection: DatabaseSync, input: ReserveInput): string {
   if (input.supersedesIterationId === null) {
     return input.requestMessageId;
@@ -8158,6 +8210,7 @@ function toRecord(row: SqlRow): IterationRecord {
     identifiersSpent: requireInteger(row, "identifiers_spent"),
     supersedesIterationId: optionalText(row, "supersedes_iteration_id"),
     requestMessageId: requireText(row, "request_message_id"),
+    workerProvider: optionalText(row, "worker_provider"),
     continuoRevision: optionalText(row, "continuo_revision"),
     agentTypeDigest: optionalText(row, "agent_type_digest"),
     configDigest: optionalText(row, "config_digest"),

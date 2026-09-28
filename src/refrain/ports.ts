@@ -412,6 +412,14 @@ export interface ReserveInput {
   /** The message that opened this lap's request (D-0061 rule 4). Carried, never read. */
   readonly requestMessageId: string;
   /**
+   * The worker provider this request chose, or null for the host's default
+   * (rondo#462). Carried and never read, for `spend`'s reason: which providers
+   * this host is equipped for is the composition root's fact and the seam's
+   * refusal, and what `src/refrain` contributes is that the value reaches
+   * `reserve()` and lands on the row with it.
+   */
+  readonly workerProvider?: string | null;
+  /**
    * The approval this admission spends, or null when nobody approved anything.
    *
    * **The loop carries it and never reads it** (D-0022 rule 17): whose
@@ -506,6 +514,14 @@ export interface ConductorPorts {
     modelTier: string,
     /** The iteration the lap is for: its approval is where the lap's cap is read (D-0121). */
     iterationId: string,
+    /**
+     * The worker provider the row carries, or null for the host's default
+     * (rondo#462). Read off the row and passed on rather than looked up again:
+     * the choice is the request's, the readiness is the host's, and the
+     * interpreter is neither -- it carries the value between them, as it
+     * carries the model tier beside it.
+     */
+    workerProvider: string | null,
   ) => Promise<EffectOutcome<LapPerformance>>;
   readonly showGate: (
     plan: AdmittedPlan,

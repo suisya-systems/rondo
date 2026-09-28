@@ -301,6 +301,7 @@ function blankRecord(id: string, status: IterationStatus): IterationRecord {
     identifiersSpent: 0,
     supersedesIterationId: null,
     requestMessageId: REQUEST,
+    workerProvider: null,
     continuoRevision: null,
     agentTypeDigest: null,
     configDigest: null,

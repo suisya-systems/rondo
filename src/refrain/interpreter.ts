@@ -199,6 +199,12 @@ export async function admit(
   scopeSpend: ScopeSpend | null = null,
   claim: LaneClaimAsk | null = null,
   numbers: readonly number[] | null = null,
+  /**
+   * The worker provider this request chose, or null for the host's default
+   * (rondo#462). Last and defaulted, as every argument added to this list has
+   * been: a caller with nothing to say about it says nothing.
+   */
+  workerProvider: string | null = null,
 ): Promise<ConductorReport> {
   const lines: string[] = [];
   const admission = nextStep(null, policy);
@@ -271,6 +277,9 @@ export async function admit(
     plan: planPayload(admitted.plan),
     supersedesIterationId,
     requestMessageId,
+    // Carried, never read, for `spend`'s reason (rondo#462): which providers
+    // this host is equipped for is not the loop's to know.
+    workerProvider,
     // **Carried, never read** (D-0022 rule 17). The comparison this authorises
     // is the store's, against the digest the composition root composed from
     // this very plan; the loop's part is that the two writes are one.
@@ -1316,7 +1325,7 @@ async function performStep(
       "the ceiling the plan declared.",
   );
 
-  const walked = await ports.performLap(plan.plan, modelTier, record.id);
+  const walked = await ports.performLap(plan.plan, modelTier, record.id, record.workerProvider);
   switch (walked.kind) {
     case "answered": {
       const lap = walked.value;

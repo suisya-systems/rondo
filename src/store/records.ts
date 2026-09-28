@@ -373,6 +373,18 @@ export interface IterationRecord {
    */
   readonly requestMessageId: string;
   /**
+   * The worker provider the person chose for this request, or null for the
+   * host's default (rondo#462).
+   *
+   * **Written at reservation and by nothing afterwards**, which is the whole of
+   * "only before it starts": there is no transition that sets it, so a lap that
+   * is running cannot be moved onto another provider, and the row a person
+   * reads is the choice the work actually ran under. Null is not "unknown" --
+   * it is "the person did not choose", and the page draws the host's default's
+   * name beside it so the two are never confused.
+   */
+  readonly workerProvider: string | null;
+  /**
    * The continuo revision `startContinuo` **observed**, not the one the pin
    * expected.
    *
@@ -712,6 +724,12 @@ export type IterationFields = Partial<
     | "workspace"
     | "supersedesIterationId"
     | "requestMessageId"
+    // rondo#462: fixed at reservation, for `supersedesIterationId`'s second
+    // reason and because it is the whole of the person's answer that the
+    // provider may be changed only before the work starts. A transition that
+    // could write it would be a lap able to change which worker it ran on
+    // while it ran, and the row would then describe a choice nobody made.
+    | "workerProvider"
     | "gateAnswer"
     | "gateAnswerActor"
     // rondo#286: written by `markPublishedRemote` at the push and by nothing

@@ -1434,6 +1434,7 @@ function published(parts: Partial<IterationRecord> = {}): IterationRecord {
     identifiersSpent: 1,
     supersedesIterationId: null,
     requestMessageId: FIXTURE_REQUEST,
+    workerProvider: null,
     continuoRevision: "603843b",
     agentTypeDigest: null,
     configDigest: null,

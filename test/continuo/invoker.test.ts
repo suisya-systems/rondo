@@ -31,7 +31,7 @@ import {
   performLap,
   presentGate,
   RUN_CLOSE_OUTCOMES,
-  resolveWorker,
+  resolveWorkers,
   SERVED_ENDPOINT_RECIPIENTS,
   showGate,
   showRun,
@@ -290,27 +290,30 @@ describe("the host's worker (D-0123)", () => {
     RONDO_CODEX_COMMAND: "/usr/local/bin/codex",
   };
 
-  test("no provider, an empty one, or 'claude' is the Claude CLI", () => {
+  /** A host equipped for Codex, whichever provider it runs by default. */
+  const codexReady = {
+    provider: "codex",
+    codexHome: "/home/op/.codex",
+    codexCommand: "/usr/local/bin/codex",
+  };
+
+  test("no provider, an empty one, or 'claude' falls back to the Claude CLI", () => {
     for (const environment of [
       {},
       { RONDO_WORKER_PROVIDER: " " },
       { RONDO_WORKER_PROVIDER: "claude" },
     ]) {
-      expect(resolveWorker(environment, "linux")).toEqual({
+      expect(resolveWorkers(environment, "linux")).toEqual({
         kind: "resolved",
-        worker: { provider: "claude" },
+        workers: { fallback: "claude", ready: [{ provider: "claude" }] },
       });
     }
   });
 
   test("codex takes its home and its command, both absolute", () => {
-    expect(resolveWorker(codexHost, "linux")).toEqual({
+    expect(resolveWorkers(codexHost, "linux")).toEqual({
       kind: "resolved",
-      worker: {
-        provider: "codex",
-        codexHome: "/home/op/.codex",
-        codexCommand: "/usr/local/bin/codex",
-      },
+      workers: { fallback: "codex", ready: [{ provider: "claude" }, codexReady] },
     });
     for (const [name, value] of [
       ["RONDO_CODEX_HOME", undefined],
@@ -318,29 +321,56 @@ describe("the host's worker (D-0123)", () => {
       ["RONDO_CODEX_COMMAND", ""],
       ["RONDO_CODEX_COMMAND", "codex"],
     ] as const) {
-      const refused = resolveWorker({ ...codexHost, [name]: value }, "linux");
+      const refused = resolveWorkers({ ...codexHost, [name]: value }, "linux");
       expect(refused.kind, `${name}=${String(value)}`).toBe("refused");
       expect(refused.kind === "refused" && refused.reason).toContain(name);
     }
   });
 
+  // rondo#462: the half that is new. The host's default stays the Claude CLI
+  // and the host is *also* equipped for Codex, which is what a request may then
+  // choose without the host being restarted.
+  test("a Claude host with a Codex home is ready for both, and is not refused without one", () => {
+    expect(resolveWorkers({ ...codexHost, RONDO_WORKER_PROVIDER: "claude" }, "linux")).toEqual({
+      kind: "resolved",
+      workers: { fallback: "claude", ready: [{ provider: "claude" }, codexReady] },
+    });
+    // A Claude host that is simply not equipped for Codex is not a refusal: it
+    // is a host with one provider to offer, which is what `ready` says.
+    expect(resolveWorkers({ RONDO_CODEX_HOME: ".codex" }, "linux")).toEqual({
+      kind: "resolved",
+      workers: { fallback: "claude", ready: [{ provider: "claude" }] },
+    });
+    // And on win32 it is never offered, whatever the environment says.
+    expect(resolveWorkers({ ...codexHost, RONDO_WORKER_PROVIDER: "claude" }, "win32")).toEqual({
+      kind: "resolved",
+      workers: { fallback: "claude", ready: [{ provider: "claude" }] },
+    });
+  });
+
   test("an unknown provider, and codex on Windows, refuse the host with the reason", () => {
-    const unknown = resolveWorker({ RONDO_WORKER_PROVIDER: "gemini" }, "linux");
+    const unknown = resolveWorkers({ RONDO_WORKER_PROVIDER: "gemini" }, "linux");
     expect(unknown.kind === "refused" && unknown.reason).toContain("claude, codex");
-    const windows = resolveWorker(codexHost, "win32");
+    const windows = resolveWorkers(codexHost, "win32");
     expect(windows.kind).toBe("refused");
     if (windows.kind === "refused") {
       expect(windows.reason).toContain("D-1120");
       expect(windows.reason).toMatch(/^[\x20-\x7e]+$/);
     }
     // Claude on Windows is unchanged.
-    expect(resolveWorker({}, "win32").kind).toBe("resolved");
+    expect(resolveWorkers({}, "win32").kind).toBe("resolved");
   });
 
   test("a Codex host drives every tier on the Codex model, and a relative home never reaches run", async () => {
     const codex: VerifiedContinuo = {
       ...unissued,
-      worker: { provider: "codex", codexHome: "/home/op/.codex", codexCommand: "/usr/bin/codex" },
+      workers: {
+        fallback: "codex",
+        ready: [
+          { provider: "claude" },
+          { provider: "codex", codexHome: "/home/op/.codex", codexCommand: "/usr/bin/codex" },
+        ],
+      },
     };
     for (const tier of mappedModelTiers()) {
       const outcome = await performLap(codex, lapRequest({ modelTier: tier }));
@@ -350,7 +380,10 @@ describe("the host's worker (D-0123)", () => {
     const relative = await performLap(
       {
         ...codex,
-        worker: { provider: "codex", codexHome: ".codex", codexCommand: "/usr/bin/codex" },
+        workers: {
+          fallback: "codex",
+          ready: [{ provider: "codex", codexHome: ".codex", codexCommand: "/usr/bin/codex" }],
+        },
       },
       lapRequest(),
     );
@@ -358,6 +391,60 @@ describe("the host's worker (D-0123)", () => {
     expect(reason).toContain("codexHome");
     expect(reason).not.toContain(REACHED_RUN);
     expect(relative.model).toBeNull();
+  });
+});
+
+describe("the request's own worker provider (rondo#462)", () => {
+  const bothReady: VerifiedContinuo = {
+    ...unissued,
+    workers: {
+      fallback: "claude",
+      ready: [
+        { provider: "claude" },
+        { provider: "codex", codexHome: "/home/op/.codex", codexCommand: "/usr/bin/codex" },
+      ],
+    },
+  };
+  const onCodex: VerifiedContinuo = {
+    ...bothReady,
+    workers: {
+      fallback: "codex",
+      ready: [
+        { provider: "claude" },
+        { provider: "codex", codexHome: "/home/op/.codex", codexCommand: "/usr/bin/codex" },
+      ],
+    },
+  };
+
+  test("the request's choice wins over the host's default, both ways", async () => {
+    // The host runs Claude by default; this request asked for Codex.
+    const codex = await performLap(bothReady, lapRequest({ workerProvider: "codex" }));
+    expect(defectReason(codex.result)).toContain(REACHED_RUN);
+    expect(codex.model).toBe("gpt-6-astra");
+    // And the other way round: a Codex host with a request that asked for Claude.
+    const claude = await performLap(onCodex, lapRequest({ workerProvider: "claude" }));
+    expect(defectReason(claude.result)).toContain(REACHED_RUN);
+    expect(claude.model).toBe("claude-opus-5");
+  });
+
+  test("choosing nothing is the host's default, and not the first row of the list", async () => {
+    expect((await performLap(onCodex, lapRequest())).model).toBe("gpt-6-astra");
+    expect((await performLap(onCodex, lapRequest({ workerProvider: null }))).model).toBe(
+      "gpt-6-astra",
+    );
+  });
+
+  test("a provider the host is not equipped for is refused before the spawn, by name", async () => {
+    for (const asked of ["codex", "gemini"]) {
+      const outcome = await performLap(unissued, lapRequest({ workerProvider: asked }));
+      const reason = defectReason(outcome.result);
+      expect(reason).toContain(asked);
+      // Nothing was driven and no model was chosen: this is rondo's own
+      // refusal, not continuo's.
+      expect(reason).not.toContain(REACHED_RUN);
+      expect(outcome.model).toBeNull();
+      expect(reason).toMatch(/^[\x20-\x7e]+$/);
+    }
   });
 });
 

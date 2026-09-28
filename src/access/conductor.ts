@@ -210,6 +210,8 @@ function lapRequestOf(
   plan: AdmittedPlan,
   modelTier: string,
   maxBudgetUsd: number | null,
+  /** The request's own provider, off the iteration row, or null (rondo#462). */
+  workerProvider: string | null,
 ): PerformLapRequest {
   return {
     db: plan.db,
@@ -221,6 +223,7 @@ function lapRequestOf(
     endpointDestinationDir: plan.endpointDestinationDir,
     claudeCommand: plan.claudeCommand,
     modelTier,
+    workerProvider,
     interlockRoot: plan.interlockRoot,
     claudeOrgPath: plan.claudeOrgPath,
     endpointDb: plan.endpointDb,
@@ -398,7 +401,12 @@ export function conductorPorts(
         discard(written.record);
       }
     },
-    performLap: async (plan, modelTier, iterationId): Promise<EffectOutcome<LapPerformance>> => {
+    performLap: async (
+      plan,
+      modelTier,
+      iterationId,
+      workerProvider,
+    ): Promise<EffectOutcome<LapPerformance>> => {
       // D-0121: the room the scope's budget leaves this lap, computed and
       // written onto its row in one transaction the moment it is sent, so the
       // caps of laps running at once never add up past the budget (rule 7). A
@@ -422,7 +430,7 @@ export function conductorPorts(
       await store.markLapProcess(iterationId, thisDriver());
       const outcome = await performLap(
         continuo,
-        lapRequestOf(plan, modelTier, budgetCapUsd),
+        lapRequestOf(plan, modelTier, budgetCapUsd, workerProvider),
         // A failed write leaves no child pid, which the host reads as unknown
         // and leaves to the plan's ceiling rather than calling the lap lost.
         (pid) => void store.markLapProcess(iterationId, { lapPid: pid }).catch(() => undefined),
@@ -605,6 +613,8 @@ export async function admit(
   scopeSpend: ScopeSpend | null = null,
   claim: LaneClaimAsk | null = null,
   numbers: readonly number[] | null = null,
+  /** The worker provider this request chose, or null for the host's default (rondo#462). */
+  workerProvider: string | null = null,
 ): Promise<ConductorReport> {
   const attempt = () =>
     admitIteration(
@@ -618,6 +628,7 @@ export async function admit(
       scopeSpend,
       claim,
       numbers,
+      workerProvider,
     );
   let report = await attempt();
   // **A refusal by a line whose work may have landed reads that landing now**
