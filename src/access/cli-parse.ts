@@ -163,9 +163,11 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // waiting at once now, which is the whole point of D-0023.
   answer: ["actor-id", "body", "iteration-id", "verified"],
   // `--scope-decision-id` spends a scope on the second lap (D-0070): the gate
-  // answer stays the person's, and the lap is the `redo` arm's admission.
+  // answer stays the person's, and the lap is the `redo` arm's admission. Left
+  // off, the approval the lap being revised was admitted under is drawn from the
+  // record (`D-0157`), so it is an override rather than the way in.
   // `--closing-fix` presses the closing lap (D-0098 rule 5.2): a scope's
-  // option, so it is refused without `--scope-decision-id` in `parseCommand`.
+  // option, and every revise now names one, so it stands on its own.
   revise: ["actor-id", "body", "iteration-id", "scope-decision-id", "closing-fix"],
   publish: [
     "repo",
@@ -348,17 +350,12 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     };
   }
 
-  // **A closing lap is the scope's option** (D-0098 rule 5.2): with no scope
-  // there is no `below_threshold` to allow it, and a flag that did nothing
-  // would read as a lap that was not re-read on purpose.
-  if (values["closing-fix"] === true && values["scope-decision-id"] === undefined) {
-    return {
-      kind: "refused",
-      reason:
-        "--closing-fix presses the closing lap a scope's below_threshold allows, so it needs " +
-        "--scope-decision-id naming that scope's approval.",
-    };
-  }
+  // **A closing lap is the scope's option** (D-0098 rule 5.2), and it used to be
+  // refused without `--scope-decision-id` because with no scope there is no
+  // `below_threshold` to allow it. Since `D-0157` a `revise` names an approval
+  // either way -- typed, or drawn from the lap being revised -- so the pairing
+  // rule is gone and the flag stands on its own. What a scope with no
+  // `below_threshold fix_unread` allows is still the verdict's answer.
 
   const text = (name: string): string | null => {
     const value = values[name];

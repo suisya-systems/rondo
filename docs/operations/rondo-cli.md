@@ -740,12 +740,38 @@ branch has every lap's commits on it, so one pull request shows the whole reques
 after the original request. rondo composes no part of what a person wrote: continuo gets the
 instruction byte for byte as the gate's answer, and the prompt gets it byte for byte too.
 
+**The second lap spends an approved scope, and you do not have to know which one** (`D-0157`).
+`--scope-decision-id ID` names the approval and always wins. Leave it off and rondo draws the
+approval the lap you are revising was admitted under -- that approval itself, never a successor that
+replaced it -- and says which one it drew, and why it is that one, in a line before the gate is
+walked:
+
+```console
+spending approval 'scope-decision-scope-1789270620294-1789270953820', the approval iteration 'lap9-002' was admitted under
+```
+
+That line is the whole of the report: there is no flag that keeps a correction off the approval's
+budget, and the gate is still your answer, walked under your `--actor-id`. A correction of a lap that
+ran on a budget belongs to that budget, which is what lap 9 got wrong
+(`docs/operations/lap-9-dogfood.md` N-33): `revise` took no scope there, so the fix of a review
+finding ran on none and the round the scope exists to count was not counted.
+
+**A lap with no approval to draw is refused, and nothing is sent.** A lap admitted under no scope
+records no admission to read one off; that refuses before the gate is touched, naming the reason and
+`--scope-decision-id` as what answers it. There is no fallback to a second lap outside every
+approval. An approval that *is* drawn but is expired, **superseded**, or out of laps is refused by
+the scope's verdict instead, with the test that refused it, the stop written into the request's
+thread -- which is rondo asking you -- and the gate left at its stage. A superseded approval is not
+quietly traded for the successor that replaced it: answer the stop, or name with
+`--scope-decision-id` the approval this correction belongs to.
+
 **Nothing here happens on its own.** A revision is a person typing the command; there is no retry
 loop, no bound to reach, and no path into `revise` that does not start with a keyboard. Revise as
 many times as the work needs -- each one costs a lap.
 
 Everything `revise` can refuse, it refuses before it touches the gate, because a walked gate cannot
-be taken back: a plan whose identifiers will not validate, a successor id the store already holds, a
+be taken back: an approval it can neither draw nor find named, a plan whose identifiers will not
+validate, a successor id the store already holds, a
 topic branch git says exists, a workspace path that is already there, a gate continuo has closed
 already -- and a run id continuo's control plane already holds, which rondo asks `run show` about
 (`D-0031`). That last one matters when rondo's store and the control plane have drifted apart: a
@@ -1317,7 +1343,10 @@ node bin/rondo.mjs decide-scope --scope-id scope-0001 --scope-digest <digest fro
 - **Spending it is somebody else's flag.** `start --scope-decision-id ID` and
   `retry --iteration-id ID --successor-id ID --scope-decision-id ID` are what admit a lap under an
   approved scope; both are refused, with the test that refused them and spending nothing, unless
-  every test of the scope passes.
+  every test of the scope passes. **`revise` spends one too, and is the one verb that does not need
+  the flag**: with it left off, the approval the lap being revised was admitted under is drawn from
+  the record and said in a line before the gate is walked, and a lap with none to draw is refused
+  rather than corrected on no budget (5.1, `D-0157`).
 
 ---
 

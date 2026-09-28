@@ -35,6 +35,7 @@ import {
   readingRangeOf,
   reviewGate,
   reviewLines,
+  reviseApproval,
   revisionBlocker,
   sayGateOpen,
   transcriptPort,
@@ -370,14 +371,17 @@ test("--prompt and --prompt-file together are refused rather than ranked", () =>
   }
 });
 
-test("D-0098 rule 5.2: --closing-fix reaches revise with a scope, and is refused without one", () => {
+test("D-0098 rule 5.2: --closing-fix reaches revise, with or without a named scope", () => {
   const base = ["revise", "--actor-id", "me", "--body=fix", "--iteration-id", "i-2"];
   const scoped = parseCommand([...base, "--scope-decision-id", "sd-1", "--closing-fix"]);
   expect(scoped.kind === "parsed" && scoped.parsed.closingFix).toBe(true);
   const plain = parseCommand([...base, "--scope-decision-id", "sd-1"]);
   expect(plain.kind === "parsed" && plain.parsed.closingFix).toBe(false);
+  // D-0157: the approval is drawn when nobody names one, so the flag no longer
+  // needs --scope-decision-id beside it to have a scope to be the option of.
   const bare = parseCommand([...base, "--closing-fix"]);
-  expect(bare.kind === "refused" ? bare.reason : "").toContain("--scope-decision-id");
+  expect(bare.kind === "parsed" && bare.parsed.closingFix).toBe(true);
+  expect(bare.kind === "parsed" && bare.parsed.scopeDecisionId).toBeNull();
   // Only revise takes it.
   expect(parseCommand(["publish", "--actor-id", "me", "--closing-fix"]).kind).toBe("refused");
 });
@@ -2834,6 +2838,71 @@ test("a request that names one issue here closes it, and nothing else does (rond
   expect(body("https://ghe.example.com/suisya-systems/rondo/issues/9")).toContain(
     "Refs https://ghe.example.com/suisya-systems/rondo/issues/9",
   );
+});
+
+/**
+ * The draw itself, over the one function (`D-0157` rules 1, 2 and 3).
+ *
+ * **What it does not say, and where that is said.** These are the values
+ * `reviseApproval` answers with; whether the command charges them, prints them
+ * before the walk and stops on a refusal is the wiring, and a test here would
+ * pass with the call absent. The refusal that never reaches the seam is driven as
+ * a command in `test/access/scope-stop.test.ts`, and the charged approval, the
+ * line before the walk and the supersession stop are driven as one in
+ * `test/access/press-path.test.ts`, where a real lap opens the gate they need.
+ */
+test("D-0157: revise draws the approval its predecessor was admitted under, and refuses when it cannot", async () => {
+  // `i-scoped` ran under sd-1 and nothing raised it; `i-raised`'s approval was
+  // replaced by an approved successor, sd-2, and `scopeTip` would say so;
+  // `i-bare` records no admission at all.
+  const admitting: Record<string, string> = { "i-scoped": "sd-1", "i-raised": "sd-old" };
+  const record = {
+    scopeDecisionAdmitting: async (id: string) => admitting[id] ?? null,
+    scopeTip: async (decision: string) =>
+      decision === "sd-old"
+        ? { kind: "tip" as const, scopeDecisionId: "sd-2" }
+        : { kind: "tip" as const, scopeDecisionId: decision },
+  };
+
+  // Named always wins, and says nothing back: the person chose it at this keyboard.
+  expect(await reviseApproval(record, "i-scoped", "sd-typed")).toEqual({
+    kind: "spending",
+    scopeDecisionId: "sd-typed",
+    saying: null,
+  });
+  // A lap with no approval of its own is still revised under one that is named.
+  expect(await reviseApproval(record, "i-bare", "sd-typed")).toMatchObject({
+    kind: "spending",
+    scopeDecisionId: "sd-typed",
+  });
+
+  // Omitted: the admission row's approval, named in one line with why it is that one.
+  const drawn = await reviseApproval(record, "i-scoped", null);
+  expect(drawn).toMatchObject({ kind: "spending", scopeDecisionId: "sd-1" });
+  expect(drawn.kind === "spending" ? drawn.saying : "").toBe(
+    "spending approval 'sd-1', the approval iteration 'i-scoped' was admitted under",
+  );
+
+  // D-0157 rule 2: the approval on the record, and not the approved successor
+  // that replaced it. What is drawn for `i-raised` is sd-old, which the verdict
+  // then refuses at its `superseded` test -- the stop the person answers. Moving
+  // to sd-2 here would spend an approval nobody gave this correction, so the
+  // successor's id must not appear in what is drawn or in what is said.
+  const raised = await reviseApproval(record, "i-raised", null);
+  expect(raised).toMatchObject({ kind: "spending", scopeDecisionId: "sd-old" });
+  const said = raised.kind === "spending" ? (raised.saying ?? "") : "";
+  expect(said).toBe(
+    "spending approval 'sd-old', the approval iteration 'i-raised' was admitted under",
+  );
+  expect(said).not.toContain("sd-2");
+
+  // Nothing to draw stops there, and points at the flag rather than running the
+  // correction on no budget (lap 9's N-33).
+  const bare = await reviseApproval(record, "i-bare", null);
+  expect(bare.kind).toBe("refused");
+  const reason = bare.kind === "refused" ? bare.reason : "";
+  expect(reason).toContain("iteration 'i-bare' records no admission against any scope");
+  expect(reason).toContain("--scope-decision-id ID");
 });
 
 test("D-0149: the lap a carry on starts again is a stopped or lost one with an approval in force", async () => {

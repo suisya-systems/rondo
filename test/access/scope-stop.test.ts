@@ -14,7 +14,7 @@ import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test, vi } from "vitest";
 
-import { commandScopedRetry, commandStart, main } from "../../src/access/cli.js";
+import { commandRevise, commandScopedRetry, commandStart, main } from "../../src/access/cli.js";
 import { parseCommand } from "../../src/access/cli-parse.js";
 import { admit, type ReportingPorts, reportToRequest, resume } from "../../src/access/conductor.js";
 import { consoleSeams } from "../../src/access/console.js";
@@ -1898,6 +1898,92 @@ test(
       { paths: "[]", author_kind: "operator", author_id: "oidc|operator-1" },
     ]);
     expect((await captured(argv, environment)).code).not.toBe(0);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+// --- rondo#228: the approval a typed `revise` draws, over the command itself --
+
+/**
+ * `rondo revise` with `--scope-decision-id` left off, driven as the terminal
+ * drives it (`D-0157`).
+ *
+ * **Why the command and not `reviseApproval`.** What the drawn approval is worth
+ * is a property of the wiring: the draw happens before anything is read from the
+ * seam, its refusal is the command's exit, and nothing of the gate or the
+ * successor's row moves behind it. A test of the returned value would pass with
+ * that wiring absent.
+ *
+ * **The continuo handle is one this process never issued**, which is the marker
+ * that says how far the command got: `run()` refuses such a handle inside
+ * itself, so a case that never mentions it never reached the seam
+ * (`test/continuo/invoker.test.ts`'s argument). The success side and the
+ * verdict's own refusal for a superseded approval need a real gate, which only a
+ * real lap opens: both are driven as this same command in
+ * `test/access/press-path.test.ts`.
+ */
+test(
+  "D-0157: a typed revise over a lap with no approval refuses before the seam, and touches nothing",
+  async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "rondo-revise-drawn-")), "rondo.sqlite3");
+    const h = await harness(path);
+    // A lap at a gate, admitted under no scope at all: the row `revise` picks as
+    // the one waiting, and the row with no `admission` consumption to read.
+    const report = await admit(
+      h.reporting,
+      h.advisory,
+      PLAN,
+      POLICY,
+      "i-unapproved",
+      null,
+      null,
+      ROOT,
+    );
+    expect(report.status).toBe("awaiting_human");
+    const parsed = parseCommand([
+      "revise",
+      "--actor-id",
+      "oidc|operator-1",
+      "--body=cap the backoff",
+      "--iteration-id",
+      "i-second",
+    ]);
+    if (parsed.kind !== "parsed") throw new Error("the revise did not parse");
+    const out: string[] = [];
+    const write = consoleSeams.write;
+    const writeError = consoleSeams.writeError;
+    consoleSeams.write = (text: string) => void out.push(text);
+    consoleSeams.writeError = (text: string) => void out.push(text);
+    let code: number;
+    try {
+      code = await commandRevise(
+        parsed.parsed,
+        { RONDO_APPROVER: "oidc|operator-1" },
+        h.store,
+        path,
+        {} as never,
+        {} as never,
+        { cliPath: "/opt/continuo/dist/cli.js", revision: "0".repeat(40) },
+      );
+    } finally {
+      consoleSeams.write = write;
+      consoleSeams.writeError = writeError;
+    }
+    // Refused for the draw's own reason, and not for continuo's absence: the
+    // unissued handle's message would be here if the preflight had been reached.
+    expect(code).toBe(2);
+    const text = out.join("");
+    expect(text).toContain("iteration 'i-unapproved' records no admission against any scope");
+    expect(text).toContain("--scope-decision-id ID");
+    expect(text).not.toContain("did not issue");
+    // Nothing moved: the gate is unanswered, the row is where it was, no second
+    // lap exists, and no consumption was written against any approval.
+    const first = await h.store.read("i-unapproved");
+    if (first.kind !== "read") throw new Error("the gated lap would not read");
+    expect(first.record.status).toBe("awaiting_human");
+    expect(first.record.gateAnswer).toBeNull();
+    expect((await h.store.read("i-second")).kind).toBe("absent");
+    expect(h.consumptions()).toBe(0);
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );

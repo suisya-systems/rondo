@@ -354,14 +354,19 @@ export const USAGE = `rondo - the operator surface for delegated work
                           into the pull request, as your claim: rondo did not
                           watch it run and does not say it did
   rondo revise --actor-id ID --body=TEXT [--iteration-id ID]
-               [--scope-decision-id ID [--closing-fix]]
+               [--scope-decision-id ID] [--closing-fix]
                           answer the gate with a change to make, and run a
                           second lap that continues from the first one's
                           branch. The second lap's run id, topic branch and
                           workspace are derived from --iteration-id, the same
                           way rondo start mints the first lap's.
-                          --scope-decision-id spends an approved scope on the
-                          second lap: the gate is still your answer, and it is
+                          The second lap spends an approved scope: the one
+                          --scope-decision-id names, or, with the flag left
+                          off, the approval the lap being revised was admitted
+                          under, drawn from the record and said in a line
+                          before the gate is walked. A lap with no approval to
+                          draw is refused there rather than corrected on no
+                          budget. The gate is still your answer, and it is
                           not touched unless every test of the scope passes.
                           --closing-fix makes it the one closing lap a scope
                           with below_threshold fix_unread allows after the
@@ -7738,6 +7743,76 @@ function closingFindings(reading: LapReading | null): readonly ClosingFinding[] 
   }));
 }
 
+/** The approval a typed `revise` spends, or the reason it drew none (`D-0157`). */
+export type ReviseApproval =
+  | {
+      readonly kind: "spending";
+      readonly scopeDecisionId: string;
+      /** The one line said before the walk, null for an approval the person named. */
+      readonly saying: string | null;
+    }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * Which approval `rondo revise` spends, and what it says about drawing it
+ * (rondo#228, `D-0157`).
+ *
+ * **`--scope-decision-id` still wins, and says nothing.** A person who names an
+ * approval has said which budget this correction belongs to, and the value is
+ * passed through for the verdict to test, as `D-0070` section 1.4 has it.
+ *
+ * **Left off, it is drawn from the record rather than from the operator's
+ * memory.** The lap being revised carries an `admission` consumption row naming
+ * the approval it ran under, so the id a person used to copy off an earlier
+ * screen is already written down, and that row's approval -- **that one, and no
+ * relative of it** -- is what the correction is spent on.
+ *
+ * **Nothing to draw refuses, and never falls back to a lap outside every
+ * approval.** A lap with no admission row leaves rondo with no approval it was
+ * given and no licence to pick one. An unscoped correction of a scoped lap is
+ * lap 9's N-33 (`docs/operations/lap-9-dogfood.md`), and this is the path it
+ * took, so the refusal names the flag a person answers it with instead.
+ *
+ * **An approval drawn but no longer usable stops the command, and this function
+ * does not look for another one.** Expired, out of laps, held by an open ask and
+ * -- the case worth naming, because there *is* a nearby approval to reach for --
+ * **superseded by an approved successor** are all the verdict's answer, computed
+ * before the walk, refusing with its own test and writing `D-0066` rule 4.4's
+ * stop (`D-0070` section 2.1). Walking to the chain's approved tip
+ * (`approvalTip`, `D-0074` section 2) would carry the correction on under an
+ * approval nobody gave it: the successor is a person's approval of a *rewritten*
+ * scope, and a lap they have not been asked about is not inside it. So the
+ * supersession refusal is relayed as the stop it is, and the person is asked
+ * (`D-0157` rule 2).
+ */
+export async function reviseApproval(
+  record: Pick<AdvisoryRecord, "scopeDecisionAdmitting">,
+  predecessorId: string,
+  named: string | null,
+): Promise<ReviseApproval> {
+  if (named !== null) {
+    return { kind: "spending", scopeDecisionId: named, saying: null };
+  }
+  const admitted = await record.scopeDecisionAdmitting(predecessorId);
+  if (admitted === null) {
+    return {
+      kind: "refused",
+      reason:
+        `revise drew no approval for the second lap: iteration '${predecessorId}' records no ` +
+        "admission against any scope, so there is no approved budget for a correction of it to " +
+        "be counted against. rondo does not start a lap outside every approval to get around " +
+        "that. Name the approval this correction spends with --scope-decision-id ID.",
+    };
+  }
+  return {
+    kind: "spending",
+    scopeDecisionId: admitted,
+    saying:
+      `spending approval '${admitted}', the approval iteration '${predecessorId}' was ` +
+      "admitted under",
+  };
+}
+
 /**
  * Door two and a half: answer the gate with a change, and run a second lap.
  *
@@ -7765,7 +7840,7 @@ function closingFindings(reading: LapReading | null): readonly ClosingFinding[] 
  * {@link import("../refrain/revision.js").revisionPlan}. rondo writes no part of
  * either (`D-0009`).
  */
-async function commandRevise(
+export async function commandRevise(
   parsed: ParsedCommand,
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
@@ -7823,6 +7898,16 @@ async function commandRevise(
     say(`iteration '${record.id}' is ${record.status}, and no gate is open on it.`);
     say("There is nothing for a person to answer yet.");
     return 0;
+  }
+
+  // **The approval this lap spends, resolved before anything is read from the
+  // seam** (rondo#228, `D-0157`): the one named, or the one the lap being
+  // revised was admitted under. Drawing it is reads only, so a refusal here
+  // costs nothing and reaches the person before the preflight's round trips.
+  const ledger = openAdvisoryRecord(storePath);
+  const spending = await reviseApproval(ledger, record.id, parsed.scopeDecisionId);
+  if (spending.kind === "refused") {
+    return refuse(spending.reason);
   }
 
   // **Composed, read and preflighted first. Nothing below the walk is undoable.**
@@ -7916,106 +8001,77 @@ async function commandRevise(
     return null;
   };
 
-  if (parsed.scopeDecisionId !== null) {
-    // D-0070: the second lap is the `redo` arm's admission, tested as an
-    // in-scope retry is and as the predecessor's request (D-0061 rule 4). The
-    // text is carried and not tested (section 3).
-    const outcome = await admitUnderScope(
-      {
-        store,
-        record: openAdvisoryRecord(storePath),
-        nowMs: Date.now,
-        beforeAdmit: answerGate,
-        admit: (plan, id, supersedes, requestMessageId, scopeSpend) =>
-          withReservedNumbers(store, ready.numbering, plan, (numbered, numbers) =>
-            admit(
-              ports,
-              advisory,
-              numbered,
-              START_POLICY,
-              id,
-              supersedes,
-              null,
-              requestMessageId,
-              scopeSpend,
-              null,
-              numbers,
-            ),
-          ),
-      },
-      parsed.scopeDecisionId,
-      {
-        kind: "redo",
-        iterationId: successorId,
-        plan: successor.plan,
-        predecessorId: record.id,
-        requestMessageId: record.requestMessageId,
-        closing: parsed.closingFix,
-      },
-    );
-    if (outcome.kind === "refused") {
-      consoleSeams.writeError(
-        gateAnswered
-          ? "The gate was answered with your instruction, and the store then refused the " +
-              "second lap, so no second lap was started (D-0070 section 2.4).\n"
-          : "The gate was not touched: your instruction was not sent.\n",
-      );
-    }
-    return await finishScopedAdmission(
-      outcome,
-      "revise",
-      continuo,
-      store,
-      successorId,
-      ports.thread ?? null,
-    );
+  // **Which approval is being spent, and why, said before the gate is walked**
+  // (rondo#228): the verdict is computed inside `admitUnderScope` and the walk
+  // is the step it runs after it, so a line said here is said before anything
+  // was sent or spent. An approval the person typed is not reported back to
+  // them; a drawn one is, because they did not choose it at this keyboard.
+  if (spending.saying !== null) {
+    say(spending.saying);
   }
 
-  const halted = await answerGate();
-  if (halted !== null) {
-    return halted;
-  }
-  // **The predecessor's id travels beside the plan, not inside it** (D-0030
-  // rule 1). It is the one place in rondo that knows this lap is a revision of
-  // that one at the moment the row is written, and until this argument existed
-  // the succession survived only as `base_branch` equalling the predecessor's
-  // `topic_branch` -- a value a reader could guess a relationship from, which
-  // is what `D-0027` rule 9 deferred and rondo#33 asked for.
-  const second = await withReservedNumbers(
-    store,
-    ready.numbering,
-    successor.plan,
-    (plan, numbers) =>
-      admit(
-        ports,
-        advisory,
-        plan,
-        START_POLICY,
-        successorId,
-        record.id,
-        null,
-        // Inherited by `reserve()` from the row above whatever is passed; this is
-        // the same value, read here so the type can say a lap always has one.
-        record.requestMessageId,
-        null,
-        null,
-        numbers,
-      ),
+  // **The second lap is the `redo` arm's admission** (D-0070), tested as an
+  // in-scope retry is and as the predecessor's request (D-0061 rule 4). The
+  // text is carried and not tested (section 3). **Every typed revise takes this
+  // road now** (`D-0157`): with the approval drawn when nobody types one, the
+  // unscoped admission this command used to fall back to is not reachable, and
+  // a correction of a lap rondo cannot count has been refused above rather than
+  // run on no budget.
+  const outcome = await admitUnderScope(
+    {
+      store,
+      record: ledger,
+      nowMs: Date.now,
+      beforeAdmit: answerGate,
+      admit: (plan, id, supersedes, requestMessageId, scopeSpend) =>
+        withReservedNumbers(store, ready.numbering, plan, (numbered, numbers) =>
+          admit(
+            ports,
+            advisory,
+            numbered,
+            START_POLICY,
+            id,
+            supersedes,
+            null,
+            requestMessageId,
+            scopeSpend,
+            null,
+            numbers,
+          ),
+        ),
+    },
+    spending.scopeDecisionId,
+    {
+      kind: "redo",
+      iterationId: successorId,
+      plan: successor.plan,
+      // **The predecessor's id travels beside the plan, not inside it** (D-0030
+      // rule 1): the one place in rondo that knows this lap is a revision of
+      // that one at the moment the row is written. Until it existed the
+      // succession survived only as `base_branch` equalling the predecessor's
+      // `topic_branch` -- a value a reader could guess a relationship from,
+      // which is what `D-0027` rule 9 deferred and rondo#33 asked for.
+      predecessorId: record.id,
+      requestMessageId: record.requestMessageId,
+      closing: parsed.closingFix,
+    },
   );
-  sayReport(second);
-  if (second.status === "awaiting_human") {
-    await sayGateOpen(() =>
-      takeModelReading(
-        modelReviewPorts(continuo, store, ports.thread ?? null),
-        second.iterationId ?? successorId,
-      ),
+  if (outcome.kind === "refused") {
+    consoleSeams.writeError(
+      gateAnswered
+        ? "The gate was answered with your instruction, and the store then refused the " +
+            "second lap, so no second lap was started (D-0070 section 2.4).\n"
+        : "The gate was not touched: your instruction was not sent.\n",
     );
-    return 0;
   }
-  if (second.iterationId === null) {
-    return 2;
-  }
-  return second.status === "closed" ? 0 : 1;
+  return await finishScopedAdmission(
+    outcome,
+    "revise",
+    continuo,
+    store,
+    successorId,
+    ports.thread ?? null,
+  );
 }
 
 /**
