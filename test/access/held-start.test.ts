@@ -306,6 +306,8 @@ async function heldAndWaiting(w: Awaited<ReturnType<typeof lines>>) {
   expect(answer).toContain(EN.startWaitsHeld);
   expect(answer).not.toContain(EN.startRefusedHeld);
   expect(answer).toContain(HOLDER_WORDS);
+  // A still runs: named, with no release to offer (rondo#553).
+  expect(answer).not.toContain("?release=");
   expect((await w.store.read(iteration)).kind).toBe("absent");
   expect(seams.admitted).toEqual([iteration]);
 
@@ -320,6 +322,11 @@ async function heldAndWaiting(w: Awaited<ReturnType<typeof lines>>) {
   const threadWaiting = await w.thread();
   expect(threadWaiting).toContain(EN.startWaitsHeld);
   expect(threadWaiting).not.toContain(EN.nextStepStart);
+  // Both name the work holding the files, and offer no release while it runs (rondo#553).
+  const card = threadWaiting.slice(threadWaiting.indexOf(EN.startWaitsHeld));
+  expect(card.slice(0, card.indexOf("</section>"))).toContain(HOLDER_WORDS);
+  expect(waiting).not.toContain("?release=");
+  expect(threadWaiting).not.toContain("?release=");
 
   // A second form of the same plan (another tab) keeps the one waiting row, so
   // the tick cannot start the plan twice by itself.
@@ -348,7 +355,18 @@ async function heldAndWaiting(w: Awaited<ReturnType<typeof lines>>) {
   expect((await w.store.read(iteration)).kind).toBe("absent");
   expect((await w.store.heldStarts()).map((held) => held.iterationId)).toEqual([iteration]);
   expect(w.logged.filter((line) => line.includes("finished work still holds"))).toHaveLength(1);
-  expect(await w.screen()).toContain(EN.startWaitsHeld);
+  // A finished: the scope screen and the thread's next step both link to its
+  // release, where the press answer did before (rondo#553).
+  const finished = await w.screen();
+  expect(finished).toContain(EN.startWaitsHeld);
+  expect(finished.slice(finished.indexOf('id="start-waits"'))).toContain(
+    'href="/?release=lap-a&amp;lang=en"',
+  );
+  const threadFinished = await w.thread();
+  const finishedCard = threadFinished.slice(threadFinished.indexOf(EN.startWaitsHeld));
+  expect(finishedCard.slice(0, finishedCard.indexOf("</section>"))).toContain(
+    'href="/?release=lap-a&amp;lang=en"',
+  );
   return iteration;
 }
 

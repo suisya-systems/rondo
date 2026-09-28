@@ -7533,12 +7533,16 @@ async function admitScopedPlan(
     // -- so the refusal can name it and offer its release where the press was.
     const read = await record.threadMessages();
     const messages = read.kind === "read" ? read.messages : [];
+    // Whether each holder is still running (rondo#553): only a finished one's
+    // release is offered, since the release screen refuses a line in flight.
+    const ledger = await store.laneLedger().catch(() => []);
     const holders = await Promise.all(
       held.holders.map(async ({ lineageId }) => {
         const root = await store.read(lineageId);
         return {
           lineageId,
           request: root.kind === "read" ? requestWords(messages, root.record) : null,
+          inFlight: ledger.find((line) => line.lineageId === lineageId)?.inFlight ?? true,
         };
       }),
     );

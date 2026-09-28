@@ -742,7 +742,12 @@ export interface Started {
   readonly why?: StartRefusal;
   readonly test?: string;
   /** On a start held by files: each line holding them, by its first lap and its request's words. */
-  readonly holders?: readonly { readonly lineageId: string; readonly request: string | null }[];
+  readonly holders?: readonly {
+    readonly lineageId: string;
+    readonly request: string | null;
+    /** Still running: its release is not offered (rondo#553). */
+    readonly inFlight: boolean;
+  }[];
 }
 
 export type ScopedStartFromWeb = (input: ScopedStartInput) => Promise<Started>;

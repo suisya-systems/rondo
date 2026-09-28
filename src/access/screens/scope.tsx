@@ -1793,20 +1793,7 @@ async function scopeApproved(
             held.scopeDecisionId === decisionId &&
             held.planDigest === runsOn.planDigest,
         );
-  const threads = waits === undefined ? null : await ports.record.threadMessages();
-  const holding =
-    waits === undefined
-      ? []
-      : await Promise.all(
-          (await ports.store.laneLedger())
-            .filter((line) => line.repository === waits.repository && line.paths.length > 0)
-            .map(async (line) => {
-              const root = await ports.store.read(line.lineageId);
-              return root.kind === "read" && threads?.kind === "read"
-                ? requestWords(threads.messages, root.record)
-                : null;
-            }),
-        );
+  const holding = waits === undefined ? [] : await waitHolders(ports, waits.repository);
   return (
     <>
       {/* **That it is approved comes first** (D-0136, rondo#496): on lap 18 a
@@ -1844,14 +1831,7 @@ async function scopeApproved(
       ) : waits !== undefined ? (
         <div id="start-waits" class="space-y-1.5">
           {note(wording.startWaitsHeld)}
-          {holding.map((request) => (
-            <p class="flex flex-wrap items-baseline gap-x-2 text-body leading-5">
-              <span class="text-muted-foreground">{wording.planHeldBy}</span>
-              <span class="min-w-0 truncate" lang="">
-                {request === null ? "" : firstLine(request)}
-              </span>
-            </p>
-          ))}
+          {holding.map((holder) => heldByLine(wording, holder, ports.releasable === true))}
         </div>
       ) : (
         <form
@@ -1974,5 +1954,59 @@ async function predecessorLine(
     spent.admissions,
     money(spent.readCostUsd),
     spent.unreadLaps,
+  );
+}
+
+/** A line holding files a waiting start needs, by its request's words (rondo#439). */
+export interface WaitHolder {
+  readonly lineageId: string;
+  readonly request: string | null;
+  readonly inFlight: boolean;
+}
+
+/**
+ * **Every line holding files in the repository a person's start waits on**
+ * (D-0158): the start asks for the whole repository, so each of them holds it.
+ */
+export async function waitHolders(ports: WebPorts, repository: string): Promise<WaitHolder[]> {
+  const threads = await ports.record.threadMessages();
+  return Promise.all(
+    (await ports.store.laneLedger())
+      .filter((line) => line.repository === repository && line.paths.length > 0)
+      .map(async (line) => {
+        const root = await ports.store.read(line.lineageId);
+        return {
+          lineageId: line.lineageId,
+          request:
+            root.kind === "read" && threads.kind === "read"
+              ? requestWords(threads.messages, root.record)
+              : null,
+          inFlight: line.inFlight,
+        };
+      }),
+  );
+}
+
+/**
+ * One holder of a waiting start, **with its release once it has finished**
+ * (rondo#553): a finished line that will never publish is released there, and
+ * the wait then ends by itself. A line still running is only named.
+ */
+export function heldByLine(wording: Chrome, holder: WaitHolder, releasable: boolean) {
+  return (
+    <p class="flex flex-wrap items-baseline gap-x-2 text-body leading-5">
+      <span class="text-muted-foreground">{wording.planHeldBy}</span>
+      <span class="min-w-0 truncate" lang="">
+        {holder.request === null ? "" : firstLine(holder.request)}
+      </span>
+      {holder.inFlight || !releasable ? null : (
+        <a
+          href={viewHref({ kind: "release", iterationId: holder.lineageId }, wording.lang)}
+          class="text-link underline-offset-2 hover:underline"
+        >
+          {wording.releaseLink}
+        </a>
+      )}
+    </p>
   );
 }

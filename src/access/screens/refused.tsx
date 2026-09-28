@@ -29,10 +29,14 @@ export interface Refused {
   /**
    * Each line holding the files a start needed (rondo#439), named by the words
    * the person wrote for its request (D-0076 rule 3.3), with its release where
-   * the host holds the release press: the release screen says what releasing
-   * does, and has the press.
+   * the host holds the release press and the line has finished (rondo#553):
+   * the release screen says what releasing does, and has the press.
    */
-  readonly holders: readonly { readonly lineageId: string; readonly request: string | null }[];
+  readonly holders: readonly {
+    readonly lineageId: string;
+    readonly request: string | null;
+    readonly inFlight: boolean;
+  }[];
   readonly releasable: boolean;
 }
 
@@ -62,13 +66,15 @@ export async function refusedPage(wording: Chrome, refused: Refused): Promise<st
           >
             {refused.line}
           </p>
-          {refused.holders.map(({ lineageId, request }) => (
+          {refused.holders.map(({ lineageId, request, inFlight }) => (
             <section class={`held-by ${CARD} space-y-3`}>
               <h3 class={CARD_HEADING}>{wording.planHeldBy}</h3>
               <p class="text-body leading-6 wrap-anywhere" lang="">
                 {request === null ? "" : firstLine(request)}
               </p>
-              {refused.releasable ? (
+              {/* A finished holder's release only (rondo#553): one still
+                  running cannot be released, so the link would lead nowhere. */}
+              {refused.releasable && !inFlight ? (
                 <a
                   href={viewHref({ kind: "release", iterationId: lineageId }, wording.lang)}
                   class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}

@@ -239,7 +239,7 @@ import { goalScopeView } from "./screens/goal-scope.js";
 import { mergeView } from "./screens/merge.js";
 import { publishView } from "./screens/publish.js";
 import { releaseView } from "./screens/release.js";
-import { scopeView } from "./screens/scope.js";
+import { heldByLine, scopeView, waitHolders } from "./screens/scope.js";
 import { type Chrome, EN, SHIPPED_SETS } from "./wording.js";
 
 /**
@@ -2691,13 +2691,17 @@ async function threadActs(
   // the host's tick starts it by itself, so the step is not the person's.
   // Under the approval in force only: a wait kept under one since replaced
   // will not start, and must not hide the new approval's start (Codex).
-  const waitsHeld =
-    (standing?.kind === "decided" || standing?.kind === "own") &&
-    (await ports.store.heldStarts()).some(
-      (held) =>
-        held.requestMessageId === requestMessageId &&
-        held.scopeDecisionId === standing.scopeDecisionId,
-    );
+  const heldStart =
+    standing?.kind === "decided" || standing?.kind === "own"
+      ? (await ports.store.heldStarts()).find(
+          (held) =>
+            held.requestMessageId === requestMessageId &&
+            held.scopeDecisionId === standing.scopeDecisionId,
+        )
+      : undefined;
+  const waitsHeld = heldStart !== undefined;
+  // Named, as the scope screen names them, with a finished one's release (rondo#553).
+  const waitHolding = heldStart === undefined ? [] : await waitHolders(ports, heldStart.repository);
   const scopeHref = (decisionId: string | null) =>
     viewHref(
       { kind: "scope", messageId: requestMessageId, rounds: null, decisionId, plan: null },
@@ -2822,6 +2826,7 @@ async function threadActs(
     <section class="next-step mb-4 rounded-lg border border-run/35 bg-run-wash px-4 py-3">
       <h2 class="text-meta leading-5 font-semibold text-run-ink">{wording.nextStepRondoHeading}</h2>
       <p class="mt-1 text-body leading-6">{wording.startWaitsHeld}</p>
+      {waitHolding.map((holder) => heldByLine(wording, holder, ports.releasable === true))}
     </section>
   );
   const next =

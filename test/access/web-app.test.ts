@@ -2827,14 +2827,20 @@ function draftedPorts(
 
 test("(start-plan) rondo#439, rondo#284: a start held by files names the holding request and offers its release, with no terminal; one rondo keeps waiting is a 202 with no second press", async () => {
   const notThis = async () => await Promise.resolve({ ok: false, note: "not this route" });
-  const held = (release: boolean, why: "startRefusedHeld" | "startWaitsHeld"): ServedPorts =>
+  const held = (
+    release: boolean,
+    why: "startRefusedHeld" | "startWaitsHeld",
+    inFlight = false,
+  ): ServedPorts =>
     ({
       ...draftedPorts([], []),
       scope: new ScopePort(notThis, notThis, notThis, async () => ({
         ok: false,
         note: "Refused: held by line lap-14.",
         why,
-        holders: [{ lineageId: "lap-14", request: "Fix issue 200\nso the gate's report is kept" }],
+        holders: [
+          { lineageId: "lap-14", request: "Fix issue 200\nso the gate's report is kept", inFlight },
+        ],
       })),
       release: release ? new ReleasePort(async () => ({ ok: true, note: "" })) : null,
     }) as unknown as ServedPorts;
@@ -2870,6 +2876,21 @@ test("(start-plan) rondo#439, rondo#284: a start held by files names the holding
     stop.abort();
     expect(await closed).toBe(0);
   }
+  // A holder still running is named with no release (rondo#553): the release
+  // screen refuses a line in flight, so the link would lead nowhere.
+  const { base, stop, closed } = await served(createApp(held(true, "startWaitsHeld", true), TOKEN));
+  const running = await send(
+    base,
+    "/start-plan?lang=ja",
+    "POST",
+    pressHeaders(base),
+    planStartForm(),
+  );
+  expect(running.status).toBe(202);
+  expect(running.body.replaceAll("&#39;", "'")).toContain('lang="">Fix issue 200</p>');
+  expect(running.body).not.toContain("?release=");
+  stop.abort();
+  expect(await closed).toBe(0);
 });
 
 /** The drafted scope's form, as the page draws it (rondo#238 C2b). */
