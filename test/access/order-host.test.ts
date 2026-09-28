@@ -29,6 +29,7 @@ import { approvedSplits } from "../../src/access/drafted-view.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { draftedPlanRun } from "../../src/access/model-draft/host.js";
 import { type OrderHostPorts, orderHost } from "../../src/access/order-host.js";
+import type { Started } from "../../src/access/web-app.js";
 import type { SplitPayload } from "../../src/advisory/proposal.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan } from "../../src/refrain/plan.js";
@@ -126,6 +127,7 @@ function tick(after: readonly (number | undefined)[], answers: DraftedStartReadi
       started.push(index);
       return { ok: true, note: "" };
     },
+    held: null,
     now: () => 5,
     log: (line) => log.push(line),
   };
@@ -445,7 +447,9 @@ test("a held start is attempted only where no line holding files in its reposito
           // Finished, still holding: the attempt is where its landing is read.
           { repository: "/srv/b", paths: ["/"], inFlight: false } as never,
         ],
+        occupancy: async () => ({ live: 0, occupying: 0 }) as never,
       },
+      policy: { maxOccupying: 2, maxLive: 6 },
       start: async (one) => {
         attempted.push(one.iterationId);
         if (one.iterationId === "lap-throws") throw new Error("the store is locked");
@@ -467,6 +471,71 @@ test("a held start is attempted only where no line holding files in its reposito
   host.kick();
   await host.settled();
   expect(t.log.filter((line) => line.includes("lap-busy"))).toHaveLength(1);
+});
+
+test("a held start waits through a full host and a continuo not usable now, and ends only on a refusal waiting does not change (rondo#284)", async () => {
+  const t = tick([], []);
+  let occupying = 2;
+  // Each attempt's answer, and what the host holds once it has answered.
+  const answers: [Started, number][] = [];
+  const settled: [string, string][] = [];
+  let attempts = 0;
+  const one = {
+    iterationId: "lap-b",
+    requestMessageId: "r1",
+    scopeDecisionId: "sd-1",
+    planDigest: "sha256:p",
+    repository: "/srv/b",
+    heldAtMs: 1,
+  };
+  const host = orderHost({
+    ...t.ports,
+    held: {
+      store: {
+        heldStarts: async () => (settled.length === 0 ? [one] : []),
+        settleHeldStart: async (id, outcome) => {
+          settled.push([id, outcome]);
+        },
+        laneLedger: async () => [],
+        occupancy: async () => ({ live: occupying, occupying }) as never,
+      },
+      policy: { maxOccupying: 2, maxLive: 6 },
+      start: async () => {
+        attempts += 1;
+        const [answer, after] = answers.shift() ?? [{ ok: true, note: "" }, occupying];
+        occupying = after;
+        return answer;
+      },
+    },
+  });
+  const pass = async () => {
+    host.kick();
+    await host.settled();
+  };
+  // Full: not attempted at all, and said once.
+  await pass();
+  await pass();
+  expect(attempts).toBe(0);
+  // Room, but continuo is not usable now: it waits on.
+  occupying = 1;
+  answers.push([{ ok: false, why: "startRefusedNoContinuo", note: "continuo is not usable" }, 1]);
+  await pass();
+  // Room when it looked, refused as another lap took the slot: it waits on.
+  answers.push([{ ok: false, why: "startRefusedNotAdmitted", note: "Refused: 2 of 2." }, 2]);
+  occupying = 1;
+  await pass();
+  expect(attempts).toBe(2);
+  expect(settled).toEqual([]);
+  // Room, and refused for a reason waiting does not change: the wait ends.
+  occupying = 1;
+  answers.push([{ ok: false, why: "startRefusedNoPlan", note: "no such plan" }, 1]);
+  await pass();
+  expect(settled).toEqual([["lap-b", "no such plan"]]);
+  expect(t.log).toEqual([
+    "order    lap-b waits: this host has no room for another lap",
+    "order    lap-b waits: continuo is not usable now",
+    "order    lap-b: not started: no such plan",
+  ]);
 });
 
 // ---------------------------------------------------------------------------
@@ -665,6 +734,7 @@ test(
       start: async () => {
         throw new Error("nothing starts behind a first that did not land");
       },
+      held: null,
       now: () => 16_500,
       log: (said) => {
         throw new Error(said);

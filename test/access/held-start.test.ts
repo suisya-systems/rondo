@@ -14,7 +14,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test, vi } from "vitest";
-import { answerOnceReserved, releaseFromPage, startScopedFromPage } from "../../src/access/cli.js";
+import {
+  answerOnceReserved,
+  heldStartPort,
+  releaseFromPage,
+  startScopedFromPage,
+} from "../../src/access/cli.js";
 import { releasePublished } from "../../src/access/merge.js";
 import { orderHost } from "../../src/access/order-host.js";
 import { viewHref } from "../../src/access/page-logic/routes.js";
@@ -25,7 +30,12 @@ import { admittedPlan, planPayload, type RunPlan, readRunPlan } from "../../src/
 import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import { scopePayloadWithDefaults } from "../../src/store/records.js";
-import { advisoryRecord, type IterationStore, iterationStore } from "../../src/store/sqlite.js";
+import {
+  type AdvisoryRecord,
+  advisoryRecord,
+  type IterationStore,
+  iterationStore,
+} from "../../src/store/sqlite.js";
 import {
   AGENT_TYPE_INPUT,
   agentTypeDigestOf,
@@ -101,7 +111,8 @@ async function lines() {
   const dir = mkdtempSync(join(tmpdir(), "rondo-held-start-"));
   const storePath = join(dir, "store.db");
   const connection = new DatabaseSync(storePath);
-  const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+  const policy = { maxOccupying: 4, maxLive: 6 };
+  const store = iterationStore(connection, policy);
   const record = advisoryRecord(connection);
   seams.store = store;
   seams.admitted = [];
@@ -228,33 +239,31 @@ async function lines() {
   const never = async (): Promise<never> => {
     throw new Error("no split in this store");
   };
-  // `rondo web`'s order tick, with no split to walk and its held-start ports.
-  const tick = orderHost({
-    record,
-    splits: async () => [],
-    readiness: never,
-    readHolder: never,
-    start: never,
-    held: {
-      store,
-      start: async (held) =>
-        await start({
-          iterationId: held.iterationId,
-          requestMessageId: held.requestMessageId,
-          scopeDecisionId: held.scopeDecisionId,
-          planDigest: held.planDigest,
-        }),
-    },
-    now: Date.now,
-    log: (line) => logged.push(line),
-  });
+  // `rondo web`'s order tick, with no split to walk and its held-start port
+  // built by the function `rondo web` builds it with.
+  const tickOver = (over: Pick<AdvisoryRecord, "recordThreadMessage" | "approvalsInForce">) =>
+    orderHost({
+      record,
+      splits: async () => [],
+      readiness: never,
+      readHolder: never,
+      start: never,
+      held: heldStartPort(ENV, store, storePath, "ada", over, EN, policy),
+      now: Date.now,
+      log: (line) => logged.push(line),
+    });
+  const tick = tickOver(record);
   const scopePath = viewHref(
     { kind: "scope", messageId: "rB", rounds: null, decisionId: "decision-b", plan: null },
     "en",
   );
   const screen = async () => (await get(base, scopePath)).body.replaceAll("&#39;", "'");
+  const threadPath = viewHref({ kind: "thread", messageId: "rB", to: null }, "en");
+  const thread = async () => (await get(base, threadPath)).body.replaceAll("&#39;", "'");
   return {
     store,
+    tickOver,
+    thread,
     base,
     logged,
     screen,
@@ -318,6 +327,22 @@ async function heldAndWaiting(w: Awaited<ReturnType<typeof lines>>) {
   expect(waiting.slice(waiting.indexOf('id="start-waits"'))).toContain(HOLDER_WORDS);
   expect(waiting).not.toContain('id="start-form"');
   expect(waiting).not.toContain('action="/start?');
+  // The thread's next step says it waits, and no longer sends the person to start it.
+  const threadWaiting = await w.thread();
+  expect(threadWaiting).toContain(EN.startWaitsHeld);
+  expect(threadWaiting).not.toContain(EN.nextStepStart);
+
+  // A second form of the same plan (another tab) keeps the one waiting row, so
+  // the tick cannot start the plan twice by itself.
+  await w.store.recordHeldStart({
+    iterationId: "lap-other-tab",
+    requestMessageId: "rB",
+    scopeDecisionId: "decision-b",
+    planDigest: (await w.store.heldStarts())[0]?.planDigest ?? "",
+    repository: REPOSITORY,
+    heldAtMs: Date.now(),
+  });
+  expect((await w.store.heldStarts()).map((held) => held.iterationId)).toEqual([iteration]);
 
   // A tick while A runs attempts nothing: A cannot have landed.
   await w.pass();
@@ -356,6 +381,7 @@ async function startsByItself(w: Awaited<ReturnType<typeof lines>>, iteration: s
   const after = await w.screen();
   expect(after).not.toContain('id="start-waits"');
   expect(after).not.toContain(EN.startWaitsHeld);
+  expect(await w.thread()).not.toContain(EN.startWaitsHeld);
   expect(w.presses()).toBe(1);
 }
 
@@ -401,6 +427,41 @@ test(
       );
       expect(released.status).toBe(303);
       await startsByItself(w, iteration);
+    } finally {
+      await w.stop();
+    }
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a start that waited under an approval since retired ends its wait without asking admission, so no stop is written (rondo#284)",
+  async () => {
+    const w = await lines();
+    try {
+      const { iteration, pressed } = await pressStart(w);
+      expect(pressed.status).toBe(202);
+      await w.closeA();
+      expect(await releasePublished(w.store, "lap-a", "https://example.invalid/pr/1", 3_000)).toBe(
+        "Its files were released: its pull request is open.",
+      );
+      const before = seams.admitted.length;
+      const retired = w.tickOver({
+        recordThreadMessage: async (draft) => {
+          throw new Error(`nothing is written: ${draft.messageId}`);
+        },
+        approvalsInForce: async () => [],
+      });
+      retired.kick();
+      await retired.settled();
+      expect(seams.admitted.slice(before)).toEqual([]);
+      expect((await w.store.read(iteration)).kind).toBe("absent");
+      expect(await w.store.heldStarts()).toEqual([]);
+      expect(w.logged.at(-1)).toBe(
+        `order    ${iteration}: not started: the approval 'decision-b' it waited under is no longer in force`,
+      );
+      // The wait over, the scope screen draws its start again.
+      expect(await w.screen()).toContain('id="start-form"');
     } finally {
       await w.stop();
     }

@@ -219,7 +219,7 @@ import {
 import { isModelDrafterName } from "./model-draft/judgement.js";
 import { modelReviewPorts, takeModelReading } from "./model-review/host.js";
 import { modelReadingLines, retakeOffered, reviewRoundsAlong } from "./model-review/judgement.js";
-import { orderHost } from "./order-host.js";
+import { type OrderHostPorts, orderHost } from "./order-host.js";
 import type {
   ClaimReach,
   LapMaterialRead,
@@ -1700,24 +1700,16 @@ export async function main(
               );
             },
             // **And the person's own start that held files kept waiting**
-            // (rondo#284): the press's own path, id and input, answered once
-            // reserved for the split start's reason.
-            held: {
+            // (rondo#284).
+            held: heldStartPort(
+              environment,
               store,
-              start: async (held) =>
-                await answerOnceReserved(
-                  store,
-                  record,
-                  chromeFor(selected.tag),
-                  held,
-                  startScopedFromPage(environment, store, opened.path, sender.actorId, {
-                    iterationId: held.iterationId,
-                    requestMessageId: held.requestMessageId,
-                    scopeDecisionId: held.scopeDecisionId,
-                    planDigest: held.planDigest,
-                  }),
-                ),
-            },
+              opened.path,
+              sender.actorId,
+              record,
+              chromeFor(selected.tag),
+              bounds.policy,
+            ),
             now: Date.now,
             log: say,
           });
@@ -5970,6 +5962,53 @@ export async function startScopedFromPage(
 
 /** Every scoped start this process has in flight, by iteration id. */
 const starting = new Map<string, Promise<Started>>();
+
+/**
+ * **The order tick's port for a person's start that held files kept waiting**
+ * (rondo#284, D-0157): the press's own path, id and input, in the approver's
+ * name, answered once reserved for the split start's reason.
+ *
+ * **An approval no longer in force ends the wait without asking** admission:
+ * its scope test would refuse, and a refused test writes the asking message
+ * that stops the request (D-0066 rule 4.4) -- a stop the person never caused,
+ * for a press they made under an approval since replaced or retired.
+ */
+export function heldStartPort(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  record: Pick<AdvisoryRecord, "recordThreadMessage" | "approvalsInForce">,
+  words: Chrome,
+  policy: HostPolicy,
+): NonNullable<OrderHostPorts["held"]> {
+  return {
+    store,
+    policy,
+    start: async (held) => {
+      const inForce = await record.approvalsInForce();
+      if (!inForce.some((one) => one.scopeDecisionId === held.scopeDecisionId)) {
+        return {
+          ok: false,
+          why: "startRefusedNotAdmitted",
+          note: `the approval '${held.scopeDecisionId}' it waited under is no longer in force`,
+        };
+      }
+      return await answerOnceReserved(
+        store,
+        record,
+        words,
+        held,
+        startScopedFromPage(environment, store, storePath, approver, {
+          iterationId: held.iterationId,
+          requestMessageId: held.requestMessageId,
+          scopeDecisionId: held.scopeDecisionId,
+          planDigest: held.planDigest,
+        }),
+      );
+    },
+  };
+}
 
 /**
  * **A start press answers once its lap's row is there, not once the lap is at

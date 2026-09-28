@@ -760,7 +760,10 @@ export interface IterationStore {
   closingLapOf(iterationId: string): Promise<ClosingLap | null>;
   /**
    * rondo#284: keep a start refused by held files as waiting. **A second
-   * refusal of the same form keeps the one row**, waiting or settled.
+   * refusal of the same form keeps the one row**, waiting or settled, and **a
+   * second form of the same plan writes none while one waits** (two tabs, two
+   * forms): one waiting start per request, approval and plan, or the tick
+   * would start the plan twice by itself.
    */
   recordHeldStart(held: HeldStart): Promise<void>;
   /** The held starts still waiting, oldest first. Writes nothing. */
@@ -2952,7 +2955,10 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
       connection
         .prepare(
           "INSERT OR IGNORE INTO held_start (iteration_id, request_message_id, " +
-            "scope_decision_id, plan_digest, repository, held_at_ms) VALUES (?, ?, ?, ?, ?, ?)",
+            "scope_decision_id, plan_digest, repository, held_at_ms) " +
+            "SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM held_start " +
+            "WHERE request_message_id = ? AND scope_decision_id = ? AND plan_digest = ? " +
+            "AND settled_at_ms IS NULL)",
         )
         .run(
           held.iterationId,
@@ -2961,6 +2967,9 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           held.planDigest,
           held.repository,
           held.heldAtMs,
+          held.requestMessageId,
+          held.scopeDecisionId,
+          held.planDigest,
         );
     },
 

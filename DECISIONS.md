@@ -27539,16 +27539,25 @@ At rondo `e72045f` on **2026-09-28**, by reading the code:
    holds for both the scoped start and a drafted part's start.
 2. **A person's scoped start's wait is a row** (`held_start`), keyed by the iteration id its form
    minted and holding the request, the approval, the plan's digest and the plan's repository. The
-   press writes it. A second refusal of the same form keeps the one row. **If rondo cannot write the
-   row, the press says `startRefusedHeld` as before** (start again), because a wait nothing will end
-   is worse than an honest refusal.
+   press writes it. A second refusal of the same form keeps the one row, and **a second form of the
+   same plan writes none while one waits** (two tabs, two forms): one waiting start per request,
+   approval and plan, or the tick would start the plan twice by itself. That press still answers
+   the wait. **If rondo cannot write the row, the press says `startRefusedHeld` as before** (start
+   again), because a wait nothing will end is worse than an honest refusal.
 3. **The resident host's tick attempts it** (`D-0073` rule 7): each pass of the order tick reads the
    waiting rows. While a line holding files in the start's repository is in flight, the start is not
    attempted, because that line cannot have landed. Otherwise the tick attempts it through the
    press's own path, with the row's input and id, in the approver's name, answered once reserved
-   (`D-0109`). Refused by held files again, it waits on. Started, its wait is settled `started`.
-   Refused for any other reason, its wait ends with that reason on the row and on the console, and
-   the page draws the ordinary start again. Each distinct wait is said on the console once, not
+   (`D-0109`). **A full host is waited through too**: the tick tests the host's occupancy against
+   its bounds as `draftedStartReadiness` does (`full`, `busy`) and does not attempt the start while
+   there is no room, because `reserve()` tests capacity before the lanes and a capacity refusal
+   reaches the press in words it cannot tell from a refusal for good. A refusal while the host has
+   filled up since the tick looked waits on as well, and so does a continuo that is not usable now.
+   Refused by held files again, it waits on. Started, its wait is settled `started`. Refused for a
+   reason waiting does not change, its wait ends with that reason on the row and on the console,
+   and the page draws the ordinary start again. **An approval no longer in force ends the wait
+   without asking admission**: its scope test would refuse, and a refused test writes the stop
+   question into the thread (`D-0066` rule 4.4), a stop the person never caused. Each distinct wait is said on the console once, not
    every minute, and so is a drafted part's. This is rule 7.1's first admission, so the tick
    attempts nothing else.
 4. **A release kicks the tick.** In `rondo web`, the order tick runs right after a publish (the
@@ -27557,7 +27566,8 @@ At rondo `e72045f` on **2026-09-28**, by reading the code:
 5. **The page offers no second press.** A held drafted part says it waits and starts by itself. The
    *start checks first whether its change landed* sentence and its button are gone, because the
    tick does that reading. The scope screen draws the waiting sentence and the work holding the
-   files in place of the start form while the row waits.
+   files in place of the start form while the row waits, and the thread's next step is rondo's
+   turn with the same sentence, not *start the work*.
 
 ### Options not taken
 
@@ -27581,6 +27591,19 @@ At rondo `e72045f` on **2026-09-28**, by reading the code:
   console every time. Only rondo's own wait line is said once.
 - **A release this process did not make** (a landing read by another process, or a pull request
   opened outside the page) is found on the next minute's pass, not at once.
+- **The capacity test and `reserve()` are two reads.** A start that takes the last slot between
+  them refuses the attempt; the tick reads the occupancy again after a refusal and waits on when the
+  host is full, but a slot that frees in that gap too settles the wait with the capacity refusal's
+  words. The report does not carry which bound refused, so the press cannot tell it apart; a
+  distinct refusal is the upgrade if this is seen.
+- **A thrown start ends the wait.** `answerOnceReserved` answers an error before the row as
+  `startRefusedNotAdmitted`, which the tick cannot tell from a refusal for good.
+- **The plan-choice screen shows the wait only once a plan is chosen**, since the row is keyed by
+  the plan; before that the screen draws the choice.
+- **The scope screen's wait names the holders without their release link**, which the press's
+  answer carries.
+- **The kicks after a publish, a merge or a release are not covered by tests.** A missing kick
+  costs up to a minute: the minute's pass still reaches the row.
 - **A drafted part's readiness tests the drafted claim, while its start admits the claim widened by
   `asPart`** (`src/access/drafted-start.ts`). A part can therefore read `ready` and still be refused
   by held files. It then waits through the tick's attempts like any other held part, and the page
