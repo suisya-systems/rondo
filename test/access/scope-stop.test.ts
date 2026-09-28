@@ -1853,6 +1853,45 @@ test("D-0160: a line that declared nothing claims at its gate what it changed th
   expect(line.kind === "read" ? line.line.claim?.paths : undefined).toEqual(["docs/a.md"]);
 });
 
+test("D-0160: a gate already open, looked at again, takes the claim a stop before it left unwritten", async () => {
+  const h = await harness();
+  const ports: ReportingPorts = {
+    ...h.reporting,
+    lanes: {
+      store: h.store,
+      remote: "origin",
+      readLanding: async () => ({ kind: "undetermined", reason: "not asked" }),
+      readChangedPaths: async () => ({ kind: "read", paths: ["docs/a.md"] }),
+    },
+  };
+  // The gate reached with no lanes wired: the claim is not written, as when
+  // the host stops between the gate and the write.
+  expect(
+    (await admit(h.reporting, h.advisory, PLAN, POLICY, "i-bare", null, null, REQUEST)).status,
+  ).toBe("awaiting_human");
+  const before = await h.store.laneLine("i-bare");
+  expect(before.kind === "read" ? before.line.claim?.paths : undefined).toEqual([]);
+  const found = await h.store.read("i-bare");
+  if (found.kind !== "read") throw new Error("no row");
+  const gateId = String(found.record.gateId);
+  const looked = await resume(
+    {
+      ...ports,
+      showGate: async () => ({
+        kind: "answered",
+        value: { gateId, stage: "received", outcome: null },
+      }),
+    },
+    "i-bare",
+  );
+  expect(looked.status).toBe("awaiting_human");
+  expect(looked.lines.join("\n")).toContain(
+    "so it now claims what lap i-bare changed: 'docs/a.md'.",
+  );
+  const after = await h.store.laneLine("i-bare");
+  expect(after.kind === "read" ? after.line.claim?.paths : undefined).toEqual(["docs/a.md"]);
+});
+
 test("D-0098 rule 2: what a lap took in is not compared with its claim, only what it changed since", async () => {
   const h = await harness();
   const X = "c".repeat(40);

@@ -3214,7 +3214,7 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
               supersedesClaimId: head.claimId,
               authorKind: "drafter",
               authorId: LANE_LEDGER_AUTHOR,
-              bases: [{ form: "iteration", iterationId: input.iterationId }, { form: "changed" }],
+              bases: [{ form: "iteration", iterationId: input.iterationId }, CHANGED],
             },
             input.nowMs,
           );
@@ -7935,7 +7935,14 @@ function laneAdmission(connection: DatabaseSync, input: ReserveInput): LaneAdmis
       paths: taken === null ? [] : taken.paths,
       supersedesClaimId: head === null ? null : head.claimId,
       ...byRule,
-      bases: taken === null ? [...bases, UNCLAIMED] : bases,
+      // A claim a gate took from what the line changed stays one (D-0160), so
+      // the redo's gate goes on claiming what it changes.
+      bases:
+        taken === null
+          ? [...bases, UNCLAIMED]
+          : basisForms(claimBases(connection, taken.claimId)).includes("changed")
+            ? [...bases, CHANGED]
+            : bases,
       // The paths taken back keep the words that said why they were asked.
       why: taken === null ? null : taken.why,
     };
@@ -7951,6 +7958,9 @@ function laneAdmission(connection: DatabaseSync, input: ReserveInput): LaneAdmis
 
 /** The basis that marks a claim row as a line that declared nothing (D-0160). */
 const UNCLAIMED = { form: "unclaimed" } as const;
+
+/** The basis that marks a claim row a gate took from what its line changed (D-0160). */
+const CHANGED = { form: "changed" } as const;
 
 /**
  * Release a line's claim when the status just written leaves nothing of it open

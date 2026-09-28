@@ -951,6 +951,12 @@ export async function readHolder(
 async function withClaimComparison(
   ports: ReportingPorts,
   report: ConductorReport,
+  /**
+   * False for a gate already open and looked at again: only the claim is
+   * written, which a stop between the gate and this write left undone
+   * (Codex); the comparison was said when the gate was reached.
+   */
+  sayComparison = true,
 ): Promise<ConductorReport> {
   if (ports.lanes === undefined || ports.lanes === null || report.iterationId === null) {
     return report;
@@ -977,7 +983,10 @@ async function withClaimComparison(
       claimed.push(`What lap ${report.iterationId} changed was not claimed: ${outcome.reason}.`);
     }
   }
-  const lines = [...claimed, ...claimComparisonLines(report.iterationId, comparison)];
+  const lines = [
+    ...claimed,
+    ...(sayComparison ? claimComparisonLines(report.iterationId, comparison) : []),
+  ];
   return lines.length === 0 ? report : { ...report, lines: [...report.lines, ...lines] };
 }
 
@@ -1179,7 +1188,7 @@ export async function resume(ports: ReportingPorts, iterationId: string): Promis
     before.record.status === "awaiting_human" &&
     before.record.gateId === (await gateIdOf(ports, iterationId))
   ) {
-    return await withGateReportGap(ports, report);
+    return await withGateReportGap(ports, await withClaimComparison(ports, report, false));
   }
   return await withGateReport(ports, await withClaimComparison(ports, report));
 }

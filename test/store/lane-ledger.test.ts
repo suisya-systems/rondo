@@ -564,3 +564,25 @@ test("the ledger as the page reads it: what each line holds, whether it is in fl
   });
   expect(byLine.size).toBe(6);
 });
+
+test("a line that claimed what it changed, released and retried, takes its paths back and still claims what it changes (D-0160)", async () => {
+  const { store } = fresh();
+  await reserved(store, input("free"));
+  await walk(store, "free", "awaiting_human");
+  expect(
+    await store.claimChanged({ iterationId: "free", paths: ["docs/x.md"], nowMs: 3_000 }),
+  ).toMatchObject({ kind: "claimed" });
+  expect((await store.transition("free", "awaiting_human", "abandoned", {}, 3_100)).kind).toBe(
+    "transitioned",
+  );
+  await reserved(store, input("free-r2", { supersedesIterationId: "free" }));
+  // The retry holds what the release gave up, and its gate goes on claiming.
+  expect(
+    await store.claimChanged({ iterationId: "free-r2", paths: ["lib/y.ts"], nowMs: 3_200 }),
+  ).toEqual({ kind: "claimed", lineageId: "free", paths: ["lib/y.ts"] });
+  const line = await store.laneLine("free");
+  expect(line.kind === "read" ? line.line.claim?.paths : undefined).toEqual([
+    "docs/x.md",
+    "lib/y.ts",
+  ]);
+});
