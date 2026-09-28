@@ -46,3 +46,15 @@ test("a held start waits once per plan, waits again after a wait that did not st
   expect(await store.recordHeldStart({ ...held("lap-c"), planDigest: "sha256:other" })).toBe(true);
   expect(await waiting(store)).toEqual(["lap-c"]);
 });
+
+test("a form that joined a wait resolves to it after the wait ends, and joining keeps no second wait", async () => {
+  const store = iterationStore(new DatabaseSync(":memory:"), { maxOccupying: 2, maxLive: 3 });
+  expect(await store.recordHeldStart(held("lap-a"))).toBe(true);
+  await store.joinHeldStart(held("lap-b"), "lap-a");
+  expect(await waiting(store)).toEqual(["lap-a"]);
+  expect(await store.heldStartJoin("lap-b")).toBe("lap-a");
+  await store.settleHeldStart("lap-a", "started", 2_000);
+  expect(await store.heldStartJoin("lap-b")).toBe("lap-a");
+  expect(await store.heldStartJoin("lap-a")).toBeNull();
+  expect(await store.heldStartJoin("lap-none")).toBeNull();
+});

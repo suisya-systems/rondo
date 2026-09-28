@@ -280,6 +280,9 @@ export interface ClosingLap extends ClosingLapSpend {
   readonly predecessorId: string;
 }
 
+/** A `held_start` outcome naming the wait a form joined (`joinHeldStart`). */
+const JOINED = "joined:";
+
 /**
  * A person's scoped start refused by files another line holds, waiting to be
  * attempted again by the resident host's tick (rondo#284, D-0157). Keyed by the
@@ -766,6 +769,14 @@ export interface IterationStore {
    * two forms), or the tick would start the plan twice by itself.
    */
   recordHeldStart(held: HeldStart): Promise<boolean>;
+  /**
+   * Keep that `held`'s form joined the wait `joinedTo` (Codex round 4): a
+   * settled row under the form's own id, so the form sent again resolves to
+   * the wait's lap rather than starting the work under an id nothing reserved.
+   */
+  joinHeldStart(held: HeldStart, joinedTo: string): Promise<void>;
+  /** The wait a form joined ({@link joinHeldStart}), or null. Writes nothing. */
+  heldStartJoin(iterationId: string): Promise<string | null>;
   /** The held starts still waiting, oldest first. Writes nothing. */
   heldStarts(): Promise<readonly HeldStart[]>;
   /** End a held start's wait with what its attempt came to; a settled one is left as it is. */
@@ -2980,6 +2991,33 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
             .get(held.iterationId) !== undefined
         );
       });
+    },
+
+    async joinHeldStart(held: HeldStart, joinedTo: string): Promise<void> {
+      connection
+        .prepare(
+          "INSERT OR IGNORE INTO held_start (iteration_id, request_message_id, " +
+            "scope_decision_id, plan_digest, repository, held_at_ms, settled_at_ms, outcome) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          held.iterationId,
+          held.requestMessageId,
+          held.scopeDecisionId,
+          held.planDigest,
+          held.repository,
+          held.heldAtMs,
+          held.heldAtMs,
+          `${JOINED}${joinedTo}`,
+        );
+    },
+
+    async heldStartJoin(iterationId: string): Promise<string | null> {
+      const row = connection
+        .prepare("SELECT outcome FROM held_start WHERE iteration_id = ?")
+        .get(iterationId) as SqlRow | undefined;
+      const outcome = row === undefined ? "" : String(row["outcome"] ?? "");
+      return outcome.startsWith(JOINED) ? outcome.slice(JOINED.length) : null;
     },
 
     async heldStarts(): Promise<readonly HeldStart[]> {

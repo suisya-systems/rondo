@@ -6018,13 +6018,30 @@ export async function scopedStartPress(
   words: Chrome,
   input: ScopedStartInput,
 ): Promise<Started> {
-  const waiting = (await store.heldStarts()).find(
-    (held) =>
-      held.requestMessageId === input.requestMessageId &&
-      held.scopeDecisionId === input.scopeDecisionId &&
-      held.planDigest === input.planDigest,
-  );
-  const joined = waiting === undefined ? input : { ...input, iterationId: waiting.iterationId };
+  // A form that joined a wait before is that wait's press, sent again
+  // (Codex round 4): it resolves to the wait's lap however the wait ended.
+  const before = await store.heldStartJoin(input.iterationId);
+  const waiting =
+    before === null
+      ? (await store.heldStarts()).find(
+          (held) =>
+            held.requestMessageId === input.requestMessageId &&
+            held.scopeDecisionId === input.scopeDecisionId &&
+            held.planDigest === input.planDigest,
+        )
+      : undefined;
+  if (waiting !== undefined && waiting.iterationId !== input.iterationId) {
+    await store.joinHeldStart(
+      { ...waiting, iterationId: input.iterationId, heldAtMs: Date.now() },
+      waiting.iterationId,
+    );
+  }
+  const joined =
+    before !== null
+      ? { ...input, iterationId: before }
+      : waiting === undefined
+        ? input
+        : { ...input, iterationId: waiting.iterationId };
   return await answerOnceReserved(
     store,
     record,

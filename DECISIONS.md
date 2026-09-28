@@ -27545,6 +27545,8 @@ At rondo `e72045f` on **2026-09-28**, by reading the code:
    the wait. **A press of the same plan joins a wait already kept**: it starts under the wait's id,
    not its own form's, so a second tab pressed once the files are free starts the one lap, and the
    tick finds that lap there and ends the wait rather than reading its line as the work it waits on.
+   The join is kept as a settled row under the joining form's own id, so that form sent again,
+   however long after, is still that lap's press and starts nothing new.
    **Once a form of the plan started it, no form of that plan waits again** (a stale tab sent
    again is told to start again, as before this entry), and **a form whose own wait ended without
    a start waits again** when held files refuse it once more, rather than being told it waits on
