@@ -27542,7 +27542,10 @@ At rondo `e72045f` on **2026-09-28**, by reading the code:
    press writes it. A second refusal of the same form keeps the one row, and **a second form of the
    same plan writes none while one waits** (two tabs, two forms): one waiting start per request,
    approval and plan, or the tick would start the plan twice by itself. That press still answers
-   the wait. **If rondo cannot write the row, the press says `startRefusedHeld` as before** (start
+   the wait. **A press of the same plan joins a wait already kept**: it starts under the wait's id,
+   not its own form's, so a second tab pressed once the files are free starts the one lap, and the
+   tick finds that lap there and ends the wait rather than reading its line as the work it waits on.
+   **If rondo cannot write the row, the press says `startRefusedHeld` as before** (start
    again), because a wait nothing will end is worse than an honest refusal.
 3. **The resident host's tick attempts it** (`D-0073` rule 7): each pass of the order tick reads the
    waiting rows. While a line holding files in the start's repository is in flight, the start is not

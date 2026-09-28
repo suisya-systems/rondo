@@ -14,12 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test, vi } from "vitest";
-import {
-  answerOnceReserved,
-  heldStartPort,
-  releaseFromPage,
-  startScopedFromPage,
-} from "../../src/access/cli.js";
+import { heldStartPort, releaseFromPage, scopedStartPress } from "../../src/access/cli.js";
 import { releasePublished } from "../../src/access/merge.js";
 import { orderHost } from "../../src/access/order-host.js";
 import { viewHref } from "../../src/access/page-logic/routes.js";
@@ -217,13 +212,7 @@ async function lines() {
 
   // The page's own start press, answered once reserved, as `rondo web` wires it.
   const start = async (input: ScopedStartInput) =>
-    await answerOnceReserved(
-      store,
-      record,
-      EN,
-      input,
-      startScopedFromPage(ENV, store, storePath, "ada", input),
-    );
+    await scopedStartPress(ENV, store, storePath, "ada", record, EN, input);
   let presses = 0;
   const notThis = async () => await Promise.resolve({ ok: false, note: "not this route" });
   const { base, stop, served } = await serving({
@@ -427,6 +416,51 @@ test(
       );
       expect(released.status).toBe(303);
       await startsByItself(w, iteration);
+    } finally {
+      await w.stop();
+    }
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a press from another tab's form once the files are free joins the wait: one lap, which the tick then settles (rondo#284)",
+  async () => {
+    const w = await lines();
+    try {
+      // The other tab's page, drawn before the first press: its own form and id.
+      const other = await w.screen();
+      const form = other.slice(other.indexOf('id="start-form"'));
+      const field = (name: string) =>
+        new RegExp(`name="${name}" value="([^"]+)"`).exec(form)?.[1] ?? "";
+      const otherId = field("iteration");
+      const iteration = await heldAndWaiting(w);
+      expect(otherId).not.toBe(iteration);
+      expect(await releasePublished(w.store, "lap-a", "https://example.invalid/pr/1", 3_000)).toBe(
+        "Its files were released: its pull request is open.",
+      );
+      const pressed = await post(
+        w.base,
+        {
+          token: tokenIn(other),
+          request: field("request"),
+          scope_decision: field("scope_decision"),
+          plan: field("plan"),
+          iteration: otherId,
+        },
+        {},
+        "/start?lang=en",
+      );
+      expect(pressed.status).toBe(303);
+      // Started under the wait's own id, not the other tab's.
+      expect((await w.store.read(otherId)).kind).toBe("absent");
+      expect((await w.store.read(iteration)).kind).toBe("read");
+      // The tick finds the row there and settles the wait without a second lap.
+      const before = seams.admitted.length;
+      await w.pass();
+      await w.pass();
+      expect(seams.admitted.length).toBe(before);
+      expect(await w.store.heldStarts()).toEqual([]);
     } finally {
       await w.stop();
     }

@@ -2036,12 +2036,14 @@ export async function main(
                   await recordScopeFromPage(environment, store, opened.path, sender.actorId, draft),
                 // **Answered once the lap is there, not at its gate** (D-0109).
                 async (input) =>
-                  await answerOnceReserved(
+                  await scopedStartPress(
+                    environment,
                     store,
+                    opened.path,
+                    sender.actorId,
                     record,
                     chromeFor(selected.tag),
                     input,
-                    startScopedFromPage(environment, store, opened.path, sender.actorId, input),
                   ),
                 // The drafted scope's two presses (rondo#238 C2b, D-0071 rule 5.3).
                 async (form) =>
@@ -5994,20 +5996,47 @@ export function heldStartPort(
           note: `the approval '${held.scopeDecisionId}' it waited under is no longer in force`,
         };
       }
-      return await answerOnceReserved(
-        store,
-        record,
-        words,
-        held,
-        startScopedFromPage(environment, store, storePath, approver, {
-          iterationId: held.iterationId,
-          requestMessageId: held.requestMessageId,
-          scopeDecisionId: held.scopeDecisionId,
-          planDigest: held.planDigest,
-        }),
-      );
+      return await scopedStartPress(environment, store, storePath, approver, record, words, {
+        iterationId: held.iterationId,
+        requestMessageId: held.requestMessageId,
+        scopeDecisionId: held.scopeDecisionId,
+        planDigest: held.planDigest,
+      });
     },
   };
+}
+
+/**
+ * The page's scoped start press, answered once reserved (D-0109) -- **under the
+ * id of a wait already kept for the same plan** (rondo#284, Codex): a second
+ * tab's form minted its own id, and starting under it would leave the first
+ * form's wait for the tick to start the same plan again once this line's files
+ * were free. So the press joins the wait: one lap, whichever of the two starts
+ * it, and the tick's next attempt finds the row and settles the wait.
+ */
+export async function scopedStartPress(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  storePath: string,
+  approver: string,
+  record: Pick<AdvisoryRecord, "recordThreadMessage">,
+  words: Chrome,
+  input: ScopedStartInput,
+): Promise<Started> {
+  const waiting = (await store.heldStarts()).find(
+    (held) =>
+      held.requestMessageId === input.requestMessageId &&
+      held.scopeDecisionId === input.scopeDecisionId &&
+      held.planDigest === input.planDigest,
+  );
+  const joined = waiting === undefined ? input : { ...input, iterationId: waiting.iterationId };
+  return await answerOnceReserved(
+    store,
+    record,
+    words,
+    joined,
+    startScopedFromPage(environment, store, storePath, approver, joined),
+  );
 }
 
 /**

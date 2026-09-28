@@ -437,6 +437,8 @@ test("a held start is attempted only where no line holding files in its reposito
     ...t.ports,
     held: {
       store: {
+        // No lap under a waiting id yet: the press has not started one.
+        read: async () => ({ kind: "absent" }) as never,
         heldStarts: async () =>
           waiting.filter((one) => !settled.some(([id]) => id === one.iterationId)),
         settleHeldStart: async (id, outcome) => {
@@ -492,6 +494,8 @@ test("a held start waits through a full host and a continuo not usable now, and 
     ...t.ports,
     held: {
       store: {
+        // No lap under a waiting id yet: the press has not started one.
+        read: async () => ({ kind: "absent" }) as never,
         heldStarts: async () => (settled.length === 0 ? [one] : []),
         settleHeldStart: async (id, outcome) => {
           settled.push([id, outcome]);

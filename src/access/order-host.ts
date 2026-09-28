@@ -71,7 +71,7 @@ export interface OrderHostPorts {
   readonly held: {
     readonly store: Pick<
       IterationStore,
-      "heldStarts" | "settleHeldStart" | "laneLedger" | "occupancy"
+      "read" | "heldStarts" | "settleHeldStart" | "laneLedger" | "occupancy"
     >;
     readonly policy: Pick<HostPolicy, "maxOccupying" | "maxLive">;
     readonly start: (held: HeldStart) => Promise<Started>;
@@ -245,6 +245,14 @@ async function readHeldStarts(
     const id = one.iterationId;
     // One start's failure costs that start, never the pass.
     try {
+      // **Its lap is already there** -- a press joined the wait and started it
+      // (`scopedStartPress`): the wait is over, before its own line, now in
+      // flight, is read as the work it waits on.
+      if ((await held.store.read(id)).kind !== "absent") {
+        await held.store.settleHeldStart(id, "started", ports.now());
+        ports.log(`order    ${id}: started by a press`);
+        continue;
+      }
       // Read again for each: a start this pass made holds files and a slot.
       const lines = await held.store.laneLedger();
       if (lines.some((l) => l.repository === one.repository && l.paths.length > 0 && l.inFlight)) {
