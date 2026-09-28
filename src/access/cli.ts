@@ -1601,8 +1601,10 @@ export async function main(
           iterationId,
           head,
         );
-        // A merge closed out may be what the goal's next request waits on (rondo#469).
+        // A merge closed out may be what the goal's next request waits on
+        // (rondo#469), and its release what a held start waits on (rondo#284).
         flow?.kick();
+        order?.kick();
         return merged;
       },
       closedOut: () => flow?.kick(),
@@ -1697,6 +1699,25 @@ export async function main(
                 running,
               );
             },
+            // **And the person's own start that held files kept waiting**
+            // (rondo#284): the press's own path, id and input, answered once
+            // reserved for the split start's reason.
+            held: {
+              store,
+              start: async (held) =>
+                await answerOnceReserved(
+                  store,
+                  record,
+                  chromeFor(selected.tag),
+                  held,
+                  startScopedFromPage(environment, store, opened.path, sender.actorId, {
+                    iterationId: held.iterationId,
+                    requestMessageId: held.requestMessageId,
+                    scopeDecisionId: held.scopeDecisionId,
+                    planDigest: held.planDigest,
+                  }),
+                ),
+            },
             now: Date.now,
             log: say,
           });
@@ -1769,7 +1790,12 @@ export async function main(
                 iterationId,
                 scoped,
               ),
-            published: () => checks.kick(),
+            // Its pull request open, the line's files are free (D-0114): a
+            // start they held is attempted now, not on the minute (rondo#284).
+            published: () => {
+              checks.kick();
+              order?.kick();
+            },
             now: Date.now,
             log: say,
           });
@@ -1881,6 +1907,17 @@ export async function main(
         rescan.unref();
       }
     };
+    const merging = mergePress({
+      store,
+      record,
+      now: Date.now,
+      pressing,
+      removeWorkspace,
+      readAgain: async () => {
+        checks.kick();
+        await checks.idle();
+      },
+    });
     const served = await serveOperatorPage(
       {
         store,
@@ -2100,17 +2137,20 @@ export async function main(
         publish:
           sender === null || "refusal" in sender
             ? null
-            : new PublishPort(
-                async (input) =>
-                  await publishFromPage(
-                    environment,
-                    store,
-                    opened.path,
-                    sender.actorId,
-                    asked,
-                    input,
-                  ),
-              ),
+            : new PublishPort(async (input) => {
+                const published = await publishFromPage(
+                  environment,
+                  store,
+                  opened.path,
+                  sender.actorId,
+                  asked,
+                  input,
+                );
+                // What the pull request released may be what a held start
+                // waits on (rondo#284): it is attempted now, not on the minute.
+                order?.kick();
+                return published;
+              }),
         // **The dry-run this screen is read from, on exactly the press's own
         // condition.** The same function the press runs, so what is shown is
         // what would happen -- and null wherever the port is null, because a
@@ -2203,25 +2243,21 @@ export async function main(
         merge:
           sender === null || "refusal" in sender
             ? null
-            : new MergePort(
-                mergePress({
-                  store,
-                  record,
-                  now: Date.now,
-                  pressing,
-                  removeWorkspace,
-                  readAgain: async () => {
-                    checks.kick();
-                    await checks.idle();
-                  },
-                }),
-              ),
+            : new MergePort(async (input) => {
+                const merged = await merging(input);
+                // Its release may be what a held start waits on (rondo#284).
+                order?.kick();
+                return merged;
+              }),
         release:
           sender === null || "refusal" in sender
             ? null
-            : new ReleasePort(
-                async (input) => await releaseFromPage(environment, store, sender.actorId, input),
-              ),
+            : new ReleasePort(async (input) => {
+                const released = await releaseFromPage(environment, store, sender.actorId, input);
+                // A start these files held is attempted now (rondo#284).
+                order?.kick();
+                return released;
+              }),
         publishing:
           sender === null || "refusal" in sender
             ? null
@@ -7015,7 +7051,7 @@ async function startScoped(
       note: `The plan was refused: ${planned.reason}`,
     };
   }
-  return await admitScopedPlan(
+  const started = await admitScopedPlan(
     environment,
     store,
     storePath,
@@ -7025,6 +7061,29 @@ async function startScoped(
     null,
     null,
   );
+  if (started.why !== "startWaitsHeld") {
+    return started;
+  }
+  // **Refused by files another line holds, so it waits** (rondo#284, D-0157):
+  // kept by the id its form minted, and attempted again by the resident host's
+  // tick (`orderHost`) once they are free. A row rondo could not write would be
+  // a wait nothing ends, so that press is told to start again, as it was.
+  try {
+    await store.recordHeldStart({
+      iterationId: input.iterationId,
+      requestMessageId: input.requestMessageId,
+      scopeDecisionId: input.scopeDecisionId,
+      planDigest: input.planDigest,
+      repository: repositoryKey(planned.plan.repository) ?? planned.plan.repository,
+      heldAtMs: Date.now(),
+    });
+    return started;
+  } catch (error) {
+    consoleSeams.writeError(
+      `${asciiEscape(`lap '${input.iterationId}': its wait was not kept: ${error instanceof Error ? error.message : String(error)}`)}\n`,
+    );
+    return { ...started, why: "startRefusedHeld" };
+  }
 }
 
 /**
@@ -7277,9 +7336,10 @@ async function admitScopedPlan(
         };
       }),
     );
+    // It waits (rondo#284): the resident host's tick attempts it again.
     return {
       ok: false,
-      why: "startRefusedHeld",
+      why: "startWaitsHeld",
       note: outcome.report.lines.join("\n"),
       holders,
     };

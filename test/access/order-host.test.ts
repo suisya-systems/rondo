@@ -392,6 +392,83 @@ test("a held plan is attempted only when every holder has finished", async () =>
   expect(t.started).toEqual([1]);
 });
 
+test("a part the files hold again waits, said once rather than every minute (rondo#284)", async () => {
+  const run = { kind: "runnable" } as never;
+  const t = tick(
+    [undefined],
+    [
+      [
+        { kind: "ready", run },
+        { kind: "ready", run },
+      ],
+    ],
+  );
+  const host = orderHost({
+    ...t.ports,
+    start: async () => ({ ok: false, why: "startWaitsHeld", note: "Refused: held." }),
+  });
+  for (let n = 0; n < 2; n += 1) {
+    host.kick();
+    await host.settled();
+  }
+  expect(t.log).toEqual(["order    p-1 plan 0 waits: other work still holds its files"]);
+});
+
+test("a held start is attempted only where no line holding files in its repository runs, and a refusal other than held files ends its wait (rondo#284)", async () => {
+  const t = tick([], []);
+  const held = (iterationId: string, repository: string) => ({
+    iterationId,
+    requestMessageId: "r1",
+    scopeDecisionId: "sd-1",
+    planDigest: "sha256:p",
+    repository,
+    heldAtMs: 1,
+  });
+  const waiting = [
+    held("lap-busy", "/srv/a"),
+    held("lap-throws", "/srv/b"),
+    held("lap-no", "/srv/b"),
+  ];
+  const settled: [string, string][] = [];
+  const attempted: string[] = [];
+  const host = orderHost({
+    ...t.ports,
+    held: {
+      store: {
+        heldStarts: async () =>
+          waiting.filter((one) => !settled.some(([id]) => id === one.iterationId)),
+        settleHeldStart: async (id, outcome) => {
+          settled.push([id, outcome]);
+        },
+        laneLedger: async () => [
+          { repository: "/srv/a", paths: ["src/"], inFlight: true } as never,
+          // Finished, still holding: the attempt is where its landing is read.
+          { repository: "/srv/b", paths: ["/"], inFlight: false } as never,
+        ],
+      },
+      start: async (one) => {
+        attempted.push(one.iterationId);
+        if (one.iterationId === "lap-throws") throw new Error("the store is locked");
+        return { ok: false, why: "startRefusedOutside", note: "outside the scope" };
+      },
+    },
+  });
+  host.kick();
+  await host.settled();
+  // One start's failure does not stop the pass; the running line's start is not attempted.
+  expect(attempted).toEqual(["lap-throws", "lap-no"]);
+  expect(settled).toEqual([["lap-no", "outside the scope"]]);
+  expect(t.log).toEqual([
+    "order    lap-busy waits: other work in flight holds files it needs",
+    "order    lap-throws: the store is locked",
+    "order    lap-no: not started: outside the scope",
+  ]);
+  // The wait on a running line is said once, not every minute.
+  host.kick();
+  await host.settled();
+  expect(t.log.filter((line) => line.includes("lap-busy"))).toHaveLength(1);
+});
+
 // ---------------------------------------------------------------------------
 // Over a real store: readiness, the press's refusal, and the admission on a landing.
 

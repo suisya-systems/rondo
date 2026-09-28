@@ -355,7 +355,6 @@ test("an approved drafted scope offers each plan its own start, and says so wher
     EN.planHeldWhy(ownLane("lap-plan-0").paths, "it renames a word used everywhere"),
   );
   expect(once).toContain("Two things, please.");
-  expect(once).not.toContain(EN.planHeldTry);
   expect(once).not.toContain("?release=");
 
   // No room: the reason, and no button to press.
@@ -373,8 +372,9 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   }
 
   // Plan 0's work finishes without being found on the default branch: plan 1
-  // is still held, said as held by finished work, and now both the start
-  // (which reads that landing first, D-0073 rule 7) and the release are drawn.
+  // is still held, said as held by finished work, and the release is drawn --
+  // but no start: the host's tick attempts it, reading that landing first
+  // (D-0073 rule 7), so there is nothing to press a second time (rondo#284).
   for (const [from, to] of [
     ["planned", "admitting"],
     ["admitting", "admitted"],
@@ -397,8 +397,7 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   const finished = (await render(ports)).replaceAll("&#39;", "'");
   expect(finished).toContain(EN.planHeldFinished(["/"]));
   expect(finished).not.toContain(EN.planHeld(["/"]));
-  expect(finished).toContain(EN.planHeldTry);
-  expect(starts(finished)).toBe(1);
+  expect(starts(finished)).toBe(0);
   expect(finished).toContain("/?release=lap-plan-0&amp;lang=en");
   // Named by the words the person wrote for the request, not by the brief (rondo#439).
   expect(finished).toContain("Two things, please.");

@@ -190,6 +190,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0155 | A merge waits only on the questions that hold its line: a question over another line the person answered with a stop no longer withholds the merge, on the page or on green | accepted |
 | D-0156 | Only a judgment call at or above the scope's threshold keeps rondo from sending the drafted change; one below it is left out of what is sent, and the note names it | accepted |
 | D-0157 | A typed `revise` spends the approval the lap it revises was admitted under: `--scope-decision-id` overrides it, nothing to draw refuses, and no `revise` runs outside every approval | accepted |
+| D-0157 | A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press | accepted |
 
 ---
 
@@ -24392,6 +24393,12 @@ At rondo `2de3190` on **2026-09-26**, by reading `DECISIONS.md`, `git log` and t
 > repository's own paths since rondo#496: before it, the drafter claimed `/` for nearly every plan,
 > so lines of one repository ran one at a time whatever `maxOccupying` allowed. The row is unedited.
 
+> **Annotation (2026-09-28, from D-0157).** The **Refuse** and **Defer** rows' open cells are
+> closed by rondo#284: a start the ledger refuses for held files now waits and is attempted again
+> by the resident host's tick until the paths are free, with no second press. `D-0067`'s
+> `sequence` and `D-0068`'s wait readings stay unbuilt; `D-0157` says why this is enough. The rows
+> are unedited.
+
 3. **rondo#250 is done with this entry.** Its ask, a decision naming the layer and its authorities,
    is answered by `D-0073`, `D-0098` and this table. What is left is building work, and each piece has
    an issue of its own: rondo#282, rondo#284, rondo#286, rondo#287 and rondo#452. The residuals of
@@ -27491,3 +27498,97 @@ none. So what was left, and what this entry decides, is the terminal.
   and a `revise` that omits it spends the approval the lap it revises was admitted under, or refuses.
 - **`docs/operations/lap-9-dogfood.md` N-33's remaining half** -- the unscoped `revise` -- is
   answered by this entry once built.
+
+## D-0157 — A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press
+
+**Status:** accepted (2026-09-28, rondo#284). Builds `D-0073` rules 3.4, 3.5, 7 and 7.1 for the
+starts a person presses. Refs `D-0067`, `D-0068` rule 2.1, `D-0098` rule 1.4, `D-0109`, `D-0114`,
+`D-0127` rule 4, rondo#280.
+
+### Context
+
+On lap-19 (2026-09-28 19:30 JST, `~/rondo-lap-19`) the second half of rondo#228's split held
+`DECISIONS.md` and `src/access/cli*.ts`. The goal flow's starts of rondo#462 and rondo#194 were
+refused, and the page asked the person to press start again once the files were free. With two lines
+in parallel (the owner's decision of 2026-09-27) that makes every overlap a manual restart.
+
+### What was measured
+
+At rondo `e72045f` on **2026-09-28**, by reading the code:
+
+- **A drafted split's part already waited.** The order tick (`D-0127`) walks every approved split
+  each minute and attempts a `held` part once no holder is in flight, and the attempt reads the
+  finished holders' landings (`D-0073` rule 7, the rondo#280 fallback in `admit`).
+- **A person's own scoped start did not.** `startScoped` admits the request's held plan with no
+  claim, so it asks for `/` (`D-0073` rule 2.5). Refused by held files, it answered
+  `startRefusedHeld` and nothing ever attempted it again. It is the start the scope screen draws
+  for a request with no drafted split, the goal flow's requests included.
+- **Nothing woke the tick on a release.** The paths come free when the holder's pull request opens
+  (`D-0114`), when it is merged from the page, or on the release press, but the tick ran only on the
+  minute.
+- **`D-0067`'s `sequence` proposal and `D-0068` rule 2.1's `held_by_order` / `held_by_bound`
+  readings are not built.** An admission refusal writes only a best-effort `admission_refusal` row,
+  with no request, plan or scope on it.
+
+### Decision
+
+1. **A start refused by held files waits.** It is not a refusal to the person. The press answers
+   `202` with the page that says it waits, names the work holding the files and keeps that work's
+   release link. It says nothing has started or been spent, and that rondo starts it by itself once
+   that work's pull request opens or its files are released, so there is nothing to press. This
+   holds for both the scoped start and a drafted part's start.
+2. **A person's scoped start's wait is a row** (`held_start`), keyed by the iteration id its form
+   minted and holding the request, the approval, the plan's digest and the plan's repository. The
+   press writes it. A second refusal of the same form keeps the one row. **If rondo cannot write the
+   row, the press says `startRefusedHeld` as before** (start again), because a wait nothing will end
+   is worse than an honest refusal.
+3. **The resident host's tick attempts it** (`D-0073` rule 7): each pass of the order tick reads the
+   waiting rows. While a line holding files in the start's repository is in flight, the start is not
+   attempted, because that line cannot have landed. Otherwise the tick attempts it through the
+   press's own path, with the row's input and id, in the approver's name, answered once reserved
+   (`D-0109`). Refused by held files again, it waits on. Started, its wait is settled `started`.
+   Refused for any other reason, its wait ends with that reason on the row and on the console, and
+   the page draws the ordinary start again. Each distinct wait is said on the console once, not
+   every minute, and so is a drafted part's. This is rule 7.1's first admission, so the tick
+   attempts nothing else.
+4. **A release kicks the tick.** In `rondo web`, the order tick runs right after a publish (the
+   press's, or one under a scope), a merge (the press's, or one on green) and the release press, so a
+   wait ends when its files come free, not up to a minute later.
+5. **The page offers no second press.** A held drafted part says it waits and starts by itself. The
+   *start checks first whether its change landed* sentence and its button are gone, because the
+   tick does that reading. The scope screen draws the waiting sentence and the work holding the
+   files in place of the start form while the row waits.
+
+### Options not taken
+
+- **Build `D-0067`'s `sequence` and `D-0068`'s wait readings first.** They answer *why does this
+  line wait* for every kind of wait and order starts across lines. rondo#284 needs only the first
+  admission retried, and the order tick plus one row does that without a new proposal kind. The
+  page names the holder, which answers the person's *why* for this wait.
+- **Queue the start's full plan on the row.** The press reads the plan back by its digest every
+  time, so a plan rondo stops holding refuses the attempt. That attempt ends the wait with the
+  reason, which is better than running a plan the person can no longer see.
+- **A manual *release files* step as the answer.** The release press stays for the work that will
+  never publish, but the person never has to press it just to start their own work.
+
+### What it costs
+
+- **An undrafted start claims the whole repository**, so it waits for **every** line of its
+  repository that holds files, not only the ones whose files it would touch. That is `D-0073` rule
+  2.5's cost, unchanged; a drafted claim is the way to narrow it.
+- **A finished holder whose pull request is not open is attempted every minute.** Each attempt
+  starts continuo and reads the holder's landing, and the conductor's report lines reach the host's
+  console every time. Only rondo's own wait line is said once.
+- **A release this process did not make** (a landing read by another process, or a pull request
+  opened outside the page) is found on the next minute's pass, not at once.
+- **A drafted part's readiness tests the drafted claim, while its start admits the claim widened by
+  `asPart`** (`src/access/drafted-start.ts`). A part can therefore read `ready` and still be refused
+  by held files. It then waits through the tick's attempts like any other held part, and the page
+  said `ready` in the meantime.
+
+### What would falsify it
+
+- **A wait that never ends while the files are free**: a row still waiting after its repository's
+  lines have all released or ended. The tick or the row's key is then wrong.
+- **People pressing start again anyway**: then the waiting sentence is not being read as a wait,
+  and the start form should say it in place, not only on the press's answer.

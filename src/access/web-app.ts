@@ -718,6 +718,9 @@ export type StartRefusal =
   | "startRefusedNoContinuo"
   | "startRefusedOutside"
   | "startRefusedHeld"
+  // Refused by held files, and attempted again by the host's tick (rondo#284):
+  // not a refusal to the person, who is told it waits.
+  | "startWaitsHeld"
   | "startRefusedNotAdmitted";
 
 /** What one scoped start came to; `test` is the `ScopeTest` that refused, on `startRefusedOutside`. */
@@ -726,7 +729,7 @@ export interface Started {
   readonly note: string;
   readonly why?: StartRefusal;
   readonly test?: string;
-  /** On `startRefusedHeld`: each line holding the files, by its first lap and its request's words. */
+  /** On a start held by files: each line holding them, by its first lap and its request's words. */
   readonly holders?: readonly { readonly lineageId: string; readonly request: string | null }[];
 }
 
@@ -1982,6 +1985,16 @@ function escapeHtml(text: string): string {
     .replaceAll('"', "&quot;");
 }
 
+/**
+ * **A start held by files is accepted, not refused** (rondo#284, D-0157): the
+ * host's tick starts it once they are free, so the answer is a `202` with the
+ * page that says it waits -- nothing to press again -- and not the `409` of a
+ * start that ended.
+ */
+function heldStatus(started: Started): 202 | 409 {
+  return started.why === "startWaitsHeld" ? 202 : 409;
+}
+
 /** A plain-text response a person can read, for every refusal. */
 function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 500, line: string) {
   return c.body(`${line}\n`, status, {
@@ -2724,7 +2737,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (!started.ok) {
       return startRefused(
         c,
-        409,
+        heldStatus(started),
         started.why ?? "startRefusedNotAdmitted",
         request,
         decision,
@@ -2777,7 +2790,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (!started.ok) {
       return startRefused(
         c,
-        409,
+        heldStatus(started),
         started.why ?? "startRefusedNotAdmitted",
         request,
         decision,
@@ -3362,7 +3375,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   /** A scoped start's refusal, said the same way and with the same way back. */
   function startRefused(
     c: Context<PageEnv>,
-    status: 400 | 403 | 409,
+    status: 202 | 400 | 403 | 409,
     why: "startRefusedNoApprover" | "startRefusedPress" | "startRefusedForm" | StartRefusal,
     request: string | null,
     decision: string | null,
@@ -3727,7 +3740,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   /** One refusal page: what it is, why nothing happened, and the one link back. */
   function pressRefused(
     c: Context<PageEnv>,
-    status: 400 | 403 | 409,
+    status: 202 | 400 | 403 | 409,
     title: string,
     line: string,
     href: string,

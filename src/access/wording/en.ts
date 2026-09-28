@@ -1036,19 +1036,22 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was released: rondo could not record your decision. The files stay with this work; " +
     "pressing again is safe.",
   planHeld: (paths) =>
-    `Not yet: other work is changing ${filesEn(paths)}. This can start once that work's pull ` +
-    "request is opened, or once its files are released.",
+    `Waiting: other work is changing ${filesEn(paths)}. rondo starts this by itself once that ` +
+    "work's pull request is opened or its files are released; there is nothing to press.",
   planHeldFinished: (paths) =>
-    `Not yet: work that has finished still keeps ${filesEn(paths)}, because its pull request ` +
-    "is not open yet. This can start once it is, or once its files are released.",
+    `Waiting: work that has finished still keeps ${filesEn(paths)}, because its pull request ` +
+    "is not open yet. rondo starts this by itself once it is, or once its files are released; " +
+    "there is nothing to press.",
   planHeldBy: "Held by",
   planHeldWhy: (paths, why) => `Why it holds ${filesEn(paths)}: ${why}`,
-  planHeldTry:
-    "That work has finished. Starting checks first whether its change is on the default branch.",
   startRefusedHeld:
     "Nothing was started and nothing was spent: other work still keeps files this needs. The " +
     "approval stands; start again once that work's pull request is opened or its files are " +
     "released.",
+  startWaitsHeld:
+    "Waiting: other work is changing files this needs. Nothing has started and nothing was " +
+    "spent yet. rondo starts this by itself once that work's pull request is opened or its " +
+    "files are released; there is nothing to press.",
   publishHeading: "Open a pull request for this work",
   publishLead:
     "Nothing has left this machine yet. This is what publishing would do, read just now; the " +

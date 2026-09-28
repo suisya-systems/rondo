@@ -21,12 +21,23 @@
  * readiness are asked exactly as for a press. It answers once the lap's row is
  * reserved (D-0109), so one pass starts two parts and goes on reading landings
  * while they run.
+ *
+ * **And a person's own start that other work's files held** (rondo#284,
+ * D-0157): kept as a `held_start` row by the press, and attempted again here
+ * through the press's own path and id once no line holding files in its
+ * repository is in flight -- a scoped start asks for the whole repository
+ * (D-0073 rule 2.5), so every such line is in its way. The attempt reads the
+ * finished holders' landings, as a press's does (rule 7); refused by held files
+ * again, it waits on; started, or refused for any other reason, its wait ends
+ * and the reason is said, so the page draws the ordinary start again rather
+ * than a wait nothing will end.
  */
 
 import { readSplitPayload } from "../advisory/proposal.js";
-import type { AdvisoryRecord, ApprovedSplit } from "../store/sqlite.js";
+import type { AdvisoryRecord, ApprovedSplit, HeldStart, IterationStore } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
 import type { DraftedStartReadiness } from "./drafted-start.js";
+import type { Started } from "./web-app.js";
 
 export interface OrderHostPorts {
   readonly record: Pick<AdvisoryRecord, "readProposal" | "recordThreadMessage" | "openAsksIn">;
@@ -42,10 +53,16 @@ export interface OrderHostPorts {
    * `startSplitFromPage` in the approver's name, with a freshly minted
    * iteration id, answered once the lap's row is reserved (`answerOnceReserved`).
    */
-  readonly start: (
-    split: ApprovedSplit,
-    planIndex: number,
-  ) => Promise<{ readonly ok: boolean; readonly note: string }>;
+  readonly start: (split: ApprovedSplit, planIndex: number) => Promise<Started>;
+  /**
+   * The person's starts held by files (rondo#284): the rows, the ledger, and
+   * `startScopedFromPage` with the row's own input and id, in the approver's
+   * name, answered once reserved. Absent where no approver can start one.
+   */
+  readonly held?: {
+    readonly store: Pick<IterationStore, "heldStarts" | "settleHeldStart" | "laneLedger">;
+    readonly start: (held: HeldStart) => Promise<Started>;
+  };
   readonly now: () => number;
   readonly log: (line: string) => void;
 }
@@ -80,6 +97,13 @@ export function orderHost(ports: OrderHostPorts): OrderHost {
           await readSplit(ports, split, said);
         } catch (error) {
           ports.log(`order    ${split.proposalId}: ${describe(error)}`);
+        }
+      }
+      if (ports.held !== undefined) {
+        try {
+          await readHeldStarts(ports, ports.held, said);
+        } catch (error) {
+          ports.log(`order    the held starts could not be read: ${describe(error)}`);
         }
       }
     }
@@ -165,6 +189,16 @@ async function readSplit(
       continue;
     }
     const started = await ports.start(split, index);
+    // Held by files again: it waits, said once rather than every minute.
+    if (started.why === "startWaitsHeld") {
+      sayOnce(
+        ports,
+        said,
+        `${split.proposalId}/${String(index)}`,
+        `${split.proposalId} plan ${String(index)} waits: other work still holds its files`,
+      );
+      continue;
+    }
     ports.log(
       `order    ${split.proposalId} plan ${String(index)}: ` +
         (!started.ok
@@ -173,6 +207,43 @@ async function readSplit(
             ? "started under its approved scope"
             : "started on its dependency's landing"),
     );
+  }
+}
+
+/** Attempt each held start whose repository no line holding files is in flight in (rondo#284). */
+async function readHeldStarts(
+  ports: OrderHostPorts,
+  held: NonNullable<OrderHostPorts["held"]>,
+  said: Set<string>,
+): Promise<void> {
+  const waiting = await held.store.heldStarts();
+  if (waiting.length === 0) {
+    return;
+  }
+  const lines = await held.store.laneLedger();
+  for (const one of waiting) {
+    const id = one.iterationId;
+    // One start's failure costs that start, never the pass.
+    try {
+      if (lines.some((l) => l.repository === one.repository && l.paths.length > 0 && l.inFlight)) {
+        sayOnce(ports, said, id, `${id} waits: other work in flight holds files it needs`);
+        continue;
+      }
+      const started = await held.start(one);
+      // `startRefusedHeld` is the same refusal where the row could not be
+      // written again; the row this reads is still there, so it waits on.
+      if (started.why === "startWaitsHeld" || started.why === "startRefusedHeld") {
+        sayOnce(ports, said, id, `${id} waits: finished work still holds files it needs`);
+        continue;
+      }
+      await held.store.settleHeldStart(id, started.ok ? "started" : started.note, ports.now());
+      ports.log(
+        `order    ${id}: ` +
+          (started.ok ? "started once its files were free" : `not started: ${started.note}`),
+      );
+    } catch (error) {
+      ports.log(`order    ${id}: ${describe(error)}`);
+    }
   }
 }
 
