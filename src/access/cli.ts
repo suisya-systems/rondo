@@ -135,6 +135,7 @@ import {
   conductorPorts,
   endFaulted,
   endLost,
+  issuesClosedOver,
   notRereadSentence,
   type ReportingPorts,
   type RequestThread,
@@ -1726,7 +1727,13 @@ export async function main(
                 // cannot answer about one line two ways. A host started with
                 // `--remote NAME` therefore settles no landing by itself and
                 // says so; that is the stop rule 4 asks for.
-                { store, readLanding, readChangedPaths, remote: READING_REMOTE },
+                {
+                  store,
+                  readLanding,
+                  readChangedPaths,
+                  remote: READING_REMOTE,
+                  issuesClosed: issuesClosedOver(record),
+                },
                 lineageId,
                 Date.now(),
               ),
@@ -7441,7 +7448,7 @@ async function admitScopedPlan(
   },
   unquoted: RunPlan,
   proposalId: string | null,
-  /** The drafted split's claim (D-0073 rule 2.3), or null for the whole repository (rule 2.5). */
+  /** The drafted split's claim (D-0073 rule 2.3), or null for none until its gate (D-0160). */
   claim: LaneClaimAsk | null,
   /** How many new decision entries the drafted split says the plan writes (D-0098 rule 3.3). */
   entries = 0,
@@ -7534,12 +7541,16 @@ async function admitScopedPlan(
     // -- so the refusal can name it and offer its release where the press was.
     const read = await record.threadMessages();
     const messages = read.kind === "read" ? read.messages : [];
+    // Whether each holder is still running (rondo#553): only a finished one's
+    // release is offered, since the release screen refuses a line in flight.
+    const ledger = await store.laneLedger().catch(() => []);
     const holders = await Promise.all(
       held.holders.map(async ({ lineageId }) => {
         const root = await store.read(lineageId);
         return {
           lineageId,
           request: root.kind === "read" ? requestWords(messages, root.record) : null,
+          inFlight: ledger.find((line) => line.lineageId === lineageId)?.inFlight ?? true,
         };
       }),
     );

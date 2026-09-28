@@ -448,8 +448,8 @@ export interface ReserveInput {
    */
   readonly scopeSpend: ScopeSpend | null;
   /**
-   * The paths a first admission asks to hold, or null for the whole repository
-   * (D-0073 rules 2.3 and 2.5). Carried and never read, for `spend`'s reason.
+   * The paths a first admission asks to hold, or null for none until its gate
+   * (D-0073 rule 2.3, D-0160). Carried and never read, for `spend`'s reason.
    */
   readonly claim: LaneClaimAsk | null;
   /** The decision-record numbers this admission reserves, or null (D-0098 rule 3.3). */

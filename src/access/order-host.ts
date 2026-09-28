@@ -25,8 +25,9 @@
  * **And a person's own start that other work's files held** (rondo#284,
  * D-0158): kept as a `held_start` row by the press, and attempted again here
  * through the press's own path and id once no line holding files in its
- * repository is in flight -- a scoped start asks for the whole repository
- * (D-0073 rule 2.5), so every such line is in its way. The attempt reads the
+ * repository is in flight -- such a wait was kept while a scoped start asked
+ * for the whole repository (D-0073 rule 2.5; since D-0160 it claims nothing,
+ * so no new one is kept), so every such line was in its way. The attempt reads the
  * finished holders' landings, as a press's does (rule 7); refused by held files
  * again, or while the host has no room for another lap, or while continuo is
  * not usable, it waits on; started, or refused for a reason waiting does not

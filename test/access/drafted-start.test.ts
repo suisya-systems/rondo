@@ -894,8 +894,17 @@ test("a part cut from an earlier line also asks for what that line changed (rond
     bases: [{ form: "iteration", iterationId: "lap-early" }],
   });
   // Unread changes: the whole repository, unless the earlier line still holds paths.
-  expect(asPart({ plan, claim }, "", { ...earlier, held: [] }, null).claim).toBeNull();
+  // D-0160: no claim now claims nothing, so the whole repository is an explicit
+  // '/' ask in the lane ledger's name (D-0146 rule 4), not a null claim.
+  expect(asPart({ plan, claim }, "", { ...earlier, held: [] }, null).claim).toEqual({
+    paths: ["/"],
+    authorKind: "drafter",
+    authorId: "rondo/lane-ledger/1",
+    bases: [{ form: "iteration", iterationId: "lap-early" }],
+  });
   expect(asPart({ plan, claim }, "", earlier, null).claim).toEqual(claim);
+  // No drafted claim stays none (D-0160): nothing is asked for on its behalf.
+  expect(asPart({ plan, claim: null }, "", earlier, ["src/b.ts"]).claim).toBeNull();
   // No earlier line: the plan keeps its base and its claim.
   expect(asPart({ plan, claim }, "", { kind: "none" }, null)).toEqual({ plan, claim });
 });
