@@ -107,7 +107,9 @@ test("the provider is on the live reading too, so a running lap shows what it ru
   expect((await reserveOne(store, "live", "codex")).kind).toBe("reserved");
   const live = await store.readLive();
   expect(
-    live.map((read) => (read.kind === "read" ? [read.record.id, read.record.workerProvider] : read)),
+    live.map((read) =>
+      read.kind === "read" ? [read.record.id, read.record.workerProvider] : read,
+    ),
   ).toEqual([["live", "codex"]]);
 });
 
@@ -146,11 +148,31 @@ test("no transition can move a running lap onto another provider", async () => {
   const { store } = storeUnder();
   expect((await reserveOne(store, "fixed", "codex")).kind).toBe("reserved");
   // The fields a transition may write are `IterationFields`, which omits it:
-  // this is the type-level rule asserted as behaviour, through the one door a
-  // caller has. A cast, because a caller that could write it would not compile.
-  await store.transition("fixed", "classified", {
-    workerProvider: "claude",
-  } as unknown as Parameters<typeof store.transition>[2]);
+  // the type-level rule, asserted as behaviour through the one door a caller
+  // has. A cast, because a caller that could name it would not compile.
+  const named = await store.transition(
+    "fixed",
+    "planned",
+    "classified",
+    { workerProvider: "claude" } as unknown as Parameters<typeof store.transition>[3],
+    2_000,
+  );
+  // The store has no column a transition could put it in, so it refuses rather
+  // than writing it -- and the choice on the row is untouched.
+  expect(named.kind).toBe("defect");
+  expect(await providerOf(store, "fixed")).toBe("codex");
+
+  // The observed-red control: the same edge with a field a transition *may*
+  // write commits, so the refusal above is about the provider and not about a
+  // transition this fixture could never make.
+  const allowed = await store.transition(
+    "fixed",
+    "planned",
+    "classified",
+    { classification: "allowed" },
+    2_000,
+  );
+  expect(allowed.kind).toBe("transitioned");
   expect(await providerOf(store, "fixed")).toBe("codex");
 });
 

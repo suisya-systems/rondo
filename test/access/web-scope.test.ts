@@ -1638,9 +1638,7 @@ test("the start form offers the workers this host is equipped for and names the 
     scopeId: "scope-worker",
     payload: scopePayloadWithDefaults({
       requests: [requestId],
-      workspaces: [
-        { repository: SCOPE_PLAN.repository, workspace_root: SCOPE_PLAN.workspaceRoot },
-      ],
+      workspaces: [{ repository: SCOPE_PLAN.repository, workspace_root: SCOPE_PLAN.workspaceRoot }],
       agent_types: [plan.agentTypeDigest],
       budgets: {
         laps: 1,

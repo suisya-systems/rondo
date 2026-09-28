@@ -1658,37 +1658,46 @@ function workerChoice(wording: Chrome, workers: WebPorts["workers"]) {
     return null;
   }
   const others = workers.ready.filter((provider) => provider !== workers.fallback);
+  const said = (
+    <span class="note text-meta leading-5 text-muted-foreground">
+      {wording.workerProviderBefore}
+    </span>
+  );
+  if (others.length === 0) {
+    // The one worker this host has, said and not offered. The field is still
+    // posted so a form drawn on a host with one provider and pressed after a
+    // second arrived is read the same way: empty is the default. **Not a
+    // `label`**, because there is no control here for one to name.
+    return (
+      <div class="flex flex-col gap-1">
+        <span class="text-meta leading-5 font-medium text-muted-foreground">
+          {wording.workerProviderLabel}
+        </span>
+        <input type="hidden" name="worker_provider" value="" />
+        <p class="text-body leading-5 text-muted-foreground">
+          {wording.workerProviderDefault(workers.fallback)}
+        </p>
+        {said}
+      </div>
+    );
+  }
   return (
     <label class="flex flex-col gap-1">
       <span class="text-meta leading-5 font-medium text-muted-foreground">
         {wording.workerProviderLabel}
       </span>
-      {others.length === 0 ? (
-        // The one worker this host has, said and not offered. The field is
-        // still posted so a form drawn on a host with one provider and pressed
-        // after a second arrived is read the same way: empty is the default.
-        <>
-          <input type="hidden" name="worker_provider" value="" />
-          <p class="text-body leading-5 text-muted-foreground">
-            {wording.workerProviderDefault(workers.fallback)}
-          </p>
-        </>
-      ) : (
-        <select name="worker_provider" class={BOX}>
-          {/* The default first and selected, so a person who reads nothing here
-              gets what the host would have run anyway -- with its name in the
-              option rather than behind a terminal. */}
-          <option value="" selected>
-            {wording.workerProviderDefault(workers.fallback)}
-          </option>
-          {others.map((provider) => (
-            <option value={provider}>{provider}</option>
-          ))}
-        </select>
-      )}
-      <span class="note text-meta leading-5 text-muted-foreground">
-        {wording.workerProviderBefore}
-      </span>
+      <select name="worker_provider" class={BOX}>
+        {/* The default first and selected, so a person who reads nothing here
+            gets what the host would have run anyway -- with its name in the
+            option rather than behind a terminal. */}
+        <option value="" selected>
+          {wording.workerProviderDefault(workers.fallback)}
+        </option>
+        {others.map((provider) => (
+          <option value={provider}>{provider}</option>
+        ))}
+      </select>
+      {said}
     </label>
   );
 }
