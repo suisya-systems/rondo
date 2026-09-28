@@ -923,9 +923,7 @@ export const PAGE_EN: PageWords = Object.freeze({
       case "cost":
         return "approve more room: what ran out is the approval, not the goal's work.";
       case "failed_twice":
-        return (
-          "read why the last two requests ended, in their threads, before rondo sends another."
-        );
+        return "read why the last two requests ended, in their threads, before rondo sends another.";
       case "nothing_eligible":
         return "stop: nothing left in the ranking is one rondo may send by itself.";
     }

@@ -16,6 +16,8 @@ import { type FlowHostPorts, flowHost } from "../../src/access/flow-host.js";
 import { flowStopOf } from "../../src/access/flow-stop.js";
 import { unreadIssues } from "../../src/access/issue-read.js";
 import { MODEL_DRAFTER_PREFIX } from "../../src/access/model-draft/judgement.js";
+import { JA } from "../../src/access/wording/ja.js";
+import { type Chrome, EN } from "../../src/access/wording.js";
 import { flowMessageId } from "../../src/advisory/flow.js";
 import { type TriagePayload, triagePayloadDocument } from "../../src/advisory/triage.js";
 import { contentDigest } from "../../src/store/plan.js";
@@ -27,8 +29,6 @@ import {
   type ProposalDraft,
 } from "../../src/store/records.js";
 import { advisoryRecord } from "../../src/store/sqlite.js";
-import { type Chrome, EN } from "../../src/access/wording.js";
-import { JA } from "../../src/access/wording/ja.js";
 
 const REPO = "o/r";
 const AGENT_TYPE = `sha256:${"a".repeat(64)}`;
