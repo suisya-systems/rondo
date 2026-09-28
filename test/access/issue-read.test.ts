@@ -759,7 +759,7 @@ test("rondo#553: a request's issues read closed only when every one it named is 
     bases: [],
     asks: false,
   });
-  const read = (named: string, number: number, pullRequest = false) =>
+  const read = (named: string, number: number, pullRequest = false, state = "open") =>
     forgeBody({
       named,
       atMs: 1_000,
@@ -769,7 +769,7 @@ test("rondo#553: a request's issues read closed only when every one it named is 
         pullRequest,
         title: "t",
         // As first read: the state then says nothing about now.
-        state: "open",
+        state,
         author: "ada",
         openedAt: "2026-09-01T00:00:00Z",
         body: "",
@@ -810,6 +810,12 @@ test("rondo#553: a request's issues read closed only when every one it named is 
   expect(await issuesClosedNow(thread, "r4", readState)).toBe(false);
   // A read that failed says nothing, and neither does one failing now.
   expect(await issuesClosedNow(thread, "r5", readState)).toBe(false);
+  // One already closed when the request read it was named for context.
+  const context = [
+    message("r6", "Like #237.", null),
+    message("f6", read("#237", 237, false, "closed"), "r6"),
+  ];
+  expect(await issuesClosedNow(context, "r6", readState)).toBe(false);
   expect(
     await issuesClosedNow(thread, "r1", async () => await Promise.resolve(ran("", 1, "HTTP 502"))),
   ).toBe(false);

@@ -421,3 +421,102 @@ test(
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
+
+test("rondo#553: a finished line approved at its gate keeps its files though its issues closed: its publish is still owed", async () => {
+  const connection = new DatabaseSync(
+    join(mkdtempSync(join(tmpdir(), "rondo-claims-approved-")), "store.db"),
+  );
+  const store = iterationStore(connection, POLICY);
+  const said = await advisoryRecord(connection).recordThreadMessage({
+    messageId: "r1",
+    body: "Fix it.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: 500,
+    bases: [],
+    asks: false,
+  });
+  expect(said.kind).toBe("recorded");
+  const planned = readRunPlan(planDocument());
+  if (planned.kind !== "planned") throw new Error(planned.reason);
+  // A line that changed something, closed at its gate: approved or not.
+  const finish = async (id: string, answer: "approve" | null) => {
+    const reserved = await store.reserve({
+      numbers: null,
+      id,
+      request: "Fix it.",
+      plan: admittedPayload(planned.plan, id),
+      spend: null,
+      scopeSpend: null,
+      claim: { paths: [`${id}/`], authorKind: "drafter", authorId: "test", bases: [] },
+      nowMs: 1_000,
+      supersedesIterationId: null,
+      requestMessageId: "r1",
+      runId: `rondo-${id}`,
+      topicBranch: `rondo/${id}`,
+      workspace: `/srv/work/${id}`,
+    });
+    expect(reserved.kind).toBe("reserved");
+    for (const [from, to] of [
+      ["planned", "admitting"],
+      ["admitting", "admitted"],
+      ["admitted", "performing"],
+    ] as const) {
+      expect((await store.transition(id, from, to, {}, 1_100)).kind).toBe("transitioned");
+    }
+    const gated = await store.transition(
+      id,
+      "performing",
+      "awaiting_human",
+      { gateId: `g-${id}` },
+      1_200,
+      {
+        drafter: "rondo/deterministic/2",
+        verdict: "clear",
+        findings: [],
+        evidence: {
+          baseRef: "refs/remotes/origin/main",
+          baseCommit: "a".repeat(40),
+          tipCommit: "c".repeat(40),
+          materialDigest: "sha256:x",
+          commitCount: 1,
+          fileCount: 1,
+        },
+        unavailableReason: null,
+      },
+    );
+    expect(gated.kind, JSON.stringify(gated)).toBe("transitioned");
+    if (answer !== null) {
+      await store.recordGateAnswer(id, `g-${id}`, answer, "ada", 1_300);
+    }
+    const closed = await store.transition(
+      id,
+      "awaiting_human",
+      "closed",
+      { gateOutcome: "answered_and_forwarded" },
+      1_400,
+    );
+    expect(closed.kind).toBe("transitioned");
+  };
+  await finish("approved", "approve");
+  await finish("answered", null);
+  const conductor = await vi.importActual<typeof import("../../src/access/conductor.js")>(
+    "../../src/access/conductor.js",
+  );
+  const lanes = {
+    store,
+    readLanding: async () => {
+      throw new Error("no landing is read in this test");
+    },
+    readChangedPaths: async () => {
+      throw new Error("no changed paths are read in this test");
+    },
+    remote: "origin",
+    issuesClosed: async () => true,
+  };
+  // Approved and not yet pushed: the publish is still to come, so it holds.
+  expect((await conductor.readHolder(lanes, "approved", 2_000)).released).toBe(false);
+  // Not approved, left work, its issues closed: nothing will publish it.
+  expect((await conductor.readHolder(lanes, "answered", 2_000)).released).toBe(true);
+});

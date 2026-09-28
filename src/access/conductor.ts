@@ -68,6 +68,7 @@ import type {
 } from "../refrain/ports.js";
 import { claimCover, lineShape, WHOLE_REPOSITORY } from "../store/lanes.js";
 import {
+  approvedForPublication,
   type IterationRecord,
   isDeterministicReadingDrafter,
   isModelReadingDrafter,
@@ -854,7 +855,13 @@ export async function readHolder(
         `Line ${lineageId} has ended at its gate with nothing to publish: it left nothing`,
       );
     }
-    if (lanes.issuesClosed !== undefined && (await lanes.issuesClosed(root.requestMessageId))) {
+    // An approved tip is work still owed a publish, whatever its issues say:
+    // the publish press, or rondo's publish under a scope, is still to come.
+    if (
+      !line.laps.some((lap) => shape.closedTips.includes(lap.id) && approvedForPublication(lap)) &&
+      lanes.issuesClosed !== undefined &&
+      (await lanes.issuesClosed(root.requestMessageId))
+    ) {
       return await release(
         shape.closedTips,
         `Line ${lineageId} has ended at its gate unpublished, and every issue its request named is closed`,

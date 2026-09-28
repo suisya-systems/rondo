@@ -859,8 +859,10 @@ export function latestReads(
  * (rondo#553): a finished line whose request's issues are all closed will
  * never be published, so its files are free. The thread's reads are as old as
  * the request, so each issue is read again; pull requests it named are not its
- * issues. False where it named none, where a read of one failed then or fails
- * now, and where one is open: a line is released on this only when it is sure.
+ * issues, and neither is one already closed when it was read, which the request
+ * named for context. False where it named none, where a read of one failed then
+ * or fails now, and where one is open: a line is released on this only when it
+ * is sure.
  */
 export async function issuesClosedNow(
   messages: readonly ThreadMessageDraft[],
@@ -872,7 +874,7 @@ export async function issuesClosedNow(
     return false;
   }
   const issues = reads.flatMap((read) =>
-    "read" in read && !read.read.pullRequest ? [read.read] : [],
+    "read" in read && !read.read.pullRequest && read.read.state === "open" ? [read.read] : [],
   );
   if (issues.length === 0) {
     return false;

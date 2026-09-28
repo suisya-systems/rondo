@@ -27768,8 +27768,11 @@ At rondo `8e4d949` on **2026-09-29**, by reading the code:
       `baseCommit` (the line's range, not the tip's own, since a revise is read from its
       predecessor's tip); or
    2. **every issue its request named is closed on the forge now**: each is read again with the
-      operator's own `gh`; a pull request it named is not its issue, and a request that named none,
-      a read that failed then or fails now, or an open issue keeps the claim.
+      operator's own `gh`; a pull request it named is not its issue, nor is one already closed when
+      the request read it (named for context), and a request that named none, a read that failed
+      then or fails now, or an open issue keeps the claim. **A line with a tip approved at its gate
+      is not released this way**: its publish, the person's press or rondo's under a scope, is still
+      owed.
 
    The release is `D-0073` rule 4.3's *ended with nothing to land*: the lane ledger's author, the
    line's numbers given up, and no `landing` basis, so no order is released by it (`D-0098` rule
