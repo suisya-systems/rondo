@@ -41,6 +41,11 @@ const asking = (paths: readonly string[]): LaneClaimAsk => ({
   bases: [{ form: "message", messageId: "m-1" }],
 });
 
+/** A drafted claim on the whole repository (D-0073 rule 2.2): since D-0160 a
+ * line admitted with no drafted claim holds nothing, so a test that needs a
+ * line overlapping every other asks for '/' outright. */
+const whole = asking(["/"]);
+
 const input = (
   id: string,
   parts: Partial<ReserveInput> & { readonly repository?: string } = {},
@@ -94,9 +99,9 @@ const walk = async (store: Store, id: string, to: "awaiting_human" | "closed") =
   }
 };
 
-test("a line admitted with no drafted claim holds the whole repository, and a second is refused with nothing written", async () => {
+test("a line holding the whole repository refuses a second with nothing written (D-0160: '/' is asked outright)", async () => {
   const { connection, store, claims, iterations } = fresh();
-  await reserved(store, input("a"));
+  await reserved(store, input("a", { claim: whole }));
   expect(claims()).toEqual([
     {
       claim_id: "a:1",
@@ -105,7 +110,7 @@ test("a line admitted with no drafted claim holds the whole repository, and a se
       paths: '["/"]',
       supersedes_claim_id: null,
       author_kind: "drafter",
-      author_id: LANE_LEDGER_AUTHOR,
+      author_id: "rondo/advisory/test",
     },
   ]);
 
@@ -157,12 +162,17 @@ test("disjoint claims run together; a directory over a claimed file, or another 
   ]);
 });
 
-test("a malformed drafted claim is a defect in the caller and writes nothing", async () => {
-  const { store, iterations } = fresh();
+test("a malformed drafted claim is a defect in the caller and writes nothing; an ask with no paths claims nothing yet (D-0160)", async () => {
+  const { store, claims, iterations } = fresh();
   expect((await store.reserve(input("a", { claim: asking(["src/*.ts"]) }))).kind).toBe("defect");
-  expect((await store.reserve(input("b", { claim: asking([]) }))).kind).toBe("defect");
   expect((await store.reserve(input("c", { plan: { run_id: "r" } }))).kind).toBe("defect");
   expect(iterations()).toBe(0);
+  // No paths is no longer malformed: the line holds nothing until its gate,
+  // keeping the bases it was asked on (D-0160).
+  await reserved(store, input("b", { claim: asking([]) }));
+  expect(claims()).toEqual([
+    expect.objectContaining({ claim_id: "b:1", paths: "[]", supersedes_claim_id: null }),
+  ]);
 });
 
 test("a redo continues its lineage's claim and writes no row; a redo carrying a claim is a defect", async () => {
@@ -179,16 +189,18 @@ test("a redo continues its lineage's claim and writes no row; a redo carrying a 
 
 test("a line at its gate or closed keeps its claim; an abandoned or failed line releases it in the same transaction", async () => {
   const { store, claims } = fresh();
-  await reserved(store, input("gated"));
+  // Each line asks for '/' outright: one with no drafted claim holds nothing
+  // (D-0160), and this test is about a holder keeping or giving up its paths.
+  await reserved(store, input("gated", { claim: whole }));
   await walk(store, "gated", "awaiting_human");
-  expect((await store.reserve(input("next"))).kind).toBe("laneRefused");
+  expect((await store.reserve(input("next", { claim: whole }))).kind).toBe("laneRefused");
 
   await store.transition("gated", "awaiting_human", "closed", {}, 3_000);
   // Closed and not landed: still open (rule 3.3).
-  expect((await store.reserve(input("next"))).kind).toBe("laneRefused");
+  expect((await store.reserve(input("next", { claim: whole }))).kind).toBe("laneRefused");
 
   const { store: other, claims: otherClaims } = fresh();
-  await reserved(other, input("x"));
+  await reserved(other, input("x", { claim: whole }));
   expect((await other.transition("x", "planned", "failed", {}, 5)).kind).toBe("transitioned");
   expect(otherClaims().at(-1)).toMatchObject({
     claim_id: "x:2",
@@ -196,20 +208,65 @@ test("a line at its gate or closed keeps its claim; an abandoned or failed line 
     supersedes_claim_id: "x:1",
     author_id: LANE_LEDGER_AUTHOR,
   });
-  await reserved(other, input("y"));
+  await reserved(other, input("y", { claim: whole }));
 
-  await reserved(other, input("z", { repository: "/srv/z" }));
+  await reserved(other, input("z", { repository: "/srv/z", claim: whole }));
   expect((await other.transition("z", "planned", "abandoned", {}, 5)).kind).toBe("transitioned");
-  await reserved(other, input("z2", { repository: "/srv/z" }));
+  await reserved(other, input("z2", { repository: "/srv/z", claim: whole }));
   expect(claims()).toHaveLength(1);
 });
 
 test("settle's escape hatch releases the line it ends", async () => {
   const { store, claims } = fresh();
-  await reserved(store, input("a"));
+  // '/' asked outright, so the release is what admits `b` (D-0160).
+  await reserved(store, input("a", { claim: whole }));
   expect((await store.settle("a", "stuck", 9)).kind).toBe("settled");
   expect(claims().map((row) => row["paths"])).toEqual(['["/"]', "[]"]);
-  await reserved(store, input("b"));
+  await reserved(store, input("b", { claim: whole }));
+});
+
+test("a line with no drafted claim holds nothing and runs beside any line; its gate claims what it changed that nobody holds (D-0160)", async () => {
+  const { connection, store, claims } = fresh();
+  await reserved(store, input("wide", { claim: whole }));
+  await reserved(store, input("free"));
+  await reserved(store, input("free2"));
+  expect(claims().find((row) => row["lineage_id"] === "free")).toEqual({
+    claim_id: "free:1",
+    lineage_id: "free",
+    repository: REPOSITORY,
+    paths: "[]",
+    supersedes_claim_id: null,
+    author_kind: "drafter",
+    author_id: LANE_LEDGER_AUTHOR,
+  });
+  // Open, not released: it holds nothing yet.
+  expect((await store.laneLedger()).find((line) => line.lineageId === "free")).toMatchObject({
+    paths: [],
+    releasedBy: null,
+  });
+  expect((await store.transition("wide", "planned", "abandoned", {}, 5)).kind).toBe("transitioned");
+  await reserved(store, input("src", { claim: asking(["src/"]) }));
+
+  // At its gate: the changed paths `src` holds are left to it.
+  expect(
+    await store.claimChanged({ iterationId: "free", paths: ["src/a.ts", "docs/x.md"], nowMs: 9 }),
+  ).toEqual({ kind: "claimed", lineageId: "free", paths: ["docs/x.md"] });
+  const row = connection
+    .prepare("SELECT paths, supersedes_claim_id, bases FROM lane_claim WHERE claim_id = 'free:2'")
+    .get() as Record<string, unknown>;
+  expect(row).toEqual({
+    paths: '["docs/x.md"]',
+    supersedes_claim_id: "free:1",
+    bases: JSON.stringify([{ form: "iteration", iterationId: "free" }, { form: "changed" }]),
+  });
+  // Now it holds them: another unclaimed line's gate cannot take them too.
+  expect(
+    await store.claimChanged({ iterationId: "free2", paths: ["docs/x.md"], nowMs: 10 }),
+  ).toEqual({ kind: "unchanged" });
+  // A drafted claim is never widened (rondo#283).
+  expect(await store.claimChanged({ iterationId: "src", paths: ["lib/y.ts"], nowMs: 11 })).toEqual({
+    kind: "unchanged",
+  });
 });
 
 test("a closed lap revised into a redo that failed owes nothing, so the redo's failure releases the line", async () => {
@@ -278,9 +335,10 @@ test("a line from before the ledger holds '/' only while a lap of it has not end
     connection
       .prepare(
         "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, identifiers_spent, " +
-          "supersedes_iteration_id, created_at_ms, updated_at_ms) VALUES (?, ?, 'r', ?, 'x', 1, 1, ?, 1, 1)",
+          "supersedes_iteration_id, request_message_id, created_at_ms, updated_at_ms) " +
+          "VALUES (?, ?, 'r', ?, 'x', 1, 1, ?, ?, 1, 1)",
       )
-      .run(id, status, JSON.stringify({ repository: REPOSITORY }), supersedes);
+      .run(id, status, JSON.stringify({ repository: REPOSITORY }), supersedes, REQUEST);
   // Finished before the ledger, closed tips included: not open to it (a squash
   // merge hides whether a closed one landed, so holding it would hold for ever).
   legacy("old-done", "abandoned");
@@ -299,14 +357,13 @@ test("a line from before the ledger holds '/' only while a lap of it has not end
   expect((await store.settle("old-gated", "gone", 3)).kind).toBe("settled");
   expect(claims()).toEqual([]);
   await reserved(store, input("new", { claim: asking(["docs/"]) }));
-  // A redo of a pre-ledger line is an allocation of rule 2.5's whole
-  // repository (D-0073 rule 2.5), tested like a first admission.
-  expect(
-    await store.reserve(input("old-r2", { supersedesIterationId: "old-closed" })),
-  ).toMatchObject({
-    kind: "laneRefused",
-    paths: ["/"],
-  });
+  // A redo of a pre-ledger line is tested like a first admission with no
+  // drafted claim: it claims nothing yet, so it runs beside `new` (D-0160,
+  // replacing rule 2.5's whole repository).
+  await reserved(store, input("old-r2", { supersedesIterationId: "old-closed" }));
+  expect(claims().filter((row) => row["lineage_id"] === "old-closed")).toEqual([
+    expect.objectContaining({ claim_id: "old-closed:1", paths: "[]", supersedes_claim_id: null }),
+  ]);
 });
 
 const press = (iterationId: string) => ({
@@ -321,7 +378,8 @@ const press = (iterationId: string) => ({
 
 test("a landing's release is refused as stale when a claim row or a lap was written after the reading", async () => {
   const { store } = fresh();
-  await reserved(store, input("a"));
+  // '/' asked outright (D-0160), so `b`'s admission shows the release took.
+  await reserved(store, input("a", { claim: whole }));
   await walk(store, "a", "closed");
   const read = await store.laneLine("a");
   if (read.kind !== "read") throw new Error("no line");
@@ -343,7 +401,7 @@ test("a landing's release is refused as stale when a claim row or a lap was writ
   });
   // Released once: a second reading over the same line holds nothing to release.
   expect((await store.releaseLane(landed(["a"], "a:2"))).kind).toBe("refused");
-  await reserved(store, input("b"));
+  await reserved(store, input("b", { claim: whole }));
 });
 
 test("first_landed is only a landing's release: never an abandon, a failure or the person's press (D-0098 rules 1.1 and 1.5)", async () => {
@@ -421,11 +479,12 @@ test("the capacity ledger still answers its own question beside the claim (rule 
 
 test("one repository spelled two ways is one ledger: a trailing '/' or a '.' segment is no second repository", async () => {
   const { store, claims } = fresh();
-  await reserved(store, input("a"));
+  // '/' asked outright: a line with no drafted claim is refused by nobody (D-0160).
+  await reserved(store, input("a", { claim: whole }));
   for (const spelling of ["/srv/repo/", "/srv/./repo", "/srv//repo", "/srv/x/../repo"]) {
-    expect((await store.reserve(input(`b-${spelling}`, { repository: spelling }))).kind).toBe(
-      "laneRefused",
-    );
+    expect(
+      (await store.reserve(input(`b-${spelling}`, { repository: spelling, claim: whole }))).kind,
+    ).toBe("laneRefused");
   }
   expect(claims().map((row) => row["repository"])).toEqual(["/srv/repo"]);
 });

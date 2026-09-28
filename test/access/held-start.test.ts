@@ -8,6 +8,11 @@
  * loop's admission (`conductor.admit`), which here only reserves -- **through
  * the real store**, so the lane ledger is what refuses the start and what lets
  * it through. Everything between the press and that reservation is rondo's own.
+ *
+ * **Since D-0160 a start with no drafted claim claims nothing** (rondo#554), so
+ * files no longer hold it: a wait is now a drafted part's, or one kept before
+ * D-0160. The admission here is handed `/` in its place (`seams.unclaimed`) so
+ * the wait's own mechanics stay under test; the last test hands it nothing.
  */
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -43,6 +48,8 @@ import { get, portsOver, post, serving, tokenIn, WINDOWS_HEAVY_TIMEOUT_MS } from
 const seams = vi.hoisted(() => ({
   store: null as IterationStore | null,
   admitted: [] as string[],
+  /** What an admission with no drafted claim is handed: `/`, as before D-0160, or nothing. */
+  unclaimed: null as { paths: string[]; authorKind: "drafter"; authorId: string; bases: [] } | null,
 }));
 vi.mock("../../src/continuo/invoker.js", async (original) => {
   const real = await original<typeof import("../../src/continuo/invoker.js")>();
@@ -64,7 +71,7 @@ vi.mock("../../src/access/conductor.js", async (original) => {
         plan: admittedPayload(plan, id),
         spend: null,
         scopeSpend: scopeSpend ?? null,
-        claim: claim ?? null,
+        claim: claim ?? seams.unclaimed,
         nowMs: Date.now(),
         supersedesIterationId: supersedes ?? null,
         requestMessageId,
@@ -111,6 +118,7 @@ async function lines() {
   const record = advisoryRecord(connection);
   seams.store = store;
   seams.admitted = [];
+  seams.unclaimed = { paths: ["/"], authorKind: "drafter", authorId: "before-d-0160", bases: [] };
   const say = async (messageId: string, body: string, inReplyTo: string | null, atMs: number) => {
     const outcome = await record.recordThreadMessage({
       messageId,
@@ -577,6 +585,35 @@ test(
       );
       // The wait over, the scope screen draws its start again.
       expect(await w.screen()).toContain('id="start-form"');
+    } finally {
+      await w.stop();
+    }
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "a person's start with no drafted claim runs beside a line holding files, and claims nothing until its gate (rondo#554, D-0160)",
+  async () => {
+    const w = await lines();
+    try {
+      seams.unclaimed = null;
+      // Said before it is pressed: no plan, so it starts beside other work.
+      const form = await w.screen();
+      expect(form.slice(form.indexOf('id="start-form"'))).toContain(EN.startBeside);
+      const { iteration, pressed } = await pressStart(w);
+      // Started at once: nothing waits, and nothing was refused.
+      expect(pressed.status).toBe(303);
+      expect((await w.store.read(iteration)).kind).toBe("read");
+      expect(await w.store.heldStarts()).toEqual([]);
+      const ledger = await w.store.laneLedger();
+      expect(ledger.find((line) => line.lineageId === "lap-a")?.paths).toEqual(["src/"]);
+      // Open and holding nothing: not said to be released.
+      expect(ledger.find((line) => line.lineageId === iteration)).toMatchObject({
+        paths: [],
+        inFlight: true,
+        releasedBy: null,
+      });
     } finally {
       await w.stop();
     }

@@ -683,7 +683,7 @@ export type DraftedPlanRun =
        * What the line asks to hold at its first admission (D-0073 rule 2.3),
        * authored by the drafter run that wrote the split and resting on it and
        * the plan's own bases; null for a split drafted before claims were,
-       * which claims the whole repository (rule 2.5).
+       * which claims nothing until its gate (D-0160).
        */
       readonly claim: LaneClaimAsk | null;
     }

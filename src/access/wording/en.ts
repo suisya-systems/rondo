@@ -792,6 +792,9 @@ explanation you pressed on and then answers the gate.`,
     "scope that replaced it is the one to start under.",
   startAction: "Start the work",
   startPlain: "Starts one lap under this approval",
+  startBeside:
+    "There is no plan for this, so it starts beside other work. If they collide, rondo offers " +
+    "the work that fixes it on one press.",
   startNote:
     "The words of your request are what the work is asked to do, exactly as you wrote them. " +
     "rondo names the lap; you do not.",

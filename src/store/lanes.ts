@@ -12,7 +12,7 @@
 
 import { TERMINAL_STATUSES } from "./records.js";
 
-/** The claim on the whole repository (D-0073 rule 2.2), and rule 2.5's default. */
+/** The claim on the whole repository (D-0073 rule 2.2). */
 export const WHOLE_REPOSITORY = "/";
 
 /**

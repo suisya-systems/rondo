@@ -1563,10 +1563,24 @@ test(
 
 // --- D-0073 rule 7: a lane refusal reads the holder's landing ----------------
 
+/**
+ * An explicit claim of the whole repository. Since D-0160 a start with no
+ * drafted claim holds nothing (an `unclaimed` row, paths `[]`) and neither
+ * refuses nor is refused, so the tests below whose subject is one line
+ * holding another's paths give both lines this claim.
+ */
+const WHOLE = {
+  paths: ["/"],
+  authorKind: "drafter" as const,
+  authorId: "rondo/drafter/3/claude-fixture",
+  bases: [{ form: "proposal", proposalId: "draft-whole" }],
+};
+
 test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a landed one is released and let through", async () => {
   const h = await harness();
   expect(
-    (await admit(h.reporting, h.advisory, PLAN, POLICY, "i-land", null, null, REQUEST)).status,
+    (await admit(h.reporting, h.advisory, PLAN, POLICY, "i-land", null, null, REQUEST, null, WHOLE))
+      .status,
   ).toBe("awaiting_human");
   const asked: LandingRequest[] = [];
   let answer: LandingReading = {
@@ -1587,8 +1601,11 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
       },
     },
   };
+  // Both lines claim '/' explicitly (D-0160: a start with no drafted claim holds nothing).
+  const next = () =>
+    admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST, null, WHOLE);
   // At its gate the line holds its paths whatever its diff says (rule 10): nothing is read.
-  const gated = await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST);
+  const gated = await next();
   expect(gated.iterationId).toBeNull();
   expect(gated.laneRefusal?.holders).toEqual([{ lineageId: "i-land", sharedPaths: ["/"] }]);
   expect(asked).toEqual([]);
@@ -1599,7 +1616,7 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
   // **A closed line rondo never recorded a push for is read as neither
   // landed nor not landed** (rondo#286, D-0153 rule 3): no git is run, and the
   // line keeps its paths until a person presses release.
-  const unpushed = await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST);
+  const unpushed = await next();
   expect(unpushed.iterationId).toBeNull();
   expect(unpushed.lines.join("\n")).toContain(
     "undetermined: rondo holds no record of the remote a publish pushed it to",
@@ -1609,7 +1626,7 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
   // What `publish` writes at the push (D-0153 rule 1), here to the remote this
   // host reads landings from.
   await h.store.markPublishedRemote("i-land", "origin", 3);
-  const unmerged = await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST);
+  const unmerged = await next();
   expect(unmerged.iterationId).toBeNull();
   expect(unmerged.lines.join("\n")).toContain("'x.ts' differ");
   expect(asked).toEqual([
@@ -1624,14 +1641,12 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
   ]);
 
   answer = { kind: "undetermined", reason: "the forge did not answer" };
-  const unknown = (
-    await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST)
-  ).lines.join("\n");
+  const unknown = (await next()).lines.join("\n");
   expect(unknown).toContain("undetermined: the forge did not answer");
   expect(unknown).not.toContain("not on");
 
   answer = { kind: "landed", branch: "main", headCommit: "h", paths: ["x.ts"] };
-  const through = await admit(ports, h.advisory, PLAN, POLICY, "i-next", null, null, REQUEST);
+  const through = await next();
   expect(through.iterationId).toBe("i-next");
   expect(through.lines[0]).toContain("so its paths were released");
   const read = await h.store.laneLine("i-land");
@@ -1647,7 +1662,8 @@ test("D-0073 rule 7: a refusal by a closed line reads its landing, and only a la
 test("rondo#286 (D-0153): the landing is read from the remote the publish recorded, and a disagreement with this host's is left to a person", async () => {
   const h = await harness();
   expect(
-    (await admit(h.reporting, h.advisory, PLAN, POLICY, "i-fork", null, null, REQUEST)).status,
+    (await admit(h.reporting, h.advisory, PLAN, POLICY, "i-fork", null, null, REQUEST, null, WHOLE))
+      .status,
   ).toBe("awaiting_human");
   expect((await h.store.transition("i-fork", "awaiting_human", "closed", {}, 2)).kind).toBe(
     "transitioned",
@@ -1665,6 +1681,7 @@ test("rondo#286 (D-0153): the landing is read from the remote the publish record
       return { kind: "landed", branch: "main", headCommit: "h", paths: ["x.ts"] };
     },
   });
+  // Both lines claim '/' explicitly, so the second is held by the first (D-0160).
   const attempt = async (remote: string) =>
     await admit(
       { ...h.reporting, lanes: lanes(remote) },
@@ -1675,6 +1692,8 @@ test("rondo#286 (D-0153): the landing is read from the remote the publish record
       null,
       null,
       REQUEST,
+      null,
+      WHOLE,
     );
 
   // **Rule 4**: this host reads landings from origin and the publish pushed
@@ -1722,12 +1741,27 @@ test("D-0073 rule 2.3: a drafted claim reaches reserve(), so two lines on differ
     { lineageId: "i-store", sharedPaths: ["src/store/sqlite.ts"] },
   ]);
   expect((await h.store.read("i-shared")).kind).toBe("absent");
-  // With no drafted claim a line claims the whole repository (rule 2.5), and collides with both.
-  const whole = await admit(h.reporting, h.advisory, PLAN, POLICY, "i-whole", null, null, REQUEST);
+  // A line claiming the whole repository collides with both.
+  const whole = await first("i-whole", ["/"]);
   expect(whole.laneRefusal?.holders.map((holder) => holder.lineageId).sort()).toEqual([
     "i-docs",
     "i-store",
   ]);
+  // D-0160 (replacing rule 2.5): with no drafted claim a line claims nothing, not '/',
+  // so it runs beside both, and its row holds no path.
+  const unclaimed = await admit(
+    h.reporting,
+    h.advisory,
+    PLAN,
+    POLICY,
+    "i-bare",
+    null,
+    null,
+    REQUEST,
+  );
+  expect(unclaimed.status).toBe("awaiting_human");
+  const bare = await h.store.laneLine("i-bare");
+  expect(bare.kind === "read" ? bare.line.claim?.paths : undefined).toEqual([]);
 });
 
 test("D-0073 rule 5: the gate compares what a lap changed with its line's claim, and writes nothing", async () => {
@@ -1836,7 +1870,8 @@ test("D-0098 rule 2: what a lap took in is not compared with its claim, only wha
 test("D-0073 rule 4.3: a line that ended with its release missed is released at the next refusal, with nothing read", async () => {
   const h = await harness();
   expect(
-    (await admit(h.reporting, h.advisory, PLAN, POLICY, "i-lost", null, null, REQUEST)).status,
+    (await admit(h.reporting, h.advisory, PLAN, POLICY, "i-lost", null, null, REQUEST, null, WHOLE))
+      .status,
   ).toBe("awaiting_human");
   // Ended out of band, so no release row was written: the claim is still held.
   h.connection.prepare("UPDATE iteration SET status = 'abandoned' WHERE id = 'i-lost'").run();
@@ -1853,7 +1888,19 @@ test("D-0073 rule 4.3: a line that ended with its release missed is released at 
       },
     },
   };
-  const through = await admit(ports, h.advisory, PLAN, POLICY, "i-after", null, null, REQUEST);
+  // Both claim '/' explicitly, so i-after is refused by i-lost first (D-0160).
+  const through = await admit(
+    ports,
+    h.advisory,
+    PLAN,
+    POLICY,
+    "i-after",
+    null,
+    null,
+    REQUEST,
+    null,
+    WHOLE,
+  );
   expect(through.iterationId).toBe("i-after");
   expect(through.lines[0]).toContain("has ended with nothing to land, so its paths were released");
   expect(read).toBe(0);
@@ -1894,7 +1941,9 @@ test(
         )
         .all(),
     ).toEqual([
-      { paths: '["/"]', author_kind: "drafter", author_id: "rondo/lane-ledger/1" },
+      // D-0160: a start with no drafted claim holds nothing (an unclaimed row), and the
+      // press still writes a real, empty release over it.
+      { paths: "[]", author_kind: "drafter", author_id: "rondo/lane-ledger/1" },
       { paths: "[]", author_kind: "operator", author_id: "oidc|operator-1" },
     ]);
     expect((await captured(argv, environment)).code).not.toBe(0);

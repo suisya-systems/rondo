@@ -962,6 +962,12 @@ export interface Chrome extends PageWords {
   readonly startPlain: string;
   readonly startNote: string;
   /**
+   * A start with no plan drafted for it (rondo#554, D-0160): it claims no
+   * files, so it runs beside other work; a collision is fixed on the press
+   * the conflict fix already offers (D-0105), not by itself.
+   */
+  readonly startBeside: string;
+  /**
    * That a second press of this button is one lap and not two (rondo#244).
    *
    * **Said because it is true and was not said.** `startScopedFromPage` holds

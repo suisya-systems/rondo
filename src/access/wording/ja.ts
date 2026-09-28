@@ -815,6 +815,8 @@ export const JA: Chrome = Object.freeze({
     chosen ? `${provider} (この依頼で選ばれたもの)` : `${provider} (このホストの既定値)`,
   workerProviderUnknown:
     "不明です。この周回は、rondo が提供元を記録するようになる前に始まりました。",
+  startBeside:
+    "計画が無いので、ほかの作業と並べて始めます。ぶつかったら、rondo が直す作業をボタン一つで出します。",
   startNote:
     "依頼に書いた言葉が、そのまま作業への指示になります。周回の名前は rondo が付けるので、" +
     "あなたが決める必要はありません。",

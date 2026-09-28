@@ -191,6 +191,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0156 | Only a judgment call at or above the scope's threshold keeps rondo from sending the drafted change; one below it is left out of what is sent, and the note names it | accepted |
 | D-0157 | A typed `revise` spends the approval the lap it revises was admitted under: `--scope-decision-id` overrides it, nothing to draw refuses, and no `revise` runs outside every approval | accepted |
 | D-0158 | A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press | accepted |
+| D-0160 | Claims that let two lines run: a finished line nothing will publish gives its files up, a refused draft is drafted once more, and a start with no drafted claim claims nothing until its gate claims what it changed | accepted |
 
 ---
 
@@ -16512,6 +16513,10 @@ number.
    covers** (rule 3.2), and writes nothing else. It is not retried: the person's next message triggers
    the next run.
 
+   > **Annotation (2026-09-29, from D-0160).** Narrowed: a run the model answered or failed is drafted
+   > once more, straight away, before this message is written; rondo's note that it does so covers no
+   > operator message. A run refused before the model (material over the bound, not an opener) is not.
+
 ### 2. What it is handed, and what it is not
 
 1. **The document holds, each taken by rondo from its own source:**
@@ -17088,6 +17093,10 @@ number.
    5. **A plan admitted with no drafted claim claims `/`**: an operator-written plan (`D-0071`), or a
       redo of a line admitted before this entry. Parallelism comes from declaring, and a line that
       declares nothing collides with everything, which is today's behaviour at `RONDO_MAX_OCCUPYING` 1.
+
+      > **Annotation (2026-09-29, from D-0160).** Superseded by the owner's decision of 2026-09-29: a
+      > plan admitted with no drafted claim claims **nothing**, and its gate claims the files it
+      > changed that no other open line holds. Rule 5's widening is written for such a line only.
    6. **A redo continues its lineage's claim** and writes no row unless the claim changes. **A redo of
       a line whose claim was released** (rule 4.3: an `abandoned` or `failed` line retried) re-requests
       the last claim the release superseded, and `reserve()` tests it as it tests a first admission:
@@ -27577,6 +27586,12 @@ none. So what was left, and what this entry decides, is the terminal.
 starts a person presses. Refs `D-0067`, `D-0068` rule 2.1, `D-0098` rule 1.4, `D-0109`, `D-0114`,
 `D-0127` rule 4, rondo#280.
 
+> **Annotation (2026-09-29, from D-0160).** A start with no drafted claim now claims nothing, so a
+> person's own scoped start is no longer held by files and writes no new `held_start` row; the rows
+> kept before and a drafted part still wait as below. A finished line nothing will publish is
+> released when its landing is read, and the scope screen's wait and the thread's next step now
+> name the holders and link a finished one's release, which the costs below say they did not.
+
 ### Context
 
 On lap-19 (2026-09-28 19:30 JST, `~/rondo-lap-19`) the second half of rondo#228's split held
@@ -27699,3 +27714,127 @@ At rondo `e72045f` on **2026-09-28**, by reading the code:
   lines have all released or ended. The tick or the row's key is then wrong.
 - **People pressing start again anyway**: then the waiting sentence is not being read as a wait,
   and the start form should say it in place, not only on the press's answer.
+
+## D-0160 — Claims that let two lines run: a finished line nothing will publish gives its files up, a refused draft is drafted once more, and a start with no drafted claim claims nothing until its gate claims what it changed
+
+**Status:** accepted (2026-09-29, rondo#553 and rondo#554; the owner answered the four points put
+to them the same day). Supersedes `D-0073` rule 2.5, narrows `D-0071` rule 1.5, and writes rule 5's
+widening for a line that declared nothing, which rondo#283's answer left unwritten. Refs `D-0073`
+rules 3.3, 4.3, 6 and 7, `D-0098` rule 1.5, `D-0105`, `D-0114`, `D-0138` rule 2, `D-0146` rule 4,
+`D-0153`, `D-0158`.
+
+### Context
+
+On lap 19 (2026-09-28, `~/rondo-lap-19`), with two lines in parallel (the owner's decision of
+2026-09-27), two things kept the second line from running:
+
+- **rondo#553.** rondo#228's second part (lap-2c98a97a) was closed at its gate with nothing to
+  publish: its work had landed through PR #548 on another line of the same request. It kept its
+  claim on `DECISIONS.md`, `docs/operations/rondo-cli.md` and `src/access/cli*.ts`, and the host
+  said *whether its work has landed is undetermined: rondo holds no record of the remote a publish
+  pushed it to* on every pass. Under `D-0158` the held starts of rondo#462 and rondo#194 would have
+  waited for ever. The wait screens said *nothing to press* and offered no release; the release
+  screen was reached by typing `?release=<lap id>`.
+- **rondo#554.** rondo#462's draft was refused once (`D-0071` rule 7.1: the model cited a message
+  id not in the thread). Its scope stayed approved, the start ran with no drafted split, and so it
+  claimed `/` (`D-0073` rule 2.5), which overlaps every line. rondo#194 started on `DECISIONS.md`
+  and rondo#462 waited for it.
+
+### What was measured
+
+At rondo `8e4d949` on **2026-09-29**, by reading the code:
+
+- **A gate close is never released by itself.** `releaseIfEnded` runs on `abandoned` and `failed`
+  only. A `closed` lap is a closed tip, and `readHolder` reads its landing from the remote the
+  publish recorded (`D-0153`); an unpublished line has none, so the reading is `undetermined` every
+  time and only the release press ends the claim.
+- **The deterministic reading already says a lap left nothing**: `tipCommit` equal to `baseCommit`
+  (`review.ts`, *so this lap left nothing*). The issue a request names is read once, when the
+  message arrives, and never again.
+- **A refused draft is not retried** (`D-0071` rule 1.5), pinned by a test, and its message covers
+  the request's operator messages, so nothing drafts it again until the person writes.
+- **rondo sees a lap's commits only at its gate.** `lap perform` is one call with no progress, and
+  the reading is taken when it returns.
+- **The conflict fix is a press** (`D-0105` rule 3, `D-0138` rule 2): it spends the scope's `redo`
+  and is not started unattended.
+
+### Decision
+
+1. **A finished line nothing will publish gives its files up** (rondo#553). When a holder's landing
+   is read (`readHolder`: an admission refused by its files, a drafted part's attempt by the order
+   tick, a held start's attempt), a line whose every lap has ended and no lap of which was pushed is
+   released by rondo when either:
+   1. **it left nothing**: every closed tip's reading has its `tipCommit` equal to the root lap's
+      `baseCommit` (the line's range, not the tip's own, since a revise is read from its
+      predecessor's tip); or
+   2. **every issue its request named is closed on the forge now**: each is read again with the
+      operator's own `gh`; a pull request it named is not its issue, and a request that named none,
+      a read that failed then or fails now, or an open issue keeps the claim.
+
+   The release is `D-0073` rule 4.3's *ended with nothing to land*: the lane ledger's author, the
+   line's numbers given up, and no `landing` basis, so no order is released by it (`D-0098` rule
+   1.5). A published line is not read here: its pull request's opening released its paths already
+   (`D-0114`).
+2. **Wherever a start waits, the page names what holds its files, and links a finished holder's
+   release** (rondo#553): the press's answer, the scope screen's wait and the thread's next step.
+   A holder still running is named with no link, since its release is refused.
+3. **A refused draft is drafted once more** (rondo#554). A run the model answered or failed (a
+   rule 7.1 refusal, a timeout, a run that did not answer) is run again at once, and rondo writes a
+   note that it does so, under the request's latest operator message and in a name outside the
+   model drafter's, so it covers nothing (rule 3.2) and the request is still rondo's turn (`D-0151`).
+   The note is counted in the store, so a restart does not draft it a third time; a new operator
+   message is a new request for a draft, as before. A run refused before the model (material over
+   the bound, not an opener) is not run again: it would come out the same. The thread says *rondo's
+   first draft of this request was refused, so rondo drafted it once more*, then what the second run
+   came to.
+4. **A start with no drafted claim claims nothing until its gate** (rondo#554, the owner's decision,
+   replacing `D-0073` rule 2.5). Its first row holds no paths and carries an `unclaimed` basis, so it
+   is open and not released, and it overlaps no line: it runs beside every other line. At each of
+   its gates rondo claims the files its lap changed that no other open line holds (a successor row
+   with a `changed` basis); later starts see that claim and wait or run beside it. The paths another
+   line holds are left to that line, and the collision is reported at the gate as before and fixed
+   by the conflict fix's press (`D-0105`). The start form says: *There is no plan for this, so it
+   starts beside other work. If they collide, rondo offers the work that fixes it on one press.*
+   1. It holds for every first admission with no drafted claim: the scoped start, a drafted split
+      with no claim, an operator's plan, and a redo of a line that never held paths.
+   2. **A drafted claim is not widened by the gate**: rondo#283's answer stands for it.
+   3. **`D-0146` rule 4's `/` stands**: a part whose earlier line's changes cannot be read still
+      asks for the whole repository.
+
+### Options not taken
+
+- **Release only a line that left nothing.** It fixes lap 19's case; the owner asked for the closed
+  issue too.
+- **A press to draft again.** It leaves the second line waiting on a person each time a draft fails.
+- **Keep `/` after a second refusal, and say so.** Locking the whole repository for a start whose
+  files nobody knows makes certain that work waits in line, to prevent a collision that may not
+  happen, and the conflict fix already exists (the owner's reason).
+- **Start the conflict fix by itself for such a line.** `D-0138` rule 2 keeps it a press because it
+  spends the scope's `redo`; taking that press away is a separate decision (a separate issue).
+
+### What it costs
+
+- **A person's own start no longer waits on files**, so `D-0158`'s wait is kept now only for a
+  drafted part, and for rows written before this entry.
+- **Two such lines can change the same file before either reaches its gate.** The first to claim
+  it keeps it; the other's gate reports the collision, and nothing is repaired until a pull request
+  conflicts and the person presses the fix. A clash git merges cleanly is not caught by rondo.
+- **Two tabs' forms of one plan both start**, since no claim refuses the second. Before, the second
+  was refused by the first's `/`.
+- **A line's claim is only as recent as its last gate**: while a lap runs, what it is changing is
+  unclaimed.
+- **An issue closed is read again each time the holder is read**, one `gh api` call per issue on
+  every attempt, including the order tick's each minute while a start waits on that line.
+- **A line closed as `withdrawn` or `subject_gone`** that left work and whose issue is open keeps
+  its files until a release press, as before.
+- **A drafted run is paid for twice when it is refused**, and neither run is charged to a budget
+  (`D-0071`'s residual).
+
+### What would falsify it
+
+- **A line released while its work was still to be published**: an issue closed by hand while the
+  line's pull request was yet to open. The issue reading is then too eager, and should wait for the
+  person.
+- **Collisions between lines that claimed nothing becoming the common case**: the gate is then too
+  late a point to claim at, and the drafter's claim is the thing to fix.
+

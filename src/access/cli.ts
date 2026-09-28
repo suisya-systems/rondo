@@ -7447,7 +7447,7 @@ async function admitScopedPlan(
   },
   unquoted: RunPlan,
   proposalId: string | null,
-  /** The drafted split's claim (D-0073 rule 2.3), or null for the whole repository (rule 2.5). */
+  /** The drafted split's claim (D-0073 rule 2.3), or null for none until its gate (D-0160). */
   claim: LaneClaimAsk | null,
   /** How many new decision entries the drafted split says the plan writes (D-0098 rule 3.3). */
   entries = 0,

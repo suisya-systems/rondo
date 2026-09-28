@@ -242,7 +242,7 @@ export interface ReserveInput {
   readonly scopeSpend: ScopeSpend | null;
   /**
    * The paths a first admission asks to hold (D-0073 rule 2.3), or null for
-   * rule 2.5's whole repository. **A redo passes null**: it continues its
+   * none until its gate (D-0160). **A redo passes null**: it continues its
    * lineage's claim (rule 2.6), and a claim that changes is a successor row
    * this call does not write.
    */
@@ -730,10 +730,25 @@ export interface IterationStore {
    * Compare the paths a lap changed with its line's in-force claim (D-0073
    * rule 5): which fall outside it, split into those another open line of the
    * repository holds (`D-0067` rule 2's collision) and those nobody holds.
-   * Reads only: the ledger does not widen a claim by itself (the person's
-   * answer at rondo#283's gate), so rule 5's widening is not written here.
+   * Reads only: the ledger does not widen a drafted claim by itself (the
+   * person's answer at rondo#283's gate); {@link claimChanged} is the one
+   * widening, for a line that declared nothing (D-0160).
    */
   compareLane(input: LaneCompareInput): Promise<LaneCompareOutcome>;
+  /**
+   * **A line that declared nothing claims what its lap changed** (rondo#554,
+   * D-0160): at its gate, the changed paths no other open line holds, added
+   * to its claim. Only for a line admitted with no drafted claim (its head
+   * `unclaimed`) or one whose claim came this way (`changed`); a drafted
+   * claim is left as it is. Writes nothing when no path is left.
+   */
+  claimChanged(
+    input: LaneCompareInput & { readonly nowMs: number },
+  ): Promise<
+    | { readonly kind: "claimed"; readonly lineageId: string; readonly paths: readonly string[] }
+    | { readonly kind: "unchanged" }
+    | { readonly kind: "defect"; readonly reason: string }
+  >;
   /**
    * Every line the ledger has an answer about, holding or released (D-0073
    * rule 12): what the page says a line owns, what waits on it and whether its
@@ -2886,11 +2901,14 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
           // when its pull request opened is the one exception** (D-0114): its
           // work is still owed a landing, so the landing, the merge or the
           // person's press writes the row that ends it, over the publish's.
+          // Nor is a line that declared nothing and changed nothing yet: it is
+          // open, holding no paths (D-0160), and a release ends it.
           const overPublish =
             head !== null &&
             head.paths.length === 0 &&
-            isPublishRelease(claimBases(connection, head.claimId)) &&
-            !isPublishRelease(input.bases);
+            ((isPublishRelease(claimBases(connection, head.claimId)) &&
+              !isPublishRelease(input.bases)) ||
+              isUnclaimed(claimBases(connection, head.claimId)));
           if (head === null || (head.paths.length === 0 && !overPublish)) {
             return {
               kind: "refused",
@@ -3156,15 +3174,68 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
         .run(nowMs, outcome, iterationId);
     },
 
+    async claimChanged(input) {
+      try {
+        return inTransaction(() => {
+          const root = lineageOf(connection, input.iterationId)?.[0];
+          const head = root === undefined ? null : claimHead(connection, root);
+          if (root === undefined || head === null) {
+            return { kind: "unchanged" } as const;
+          }
+          const forms = basisForms(claimBases(connection, head.claimId));
+          if (!forms.includes("unclaimed") && !forms.includes("changed")) {
+            return { kind: "unchanged" } as const;
+          }
+          // Under the lock, the paths another open line holds are left out
+          // again: that line keeps them (rule 3), and the collision is the
+          // conflict fix's (D-0105). So is the decision record, which is
+          // shared-append (D-0098 rule 3.5).
+          const record = lineRecord(connection, root);
+          const others = openLines(connection, head.repository, root);
+          const taken = input.paths.filter(
+            (path) =>
+              path !== record &&
+              !claimCovers(head.paths, path) &&
+              others.every((line) => sharedPaths([path], line.paths).length === 0),
+          );
+          if (taken.length === 0) {
+            return { kind: "unchanged" } as const;
+          }
+          const claim = normalizeClaim([...head.paths, ...taken]);
+          if (claim.kind === "refused") {
+            return { kind: "defect", reason: claim.reason } as const;
+          }
+          insertClaim(
+            connection,
+            {
+              lineageId: root,
+              repository: head.repository,
+              paths: claim.paths,
+              supersedesClaimId: head.claimId,
+              authorKind: "drafter",
+              authorId: LANE_LEDGER_AUTHOR,
+              bases: [{ form: "iteration", iterationId: input.iterationId }, { form: "changed" }],
+            },
+            input.nowMs,
+          );
+          return { kind: "claimed", lineageId: root, paths: [...taken].sort() } as const;
+        });
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
     async landingOf(iterationId: string): Promise<LineLanding | null> {
       const root = lineageOf(connection, iterationId)?.[0];
       if (root === undefined) {
         return null;
       }
+      // A release is a successor: a line's root is never one, even an
+      // `unclaimed` root carrying the landing it was admitted on (D-0160).
       const rows = connection
         .prepare(
           "SELECT bases, created_at_ms FROM lane_claim WHERE lineage_id = ? AND paths = '[]' " +
-            "ORDER BY created_at_ms DESC, claim_id DESC",
+            "AND supersedes_claim_id IS NOT NULL ORDER BY created_at_ms DESC, claim_id DESC",
         )
         .all(root) as SqlRow[];
       for (const row of rows) {
@@ -7290,7 +7361,8 @@ function scopeRefusal(
 
 /**
  * The author id on a claim row rondo writes by rule rather than by drafting:
- * rule 2.5's whole repository, rule 2.6's re-request and rule 4.3's release
+ * D-0160's line that claims nothing and the paths its gate claims, rule 2.6's
+ * re-request and rule 4.3's release
  * when a line ends or lands (D-0073). `drafter` is its kind, as it is for
  * the deterministic reading drafter: a mechanical voice, not a person's.
  */
@@ -7363,14 +7435,27 @@ function claimHead(connection: DatabaseSync, lineageId: string): ClaimRow | null
  * line holds no paths and is still owed its landing.
  */
 function isPublishRelease(bases: unknown): boolean {
-  const forms = Array.isArray(bases)
+  const forms = basisForms(bases);
+  return forms.includes("published") && !forms.includes("landing");
+}
+
+/** Each basis's `form`, in order. */
+function basisForms(bases: unknown): readonly unknown[] {
+  return Array.isArray(bases)
     ? bases.map((basis: unknown) =>
         typeof basis === "object" && basis !== null
           ? (basis as Record<string, unknown>)["form"]
           : undefined,
       )
     : [];
-  return forms.includes("published") && !forms.includes("landing");
+}
+
+/**
+ * Whether an empty claim row is a line that declared nothing, not a release
+ * (rondo#554, D-0160): it holds no paths yet and is still open.
+ */
+function isUnclaimed(bases: unknown): boolean {
+  return basisForms(bases).includes("unclaimed");
 }
 
 /** One claim row's bases, parsed. */
@@ -7714,8 +7799,12 @@ function ledgerLines(connection: DatabaseSync): readonly LedgerLine[] {
       closedTips: shape.closedTips,
       // A line released when its pull request opened holds no paths and is
       // still owed its landing (D-0114), so it is not said to be released.
+      // Nor is a line that declared nothing and has not changed anything yet
+      // (D-0160).
       releasedBy:
-        head.paths.length > 0 || isPublishRelease(JSON.parse(String(row["bases"])))
+        head.paths.length > 0 ||
+        isPublishRelease(JSON.parse(String(row["bases"]))) ||
+        isUnclaimed(JSON.parse(String(row["bases"])))
           ? null
           : row["author_kind"] === "operator"
             ? "person"
@@ -7769,8 +7858,12 @@ function laneAdmission(connection: DatabaseSync, input: ReserveInput): LaneAdmis
   const bases = [{ form: "iteration", iterationId: input.id }];
   let write: ClaimWrite;
   if (input.supersedesIterationId === null) {
-    let paths: readonly string[] = [WHOLE_REPOSITORY];
-    if (input.claim !== null) {
+    // **A plan admitted with no drafted claim claims nothing yet** (rondo#554,
+    // D-0160, replacing rule 2.5's `/`): it runs beside every line, and its
+    // gate claims what it changed (`claimChanged`). An ask with no paths is
+    // the same, carrying the bases it was asked on.
+    let paths: readonly string[] = [];
+    if (input.claim !== null && input.claim.paths.length > 0) {
       const asked = normalizeClaim(input.claim.paths);
       if (asked.kind === "refused") {
         return { kind: "defect", reason: `the claim drafted for '${input.id}': ${asked.reason}` };
@@ -7778,8 +7871,15 @@ function laneAdmission(connection: DatabaseSync, input: ReserveInput): LaneAdmis
       paths = asked.paths;
     }
     write =
-      input.claim === null
-        ? { lineageId: input.id, repository, paths, supersedesClaimId: null, ...byRule, bases }
+      input.claim === null || paths.length === 0
+        ? {
+            lineageId: input.id,
+            repository,
+            paths,
+            supersedesClaimId: null,
+            ...byRule,
+            bases: [...(input.claim?.bases ?? bases), UNCLAIMED],
+          }
         : {
             lineageId: input.id,
             repository,
@@ -7807,14 +7907,18 @@ function laneAdmission(connection: DatabaseSync, input: ReserveInput): LaneAdmis
       };
     }
     const head = claimHead(connection, lineageId);
-    if (head !== null && head.paths.length > 0) {
+    if (
+      head !== null &&
+      (head.paths.length > 0 || isUnclaimed(claimBases(connection, head.claimId)))
+    ) {
       return { kind: "continue" };
     }
     // A released line retried takes back what the release gave up (rule 2.6),
     // and a line from before the ledger, or released without ever holding a
-    // claim, asks for the whole repository (rule 2.5). The paths given up are
-    // the last row that held any: a published line's landing is a second
-    // empty row over its publish's (D-0114).
+    // claim, claims nothing yet, as a first admission with no drafted claim
+    // does (D-0160). The paths given up are the last row that held any: a
+    // published line's landing is a second empty row over its publish's
+    // (D-0114).
     let given: ClaimRow | undefined;
     let from = head?.supersedesClaimId ?? null;
     while (from !== null) {
@@ -7828,10 +7932,10 @@ function laneAdmission(connection: DatabaseSync, input: ReserveInput): LaneAdmis
     write = {
       lineageId,
       repository,
-      paths: taken === null ? [WHOLE_REPOSITORY] : taken.paths,
+      paths: taken === null ? [] : taken.paths,
       supersedesClaimId: head === null ? null : head.claimId,
       ...byRule,
-      bases,
+      bases: taken === null ? [...bases, UNCLAIMED] : bases,
       // The paths taken back keep the words that said why they were asked.
       why: taken === null ? null : taken.why,
     };
@@ -7844,6 +7948,9 @@ function laneAdmission(connection: DatabaseSync, input: ReserveInput): LaneAdmis
     ? { kind: "write", write }
     : { kind: "refused", paths: write.paths, holders };
 }
+
+/** The basis that marks a claim row as a line that declared nothing (D-0160). */
+const UNCLAIMED = { form: "unclaimed" } as const;
 
 /**
  * Release a line's claim when the status just written leaves nothing of it open
@@ -7863,7 +7970,10 @@ function releaseIfEnded(connection: DatabaseSync, iterationId: string, nowMs: nu
   // 3.4).
   releaseReservations(connection, root.id, [{ form: "iteration", iterationId }], nowMs);
   const head = claimHead(connection, root.id);
-  if (head === null || head.paths.length === 0) {
+  if (
+    head === null ||
+    (head.paths.length === 0 && !isUnclaimed(claimBases(connection, head.claimId)))
+  ) {
     return;
   }
   insertClaim(

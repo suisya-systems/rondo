@@ -1853,6 +1853,11 @@ async function scopeApproved(
               names the lap (D-0023) and a double press is one lap. */}
           <input type="hidden" name="iteration" value={newIterationId()} />
           <p class="note text-meta leading-5 text-muted-foreground">{wording.startNote}</p>
+          {/* **No plan drafted, so no files claimed** (rondo#554, D-0160): the
+              start runs beside other work, and says so before it is pressed. */}
+          <p id="start-beside" class="note text-meta leading-5 text-muted-foreground">
+            {wording.startBeside}
+          </p>
           {/* **The one press that spends money, saying what the refusals
               already say** (rondo#244): the join is real, and a guarantee
               nobody is told about is paid for in suspicion. */}
@@ -1966,7 +1971,8 @@ export interface WaitHolder {
 
 /**
  * **Every line holding files in the repository a person's start waits on**
- * (D-0158): the start asks for the whole repository, so each of them holds it.
+ * (D-0158): such a wait was kept while the start asked for the whole
+ * repository, so each of them holds it.
  */
 export async function waitHolders(ports: WebPorts, repository: string): Promise<WaitHolder[]> {
   const threads = await ports.record.threadMessages();

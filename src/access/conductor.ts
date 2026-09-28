@@ -933,11 +933,13 @@ export async function readHolder(
  * the comparison for itself where the press is ({@link compareClaim}, and
  * `pageMaterial` in `src/access/cli.ts`): rondo#294, because a person who only
  * reads the page met a collision at merge time instead. Rule
- * 5's widening onto an unheld path is not written: the person answered at
- * rondo#283's gate that the ledger does not widen a claim by itself, and
- * whether to widen it is theirs. The collision's finding and its `sequence`
- * are `D-0067`'s, not built. It cannot fail the step: the gate is already
- * committed.
+ * 5's widening onto an unheld path is not written for a drafted claim: the
+ * person answered at rondo#283's gate that the ledger does not widen a claim
+ * by itself, and whether to widen it is theirs. **A line that declared
+ * nothing is the exception** (rondo#554, D-0160): it claims the unheld paths
+ * its lap changed here, so later starts see them. The collision's finding and
+ * its `sequence` are `D-0067`'s, not built. It cannot fail the step: the gate
+ * is already committed.
  */
 async function withClaimComparison(
   ports: ReportingPorts,
@@ -946,10 +948,29 @@ async function withClaimComparison(
   if (ports.lanes === undefined || ports.lanes === null || report.iterationId === null) {
     return report;
   }
-  const lines = claimComparisonLines(
-    report.iterationId,
-    await compareClaim(ports.lanes, report.iterationId),
-  );
+  let comparison = await compareClaim(ports.lanes, report.iterationId);
+  const claimed: string[] = [];
+  if (comparison.kind === "outside" && comparison.unheld.length > 0) {
+    const outcome = await ports.lanes.store.claimChanged({
+      iterationId: report.iterationId,
+      paths: comparison.unheld,
+      nowMs: ports.now(),
+    });
+    if (outcome.kind === "claimed") {
+      claimed.push(
+        `Line ${outcome.lineageId} declared no files, so it now claims what lap ` +
+          `${report.iterationId} changed: ${outcome.paths.map((path) => `'${path}'`).join(", ")}.`,
+      );
+      const unheld = comparison.unheld.filter((path) => !outcome.paths.includes(path));
+      comparison =
+        unheld.length === 0 && comparison.held.length === 0
+          ? { kind: "inside" }
+          : { ...comparison, unheld };
+    } else if (outcome.kind === "defect") {
+      claimed.push(`What lap ${report.iterationId} changed was not claimed: ${outcome.reason}.`);
+    }
+  }
+  const lines = [...claimed, ...claimComparisonLines(report.iterationId, comparison)];
   return lines.length === 0 ? report : { ...report, lines: [...report.lines, ...lines] };
 }
 
@@ -1227,7 +1248,12 @@ export interface ReportingPorts extends ConductorPorts {
 export interface LandingPorts {
   readonly store: Pick<
     IterationStore,
-    "laneLine" | "readingsFor" | "releaseLane" | "compareLane" | "numberReservations"
+    | "laneLine"
+    | "readingsFor"
+    | "releaseLane"
+    | "compareLane"
+    | "claimChanged"
+    | "numberReservations"
   >;
   readonly readLanding: (request: LandingRequest) => Promise<LandingReading>;
   /** What reads the paths a lap at its gate changed (D-0073 rule 5). */
