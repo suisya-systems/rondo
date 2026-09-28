@@ -440,8 +440,9 @@ export function draftRefusedNoteId(requestMessageId: string): string {
  *
  * It is written in the flow's own voice, so it holds no part of the request
  * (`holdsNothing`), and it is skipped when `ownOpenAsk` is read, so the note
- * does not become the stop it exists instead of. Drafting the request again by
- * itself is rondo#554's and is deliberately not done here.
+ * does not become the stop it exists instead of. The drafter host drafts a
+ * refused run once more first (rondo#554, D-0160): its note covers nothing,
+ * so a request is `draft_refused` here only once the second run is refused.
  */
 async function tellDraftRefused(
   ports: FlowHostPorts,

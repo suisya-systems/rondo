@@ -27789,7 +27789,9 @@ At rondo `8e4d949` on **2026-09-29**, by reading the code:
    message is a new request for a draft, as before. A run refused before the model (material over
    the bound, not an opener) is not run again: it would come out the same. The thread says *rondo's
    first draft of this request was refused, so rondo drafted it once more*, then what the second run
-   came to.
+   came to. Under a goal scope the flow's `draft_refused` (the `D-0128` annotation from rondo#549)
+   is therefore read only after the second run is refused: while the second run is owed, the
+   request is not covered, and the flow's note is not written.
 4. **A start with no drafted claim claims nothing until its gate** (rondo#554, the owner's decision,
    replacing `D-0073` rule 2.5). Its first row holds no paths and carries an `unclaimed` basis, so it
    is open and not released, and it overlaps no line: it runs beside every other line. At each of
