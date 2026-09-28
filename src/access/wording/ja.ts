@@ -216,6 +216,7 @@ export const JA: Chrome = Object.freeze({
     "rondo はこの依頼の下書きを作れなかったので、まだ何も提案されていません。範囲はご自身で" +
     "決められます。",
   drafterNoDraftWhy: "止まった理由",
+  drafterRedrafted: "rondo の最初の下書きは通らなかったので、もう一度下書きしました。",
   issueRead: (pullRequest, comments) =>
     `rondo がこの${pullRequest ? "プルリクエストの会話" : "イシュー"}` +
     `${comments === 0 ? "" : `とコメント ${String(comments)} 件`}を読みました。` +

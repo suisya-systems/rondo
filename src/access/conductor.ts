@@ -101,11 +101,13 @@ import {
   type LandingRequest,
   type MergeMethod,
   readChangedPaths,
+  readIssueState,
   readLanding,
   readRecordAdditions,
   stoppedAtTimeLimit,
 } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
+import { issuesClosedNow } from "./issue-read.js";
 import { thisDriver } from "./lost-laps.js";
 import { modelReadingLines } from "./model-review/judgement.js";
 import { refusalSaid } from "./page-logic/laps.js";
@@ -290,12 +292,16 @@ export function lapSpendFields(
 export function conductorPorts(
   continuo: VerifiedContinuo,
   store: IterationStore,
-  record: Pick<AdvisoryRecord, "recordThreadMessage"> | null,
+  record:
+    | (Pick<AdvisoryRecord, "recordThreadMessage"> &
+        Partial<Pick<AdvisoryRecord, "threadMessages">>)
+    | null,
   now: () => number = Date.now,
   /** The person's words for a stopped lap's ask (D-0110 rule 2); null writes none. */
   words: Chrome | null = null,
 ): ReportingPorts {
   const port: StorePort = store;
+  const threadMessages = record?.threadMessages?.bind(record);
   return {
     store: port,
     thread:
@@ -314,7 +320,15 @@ export function conductorPorts(
               return observed.kind === "answered" ? observed.payload.rationale : null;
             },
           },
-    lanes: { store, readLanding, readChangedPaths, remote: READING_REMOTE },
+    lanes: {
+      store,
+      readLanding,
+      readChangedPaths,
+      remote: READING_REMOTE,
+      ...(threadMessages === undefined
+        ? {}
+        : { issuesClosed: issuesClosedOver({ threadMessages }) }),
+    },
     keepWork: keepStoppedWork,
     now,
     classify: async (plan) => classifyPlan(plan),
@@ -735,6 +749,19 @@ export function landingRemoteOf(
       };
 }
 
+/** {@link LandingPorts.issuesClosed} over a thread and the operator's own `gh` (rondo#553). */
+export function issuesClosedOver(
+  record: Pick<AdvisoryRecord, "threadMessages">,
+): (requestMessageId: string) => Promise<boolean> {
+  return async (requestMessageId) => {
+    const threads = await record.threadMessages();
+    return (
+      threads.kind === "read" &&
+      (await issuesClosedNow(threads.messages, requestMessageId, readIssueState))
+    );
+  };
+}
+
 /**
  * Read one line's landing and release it if it landed or ended with nothing to
  * land. Exported for the resident host's order tick (D-0098 rule 1.4), which
@@ -807,6 +834,33 @@ export async function readHolder(
   if (root === undefined || typeof repository !== "string") {
     return undetermined("its first lap's plan names no repository");
   }
+  // The lineage's first base is the root lap's, and only the root's: a later
+  // lap's reading is taken over its predecessor's branch, and the root's own
+  // changes would fall out of the set. Each closed tip's tip is its own.
+  const evidenceOf = async (iterationId: string) =>
+    latestReading(await lanes.store.readingsFor(iterationId), isDeterministicReadingDrafter)
+      ?.evidence ?? null;
+  // **A finished line nothing will publish gives its files up** (rondo#553,
+  // D-0160): no lap of it was pushed, so no landing will ever be read, and
+  // either it left nothing -- every closed tip is at the commit its first lap
+  // was cut from -- or every issue its request named has closed. Released as
+  // one that ended with nothing to land: no order is released by it.
+  if (line.laps.every((lap) => lap.publishedRemote === null)) {
+    const base = (await evidenceOf(root.id))?.baseCommit ?? null;
+    const tips = await Promise.all(shape.closedTips.map(evidenceOf));
+    if (base !== null && tips.every((tip) => tip?.tipCommit === base)) {
+      return await release(
+        shape.closedTips,
+        `Line ${lineageId} has ended at its gate with nothing to publish: it left nothing`,
+      );
+    }
+    if (lanes.issuesClosed !== undefined && (await lanes.issuesClosed(root.requestMessageId))) {
+      return await release(
+        shape.closedTips,
+        `Line ${lineageId} has ended at its gate unpublished, and every issue its request named is closed`,
+      );
+    }
+  }
   // **The landing is read from where the publish pushed** (rondo#286, D-0153):
   // read before any git is run, because a line whose remote rondo cannot name
   // has no forge to fetch from.
@@ -815,12 +869,6 @@ export async function readHolder(
     return undetermined(pushedTo.undetermined);
   }
   const remote = pushedTo.remote;
-  // The lineage's first base is the root lap's, and only the root's: a later
-  // lap's reading is taken over its predecessor's branch, and the root's own
-  // changes would fall out of the set. Each closed tip's tip is its own.
-  const evidenceOf = async (iterationId: string) =>
-    latestReading(await lanes.store.readingsFor(iterationId), isDeterministicReadingDrafter)
-      ?.evidence ?? null;
   const baseCommit = (await evidenceOf(root.id))?.baseCommit ?? null;
   if (baseCommit === null) {
     return undetermined(`its first lap ${root.id} carries no reading of the base it was cut from`);
@@ -1194,6 +1242,11 @@ export interface LandingPorts {
    * rather than read against either.
    */
   readonly remote: string;
+  /**
+   * Whether every issue a request named reads closed on its forge now
+   * ({@link issuesClosedNow}, rondo#553); absent where no thread is read.
+   */
+  readonly issuesClosed?: (requestMessageId: string) => Promise<boolean>;
 }
 
 /** What a report into a request thread reads and writes. */

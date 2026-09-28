@@ -228,6 +228,8 @@ explanation you pressed on and then answers the gate.`,
     "rondo could not draft this request, so nothing has been proposed. You can set the scope " +
     "yourself.",
   drafterNoDraftWhy: "What stopped it",
+  drafterRedrafted:
+    "rondo's first draft of this request was refused, so rondo drafted it once more.",
   issueRead: (pullRequest, comments) =>
     `rondo read this ${pullRequest ? "pull request's conversation" : "issue"}` +
     `${comments === 0 ? "" : ` and its ${String(comments)} ${comments === 1 ? "comment" : "comments"}`}` +

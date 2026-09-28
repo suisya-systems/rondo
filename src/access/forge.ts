@@ -671,6 +671,21 @@ export async function readIssueFromForge(request: IssueReadRequest): Promise<{
 }
 
 /**
+ * One issue's state as the forge says it now (`open` or `closed`), for a
+ * finished line whose request's issues may have closed since they were read
+ * (rondo#553). A read through the operator's own `gh`, as
+ * {@link readIssueFromForge} is, with no comments.
+ */
+export async function readIssueState(request: IssueReadRequest): Promise<CommandOutcome> {
+  const host = request.host === null ? [] : ["--hostname", request.host];
+  return await runCommand(
+    "gh",
+    ["api", ...host, `repos/${request.repo}/issues/${String(request.number)}`, "--jq", ".state"],
+    ISSUE_READ_TIMEOUT_MS,
+  );
+}
+
+/**
  * List one repository's open issues for triage (D-0097 point 1 (b)): number,
  * title and label names, one JSON object per line, pull requests left out.
  *

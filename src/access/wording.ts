@@ -157,6 +157,11 @@ export interface Chrome extends PageWords {
    */
   readonly drafterNoDraft: string;
   readonly drafterNoDraftWhy: string;
+  /**
+   * A draft refused once and drafted again (rondo#554, D-0160): what came of
+   * the second run is the next message, a draft or {@link drafterNoDraft}.
+   */
+  readonly drafterRedrafted: string;
   /** A read that worked (section 4.1): nothing to press, what was read folded. */
   readonly issueRead: (pullRequest: boolean, comments: number) => string;
   readonly issueReadFold: string;

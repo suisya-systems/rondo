@@ -126,7 +126,7 @@ import { gateScope } from "./gate-host.js";
 import { goalScopeStanding } from "./goal-scope.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
 import { type IssueComment, parseForgeRead } from "./issue-read.js";
-import { isModelDrafterName } from "./model-draft/judgement.js";
+import { isModelDrafterName, REDRAFT_AUTHOR } from "./model-draft/judgement.js";
 import { retakeOffered } from "./model-review/judgement.js";
 import { unlandedPrefix } from "./order-host.js";
 import type {
@@ -2283,6 +2283,11 @@ function noDraft(message: ThreadMessageDraft): boolean {
   );
 }
 
+/** rondo's note that a refused draft is drafted once more (rondo#554, D-0160). */
+function redraftNote(message: ThreadMessageDraft): boolean {
+  return message.authorKind === "drafter" && message.authorId === REDRAFT_AUTHOR;
+}
+
 /**
  * **A drafter run that drafted nothing, said as what happened** (rondo#238):
  * the row's words are rondo's own about its tools, so they are kept, folded,
@@ -2293,7 +2298,9 @@ function noDraft(message: ThreadMessageDraft): boolean {
 function noDraftView(wording: Chrome, message: ThreadMessageDraft, reads: HeldReads | null) {
   return (
     <div class="space-y-2">
-      <p class="text-body leading-6">{wording.drafterNoDraft}</p>
+      <p class="text-body leading-6">
+        {redraftNote(message) ? wording.drafterRedrafted : wording.drafterNoDraft}
+      </p>
       <details class="group">
         <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
           {chevron()}
@@ -4161,6 +4168,7 @@ export async function operatorPage(
           (message) =>
             message.authorKind === "forge" ||
             noDraft(message) ||
+            redraftNote(message) ||
             lapReport(message) ||
             scopeStop(message) ||
             (reads !== null && heldMessage(message)),
@@ -4175,7 +4183,7 @@ export async function operatorPage(
                   ? lapReportView(wording, message, reads)
                   : scopeStop(message)
                     ? scopeStopView(wording, message, reads)
-                    : noDraft(message) || reads === null
+                    : noDraft(message) || redraftNote(message) || reads === null
                       ? noDraftView(wording, message, reads)
                       : raw(heldMarkup({ wording, reads, text: message.body, className: "" }))
               ).toString(),

@@ -135,6 +135,7 @@ import {
   conductorPorts,
   endFaulted,
   endLost,
+  issuesClosedOver,
   notRereadSentence,
   type ReportingPorts,
   type RequestThread,
@@ -1726,7 +1727,13 @@ export async function main(
                 // cannot answer about one line two ways. A host started with
                 // `--remote NAME` therefore settles no landing by itself and
                 // says so; that is the stop rule 4 asks for.
-                { store, readLanding, readChangedPaths, remote: READING_REMOTE },
+                {
+                  store,
+                  readLanding,
+                  readChangedPaths,
+                  remote: READING_REMOTE,
+                  issuesClosed: issuesClosedOver(record),
+                },
                 lineageId,
                 Date.now(),
               ),
