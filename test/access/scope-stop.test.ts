@@ -1818,6 +1818,41 @@ test("D-0073 rule 5: the gate compares what a lap changed with its line's claim,
   );
 });
 
+test("D-0160: a line that declared nothing claims at its gate what it changed that no other line holds", async () => {
+  const h = await harness();
+  let changed: ChangedPathsReading = { kind: "read", paths: [] };
+  const ports: ReportingPorts = {
+    ...h.reporting,
+    lanes: {
+      store: h.store,
+      remote: "origin",
+      readLanding: async () => ({ kind: "undetermined", reason: "not asked" }),
+      readChangedPaths: async () => changed,
+    },
+  };
+  const held = await admit(ports, h.advisory, PLAN, POLICY, "i-store", null, null, REQUEST, null, {
+    paths: ["src/store/"],
+    authorKind: "drafter",
+    authorId: "rondo/drafter/3/claude-fixture",
+    bases: [{ form: "proposal", proposalId: "draft-1" }],
+  });
+  expect(held.status).toBe("awaiting_human");
+
+  changed = { kind: "read", paths: ["docs/a.md", "src/store/sqlite.ts"] };
+  const bare = await admit(ports, h.advisory, PLAN, POLICY, "i-bare", null, null, REQUEST);
+  expect(bare.status).toBe("awaiting_human");
+  const said = bare.lines.join("\n");
+  expect(said).toContain(
+    "Line i-bare declared no files, so it now claims what lap i-bare changed: 'docs/a.md'.",
+  );
+  // The other line keeps its own; the collision is still said.
+  expect(said).toContain(
+    "Lap i-bare changed 'src/store/sqlite.ts' outside line i-bare's claim, and line i-store holds it",
+  );
+  const line = await h.store.laneLine("i-bare");
+  expect(line.kind === "read" ? line.line.claim?.paths : undefined).toEqual(["docs/a.md"]);
+});
+
 test("D-0098 rule 2: what a lap took in is not compared with its claim, only what it changed since", async () => {
   const h = await harness();
   const X = "c".repeat(40);
