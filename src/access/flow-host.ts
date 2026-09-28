@@ -61,7 +61,7 @@ import {
   type ThreadMessageDraft,
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
-import { type FlowStopFacts, stopPrefix } from "./flow-stop.js";
+import { type FlowStopFacts, flowStopBody, stopPrefix } from "./flow-stop.js";
 import { hostFailure } from "./host-failure.js";
 import { MODEL_DRAFTER_PREFIX } from "./model-draft/judgement.js";
 import type { Chrome } from "./wording.js";
@@ -629,6 +629,27 @@ async function askStop(
     );
   }
   const messageId = `${stopPrefix(flow.scopeDecisionId)}${reason}-${latest.messageId}`;
+  // **The stop's facts are kept beside the ask, under the ask's own id**
+  // (rondo#549, the gate's third reading). The body below is one language's
+  // wording of them -- the host's -- and the person reading the thread may have
+  // chosen another, so the page says the stop again from these fields
+  // (`flowStopAskedFacts`). Recorded first, so an ask is never on the page
+  // without the facts it would be re-said from; a row whose ask then fails to
+  // write is read by nothing, since `flowStopOf` reads rows only before the
+  // approval's first request and one exists here.
+  const kept = await ports.record.recordFlowStop({
+    stopId: messageId,
+    scopeDecisionId: flow.scopeDecisionId,
+    repository,
+    facts: facts as unknown as JsonRecord,
+    atMs: ports.now(),
+  });
+  // `refused` here is the id already spoken for -- the flow stops again on
+  // every pass until the ask is answered -- and is this caller's success, as
+  // `duplicate` is for the message below.
+  if (kept.kind === "defect") {
+    sayOnce(`stopped (${reason}), and its facts were not kept: ${kept.reason}`);
+  }
   const outcome = await ports.record.recordThreadMessage({
     messageId,
     body: flowStopBody(ports.words, repository, facts),
@@ -651,69 +672,5 @@ async function askStop(
   }
   if (outcome.kind !== "duplicate") {
     sayOnce(`stopped (${reason}), and the question was not written: ${outcome.reason}`);
-  }
-}
-
-/**
- * The stop's words, in the scope stop's layout (`stopBody`, D-0066 rule 4.4)
- * and **in the person's language** (D-0079, rondo#549).
- *
- * The flow stops on the minute, outside any request to the page, so the words
- * are the host operator's (`hostWords`) and the thread draws the body as it was
- * written. The terminal line beside it stays English (D-0079 rule 3.2), and so
- * does everything the ask cites by name: what a person reads is a sentence, and
- * a scope id or a decision id is not one (D-0076). The `detail` the caller
- * composed for the terminal is not translated here -- the same facts are said
- * from the catalogue, so this ask and the goal's screen say one thing.
- */
-export function flowStopBody(words: Chrome, repository: string, facts: FlowStopFacts): string {
-  return words.flowStopAsk({
-    repository,
-    why: flowStopWhy(words, facts),
-    recommended: words.flowStopAskRecommended(facts.reason),
-  });
-}
-
-/**
- * Why the flow stopped, as the person reads it: the reason, and under it the
- * facts that reason turns on, each its own line.
- *
- * The keys are the goal screen's own (`flowStopSaid`), so a stop says the same
- * thing wherever it is read; the numbers are formatted as that screen formats
- * them (`money`, `localTime`), which is a token and not prose (D-0055 rule 3).
- */
-function flowStopWhy(words: Chrome, facts: FlowStopFacts): string {
-  const reason = words.flowStopReason(facts.reason);
-  switch (facts.reason) {
-    case "expiry":
-      return [
-        reason,
-        words.flowStopExpiredAt(
-          new Date(facts.expiresAtMs).toISOString().slice(0, 16).replace("T", " "),
-        ),
-      ].join("\n");
-    case "laps":
-      return [reason, words.flowStopLapsUsed(facts.admissions, facts.laps)].join("\n");
-    case "cost":
-      return [
-        reason,
-        words.flowStopCostOver(
-          facts.spentUsd.toFixed(2),
-          facts.committedUsd.toFixed(2),
-          facts.budgetUsd.toFixed(2),
-        ),
-      ].join("\n");
-    case "nothing_eligible":
-      return [
-        reason,
-        ...(facts.skipped.length === 0
-          ? [words.flowStopRankingEmpty]
-          : [
-              words.flowStopSkippedHeading,
-              ...facts.skipped.map((one) => `- ${one.request}: ${words.flowStopSkipped(one.why)}`),
-            ]),
-      ].join("\n");
-    default:
-      return reason;
   }
 }

@@ -525,6 +525,67 @@ test("a scope stop shows its three options, in the page's language, with rondo's
   }
 });
 
+test("rondo#549: a flow's stop is read in the page's language, whatever the host's is", async () => {
+  // The host's language is the machine's setting and the page's is the
+  // reader's own (`?lang`, the cookie, the browser). This host reads English
+  // -- `RONDO_LANGUAGE` unset is `EN` -- and the person is on a Japanese page.
+  const w = await world();
+  expect((await approve(w)).ok).toBe(true);
+  const standing = await goalScopeStanding(w.record, "goal-1");
+  if (standing.kind === "none") throw new Error("no approval");
+  const opener = flowMessageId(standing.scopeDecisionId, "issue:o/r#7");
+  expect(
+    await w.record.recordThreadMessage({
+      messageId: opener,
+      body: "Make setup in o/r finish without a shell",
+      authorKind: "drafter",
+      authorId: FLOW_AUTHOR,
+      inReplyTo: null,
+      atMs: 3_000,
+      bases: [{ form: "goal", goalId: "goal-1" }],
+      asks: false,
+    }),
+  ).toEqual({ kind: "recorded" });
+  const flow = flowHost({
+    store: w.store,
+    record: w.record,
+    policy: { maxOccupying: 4, maxLive: 6 },
+    words: EN,
+    now: () => BUDGETS.expires_at_ms + 1,
+    log: () => undefined,
+  });
+  flow.kick();
+  await flow.settled();
+  // Written in the host's words, and its facts kept beside it under its own id.
+  const read = await w.record.threadMessages();
+  const asked = (read.kind === "read" ? read.messages : []).find((message) => message.asks);
+  expect(asked?.inReplyTo).toBe(opener);
+  expect(asked?.body).toContain(EN.flowStopReason("expiry"));
+  expect((await w.record.flowStops()).map((one) => one.stopId)).toEqual([asked?.messageId]);
+
+  const view = { kind: "thread", messageId: opener, to: null } as const;
+  const at = new Date(BUDGETS.expires_at_ms).toISOString().slice(0, 16).replace("T", " ");
+  const ja = await w.page(view, JA);
+  for (const said of [
+    JA.flowStopReason("expiry"),
+    JA.flowStopExpiredAt(at),
+    JA.flowStopAskRecommended("expiry"),
+  ]) {
+    expect(ja).toContain(said);
+  }
+  // The person's own words lead; what the host wrote follows, under the fold,
+  // byte for byte.
+  expect(ja.indexOf(JA.flowStopReason("expiry"))).toBeLessThan(
+    ja.indexOf(EN.flowStopReason("expiry")),
+  );
+  // And an English page says it once: the host's words and the page's agree,
+  // so there is nothing to fold away.
+  const en = await w.page(view);
+  expect(en).toContain(EN.flowStopAskRecommended("expiry"));
+  expect(en).not.toContain(JA.flowStopReason("expiry"));
+  expect(en.split(EN.flowStopReason("expiry"))).toHaveLength(2);
+});
+
 test("a form whose row was written but never approved is tested again, not replayed", async () => {
   const w = await world();
   const draft = await w.page({ kind: "goalScope", repository: "o/r" });

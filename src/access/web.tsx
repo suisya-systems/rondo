@@ -94,6 +94,7 @@ import { revisionInstruction } from "../refrain/revision.js";
 import {
   approvedForPublication,
   type FindingSeverity,
+  FLOW_AUTHOR,
   FLOW_AUTHOR_PREFIX,
   findingBasisText,
   type GradedFinding,
@@ -119,7 +120,12 @@ import {
 import { basisLine, DETERMINISTIC_DRAFTER, gather } from "./advisory.js";
 import { approvedUnstarted, partsOf } from "./drafted-start.js";
 import { draftedStanding } from "./drafted-view.js";
-import { flowStopOf } from "./flow-stop.js";
+import {
+  flowStopAskedFacts,
+  flowStopBody,
+  type FlowStopFacts,
+  flowStopOf,
+} from "./flow-stop.js";
 import type { LapWorkInspection } from "./forge.js";
 import { type GateAuto, gateAuto } from "./gate-auto.js";
 import { gateScope } from "./gate-host.js";
@@ -2466,6 +2472,63 @@ function scopeStopView(wording: Chrome, message: ThreadMessageDraft, reads: Held
   );
 }
 
+/**
+ * Whether a message is the stop the flow asked in a request's thread
+ * (`askStop` in `flow-host.ts`): the flow's own voice, a `flow-stop-` id and
+ * `asks` set.
+ */
+function flowStopAsked(message: ThreadMessageDraft): boolean {
+  return (
+    message.authorId === FLOW_AUTHOR &&
+    message.messageId.startsWith("flow-stop-") &&
+    message.asks
+  );
+}
+
+/**
+ * **A flow's stop, said again to whoever is reading it** (rondo#549).
+ *
+ * The flow stops on the minute, outside any request to the page, so the host
+ * had to pick a language when it wrote the ask and picked its own operator's
+ * (D-0079). That is the machine's setting, and the person in front of the page
+ * chose theirs -- `?lang`, the language cookie, the browser (D-0055). So the
+ * stop is composed again here from the facts the host kept beside the ask, by
+ * the one composer both sides use (`flowStopBody`), and what is drawn is the
+ * person's own words rather than the host's.
+ *
+ * The ask as it was written stays under the fold, byte for byte, as the scope
+ * stop's record does -- and is left out where it is the same text, because a
+ * host and a reader who share a language would otherwise read it twice.
+ */
+function flowStopView(
+  wording: Chrome,
+  message: ThreadMessageDraft,
+  stop: { readonly facts: FlowStopFacts; readonly repository: string },
+) {
+  const said = flowStopBody(wording, stop.repository, stop.facts);
+  return (
+    <div class="space-y-2">
+      <p class="body text-body leading-6 wrap-anywhere whitespace-pre-wrap" lang={wording.lang}>
+        {said}
+      </p>
+      {said === message.body ? null : (
+        <details class="group">
+          <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+            {chevron()}
+            {wording.evBrokeReason}
+          </summary>
+          <p
+            class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+            lang=""
+          >
+            {message.body}
+          </p>
+        </details>
+      )}
+    </div>
+  );
+}
+
 /** The newest approval in force over a scope the person wrote, if any. */
 async function ownApproval(
   ports: WebPorts,
@@ -4142,6 +4205,21 @@ export async function operatorPage(
           ),
         };
   /*
+   * **A flow's stop, with the facts the host kept beside its ask** (rondo#549):
+   * read only where the thread holds one, so an ordinary thread asks the store
+   * nothing. The page says the stop again from these, in the language of
+   * whoever is looking, instead of drawing the host's own (`flowStopView`).
+   */
+  const flowStopRows = selectedMessages.some(flowStopAsked) ? await ports.record.flowStops() : [];
+  const flowStopSays = new Map(
+    selectedMessages.flatMap((message) => {
+      const stop = flowStopAsked(message)
+        ? flowStopAskedFacts(flowStopRows, message.messageId)
+        : null;
+      return stop === null ? [] : [[message.messageId, stop] as const];
+    }),
+  );
+  /*
    * **The messages whose body is not prose**, rendered here because this
    * renderer still owns them: what rondo read of a named issue (D-0078 section
    * 4), a drafter run that drafted nothing (rondo#238) and rondo's own report
@@ -4158,24 +4236,27 @@ export async function operatorPage(
             noDraft(message) ||
             lapReport(message) ||
             scopeStop(message) ||
+            flowStopSays.has(message.messageId) ||
             (reads !== null && heldMessage(message)),
         )
-        .map(
-          async (message) =>
-            [
-              message.messageId,
-              await (message.authorKind === "forge"
-                ? forgeView(wording, message)
-                : lapReport(message)
-                  ? lapReportView(wording, message, reads)
-                  : scopeStop(message)
-                    ? scopeStopView(wording, message, reads)
+        .map(async (message) => {
+          const stop = flowStopSays.get(message.messageId);
+          return [
+            message.messageId,
+            await (message.authorKind === "forge"
+              ? forgeView(wording, message)
+              : lapReport(message)
+                ? lapReportView(wording, message, reads)
+                : scopeStop(message)
+                  ? scopeStopView(wording, message, reads)
+                  : stop !== undefined
+                    ? flowStopView(wording, message, stop)
                     : noDraft(message) || reads === null
                       ? noDraftView(wording, message, reads)
                       : raw(heldMarkup({ wording, reads, text: message.body, className: "" }))
-              ).toString(),
-            ] as const,
-        ),
+            ).toString(),
+          ] as const;
+        }),
     ),
   );
   /** Each message's moment, for rule 7's line: the items themselves do not carry it. */
