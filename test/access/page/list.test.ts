@@ -72,3 +72,32 @@ test("the running mark turns, and holds still where motion is reduced", () => {
     /@media \(prefers-reduced-motion: reduce\) \{\s*\.list-dot-run \{\s*animation: none;/,
   );
 });
+
+test("a row that needs nobody is one line, and its sentence stays for a reader (rondo#592)", () => {
+  const css = readFileSync(new URL("../../../page/list.css", import.meta.url), "utf8");
+  const rule = (selector: string): string =>
+    new RegExp(`${selector.replace(/[.()]/g, "\\$&")} \\{([^}]*)\\}`).exec(css)?.[1] ?? "";
+  expect(rule(".list-row:not(.list-row-mine) b")).toMatch(/white-space: nowrap/);
+  const sentence = rule(".list-row:not(.list-row-mine) p");
+  expect(sentence).toMatch(/clip-path: inset\(50%\)/);
+  expect(sentence).not.toMatch(/display: none/);
+  // A waiting row is not cut: nothing narrows `.list-row-mine` back to one line.
+  expect(rule(".list-row-mine p")).not.toMatch(/nowrap|clip/);
+  const html = renderToStaticMarkup(
+    RequestsFace({
+      wording: EN,
+      list: {
+        yourTurn: [],
+        days: [{ cut: "today", rows: [row("finished")] }],
+        lastLookedAbove: null,
+      },
+      hrefOf: (id) => `/?thread=${id}`,
+      agoOf: () => "now",
+      allowance: null,
+      newRequestHref: null,
+      lastLookedSaid: "",
+      openId: null,
+    }),
+  );
+  expect(html).toMatch(/<p>[^<]+<\/p>/);
+});
