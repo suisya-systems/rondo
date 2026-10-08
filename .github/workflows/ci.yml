@@ -315,6 +315,9 @@ jobs:
       - name: Unused exports and dependencies
         run: npm run knip
 
+      - name: Source file line budget
+        run: npm run file-size
+
       - name: Import boundary check
         # Named separately because this file is what the build exists to defend
         # while rondo has no behaviour yet. It has already run in `double-green`

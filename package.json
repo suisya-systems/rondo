@@ -33,7 +33,8 @@
     "preflight:model-tier": "node scripts/model-tier.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run build && npm run page:check && npm run lint && npm run knip && npm run typecheck && npm run test"
+    "file-size": "node scripts/file-size.mjs",
+    "verify": "npm run build && npm run page:check && npm run file-size && npm run lint && npm run knip && npm run typecheck && npm run test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.10",
