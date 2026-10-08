@@ -50,6 +50,12 @@
  * waiting reads as waiting from across a room. `color-scheme` is kept so form controls and scroll
  * bars follow the reader's setting.
  *
+ * **Which palette is drawn is the person's choice, the system's by default** (rondo#590, D-0184,
+ * revisiting D-0082 rule 8). Each token holds both values in one `light-dark()`, and `color-scheme`
+ * picks: `light dark` follows `prefers-color-scheme`, and the header's control (`page/theme.js`)
+ * pins it with `data-theme` on the root. One declaration per token, so the two palettes cannot
+ * drift apart across a light block, a dark media block and a forced-dark block.
+ *
  * The floors are the old stylesheet's (rondo#153): `--faint` carries bases, ids and ages, which are
  * text a person reads, so it clears 4.5:1 on the page ground and on a card in both modes; recessive
  * is a step down in weight and never below legible. `--wait` is the one filled button's ground, so
@@ -64,48 +70,31 @@
  */
 :root {
   color-scheme: light dark;
-  --background: #f8f9fa;
-  --foreground: #16181d;
-  --card: #ffffff;
-  --muted: #eef0f3;
-  --muted-foreground: #525a66;
-  --faint: #636b77;
-  --border: #dfe2e7;
-  --accent: #eef1f6;
-  --ring: #2f6fdb;
-  --link: #1f56b3;
-  --wait: #a65300;
-  --wait-foreground: #ffffff;
-  --wait-ink: #8a4500;
-  --wait-wash: #fff4e5;
-  --run: #525a66;
-  --run-ink: #414956;
-  --run-wash: #eef0f3;
-  --ok: #1a7f47;
-  --fail: #c0332b;
+  --background: light-dark(#f8f9fa, #0d0f12);
+  --foreground: light-dark(#16181d, #e6e8ec);
+  --card: light-dark(#ffffff, #14171b);
+  --muted: light-dark(#eef0f3, #1b1f24);
+  --muted-foreground: light-dark(#525a66, #a3abb5);
+  --faint: light-dark(#636b77, #8c95a0);
+  --border: light-dark(#dfe2e7, #282d34);
+  --accent: light-dark(#eef1f6, #232c38);
+  --ring: light-dark(#2f6fdb, #5b9bff);
+  --link: light-dark(#1f56b3, #7aafff);
+  --wait: light-dark(#a65300, #d48a2c);
+  --wait-foreground: light-dark(#ffffff, #1a1206);
+  --wait-ink: light-dark(#8a4500, #e9a854);
+  --wait-wash: light-dark(#fff4e5, #241a0c);
+  --run: light-dark(#525a66, #a3abb5);
+  --run-ink: light-dark(#414956, #aeb6c0);
+  --run-wash: light-dark(#eef0f3, #1b1f24);
+  --ok: light-dark(#1a7f47, #46c081);
+  --fail: light-dark(#c0332b, #f2716a);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0d0f12;
-    --foreground: #e6e8ec;
-    --card: #14171b;
-    --muted: #1b1f24;
-    --muted-foreground: #a3abb5;
-    --faint: #8c95a0;
-    --border: #282d34;
-    --accent: #232c38;
-    --ring: #5b9bff;
-    --link: #7aafff;
-    --wait: #d48a2c;
-    --wait-foreground: #1a1206;
-    --wait-ink: #e9a854;
-    --wait-wash: #241a0c;
-    --run: #a3abb5;
-    --run-ink: #aeb6c0;
-    --run-wash: #1b1f24;
-    --ok: #46c081;
-    --fail: #f2716a;
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 /*

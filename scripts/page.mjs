@@ -55,6 +55,7 @@ const COPIES = {
   "icon.svg": join(root, "page/icon.svg"),
   "icon-wait.svg": join(root, "page/icon-wait.svg"),
   "text-size.js": join(root, "page/text-size.js"),
+  "theme.js": join(root, "page/theme.js"),
   "inter-latin-wght-normal.woff2": require.resolve(
     "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2",
   ),

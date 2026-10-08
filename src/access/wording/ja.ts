@@ -542,6 +542,8 @@ export const JA: Chrome = Object.freeze({
   keyShowSheet: "この一覧を開く",
   textSizeLabel: "文字の大きさ",
   textSizes: ["標準の文字", "大きい文字", "もっと大きい文字"],
+  themeLabel: "配色",
+  themes: ["ライト", "ダーク", "OS の設定に従う"],
 
   inboxNote: "ここを読んでも最後に見た印は動きません。印を動かすのは rondo inbox です。",
 

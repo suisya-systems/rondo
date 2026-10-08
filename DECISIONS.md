@@ -217,6 +217,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0175 | The inbox lists a proposal that binds nothing only while its subject is open and nothing newer replaces it; the rest are a count, and every row stays in the store | accepted, amended |
 | D-0176 | An approvable proposal whose successor identity is already in the store no longer waits on the person: the inbox counts it in a line and the page's count leaves it out, and the row stays readable | accepted |
 | D-0183 | A list row that waits on nobody is one line, its title and its time, with its state in the mark's shape; the sentence and the repository stay in the markup for a reader, and a waiting row keeps both lines | accepted |
+| D-0184 | The page offers light, dark and the system's palette, kept in this browser as the text size is; the system's is the default, and each colour token holds both values in one declaration | accepted |
 
 ---
 
@@ -20409,6 +20410,14 @@ the contrast floors already recorded, under `prefers-color-scheme` alone. A togg
 preference rondo would have to store, name to the person and restore, and `D-0076` rule 3 is what
 says it is not worth their attention.
 
+> **Annotation (2026-10-08, from D-0184).** Not additive (rondo#590): the header offers light, dark
+> and *as the system is set*, the last the default, and the choice is kept in this browser's
+> `localStorage` as the text size already is (rondo#379). With nothing chosen the page still follows
+> `prefers-color-scheme`. Both palettes stay written out with the same floors (`D-0184`). Nothing
+> above is edited.
+>
+> - Amends: D-0082 rule 8
+
 **9. `data-question` is a marker and not a style hook.** It stays for tests and readers; the stale
 comment claiming the weight rests on it is corrected to say where the weight actually is.
 
@@ -29489,3 +29498,53 @@ sighted reader finds it.
 
 - A person who could not tell, from the list, a state they needed to act on.
 - Requests with the same title in different repositories being opened by mistake.
+
+---
+
+## D-0184 — The page offers light, dark and the system's palette, kept in this browser as the text size is; the system's is the default, and each colour token holds both values in one declaration
+
+**Status:** accepted (2026-10-08, rondo#590, the owner's approval through the window). Amends
+`D-0082` rule 8. Supersedes nothing. Refs `D-0059`, `D-0076` rule 3, rondo#318, rondo#379.
+
+### Context
+
+`D-0082` rule 8 drew dark from `prefers-color-scheme` alone and refused a switch because it is a
+preference rondo would have to store, name and restore. rondo#379 has since stored one: the text
+size, in `localStorage`, from the header, with no server state. And an editor beside the page need
+not follow the system, which gives a light rondo beside a dark editor (rondo#590, found by the page
+review for rondo#318).
+
+### Decision
+
+1. **Three choices in the header: light, dark, and as the system is set**, which is the default and
+   draws what rule 8 drew. Each is a button with its name as its accessible name and tooltip,
+   script only, outside `#ledger`, beside the text-size control.
+2. **Kept as the text size is.** `page/theme.js` puts `data-theme` on the root element before the
+   body is parsed, keeps the choice under one `localStorage` key, follows another tab's choice, and
+   ignores a stored value it has no rule for. The system's choice is no attribute and no key. Nothing
+   reaches the server and no cookie is added (`D-0056` rule 5).
+3. **One declaration per token.** Each colour token in `page/app.css` is `light-dark(light, dark)`
+   and `color-scheme` picks: `light dark` follows the system, `data-theme` pins `light` or `dark`.
+   Form controls and scroll bars follow the same pin. The values and their floors are rule 8's,
+   unchanged.
+4. It lives in `page/theme.js`, `page/app.css` and `src/access/page/document.tsx`, not `web.tsx`
+   (`D-0168`).
+
+### Options not taken
+
+- **One script for both choices.** `page/text-size.js` has one duty and a test of its own; a second
+  file of the same shape keeps each readable alone, at the cost of about thirty lines alike.
+- **A forced-dark block beside the media block.** It writes the dark palette twice, and a value
+  changed in one and not the other draws a different dark by how it was reached.
+
+### What it costs
+
+- A browser without `light-dark()` (before Chrome 123, Firefox 120, Safari 17.5) draws no colour
+  tokens at all; the build passes the function through untouched.
+- A person who chose light or dark no longer follows the system when it changes, until they press
+  the system's button.
+
+### What would falsify it
+
+- A person who chose a palette and found it lost on the next visit in the same browser.
+- A page that paints in one palette and then the other on load.

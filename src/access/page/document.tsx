@@ -170,8 +170,10 @@ export async function pageDocument({
           // **Not deferred, and before the body** (rondo#379): it puts the
           // text size a person chose on the root element before anything is
           // drawn, so the page does not paint at one size and jump to another.
+          // `theme.js` does the same for the palette (rondo#590).
         }
         <script src="/text-size.js" />
+        <script src="/theme.js" />
         {
           // `defer` on all of them, in this order: htmx is defined before its
           // morph extension registers with it, and both before the key and
@@ -399,6 +401,29 @@ export async function pageDocument({
                   class={`inline-flex h-7 min-w-7 items-center justify-center px-1 font-semibold leading-none text-muted-foreground hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground ${["text-id", "text-body", "text-title"][at]}`}
                 >
                   A
+                </button>
+              ))}
+            </fieldset>
+            {/*
+             * **The palette, which a person can change** (rondo#590, D-0184).
+             * Light, dark, or as the system is set (the default). Built as the
+             * text-size control is: `page/theme.js` puts the choice on the
+             * root, remembers it in this browser and marks the pressed one.
+             */}
+            <fieldset
+              aria-label={wording.themeLabel}
+              class="js-only inline-flex shrink-0 items-center rounded-md border border-border"
+            >
+              {(["light", "dark", ""] as const).map((choice, at) => (
+                <button
+                  type="button"
+                  data-theme-choice={choice}
+                  aria-pressed="false"
+                  aria-label={wording.themes[at]}
+                  title={wording.themes[at]}
+                  class="inline-flex h-7 min-w-7 items-center justify-center px-1 text-body leading-none text-muted-foreground hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
+                >
+                  {["\u2600\ufe0e", "\u263e\ufe0e", "\u25d0"][at]}
                 </button>
               ))}
             </fieldset>

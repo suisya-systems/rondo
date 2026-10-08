@@ -603,12 +603,14 @@ test("rendering the scope screen writes nothing, however many times or in which 
     null,
   );
   expect(bare).not.toContain("<form");
-  // The header's text-size buttons (rondo#379) and its `?` (rondo#588) are in
+  // The header's text-size and palette buttons (rondo#379, rondo#590) and its `?` (rondo#588) are in
   // no form and press nothing; every other button is.
   expect(
     [...bare.matchAll(/<button[^>]*>/g)].filter(
       ([tag]) =>
-        !tag.includes("data-text-size-choice") && !tag.includes('popovertarget="key-sheet"'),
+        !tag.includes("data-text-size-choice") &&
+        !tag.includes("data-theme-choice") &&
+        !tag.includes('popovertarget="key-sheet"'),
     ),
   ).toEqual([]);
   expect(bare).toContain(

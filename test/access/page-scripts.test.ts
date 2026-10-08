@@ -510,13 +510,17 @@ test("a send htmx took, and a form that only reads, are not presses", () => {
 });
 
 /**
- * A tab running `page/text-size.js` (rondo#379): a root element, the header's
- * three buttons once the document is parsed, and a `localStorage` that holds
- * `saved` -- or throws on every call when `saved` is `"refused"`.
+ * A tab running `page/text-size.js` (rondo#379), or `page/theme.js` (rondo#590)
+ * when `choice` names it: a root element, the header's three buttons once the
+ * document is parsed, and a `localStorage` that holds `saved` -- or throws on
+ * every call when `saved` is `"refused"`.
  */
-function textSizeTab(saved: string | null | "refused") {
+const TEXT_SIZE = { name: "text-size", steps: ["", "large", "larger"] };
+const THEME = { name: "theme", steps: ["light", "dark", ""] };
+function textSizeTab(saved: string | null | "refused", choice = TEXT_SIZE) {
+  const { name, steps } = choice;
   const storage = new Map<string, string>();
-  if (saved !== null && saved !== "refused") storage.set("rondo:text-size", saved);
+  if (saved !== null && saved !== "refused") storage.set(`rondo:${name}`, saved);
   const refuse = () => {
     throw new Error("SecurityError");
   };
@@ -540,15 +544,15 @@ function textSizeTab(saved: string | null | "refused") {
       this.attributes.delete(name);
     }
     closest(selector: string) {
-      return selector === "[data-text-size-choice]" && this.attributes.has("data-text-size-choice")
+      return selector === `[data-${name}-choice]` && this.attributes.has(`data-${name}-choice`)
         ? this
         : null;
     }
   }
   const root = new Element();
-  const buttons = ["", "large", "larger"].map((step) => {
+  const buttons = steps.map((step) => {
     const button = new Element();
-    button.setAttribute("data-text-size-choice", step);
+    button.setAttribute(`data-${name}-choice`, step);
     return button;
   });
   let parsed = false;
@@ -559,14 +563,14 @@ function textSizeTab(saved: string | null | "refused") {
   const fire = (type: string, event: unknown = {}) => {
     for (const listener of heard.get(type) ?? []) listener(event);
   };
-  runInNewContext(bytesOf("page/text-size.js").toString("utf8"), {
+  runInNewContext(bytesOf(`page/${name}.js`).toString("utf8"), {
     Element,
     localStorage,
     window: { addEventListener: listen },
     document: {
       documentElement: root,
       querySelectorAll: (selector: string) =>
-        selector === "[data-text-size-choice]" && parsed ? buttons : [],
+        selector === `[data-${name}-choice]` && parsed ? buttons : [],
       addEventListener: listen,
     },
   });
@@ -582,8 +586,8 @@ function textSizeTab(saved: string | null | "refused") {
       fire("click", { target: buttons[at] });
     },
     otherTab(step: string) {
-      storage.set("rondo:text-size", step);
-      fire("storage", { key: "rondo:text-size" });
+      storage.set(`rondo:${name}`, step);
+      fire("storage", { key: `rondo:${name}` });
     },
   };
 }
@@ -632,6 +636,30 @@ test("a choice made in another tab is followed here", () => {
   tab.otherTab("large");
   expect(tab.root.getAttribute("data-text-size")).toBe("large");
   expect(tab.pressed()).toEqual(["false", "true", "false"]);
+});
+
+test("the palette a person chose is on the root before the body, the system's leaves none, and a press is remembered (rondo#590)", () => {
+  const tab = textSizeTab("dark", THEME);
+  expect(tab.root.getAttribute("data-theme")).toBe("dark");
+  tab.parse();
+  expect(tab.pressed()).toEqual(["false", "true", "false"]);
+  tab.press(0);
+  expect(tab.root.getAttribute("data-theme")).toBe("light");
+  expect(tab.storage.get("rondo:theme")).toBe("light");
+  tab.press(2);
+  expect(tab.root.getAttribute("data-theme")).toBe(null);
+  expect(tab.storage.has("rondo:theme")).toBe(false);
+  expect(tab.pressed()).toEqual(["false", "false", "true"]);
+  tab.otherTab("dark");
+  expect(tab.root.getAttribute("data-theme")).toBe("dark");
+  const unknown = textSizeTab('"><script>', THEME);
+  unknown.parse();
+  expect(unknown.root.getAttribute("data-theme")).toBe(null);
+  expect(unknown.pressed()).toEqual(["false", "false", "true"]);
+  const refused = textSizeTab("refused", THEME);
+  refused.parse();
+  refused.press(1);
+  expect(refused.root.getAttribute("data-theme")).toBe("dark");
 });
 
 test("a taken request wins over a draft kept for another take, and a reload of the same take keeps the edits", () => {
@@ -808,9 +836,17 @@ test("an element the redraw built is a change, and a ledger with no word marks i
  * extension -- are not run: what they declare is theirs, and a name of ours
  * colliding with a name of theirs is not what this fixes.
  */
-const LOADED = ["text-size.js", "keys.js", "composer.js", "chime.js", "changed.js", "rounds.js"];
+const LOADED = [
+  "text-size.js",
+  "theme.js",
+  "keys.js",
+  "composer.js",
+  "chime.js",
+  "changed.js",
+  "rounds.js",
+];
 
-/** An element of the page below: everything these five touch on a node. */
+/** An element of the page below: everything these scripts touch on a node. */
 class Painted {
   readonly attributes = new Map<string, string>();
   readonly classList = { add: () => {} };

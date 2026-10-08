@@ -49,6 +49,7 @@ export async function refusedPage(wording: Chrome, refused: Refused): Promise<st
         <title>{refused.title}</title>
         <link rel="stylesheet" href="/app.css" />
         <script src="/text-size.js" />
+        <script src="/theme.js" />
       </head>
       <body class="min-h-screen bg-background font-sans text-foreground antialiased">
         <header class="border-b border-border bg-background">

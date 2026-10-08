@@ -588,6 +588,9 @@ export interface Chrome extends PageWords {
   /** The header's text-size control (rondo#379): the group's name, and one name per step, smallest first. */
   readonly textSizeLabel: string;
   readonly textSizes: readonly [string, string, string];
+  /** The header's palette control (rondo#590, D-0184): the group's name, then light, dark and the system's. */
+  readonly themeLabel: string;
+  readonly themes: readonly [string, string, string];
 
   readonly inboxNote: string;
 
