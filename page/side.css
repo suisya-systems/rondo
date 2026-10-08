@@ -26,17 +26,18 @@
 }
 
 /*
- * The week's six figures: three across at 2560, where this face is 720px
- * wide, and two across once it is 440px -- which is rule 8's *cards go one
- * across* read as *one step narrower*, because a figure is not a card and two
- * of these still fit.
+ * The week's six figures: three across where this face is wide -- 720px at
+ * 2560, or under the thread at 641-1100 -- and two across where it is a
+ * narrow column (the `@container` rule at the foot), which is rule 8's *cards
+ * go one across* read as *one step narrower*, because a figure is not a card
+ * and two of these still fit.
  *
  * The rules between the cells are the grid's gap over the border colour,
  * which is one declaration rather than a border per cell.
  */
 .side-week {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   margin-bottom: 4px;
   background: var(--color-border);
@@ -261,38 +262,45 @@
 }
 
 /*
- * Below 2560 the face is 440px: the week's figures go two across and the five
- * steps stay five, which is what a person reads the card for -- a step row cut
- * into two lines is no longer a line to read left to right.
+ * By the face's own width and not the window's (D-0185 rule 5): the same face
+ * is a 320px column beside the thread at 1280 and about 700px across under it
+ * at 1000, so a window width cannot say which drawing it needs.
+ *
+ * Under 600px the week's figures go two across. A row of three in a grid of
+ * two leaves one cell unfilled, and the rules between the cells are this
+ * grid's own background showing through its gap -- so an unfilled cell is not
+ * empty space, it is a grey block. The odd last figure takes the rest of its
+ * row instead.
  */
-@media (max-width: 2000px) {
+@container (max-width: 600px) {
   .side-week {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  /*
-   * A row of three in a grid of two leaves one cell unfilled, and the rules
-   * between the cells are this grid's own background showing through its gap
-   * -- so an unfilled cell is not empty space, it is a grey block. The odd
-   * last figure takes the rest of its row instead. Only here: at three across
-   * the rows are full, and at 1280 the face is full width again.
-   */
   .side-week > div:last-child:nth-child(odd) {
     grid-column: 1 / -1;
   }
   .side-week dd {
     font-size: var(--text-title);
   }
-  .side-step {
-    font-size: var(--text-id);
-  }
 }
 
-/* 1280: the face is under the thread and full width, so nothing is narrower. */
-@media (max-width: 1400px) {
-  .side-week {
-    grid-template-columns: repeat(3, 1fr);
+/*
+ * Under 640px the steps stand one under another. Seven across left each 40 to
+ * 60px -- a 320px column at 1280, or under the thread at 760 -- and a word
+ * like "Automatic" at a larger text size ran into the next step, and a row cut
+ * into two lines is no longer a line to read; a column still reads in the
+ * order they happen in.
+ */
+@container (max-width: 640px) {
+  .side-steps {
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
   }
   .side-step {
-    font-size: var(--text-id);
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 4px;
   }
 }
