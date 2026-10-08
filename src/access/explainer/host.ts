@@ -73,7 +73,18 @@ export function explainerHost(ports: ExplainerHostPorts): ExplainerHost {
         ports.log(`explain  the questions could not be read: ${hostFailure(error).text}`);
         return;
       }
-      for (const questionId of due.filter((id) => !givenUp.has(id))) {
+      // A held run whose question is answered or gone has nothing left to write.
+      for (const questionId of unwritten.keys()) {
+        if (!due.includes(questionId)) unwritten.delete(questionId);
+      }
+      // **No run is admitted while one is held unwritten** (Codex): its spend is
+      // not in the store yet, so admission would read a balance it has already
+      // spent. Held runs are written first, and the scan stops while one stays.
+      const open = due.filter((id) => !givenUp.has(id));
+      for (const questionId of [
+        ...open.filter((id) => unwritten.has(id)),
+        ...open.filter((id) => !unwritten.has(id)),
+      ]) {
         try {
           if (!(await answer(ports, questionId, unwritten))) {
             givenUp.add(questionId);
@@ -84,6 +95,7 @@ export function explainerHost(ports: ExplainerHostPorts): ExplainerHost {
             `explain  ${questionId}: ${hostFailure(error).text}; tried again on the next scan`,
           );
         }
+        if (unwritten.size > 0) break;
       }
     }
   };

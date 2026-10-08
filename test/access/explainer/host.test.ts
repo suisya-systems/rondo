@@ -17,7 +17,7 @@ import type { DrafterRun } from "../../../src/access/model-draft/judgement.js";
 import { EN } from "../../../src/access/wording.js";
 import { explainerRow } from "../../../src/continuo/roles.js";
 import { planDocument, world } from "../fixtures/drafter.js";
-import { approve, asked, LAP, QUESTION, type World } from "./world.js";
+import { approve, ask, asked, LAP, QUESTION, type World } from "./world.js";
 
 const ANSWERED: DrafterRun = {
   kind: "answered",
@@ -225,6 +225,30 @@ test("a run whose write fails is written on the next scan without running again"
   expect(handed).toHaveLength(1);
   expect(await answers(w)).toHaveLength(1);
   expect((await w.record.scopeSpent("sd-1")).readCostUsd).toBeCloseTo(before + 0.03);
+});
+
+test("while a run's answer is held unwritten, no other question's run is admitted (Codex)", async () => {
+  const w = await asked();
+  await approve(w);
+  await ask(w, "question-2", null, "And what happens next?");
+  let faults = 1;
+  const record = {
+    ...w.record,
+    recordAnswer: async (write: Parameters<typeof w.record.recordAnswer>[0]) =>
+      faults-- > 0
+        ? { kind: "defect" as const, reason: "database is locked" }
+        : await w.record.recordAnswer(write),
+  };
+  const { host, handed } = hostOver({ ...w, record }, async () => ANSWERED);
+  host.kick();
+  await host.idle();
+  // The first run's spend is not in the store yet, so the second is not run.
+  expect(handed).toHaveLength(1);
+  host.kick();
+  await host.idle();
+  // The held answer lands first, and only then is the next question run.
+  expect(handed).toHaveLength(2);
+  expect(await w.record.unansweredQuestionIds("rondo/explainer/")).toEqual([]);
 });
 
 test("a model answer the store refuses is written as the records' answer, its cost counted", async () => {

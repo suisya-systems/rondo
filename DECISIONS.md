@@ -29694,7 +29694,9 @@ the reads open to one later. This entry writes those points down as rules, at ro
      whose process never started (no directory for it, no executable) spent nothing and is not.
    - **A run is paid for once.** Its result is held until its answer is written: a store fault on
      the write writes the same answer on a later scan without running the model again, and a model
-     answer the store refuses is written as the deterministic answer carrying the same count.
+     answer the store refuses is written as the deterministic answer carrying the same count. While
+     a run is held unwritten no other run is admitted, since its spend is not yet in what admission
+     reads.
    - **One answer is capped at 0.50 USD, checked at admission**: the model runs only when an
      approval is in force for the request and what it has left (approved less spent less held) is
      at least the cap. Nothing is held while the run is in flight (residual below). With no
