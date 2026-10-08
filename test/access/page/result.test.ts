@@ -1412,6 +1412,6 @@ test("D-0105: the thread's conflict line says rondo can resolve it, and the upda
   const conflict = said.messages.find((one) => one.messageId.startsWith("report-conflict-i-r-"));
   expect(conflict?.body).toContain("rondo can resolve it in one more attempt");
   expect(conflict?.body).not.toContain("does not resolve");
-  expect(EN.publishNoteUpdate).toContain("opens no pull request");
-  expect(chromeFor("ja").publishNoteUpdate).toContain("プルリクエストは作らず");
+  expect(EN.publishNoteUpdate(false)).toContain("opens no pull request");
+  expect(chromeFor("ja").publishNoteUpdate(false)).toContain("プルリクエストは作らず");
 });

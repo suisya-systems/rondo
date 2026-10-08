@@ -4,12 +4,13 @@
  * whose scope's approved tip includes both `push_branch` and
  * `open_pull_request` is published in the resident host, today the `rondo web`
  * process, on the minute it already rescans on and right after rondo answers a
- * gate. The act is the press's own path (`publishUnderScope`,
- * `page-publish-actions.ts`), so every refusal of the press holds; the review's
- * verdict is one, and passing it stays a person's act (`--despite-review`, the
- * page's second press). So is a lap whose model reading is missing,
- * unavailable or raised a finding at or above the line an automatic approval
- * keeps (D-0066 rule 4.2's reading).
+ * gate or a person approves one. The act is the press's own path
+ * (`publishUnderScope`, `page-publish-actions.ts`), so every refusal of the
+ * press holds; the review's verdict is one, and passing it stays a person's act
+ * (`--despite-review`, the page's second press). Under rondo's own approval, so
+ * is a lap whose model reading is missing, unavailable or raised a finding at
+ * or above the line an automatic approval keeps (D-0066 rule 4.2's reading); a
+ * person who approved has answered that already (D-0187).
  *
  * **Claim, then act** (D-0042): each leg's `scope_consumption` row is written
  * right before it runs, asking the scope again first, so a lap is pushed and
@@ -22,6 +23,7 @@
 import { approvedForPublication, reviewedReading } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { modelReason } from "./gate-auto.js";
+import { GATE_ACTOR } from "./gate-host.js";
 import { scopedAuthority } from "./merge.js";
 import { askOverLine, resultOf } from "./page-logic/result.js";
 import { threadsOf } from "./page-logic/threads.js";
@@ -171,10 +173,15 @@ async function publishable(
   if (authority === null) {
     return null;
   }
-  // D-0066 rule 4.2: a push or a pull request is inside the scope only where
-  // the lap's model reading of its tip is there, readable and below the line,
-  // as for an automatic approval. A person's approval over a finding is
-  // theirs to publish on, with the press.
+  // **A person's approval carries the lap to its pull request** (D-0187):
+  // they approved over what the model read, as a merge on green takes it
+  // (D-0126 rule 2), so the press would only ask them the same thing twice.
+  if (lap.gateAnswerActor !== null && lap.gateAnswerActor !== GATE_ACTOR) {
+    return authority;
+  }
+  // D-0066 rule 4.2: under rondo's own approval, a push or a pull request is
+  // inside the scope only where the lap's model reading of its tip is there,
+  // readable and below the line, as for an automatic approval.
   const readings = await ports.store.readingsFor(lap.id);
   return modelReason(readings, reviewedReading(readings), { payload: authority.payload }) === null
     ? authority

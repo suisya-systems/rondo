@@ -1202,9 +1202,12 @@ export const JA: Chrome = Object.freeze({
   publishModelHeading: "モデルが読んだこと",
   publishModelNote:
     "判断の材料です。承認ではなく、この画面の内容がこれで決まったわけでもありません。",
-  publishNote:
+  publishNote: (merges) =>
     "ボタンを押すと、rondo があなたの名前で push し、プルリクエストを作り、作業の記録を閉じます。" +
-    "マージはしません。画面を開いたあとに何か変わっていれば、実行せず、理由を表示します。",
+    (merges
+      ? "チェックが通れば、範囲にしたがって rondo がデフォルトブランチにマージします。"
+      : "マージはしません。") +
+    "画面を開いたあとに何か変わっていれば、実行せず、理由を表示します。",
   publishPlain: "このブランチを push し、プルリクエストを作り、作業の記録を閉じます。",
   publishBack: "公開の画面に戻る",
   publishNotOffered:
@@ -1280,9 +1283,11 @@ export const JA: Chrome = Object.freeze({
     "rondo があなたの回答を待っています。回答するまで、この依頼の作業は先へ進みません。",
   nextStepStart: "範囲は承認済みです。範囲の画面から作業を始めてください。",
   nextStepStartAction: "作業を始める画面へ",
-  nextStepPublish:
+  nextStepPublish: (merges) =>
     "作業は承認済みです。プルリクエストを作ると、ブランチを push してレビューに出します。" +
-    "マージはしません。",
+    (merges
+      ? "チェックが通れば、範囲にしたがって rondo がデフォルトブランチにマージします。"
+      : "マージはしません。"),
   nextStepAddRepository: (named, repo) =>
     `この依頼は ${named} を名指ししていますが、rondo はまだ ${repo} で作業していないので、` +
     `何も下書きしていません。追加すると、${repo} を rondo のほかのリポジトリと同じ場所に` +
@@ -1588,16 +1593,23 @@ export const JA: Chrome = Object.freeze({
     "あと何回できるかが決まらず、rondo はどちらかを選びません。",
   retakeRefusedNoContinuo:
     "レビューはやり直していません。作業を動かす rondo の部分が起動しません。",
-  nextStepPublishUpdate: (pullRequest) =>
+  nextStepPublishUpdate: (pullRequest, merges) =>
     `競合の解消は承認済みです。公開すると ${pullRequest} に push し、チェックがもう一度` +
-    "動きます。マージはしません。",
+    "動きます。" +
+    (merges
+      ? "チェックが通れば、範囲にしたがって rondo がデフォルトブランチにマージします。"
+      : "マージはしません。"),
   publishUpdates: (pullRequest, base) =>
     `${base} 向けに開いている ${pullRequest} へ push します。プルリクエストは新しく作りません。`,
   publishUpdateAction: (pullRequest) => `プルリクエスト ${pullRequest} を更新する`,
   publishBusyUpdate: "プルリクエストを更新しています…",
   publishPlainUpdate: "このブランチを開いているプルリクエストへ push し、作業の記録を閉じます。",
-  publishNoteUpdate:
+  publishNoteUpdate: (merges) =>
     "ボタンを押すと、rondo があなたの名前で、開いているプルリクエストへ push し、作業の記録を閉じます。" +
-    "プルリクエストは作らず、マージもしません。画面を開いたあとに何か変わっていたり、" +
+    (merges
+      ? "プルリクエストは作りません。" +
+        "チェックが通れば、範囲にしたがって rondo がデフォルトブランチにマージします。"
+      : "プルリクエストは作らず、マージもしません。") +
+    "画面を開いたあとに何か変わっていたり、" +
     "プルリクエストが閉じていたりすれば、実行せず、理由を表示します。",
 } satisfies Chrome);

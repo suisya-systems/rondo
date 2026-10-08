@@ -18,6 +18,7 @@ import { DETERMINISTIC_DRAFTER } from "../../src/access/advisory.js";
 import { reportToRequest } from "../../src/access/conductor.js";
 import { PRIMARY, SECONDARY } from "../../src/access/page/vocabulary.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
+import { type JsonRecord, scopePayloadWithDefaults } from "../../src/store/records.js";
 import {
   fresh,
   gateWithChecks,
@@ -131,13 +132,61 @@ test("an approved lap's next step is drawn filled and named for what it does: a 
   );
   expect(classOf(html, "publish-i-0001")).toBe(NEXT);
   drawnOnceOnTop(html, "publish-i-0001");
-  expect(html).toContain(EN.nextStepPublish);
+  expect(html).toContain(EN.nextStepPublish(false));
   expect(html).toContain(">Open a pull request</a>");
   // No other scope beside it: the approved work is not yet a pull request
   // (rondo#437), and a second way would be a choice.
   expect(html).not.toContain('id="scope-req-1"');
   // And in Japanese, from what it does rather than from the English line.
   expect(chromeFor("ja").publishAction).toBe("プルリクエストを作る");
+});
+
+test("D-0187: under a scope that merges on green, the next step says rondo merges it, not that nothing is", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await recordAnswer(world, "i-0001");
+  await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "answered_and_forwarded" },
+    5_000,
+  );
+  const ports = portsOver(world, "ada", [], null, null, async () => DRY_RUN);
+  const record = {
+    ...ports.record,
+    scopeDecisionAdmitting: async () => "sd-merge",
+    scopeTip: async () => ({ kind: "absent" }),
+    readScopeDecision: async () => ({
+      kind: "read",
+      decision: { scopeDecisionId: "sd-merge", scopeId: "scope-merge", outcome: "approved" },
+    }),
+    readScope: async () => ({
+      kind: "read",
+      scope: {
+        scopeId: "scope-merge",
+        payload: scopePayloadWithDefaults({
+          requests: { message_ids: ["req-1"] },
+          workspaces: [{ repository: "/srv/work", workspace_root: "/srv/work" }],
+          agent_types: [],
+          budgets: {
+            laps: 1,
+            review_rounds: 1,
+            cost_usd: 1,
+            cost_reserve_usd: 1,
+            expires_at_ms: Number.MAX_SAFE_INTEGER,
+          },
+          severity_threshold: "major",
+          outward_acts: ["push_branch", "open_pull_request", "merge_default_branch"],
+        } as unknown as JsonRecord),
+      },
+    }),
+  } as unknown as typeof ports.record;
+  const html = await operatorPage({ ...ports, record }, "t", threadOf("req-1"));
+  expect(html).toContain(EN.nextStepPublish(true));
+  expect(html).not.toContain(EN.nextStepPublish(false));
+  expect(chromeFor("ja").nextStepPublish(true)).not.toContain("マージはしません");
+  expect(chromeFor("ja").nextStepPublish(false)).toContain("マージはしません");
 });
 
 test("a lap answered with a change, or with no record of which answer, offers no pull request (rondo#385)", async () => {
@@ -163,7 +212,7 @@ test("a lap answered with a change, or with no record of which answer, offers no
       threadOf("req-1"),
     );
     expect(html).not.toContain("publish-i-0001");
-    expect(html).not.toContain(EN.nextStepPublish);
+    expect(html).not.toContain(EN.nextStepPublish(false));
   }
 });
 

@@ -1193,10 +1193,12 @@ explanation you pressed on and then answers the gate.`,
   publishModelHeading: "What the model read",
   publishModelNote:
     "Material for you to weigh. It is not an approval, and nothing on this screen was decided by it.",
-  publishNote:
-    "rondo pushes, opens the pull request and closes the run, as you. It merges nothing; that " +
-    "is still yours. If any of this has changed since the page was drawn, the press stops and " +
-    "says so.",
+  publishNote: (merges) =>
+    "rondo pushes, opens the pull request and closes the run, as you. " +
+    (merges
+      ? "Once its checks are green, rondo merges it into the default branch, as the scope allows."
+      : "It merges nothing; that is still yours.") +
+    " If any of this has changed since the page was drawn, the press stops and says so.",
   publishPlain: "Pushes this branch, opens its pull request and closes the run.",
   publishBack: "Back to publishing",
   publishNotOffered:
@@ -1278,9 +1280,11 @@ explanation you pressed on and then answers the gate.`,
     "rondo is waiting for your answer. Until you answer, the work on this request does not go on.",
   nextStepStart: "The scope is approved. Start the work from its screen.",
   nextStepStartAction: "Go to start the work",
-  nextStepPublish:
-    "The work is approved. Opening a pull request pushes its branch and puts it up for review; " +
-    "nothing is merged.",
+  nextStepPublish: (merges) =>
+    "The work is approved. Opening a pull request pushes its branch and puts it up for review. " +
+    (merges
+      ? "Once its checks are green, rondo merges it into the default branch, as the scope allows."
+      : "Nothing is merged."),
   nextStepAddRepository: (named, repo) =>
     `This request names ${named}, but rondo does not work in ${repo} yet, so nothing has been ` +
     `drafted. Adding it copies ${repo} onto this computer beside rondo's other repositories, and ` +
@@ -1586,16 +1590,23 @@ explanation you pressed on and then answers the gate.`,
     "many review rounds it has left cannot be told, and rondo does not pick one of them.",
   retakeRefusedNoContinuo:
     "The review was not taken again: the part of rondo that runs the work will not start.",
-  nextStepPublishUpdate: (pullRequest) =>
-    `The conflict fix is approved. Publishing pushes it onto ${pullRequest}; the checks run ` +
-    "there again, and nothing is merged.",
+  nextStepPublishUpdate: (pullRequest, merges) =>
+    `The conflict fix is approved. Publishing pushes it onto ${pullRequest}, and the checks run ` +
+    "there again. " +
+    (merges
+      ? "Once its checks are green, rondo merges it into the default branch, as the scope allows."
+      : "Nothing is merged."),
   publishUpdates: (pullRequest, base) =>
     `Push onto ${pullRequest}, already open against ${base}; no new pull request is opened.`,
   publishUpdateAction: (pullRequest) => `Update pull request ${pullRequest}`,
   publishBusyUpdate: "Updating the pull request...",
   publishPlainUpdate: "Pushes this branch onto the open pull request and closes the run.",
-  publishNoteUpdate:
+  publishNoteUpdate: (merges) =>
     "rondo pushes onto the open pull request and closes the run, as you; it opens no pull " +
-    "request and merges nothing. If any of this has changed since the page was drawn, or the " +
-    "pull request is no longer open, the press stops and says so.",
+    (merges
+      ? "request. " +
+        "Once its checks are green, rondo merges it into the default branch, as the scope allows."
+      : "request and merges nothing.") +
+    " If any of this has changed since the page was drawn, or the pull request is no longer " +
+    "open, the press stops and says so.",
 } satisfies Chrome);

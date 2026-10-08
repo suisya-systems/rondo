@@ -221,6 +221,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0177 | A person asks rondo on the page what something means or what happened, and a model explainer answers in the thread: an explanation with bases that binds nothing, counted against the approval in force, capped per answer | accepted |
 | D-0185 | The page is designed for the half screen beside an editor as well as for 2560: about 760px and about 1280px are widths of their own, and above a phone the list and the thread scroll on their own | accepted |
 | D-0186 | A paused goal flow is a row under *your turn* in the list, on every view, leading to the screen that resumes it; it is the one row there that is not a request | accepted |
+| D-0187 | A person's approval at the gate carries the lap to its pull request under a scope that allows it, without a second press, and the page's publish sentences say whether rondo then merges on green | accepted |
 
 ---
 
@@ -14993,6 +14994,16 @@ number.
 > - **Rule 4.2's tests read no property of the text `revise` adds**; it reaches the verdict only through
 >   the successor's plan (`D-0070` section 3 (A)). Nothing above is edited.
 
+> **Annotation (2026-10-09, from D-0187).** Not additive (rondo#609): rule 4.2's readings bullet
+> for **an act that carries a lap's result onward** no longer asks the model reading of a
+> `push_branch` or an `open_pull_request` whose gate **a person** answered `approve`. Their approval
+> was given over that reading, as a merge on green already takes it (`D-0126` rule 2); the test
+> stands for a gate rondo answered under the scope (`D-0125`), and for every other act it names.
+> The deterministic reading's refusal is unchanged, and passing it is still a person's
+> `--despite-review`. Nothing above is edited.
+>
+> - Amends: D-0066 rule 4.2
+
 ### 5. `D-0062` rule 3 and `D-0022` rule 9, restated
 
 1. **`D-0062` rule 3, restated: a drafted split's agent type is approved by the scope, not per
@@ -25700,6 +25711,16 @@ The expiry test in rule 2.1 is `D-0066` rule 1.2.4's, read as it is for every ac
 > - Amends: D-0126 rule 5
 > - Amends: D-0126 "A merge on green is tried once"
 
+> **Annotation (2026-10-09, from D-0187).** Not additive (rondo#609): in the rondo#470 annotation
+> above, the publish pass's last condition, that "`D-0066` rule 4.2's test for an act that carries a
+> lap's result onward holds", is asked of the model reading only where rondo answered the gate. A
+> lap **a person** approved is published under the scope with no press, whatever the model read, on
+> every other condition as written: no question over the line, the line holding it, the scope's
+> both acts unexpired, and every refusal of the press. The page's publish sentences say whether
+> the scope then merges on green (`D-0187` rule 3). Nothing above is edited.
+>
+> - Amends: D-0126 "D-0066 rule 4.2's test for an act that carries a lap's result onward holds"
+
 ## D-0127 — Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended
 
 **Status:** accepted (2026-09-27, rondo#463; the owner's decision through the secretary: a request
@@ -29955,3 +29976,73 @@ something the person has to remember (`D-0173 K3`).
 
 - A person who paused a flow on purpose and reads the amber row as noise they learn to skip.
 - A paused flow whose screen a person still reaches by typing its address.
+
+## D-0187 — A person's approval at the gate carries the lap to its pull request under a scope that allows it, without a second press, and the page's publish sentences say whether rondo then merges on green
+
+**Status:** accepted (2026-10-09, rondo#609). Amends `D-0066` rule 4.2 and `D-0126`'s rondo#470
+annotation. Supersedes nothing. Refs `D-0042`, `D-0060`, `D-0092`, `D-0099`, `D-0105`, `D-0125`,
+`D-0126` rule 2, `D-0168`, `D-0169`, `D-0173 K1`, `D-0173 K2`.
+
+### Context
+
+On 2026-10-09, on the lap-19 host at `0cd7a2c`, two requests ran in parallel under scopes that both
+allowed `push_branch`, `open_pull_request` and `merge_default_branch`. The lap with no model finding
+was approved by rondo, published and merged on green with no press. The other had a model finding,
+and the person approved it on the page over the finding. It then stopped at a second press, *Open a
+pull request* (*2 回目: プルリクエストを作る*), whose sentence said nothing would be merged. Once
+pressed, its pull request went green and rondo merged it under the scope after all.
+
+Two things were wrong. The publish pass (`src/access/publish-host.ts`) asked every approved lap
+the model-reading test `D-0066` rule 4.2 sets for an automatic approval, so a person's approval over
+a finding was left for the press: the person was asked the same thing twice, which is a step
+`D-0173 K2` does not have between the request and the pull request. And the publish sentences, the
+next-step card's and the publish screen's, said *nothing is merged* whatever the scope said, while
+the checks host merges any approved lap on green under a scope that includes the merge (`D-0126`
+rule 2), however it was published.
+
+### Decision
+
+1. **A person's approval publishes under the scope.** Where the gate's `approve` was recorded with an
+   actor that is not rondo's gate actor (`gateAnswerActor`, `GATE_ACTOR`), the publish pass does not
+   ask the model reading. An answer with no actor recorded is not read as a person's, and keeps the
+   test. Every other condition of the pass is unchanged: both acts in the approved, unexpired scope,
+   no question over the line, the line holding the lap as its one closed tip, nothing saying it was
+   published, a claim per leg asked again (`D-0042`), and every refusal of the press, the review's
+   verdict among them, which only a person's `--despite-review` passes.
+2. **The approve press wakes the publish pass**, as rondo's own answer already does, so the lap is
+   published as the press returns and not on the next minute.
+3. **The publish sentences say what the scope does after the press.** The next-step card's
+   sentence, the publish screen's note and the two update sentences of a conflict fix (`D-0105`) say
+   that rondo merges into the default branch once the checks are green, as the scope allows, where
+   the lap's approved scope includes `merge_default_branch` and has not expired, and *nothing is
+   merged* otherwise. The test is the one the checks host asks before a merge on green
+   (`scopedAuthority`).
+4. **No line is added to `web.tsx` or `cli.ts`** (`D-0168`): the change is in
+   `src/access/publish-host.ts`, `src/access/host.ts`, `src/access/page/thread-acts.tsx`,
+   `src/access/screens/publish.tsx` and the wording.
+
+### Options not taken
+
+- **Draw the next-step card as rondo's turn while the pass runs.** The page cannot tell a lap the
+  pass is about to publish from one it tried and left for the press (tried once per process), and
+  saying *rondo is publishing* over a press that is the only way on would be the worse error. With
+  rule 2 the card stands for the moment the press takes to return.
+- **Publish from the approve press itself.** The pass is already the one path for a scoped publish,
+  with its claims, its single attempt and its log; a second caller would be a second place to keep
+  agreeing with it.
+- **Keep the test and reword the card.** The press would still be a step `D-0173 K2` does not have.
+
+### What it costs
+
+- A finding the person approved over is pushed and, under a merging scope, merged on green without
+  the person seeing the publish screen. The scope's approval and the gate's answer are where they
+  agree to that, as for a lap rondo approved.
+- A gate answered from the terminal publishes on the next minute, not at once: only the page's press
+  wakes the pass.
+
+### What would falsify it
+
+- A lap a person approved under a scope with both acts that still offers the press with no refusal
+  said in the terminal.
+- A publish sentence that says rondo merges over a scope without the merge, or *nothing is merged*
+  over one with it.
