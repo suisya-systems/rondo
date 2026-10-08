@@ -216,6 +216,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0174 | Where the prose enumerates something the tree also enumerates, a test compares the two lists, the prose states no count, and the check fails when its sentence is gone; a negative claim and a pinned dependency's own surface stay hand-maintained | accepted |
 | D-0175 | The inbox lists a proposal that binds nothing only while its subject is open and nothing newer replaces it; the rest are a count, and every row stays in the store | accepted, amended |
 | D-0176 | An approvable proposal whose successor identity is already in the store no longer waits on the person: the inbox counts it in a line and the page's count leaves it out, and the row stays readable | accepted |
+| D-0183 | A list row that waits on nobody is one line, its title and its time, with its state in the mark's shape; the sentence and the repository stay in the markup for a reader, and a waiting row keeps both lines | accepted |
 
 ---
 
@@ -20607,6 +20608,13 @@ little is on it.
 >
 > - Amends: D-0083 rule 5
 
+> **Annotation (2026-10-08, from D-0183).** Not additive (rondo#592): on the left face, a request not
+> waiting on the person is drawn on one line, its title and its time, with its state in the mark's
+> shape; its repository's name and its sentence of state stay in the markup for a screen reader and
+> are hidden from the eye (`D-0183`). A request under *your turn* keeps both. Nothing above is edited.
+>
+> - Amends: D-0083 rule 5
+
 **6. Governance is permanent, in one line under the title, and in full on the right.** Under every
 thread's title, at every width: repository | when it was asked | spent / approved | which try of how
 many | how many things rondo decided without asking | what remains, as a chain (*your answer ->
@@ -29445,3 +29453,39 @@ whose every answer runs nothing.
 
 - A folded proposal whose approval could still be admitted.
 - An approvable kind whose retry is not admitted under the successor its snapshot records.
+
+## D-0183 — A list row that waits on nobody is one line, its title and its time, with its state in the mark's shape; the sentence and the repository stay in the markup for a reader, and a waiting row keeps both lines
+
+**Status:** accepted (2026-10-08, rondo#592). Amends `D-0083` rule 5 for the left face. Supersedes
+nothing. Refs `D-0081`, `D-0082` rule 2, `D-0083` rule 2, rondo#318, rondo#587, rondo#589.
+
+### Context
+
+Every row in the left face was two lines, a 16px title over a 13px state sentence, so a 300px face
+held few requests above the fold. `D-0083` rule 5 gives each request "its repository's name and one
+sentence of state", and rule 2 already lets a finished request's line be cut to one. Since
+rondo#589 a row's state is also a shape of its own, so the sentence is no longer the only place a
+sighted reader finds it.
+
+### Decision
+
+1. **A row not waiting on the person is one line**: the mark, the title cut with an ellipsis, and
+   the time. Its state sentence and repository chip are hidden from the eye, not removed: they stay
+   in the markup, clipped the way a screen reader still reads, because the mark is `aria-hidden`.
+2. **A row under *your turn* keeps both lines**, untruncated, as `D-0082` rule 2 and `D-0083` rule 2
+   say. It is the one row whose sentence the person came for.
+3. **A cut row reads whole on hover**: its link's `title` is the title, the repository and the
+   sentence, one to a line, because two requests with one title were told apart only by what the
+   cut hid. A waiting row carries none; nothing of it is cut.
+4. It lives in `page/list.css` and `src/access/page/list.tsx`, not `web.tsx` (`D-0168`).
+
+### What it costs
+
+- The repository (`D-0081`) and the state sentence of a row that needs nobody are read by hovering
+  it or on the centre's thread once it is opened, not at a glance: two finished requests with one
+  title look the same in the list until the pointer is on them.
+
+### What would falsify it
+
+- A person who could not tell, from the list, a state they needed to act on.
+- Requests with the same title in different repositories being opened by mistake.

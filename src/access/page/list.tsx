@@ -208,6 +208,7 @@ function Row({
 }) {
   const waiting = row.state === "waitingOnYou";
   const mark = markOf(row);
+  const said = stateFor(wording, row);
   return (
     // **The open request is marked, and every row is a `j`/`k` stop**
     // (rondo#587): the header's hint moves through this list as it does
@@ -217,6 +218,13 @@ function Row({
       href={hrefOf(row.messageId)}
       data-row=""
       aria-current={open ? "page" : undefined}
+      // A row cut to one line (rondo#592) keeps what it cut on hover: two
+      // requests with one title are told apart by their repository and state.
+      title={
+        waiting
+          ? undefined
+          : [row.title, row.repository, said].filter((line) => line !== null).join("\n")
+      }
     >
       {/*
        * One mark, amber only where a person must act (D-0082 rule 2), green
@@ -242,7 +250,7 @@ function Row({
         <b lang="">{row.title}</b>
         <p>
           {row.repository === null ? null : <span className="list-repo">{row.repository}</span>}
-          {stateFor(wording, row)}
+          {said}
         </p>
       </div>
       <time>{agoOf(row.atMs)}</time>

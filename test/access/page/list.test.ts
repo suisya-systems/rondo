@@ -72,3 +72,36 @@ test("the running mark turns, and holds still where motion is reduced", () => {
     /@media \(prefers-reduced-motion: reduce\) \{\s*\.list-dot-run \{\s*animation: none;/,
   );
 });
+
+test("a row that needs nobody is one line, its sentence stays for a reader, and hover reads it whole (rondo#592)", () => {
+  const css = readFileSync(new URL("../../../page/list.css", import.meta.url), "utf8");
+  const rule = (selector: string): string =>
+    new RegExp(`${selector.replace(/[.()]/g, "\\$&")} \\{([^}]*)\\}`).exec(css)?.[1] ?? "";
+  expect(rule(".list-row:not(.list-row-mine) b")).toMatch(/white-space: nowrap/);
+  const sentence = rule(".list-row:not(.list-row-mine) p");
+  expect(sentence).toMatch(/clip-path: inset\(50%\)/);
+  expect(sentence).not.toMatch(/display: none/);
+  // A waiting row is not cut: nothing narrows `.list-row-mine` back to one line.
+  expect(rule(".list-row-mine p")).not.toMatch(/nowrap|clip/);
+  const html = renderToStaticMarkup(
+    RequestsFace({
+      wording: EN,
+      list: {
+        yourTurn: [row("waitingOnYou")],
+        days: [{ cut: "today", rows: [row("finished", { repository: "org/repo" })] }],
+        lastLookedAbove: null,
+      },
+      hrefOf: (id) => `/?thread=${id}`,
+      agoOf: () => "now",
+      allowance: null,
+      newRequestHref: null,
+      lastLookedSaid: "",
+      openId: null,
+    }),
+  );
+  const [mine, cut] = html.match(/<a class="list-row[^>]*>/g) ?? [];
+  expect(mine).not.toContain("title=");
+  // Two requests with one title are told apart on hover by repository and state.
+  expect(cut).toContain(`title="finished\norg/repo\n${EN.rowFinished}"`);
+  expect(html).toContain(`<span class="list-repo">org/repo</span>${EN.rowFinished}</p>`);
+});

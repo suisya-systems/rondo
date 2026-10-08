@@ -76,10 +76,28 @@
   font-size: var(--text-meta);
   line-height: 1.5;
   color: var(--color-muted-foreground);
-  /* A row that needs nobody is cut to one line; a waiting one is not (rule 2). */
+}
+
+/*
+ * **A row that needs nobody is one line: its title, cut, and its time**
+ * (rondo#592, D-0183). Two lines a row put few requests above the fold of a
+ * 300px face; its state is the mark's shape (rondo#589), so the sentence and
+ * the repository go from the eye and stay for a reader, who has no mark --
+ * hidden the way a screen reader still reads, not `display: none`.
+ */
+.list-row:not(.list-row-mine) b {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.list-row:not(.list-row-mine) p {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .list-row time {
@@ -116,8 +134,6 @@
 
 .list-row-mine p {
   color: var(--color-foreground);
-  white-space: normal;
-  overflow: visible;
 }
 
 /*
