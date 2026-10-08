@@ -232,10 +232,16 @@ rules, from that file's own "How to use this file":
 - **Supersession keeps the ID**: the old entry gains
   `Status: superseded by D-XXXX` and the replacement is appended with a new ID.
 - **Append-only forbids removing and rewriting, not annotating.** A later entry
-  may add a marked, dated note to an earlier one — which falsifier fired, which
-  entry answered it — leaving every original claim readable underneath. Changing
-  what an entry *asserted* is a supersession and takes a new ID. D-0001 carries
-  three such annotations from D-0015 and D-0016.
+  may add a marked, dated note to an earlier one, leaving every original claim
+  readable underneath, and the note says whether it is additive (D-0169). An
+  *additive* annotation changes nothing the entry asserted: which falsifier
+  fired, which entry answered it, that a request was carried out. D-0001 carries
+  three such annotations from D-0015 and D-0016. A *not additive* annotation
+  withdraws, narrows or replaces a clause of what the entry asserted, and ends
+  with a list of `Amends: D-NNNN <rule>` lines, one per part it changes: the entry it sits
+  in, and the rule as that entry numbers it. Changing what an entry is *for*,
+  or so much of it that its live rules can no longer be read off its text and
+  its `Amends:` lines, is a supersession and takes a new ID.
 - **Cross-reference by ID only** — never by line number or heading order.
 - **Every entry states what would falsify it.** An entry taken on facts that can
   change records the fact and the date it was measured at, so a later reader can
@@ -245,8 +251,14 @@ rules, from that file's own "How to use this file":
 
 Add the ID to the index table at the top of the file as well as to the body,
 with the entry's heading as its title and the start of its `Status` line as its
-status. `test/architecture/docs-claims.test.ts` fails when an entry has no row
-or a row's title or status differs from its entry.
+status, followed by `, amended` once an annotation in an accepted entry carries
+an `Amends:` line. That column is the live-rule index: an `accepted` entry is
+read as written, an `accepted, amended` one with its `Amends:` lines, and a
+`superseded by D-NNNN` one in its replacement.
+`test/architecture/docs-claims.test.ts` fails when an entry has no row, when a
+row's title or status differs from its entry, when an annotation marked not
+additive has no `Amends:` line, or when an `Amends:` line sits outside an
+annotation of the entry it names.
 
 ## 4. Verification
 

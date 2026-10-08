@@ -19,12 +19,18 @@ C-NN`, so the spaces can never be read as one.
   position.
 - **Append-only means nothing is removed or rewritten — not that an entry is frozen.** The
   supersession rule above already edits an accepted entry's `Status`, and the same licence extends
-  to a **dated annotation**: a later entry may add a marked, dated note to an earlier one saying
-  which falsifier fired, which entry answered it, or that a request has since been carried out. An
-  annotation is additive and says so; it never edits a claim, a measurement or a date already
-  recorded, and the original text stays readable underneath it. Anything that would change what an
-  entry *asserted* is a supersession and takes a new ID instead. D-0001's annotations from D-0015
-  and D-0016 are the worked example.
+  to a **dated annotation**: a later entry may add a marked, dated note to an earlier one, and the
+  note says whether it is additive. An additive annotation says which falsifier fired, which entry
+  answered it, or that a request has since been carried out; D-0001's annotations from D-0015 and
+  D-0016 are the worked example. A **not additive** annotation withdraws, narrows or replaces a
+  clause of what the entry asserted, and ends with a list of `Amends: D-NNNN <rule>` lines, one per
+  part it changes: the entry it sits in, and the rule as that entry numbers it (`D-0169`). Neither
+  kind edits a claim, a measurement or a date already recorded, and the original text stays
+  readable underneath. Changing what an entry is *for*, or so much of it that its live rules can no
+  longer be read off its text and its `Amends:` lines, is a supersession and takes a new ID.
+- **The index's status column is the live-rule index.** An accepted entry with an `Amends:` line is
+  indexed `accepted, amended` and read with those lines; `superseded by D-NNNN` is read in its
+  replacement. `test/architecture/docs-claims.test.ts` holds the index and the `Amends:` lines.
 - **Every entry states what would falsify it.** A decision taken on facts that can change records
   the fact, the version, and the date it was measured at, so a later reader can tell "still true"
   from "was true in 2026".
@@ -41,7 +47,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0001 | How rondo consumes continuo and cadenza in lap 1: a CLI process boundary for continuo, and nothing at all for cadenza | superseded by D-0018 |
 | D-0002 | The TypeScript configuration: ESM, NodeNext, strictness beyond `strict`, and no build output yet | accepted |
 | D-0003 | The double-green rule, and where it is enforced | accepted |
-| D-0004 | ASCII-only for anything rondo prints | accepted |
+| D-0004 | ASCII-only for anything rondo prints | accepted, amended |
 | D-0005 | One module owns SQLite, and the driver is `node:sqlite` | accepted |
 | D-0006 | The import boundary is a test that parses the tree, not a lint rule | accepted |
 | D-0007 | Install from the lockfile, with `--ignore-scripts` | accepted |
@@ -52,7 +58,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0012 | Single-flight in lap 1, and what parallel admission actually waits on (cadenza `C-7`) | accepted |
 | D-0013 | An aborted iteration's open gate is closed `withdrawn` by the operating surface, not by the conductor (cadenza `C-13`) | accepted |
 | D-0014 | The agent type's role name is mapped in the continuo-invocation adapter, which refuses an unmapped name before admission (cadenza `C-15`) | accepted |
-| D-0015 | continuo's machine-readable seam, re-argued on its merits: the CLI boundary stands, `--json` is a wire protocol rather than types, and provenance becomes a verification duty | accepted |
+| D-0015 | continuo's machine-readable seam, re-argued on its merits: the CLI boundary stands, `--json` is a wire protocol rather than types, and provenance becomes a verification duty | accepted, amended |
 | D-0016 | cadenza is still not consumed in lap 1, now for a different and narrower reason: the entry point exists, the artefact does not, and the record rondo needs is not exported | superseded by D-0018 |
 | D-0017 | The first working seam to continuo: a `src/continuo/` layer, a build rondo verifies before it drives, and `gate close` rejoining the envelope | accepted |
 | D-0018 | cadenza becomes a library rondo consumes: a vendored tarball under cadenza's delivery bridge, one facade, and a smoke that runs in every cell | accepted |
@@ -61,7 +67,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0021 | The pin moves to continuo `603843b`: a third explicit budget for the identity read-back, and the model tier priced into `lap perform --model` | accepted |
 | D-0024 | rondo ships a binary: an emitting build beside the type-check, a launcher, and the CI cell that runs it | accepted |
 | D-0025 | The lap-1 operating surface is a command line: `start`, `answer`, `publish`, `abandon`, with the plan file as the whole of configuration | accepted |
-| D-0026 | The pull request `publish` opens is written for a person: the lap's own commit subjects are the summary, and the request is quoted input | accepted |
+| D-0026 | The pull request `publish` opens is written for a person: the lap's own commit subjects are the summary, and the request is quoted input | accepted, amended |
 | D-0023 | The identifier allocator and the capacity ledger: rondo mints the triple, `awaiting_human` stops occupying capacity, and the single-flight index becomes a counted bound | accepted |
 | D-0027 | "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt | accepted |
 | D-0028 | The plan payload carries its own version: an ordered read-side upgrade ladder, strict again at the version that introduced each field, and separate from the schema's migration on purpose | accepted |
@@ -83,51 +89,51 @@ C-NN`, so the spaces can never be read as one.
 | D-0043 | The trigger a stopped lap pulls: one proposal at the abandon the conductor's own arc reaches, `contract_keys` because it is the only option set that is a choice, and a successor identity rondo mints and nobody has yet adopted | accepted |
 | D-0044 | The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs | superseded by D-0062 |
 | D-0045 | What the record may say about a verification rondo did not watch: the operator's claim held as a claim, no column for a result, a silence that reads as a silence, and a row `publish` may print and may not be satisfied by | accepted |
-| D-0046 | Where rondo reads what a lap cost: off the lap's own transcript, three columns rather than one, and an unread cost that is not a zero | accepted |
-| D-0047 | Where an approval is spent: inside the admission's own transaction, with the contract recomposed from today's material, and by a verb of its own | accepted |
+| D-0046 | Where rondo reads what a lap cost: off the lap's own transcript, three columns rather than one, and an unread cost that is not a zero | accepted, amended |
+| D-0047 | Where an approval is spent: inside the admission's own transaction, with the contract recomposed from today's material, and by a verb of its own | accepted, amended |
 | D-0048 | Naming a running lap's transcript: one identifier read off a live run, three liveness-shaped fields refused by name, and a directory printed where the hole already is | accepted |
 | D-0049 | An approval that names a contract the proposal never carried: refused at the door as a dangling reference, and not as a spendability check | accepted |
 | D-0050 | The second fence rondo never sees: no column for the worker's own sandbox, `D-0045`'s form declined because the silence points the other way, one standing sentence on the fence block, and the report asked of continuo | accepted |
 | D-0051 | A reading is identified by what it says, because the row can never say anything else: no identifier issued by the store, position and the clock out of the match entirely, and the one reading movement that can happen said once as a count | accepted |
 | D-0052 | A tier nothing prices is refused at `classify`, off the record cadenza just built: the tier names in the loop, the prices behind the seam, and `D-0017` rule 2 unamended | accepted |
 | D-0053 | The operator's language is a property of the lap: material is what a lap composed for the answer, the language is an ask carried on the plan and recorded as an ask, and the laps already written stay written | accepted |
-| D-0054 | The page may run one script, and it is a poller and a morph rather than a framework: liveness decided per view, `D-0041` rule 3a re-founded on the server's types, and one vendored 10 KB file no build ever touches | accepted |
-| D-0055 | The chrome is prose the operator reads, and its language comes from the host's one operator: the line drawn at the span rather than at the string, recorded words left in English, and `<html lang>` naming what rondo actually wrote | accepted |
+| D-0054 | The page may run one script, and it is a poller and a morph rather than a framework: liveness decided per view, `D-0041` rule 3a re-founded on the server's types, and one vendored 10 KB file no build ever touches | accepted, amended |
+| D-0055 | The chrome is prose the operator reads, and its language comes from the host's one operator: the line drawn at the span rather than at the string, recorded words left in English, and `<html lang>` naming what rondo actually wrote | accepted, amended |
 | D-0056 | The chrome's language follows the browser and is remembered, and the resolution is never silent: five steps with the first answer winning, the resolved tag put back into the URL, and one cookie that is a memory and not a record | accepted |
 | D-0057 | The page is priced against four frameworks and stays hand-written: 96 lines of 1,233 taken over, three invariants that stop being types, and `D-0007` kept because a build leaves the pin check nothing to check | superseded by D-0059 |
 | D-0058 | The second `resume` leaves the handbook: idempotence is a property the suite already proves more strongly than a walk can observe it, the surface keeps one `resume` per answering act on purpose, and no verb is added on the strength of a sentence | accepted |
-| D-0059 | The page is judged by the screen and rides an off-the-shelf stack: the bar named by three tools, prototypes that reach it only by design work, Hono with htmx and Tailwind for what is generic, rondo's own code for what is rondo's, and four relaxations put to the human gate rather than taken | accepted |
+| D-0059 | The page is judged by the screen and rides an off-the-shelf stack: the bar named by three tools, prototypes that reach it only by design work, Hono with htmx and Tailwind for what is generic, rondo's own code for what is rondo's, and four relaxations put to the human gate rather than taken | accepted, amended |
 | D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
-| D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062` | accepted |
+| D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062` | accepted, amended |
 | D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | superseded by D-0066 |
 | D-0063 | The advisory is the secretary's drafting half: it reads, asks back, drafts a split, brings points in dispute with a recommendation and reports to a person, and proposes what comes next, while handing over and approving stay elsewhere; `D-0022` rules 1, 3, 4 and 7 widen for a model drafter and a split, and only two lines are kept | accepted |
 | D-0064 | rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report | accepted |
 | D-0065 | The model reviewer: a reader of another model family that rondo runs outside the lap over bytes it hands over and digests, graded findings with bases on the reading record, a round budget and a threshold that are the scope's, and the three defects a person caught sorted into caught, half caught and not caught | accepted |
-| D-0066 | The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it | accepted |
-| D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | accepted |
+| D-0066 | The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it | accepted, amended |
+| D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | accepted, amended |
 | D-0068 | One voice and a patrol: the person asks rondo why a line waits and gets an answer joined from rows with bases, a timer in the resident host reads rows against each lap's own declared patience, and nothing it finds is handled silently | accepted |
 | D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | superseded by D-0071 |
-| D-0070 | A revise inside a scope: the person still answers the gate, the lap it starts spends the scope through the `redo` arm, the verdict is computed before the gate is walked, and the added text is carried and never tested | accepted |
+| D-0070 | A revise inside a scope: the person still answers the gate, the lap it starts spends the scope through the `redo` arm, the verdict is computed before the gate is walked, and the added text is carried and never tested | accepted, amended |
 | D-0071 | The model drafter: a Claude model rondo runs outside the lap over a thread it hands over, which chooses among held plans and agent types and writes words, while every number in a drafted scope is computed from recorded laps and may only be narrowed; and a plan the person pastes into the thread is how a fresh store gets its first template and agent type | superseded by D-0075 |
 | D-0072 | What a reply to a scope stop does: an answering press carries one of two words, the line opens on the absence of "carry on" rather than on the presence of a reply, and stopping becomes a row instead of a second approval | accepted |
-| D-0073 | Which lines may run together: a lane ledger that allocates paths to a line from its admission until its work lands, refuses an admission that would share one, and releases it by reading the default branch; `D-0067` rule 1 gives way for two authorities, approving and every judgement no row settles stay with the person, and it is not a bigger capacity number | accepted |
-| D-0074 | Raising a running lap's budget: a raise is a successor scope that changes only its budgets, the lap in flight follows its approval's approved successor, and the person presses it from the gate that refused them | accepted |
-| D-0075 | A fresh store's first plan is the last thing setup does: setup hands the plan it composed to the store and not to the person, the host reads no path and composes nothing, and naming a repository stays installation | accepted |
+| D-0073 | Which lines may run together: a lane ledger that allocates paths to a line from its admission until its work lands, refuses an admission that would share one, and releases it by reading the default branch; `D-0067` rule 1 gives way for two authorities, approving and every judgement no row settles stay with the person, and it is not a bigger capacity number | accepted, amended |
+| D-0074 | Raising a running lap's budget: a raise is a successor scope that changes only its budgets, the lap in flight follows its approval's approved successor, and the person presses it from the gate that refused them | accepted, amended |
+| D-0075 | A fresh store's first plan is the last thing setup does: setup hands the plan it composed to the store and not to the person, the host reads no path and composes nothing, and naming a repository stays installation | accepted, amended |
 | D-0076 | Who the page is written for: the person who asked for the work and judges it, who knows their own repository and not rondo; rondo's own words, identifiers and failures never reach them as themselves, and what they cannot use is not shown | accepted |
 | D-0077 | The organisation drafts the revise instruction: the model drafter runs once a model reading with findings lands, its draft quotes every finding because rondo renders the quotes from the reading and only the drafter's words are the model's, and an unavailable draft leaves the person an empty box and a sentence, never a deterministic fallback | accepted |
 | D-0078 | What a lap knows of the issue it is sent to fix: rondo reads the issue outside the lap when the person's message names it, records what it read in the request thread, and carries it into the prompt quoted, so the lap stays closed to the forge and the person never has to copy an issue into a request | accepted |
 | D-0079 | Composed in the language, not translated into it: every wording set is a whole catalogue and none is another's diff, what a lap and its drafter write for the person is asked for as composed in the person's language, and English is written only where the repository requires it | accepted |
 | D-0080 | Starting rondo is one word with nothing in it to remember: setup writes the command that carries every host fact, the thing the person typed is what speaks when rondo cannot start, and starting runs no setup | accepted |
-| D-0081 | One store and one host, many repositories: a repository is named by the plan a request is drafted from, the forge slug stops being a host fact, and `D-0075` rule 1.1 is withdrawn | accepted |
-| D-0082 | The screen's visual system, written down: weight follows who is blocked rather than which group a row is in, one type scale a step larger than it was proposed, amber and red spent only on meaning, and blue returned to what a person can touch | accepted |
-| D-0083 | The page's shape: the unit is a request's thread and the axis is time, the summary and the gate are one screen of three faces, empty is the ordinary state and its centre asks what the person wants, and the answering box inherits everything the gate had | accepted |
+| D-0081 | One store and one host, many repositories: a repository is named by the plan a request is drafted from, the forge slug stops being a host fact, and `D-0075` rule 1.1 is withdrawn | accepted, amended |
+| D-0082 | The screen's visual system, written down: weight follows who is blocked rather than which group a row is in, one type scale a step larger than it was proposed, amber and red spent only on meaning, and blue returned to what a person can touch | accepted, amended |
+| D-0083 | The page's shape: the unit is a request's thread and the axis is time, the summary and the gate are one screen of three faces, empty is the ordinary state and its centre asks what the person wants, and the answering box inherits everything the gate had | accepted, amended |
 | D-0084 | The page's foundation moves from Hono server JSX with htmx to React on Vite, and what held it up is rebuilt on the door rather than on the library: a press is a real form, and no RPC or meta-framework comes with it | accepted |
 | D-0085 | A lap without a request stops being a state rondo has: `D-0061` rule 4's nullable link is tightened to required, `start` takes the message it came from, and what makes that safe is the type rather than the column | accepted |
-| D-0086 | Event lines fold twice and by no number: every try but the newest is one line, what the person has already read is one line over the top, and a decision rondo made without asking is never inside either | accepted |
+| D-0086 | Event lines fold twice and by no number: every try but the newest is one line, what the person has already read is one line over the top, and a decision rondo made without asking is never inside either | accepted, amended |
 | D-0087 | The Windows cells leave the pull-request path for the nightly schedule and `workflow_dispatch`: the matrix becomes an expression over the trigger, the double-green rule is untouched, and every guarantee only Windows carries is now carried a night later | accepted |
 | D-0088 | The Windows cell's temporary files move to the runner's local disk: `continuo D-1109` is ported because rondo measured continuo-shaped and not cadenza-shaped, and the cell halves without a test, a timeout or a durability claim changing | accepted |
 | D-0089 | A lap's definition of done is rondo's to add, not the drafter's to remember: every lap's prompt carries a fixed definition of done after its request and names the rule files its plan names, which the worker reads in its own workspace | accepted |
-| D-0090 | A request that names an issue in a repository rondo does not work in is not started: the page says so before a scope is drafted, and the person adds that repository from the page with one press, while rondo infers everything else | accepted |
+| D-0090 | A request that names an issue in a repository rondo does not work in is not started: the page says so before a scope is drafted, and the person adds that repository from the page with one press, while rondo infers everything else | accepted, amended |
 | D-0091 | A person merges from the page: a merge press per act, drawn only where rondo's own reading is green on the head and nothing waits on the person, through the operator's own `gh`; `D-0025` rule 6's "never merges" gives way for that press alone, and `D-0064` rule 3.4's transition is not taken | accepted |
 | D-0092 | Which answer a gate was given is recorded beside the gate answer, when rondo carries it: `approve` and `revise` stop being told apart by whether a next try exists, and a lap with no record is not called approved | accepted (point 3 pending the owner) |
 | D-0093 | The boundary test also asks which role a module plays: every module under `src/` names a row of `D-0064` section 5, a row given to cadenza or continuo is refused, and what already sits in rondo is a named, shrinking list of relocations | accepted |
@@ -135,11 +141,11 @@ C-NN`, so the spaces can never be read as one.
 | D-0095 | A pull request's checks are judged by continuo: rondo fetches the three documents with the operator's `gh`, hands them to `ci observe`, writes `ci show`'s verdict into the thread, and a reading it cannot make is said as that and never as red; `D-0064` rule 3.4's transition is still not taken | accepted |
 | D-0096 | The header's "Requests" link is closed, and a thread's `Esc` goes to the bare address: the link led to the new-request view the list already reaches, and the way back it carried on a thread moves to the logo | accepted |
 | D-0097 | rondo proposes which request is worth making: the advisory ranks candidates against a goal the person wrote down, reads its own record as well as the issue list, and brings one recommendation whose open points can be answered in one word; it never starts what it proposes | accepted |
-| D-0098 | Parallel control beyond the lane ledger: an order across repositories released only by a landing, a line that takes over landed paths first takes in the default branch, decision-record numbers reserved so decision entries are written in parallel, a worker's question carried at the lap's end and never answered by silence, and a review stopped by the scope's numbers | accepted |
+| D-0098 | Parallel control beyond the lane ledger: an order across repositories released only by a landing, a line that takes over landed paths first takes in the default branch, decision-record numbers reserved so decision entries are written in parallel, a worker's question carried at the lap's end and never answered by silence, and a review stopped by the scope's numbers | accepted, amended |
 | D-0099 | A `git status` that fails is refused by `publish` whatever overrides it: the inspection says which half it could not read, and only unreadable history stays publishable past `--despite-review` | accepted |
 | D-0100 | A first lap is cut from the forge's base branch as it is at admission: rondo fetches it into a branch of the lap's own, `rondo/base/<runId>`, admits continuo against that, and refuses the lap when the fetch fails | accepted |
 | D-0102 | rondo reads what the forge did to a published pull request, and not only its checks: a conflict is said as why no check runs, a head somebody else pushed is shown with its commits and can be merged by a press that names it, and a merge or a close made on the forge ends the request | accepted |
-| D-0103 | How D-0098's five rules are built: a landing basis on the claim's release is `first_landed`, a split plan orders its parts by `after`, a take-in is a plan field with no trigger yet, decision numbers are rows beside the claim, a worker's question is a fenced block relayed as an ask, and a closing lap is a press the review host does not read | accepted |
+| D-0103 | How D-0098's five rules are built: a landing basis on the claim's release is `first_landed`, a split plan orders its parts by `after`, a take-in is a plan field with no trigger yet, decision numbers are rows beside the claim, a worker's question is a fenced block relayed as an ask, and a closing lap is a press the review host does not read | accepted, amended |
 | D-0104 | The gate's checks card says what the worker itself ran, apart from what the reading says about itself: the last test run rondo can read off the lap's recorded commands, with the runner's counts and where they came from, and "not recorded" rather than a zero where nothing reads | accepted |
 | D-0105 | rondo resolves a conflicting pull request on the page: the pin moves to cadenza `2c56970` so a worker may run `git merge --no-edit`, `D-0098` rule 2's take-in is switched on, and a conflict fix is one more attempt that takes the base in, stops at its gate, and is pushed onto the pull request it fixes | accepted |
 | D-0106 | What a person acts on sits at the top of every screen, and the thread runs newest first: presses, boxes and decisions come before any history or long content, nothing is stuck to the window's foot, and the answering box keeps every element it inherited | accepted |
@@ -160,10 +166,10 @@ C-NN`, so the spaces can never be read as one.
 | D-0121 | A running lap is held to the scope's budget by the worker CLI's own spend stop: rondo sends each lap with the room the budget leaves it, continuo carries it (continuo#241), and a Codex lap is held only before it starts | accepted |
 | D-0122 | `mechanical` runs on `claude-sonnet-5` through the Claude CLI: the tier table gains a provider column passed as `lap perform --provider`, every row `claude`, and a drafter may name a `mechanical` agent type only with one grounded claim per condition of `D-0044` rule 1 | accepted |
 | D-0123 | The host's worker is the Claude CLI or the Codex CLI: `RONDO_WORKER_PROVIDER` picks the tier table, a `gpt` lap is read by a Claude reviewer, a Codex lap's tokens are priced at OpenAI's public API rate, and Windows refuses `codex` at start | accepted |
-| D-0124 | Two laps at once by default: D-0023 rule 17's condition is met by the pinned continuo, the default `maxOccupying` is 2, host-wide and across repositories, and `maxLive` stays 3 | accepted |
+| D-0124 | Two laps at once by default: D-0023 rule 17's condition is met by the pinned continuo, the default `maxOccupying` is 2, host-wide and across repositories, and `maxLive` stays 3 | accepted, amended |
 | D-0125 | rondo decides whether a lap's gate would be approved automatically, and says why on the gate card: clear checks, no model finding at or above `major` on the same tip, a green test run read off the lap, no open question and no closing lap; the organisation's answer itself waits on continuo#240 | accepted |
 | D-0126 | Merge on green, opted into per scope: a scope may include `merge_default_branch`, and the checks host then merges a lap of it through the press's own path right after continuo reads the lap's own head green; `D-0064` rule 3.4's merge transition is taken, and `D-0025` rule 6's "never merges" gives way for such a merge | accepted |
-| D-0127 | Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended | accepted |
+| D-0127 | Approving a split's scope is the go: the order tick starts every part of an approved split that can start, in the approver's name, without waiting out a lap; `D-0103` rule 1.4 is amended | accepted, amended |
 | D-0128 | A scope can cover the requests rondo injects from a goal: `requests` gains one decidable form, `{"from_goal": "<goal_id>"}`, and under it the flow host, never triage, starts the goal's next request | accepted |
 | D-0129 | How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed | accepted |
 | D-0130 | A lap's cap is written when it is sent and held until its cost is read, one reserve is kept for each lane a partner could still run in, and a budget stop ends the lap with what it spent | accepted |
@@ -177,7 +183,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0142 | Carrying on at a worker's question is the gate's revise, on the same press; its answer is not drafted again, and a lap that asked is never approved by rondo | accepted |
 | D-0143 | A lap stopped at its time limit keeps what it had not committed, as one unverified commit in rondo's name on its own branch, and a retry of that lap merges it in as its first step; `D-0110` rule 1's option Z is narrowed | accepted |
 | D-0144 | The record's language is not what the reader sees: English-held text is read in the person's language on a press, stored by the original's digest beside it and never in its place, and drawn in place with the original one fold away | accepted |
-| D-0145 | Under a goal scope, rondo sends the drafted change itself when only plain review findings withhold the gate: every standing finding quoted, none marked a judgment call, a round and the budget left, no question on the lap | accepted |
+| D-0145 | Under a goal scope, rondo sends the drafted change itself when only plain review findings withhold the gate: every standing finding quoted, none marked a judgment call, a round and the budget left, no question on the lap | accepted, amended |
 | D-0146 | A part of a split request is told it is a part, and its model review judges that part; a later split starts from the request's earlier line that has not landed, or says why it does not | accepted |
 | D-0147 | The goal flow's open question is in the person's turn: its block stays on the empty centre while another request waits on them | accepted |
 | D-0148 | A budget stop under a paused goal scope offers no raise; its box says the work is paused and links to resuming it | accepted |
@@ -190,7 +196,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0155 | A merge waits only on the questions that hold its line: a question over another line the person answered with a stop no longer withholds the merge, on the page or on green | accepted |
 | D-0156 | Only a judgment call at or above the scope's threshold keeps rondo from sending the drafted change; one below it is left out of what is sent, and the note names it | accepted |
 | D-0157 | A typed `revise` spends the approval the lap it revises was admitted under: `--scope-decision-id` overrides it, nothing to draw refuses, and no `revise` runs outside every approval | accepted |
-| D-0158 | A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press | accepted |
+| D-0158 | A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press | accepted, amended |
 | D-0159 | A red check on rondo's own pull request is rondo's to re-run once and the person's to have repaired on that pull request: the first red re-runs the failed Actions jobs once, a repair is a redo of the published lap pushed onto its head branch under the same approval, it is approved automatically only once its own runs showed the failure and then a pass, and a merge on green waits only on its own line, or a question over that line or over the request as a whole (not the flow host's), and says when it waits | accepted |
 | D-0160 | Claims that let two lines run: a finished line nothing will publish gives its files up, a refused draft is drafted once more, and a start with no drafted claim claims nothing until its gate claims what it changed | accepted |
 | D-0161 | A worker's question is put to the person whether or not its lap committed anything: nothing committed is said on the page, not a reason to drop the question | accepted |
@@ -202,6 +208,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0167 | Each drafted part says on the scope screen which model it runs on, in the person's words: the tier, the model and worker it maps to, the drafter's grounds for a lighter tier, and each lap's model and cost | accepted |
 | D-0168 | A source file holds at most 2000 lines, and the ten files already over it may only shrink | accepted |
 | D-0170 | `rondo web`'s composition root leaves `main` for `host.ts`, and the page's presses leave `cli.ts` for three modules of their own; what the commands share with them stays in `cli.ts` | accepted |
+| D-0169 | A dated annotation may change a clause of an accepted entry when it says it is not additive and ends with an `Amends:` line per part it changes, and the index's status column is the live-rule index | accepted |
 
 ---
 
@@ -698,6 +705,8 @@ identifiers, or test names.
 > every other rondo command. The cost is this entry's own argument in reverse — someone now has to ask
 > which reader a string is for — and `D-0080` takes it in one place and measures it on the Windows
 > cell. Nothing below is edited.
+>
+> - Amends: D-0004 "Every string rondo writes to a terminal"
 
 **Why.** CI includes a Windows cell, where the console may be cp932. A character that cannot be
 encoded there does not print badly: it raises `UnicodeEncodeError` in the writer and takes the
@@ -1464,6 +1473,8 @@ sees modules.
 > rule 6 is implemented only as far as verification: persisting the observed revision per run waits
 > on a store schema, which D-0017 rule 5 records as outstanding. The measurements below are those of
 > `c92ab1a1c6fd9bd99c0c3b81326a30ba05432a61` and are kept as taken.
+>
+> - Amends: D-0015 rule 5
 
 > **Annotation (2026-09-06, from D-0019).** **Rule 6's outstanding half is discharged.** The store
 > schema arrived with D-0019, and the iteration row carries the **observed** continuo revision;
@@ -3503,6 +3514,8 @@ Walked on 2026-09-06 against the pinned continuo with a real `claude -p` worker
 > in one fold at the end of the body, labelled as rondo's record of where the change came from, which
 > the publish preview draws closed (`D-0076` sections 3 and 5). The sentence saying who opened the
 > pull request and that merging it is not rondo's stays in the prose. Nothing below is edited.
+>
+> - Amends: D-0026 rule 4
 
 The first pull request `rondo publish` opened for real (`#29`, 2026-09-06) put the lap's prompt in
 both fields. The title was the topic branch, a colon, and the prompt's first line cut off with an
@@ -4294,6 +4307,8 @@ next field would have faced the same choice with no rule to appeal to.
 > section 6 says. **Route S gains the scope as a thing it approves** (`D-0064` P1 and rule 3.1), and
 > route G's gate is answered by the organisation only under `D-0064` rule 3.6. **"rondo never mints a
 > gate" is kept.** The text of rule 15 below is unedited.
+>
+> - Amends: D-0022 rule 15
 
 The design is [`docs/design/advisory.md`](docs/design/advisory.md), whose rows `A-1` … `A-18` this
 entry takes. It answers rondo#9: whether the component that proposes contracts and explains state
@@ -8611,6 +8626,10 @@ seam (`D-0015`: `--json` is the wire protocol), because nothing measured here is
 > **running** lap's log (`readLapLog`, rondo#258), which `lap perform` cannot carry because it answers
 > when the turn ends, and it stays until continuo's `run show` names a running lap's transcript
 > (continuo#218). Nothing below is edited.
+>
+> - Amends: D-0046 rule 1
+> - Amends: D-0046 rule 2
+> - Amends: D-0046 rule 4
 
 Every lap's terminal `result` event carries `total_cost_usd`, `num_turns` and `duration_ms`. rondo
 kept none of them, so five dogfood records ([`lap-1`](docs/operations/lap-1-dogfood.md) through
@@ -8754,6 +8773,8 @@ costs one module and one grant, and the falsifiers below say what would move it.
 > **Annotation (2026-09-13, from D-0066).** The case above is retired with `D-0062` rule 3.3: a split
 > is no longer spent through `human_decision`, but admitted under a scope whose list names the
 > `agentTypeDigest` itself (`D-0066` rule 5.1). Rule 4 is otherwise unchanged.
+>
+> - Amends: D-0047 rule 4
 
 rondo#107 measures the last hole in #41 section 3's chain. `rondo decide` writes a `human_decision`
 row and nothing reads it; the screen says so to the operator in its own words
@@ -10206,6 +10227,8 @@ lap, plus one escape reproduced directly.
 >   asking the gate to approve a claim nothing holds up.
 > - **Rules 2, 3, 4 and 6 stand as their annotations leave them**; rule 5 is `D-0059` R2's and
 >   `D-0084` rule 5 re-states it; rule 8 is `D-0064`'s. Nothing below is edited.
+>
+> - Amends: D-0054 rule 7
 
 > **Annotation (2026-09-13, from D-0057).** Added after this entry was accepted, and additive:
 > nothing below is removed or rewritten, and **nothing this entry decided is changed**. Rule 3's
@@ -10544,6 +10567,8 @@ the properties rules 2, 3, 6 and 7 assert.
 > force where a string is typed or its spelling refused. **The terminal keeps rule 2 as written.**
 > The falsifier "prose that is a token to somebody else" is recorded as having fired the other way on
 > 2026-09-19 (rondo#259): tokens kept for a reader who was not there. Nothing below is edited.
+>
+> - Amends: D-0055 rule 2
 
 > **Annotation (2026-09-20, from D-0079), and not additive.** Added after this entry was accepted, by
 > the answer of rondo's human gate to `D-0079`'s seventh point. **Rule 9 is withdrawn**: every set is a
@@ -10553,6 +10578,8 @@ the properties rules 2, 3, 6 and 7 assert.
 > Every other rule is read as written, and **this entry is not superseded**. Nothing below is edited.
 > The line drawn here between an annotation and a supersession follows the precedents of `D-0076`,
 > `D-0074` and `D-0073` rather than the letter of `AGENTS.md`, a difference tracked on rondo#273.
+>
+> - Amends: D-0055 rule 9
 
 > **Annotation (2026-09-21, from rondo#352), and additive.** Added after this entry was accepted, and
 > nothing below is edited. **The falsifier "`RONDO_OPERATOR_LANGUAGE` acquiring a file, a default
@@ -12188,6 +12215,8 @@ entry put to it; the answer is recorded in section "What was put to the human ga
 > rondo has. What the link *means* is unchanged -- one message, written once at reservation, many
 > laps to one request, refused when it names no message that opens a request -- and the column
 > itself stays nullable in `SCHEMA` for the reason `D-0085` rule 3 gives. Nothing below is edited.
+>
+> - Amends: D-0061 rule 4
 
 > **Annotation (2026-09-13, from D-0064).** Added after this entry was accepted, and additive. **Step
 > 5.4's split is decided inside a scope** (`D-0064` O1), bounded by the scope's request predicate and
@@ -13704,6 +13733,8 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 >   `page.manifest.json`), and the first rondo script that runs before the body. A stored value the
 >   stylesheet has no step for is ignored, not applied.
 > - Nothing else in this entry is changed, and nothing below is edited.
+>
+> - Amends: D-0059 R3
 
 > **Annotation (2026-09-22, from rondo#375), and not additive.** Added after this entry was
 > accepted, by the answer of rondo's human gate (relayed by the secretary on 2026-09-22). **R3's
@@ -13737,6 +13768,8 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 >   already reads, and a press whose navigation fails (the network, not a refusal) leaves its
 >   buttons marked until the page is loaded again.
 > - Nothing else in this entry is changed, and nothing below is edited.
+>
+> - Amends: D-0059 R3
 
 > **Annotation (2026-09-21, from D-0087).** Added after this entry was accepted, and additive.
 > **The residual *"cross-platform build reproducibility"*, whose decider this entry names as
@@ -13783,6 +13816,8 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 >   hydrated by React today; if a face ever is (`D-0084` rule 1), a merge and React would both own
 >   the same nodes, and that face should take over its own updating rather than be morphed.
 > - Nothing else in this entry is changed, and nothing below is edited.
+>
+> - Amends: D-0059 R2
 
 > **Annotation (2026-09-14, from rondo#220).** Added after this entry was accepted, and additive, by the
 > answer of rondo's human gate (relayed by the secretary on 2026-09-14) that every write the page adds
@@ -13889,6 +13924,8 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 > approved tip** (`D-0074` section 2, and its annotation on `D-0070` section 1.2):
 > the press posts the tip, and the check compares against the tip. A lap whose scope was never changed
 > posts the approval it was admitted under, as before. Nothing above is edited.
+>
+> - Amends: D-0059 section 5a
 
 > **Annotation (2026-09-19, from D-0077).** Added after this entry was accepted, and additive, by the
 > answer of rondo's human gate to rondo#262. In the S4 annotation above, the third bullet's box holds
@@ -13945,6 +13982,8 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 > remote (`forge.ts`'s reason, `D-0075` rule 3.1), the push-URL preflight still compares what would be
 > pushed against the slug, and a host or lap with no slug draws the sentence rather than a button.
 > Nothing above is edited.
+>
+> - Amends: D-0059 section 5a
 
 > **Annotation (2026-09-20, from rondo#288, releasing a finished line's files from the page).**
 > Added under the same answer of rondo's human gate as the annotations above -- every write the page
@@ -14243,6 +14282,12 @@ keeps a reader's local state.
 > no longer a state rondo promises to be complete and correct in (`D-0054` rule 7's annotation, of
 > the same date). The other three are unchanged, and so is rule 1's requirement that a set be
 > attached for the human gate. Nothing below is edited.
+>
+> - Amends: D-0059 Q1
+> - Amends: D-0059 rule 2
+> - Amends: D-0059 rule 3
+> - Amends: D-0059 rule 1
+> - Amends: D-0059 R1
 
 ### Decision
 
@@ -14628,6 +14673,8 @@ number.
 > rule for recording an `agent_type_record` from a plan now lives in `D-0075` rule 2.4 and `D-0071`
 > section 6.2 as carried: a `drafter` scope may also record one from a setup row, cited by a `setup`
 > basis, with `recorded_by` the row's. Nothing above is edited.
+>
+> - Amends: D-0066 rule 1.2.3
 
 ### 2. The approval of a scope (P1)
 
@@ -14826,6 +14873,9 @@ number.
 > - **Everything else in rules 4.2 and 4.4 stands as written**, the rondo#197 and `D-0069`
 >   annotations included: which line an ask stands over is still read off its bases, and the verdict is
 >   still a read over rows inside rule 4.3's write lock, reading no property of any text.
+>
+> - Amends: D-0066 rule 4.4
+> - Amends: D-0066 rule 4.2
 
 > **Annotation (2026-09-14, from D-0070).** Added after this entry was accepted, and additive, by the
 > answer of rondo's human gate to `D-0070`'s second and third points.
@@ -15168,6 +15218,8 @@ names. Line numbers drift; re-measure the claim, not the number.
    > not yet admitted holds its request's other plans", which naming a *plan* in a basis would
    > change) is left exactly where that entry leaves it. `D-0061` rule 2.6 carries the matching note.
    > Nothing else in this rule is edited.
+   >
+   > - Amends: D-0067 rule 4
 
 5. **What the organisation decides about order, and what reaches the person (answering the third
    question).**
@@ -15246,6 +15298,9 @@ names. Line numbers drift; re-measure the claim, not the number.
 >   rule 7). Without a resident host it is read at the next admission the surface attempts.
 >
 > The text above is not edited.
+>
+> - Amends: D-0067 rule 1
+> - Amends: D-0067 rule 2
 
 > **Annotation (2026-09-22, from D-0098).** Added after this entry was accepted, and additive, by the
 > answer of rondo's human gate to `D-0098`'s first point. **Rule 3.4**: `first_landed` joins the closed
@@ -15965,6 +16020,8 @@ budgets and the request's asks, which is what `D-0066` section 3.2 says an admis
    > plan back exactly as an unanswered question does, and releasing one takes a `carry_on` on every
    > open question in the thread. The coupling, its confinement to operator-written first admissions
    > within one request, and its end condition are otherwise unchanged.
+   >
+   > - Amends: D-0069 rule 5
 
 **The five checks against section 4, one per way round it:**
 
@@ -16202,6 +16259,8 @@ of the successor's lap** (`D-0027` rules 1 and 6).
 > approval, so a lap whose scope was never changed spends what it spent before. The successor's
 > admission is still an `admission` through the `redo` arm, written under the tip and tested against
 > the tip's budgets. Nothing else in section 1 moves, and the text above is not edited.
+>
+> - Amends: D-0070 section 1.2
 
 > **Annotation (2026-09-28, from D-0157).** Added after this entry was accepted, by the answer of
 > rondo's human gate to rondo#228. **Section 1.4's flag is an override, not the way in.** A typed
@@ -16210,6 +16269,8 @@ of the successor's lap** (`D-0027` rules 1 and 6).
 > one line before the walk -- and refuses when there is none to draw, rather than admitting the
 > second lap unscoped as it did when this entry was built. An explicit `--scope-decision-id` still
 > wins. Sections 2 and 3 are unmoved, and the text above is not edited.
+>
+> - Amends: D-0070 section 1.4
 
 ### 2. When the verdict is computed: before the gate is walked, at the one call site
 
@@ -16526,6 +16587,8 @@ number.
    > **Annotation (2026-09-29, from D-0160).** Narrowed: a run the model answered or failed is drafted
    > once more, straight away, before this message is written; rondo's note that it does so covers no
    > operator message. A run refused before the model (material over the bound, not an opener) is not.
+   >
+   > - Amends: D-0071 rule 1.5
 
 ### 2. What it is handed, and what it is not
 
@@ -17107,6 +17170,9 @@ number.
       > **Annotation (2026-09-29, from D-0160).** Superseded by the owner's decision of 2026-09-29: a
       > plan admitted with no drafted claim claims **nothing**, and its gate claims the files it
       > changed that no other open line holds. Rule 5's widening is written for such a line only.
+      >
+      > - Amends: D-0073 rule 2.5
+      > - Amends: D-0073 rule 5
    6. **A redo continues its lineage's claim** and writes no row unless the claim changes. **A redo of
       a line whose claim was released** (rule 4.3: an `abandoned` or `failed` line retried) re-requests
       the last claim the release superseded, and `reserve()` tests it as it tests a first admission:
@@ -17325,6 +17391,11 @@ number.
 > and rule 6's reading, `D-0113`'s merge release or the person's press writes the row that ends it.
 > Rule 6.1's soundness no longer covers the time between publish and landing (`D-0114` rule 5.4).
 > Rules 6, 7 and 10 are otherwise unedited.
+>
+> - Amends: D-0073 rule 2
+> - Amends: D-0073 rule 3.3
+> - Amends: D-0073 rule 4.3
+> - Amends: D-0073 rule 6.1
 
 ### 2. The six capabilities of 2026-09-17, under this entry
 
@@ -17598,6 +17669,8 @@ approval it was not admitted under, and a press.
 
 > **Annotation (2026-09-27, from rondo#508).** Amended by `D-0140` rule 3 for one question: a lap the
 > budget stopped offers raising the budget and carrying on as one press, raise first.
+>
+> - Amends: D-0074 rule 3.4
 
 ### 4. What the person presses
 
@@ -17732,6 +17805,8 @@ screen has to be asked about. Below, its clauses are named **K1** (request to pu
 > on 2026-09-20, and `D-0080` is judged by the redrawn line. K3's own words above stand as written and
 > are not edited; **rondo#298** is where the definition itself is restated, so that one place holds
 > what it now says. Nothing below is edited.
+>
+> - Amends: D-0075 K3
 
 rondo#265 is the one open gap that plainly fails K3. Under `D-0071` point 1(a) a fresh store gets its
 first template **only** from a plan the person pastes into a request thread. A plan carries this host's
@@ -19768,6 +19843,8 @@ binding to one repository lives in installation and in publishing, which is wher
    > asked of every plan in play -- so one local repository holding a slug-carrying row and a
    > slug-less one is a dispute wherever the host's `--repo` names a third thing, and the read stops
    > instead of taking the newer row (rondo#313 item 2). Nothing below is edited.
+   >
+   > - Amends: D-0081 rule 3.4
 5. **What this does to `D-0080`.** Rule 2.1 has the start command carry "the repository and remote"
    among the host facts. Under rule 3.2 the repository leaves that list and the remote stays; under
    the gate's other options the list widens instead. **Rule 1 is untouched either way** -- starting
@@ -19916,6 +19993,8 @@ binding to one repository lives in installation and in publishing, which is wher
   installation, and `D-0075`'s residual on that is unchanged.
   > **Annotation (2026-09-22, from D-0090).** No longer holds, and **not additive**: a repository a
   > request names is added from the page (`D-0090`). Nothing above is edited.
+  >
+  > - Amends: D-0081 "It does not give the person a way to add a repository from the page"
 - **It does not decide the bounds.** `RONDO_MAX_LIVE` and `RONDO_MAX_OCCUPYING` stay the host's
   (`D-0023`), counted across repositories, and whether a person wants a bound per repository is not
   asked here.
@@ -20069,6 +20148,8 @@ press added later is drawn right without anyone remembering this rule.
 > true of its row; `D-0083` lifts a waiting request under *your turn*, which is true of it, so the
 > argument is kept and its conclusion differs. Until that page is built, the screen is the one this
 > entry describes. Nothing above is edited.
+>
+> - Amends: D-0082 rule 1
 
 **2. Amber is spent only on "a person must act", and red only on "this is broken".** Neither may be
 used for emphasis, for a heading, for a hover, or to mark something merely recent. The difference
@@ -20307,6 +20388,8 @@ list is amber, and a finished request's line may be cut to one line.
 
 > **Annotation (2026-09-22, from D-0106).** Not additive (rondo#408): the axis stays time and is
 > drawn **newest first** (`D-0106` rule 2). Nothing above is edited.
+>
+> - Amends: D-0083 rule 2
 
 **3. The summary and the gate are one screen.** There is no separate decision screen. Arriving from a
 notification and opening the page land on the same screen: from a notification the request it names
@@ -20336,6 +20419,8 @@ little is on it.
 > no amber (`D-0097` point 4). On a day nothing goes against a goal the person wrote, that proposal is
 > one sentence saying what was read and when, and the lower third stays empty. The quiet this rule
 > chose, and its falsifier (the quiet taken for a page not yet loaded), stand. Nothing above is edited.
+>
+> - Amends: D-0083 rule 4
 
 **5. Three faces, and what each holds.**
 
@@ -20348,6 +20433,8 @@ little is on it.
 > **Annotation (2026-09-22, from D-0106).** Not additive (rondo#408): the centre's order is the
 > next step, the box to answer in, the screens the request leads to and the box to add to it, **then**
 > the thread (`D-0106` rules 1 and 4); *under it, always* no longer holds. Nothing above is edited.
+>
+> - Amends: D-0083 rule 5
 
 **6. Governance is permanent, in one line under the title, and in full on the right.** Under every
 thread's title, at every width: repository | when it was asked | spent / approved | which try of how
@@ -20385,6 +20472,8 @@ press needs is inside the box that holds the press.
 > **Annotation (2026-09-22, from D-0106).** Not additive (rondo#408): *the page scrolls to the
 > answering box on arrival* is withdrawn, because the box is at the top of the thread at every width
 > (`D-0106` rule 3). The faces' folds in this table stand. Nothing above is edited.
+>
+> - Amends: D-0083 rule 8
 
 **9. The answering box inherits the gate, whole.** The box in the thread replaces the gate screen and
 carries every element it had:
@@ -20758,6 +20847,9 @@ gives back the folded tries, not the raw lines.
 > **Annotation (2026-09-22, from D-0106).** Not additive (rondo#408): the thread is drawn newest
 > first, so this fold of what was already read sits at the **foot** of the thread, under the new
 > lines, rather than over the top. What it folds is unchanged. Nothing above is edited.
+>
+> - Amends: D-0086 rule 3
+> - Amends: D-0086 rule 1
 
 **4. No threshold, and that is a claim and not an omission.** Neither fold counts lines. A request
 tried once has no settled try; a person who has read nothing has nothing already-read. **The unit
@@ -21339,6 +21431,8 @@ All seven were answered through the window on 2026-09-22.
   > **Annotation (2026-09-22, from D-0094).** No longer holds, and **not additive**: setup computes
   > `allowed_bash` with cadenza's `allowedCommandsFor` over the target's top-level files and writes it
   > into every catalog project it writes. Nothing above is edited.
+  >
+  > - Amends: D-0090 What this does not do: "It does not change setup"
 - **It does not read an enterprise forge's address as a place.** Only `github.com` addresses name a
   place, and an issue linked on another host names none, since the clone is by `OWNER/NAME` and
   would find github.com's repository of that name; `OWNER/NAME` written as such names one on any
@@ -22510,6 +22604,8 @@ number.
       > **Annotation (2026-10-08, from D-0161).** Superseded in part: "a question about nothing the
       > person can see is not put" is withdrawn. A lap that committed nothing has its question put
       > all the same, and the page says nothing was committed. The rest of this rule is unedited.
+      >
+      > - Amends: D-0098 rule 4.2
    3. **The line waits at its gate and nothing else does.** It keeps its claim and holds no capacity
       (`D-0073` rule 10, `D-0023` rule 2); every other line keeps running. `D-0068` reads it as waiting
       on the person, with what answering releases.
@@ -23038,6 +23134,10 @@ At rondo `24294fa` and the pinned cadenza, by reading:
       > paths, and takes in the base for a conflict fix (`D-0105` rules 2 and 3). Rule 2.6's open
       > parts -- the drafted revise quoting the ancestry test, the model reading over
       > `take_in.commit...tip`, and the ref a revision's take-in is fetched into -- are built there.
+      >
+      > - Amends: D-0103 rule 2.7
+      > - Amends: D-0103 rule 2.6
+      > - Amends: D-0103 rule 2
 
 3. **Rule 3: numbers are rows beside the claim.**
    1. **The record is named at setup** by the plan field `decision_record` (payload version 6;
@@ -25014,6 +25114,8 @@ At rondo `7a038e1` and continuo `f2fb450` on **2026-09-27**:
 
   > **Annotation (2026-09-27, from D-0129).** Not additive: the page shows several lines of one
   > request, and `D-0127` rule 5's guard is removed, so two parts of one request run together.
+  >
+  > - Amends: D-0124 "Two parts of one request do not run together yet"
 
 ### What would falsify it
 
@@ -25322,6 +25424,9 @@ owner decided that approving the scope is the press.
    > press refusal, its scope-screen line and its wording are removed. Rule 4's `sibling` is gone
    > with it. A part is still held by files another line holds, by an earlier part's landing and by
    > room.
+   >
+   > - Amends: D-0127 rule 5
+   > - Amends: D-0127 rule 4
 6. **The tick's start answers once the lap's row is reserved** (`answerOnceReserved`, as the
    press's does since `D-0109`). One pass can start two parts and still read landings while they
    run. A start that ends badly after that is an ask in the request's thread.
@@ -26781,6 +26886,9 @@ are version 2). Refs `D-0070`, `D-0098` rule 2.3, `D-0128`, `D-0142` rule 4.
 > **Annotation (2026-09-28, from rondo#543).** Amended by `D-0156`: rule 1's "marked none a judgment
 > call" counts only the findings at or above the scope's threshold, and rule 2's "the box's text" is
 > that text less the findings below it the drafter marked a judgment call.
+>
+> - Amends: D-0145 rule 1
+> - Amends: D-0145 rule 2
 
 ### Context
 
@@ -27676,6 +27784,12 @@ starts a person presses. Refs `D-0067`, `D-0068` rule 2.1, `D-0098` rule 1.4, `D
 > kept before and a drafted part still wait as below. A finished line nothing will publish is
 > released when its landing is read, and the scope screen's wait and the thread's next step now
 > name the holders and link a finished one's release, which the costs below say they did not.
+>
+> - Amends: D-0158 rule 1
+> - Amends: D-0158 rule 2
+> - Amends: D-0158 "An undrafted start claims the whole repository"
+> - Amends: D-0158 "A finished holder whose pull request is not open is attempted every minute"
+> - Amends: D-0158 "The scope screen's wait names the holders without their release link"
 
 ### Context
 
@@ -28602,3 +28716,77 @@ A refactor under D-0168 that changes no behaviour, no command output and no page
 
 - A difference in any test, command output or page caused by this move.
 - A module of the five that fails when it is the first one loaded.
+
+## D-0169 — A dated annotation may change a clause of an accepted entry when it says it is not additive and ends with an `Amends:` line per part it changes, and the index's status column is the live-rule index
+
+**Status:** accepted (2026-10-08, rondo#569). Resolves rondo#273. Changes the annotation rule in
+"How to use this file" and `AGENTS.md` section 3. Supersedes nothing. Refs `D-0001`'s annotations
+from `D-0015` and `D-0016`, rondo#298.
+
+### Context
+
+"How to use this file" and `AGENTS.md` section 3 said an annotation is additive and that anything
+changing what an entry asserted is a supersession. The file's practice has been the other way since
+`D-0072`: a later entry changes one rule of an earlier one and writes a dated annotation there marked
+*not additive*, because supersession is whole-entry and carrying every other section of a long entry
+forward to replace one clause is the heavier act (rondo#273, raised while landing `D-0076`).
+
+At `a3bd6a0`, by a census of every `**Annotation (` blockquote in this file: 232 annotations,
+172 marked additive, 30 marked not additive in 20 entries, and 30 marked neither way.
+Of the not-additive ones, 14 named no rule of the entry they changed. Of the unmarked ones,
+13 withdraw, narrow or replace a clause ("Superseded in part", "Narrowed", "Amended by",
+"No longer holds") without saying they are not additive. Nothing machine-readable said which
+accepted entries are still read as written, so the rules in force could not be read in one place.
+
+### Decision
+
+1. **The line moves to the practice.** A dated annotation may withdraw, narrow or replace a clause of
+   what an accepted entry asserted, provided it says it is not additive. Changing what an entry is
+   *for*, or so much of it that its live rules can no longer be read off its text and annotations, is
+   still a supersession and takes a new ID. Where an annotation is additive it says so too.
+2. **A not-additive annotation ends with a list of `Amends: D-NNNN <rule>` lines, one per part it
+   changes**:
+   `D-NNNN` is the entry the annotation sits in, and `<rule>` names the part as that entry numbers
+   it (`rule 4`, `section 1.2`, `R3`), or by a few quoted words where the entry has no number for it.
+3. **The index's status column is the live-rule index.** An accepted entry with an `Amends:` line is
+   indexed `accepted, amended`; an `accepted` entry is read as written; a `superseded by D-NNNN`
+   entry is read in its replacement. At this entry: 128 accepted, 26 accepted and
+   amended, 8 superseded.
+4. **`test/architecture/docs-claims.test.ts` holds rules 2 and 3**: an annotation whose words say
+   it is not additive and carries no `Amends:` line fails, an `Amends:` line outside an annotation
+   of the entry it names fails, and an index row whose status does not end in `, amended` exactly
+   when its accepted entry has one fails.
+5. **The existing annotations gain their lines now**, appended under each and editing none of their
+   words: every annotation marked not additive, and the unmarked ones whose words withdraw, narrow
+   or replace a clause. Where the annotation named no rule, the rule is read from the entry's body.
+   Every one could be named from its own words or from its entry's body. 43 annotations gain lines,
+   26 accepted entries are indexed amended, and three superseded entries (`D-0022`, `D-0069`,
+   `D-0071`) carry lines too and are indexed as superseded.
+
+### Options not taken
+
+- **Move the practice to the rule**: supersede each entry a not-additive annotation changed. That
+  is 20 whole entries carried forward for clause-level corrections, the cost rondo#273 names.
+- **`Amends:` in the amending entry rather than the amended one.** A reader of the amended entry
+  then needs a search of the whole file to learn that it changed, which is the gap this closes; an
+  annotation already sits there and names its source.
+- **A generated live-rule file beside `DECISIONS.md`.** A second place holding the same fact, which
+  every lane touching an annotation would have to regenerate and merge; the index row already exists
+  and is already checked.
+- **Require every annotation to be marked additive or not.** The unmarked additive ones would need
+  a word added to text written before this rule, and no check can tell an unmarked clause change
+  from an additive note anyway; rule 2's line is the mark the test reads.
+
+### What it costs
+
+- The check reads words, not meaning: an annotation that changes a clause without saying so and
+  without an `Amends:` line still passes, and the live index then calls its entry clean. A review is
+  what catches that, as it was before.
+- `src/` cites superseded entries by ID (288 citations at `0d55b87`, rondo#569); this entry does not
+  re-point them. The index says where each superseded entry is read.
+
+### What would falsify it
+
+- A not-additive annotation whose change cannot be named as parts of its entry, so that its
+  `Amends:` lines say less than the annotation does: that change was a supersession.
+- An entry reaching so many `Amends:` lines that its live rules cannot be read from it: supersede it.
