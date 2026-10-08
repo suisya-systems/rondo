@@ -858,7 +858,7 @@ test.skipIf(!available)(
       "--actor-id",
       "ada",
       "--body=Cap the backoff at thirty seconds.",
-      "--iteration-id",
+      "--successor-id",
       successorId,
     ]);
     expect(code, text).toBe(0);
@@ -955,7 +955,7 @@ test.skipIf(!available)(
       "--actor-id",
       "ada",
       "--body=Cap the backoff at thirty seconds.",
-      "--iteration-id",
+      "--successor-id",
       successorId,
     ]);
 

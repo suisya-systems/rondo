@@ -196,6 +196,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0161 | A worker's question is put to the person whether or not its lap committed anything: nothing committed is said on the page, not a reason to drop the question | accepted |
 | D-0162 | The model reviewer's answer is shaped by codex's `--output-schema`, which rondo writes as a file of its own beside the reviewer's empty directory | accepted |
 | D-0163 | A person changes which files an open line keeps: a widening for work still going and never onto another open line's files, a narrowing once nothing of the line can commit and never of a file it changed | accepted |
+| D-0165 | `revise --iteration-id` names the lap being revised, as on every other verb, and the second lap is named by `--successor-id`, so a revise works while several iterations are open | accepted |
 
 ---
 
@@ -28314,3 +28315,55 @@ At rondo `8fb7642` on **2026-10-08**, by reading the code:
 - **Two lines colliding on a path one of them gave up by this press**, which would mean rule 4's
   reading missed a commit.
 - Any measurement above failing to reproduce at rondo `8fb7642`.
+
+---
+
+## D-0165 — `revise --iteration-id` names the lap being revised, as on every other verb, and the second lap is named by `--successor-id`, so a revise works while several iterations are open
+
+**Status:** accepted (2026-10-08, rondo#36). Supersedes nothing: no entry's rule states what
+`revise`'s `--iteration-id` means. Refs `D-0023`, `D-0027` rules 1 and 9.
+
+### Context
+
+`D-0027` rule 1 gave `revise` an optional `--iteration-id`, and the command used it as the id of
+the second lap, while `answer`, `publish`, `abandon`, `retry` and `propose` use it for the row
+being acted on. With one open iteration the lap being revised was "the live one". `D-0023` let
+several be open, and from then on `revise` had no way to say which lap it revised: it refused
+whenever more than one was open (rondo#36). The page's revise press (rondo#235,
+`reviseFromPage`) already takes the lap it revises and the successor it mints as two inputs, and
+`retry` and `propose` spell the same pair `--iteration-id` and `--successor-id`.
+
+### Decision
+
+1. **`revise --iteration-id ID` names the lap being revised**, resolved as `answer` resolves it
+   (`pickWaiting`): the row named, or with the flag left off the one live iteration, and a refusal
+   listing every live row when several are open.
+2. **`revise --successor-id ID` names the second lap and is required.** rondo derives its run id,
+   topic branch and workspace from it as before (`D-0023` rule 9). Every refusal that used to say
+   "choose another --iteration-id" about the successor's identifiers now says `--successor-id`.
+3. **An old command line fails safe.** `revise --iteration-id NEW` without `--successor-id` is
+   refused before anything is read, and the refusal says what each flag names now. No gate is
+   walked on a guess.
+4. `D-0027` rule 9's "no `revise` from anywhere but the live iteration's open gate" still holds:
+   a named row with no gate stops the command, and one whose gate continuo has already closed is
+   refused by the preflight (`D-0027` rule 6) before anything is walked, as before.
+
+### Options not taken
+
+- **Keep `--iteration-id` as the successor and add a flag for the lap being revised.** It keeps
+  the one verb whose `--iteration-id` means something different from all the others, which is the
+  inconsistency rondo#36 reports.
+- **Mint the successor's id when `--successor-id` is left off.** Nothing asks for it yet; `start`
+  and `retry` both have a person type the new id, and the page mints its own.
+
+### What it costs
+
+- **Scripts and notes that typed `revise --iteration-id NEW` must change** to `--successor-id NEW`.
+  The refusal in rule 3 says so; the dogfood records under `docs/operations/` keep the old
+  spelling because they record what was typed then.
+
+### What would falsify it
+
+- **An operator who reads `--iteration-id` on `revise` as the new lap** and is refused for it
+  repeatedly: then the successor would be better minted (the option not taken).
+- Any statement above failing to hold at rondo `5890528`.

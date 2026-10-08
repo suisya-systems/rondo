@@ -459,7 +459,7 @@ function repeatedIdentifier(input: RevisionRequest, plan: AdmittedPlan): string 
   // triple the operator typed, which the upgrade back-filled onto it verbatim.
   // Nothing stops that run id being `rondo-<some other id>`: a predecessor
   // called `legacy-id` can already own `rondo-revision`, and revising it with
-  // `--iteration-id revision` derives exactly that. The id check passes, the
+  // `--successor-id revision` derives exactly that. The id check passes, the
   // branch and workspace may well be free, and `commandRevise` would then
   // answer the predecessor's gate -- which cannot be undone -- before
   // `reserve()` refused the successor against the migrated claim.
@@ -469,7 +469,7 @@ function repeatedIdentifier(input: RevisionRequest, plan: AdmittedPlan): string 
   // still gives a person a sentence they can act on.
   if (input.iterationId === input.predecessor.id) {
     return (
-      `'--iteration-id' is '${input.iterationId}', which is the iteration being revised. The ` +
+      `'--successor-id' is '${input.iterationId}', which is the iteration being revised. The ` +
       "second lap is a second run: continuo holds a run under the first lap's id, git holds " +
       `its branch '${plan.topicBranch}' and a worktree stands at '${plan.workspace}'. rondo ` +
       "derives all three from the iteration id, so the revision needs an id of its own. What " +
@@ -503,7 +503,7 @@ function repeatedIdentifier(input: RevisionRequest, plan: AdmittedPlan): string 
         `which iteration '${input.predecessor.id}' already holds. That iteration was admitted ` +
         "before rondo allocated identifiers, so its names were typed rather than derived and " +
         "one of them happens to collide with what this id produces. Nothing was touched. " +
-        "Choose a different --iteration-id."
+        "Choose a different --successor-id."
       );
     }
   }

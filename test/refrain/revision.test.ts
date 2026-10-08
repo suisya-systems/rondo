@@ -449,7 +449,7 @@ test("a chain of revisions keeps the first lap's base rather than walking back o
  */
 test("a successor iteration id equal to the predecessor's is refused, and the refusal says what continues instead", () => {
   const reason = refusalOf({ iterationId: PREDECESSOR.id });
-  expect(reason).toContain("'--iteration-id'");
+  expect(reason).toContain("'--successor-id'");
   expect(reason).toContain("the iteration being revised");
   expect(reason).toContain("second lap is a second run");
   expect(reason).toContain("base branch is the first lap's topic branch");

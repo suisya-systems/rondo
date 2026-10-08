@@ -2068,7 +2068,7 @@ test(
       "--actor-id",
       "oidc|operator-1",
       "--body=cap the backoff",
-      "--iteration-id",
+      "--successor-id",
       "i-second",
     ]);
     if (parsed.kind !== "parsed") throw new Error("the revise did not parse");
@@ -2107,6 +2107,70 @@ test(
     expect(first.record.gateAnswer).toBeNull();
     expect((await h.store.read("i-second")).kind).toBe("absent");
     expect(h.consumptions()).toBe(0);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+/**
+ * `revise` names the lap it revises (D-0165, rondo#36).
+ *
+ * With two laps at their gates, "the live one" names nothing: left off,
+ * `--iteration-id` is refused with both listed; named, the command reaches that
+ * lap -- which the draw's refusal proves, because it quotes the lap it drew for.
+ */
+test(
+  "D-0165: with two laps at gates, revise refuses to guess and reaches the one --iteration-id names",
+  async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "rondo-revise-named-")), "rondo.sqlite3");
+    const h = await harness(path);
+    for (const id of ["i-first", "i-other"]) {
+      const report = await admit(h.reporting, h.advisory, PLAN, POLICY, id, null, null, ROOT);
+      expect(report.status).toBe("awaiting_human");
+    }
+    const typedRevise = async (...extra: string[]): Promise<{ code: number; text: string }> => {
+      const parsed = parseCommand([
+        "revise",
+        "--actor-id",
+        "oidc|operator-1",
+        "--body=cap the backoff",
+        "--successor-id",
+        "i-second",
+        ...extra,
+      ]);
+      if (parsed.kind !== "parsed") throw new Error("the revise did not parse");
+      const out: string[] = [];
+      const write = consoleSeams.write;
+      const writeError = consoleSeams.writeError;
+      consoleSeams.write = (text: string) => void out.push(text);
+      consoleSeams.writeError = (text: string) => void out.push(text);
+      try {
+        const code = await commandRevise(
+          parsed.parsed,
+          { RONDO_APPROVER: "oidc|operator-1" },
+          h.store,
+          path,
+          {} as never,
+          {} as never,
+          { cliPath: "/opt/continuo/dist/cli.js", revision: "0".repeat(40) },
+        );
+        return { code, text: out.join("") };
+      } finally {
+        consoleSeams.write = write;
+        consoleSeams.writeError = writeError;
+      }
+    };
+
+    const unnamed = await typedRevise();
+    expect(unnamed.code).toBe(2);
+    expect(unnamed.text).toContain("2 iterations are live");
+    expect(unnamed.text).toContain("i-first");
+    expect(unnamed.text).toContain("i-other");
+
+    const named = await typedRevise("--iteration-id", "i-other");
+    expect(named.code).toBe(2);
+    expect(named.text).toContain("iteration 'i-other' records no admission against any scope");
+    expect(named.text).not.toContain("iterations are live");
+    expect((await h.store.read("i-second")).kind).toBe("absent");
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );

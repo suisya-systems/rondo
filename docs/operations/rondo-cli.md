@@ -679,7 +679,7 @@ write a new plan file by hand. `revise` is the other way to answer a gate.
 ```console
 $ node bin/rondo.mjs revise --actor-id happy_ryo \
     --body="Not quite. The line you added should read exactly: 'Touched twice by the rondo operator CLI.' Change that one line and commit it. Do nothing else." \
-    --iteration-id revise-004
+    --successor-id revise-004
 gate gate/worker_escalation/7ddacc1b-.../0 is at stage 'received'
   gate present   message relay/gate/.../presented (enqueued: true)
   ... the same six verbs `answer` drives ...
@@ -698,9 +698,11 @@ A person has to answer this before anything lands. Next: rondo answer
 **The one identifier is yours, and it must be new.** continuo holds a run under the first lap's id,
 git holds its branch, and a worktree stands at its workspace; its materialiser requires a topic
 branch that does not already exist and a workspace path that does not exist. You name only the
-successor's `--iteration-id`: rondo derives the run id, the topic branch and the workspace from it
+successor's `--successor-id`: rondo derives the run id, the topic branch and the workspace from it
 (`D-0023` rule 9), so there is no flag to type them. An id whose derived triple collides with
 something that already exists is refused, with the reason, before the gate is touched.
+`--iteration-id` names the lap being revised, as it does on `answer`, `retry` and `propose`; it may
+be left off while only one iteration is open, and is needed when several are (`D-0165`).
 
 **What carries the work across is the branch, and rondo sets that for you.** The second lap's
 `base_branch` is the first lap's `topic_branch`, so git cuts the second worktree from the first

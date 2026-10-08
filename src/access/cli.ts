@@ -375,13 +375,15 @@ export const USAGE = `rondo - the operator surface for delegated work
                           answering -- recorded on the iteration, and carried
                           into the pull request, as your claim: rondo did not
                           watch it run and does not say it did
-  rondo revise --actor-id ID --body=TEXT [--iteration-id ID]
-               [--scope-decision-id ID] [--closing-fix]
+  rondo revise --actor-id ID --body=TEXT --successor-id ID
+               [--iteration-id ID] [--scope-decision-id ID] [--closing-fix]
                           answer the gate with a change to make, and run a
                           second lap that continues from the first one's
-                          branch. The second lap's run id, topic branch and
-                          workspace are derived from --iteration-id, the same
-                          way rondo start mints the first lap's.
+                          branch. --iteration-id names the lap being revised;
+                          name one when more than one iteration is open. The
+                          second lap's run id, topic branch and workspace are
+                          derived from --successor-id, the same way rondo
+                          start mints the first lap's.
                           The second lap spends an approved scope: the one
                           --scope-decision-id names, or, with the flag left
                           off, the approval the lap being revised was admitted
@@ -7708,7 +7710,7 @@ export function revisionBlocker(input: {
     return (
       `iteration '${input.successorId}' already exists in the store, so the second lap could ` +
       "not be reserved under it -- and the gate would have been answered first. Nothing was " +
-      "touched. Choose another --iteration-id."
+      "touched. Choose another --successor-id."
     );
   }
   if (input.successorRunStatus !== null) {
@@ -7717,7 +7719,7 @@ export function revisionBlocker(input: {
       `'${input.successorRunStatus}', and admission refuses a second run under one id -- the ` +
       "second lap could not have been admitted, and the gate would have been answered first. " +
       "Nothing was touched. rondo derives the run id from the iteration id, so choose another " +
-      "--iteration-id."
+      "--successor-id."
     );
   }
   if (input.topicBranchExists) {
@@ -7725,14 +7727,14 @@ export function revisionBlocker(input: {
       `branch '${input.topicBranch}' already exists in the repository, and continuo creates the ` +
       "topic branch rather than checking it out -- it requires one that is not there. Nothing " +
       "was touched. rondo derives the topic branch from the iteration id, so choose another " +
-      "--iteration-id."
+      "--successor-id."
     );
   }
   if (input.workspaceExists) {
     return (
       `'${input.workspace}' already exists, and continuo creates the worktree there -- it ` +
       "requires the path not to exist. Nothing was touched. rondo derives the workspace from " +
-      "the iteration id, so choose another --iteration-id."
+      "the iteration id, so choose another --successor-id."
     );
   }
   return null;
@@ -8196,26 +8198,24 @@ export async function commandRevise(
   // and a worktree stands at its workspace -- so it needs identifiers of its
   // own. Under `D-0023` rondo derives all three from the iteration id, so this
   // is the only one a person types.
-  const successorId = parsed.iterationId;
+  const successorId = parsed.successorId;
   if (successorId === null) {
     return refuse(
-      "revise needs --iteration-id ID, which is the id the second lap is reserved under. " +
+      "revise needs --successor-id ID, which is the id the second lap is reserved under. " +
         "rondo derives its run id, topic branch and workspace from it, so it must be new and " +
-        "must be a lowercase letter followed by up to 63 more of [a-z0-9_-]. What carries the " +
+        "must be a lowercase letter followed by up to 63 more of [a-z0-9_-]. --iteration-id " +
+        "names the lap being revised, as it does on every other command. What carries the " +
         "work across is the branch, and rondo sets that for you: the second lap's base branch " +
         "is the first lap's topic branch.",
     );
   }
 
-  // **The iteration being revised is resolved the way `answer` resolves it**,
-  // which since `D-0023` means "the one live iteration, and a refusal when
-  // that does not name one". `--iteration-id` is already spoken for here: on
-  // this verb alone it names the successor rather than the row being acted on,
-  // which `D-0027` chose when there could only ever be one live row to revise.
-  // With more than one open there is no second flag to say which, so revise is
-  // unavailable until the others are settled -- a real limitation, recorded
-  // rather than papered over with a guess at which row was meant.
-  const chosen = await pickWaiting(store, null);
+  // **The iteration being revised is resolved the way `answer` resolves it**
+  // (D-0165, rondo#36): the one named with `--iteration-id`, or the one live
+  // iteration, with a refusal naming them all when several are open. The flag
+  // named the successor until D-0165, which left revise with no way to say
+  // which row it revised once `D-0023` let several be open.
+  const chosen = await pickWaiting(store, parsed.iterationId);
   if ("refusal" in chosen) {
     return refuse(chosen.refusal);
   }
