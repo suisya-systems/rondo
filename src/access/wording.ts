@@ -553,6 +553,12 @@ export interface Chrome extends PageWords, ExplainWords {
    */
   readonly chimeAsk: string;
   /**
+   * The same button's words on a phone (rondo#586, `D-0185` rule 4): at 390px
+   * the whole sentence took a header row of its own, so the header was three
+   * rows tall. The whole sentence stays the button's title.
+   */
+  readonly chimeAskShort: string;
+  /**
    * The tab's title (rondo#414): what waits on the person, counted as the
    * header counts it, so a tab among twenty says so without being opened.
    */

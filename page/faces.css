@@ -1,23 +1,32 @@
 /*
- * The three faces and their folds (DECISIONS.md D-0083 rules 1 and 8).
+ * The three faces, width by width (DECISIONS.md D-0083 rule 1 as amended by
+ * D-0185, and D-0185 rule 3's table).
  *
- * Its own file so that rule 8's table is one thing a reader can check. The
- * widths are the entry's: 440 / 1,040 / 720 at 2560, the three together
- * stopping at 2,200px and centred, because width buys faces and never line
- * length.
+ * Its own file so that the table is one thing a reader can check. 2560 is a
+ * design and so are the half screens beside an editor, about 760 and about
+ * 1280 (D-0185 rule 1): each band is drawn for its width, not folded from
+ * 2560. Width buys faces and never line length, so at 2560 the three faces
+ * stop at 2,200px and are centred.
  *
- * The breakpoints are the folds, so they are written as `max-width` against
- * the reference resolution rather than as Tailwind's own scale: 2560 is the
- * design, and 1600 and 1280 are folds of it, not designs of their own.
+ * | Width     | Faces                          | What scrolls                     |
+ * |-----------|--------------------------------|----------------------------------|
+ * | > 2000    | 440 / up to 1,040 / 720        | each face                        |
+ * | 1101-2000 | 260-340 / rest / 320-440       | each face                        |
+ * | 641-1100  | 220-300 / rest, side under it  | the list; the thread with side   |
+ * | <= 640    | one, the list last             | the page                         |
+ *
+ * What goes under the thread at 641-1100 is evidence only: D-0082 rule 7
+ * holds at every width, so what a press needs is inside the box that holds
+ * the press.
  */
 
 /*
  * **The page is the viewport, and the faces are what is left of it** (rondo#593).
  * The header, the notes over the faces and the sentence under them take their
  * own height and the faces the rest, so the page itself never scrolls and only
- * a face does. The faces' height used to be the viewport less the header's
- * 3rem, which left a note or the foot sentence outside the viewport and a
- * second scroll bar for the page. `dvh`, so a phone's moving toolbar is not
+ * a face does, at every width above a phone (rondo#586). The faces' height
+ * used to be the viewport less the header's 3rem, which left a note or the
+ * foot sentence outside the viewport and a second scroll bar for the page. `dvh`, so a phone's moving toolbar is not
  * counted as room.
  */
 .page-shell {
@@ -56,69 +65,96 @@
   border-inline: 1px solid var(--color-border);
 }
 
-/* 1600: the same three faces, narrower. The thread keeps its line length. */
+/*
+ * The thread and the right face are one reading column only at 641-1100;
+ * everywhere else the wrapper draws no box and they are grid items of their own.
+ */
+.face-reading {
+  display: contents;
+}
+
+/*
+ * The centre and the right face size what is inside them by their own width
+ * (`@container` in `thread.css` and `side.css`), not the window's: the same
+ * right face is 320px beside the thread at 1280 and 700px under it at 1000.
+ */
+.face-thread,
+.face-side {
+  container-type: inline-size;
+}
+
+/*
+ * 1101-2000, which holds 1280 beside an editor and 1600: still three faces,
+ * each scrolling on its own. At 2000 the clamps are the old 340 / 440; at 1280
+ * they are 260 / 320, which leaves the thread about 640px of text.
+ */
 @media (max-width: 2000px) {
   .page-faces {
-    grid-template-columns: 340px minmax(0, 1fr) 440px;
+    grid-template-columns: clamp(260px, 17vw, 340px) minmax(0, 1fr) clamp(320px, 22vw, 440px);
+    grid-template-rows: minmax(0, 1fr);
   }
 }
 
 /*
- * 1280: two faces. The right face drops under the thread, and what drops is
- * evidence only -- D-0082 rule 7 holds at every width, so what a press needs
- * is inside the box that holds the press.
+ * 641-1100, which holds 760 beside an editor: two faces. The list scrolls on
+ * its own and keeps its place; the thread scrolls with the right face under
+ * it, so the page itself still does not scroll (rondo#586). Below 1101 a third
+ * face would leave the thread under 45 characters.
  */
-@media (max-width: 1400px) {
-  /* The faces stack, so the page scrolls again and the faces do not. */
+@media (max-width: 1100px) {
+  .page-faces {
+    grid-template-columns: clamp(220px, 30vw, 300px) minmax(0, 1fr);
+  }
+  .face-reading {
+    display: block;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .face-reading > .face {
+    overflow-y: visible;
+  }
+  .face-side {
+    border-inline: 0;
+    border-top: 1px solid var(--color-border);
+    background: none;
+  }
+}
+
+/*
+ * Phone (rondo#439): one face across, the screen a person opened first, and
+ * the page scrolls rather than a face. At 390px a list beside the thread left
+ * the centre a sliver that set one character to a line, so the list folds
+ * under the thread and the right face, where it is still one scroll away.
+ */
+@media (max-width: 640px) {
   .page-shell,
   .page-shell > main {
     display: block;
     height: auto;
   }
   .page-faces {
-    grid-template-columns: 300px minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
     height: auto;
-  }
-  .face-list {
-    grid-row: 1 / 3;
-  }
-  .face-side {
-    grid-column: 2;
-    border-inline: 0;
-    border-top: 1px solid var(--color-border);
-    background: none;
   }
   .face {
     overflow-y: visible;
   }
-}
-
-/*
- * Phone (rondo#439): one face across, the screen a person opened first. At
- * 390px the 300px list beside it left the centre a sliver that set one
- * character to a line, so the list folds under the thread and the right face,
- * where it is still one scroll away.
- */
-@media (max-width: 640px) {
-  .page-faces {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
+  .face-reading {
+    display: contents;
   }
   .face-list {
-    grid-row: auto;
     order: 1;
     border-inline: 0;
     border-top: 1px solid var(--color-border);
-  }
-  .face-side {
-    grid-column: auto;
   }
 }
 
 /*
  * The header and the notes under it span what the faces span (rondo#379): at
- * 2560 the three faces stop at 2,200px, and below 2000 they fill the screen,
+ * 2560 the three faces stop at 2,200px, and from 2000 down they fill the screen,
  * so the header's items have the room the faces have rather than a 1,024px
  * column in the middle of them. The faces' own reading widths do not change.
  */

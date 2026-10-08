@@ -252,14 +252,16 @@ export async function pageDocument({
             </span>
             {
               // The thread's own crumb, where there is room for it; the thread
-              // header names it at every width.
+              // header names it at every width. From `2xl` and not `xl`
+              // (rondo#586): at 1280, with the key hints shown, the crumb put
+              // the header on a second row.
               view.kind === "thread" && threads.rootOf(view.messageId) !== null ? (
                 <>
-                  <span aria-hidden="true" class="hidden text-faint xl:inline">
+                  <span aria-hidden="true" class="hidden text-faint 2xl:inline">
                     /
                   </span>
                   <span
-                    class="hidden max-w-[16rem] truncate text-meta text-foreground xl:inline"
+                    class="hidden max-w-[16rem] truncate text-meta text-foreground 2xl:inline"
                     lang=""
                   >
                     {firstLine(threads.byId.get(threads.rootOf(view.messageId) ?? "")?.body ?? "")}
@@ -304,8 +306,14 @@ export async function pageDocument({
                   id="chime-ask"
                   hidden
                   class={`js-only ${PILL} gap-1.5 font-sans border-link/40 text-link hover:underline`}
+                  title={wording.chimeAsk}
                 >
-                  {wording.chimeAsk}
+                  {/*
+                   * Shorter on a phone (rondo#586, D-0185 rule 4), so the
+                   * header is two rows at 390px rather than three.
+                   */}
+                  <span class="sm:hidden">{wording.chimeAskShort}</span>
+                  <span class="hidden sm:inline">{wording.chimeAsk}</span>
                 </button>
               </>
             ) : null}

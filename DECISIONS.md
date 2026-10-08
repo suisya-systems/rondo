@@ -219,6 +219,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0183 | A list row that waits on nobody is one line, its title and its time, with its state in the mark's shape; the sentence and the repository stay in the markup for a reader, and a waiting row keeps both lines | accepted |
 | D-0184 | The page offers light, dark and the system's palette, kept in this browser as the text size is; the system's is the default, and each colour token holds both values in one declaration | accepted |
 | D-0177 | A person asks rondo on the page what something means or what happened, and a model explainer answers in the thread: an explanation with bases that binds nothing, counted against the approval in force, capped per answer | accepted |
+| D-0185 | The page is designed for the half screen beside an editor as well as for 2560: about 760px and about 1280px are widths of their own, and above a phone the list and the thread scroll on their own | accepted |
 
 ---
 
@@ -20595,6 +20596,13 @@ phone is out of scope for this entry. **Width buys faces, never line length**: p
 90 characters at every width (the mock-up holds 45 at 16px for a message and 48 at 14px for an event
 line), and the three faces together stop at 2,200px and are centred.
 
+> **Annotation (2026-10-08, from D-0185).** Not additive (rondo#586): 2560x1440 is no longer the
+> one design that narrower widths fold from. About 760px and about 1280px, the half screen beside an
+> editor, are designed as widths of their own (`D-0185` rule 1). *Width buys faces, never line
+> length* and the 2,200px stop stand. Nothing above is edited.
+>
+> - Amends: D-0083 rule 1
+
 **2. The unit is a request's thread, and the axis is time.** A row in the list is a request, named by
 the person's own words, not a lap. The list is cut by day (*today / yesterday / last week / a
 month*), not by status. The one exception is `D-0082` rule 1's: requests waiting on the person are
@@ -20694,6 +20702,14 @@ press needs is inside the box that holds the press.
 > **Annotation (2026-09-22, from D-0106).** Not additive (rondo#408): *the page scrolls to the
 > answering box on arrival* is withdrawn, because the box is at the top of the thread at every width
 > (`D-0106` rule 3). The faces' folds in this table stand. Nothing above is edited.
+>
+> - Amends: D-0083 rule 8
+
+> **Annotation (2026-10-08, from D-0185).** Not additive (rondo#586): the table's widths are
+> replaced by `D-0185` rule 3's bands. Three faces now hold down to 1101px, so 1280 keeps its right
+> face beside the thread; from 641 to 1100 the right face goes under the thread and scrolls with it,
+> beside a list that scrolls on its own. *What drops below the thread is evidence only* stands.
+> Nothing above is edited.
 >
 > - Amends: D-0083 rule 8
 
@@ -29786,3 +29802,97 @@ the reads open to one later. This entry writes those points down as rules, at ro
 | What the K4 signals are read for | Recording is decided; no reader of the count exists yet | a later entry that reads them against `D-0173` |
 | A hold on the approval while an answer's run is in flight | Admission checks what is left once, and the claim is written with the answer, so a lap admitted during the run can take the last reserve and the approval ends up to one cap over. Holding it needs the claim written before the run and its cost after, which `scope_consumption` and an unchanging proposal row do not do today | the change that gives a reading a claim before its cost |
 | A run held for writing across a restart | The held result is the host's memory, so a process that stops between the run and a landed write runs the model once more on the next start | a later change, if a store fault that outlives a restart is seen |
+
+---
+
+## D-0185 — The page is designed for the half screen beside an editor as well as for 2560: about 760px and about 1280px are widths of their own, and above a phone the list and the thread scroll on their own
+
+**Status:** accepted (2026-10-08, rondo#586, the owner's approval through the window). Amends
+`D-0083` rules 1 and 8. Supersedes nothing. Refs `D-0082` rule 7, `D-0083` rule 6, `D-0168`,
+rondo#318, rondo#439, rondo#593.
+
+### Context
+
+`D-0083` rule 1 made 2560x1440 the design and 1600 and 1280 folds of it. The person works with the
+page beside VS Code or Cursor, where it is 700 to 1300px wide. There, under 1400px,
+`page/faces.css` gave the page back its scroll and took it from the faces, so the list scrolled
+away while a thread was read, and the right face was drawn under the thread at 1280 although the
+thread had more room than its 45em measure needs. rondo#586's comment adds two checks at a real
+390px: whether the header's notification button fits after rondo#593 let the header wrap, and
+whether the centre runs wider than the screen.
+
+### What was measured, and how
+
+On 2026-10-08, by reading the CSS and the markup at `531c167`, with each item's width estimated
+from its classes (nothing on this page was measured in a browser at 390; headless Chrome will not
+draw that narrow). Screenshots at 760x900, 1280x800, 1600x1000 and 2560x1440, light and dark, are
+taken before and after by the window.
+
+- **The header at 390** has 358px for its row. No item is wider than that, so nothing runs off the
+  edge; but the English notification button, about 228px, took a row of its own and the header was
+  three rows, about 116px of a phone screen.
+- **The centre at 390** has about 334px for text. An event line's text column was a plain `1fr` with
+  no word breaking, and a request's title had none either, so a path, a commit or an address in
+  either widened the face past the screen. A basis chip at the largest text size was wider than
+  the column. Markdown, code blocks and message prose already wrapped or scrolled inside themselves.
+- **The right face at 320 to 440px** holds seven steps in one row, about 40px each, where a word
+  like "Automatic" ran into the next step.
+- **The header at 1280** on a thread, with the key hints and the thread's crumb both shown, needed
+  about 1,390px of a 1,232px row and went to two rows.
+
+### Decision
+
+1. **2560 and the half screens beside an editor are all designs.** About 760px and about 1280px are
+   widths of their own, not folds of 2560. Width still buys faces, never line length.
+2. **Above a phone the page does not scroll; the list and the thread each do.** At every width over
+   640px the list keeps its place while a thread is read.
+3. **The bands:**
+
+   | Width | Faces | What scrolls |
+   |---|---|---|
+   | > 2000 | 440 / up to 1,040 / 720, centred | each face |
+   | 1101-2000 | 260-340 / rest / 320-440 | each face |
+   | 641-1100 | 220-300 / rest, the right face under the thread | the list; the thread with the right face |
+   | <= 640 | one, the list last | the page |
+
+   At 1280 that is 260 / about 700 / 320, so the right face stays beside the thread. Under 1101 a
+   third face would leave the thread under 45 characters, so the right face goes under it, inside
+   one column that scrolls beside the list. What goes under the thread is evidence only (`D-0082`
+   rule 7).
+4. **A phone keeps the page's scroll, and nothing in the centre runs past the screen.** A long word
+   in an event line or in a request's title breaks rather than widening the face, a basis chip is
+   never wider than its column, and a narrow centre spends less of itself on padding. The
+   notification button says a short form of its words below 640px, so the header is two rows at 390.
+5. **The centre and the right face are drawn by their own width, not the window's.** The same right
+   face is a 320px column at 1280 and about 700px across under the thread at 1000, so a window width
+   cannot say which drawing it needs: `@container` rules put the week's figures two across under
+   600px and the steps one under another under 480px.
+6. **It lives in `page/faces.css`, `page/side.css`, `page/thread.css`, `src/access/page/faces.tsx`**
+   and the header in `src/access/page/document.tsx`, not in `web.tsx` or `cli.ts` (`D-0168`). The
+   thread's crumb in the header shows from 1536px rather than 1280.
+
+### Options not taken
+
+- **Keep 1280 at two faces with the right face under the thread**, only giving the faces their
+  scroll back. The thread at 1280 has room for its measure and the right face beside it; putting it
+  under the thread hid the governance for nothing.
+- **A list that stays put while the page scrolls** (a sticky list in a scrolling grid). It needs a
+  scroller inside a scroller, and `j` / `k` moving through the list could then scroll the page.
+- **The right face as a drawer at 641-1100.** A new control and a new state for evidence that reads
+  well enough under the thread.
+
+### What it costs
+
+- One more box in the markup, `face-reading`, which draws nothing outside 641-1100.
+- At 641-1100 the thread and the right face share one scroll, so reading the right face moves the
+  thread away; the list does not move.
+- In a narrow right face the steps stand one under another rather than in a row, so the card is
+  taller there.
+- The short notification words on a phone say less than the whole sentence, which stays the
+  button's title.
+
+### What would falsify it
+
+- A person beside an editor who still loses the list's place while reading a thread.
+- A thread at 1101px whose text runs under 45 characters to a line.
+- A horizontal scroll bar on a phone at 390px.

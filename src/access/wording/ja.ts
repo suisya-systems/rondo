@@ -532,6 +532,7 @@ export const JA: Chrome = Object.freeze({
   reachYourTurn: "rondo があなたの答えを待っています。",
   reachLate: "rondo に、かかると決めていた時間を過ぎても終わらないものがあります。",
   chimeAsk: "このタブに通知を許可",
+  chimeAskShort: "通知を許可",
   tabTitle: (count) => (count === 0 ? "rondo" : `(${String(count)}) rondo`),
   tabTitleTurn: "あなたの番 — rondo",
   changedMark: "更新されました",

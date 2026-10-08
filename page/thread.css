@@ -10,7 +10,7 @@
 
 .ev {
   display: grid;
-  grid-template-columns: 28px 1fr auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   gap: 16px;
   align-items: start;
   padding: 4px 0;
@@ -25,6 +25,8 @@
   color: var(--color-muted-foreground);
   /* Rule 1: prose stays at 45 to 90 characters at every width. */
   max-width: 48em;
+  /* A path, a commit or an address in a refusal breaks rather than widening the face. */
+  overflow-wrap: anywhere;
 }
 
 .ev time {
@@ -110,6 +112,20 @@
   padding: 20px 28px 40px;
 }
 
+/*
+ * A narrow centre (D-0185 rule 4): beside an editor at 641px, or on a phone,
+ * 28px a side and 16px between an event's columns were a fifth of the line.
+ */
+@container (max-width: 34rem) {
+  .thread {
+    padding: 16px 16px 32px;
+  }
+  .ev,
+  .ev-fold > summary {
+    gap: 8px;
+  }
+}
+
 .thread-head {
   padding-bottom: 12px;
   margin-bottom: 8px;
@@ -129,6 +145,7 @@
   font-weight: 700;
   line-height: 1.3;
   max-width: 45em;
+  overflow-wrap: anywhere;
 }
 
 .msg {
@@ -237,7 +254,8 @@
 }
 
 .msg-bases .basis {
-  max-width: 26em;
+  max-width: min(26em, 100%);
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -316,12 +334,13 @@
 
 .side-part {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 4px 12px;
   padding: 4px 0 4px 8px;
   border-left: 2px solid var(--color-border);
   font-size: var(--text-id);
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .side-part span {
@@ -531,7 +550,7 @@
  */
 .ev-fold > summary {
   display: grid;
-  grid-template-columns: 28px 1fr auto auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
   gap: 16px;
   align-items: start;
   padding: 4px 0;
@@ -552,6 +571,7 @@
   font-size: var(--text-body);
   line-height: 1.7;
   max-width: 48em;
+  overflow-wrap: anywhere;
 }
 
 .ev-fold-open {

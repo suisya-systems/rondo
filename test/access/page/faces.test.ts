@@ -1,5 +1,6 @@
 /**
- * The three faces, rendered on the server (DECISIONS.md D-0083 rules 1 and 8).
+ * The three faces, rendered on the server (DECISIONS.md D-0083 rule 1 and
+ * D-0185).
  *
  * **What this file is really asserting is that the two JSX runtimes coexist.**
  * `tsconfig.json` points the whole tree at `hono/jsx`, because the screens this
@@ -29,6 +30,18 @@ test("the three faces are rendered, each carrying what it was handed", () => {
   // The order is the reading order: list, thread, side (rule 5's table).
   expect(html.indexOf("every request")).toBeLessThan(html.indexOf("the thread"));
   expect(html.indexOf("the thread")).toBeLessThan(html.indexOf("the material"));
+});
+
+test("the thread and the right face share one reading column, and the list is outside it", () => {
+  // rondo#586 (D-0185 rule 2): at 641-1100 that column is what scrolls beside
+  // the list, so the list keeps its place while a thread is read. Its CSS is
+  // not asserted here; what is, is that the box exists around exactly these two.
+  const html = renderToStaticMarkup(Faces({ list: "L", thread: "T", side: "S" }));
+  const reading = html.indexOf('<div class="face-reading">');
+  expect(reading).toBeGreaterThan(html.indexOf("L"));
+  expect(html.indexOf('class="face face-thread"')).toBeGreaterThan(reading);
+  expect(html.indexOf('class="face face-side"')).toBeGreaterThan(reading);
+  expect(html.endsWith("</aside></div></div>")).toBe(true);
 });
 
 test("the right face draws its frame with nothing in it, which is this slice's state", () => {
