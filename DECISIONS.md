@@ -13832,7 +13832,7 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 > - Amends: D-0059 R3
 
 > **Annotation (2026-10-08, from rondo#588), and not additive.** Added after this entry was
-> accepted, **pending the answer of rondo's human gate** on rondo#588. **R3's key script, which
+> accepted, by rondo#588. **R3's key script, which
 > moves focus between server-rendered rows and follows server-rendered links, also shows and hides
 > one server-rendered list: the page's keys** (`#key-sheet`).
 > - **What it is.** The header's key hints are drawn only at `xl` and up (rondo#379), so in a
