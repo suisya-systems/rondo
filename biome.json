@@ -43,7 +43,11 @@
   },
   "overrides": [
     {
-      "includes": ["src/access/web.tsx", "src/access/screens/*.tsx"],
+      "includes": [
+        "src/access/web.tsx",
+        "src/access/page/document.tsx",
+        "src/access/screens/*.tsx"
+      ],
       "linter": {
         "rules": {
           "correctness": {
