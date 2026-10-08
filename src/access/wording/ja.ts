@@ -648,6 +648,34 @@ export const JA: Chrome = Object.freeze({
   scopeDraftedPlansHeading: "rondo が動かそうとしている作業",
   scopeDraftedPlan: (n) => `作業 ${String(n)}`,
   scopeDraftedTemplateGone: "この下書きの元になったプランを、rondo はもう持っていません。",
+  tierHeading: "この作業を動かすモデル",
+  tierSaid: (tier, lighter) =>
+    tier === "standard"
+      ? "標準のモデルです。人が読んで受け入れる作業に rondo が使う既定のモデルです。"
+      : tier === "mechanical"
+        ? lighter === false
+          ? "軽いモデル向けと指定されていますが、この提供元には軽いモデルが無いので、ほかの作業と同じモデルで動きます。"
+          : "軽くて安いモデルです。人が読まなくても確かめられる作業にだけ、rondo はこれを使えます。"
+        : tier === null
+          ? "rondo には分かりません。この作業のエージェント種別の段階が、下書きに残っていません。"
+          : `段階 '${tier}' です。rondo にはこれに当てるモデルがありません。`,
+  tierModel: (model, provider) => `${model} (提供元 ${provider})`,
+  tierWhy:
+    "軽いモデルでよいとした理由です (下書きした側の言葉のまま)。rondo が確かめたのは、理由が揃っていて" +
+    "あなたのメッセージに基づいていることだけで、正しいかどうかではありません。承認する前に判断してください。",
+  tierCondition: (condition) =>
+    condition === "files_named"
+      ? "依頼が対象のファイルを名指ししている"
+      : condition === "bounded"
+        ? "変更の範囲が限られている"
+        : condition === "checks_are_acceptance"
+          ? "テストが通れば完了と言える"
+          : condition,
+  tierLapsHeading: "周回ごとのモデルと費用",
+  tierLap: (n, model, provider, costUsd) =>
+    `周回 ${String(n)}: ${model ?? "モデルの記録なし"}` +
+    `${provider === null ? "" : ` (提供元 ${provider})`}、` +
+    `${costUsd === null ? "費用はまだ読めていません" : `$${costUsd}`}`,
   scopeNarrowed: (computed) => `ここに書かれた内容に合わせて、rondo が ${computed} から下げました:`,
   scopeNarrowedStricter: "ここに書かれた内容に合わせて、rondo が「重大」より厳しくしました:",
   scopeNarrowedAdded: "ここに書かれた内容に合わせて、rondo が加えました:",

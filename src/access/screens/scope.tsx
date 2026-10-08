@@ -14,7 +14,7 @@ import {
   type StoredScope,
 } from "../../store/records.js";
 import { definitionOfDone, planRuleFiles, planTurnTimeoutMs } from "../done.js";
-import { draftedStartReadiness } from "../drafted-start.js";
+import { draftedStartReadiness, partLine } from "../drafted-start.js";
 import {
   type DraftedPlanShown,
   type DraftedScopeShown,
@@ -45,6 +45,7 @@ import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "../page-l
 import { firstLine, requestWords, type Threads, waitingAsk } from "../page-logic/threads.js";
 import { approvalTip, heldAgentTypeLines, scopeBudgetsFromStore, scopeCovers } from "../scope.js";
 import type { Chrome } from "../wording.js";
+import { tierBlock } from "./tier.js";
 
 /** A locator drawn as a chip: quiet, one line, the whole of it in `title`. */
 const CHIP =
@@ -407,7 +408,18 @@ export async function scopeView(
   const body =
     decisionId !== null ? (
       <>
-        {await scopeApproved(ports, wording, view, decisionId, token, newIterationId, nowMs)}
+        {
+          await scopeApproved(
+            ports,
+            wording,
+            view,
+            decisionId,
+            threads,
+            token,
+            newIterationId,
+            nowMs,
+          )
+        }
         {newer}
       </>
     ) : answerFirst !== null ? (
@@ -1190,7 +1202,7 @@ async function draftedForm(
   newScopeId: MintScopeId | null,
 ): Promise<unknown> {
   const lead = <p class="text-body leading-6">{wording.scopeDraftedLead}</p>;
-  const plans = await draftedPlansList(ports, wording, drafted);
+  const plans = await draftedPlansList(ports, wording, drafted, threads, view.messageId);
   if (token === null || newScopeId === null) {
     return (
       <>
@@ -1436,11 +1448,19 @@ async function draftedPlansList(
   ports: WebPorts,
   wording: Chrome,
   drafted: DraftedScopeShown,
+  threads: Threads,
+  requestMessageId: string,
   /** The start line under each plan, on an approved scope; absent on the draft. */
   startOf?: (plan: DraftedPlanShown) => Promise<unknown>,
 ): Promise<unknown> {
   const cards = [];
   for (const plan of drafted.plans) {
+    // A part's laps, for the model and cost each ran on (rondo#473); none on a draft.
+    const lineageId =
+      startOf === undefined
+        ? null
+        : await partLine(ports, requestMessageId, drafted.proposalId, plan.index);
+    const line = lineageId === null ? null : await ports.store.laneLine(lineageId);
     cards.push(
       <li class="space-y-1.5 border-t border-border pt-3 first:border-t-0 first:pt-0">
         <p class="text-body leading-5 font-semibold">{wording.scopeDraftedPlan(plan.index + 1)}</p>
@@ -1457,6 +1477,13 @@ async function draftedPlansList(
         >
           {plan.split.prompt}
         </p>
+        {tierBlock(
+          wording,
+          plan,
+          ports.workers?.fallback ?? null,
+          line?.kind === "read" ? line.line.laps : [],
+          (basis) => basisChip(wording, basis, threads, null, ports.actorId),
+        )}
         {plan.templatePlan === null ? null : planDone(wording, plan.templatePlan)}
         {recordedFold(wording, [
           ...(plan.repository === null || plan.workspaceRoot === null
@@ -1708,6 +1735,7 @@ async function scopeApproved(
   view: Extract<PageView, { kind: "scope" }>,
   /** The decision this address named, already known not to be null. */
   decisionId: string,
+  threads: Threads,
   token: string | null,
   newIterationId: MintIterationId | null,
   nowMs: number,
@@ -1751,7 +1779,7 @@ async function scopeApproved(
   const draftedStarts =
     drafted === null
       ? null
-      : await draftedPlansList(ports, wording, drafted, async (plan) =>
+      : await draftedPlansList(ports, wording, drafted, threads, view.messageId, async (plan) =>
           retired
             ? null
             : await planStart(

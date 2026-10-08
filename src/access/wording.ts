@@ -758,6 +758,30 @@ export interface Chrome extends PageWords {
   readonly scopeDraftedPlan: (n: number) => string;
   /** A drafted plan whose template the draft's snapshot no longer holds. */
   readonly scopeDraftedTemplateGone: string;
+  /**
+   * Which model a part runs on, and why it may (rondo#473, D-0167): the tier in
+   * the person's words, the model and worker beside it, the drafter's grounds
+   * for a lighter tier, and each lap's model and cost.
+   */
+  readonly tierHeading: string;
+  /**
+   * The tier said plainly: `lighter` is whether the tier's model differs from
+   * the `standard` one on this worker, null where rondo cannot say (no worker
+   * named, or a tier it has no model for).
+   */
+  readonly tierSaid: (tier: string | null, lighter: boolean | null) => string;
+  readonly tierModel: (model: string, provider: string) => string;
+  /** The drafter's grounds for a non-`standard` tier: claims, checked for shape only. */
+  readonly tierWhy: string;
+  /** One condition of D-0044 rule 1, in the person's words. */
+  readonly tierCondition: (condition: string) => string;
+  readonly tierLapsHeading: string;
+  readonly tierLap: (
+    n: number,
+    model: string | null,
+    provider: string | null,
+    costUsd: string | null,
+  ) => string;
   /** A drafted value below what rule 4.2 computed: what it was computed as, before the words it rests on. */
   readonly scopeNarrowed: (computed: string) => string;
   /** A threshold the drafter made stricter, and an act it added to the irreversible list, on the person's words. */

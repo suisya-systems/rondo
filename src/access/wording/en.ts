@@ -635,6 +635,34 @@ explanation you pressed on and then answers the gate.`,
   scopeDraftedPlansHeading: "What rondo proposes to run",
   scopeDraftedPlan: (n) => `Part ${String(n)}`,
   scopeDraftedTemplateGone: "The plan this was drafted from is no longer one rondo holds.",
+  tierHeading: "Which model does this part",
+  tierSaid: (tier, lighter) =>
+    tier === "standard"
+      ? "The full model: rondo's default for work a person reads to accept."
+      : tier === "mechanical"
+        ? lighter === false
+          ? "Marked for the lighter model, but this worker has no lighter model: it runs on the same model as other work."
+          : "The lighter model, which costs less: rondo may use it only where the work can be checked without a person reading it."
+        : tier === null
+          ? "rondo cannot tell: the draft holds no tier for this part's agent type."
+          : `The tier '${tier}', which rondo has no model for.`,
+  tierModel: (model, provider) => `${model}, through the ${provider} worker`,
+  tierWhy:
+    "Why it qualifies, in the drafter's words. rondo checked that each reason is there and rests on " +
+    "your messages, not that it is true: that is yours to judge before approving.",
+  tierCondition: (condition) =>
+    condition === "files_named"
+      ? "The request names the files"
+      : condition === "bounded"
+        ? "The change is bounded"
+        : condition === "checks_are_acceptance"
+          ? "The tests decide whether it is done"
+          : condition,
+  tierLapsHeading: "What its laps ran on and cost",
+  tierLap: (n, model, provider, costUsd) =>
+    `Lap ${String(n)}: ${model ?? "model not recorded"}` +
+    `${provider === null ? "" : `, ${provider}`}, ` +
+    `${costUsd === null ? "cost not read yet" : `$${costUsd}`}`,
   scopeNarrowed: (computed) =>
     `rondo lowered this from ${computed} because of what you wrote here:`,
   scopeNarrowedStricter: "rondo made this stricter than major because of what you wrote here:",

@@ -46,6 +46,11 @@ export interface DraftedPlanShown {
    * told -- or null when the snapshot no longer holds the template.
    */
   readonly templatePlan: JsonRecord | null;
+  /**
+   * The model tier of the plan's agent type, as the draft's snapshot held it
+   * (rondo#473), or null where the snapshot names no tier for it.
+   */
+  readonly modelTier: string | null;
 }
 
 /** A drafter's scope and the split it was drafted with. */
@@ -286,6 +291,8 @@ async function draftedShown(ports: Ports, scope: StoredScope): Promise<DraftedSc
       repository: template?.repository ?? null,
       workspaceRoot: template?.workspaceRoot ?? null,
       templatePlan: template?.plan ?? null,
+      modelTier:
+        material.agentTypes.find((a) => a.digest === split.agent_type_digest)?.modelTier ?? null,
     };
   });
   const rounds = scope.payload.budgets.review_rounds;

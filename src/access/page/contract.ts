@@ -49,6 +49,8 @@ export interface WebPorts extends InboxReadPorts {
     | "closingLapOf"
     // rondo#284: a start held by files waits, and the scope screen says so.
     | "heldStarts"
+    // rondo#473: a part's laps, for the model and cost each ran on.
+    | "laneLine"
   >;
   readonly record: InboxReadPorts["record"] &
     Pick<

@@ -1382,6 +1382,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/screens/refused.tsx": [HUMAN],
   "src/access/screens/release.tsx": [HUMAN],
   "src/access/screens/scope.tsx": [HUMAN],
+  "src/access/screens/tier.tsx": [HUMAN],
   "src/access/screens/goal-scope.tsx": [HUMAN],
   "src/access/web-app.ts": [HUMAN],
   "src/access/web.tsx": [HUMAN],
