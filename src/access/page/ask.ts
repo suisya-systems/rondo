@@ -13,6 +13,7 @@ import {
   type ThreadMessageDraft,
 } from "../../store/records.js";
 import type { AdvisoryRecord } from "../../store/sqlite.js";
+import { pageText } from "../explainer/judgement.js";
 import { viewHref } from "../page-logic/routes.js";
 import type { Chrome } from "../wording.js";
 import { money } from "./vocabulary.js";
@@ -92,7 +93,12 @@ export async function answerBands(
                 ? wording.answerCostUnread(money(cap))
                 : wording.answerFree;
         const page = snapshot?.["page"];
-        const body = typeof page === "string" && page !== "" ? page : null;
+        // Composed again in the page's language where the row allows it (rondo#401).
+        const composed =
+          read?.kind === "read" && snapshot != null
+            ? pageText(wording, read.proposal.derivation, snapshot, read.proposal.payload)
+            : null;
+        const body = composed ?? (typeof page === "string" && page !== "" ? page : null);
         return [
           message.messageId,
           { heading: wording.answerBandHeading, cost: said, body },

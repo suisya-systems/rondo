@@ -14,7 +14,8 @@ import {
 } from "../../../src/access/explainer/judgement.js";
 import { gatherDrafterMaterial } from "../../../src/access/model-draft/host.js";
 import type { DrafterRun } from "../../../src/access/model-draft/judgement.js";
-import { EN } from "../../../src/access/wording.js";
+import { answerBands } from "../../../src/access/page/ask.js";
+import { chromeFor, EN } from "../../../src/access/wording.js";
 import { explainerRow } from "../../../src/continuo/roles.js";
 import { planDocument, world } from "../fixtures/drafter.js";
 import { approve, ask, asked, LAP, QUESTION, type World } from "./world.js";
@@ -283,4 +284,39 @@ test("a question and its answer are not the split drafter's material, nor a past
   expect(
     material.templates.some((t) => t.from.kind === "message" && t.from.messageId === QUESTION),
   ).toBe(false);
+});
+
+test("an answer written in English is drawn in the page's language; the records it quotes stay as written", async () => {
+  const JA = chromeFor("ja");
+  const drawn = async (w: World) => {
+    const read = await w.record.threadMessages();
+    if (read.kind !== "read") throw new Error(read.reason);
+    const [message] = await answers(w);
+    return {
+      stored: message?.body ?? "",
+      band: (await answerBands(w.record, read.messages, JA)).get(message?.messageId ?? ""),
+    };
+  };
+  // The records' answer, written by a host whose language is English.
+  const free = await asked();
+  const records = hostOver(free, async () => ANSWERED);
+  records.host.kick();
+  await records.host.idle();
+  const fallback = await drawn(free);
+  expect(fallback.stored).toContain(EN.explainNoApproval);
+  expect(fallback.band?.body).toContain(JA.explainNoApproval);
+  expect(fallback.band?.body).toContain(JA.explainFallbackLead);
+  expect(fallback.band?.body).toContain(JA.explainWhereToAnswer);
+  expect(fallback.band?.body).not.toContain(EN.explainNoApproval);
+  expect(fallback.band?.body).not.toContain(EN.explainFallbackLead);
+  // A model's answer keeps its own words; what rondo says around them is the page's.
+  const paid = await asked();
+  await approve(paid);
+  const model = hostOver(paid, async () => ANSWERED);
+  model.host.kick();
+  await model.host.idle();
+  const answered = await drawn(paid);
+  expect(answered.band?.body).toContain("The try waits for your answer at its gate.");
+  expect(answered.band?.body).toContain(JA.explainWhereToAnswer);
+  expect(answered.band?.body).not.toContain(EN.explainWhereToAnswer);
 });

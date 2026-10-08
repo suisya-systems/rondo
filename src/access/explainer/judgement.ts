@@ -371,3 +371,42 @@ export function answerBody(
     page: [...lead, ...where].join("\n").trimEnd(),
   };
 }
+
+/**
+ * The answer's text as the page draws it, in the language the page is read in
+ * (rondo#401): the body is written once in the host's language, so the page
+ * composes it again from the row -- the records' answer whole from its material
+ * and reason, a model's answer around its own prose and claims, which stay as
+ * written. Null when the row is not one this can compose (an older row, or one
+ * that does not read), and the page then draws what was stored.
+ */
+export function pageText(
+  words: Chrome,
+  derivation: string | null,
+  snapshot: Readonly<Record<string, unknown>>,
+  payload: Readonly<Record<string, unknown>>,
+): string | null {
+  const material = snapshot["material"] as ExplainerMaterial | undefined;
+  if (
+    typeof material !== "object" ||
+    material === null ||
+    !Array.isArray(material.thread) ||
+    !Array.isArray(material.waits)
+  ) {
+    return null;
+  }
+  try {
+    if (derivation === "store_rows") {
+      const why = (snapshot["unexplained"] ?? { kind: "noApproval" }) as Unexplained;
+      const { answer, claims } = deterministicAnswer(material, words, why);
+      return answerBody(words, material, answer, claims, { kind: "free" }).page;
+    }
+    const prose = snapshot["prose"];
+    const claims = payload["claims"];
+    return typeof prose === "string" && Array.isArray(claims)
+      ? answerBody(words, material, prose, claims as Claim[], { kind: "free" }).page
+      : null;
+  } catch {
+    return null;
+  }
+}

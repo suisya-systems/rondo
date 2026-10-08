@@ -29674,7 +29674,11 @@ the reads open to one later. This entry writes those points down as rules, at ro
      document the model was given, the cost (`cost_usd`, null when not read, `cap_usd`, and
      `counted`, whether a run is counted), under `unexplained` why no model's answer is there if it
      is not (re-readable, `D-0063` rule 5), and under `page` the answer's text without the band and
-     cost, which the page draws as a block of their own rather than twice.
+     cost, which the page draws as a block of their own rather than twice, and under `prose` a
+     model answer's own words. **The page draws the answer in the language it is read in**: the
+     body is written once in the host's language, so the page composes the text again from the
+     row -- the records' answer whole, a model's answer around its prose and claims, which stay as
+     written -- and draws what was stored only for a row it cannot compose.
      Its `iteration_id` is null, so no lap's freshness regathers it.
    - **It is kept out of the inbox's list of proposals that bind nothing** (`D-0175`): it is
      presented in its thread, once, where it was asked.

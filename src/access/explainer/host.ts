@@ -279,6 +279,8 @@ async function write(
         // Whether this answer's run is counted, and the text the page draws under its band.
         counted: countedUnder !== null,
         page: text.page,
+        // A model's own words, for the page to draw in its reader's language around them.
+        prose: explained === null ? null : prose,
       },
       derivation: explained === null ? "store_rows" : "model",
       iterationId: null,
