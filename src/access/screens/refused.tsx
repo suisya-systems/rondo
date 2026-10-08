@@ -72,14 +72,15 @@ export async function refusedPage(wording: Chrome, refused: Refused): Promise<st
               <p class="text-body leading-6 wrap-anywhere" lang="">
                 {request === null ? "" : firstLine(request)}
               </p>
-              {/* A finished holder's release only (rondo#553): one still
-                  running cannot be released, so the link would lead nowhere. */}
-              {refused.releasable && !inFlight ? (
+              {/* A finished holder's release (rondo#553); one still running
+                  cannot be released, and gives files up by changing what it
+                  keeps (D-0163). */}
+              {refused.releasable ? (
                 <a
                   href={viewHref({ kind: "release", iterationId: lineageId }, wording.lang)}
                   class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
                 >
-                  {wording.releaseLink}
+                  {inFlight ? wording.holdsLink : wording.releaseLink}
                 </a>
               ) : null}
             </section>

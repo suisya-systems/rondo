@@ -37,6 +37,9 @@ import {
   type DraftedScopeFormDraft,
   type FlowAnswerInput,
   type GoalInput,
+  type HoldsInput,
+  type HoldsMoved,
+  HoldsPort,
   MAX_CLAIM_CHARS,
   type Merged,
   type MergeInput,
@@ -1799,6 +1802,8 @@ const WRITE_TABLE = [
   "ALL /publish",
   // The release press (D-0073 rule 4.3, rondo#288).
   "ALL /release",
+  // Changing what an open line keeps (D-0163).
+  "ALL /holds",
   // Adding a repository a request named (rondo#383, D-0090).
   "ALL /add-repository",
   // The merge press (rondo#380, D-0091).
@@ -1830,6 +1835,7 @@ const WRITE_TABLE = [
   "POST /revise",
   "POST /publish",
   "POST /release",
+  "POST /holds",
   "POST /add-repository",
   "POST /goal",
   "POST /notice",
@@ -1878,6 +1884,8 @@ const PRESS_ROUTES = [
   // The two acts that leave this machine (D-0060, D-0073 rule 4.3).
   "/publish",
   "/release",
+  // Changing what an open line keeps (D-0163).
+  "/holds",
   // Cloning and recording a repository a request named (rondo#383, D-0090).
   "/add-repository",
   // The one irreversible act on the page, per act (D-0064 rule 3.4, D-0091).
@@ -2898,8 +2906,8 @@ test("(start-plan) rondo#439, rondo#284: a start held by files names the holding
     stop.abort();
     expect(await closed).toBe(0);
   }
-  // A holder still running is named with no release (rondo#553): the release
-  // screen refuses a line in flight, so the link would lead nowhere.
+  // A holder still running is named with no release (rondo#553), and links to
+  // changing what it keeps instead (D-0163).
   const { base, stop, closed } = await served(createApp(held(true, "startWaitsHeld", true), TOKEN));
   const running = await send(
     base,
@@ -2910,7 +2918,9 @@ test("(start-plan) rondo#439, rondo#284: a start held by files names the holding
   );
   expect(running.status).toBe(202);
   expect(running.body.replaceAll("&#39;", "'")).toContain('lang="">Fix issue 200</p>');
-  expect(running.body).not.toContain("?release=");
+  expect(running.body).not.toContain(`>${chromeFor("ja").releaseLink}</a>`);
+  expect(running.body).toContain('href="/?release=lap-14&amp;lang=ja"');
+  expect(running.body).toContain(`>${chromeFor("ja").holdsLink}</a>`);
   stop.abort();
   expect(await closed).toBe(0);
 });
@@ -3476,6 +3486,116 @@ test("(release) the port refuses anything but a minted, unspent press", async ()
       .ok,
   ).toBe(false);
   expect(released).toEqual([]);
+});
+
+/** Ports whose holds press is a spy, answering `answer` to every press it lets through. */
+function holdsPorts(moved: HoldsInput[], answer: HoldsMoved = { ok: true, note: "" }): ServedPorts {
+  return {
+    ...spyPorts([]),
+    holds: new HoldsPort(async (input) => {
+      moved.push(input);
+      return await Promise.resolve(answer);
+    }),
+  };
+}
+
+function holdsForm(overrides: Record<string, string> = {}): Record<string, string> {
+  return { ...releaseForm(), paths: "src/a.ts\r\n\n  docs/  \n", ...overrides };
+}
+
+test("(holds) a person's press changes what the line keeps, one path per line, and lands on its screen", async () => {
+  const moved: HoldsInput[] = [];
+  const { base, stop, closed } = await served(createApp(holdsPorts(moved), TOKEN));
+  const pressed = await send(base, "/holds", "POST", pressHeaders(base), holdsForm());
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?release=i-0002&lang=en");
+  expect(moved).toEqual([
+    {
+      iterationId: "i-0002",
+      claimId: "i-0001:1",
+      lapIds: ["i-0001", "i-0002"],
+      paths: ["src/a.ts", "docs/"],
+    },
+  ]);
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(holds) no press, no form or no approver changes nothing; a refusal is said in words", async () => {
+  const moved: HoldsInput[] = [];
+  const { base, stop, closed } = await served(createApp(holdsPorts(moved), TOKEN));
+  const person = pressHeaders(base);
+  for (const [shape, headers, form] of [
+    ["missing Sec-Fetch-User", { ...person, "sec-fetch-user": undefined }, holdsForm()],
+    ["a wrong token", person, holdsForm({ token: "not-the-token" })],
+    ["no token", person, withoutToken(holdsForm())],
+  ] as const) {
+    const pressed = await send(base, "/holds", "POST", headers, form);
+    expect(pressed.status, shape).toBe(403);
+    expect(pressed.body, shape).toContain(EN.holdsRefusedPress.slice(0, 40));
+  }
+  for (const form of [
+    holdsForm({ claim: "" }),
+    holdsForm({ laps: "" }),
+    holdsForm({ iteration: "" }),
+    (({ paths: _, ...rest }) => rest)(holdsForm()),
+  ]) {
+    expect((await send(base, "/holds", "POST", person, form)).status).toBe(400);
+  }
+  expect(moved).toEqual([]);
+  stop.abort();
+  expect(await closed).toBe(0);
+
+  const none = await served(createApp({ ...spyPorts([]), holds: null }, TOKEN));
+  const refused = await send(none.base, "/holds", "POST", pressHeaders(none.base), holdsForm());
+  expect(refused.status).toBe(403);
+  expect(refused.body).toContain(EN.holdsRefusedNoApprover.slice(0, 40));
+  none.stop.abort();
+  expect(await none.closed).toBe(0);
+
+  // The store refused: 409 in the why's words, the paths it keeps said with
+  // them, and the way back to the screen.
+  for (const [answer, says] of [
+    [{ ok: false, note: "", why: "holdsRefusedChanged" }, EN.holdsRefusedChanged],
+    [
+      { ok: false, note: "", why: "holdsRefusedKept", paths: ["src/kept.ts"] },
+      `${EN.holdsRefusedKept} ${EN.holds(["src/kept.ts"])}`,
+    ],
+  ] as const) {
+    const stale = await served(createApp(holdsPorts([], answer), TOKEN));
+    const answered = await send(
+      stale.base,
+      "/holds",
+      "POST",
+      pressHeaders(stale.base),
+      holdsForm(),
+    );
+    expect(answered.status, answer.why).toBe(409);
+    expect(answered.body, answer.why).toContain(says);
+    expect(answered.body, answer.why).toContain("/?release=i-0002&amp;lang=en");
+    stale.stop.abort();
+    expect(await stale.closed).toBe(0);
+  }
+});
+
+test("(holds) the port refuses anything but a minted, unspent press", async () => {
+  const moved: HoldsInput[] = [];
+  const port = new HoldsPort(async (input) => {
+    moved.push(input);
+    return await Promise.resolve({ ok: true, note: "" });
+  });
+  const forged = Object.freeze({}) as unknown as Parameters<HoldsPort["move"]>[0];
+  expect(
+    (
+      await port.move(forged, {
+        iterationId: "i-0001",
+        claimId: "i-0001:1",
+        lapIds: ["i-0001"],
+        paths: ["src/"],
+      })
+    ).ok,
+  ).toBe(false);
+  expect(moved).toEqual([]);
 });
 
 /** Ports whose goal and *not now* presses are spies (D-0097). */

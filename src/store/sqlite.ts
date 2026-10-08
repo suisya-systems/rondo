@@ -49,11 +49,14 @@
 import { DatabaseSync } from "node:sqlite";
 
 import {
+  changedDropped,
   claimCovers,
+  claimMove,
   type LaneLap,
   lineShape,
   mayBeOpen,
   normalizeClaim,
+  quiescent,
   repositoryKey,
   sharedPaths,
   WHOLE_REPOSITORY,
@@ -728,6 +731,15 @@ export interface IterationStore {
    */
   releaseLane(input: LaneReleaseInput): Promise<LaneReleaseOutcome>;
   /**
+   * The person writes what an open line holds now (D-0073 rules 4.1 and 4.2,
+   * D-0163): one successor row, a widening for the paths it takes and a
+   * narrowing for those it gives up. A widening is for a line with a lap in
+   * flight and is refused onto a path another open line holds; a narrowing is
+   * for a line nothing of which can still commit, and never gives up a path
+   * in `changed`. Refused when the line moved under the screen that drew it.
+   */
+  moveClaim(input: LaneMoveInput): Promise<LaneMoveOutcome>;
+  /**
    * Compare the paths a lap changed with its line's in-force claim (D-0073
    * rule 5): which fall outside it, split into those another open line of the
    * repository holds (`D-0067` rule 2's collision) and those nobody holds.
@@ -941,6 +953,42 @@ export interface LaneReleaseInput {
 
 export type LaneReleaseOutcome =
   | { readonly kind: "released"; readonly lineageId: string }
+  | { readonly kind: "refused"; readonly reason: string }
+  | { readonly kind: "defect"; readonly reason: string };
+
+export interface LaneMoveInput {
+  /** Any lap of the line. */
+  readonly iterationId: string;
+  /** The head claim and lap ids the screen was drawn over. */
+  readonly takenOver: { readonly claimId: string; readonly lapIds: readonly string[] };
+  /** The claim the line is to hold, as the person wrote it. */
+  readonly paths: readonly string[];
+  /**
+   * What the line has changed (D-0073 rule 4.2), read over the laps in
+   * `takenOver`; null when it was not read, and a narrowing over that is
+   * answered `busy`.
+   */
+  readonly changed: readonly string[] | null;
+  readonly authorId: string;
+  readonly nowMs: number;
+}
+
+/** One arm per next move the person has (rondo#348). */
+export type LaneMoveOutcome =
+  | {
+      readonly kind: "moved";
+      readonly lineageId: string;
+      readonly added: readonly string[];
+      readonly dropped: readonly string[];
+    }
+  /** The line moved under the screen: read it again. */
+  | { readonly kind: "stale" }
+  /** A widening onto paths other open lines hold: nothing was written. */
+  | { readonly kind: "held"; readonly holders: readonly LaneHolder[] }
+  /** A lap of the line may still commit, so it gives nothing up yet. */
+  | { readonly kind: "busy" }
+  /** A narrowing would give up paths the line changed. */
+  | { readonly kind: "kept"; readonly paths: readonly string[] }
   | { readonly kind: "refused"; readonly reason: string }
   | { readonly kind: "defect"; readonly reason: string };
 
@@ -2936,6 +2984,104 @@ export function iterationStore(connection: DatabaseSync, policy: HostPolicy): It
             releaseReservations(connection, root.id, input.bases, input.nowMs);
           }
           return { kind: "released", lineageId: root.id };
+        });
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async moveClaim(input: LaneMoveInput): Promise<LaneMoveOutcome> {
+      try {
+        return inTransaction<LaneMoveOutcome>(() => {
+          const laps = lineageLaps(connection, input.iterationId);
+          if (laps === null) {
+            return {
+              kind: "defect",
+              reason: `the lineage of '${input.iterationId}' passes its bound`,
+            };
+          }
+          const root = laps[0];
+          if (root === undefined) {
+            return { kind: "refused", reason: `there is no iteration '${input.iterationId}'` };
+          }
+          const head = claimHead(connection, root.id);
+          const now = laps
+            .map((lap) => lap.id)
+            .sort()
+            .join("\n");
+          if (
+            head?.claimId !== input.takenOver.claimId ||
+            [...input.takenOver.lapIds].sort().join("\n") !== now
+          ) {
+            return { kind: "stale" };
+          }
+          // A line that holds nothing has nothing to move: released (taking
+          // paths back is a redo's allocation, rule 2.6), or declared nothing
+          // and is claimed by its gate (D-0160).
+          if (head.paths.length === 0) {
+            return { kind: "refused", reason: "this line holds no paths to change" };
+          }
+          const move = claimMove(head.paths, input.paths);
+          if (move.kind === "refused") {
+            return move;
+          }
+          const shape = lineShape(laps);
+          if (move.added.length > 0) {
+            // Only work still going can change a path it takes: a finished
+            // line taking more would hold it from others for nothing.
+            if (!shape.inFlight) {
+              return {
+                kind: "refused",
+                reason: "every lap of this line has ended, so it takes no more paths",
+              };
+            }
+            const record = lineRecord(connection, root.id);
+            const holders = openLines(connection, head.repository, root.id).flatMap((line) => {
+              const shared = sharedPaths(move.added, line.paths, record);
+              return shared.length === 0
+                ? []
+                : [{ lineageId: line.lineageId, sharedPaths: shared }];
+            });
+            if (holders.length > 0) {
+              return { kind: "held", holders };
+            }
+          }
+          if (move.dropped.length > 0) {
+            if (!mayBeOpen(shape)) {
+              return { kind: "refused", reason: "this line is not open" };
+            }
+            // Unread is a line that was still running when the press read it.
+            if (!quiescent(laps) || input.changed === null) {
+              return { kind: "busy" };
+            }
+            const kept = changedDropped(head.paths, move.paths, input.changed);
+            if (kept.length > 0) {
+              return { kind: "kept", paths: kept };
+            }
+          }
+          // A line whose claim its gates write (D-0160) keeps that after the
+          // person moves it: its next gate still claims what it changed.
+          const forms = basisForms(claimBases(connection, head.claimId));
+          insertClaim(
+            connection,
+            {
+              lineageId: root.id,
+              repository: head.repository,
+              paths: move.paths,
+              supersedesClaimId: head.claimId,
+              authorKind: "operator",
+              authorId: input.authorId,
+              bases: [
+                { form: "iteration", iterationId: input.iterationId },
+                ...(move.added.length > 0 ? [{ form: "widened" }] : []),
+                ...(move.dropped.length > 0 ? [{ form: "narrowed" }] : []),
+                ...(forms.includes("changed") ? [CHANGED] : []),
+              ],
+              why: head.why,
+            },
+            input.nowMs,
+          );
+          return { kind: "moved", lineageId: root.id, added: move.added, dropped: move.dropped };
         });
       } catch (error) {
         return { kind: "defect", reason: describe(error) };

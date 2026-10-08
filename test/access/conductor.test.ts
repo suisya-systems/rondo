@@ -16,8 +16,16 @@
  */
 import { expect, test } from "vitest";
 
-import { asEffect, landingRemoteOf, lapSpendFields } from "../../src/access/conductor.js";
+import {
+  asEffect,
+  type ClaimPorts,
+  landingRemoteOf,
+  lapSpendFields,
+  lineChanged,
+} from "../../src/access/conductor.js";
+import type { ChangedPathsRequest } from "../../src/access/forge.js";
 import type { ContinuoResult } from "../../src/continuo/protocol.js";
+import { DETERMINISTIC_READING_DRAFTER, type IterationRecord } from "../../src/store/records.js";
 
 /** The reader is never reached on a failure path, and says so if it is. */
 const unread = (): never => {
@@ -161,4 +169,71 @@ test("rondo#286 (D-0153): where a landing is read from is what the publish recor
       undetermined: expect.stringContaining("published to more than one remote ('fork', 'origin')"),
     });
   }
+});
+
+/** Ports over laps whose readings are `tips` (lap id to base and tip), and a git that answers `paths` per tip. */
+function changedPorts(
+  tips: Record<string, { baseCommit: string; tipCommit: string }>,
+  paths: Record<string, string[]>,
+  asked: ChangedPathsRequest[] = [],
+): ClaimPorts {
+  return {
+    store: {
+      readingsFor: async (id: string) =>
+        tips[id] === undefined
+          ? []
+          : [{ drafter: DETERMINISTIC_READING_DRAFTER, evidence: tips[id] }],
+    } as never,
+    readChangedPaths: async (request) => {
+      asked.push(request);
+      const read = paths[request.tipCommit];
+      return await Promise.resolve(
+        read === undefined
+          ? { kind: "undetermined" as const, reason: "git: bad object" }
+          : { kind: "read" as const, paths: read },
+      );
+    },
+  };
+}
+
+const lap = (id: string, identifiersSpent = 1): IterationRecord =>
+  ({
+    id,
+    identifiersSpent,
+    topicBranch: `rondo/${id}`,
+    plan: { repository: "owner/repo" },
+  }) as never;
+
+test("rondo#282 (D-0163): what a line changed is every lap's tip read from the line's first base", async () => {
+  const asked: ChangedPathsRequest[] = [];
+  const ports = changedPorts(
+    { "i-1": { baseCommit: "b1", tipCommit: "t1" }, "i-2": { baseCommit: "b2", tipCommit: "t2" } },
+    { t1: ["src/b.ts", "src/a.ts"], t2: ["src/a.ts", "docs/c.md"] },
+    asked,
+  );
+  // A lap whose identifiers continuo was never handed (it ended before
+  // admitting, though it holds a topic branch name) changed nothing.
+  expect(await lineChanged(ports, [lap("i-1"), lap("i-0", 0), lap("i-2")])).toEqual({
+    kind: "read",
+    paths: ["docs/c.md", "src/a.ts", "src/b.ts"],
+  });
+  expect(asked.map(({ baseCommit, tipCommit }) => `${baseCommit}..${tipCommit}`)).toEqual([
+    "b1..t1",
+    "b1..t2",
+  ]);
+});
+
+test("rondo#282 (D-0163): a lap that ran and left no reading, or git that cannot read, gives nothing up", async () => {
+  const ports = changedPorts(
+    { "i-1": { baseCommit: "b1", tipCommit: "t1" } },
+    { t1: ["src/a.ts"] },
+  );
+  expect(await lineChanged(ports, [lap("i-1"), lap("i-2")])).toMatchObject({
+    kind: "undetermined",
+  });
+  const unreadable = changedPorts({ "i-1": { baseCommit: "b1", tipCommit: "t9" } }, {});
+  expect(await lineChanged(unreadable, [lap("i-1")])).toEqual({
+    kind: "undetermined",
+    reason: "git: bad object",
+  });
 });

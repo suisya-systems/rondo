@@ -314,8 +314,9 @@ async function heldAndWaiting(w: Awaited<ReturnType<typeof lines>>) {
   expect(answer).toContain(EN.startWaitsHeld);
   expect(answer).not.toContain(EN.startRefusedHeld);
   expect(answer).toContain(HOLDER_WORDS);
-  // A still runs: named, with no release to offer (rondo#553).
-  expect(answer).not.toContain("?release=");
+  // A still runs: named, with no release to offer (rondo#553), only what it keeps (D-0163).
+  expect(answer).not.toContain(`>${EN.releaseLink}<`);
+  expect(answer).toContain(`>${EN.holdsLink}<`);
   expect((await w.store.read(iteration)).kind).toBe("absent");
   expect(seams.admitted).toEqual([iteration]);
 
@@ -330,11 +331,14 @@ async function heldAndWaiting(w: Awaited<ReturnType<typeof lines>>) {
   const threadWaiting = await w.thread();
   expect(threadWaiting).toContain(EN.startWaitsHeld);
   expect(threadWaiting).not.toContain(EN.nextStepStart);
-  // Both name the work holding the files, and offer no release while it runs (rondo#553).
+  // Both name the work holding the files, and offer no release while it runs
+  // (rondo#553): only changing what it keeps (D-0163).
   const card = threadWaiting.slice(threadWaiting.indexOf(EN.startWaitsHeld));
   expect(card.slice(0, card.indexOf("</section>"))).toContain(HOLDER_WORDS);
-  expect(waiting).not.toContain("?release=");
-  expect(threadWaiting).not.toContain("?release=");
+  expect(waiting).not.toContain(`>${EN.releaseLink}<`);
+  expect(threadWaiting).not.toContain(`>${EN.releaseLink}<`);
+  expect(waiting).toContain(`>${EN.holdsLink}<`);
+  expect(threadWaiting).toContain(`>${EN.holdsLink}<`);
 
   // A second form of the same plan (another tab) keeps the one waiting row, so
   // the tick cannot start the plan twice by itself.

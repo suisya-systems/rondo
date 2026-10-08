@@ -355,7 +355,9 @@ test("an approved drafted scope offers each plan its own start, and says so wher
     EN.planHeldWhy(ownLane("lap-plan-0").paths, "it renames a word used everywhere"),
   );
   expect(once).toContain("Two things, please.");
-  expect(once).not.toContain("?release=");
+  // Still running: no release, only changing what it keeps (D-0163).
+  expect(once).not.toContain(`>${EN.releaseLink}<`);
+  expect(once).toContain(`>${EN.holdsLink}<`);
 
   // No room: the reason, and no button to press.
   const full = await render({ ...ports, policy: { maxOccupying: 4, maxLive: 1 } });

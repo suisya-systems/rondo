@@ -195,6 +195,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0160 | Claims that let two lines run: a finished line nothing will publish gives its files up, a refused draft is drafted once more, and a start with no drafted claim claims nothing until its gate claims what it changed | accepted |
 | D-0161 | A worker's question is put to the person whether or not its lap committed anything: nothing committed is said on the page, not a reason to drop the question | accepted |
 | D-0162 | The model reviewer's answer is shaped by codex's `--output-schema`, which rondo writes as a file of its own beside the reviewer's empty directory | accepted |
+| D-0163 | A person changes which files an open line keeps: a widening for work still going and never onto another open line's files, a narrowing once nothing of the line can commit and never of a file it changed | accepted |
 
 ---
 
@@ -17468,6 +17469,14 @@ Each dated and additive unless marked, and added with this entry's acceptance:
 | **Scope binding**: a claim change written on its own names no scope approval, so `D-0064` rule 3.5 and `D-0066`'s audit of which approval authorised it have no test for it | Found in the last review round; the claim row would need a `scope_decision_id` and a verdict at write time | a later entry |
 | **Two closed sibling tips** of one lineage tree that change the same path can never both equal the default branch, so rule 6 never reads the line landed | Found in the last review round; the person's release press (rule 4.3) closes it out, as for rule 6.4 | unchanged: the release press, until a later entry reads it otherwise |
 
+> **Annotation (2026-10-08, from D-0163).** Added after this entry was accepted, and additive. The
+> **Quiescence** residual is answered by `D-0163` rule 3: a narrowing is written only when every lap
+> of the line is terminal or suspended (`awaiting_human`, `withdrawal_requested`), re-tested in the
+> writing transaction over the laps the screen was drawn over, and `stalled` counts as running. What
+> the line changed (rule 4.2) is read by the press over every lap (`D-0163` rule 4). Rules 4.1 and
+> 4.2 are built for a person's press only; the held widening, rule 4.4's drafted rows and the
+> **Scope binding** residual stay open. The table above is not edited.
+
 ### What would falsify it
 
 - **Two lines under this ledger colliding after merge on a path both declared**, which would mean rule 3
@@ -24456,6 +24465,12 @@ At rondo `2de3190` on **2026-09-26**, by reading `DECISIONS.md`, `git log` and t
 > `sequence` and `D-0068`'s wait readings stay unbuilt; `D-0158` says why this is enough. The rows
 > are unedited.
 
+> **Annotation (2026-10-08, from D-0163).** The **Move ownership**, **Fold** and **Route a
+> consequence** rows' rondo#282 cells are built by `D-0163`: a person widens and narrows an open
+> line's claim from its release screen. Rule 4.1's held widening is not built (a widening onto held
+> files is refused and pressed again once they are free), so the **Fold** row's widening held until
+> the paths are free is still open. The rows are unedited.
+
 3. **rondo#250 is done with this entry.** Its ask, a decision naming the layer and its authorities,
    is answered by `D-0073`, `D-0098` and this table. What is left is building work, and each piece has
    an issue of its own: rondo#282, rondo#284, rondo#286, rondo#287 and rondo#452. The residuals of
@@ -28168,3 +28183,134 @@ findings.
   what held the shape, and the cause is to be found again.
 - **A codex that rejects the schema** (an `error` event before or during the turn): every reading
   is then `unavailable`, which is loud, and the schema is to be fitted to that codex.
+
+## D-0163 — A person changes which files an open line keeps: a widening for work still going and never onto another open line's files, a narrowing once nothing of the line can commit and never of a file it changed
+
+**Status:** accepted (2026-10-08, rondo#282). Builds `D-0073` rules 4.1 and 4.2 for a person's
+press, and answers its residual **Quiescence**. Refs `D-0073` rules 2.2, 2.6, 3.2, 3.3, 4.3, 4.4
+and 9.2, `D-0098` rule 3.5, `D-0117`, `D-0158` rule 4, `D-0160` rule 4.
+
+### Context
+
+`D-0073` rule 4 moves a claim by successor rows in three ways, and only the release (rule 4.3) was
+built: by rondo when a line ends, publishes or lands, and by a person's release press. A claim
+that was drafted one file too narrow or too wide could be corrected only at the line's gate (rule
+5, widening only), or by releasing all of it. `D-0117`'s table left the widening and the narrowing
+open on three rows (**Move ownership**, **Fold**, **Route a consequence**) under rondo#282. Since
+`D-0158` a start held by a line's files waits for that line, and `D-0160` names the holder on the
+wait, but a holder still running was named with no link: nothing on the page could hand it a file
+it was not going to touch, or give it one it was about to need.
+
+`D-0073` left one question for this entry: **Quiescence**, a narrowing that takes a declared, not
+yet committed path from a lap still performing that still means to change it.
+
+### What was measured
+
+At rondo `8fb7642` on **2026-10-08**, by reading the code:
+
+- **The ledger already has every piece but the move.** `lane_claim` rows are immutable, a successor
+  names the head (`supersedes_claim_id` is unique), `normalizeClaim` refuses an empty claim (*a
+  claim with none is a release*), `sharedPaths` leaves the decision record out (`D-0098` rule 3.5),
+  and `openLines` lists the other open lines of one repository. `releaseLane` is the one person's
+  write, re-tested in its transaction against the head and laps it was read over.
+- **"In flight" is any lap not terminal** (`lineShape`'s `inFlight`). It includes
+  `awaiting_human` and `withdrawal_requested`, the two `SUSPENDED_STATUSES`, which hold no capacity
+  and run no work: a suspended lap leaves only for a terminal status or `stalled`.
+- **A lap's commits are read only at its gate**, as a deterministic reading's `baseCommit` and
+  `tipCommit` (`D-0160`'s measurement). Every lap `reserve()` writes has a `topicBranch`, ran or
+  not; a lap continuo was never handed has `identifiersSpent` 0, which only the move into
+  `admitting` sets.
+- **No reading of what a whole line changed existed.** The gate reads one lap's range (rule 5);
+  rule 4.2's set, every lap's tip against the lineage's first base, was not computed anywhere.
+
+### Decision
+
+1. **The person writes the claim the line keeps now, and rondo writes it as one row.** One
+   successor `lane_claim` row with `author_kind` `operator`: the paths it adds that the old claim
+   did not cover are a widening (`D-0073` rule 4.1), and the old claim's paths it no longer covers
+   are a narrowing (rule 4.2). A move may be both. **Replacing a directory with paths under it is a
+   narrowing**, so no pattern is needed and rule 2.2 stands. Its bases are the lap pressed from,
+   `widened` and or `narrowed`, and `changed` when the old head carried it; its reason is the old
+   head's. **An empty list is the release press**, and is refused here. **A line that holds nothing
+   is refused**: a released line takes paths back only by a redo (rule 2.6), and a line that
+   declared nothing is claimed by its gate (`D-0160` rule 4).
+2. **A widening is for work still going, and never onto another open line's files.** It is written
+   only for a line with a lap in flight (performing, or suspended at its gate); a line whose every
+   lap has ended takes no more paths, since rule 9.2's closed line would be a new line's work. The
+   paths added are tested by rule 3.2 in the transaction that writes the row, the decision record
+   left out (`D-0098` rule 3.5). **Onto a path another open line holds it is refused**, naming the
+   holders and the shared paths, and nothing is written. **Rule 4.1's held widening (a `sequence`
+   with a `paths` member, released at `paths_free`) is not built**: the person presses again once
+   the files are free. This is the cost `D-0158` named for starts, here for a move.
+3. **Quiescence: a narrowing is written only when nothing of the line can still commit.** That is
+   every lap of the tree terminal or suspended (`awaiting_human`, `withdrawal_requested`), tested in
+   the writing transaction with the lap ids and claim head the screen was drawn over, so a lap
+   started or a claim moved since makes the press stale and changes nothing. **A suspended lap
+   leaves only for a terminal status or `stalled`, and neither runs work or writes a reading**, so
+   the line committed nothing between the read of rule 4 and the write. `stalled` is not known to
+   have stopped and counts as running (fail-closed). This reads "no lap in flight" in the residual
+   as **not running**, the `SUSPENDED_STATUSES` reading, which is narrower than `lineShape`'s
+   `inFlight`: a line at its gate is in flight for rule 2 and quiescent for this rule. A move that
+   both widens and narrows a running line is refused whole.
+4. **What the line changed is read by the press, over every lap.** Rule 4.2's set is the paths
+   between the lineage's first base (the `baseCommit` of the first lap, root first, that has a
+   reading) and each lap's `tipCommit`, whatever its status. **A lap continuo was never handed
+   (`identifiersSpent` 0) changed nothing; a lap that ran and left no reading makes the narrowing undetermined**,
+   and nothing is given up. **Nothing taken in is subtracted**: the set counts what exists on the
+   branch, so a path another line landed and this line took in is kept, the safe side. A
+   narrowing that would drop a changed path is refused, naming those paths. A move that gives
+   nothing up reads no git.
+5. **The press is the release screen's.** One form (`POST /holds`) on the release screen of any
+   open line that holds paths: the claim one path per line, which the person edits, under a note
+   that says what the line's state allows: a running line may add files now and leave them out
+   once it stops at review, a line at review may do both, and a finished line, which shows the form
+   after the release, may only leave files out. A path list the store would refuse as written is
+   refused before any git is read. **A holder link on a waiting start now leads there for
+   a running holder too**, as *Change the files it keeps* (`D-0160` rule 2 linked only a finished
+   one's release). A stale screen changes nothing. **After a move the order tick is kicked**
+   (`D-0158` rule 4), since a narrowing may free a held start. **A line its gates claim (`D-0160`
+   rule 4) keeps that basis after the person moves it**, so its next gate still claims what it
+   changes. There is no CLI command.
+6. **Only the person writes these rows.** Rule 4.4's drafter-drafted claim rows, listed in the
+   report and decided by being rows inside a scope, are not built, and neither is the **Scope
+   binding** residual: a move names the person who pressed it and no scope approval.
+
+### Options not taken
+
+- **A widen press and a narrow press.** Two forms for one fact, and a directory replaced by its
+  files would need both; one written claim says both moves at once.
+- **Carving forbidden: a narrowing drops only whole claim elements.** It keeps `D-0073`'s claim
+  shapes but leaves a line claiming `src/` unable to give up one folder under it, which is the
+  common case of a claim drafted too wide.
+- **Narrowing a running line.** It is the residual's harm: the lap may still mean to change the
+  path, and nothing it committed yet can be read until its gate.
+- **Widening a finished line.** Nothing of it can change the path, so it would only hold it from
+  others; a fold that needs it is a redo, which takes the paths at its own admission.
+- **Holding the widening as an order** (rule 4.1's `sequence`). It needs `D-0067`'s `sequence` rows,
+  which are still unbuilt (`D-0158`); a second press costs less than that machinery today.
+- **A CLI command.** The press is on the page beside the line it moves, where the person already
+  is; nothing asks to script it.
+
+### What it costs
+
+- **A widening onto held files needs a second press** once the holder lets them go.
+- **A lap that ran and left no reading blocks every narrowing of its line** until the line ends or
+  is released.
+- **Paths taken in from another line are kept**, so a narrowing can be refused for a path only the
+  other line wrote.
+- **The form shows no mark on the files the line changed**: reading them needs git, which the page
+  does not run to draw itself. The person learns it from the refusal.
+- **A move names no approval** (rule 6), so the audit of which scope allowed a claim change is still
+  the person's name alone.
+
+### What would falsify it
+
+- **People routinely narrow and are told the work keeps the files**: the form then has to show what
+  was changed before the press, git on render or a stored set.
+- **A status added that commits while it holds a lap suspended**, or a suspended lap that can leave
+  for a running status: rule 3's reason no longer holds and the narrowing has to wait for terminal.
+- **The `sequence` and `paths_free` order gets built**: rule 2's refusal then gives way to rule 4.1's
+  held widening.
+- **Two lines colliding on a path one of them gave up by this press**, which would mean rule 4's
+  reading missed a commit.
+- Any measurement above failing to reproduce at rondo `8fb7642`.

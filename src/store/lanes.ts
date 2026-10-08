@@ -10,7 +10,7 @@
  * spelling of "overlap" or "closed tip".
  */
 
-import { TERMINAL_STATUSES } from "./records.js";
+import { SUSPENDED_STATUSES, TERMINAL_STATUSES } from "./records.js";
 
 /** The claim on the whole repository (D-0073 rule 2.2). */
 export const WHOLE_REPOSITORY = "/";
@@ -179,6 +179,64 @@ export function lineShape(laps: readonly LaneLap[]): LineShape {
       .map((lap) => lap.id)
       .sort(),
   };
+}
+
+/**
+ * Whether nothing of the line can still commit (D-0163 rule 3): every lap is
+ * terminal or suspended at its gate. A suspended lap leaves only for a
+ * terminal status or `stalled`, neither of which runs work or writes a
+ * reading, so with the lap ids unchanged since a read, the line has committed
+ * nothing since. `stalled` is unknown and counts as running, fail-closed.
+ */
+export function quiescent(laps: readonly { readonly status: string }[]): boolean {
+  return laps.every((lap) => TERMINAL.has(lap.status) || SUSPENDED.has(lap.status));
+}
+
+const SUSPENDED: ReadonlySet<string> = new Set(SUSPENDED_STATUSES);
+
+/**
+ * What writing `asked` as a line's claim over `held` does (D-0073 rules 4.1
+ * and 4.2, D-0163 rule 1): the paths it takes that `held` does not cover, and
+ * the paths of `held` it no longer covers. One shape for both moves, so
+ * replacing a directory with the files under it is a narrowing and nothing
+ * needs a pattern (rule 2.2).
+ */
+export function claimMove(
+  held: readonly string[],
+  asked: readonly string[],
+):
+  | {
+      readonly kind: "move";
+      readonly paths: readonly string[];
+      readonly added: readonly string[];
+      readonly dropped: readonly string[];
+    }
+  | { readonly kind: "refused"; readonly reason: string } {
+  const claim = normalizeClaim(asked);
+  if (claim.kind === "refused") {
+    return claim;
+  }
+  const added = claim.paths.filter((path) => !claimCovers(held, path));
+  const dropped = held.filter((path) => !claimCovers(claim.paths, path));
+  if (added.length === 0 && dropped.length === 0) {
+    return { kind: "refused", reason: "the line already holds exactly these paths" };
+  }
+  return { kind: "move", paths: claim.paths, added, dropped };
+}
+
+/**
+ * The changed paths a narrowing would give up (D-0073 rule 4.2): covered by
+ * the claim the line holds and not by the one it asks for. Raw paths, so the
+ * answer does not lean on how `claimCover` spells them.
+ */
+export function changedDropped(
+  held: readonly string[],
+  asked: readonly string[],
+  changed: readonly string[],
+): readonly string[] {
+  return [...new Set(changed)]
+    .filter((path) => claimCovers(held, path) && !claimCovers(asked, path))
+    .sort();
 }
 
 /** Whether a line of this shape is open before its landing is read. */

@@ -12,6 +12,7 @@ import { expect, test } from "vitest";
 
 import {
   commandPublishBody,
+  holdsFromPage,
   lapReport,
   main,
   publishFromPage,
@@ -1566,7 +1567,7 @@ test("the release screen names the work by its request, says why rondo has not r
     kind: "release",
     iterationId: "i-0002",
   });
-  expect(open).toContain(EN.releaseStillOpen);
+  expect(open).toContain(EN.holdsStillOpen);
   expect(open).not.toContain('action="/release');
   expect(
     (
@@ -1631,6 +1632,117 @@ test("the page's release is the approver's and only what the screen showed: a st
   // Pressed again from the same screen: the line moved, so nothing more.
   expect((await releaseFromPage(env, world.store, "ada", shown)).ok).toBe(false);
   expect(claims()).toHaveLength(2);
+});
+
+/** Walk a reserved lap to `performing`, where it may still commit. */
+async function perform(world: ReturnType<typeof fresh>, id: string): Promise<void> {
+  for (const [from, to] of [
+    ["planned", "admitting"],
+    ["admitting", "admitted"],
+    ["admitted", "performing"],
+  ] as const) {
+    // Into `admitting` the interpreter spends the identifiers (D-0023), as it does here.
+    const fields = to === "admitting" ? { identifiersSpent: 1 } : {};
+    expect((await world.store.transition(id, from, to, fields, 2_000)).kind).toBe("transitioned");
+  }
+}
+
+test("rondo#282 (D-0163): the release screen of an open line, running or finished, edits the files it keeps", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "Rename the settings page");
+  await openGate(world, "i-0001");
+  const screen = { kind: "release", iterationId: "i-0001" } as const;
+  for (const wording of [EN, chromeFor("ja")]) {
+    const html = await operatorPage(portsOver(world), "t", screen, wording);
+    expect(html).toContain("Rename the settings page");
+    expect(html).toContain(wording.holdsStillOpen);
+    expect(html).toContain(wording.holdsAtReview);
+    expect(html).toContain(`action="/holds?lang=${wording.lang}"`);
+    expect(html).toContain('<input type="hidden" name="claim" value="i-0001:1"/>');
+    expect(html).toContain('<input type="hidden" name="laps" value="i-0001"/>');
+    expect(html).toMatch(/<textarea id="holds-paths"[^>]*>\s*lanes\/i-0001\/\s*<\/textarea>/);
+    // At its gate nothing of it runs, so nothing says it does.
+    expect(html).not.toContain(wording.holdsRunning);
+    expect(html).not.toContain('action="/release');
+  }
+  // No approver: no press of either kind.
+  expect(await operatorPage(portsOver(world, null), null, screen)).not.toContain("holds-form");
+
+  // Running: the screen says what can wait for review.
+  await reserve(world, "i-0002", "Still running");
+  await perform(world, "i-0002");
+  expect(
+    await operatorPage(portsOver(world), "t", { kind: "release", iterationId: "i-0002" }),
+  ).toContain(EN.holdsRunning);
+
+  // Finished: the release press, and the files it keeps under it.
+  await reserve(world, "i-0003", "Finished work");
+  await closeApproved(world, "i-0003");
+  const finished = await operatorPage(portsOver(world), "t", {
+    kind: "release",
+    iterationId: "i-0003",
+  });
+  expect(finished).toContain('action="/release?lang=');
+  expect(finished).toContain('action="/holds?lang=');
+  expect(finished).toContain(EN.holdsEnded);
+});
+
+test("rondo#282 (D-0163): the page changes what a line keeps as the approver, over what the screen showed", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "Rename the settings page");
+  await perform(world, "i-0001");
+  await reserve(world, "i-0002", "Other work");
+  await perform(world, "i-0002");
+  const env = { RONDO_APPROVER: "ada" };
+  const head = async () => {
+    const line = await world.store.laneLine("i-0001");
+    if (line.kind !== "read" || line.line.claim === null) {
+      throw new Error("the fixture line would not read");
+    }
+    return { iterationId: "i-0001", claimId: line.line.claim.claimId, lapIds: ["i-0001"] };
+  };
+  const press = async (paths: string[]) =>
+    await holdsFromPage(env, world.store, world.record, "ada", { ...(await head()), paths });
+
+  expect(
+    await holdsFromPage({}, world.store, world.record, "ada", { ...(await head()), paths: ["x/"] }),
+  ).toMatchObject({ ok: false, why: "holdsRefusedNotRecorded" });
+  expect(
+    await holdsFromPage(env, world.store, world.record, "ada", {
+      ...(await head()),
+      claimId: "i-0001:9",
+      paths: ["x/"],
+    }),
+  ).toMatchObject({ ok: false, why: "holdsRefusedChanged" });
+
+  // Running: a widening is taken at once, and is the approver's.
+  expect(await press(["lanes/i-0001/", "docs/"])).toEqual({ ok: true, note: "" });
+  const line = await world.store.laneLine("i-0001");
+  expect(line.kind === "read" ? line.line.claim : null).toMatchObject({
+    paths: ["docs/", "lanes/i-0001/"],
+  });
+  // Onto files another open line keeps: refused, naming that line.
+  expect(await press(["lanes/i-0001/", "docs/", "lanes/i-0002/x.ts"])).toMatchObject({
+    ok: false,
+    why: "holdsRefusedHeld",
+    paths: ["lanes/i-0002/x.ts"],
+    holders: [{ lineageId: "i-0002", inFlight: true }],
+  });
+  // Running, a narrowing waits for review.
+  expect(await press(["lanes/i-0001/"])).toMatchObject({ ok: false, why: "holdsRefusedBusy" });
+
+  // At its gate, a lap that ran and left no reading gives nothing up.
+  const gated = await world.store.transition(
+    "i-0001",
+    "performing",
+    "awaiting_human",
+    { gateId: "gate-i-0001" },
+    3_000,
+  );
+  expect(gated.kind).toBe("transitioned");
+  expect(await press(["lanes/i-0001/"])).toMatchObject({ ok: false, why: "holdsRefusedUnread" });
+  // A list the store would refuse as written is refused before any git is read.
+  expect(await press([])).toMatchObject({ ok: false, why: "holdsRefusedPaths" });
 });
 
 // -- The one leg of a publish that can be driven for real here (rondo#239) --

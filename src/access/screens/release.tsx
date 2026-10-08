@@ -1,3 +1,4 @@
+import { quiescent } from "../../store/lanes.js";
 import type { LedgerLine } from "../../store/sqlite.js";
 import type { WebPorts } from "../page/contract.js";
 import {
@@ -23,6 +24,10 @@ import type { Chrome } from "../wording.js";
  * request's words and how each attempt ended, never a line or a lap id. The
  * form carries the claim and the laps it was drawn over, so the press refuses
  * a line that moved under the screen.
+ *
+ * **It is also where what a line keeps is changed** (D-0163): for an open
+ * line, running or finished, the files it keeps are a list the person edits,
+ * whatever the release press offers.
  */
 
 export async function releaseView(
@@ -47,18 +52,74 @@ export async function releaseView(
       note(line?.releasedBy === "person" ? wording.releasedByPerson : wording.releaseNothingHeld),
     );
   }
-  if (line.inFlight) {
-    return framed(note(wording.releaseStillOpen));
-  }
   const records = (await Promise.all(line.lapIds.map((id) => ports.store.read(id)))).flatMap(
     (outcome) => (outcome.kind === "read" ? [outcome.record] : []),
   );
+  const holds =
+    token === null ? null : (
+      <section id="holds" class={`${CARD} space-y-2`}>
+        <h3 class={CARD_HEADING}>{wording.holdsHeading}</h3>
+        <p class="text-body leading-5">{wording.holdsLead}</p>
+        <p class="text-body leading-5 text-muted-foreground">
+          {!line.inFlight
+            ? wording.holdsEnded
+            : quiescent(records)
+              ? wording.holdsAtReview
+              : wording.holdsRunning}
+        </p>
+        <form
+          id="holds-form"
+          method="post"
+          action={`/holds?lang=${encodeURIComponent(wording.lang)}`}
+          class="flex flex-col gap-2"
+        >
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="iteration" value={view.iterationId} />
+          <input type="hidden" name="claim" value={line.claimId} />
+          <input type="hidden" name="laps" value={line.lapIds.join(" ")} />
+          <label for="holds-paths" class="text-meta leading-5 text-muted-foreground">
+            {wording.holdsLabel}
+          </label>
+          <textarea
+            id="holds-paths"
+            name="paths"
+            required
+            rows={Math.min(8, line.paths.length + 1)}
+            lang=""
+            class="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-meta leading-5"
+          >
+            {line.paths.join("\n")}
+          </textarea>
+          <button
+            type="submit"
+            aria-describedby="holds-plain"
+            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+          >
+            {wording.holdsAction}
+          </button>
+          <span id="holds-plain" class="note sr-only">
+            {wording.holdsPlain}
+          </span>
+        </form>
+      </section>
+    );
   const root = records[0];
   const tips = records.filter((record) => line.closedTips.includes(record.id));
   // **Named by the words the person wrote for it** (rondo#439), as the list
   // and the thread name it, in one line; the brief rondo composed from them is
   // folded under it, so the press is not below a page of rondo's own text.
   const named = root === undefined ? "" : firstLine(requestWords([...threads.byId.values()], root));
+  if (line.inFlight) {
+    return framed(
+      <>
+        <p class="text-title leading-6 wrap-anywhere" lang="">
+          {named}
+        </p>
+        {note(token === null ? wording.releaseStillOpen : wording.holdsStillOpen)}
+        {holds}
+      </>,
+    );
+  }
   return framed(
     <>
       <p class="text-body leading-6">{wording.releaseLead}</p>
@@ -148,6 +209,7 @@ export async function releaseView(
           <p class="text-body leading-5">{said}</p>
         ))}
       </section>
+      {holds}
     </>,
   );
 }
