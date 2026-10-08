@@ -104,7 +104,8 @@
   box-shadow: inset 3px 0 0 var(--color-wait);
 }
 
-.list-row-mine:hover {
+.list-row-mine:hover,
+.list-row-mine[aria-current="page"] {
   background: color-mix(in srgb, var(--color-wait-wash) 80%, var(--color-accent));
 }
 
@@ -117,6 +118,32 @@
   color: var(--color-foreground);
   white-space: normal;
   overflow: visible;
+}
+
+/*
+ * **The request the centre has open** (rondo#587): its own ground, an edge in
+ * ink and its title in full ink, held while the person reads it -- a hover
+ * goes when the pointer does. The edge is an inset shadow for the reason
+ * `.list-row-mine`'s is. A waiting row keeps its amber edge, the page's one
+ * claim, and being open holds the ground its hover gives it.
+ */
+.list-row:not(.list-row-mine)[aria-current="page"] {
+  background: var(--color-accent);
+  box-shadow: inset 3px 0 0 var(--color-foreground);
+}
+
+.list-row[aria-current="page"] b {
+  color: var(--color-foreground);
+}
+
+/*
+ * **Where `j`/`k` or Tab has put focus**, a ring a person can find: an outline
+ * inside the row, so the face's edge does not cut it, and in the ring colour
+ * so it is not taken for the open mark or the amber.
+ */
+.list-row:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: -2px;
 }
 
 .list-dot {
