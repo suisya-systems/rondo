@@ -103,6 +103,8 @@ export interface ListProps {
    * given rather than deciding which sentence applies.
    */
   readonly lastLookedSaid: string;
+  /** The request the centre has open, or null where it has none (rondo#587). */
+  readonly openId: string | null;
 }
 
 function Row({
@@ -110,11 +112,13 @@ function Row({
   row,
   hrefOf,
   agoOf,
+  open,
 }: {
   readonly wording: Chrome;
   readonly row: RequestRow;
   readonly hrefOf: (messageId: string) => string;
   readonly agoOf: (atMs: number) => string;
+  readonly open: boolean;
 }) {
   const waiting = row.state === "waitingOnYou";
   // Green or red where the checks have said so (D-0082 rule 2), and the
@@ -122,7 +126,15 @@ function Row({
   const checks = row.published?.checks.kind;
   const tone = checks === "green" ? " list-dot-ok" : checks === "red" ? " list-dot-fail" : "";
   return (
-    <a className={`list-row${waiting ? " list-row-mine" : ""}`} href={hrefOf(row.messageId)}>
+    // **The open request is marked, and every row is a `j`/`k` stop**
+    // (rondo#587): the header's hint moves through this list as it does
+    // through the centre's rows, and the row the centre is showing says so.
+    <a
+      className={`list-row${waiting ? " list-row-mine" : ""}`}
+      href={hrefOf(row.messageId)}
+      data-row=""
+      aria-current={open ? "page" : undefined}
+    >
       {/*
        * One dot, amber only where a person must act. A row that needs nobody
        * carries a neutral one, so the column stays aligned and the colour is
@@ -151,6 +163,7 @@ export function RequestsFace({
   allowance,
   newRequestHref,
   lastLookedSaid,
+  openId,
 }: ListProps) {
   const empty = list.yourTurn.length === 0 && list.days.length === 0;
   return (
@@ -164,7 +177,14 @@ export function RequestsFace({
         <>
           <h6 className="list-heading list-heading-mine">{wording.yourTurn}</h6>
           {list.yourTurn.map((row) => (
-            <Row key={row.messageId} wording={wording} row={row} hrefOf={hrefOf} agoOf={agoOf} />
+            <Row
+              key={row.messageId}
+              wording={wording}
+              row={row}
+              hrefOf={hrefOf}
+              agoOf={agoOf}
+              open={row.messageId === openId}
+            />
           ))}
         </>
       )}
@@ -177,7 +197,13 @@ export function RequestsFace({
               {row.messageId === list.lastLookedAbove ? (
                 <p className="list-since">{lastLookedSaid}</p>
               ) : null}
-              <Row wording={wording} row={row} hrefOf={hrefOf} agoOf={agoOf} />
+              <Row
+                wording={wording}
+                row={row}
+                hrefOf={hrefOf}
+                agoOf={agoOf}
+                open={row.messageId === openId}
+              />
             </div>
           ))}
         </div>

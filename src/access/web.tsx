@@ -231,10 +231,6 @@ import { type Chrome, EN } from "./wording.js";
  */
 export const APPROVE_BODY = "approve";
 
-/** A row focusable by `j`/`k` that is not a list item: the answer view's claim groups. */
-const FOCUS_ROW =
-  "outline-none focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)]";
-
 /** The tone of any lap by its status: the reading's folds use it for their glyph. */
 
 /**
@@ -277,7 +273,7 @@ function claimsView(claims: readonly Claim[], snapshot: object, focusable = fals
     <div class="divide-y divide-border rounded-md border border-border">
       {groups.map((group) => (
         <div
-          class={`flex flex-col sm:flex-row sm:items-start ${focusable ? FOCUS_ROW : ""}`}
+          class={`flex flex-col sm:flex-row sm:items-start ${focusable ? "outline-none focus-visible:bg-accent focus-visible:shadow-[inset_3px_0_0_var(--color-ring)]" : ""}`}
           {...(focusable ? { "data-row": "", tabindex: -1 } : {})}
         >
           {/* One quiet line, cut with an ellipsis; the whole locator is its `title`. */}
@@ -4863,6 +4859,7 @@ export async function operatorPage(
         inbox?.sinceMs === null || inbox?.sinceMs === undefined
           ? wording.lastLookedNever
           : wording.lastLookedHere(wording.age(ago(inbox.sinceMs, nowMs))),
+      openId: onOwnScreen ? null : thread.selectedRoot,
     }),
   };
   // **Awaited here** for `scoping`'s reason: the dry-run reads a workspace and
