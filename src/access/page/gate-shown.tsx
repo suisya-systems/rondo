@@ -66,8 +66,6 @@ export function answerable(record: IterationRecord, token: string | null): token
   return token !== null && record.status === "awaiting_human" && record.gateId !== null;
 }
 
-/** One iteration, explained the way `rondo explain` explains it. */
-
 /** What a press on one row would be recorded as having shown, composed for that row. */
 export interface Shown {
   readonly claims: readonly Claim[];
