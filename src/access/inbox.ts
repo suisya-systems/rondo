@@ -33,7 +33,7 @@ import {
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { PROPOSAL_SUBJECT } from "./advisory.js";
-import { splitNonBinding } from "./inbox-current.js";
+import { splitNonBinding, takenSuccessors, waitingBinding } from "./inbox-current.js";
 import { type Chrome, EN } from "./wording.js";
 
 /**
@@ -45,7 +45,7 @@ import { type Chrome, EN } from "./wording.js";
  * for the command line, which does write the two rows a look creates.
  */
 export interface InboxReadPorts {
-  readonly store: Pick<IterationStore, "readLive">;
+  readonly store: Pick<IterationStore, "readLive" | "read">;
   readonly record: Pick<
     AdvisoryRecord,
     | "lastView"
@@ -54,6 +54,7 @@ export interface InboxReadPorts {
     | "unconsumedDecisions"
     | "changedSince"
     | "latestTriage"
+    | "readProposal"
   >;
   readonly now: () => number;
   /**
@@ -178,6 +179,11 @@ export interface InboxSnapshot {
    * repository's readings still about what to ask next (D-0175).
    */
   readonly latestTriage: ReadonlySet<string>;
+  /**
+   * The approvable open proposals whose successor identity another admission
+   * already holds, by id: approving one cannot run anything (D-0176).
+   */
+  readonly taken: ReadonlySet<string>;
 }
 
 /**
@@ -189,7 +195,7 @@ function listedProposals(snapshot: InboxSnapshot) {
     snapshot.live.map((row) => (row.kind === "read" ? row.record.id : row.id)),
   );
   return {
-    binding: snapshot.open.filter((proposal) => isApprovableKind(proposal.kind)),
+    binding: waitingBinding(snapshot.open, snapshot.taken),
     ...splitNonBinding(snapshot.open, liveIds, snapshot.latestTriage),
   };
 }
@@ -291,6 +297,7 @@ function waitingOnYouLines(wording: Chrome, snapshot: InboxSnapshot): readonly s
     wording.waitingOnYou,
     wording.bindingProposals(binding.length),
     ...proposalLines(wording, binding, snapshot, seenProposals),
+    ...(snapshot.taken.size === 0 ? [] : [wording.takenProposals(snapshot.taken.size)]),
     wording.nonBindingProposals(current.length),
     ...proposalLines(wording, current, snapshot, seenProposals),
     // **Folded and not dropped** (D-0175): the rows are still in the store and
@@ -550,6 +557,7 @@ export async function gatherInbox(ports: InboxReadPorts, actorId: string): Promi
         return [];
     }
   });
+  const open = await ports.record.openProposals(atMs);
   const snapshot: InboxSnapshot = {
     atMs,
     sinceMs,
@@ -558,7 +566,7 @@ export async function gatherInbox(ports: InboxReadPorts, actorId: string): Promi
     // note: this is the read the look writes about, and the display reads
     // stay unbounded so that nothing live is hidden from the screen. Making
     // the four agree would be tidier and wrong.
-    open: await ports.record.openProposals(atMs),
+    open,
     changed: sinceMs === null ? [] : await ports.record.changedSince(sinceMs),
     attention: await ports.record.attentionBreakdown(),
     // **Asked with the mark and with the bound this look used** (D-0037
@@ -572,6 +580,7 @@ export async function gatherInbox(ports: InboxReadPorts, actorId: string): Promi
     unspent: await ports.record.unconsumedDecisions(),
     transcripts: await locateRunning(ports, live),
     latestTriage: new Set((await ports.record.latestTriage()).map((triage) => triage.proposalId)),
+    taken: await takenSuccessors(ports, open),
   };
   return snapshot;
 }

@@ -214,7 +214,8 @@ C-NN`, so the spaces can never be read as one.
 | D-0171 | One module owns the SQLite driver and opens every connection; the schema and the queries live in per-concern store modules handed a structural connection, and the driver is still `node:sqlite` | accepted |
 | D-0173 | The completion definition has an entry of its own: K1 to K4 as they read today, what each one's failure looks like, and where the line has been drawn; a redrawing is a dated annotation on this entry, and an entry that needs the definition cites `D-0173 K<n>` rather than copying it | accepted |
 | D-0174 | Where the prose enumerates something the tree also enumerates, a test compares the two lists, the prose states no count, and the check fails when its sentence is gone; a negative claim and a pinned dependency's own surface stay hand-maintained | accepted |
-| D-0175 | The inbox lists a proposal that binds nothing only while its subject is open and nothing newer replaces it; the rest are a count, and every row stays in the store | accepted |
+| D-0175 | The inbox lists a proposal that binds nothing only while its subject is open and nothing newer replaces it; the rest are a count, and every row stays in the store | accepted, amended |
+| D-0176 | An approvable proposal whose successor identity is already in the store no longer waits on the person: the inbox counts it in a line and the page's count leaves it out, and the row stays readable | accepted |
 
 ---
 
@@ -29310,6 +29311,12 @@ prose, has no check at all; it held in rondo#327 because the diff deleted the co
 **Status:** accepted (2026-10-08, rondo#579). Supersedes nothing. Refs `D-0032`, `D-0036`, `D-0097`,
 `D-0173`.
 
+> **Annotation (2026-10-08, from D-0176).** Not additive. An approvable proposal whose successor
+> identity is already in the store is folded too: an answer can still be recorded against it, but
+> nothing it approves can be admitted, so it no longer waits on the person.
+>
+> - Amends: D-0175 rule 3
+
 ### Context
 
 A proposal that binds nothing (`explanation`, `split`, `revise_draft`, `publish_body`, `triage`, and
@@ -29362,3 +29369,58 @@ The rule lives in `src/access/inbox-current.ts`, beside the inbox and outside `c
 
 - A folded proposal that the person could still act on and had no other way to find.
 - A kind that binds nothing whose subject is neither a lap, a repository's triage, nor nothing.
+
+## D-0176 — An approvable proposal whose successor identity is already in the store no longer waits on the person: the inbox counts it in a line and the page's count leaves it out, and the row stays readable
+
+**Status:** accepted (2026-10-08, rondo#584). Amends `D-0175` rule 3. Supersedes nothing. Refs
+`D-0022` rule 17, `D-0043` rule 8, `D-0168`, rondo#582.
+
+### Context
+
+An approvable proposal (`run_plan`, `agent_type`, `contract_keys`) records in its snapshot the
+successor identity its retry would be admitted under. `proposeRetry` refuses a successor that
+already exists when it drafts, and nothing checks again while the proposal stays open. Two open
+proposals about one lap can name the same successor: the unprompted `contract_keys-<subject>`
+mints `<subject>-r2`, and an operator can run `rondo propose --successor-id <subject>-r2`. Once one
+is approved and admitted, the other still has no `human_decision`, so `openProposals` returns it
+and the page's waiting count and the inbox's binding list both include it.
+
+Reproduced in `test/access/decision-consumption.test.ts`: approving the leftover is recorded and
+`approvedRetry` still resolves it, since the approved contract's grantee is derived from the
+successor id and has not moved. `admit()` refuses it at the reservation, because the identifiers
+minted for that iteration are already held, and spends nothing. So the person is asked a question
+whose every answer runs nothing.
+
+### Decision
+
+1. **An approvable open proposal whose stored successor identity reads as anything but absent in
+   the store does not wait on the person.** That is the test `proposeRetry` applies when it drafts,
+   applied again when the inbox is read. A proposal that will not read, or names no successor,
+   still waits; only a successor seen in the store counts as taken.
+2. **The inbox lists it as a count, not a row**, in a line under the binding proposals. The page's
+   waiting count leaves it out. Both read one function, `waitingBinding`, so the two cannot
+   disagree.
+3. **Nothing is written or deleted.** The proposal stays open in the store and `rondo show
+   --proposal-id` still reads it back; an answer can still be recorded against it and is refused
+   at admission as before.
+4. The rule lives in `src/access/inbox-current.ts`, beside `D-0175`'s, and not in `web.tsx`
+   (`D-0168`).
+
+### Options not taken
+
+- **Refusing in `approvedRetry`.** The refusal already exists in `admit()`, and an earlier one does
+  not take the question off the person's list, which is what rondo#584 is about.
+- **Closing the leftover with a decision row when the successor is admitted.** That would be rondo
+  composing an answer a person did not give (`D-0009` part 3).
+
+### What it costs
+
+- Each read of the inbox or the page reads every approvable open proposal and its successor's row:
+  two reads per such proposal. There are few, since an answer closes one.
+- A successor taken by an iteration that was later found unreadable still folds the proposal; the
+  primary key is held either way.
+
+### What would falsify it
+
+- A folded proposal whose approval could still be admitted.
+- An approvable kind whose retry is not admitted under the successor its snapshot records.

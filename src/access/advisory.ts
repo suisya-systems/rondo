@@ -1519,7 +1519,7 @@ export async function recordAnswer(
  * would answer a different question -- "which identity is free now" -- and
  * would silently move the grantee the digest was issued to.
  */
-function storedSuccessorId(proposal: StoredProposal): string | null {
+export function storedSuccessorId(proposal: StoredProposal): string | null {
   const successor = (proposal.snapshot as Record<string, unknown>)["successor"];
   const id =
     typeof successor === "object" && successor !== null

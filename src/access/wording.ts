@@ -595,6 +595,8 @@ export interface Chrome extends PageWords {
   readonly nonBindingProposals: (count: number) => string;
   /** How many that bind nothing were folded because their subject moved on (D-0175). */
   readonly movedOnProposals: (count: number) => string;
+  /** How many approvable ones were folded because their successor identity is taken (D-0176). */
+  readonly takenProposals: (count: number) => string;
   readonly readOneBack: string;
   readonly iterationsWaiting: (count: number) => string;
   readonly newMark: string;
