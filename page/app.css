@@ -222,9 +222,10 @@ html:not(.js) details > summary svg {
  * **The touch family, and it is not a state** (`D-0082` rule 3). Blue means *you can touch this*,
  * and every element this can reach is one the person can act on, so the wash is that family rather
  * than a sixth colour: amber stays *a person must act* and would say the wrong thing about a step
- * that merely moved, and `--fail` would say something worse. It is the only animation on this
- * page, it lasts three seconds, and it leaves the element exactly as it found it -- one wash and a
- * ring, both fading to nothing, over a background this rule never owns.
+ * that merely moved, and `--fail` would say something worse. Beside a running row's turning mark
+ * (`page/list.css`) it is the only animation on this page, it lasts three seconds, and it leaves
+ * the element exactly as it found it -- one wash and a ring, both fading to nothing, over a
+ * background this rule never owns.
  *
  * **With `prefers-reduced-motion` there is no fade and the change is still said** (rondo#494 item
  * 1): the wash holds still and the mark is drawn from the attribute's own value, which the script

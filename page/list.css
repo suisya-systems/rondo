@@ -146,26 +146,49 @@
   outline-offset: -2px;
 }
 
+/*
+ * The mark is a shape per state (rondo#589), in `--faint` where the colour
+ * says nothing more: the old `--border` grey was a speck, and a shape a
+ * person has to tell apart needs ink they can see.
+ */
 .list-dot {
-  width: 10px;
-  height: 10px;
-  margin-top: 6px;
-  border-radius: 50%;
-  background: var(--color-border);
+  width: 14px;
+  height: 14px;
+  margin-top: 5px;
+  color: var(--color-faint);
 }
 
 /* The only amber on this face: a person must act (D-0082 rule 2). */
 .list-dot-wait {
-  background: var(--color-wait);
+  color: var(--color-wait);
+}
+
+/* Running keeps its turning mark, in the calm colour (D-0082 rule 3). */
+.list-dot-run {
+  color: var(--color-run);
+  animation: list-dot-turn 1s linear infinite;
+}
+
+@keyframes list-dot-turn {
+  to {
+    rotate: 1turn;
+  }
+}
+
+/* Held still, the arc on its ring still tells running from the rest. */
+@media (prefers-reduced-motion: reduce) {
+  .list-dot-run {
+    animation: none;
+  }
 }
 
 /* A published request's checks, where they have said green or red (rondo#376). */
 .list-dot-ok {
-  background: var(--color-ok);
+  color: var(--color-ok);
 }
 
 .list-dot-fail {
-  background: var(--color-fail);
+  color: var(--color-fail);
 }
 
 /*
