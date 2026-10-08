@@ -282,7 +282,10 @@ const QUESTION = {
 const RATIONALE = `Built the loader.\n\n\`\`\`rondo-question\n${JSON.stringify(QUESTION)}\n\`\`\`\n`;
 
 /** Part 1 at its gate with the worker's question put; part 2 still running. */
-async function questioned(after: readonly (number | undefined)[] = [undefined, undefined]) {
+async function questioned(
+  after: readonly (number | undefined)[] = [undefined, undefined],
+  evidence: typeof EVIDENCE = EVIDENCE,
+) {
   const w = await split(after);
   await w.start(0, "lap-one");
   if (after[1] === undefined) {
@@ -299,7 +302,7 @@ async function questioned(after: readonly (number | undefined)[] = [undefined, u
       drafter: "rondo/deterministic/2",
       verdict: "clear",
       findings: [],
-      evidence: EVIDENCE,
+      evidence,
       unavailableReason: null,
     },
   );
@@ -343,6 +346,25 @@ test("a worker's question: one line over the box says what was built and what wa
   // The line under the title keeps the other part's state.
   expect(html).toContain('<span class="gov-parts">1 other part still running</span>');
   expect(await gatePage(w, JA)).toContain('<span class="gov-parts">ほかの作業 1 件は進行中</span>');
+});
+
+test("a lap that committed nothing still shows its question over the box, saying so, with no card to open (rondo#550)", async () => {
+  const w = await questioned(undefined, {
+    ...EVIDENCE,
+    tipCommit: EVIDENCE.baseCommit,
+    commitCount: 0,
+    fileCount: 0,
+  });
+  const html = await gatePage(w);
+  const lead =
+    "The worker stopped to ask before committing anything. Waiting on your answer: the pin bump in package.json";
+  const at = html.indexOf(lead);
+  const box = html.indexOf('id="answering"');
+  expect(at).toBeGreaterThan(-1);
+  expect(box).toBeGreaterThan(at);
+  expect(html.slice(at, box)).not.toContain('href="#changed"');
+  expect(html).toContain(QUESTION.question);
+  expect(await gatePage(w, JA)).toContain("作業者は何もコミットせずに質問しました。");
 });
 
 /** The revise box's sentence about the question, as text. */

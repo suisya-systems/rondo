@@ -185,17 +185,27 @@ test("a question is put as an ask on its lap, holds that line only, and is relea
   expect(box).toContain(`---\n${answer}\n---`);
 });
 
-test("nothing committed, nothing asked, or nothing read: no ask is written", async () => {
-  for (const { rationale, tip } of [
-    { rationale: report(QUESTION), tip: BASE },
-    { rationale: "Done.", tip: TIP },
-    { rationale: null, tip: TIP },
-  ]) {
-    const { record, ports } = world(rationale, tip);
+test("nothing asked or nothing read: no ask is written", async () => {
+  for (const rationale of ["Done.", null]) {
+    const { record, ports } = world(rationale);
     await request(record);
     await relayQuestion(ports, "it-1", 10);
     expect(await record.openAsksIn("m-request")).toEqual({ kind: "read", asks: [] });
   }
+});
+
+test("a lap that committed nothing still has its question put, ending at its base (rondo#550)", async () => {
+  const { record, ports } = world(report(QUESTION), BASE);
+  await request(record);
+  expect(await relayQuestion(ports, "it-1", 10)).toContain("question-it-1");
+  const read = await record.threadMessages();
+  const asked =
+    read.kind === "read" ? read.messages.find((m) => m.messageId === "question-it-1") : null;
+  expect(asked?.asks).toBe(true);
+  expect(asked?.body.startsWith(QUESTION.question)).toBe(true);
+  expect(asked?.body.endsWith(BASE)).toBe(true);
+  const open = await record.openAsksIn("m-request");
+  expect(open.kind === "read" && open.asks.map((ask) => ask.messageId)).toEqual(["question-it-1"]);
 });
 
 test("an unreadable block is put in the thread, not dropped, and holds its line until answered (rule 4.4)", async () => {

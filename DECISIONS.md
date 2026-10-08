@@ -193,6 +193,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0158 | A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press | accepted |
 | D-0159 | A red check on rondo's own pull request is rondo's to re-run once and the person's to have repaired on that pull request: the first red re-runs the failed Actions jobs once, a repair is a redo of the published lap pushed onto its head branch under the same approval, it is approved automatically only once its own runs showed the failure and then a pass, and a merge on green waits only on its own line, or a question over that line or over the request as a whole (not the flow host's), and says when it waits | accepted |
 | D-0160 | Claims that let two lines run: a finished line nothing will publish gives its files up, a refused draft is drafted once more, and a start with no drafted claim claims nothing until its gate claims what it changed | accepted |
+| D-0161 | A worker's question is put to the person whether or not its lap committed anything: nothing committed is said on the page, not a reason to drop the question | accepted |
 
 ---
 
@@ -22489,6 +22490,10 @@ number.
       answer** (a question about nothing the person can see is not put), keeping the recommendation's
       author as a column (`D-0064` rule 4.4): the worker's recommendation and the organisation's, if
       they differ, are both shown.
+
+      > **Annotation (2026-10-08, from D-0161).** Superseded in part: "a question about nothing the
+      > person can see is not put" is withdrawn. A lap that committed nothing has its question put
+      > all the same, and the page says nothing was committed. The rest of this rule is unedited.
    3. **The line waits at its gate and nothing else does.** It keeps its claim and holds no capacity
       (`D-0073` rule 10, `D-0023` rule 2); every other line keeps running. `D-0068` reads it as waiting
       on the person, with what answering releases.
@@ -28047,3 +28052,40 @@ At rondo `8e4d949` on **2026-09-29**, by reading the code:
 - **Collisions between lines that claimed nothing becoming the common case**: the gate is then too
   late a point to claim at, and the drafter's claim is the thing to fix.
 
+## D-0161 — A worker's question is put to the person whether or not its lap committed anything: nothing committed is said on the page, not a reason to drop the question
+
+**Status:** accepted (2026-10-08, rondo#550). Supersedes the parenthesis in `D-0098` rule 4.2. Refs
+`D-0098` rules 4.1, 4.4 and 8.3, `D-0071` rule 5.2.
+
+### Context
+
+On 2026-09-28, lap-4350ed77 (rondo#228, a change request to repair PR #548's CI) stopped to ask a
+question before committing anything. `D-0098` rule 4.2 said *a question about nothing the person can
+see is not put*, so the host logged *asked a question with nothing committed, so it was not put*
+and pointed at `rondo answer`, a terminal command. The page's gate showed the checks' findings and
+the model review's blocker (*the requested #548 CI repair remains undelivered*), and the worker's
+question nowhere. The person was asked to answer a question they could not read.
+
+### Decision
+
+1. **A lap's question is put to the request's thread whether or not the lap committed anything.**
+   The ask is the same message (`question-<lap>`, `asks: true`, holding its line until answered);
+   its last line is the commit the lap ended at, which for a lap that committed nothing is its base:
+   the commit the next lap builds on.
+2. **The page says nothing was committed.** The line over the answering box reads *the worker
+   stopped to ask before committing anything* (and the same in the operator's language) instead of
+   naming a commit, and links to no card of what changed.
+
+### What it costs
+
+- **The model review still reads a lap that stopped to ask as one that did not deliver**: its
+  blocker sits beside the question at the gate. Telling the reviewer that the lap asked is a
+  separate change.
+- **A worker can ask before doing any work**, against rule 4.1's "build everything that does not
+  depend on the answer first". Rondo no longer enforces that by silence; the page shows it instead.
+
+### What would falsify it
+
+- **Laps that ask with nothing committed becoming the common case** where the question could have
+  waited for independent work: rule 4.1's instruction is then not being followed, and the fix is in
+  the instruction, not in dropping the question.
