@@ -28454,8 +28454,8 @@ where theirs was takes the words off the screen. The scope and goal scope screen
    `page/composer.js` marks it pressed, a line saying nothing was sent is added to the notice, and
    focus moves there. *Keep answering these* removes the notice, and the same new round does not
    raise it again; a later one does.
-4. **Taking the new form takes what still means the same.** A field with the same
-   `data-round-carry` on both forms moves across: the request line and why, and an answer whose
+4. **Taking the new form takes what still means the same.** Where both forms are about the same
+   candidate (`data-round-keeps`), a field with the same `data-round-carry` on both moves across: the request line and why, and an answer whose
    point has the same words. The carried words are then kept as a draft by `page/composer.js`.
    Answers to points that changed do not move (rondo#504: points are worded fresh on each reading).
 5. **The server takes an answer from any round of the candidate the flow waits on, and refuses one

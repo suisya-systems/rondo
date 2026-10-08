@@ -262,6 +262,23 @@ test("taking the new round carries what still means the same, and nothing else",
   ]);
 });
 
+test("a new round over another candidate takes none of what was written for this one", () => {
+  const tab = page(ask("ask-1", ["a"], "issue:o/r#1"));
+  const [request, a] = tab.form().querySelectorAll("textarea") as [Node, Node];
+  request.value = "my request for #1";
+  a.value = "mine for a";
+  tab.redraw(ask("ask-2", ["a"], "issue:o/r#2"));
+  expect(tab.notice()?.textContent).not.toContain("Keep answering these");
+  tab.press("Use the new points");
+  expect(tab.form().dataset.round).toBe("ask-2");
+  expect(
+    tab
+      .form()
+      .querySelectorAll("textarea")
+      .map((field) => field.value),
+  ).toEqual(["the request", "answer to a"]);
+});
+
 test("a round the server does not say can be kept offers only the new one", () => {
   const tab = page(ask("gate-1", [], ""));
   (tab.form().querySelectorAll("textarea")[0] as Node).value = "my claim";

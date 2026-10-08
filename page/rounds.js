@@ -138,10 +138,12 @@
       return;
     }
     // **What the person wrote goes with them where it still means the same**:
-    // a field with the same `data-round-carry` on the new form. The input
+    // a field with the same `data-round-carry` on the new form, and only for
+    // the same candidate -- one's request is not another's (Codex). The input
     // event is what `page/composer.js` keeps a draft from.
     const fresh = kept.next;
-    for (const field of form.querySelectorAll("[data-round-carry]")) {
+    const carried = keeps(form, fresh) ? form.querySelectorAll("[data-round-carry]") : [];
+    for (const field of carried) {
       const to = fresh.querySelector(
         `[data-round-carry="${CSS.escape(field.dataset.roundCarry)}"]`,
       );
