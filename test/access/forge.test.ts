@@ -9,7 +9,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { expect, test } from "vitest";
 
@@ -263,7 +263,9 @@ function fakeReviewer(
   const read = options.readStdin === false ? "" : `cat > '${seen}'\ncat '${seen}' >&2\n`;
   writeFileSync(
     executable,
-    `#!/bin/sh\nprintf '%s\\n' "$@" > '${seen}.argv'\n${read}cat '${join(root, "events")}'\nexit ${String(options.status ?? 0)}\n`,
+    `#!/bin/sh\nprintf '%s\\n' "$@" > '${seen}.argv'\n` +
+      `prev=; for a in "$@"; do [ "$prev" = --output-schema ] && cat "$a" > '${seen}.schema'; prev=$a; done\n` +
+      `${read}cat '${join(root, "events")}'\nexit ${String(options.status ?? 0)}\n`,
     { mode: 0o755 },
   );
   return { executable, seen };
@@ -324,6 +326,22 @@ posix(
     expect(argv[at + 2]).toBe("-");
     // The directory it ran in was empty and is gone.
     expect(existsSync(argv[at + 1] ?? "")).toBe(false);
+    // rondo#190: the output contract is enforced as a schema, from a file
+    // outside that directory, and the file is gone too.
+    const schemaPath = argv[argv.indexOf("--output-schema") + 1] ?? "";
+    expect(dirname(schemaPath)).not.toBe(argv[at + 1]);
+    expect(existsSync(schemaPath)).toBe(false);
+    const schema = JSON.parse(readFileSync(`${fake.seen}.schema`, "utf8")) as {
+      required: string[];
+      properties: { findings: { items: { properties: { severity: { enum: string[] } } } } };
+    };
+    expect(schema.required).toEqual(["findings"]);
+    expect(schema.properties.findings.items.properties.severity.enum).toEqual([
+      "blocker",
+      "major",
+      "minor",
+      "nit",
+    ]);
   },
 );
 

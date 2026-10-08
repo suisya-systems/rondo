@@ -194,6 +194,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0159 | A red check on rondo's own pull request is rondo's to re-run once and the person's to have repaired on that pull request: the first red re-runs the failed Actions jobs once, a repair is a redo of the published lap pushed onto its head branch under the same approval, it is approved automatically only once its own runs showed the failure and then a pass, and a merge on green waits only on its own line, or a question over that line or over the request as a whole (not the flow host's), and says when it waits | accepted |
 | D-0160 | Claims that let two lines run: a finished line nothing will publish gives its files up, a refused draft is drafted once more, and a start with no drafted claim claims nothing until its gate claims what it changed | accepted |
 | D-0161 | A worker's question is put to the person whether or not its lap committed anything: nothing committed is said on the page, not a reason to drop the question | accepted |
+| D-0162 | The model reviewer's answer is shaped by codex's `--output-schema`, which rondo writes as a file of its own beside the reviewer's empty directory | accepted |
 
 ---
 
@@ -28111,3 +28112,59 @@ question nowhere. The person was asked to answer a question they could not read.
 - **Laps that ask with nothing committed becoming the common case** where the question could have
   waited for independent work: rule 4.1's instruction is then not being followed, and the fix is in
   the instruction, not in dropping the question.
+
+## D-0162 — The model reviewer's answer is shaped by codex's `--output-schema`, which rondo writes as a file of its own beside the reviewer's empty directory
+
+**Status:** accepted (2026-10-08, rondo#190, adopted on the measurement the issue set). Widens
+`src/access/forge.ts`'s `node:fs` grant by one binding; `D-0065` rule 1.1's empty directory is
+kept. Refs `D-0065` rules 1.1, 2.4 and 5.4.
+
+### Context
+
+`D-0065`'s reviewer is started with `--ignore-user-config` so the operator's MCP servers are not
+available to it. Measured on 2026-09-13, about a third of the answers carrying two findings then
+came back as JSON cut short of its closing `]}`. `modelReadingOf` records such an answer as
+`unavailable`, so it fails closed, but under a scope an unavailable reading stops the line (rule
+5.4): noise that stops work.
+
+### What was measured
+
+On 2026-10-08, codex-cli 0.153.4 and `gpt-6-astra`, on the planted lap
+(`docs/operations/model-reviewer-planted-lap.md` section 7), 10 runs per variant each way:
+
+| | both planted | p1 only | p2 only | control |
+|---|---|---|---|---|
+| without the schema (`8fb7642`'s reviewer) | 8 of 10 recorded | 9 of 10 | 10 of 10 | 10 of 10 |
+| with `--output-schema` | 10 of 10 | 10 of 10 | 10 of 10 | 10 of 10 |
+
+All 3 runs not recorded without the schema were the truncation, and nothing else. With the schema
+every planted run raised a `major` finding with its bases resolved, and the control raised nothing.
+That is the issue's bar: at least 10 runs per variant with no truncated answer and no loss of
+findings.
+
+### Decision
+
+1. **`runReviewer` passes `--output-schema <file>` to `codex`**, the file holding the output
+   contract `parseAnswer` reads, as a strict JSON Schema (`REVIEWER_OUTPUT_SCHEMA`).
+2. **The file is in a temp directory of its own**, not in the directory the reviewer is started in,
+   which stays empty. Both are removed after the run, and a failure to write it is a failed run, so
+   the reading is `unavailable`.
+3. **`src/access/forge.ts` is granted `writeFileSync`.** The planted case refusing it is replaced
+   by one refusing `copyFileSync`, so a file rondo did not write still cannot be placed beside the
+   reviewer.
+4. **`parseAnswer` is unchanged.** The schema narrows what can arrive; the answer is still read as
+   untrusted and strictly.
+
+### What it costs
+
+- **The output contract is written twice**: once as the prompt's prose (`judgement.ts`) and once
+  as the schema (`forge.ts`). A drift between them fails closed (an unparseable answer), not open.
+- **The forge can now write a file.** What it writes is one constant.
+- **The cause of the truncation is still not found.** The schema avoids it; it does not explain it.
+
+### What would falsify it
+
+- **A truncated or unparseable answer under the schema** on a later codex: the schema is then not
+  what held the shape, and the cause is to be found again.
+- **A codex that rejects the schema** (an `error` event before or during the turn): every reading
+  is then `unavailable`, which is loud, and the schema is to be fitted to that codex.
