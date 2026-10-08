@@ -302,7 +302,13 @@ test("a lap admitted under no approval is told so where the change would be (#23
  * The lap at the gate admitted under an approval of one lap, which it spent
  * (D-0074 rule 4.1): a request, its scope and approval, and the admission row.
  */
-async function spentGate(world: ReturnType<typeof fresh>): Promise<void> {
+async function spentGate(
+  world: ReturnType<typeof fresh>,
+  budgets: { readonly laps: number; readonly review_rounds: number } = {
+    laps: 1,
+    review_rounds: 3,
+  },
+): Promise<void> {
   await seedScopeRequest(world, "m-req", "Fix the parser.");
   await gateWithChecks(world);
   await modelFindings(world);
@@ -316,8 +322,7 @@ async function spentGate(world: ReturnType<typeof fresh>): Promise<void> {
     workspaces: [{ repository: "/srv/repo", workspace_root: "/srv/work" }],
     agent_types: [`sha256:${"a".repeat(64)}`],
     budgets: {
-      laps: 1,
-      review_rounds: 3,
+      ...budgets,
       cost_usd: 7.5,
       cost_reserve_usd: 2.5,
       expires_at_ms: 4_000_000_000_000,
@@ -420,6 +425,49 @@ test("a gate whose approval is spent says which budget and offers to raise it, i
   const after = await gate();
   expect(after).not.toContain('id="raise"');
   expect(after).toContain('<input type="hidden" name="scope_decision" value="sd-2"/>');
+});
+
+test("a gate whose review rounds are spent raises them on the change press itself, and says which lap it starts (D-0164, rondo#547)", async () => {
+  const world = fresh();
+  // One round taken (the lap's model reading), one approved, laps to spare.
+  await spentGate(world, { laps: 5, review_rounds: 1 });
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", []), material: structured },
+    "t",
+    { kind: "summary" },
+    EN,
+    null,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000004",
+  );
+  expect(html).not.toContain('id="raise"');
+  const form = html.slice(
+    html.indexOf('id="revise-form"'),
+    html.indexOf("</form>", html.indexOf('id="revise-form"')),
+  );
+  expect(form).toContain('id="revise-raise"');
+  expect(form).toContain(EN.reviseRaises(1));
+  expect(form).toContain('<input type="hidden" name="raise" value="sd-1"/>');
+  expect(form).toContain('<input type="hidden" name="scope_decision" value="sd-1"/>');
+  expect(form).toContain('name="review_rounds" min="2" step="1" value="2"');
+  expect(form).toContain('<input type="hidden" name="laps" value="5"/>');
+  // The lap a change starts is the line's second, as the story counts it.
+  expect(form).toContain(EN.reviseNote(2));
+
+  // With rounds to spare, the press only asks.
+  const roomy = fresh();
+  await spentGate(roomy, { laps: 5, review_rounds: 3 });
+  const plain = await operatorPage(
+    { ...portsOver(roomy, "ada", []), material: structured },
+    "t",
+    { kind: "summary" },
+    EN,
+    null,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000004",
+  );
+  expect(plain).toContain('id="revise-form"');
+  expect(plain).not.toContain('id="revise-raise"');
 });
 
 test("the raise screen shows what was approved and used, redraws the budgets, and posts only budgets (D-0074 rule 4.2)", async () => {
@@ -1453,6 +1501,8 @@ test("the gate opens on what happened: each lap, what it was asked, what it comm
   expect(story).toContain(EN.storyLapName(2, true));
   expect(story).toContain(EN.storyToldAsked);
   expect(story).toContain(words);
+  // Quoted open, never behind a fold (rondo#547).
+  expect(story).not.toContain("<details");
   expect(story).toContain(EN.storyNow);
   // Not split, so no part is named.
   expect(story).not.toContain(EN.storyOthers);

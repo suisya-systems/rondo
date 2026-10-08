@@ -71,6 +71,11 @@ function gateAutoJa(auto: GateAuto): string {
     : "rondo ならこれを自動で承認します。";
 }
 
+/** The lap a change starts, by its number in the line where it was read. */
+function lapJa(next: number | null): string {
+  return next === null ? "次の周回" : `${String(next)} 周目`;
+}
+
 function scopeTestJa(test: string): string {
   switch (test) {
     case "decision":
@@ -506,7 +511,7 @@ export const JA: Chrome = Object.freeze({
   storyToldRequest: "依頼の内容に取り組みました。",
   storyToldAsked: "次の変更を求められました:",
   storyToldNotRecorded: "前の周回の続きです。何を求められたかは記録にありません。",
-  storyShowAsked: "求められた内容",
+  storyToldContinued: (n) => `${String(n)} 周目が途中で終わったため、その続きに取り組みました。`,
   storyChanged: (commits, files) =>
     `${String(commits)} 件のコミットで ${String(files)} ファイルを変更しました。`,
   storyChangedUnread: "コミット内容は読み取れていません。",
@@ -871,15 +876,20 @@ export const JA: Chrome = Object.freeze({
   scopeBack: "範囲に戻る",
 
   reviseAction: "変更を依頼する",
-  revisePlain: "書かれた内容をこのゲートに送り、同じ承認のもとで 2 周目をその内容で動かします。",
+  revisePlain: (next) =>
+    `書かれた内容をこのゲートに送り、同じ承認のもとで${lapJa(next)}をその内容で動かします。`,
   reviseLabel: "変更してほしいこと",
   revisePlaceholder: "例: パーサーの変更はそのまま、コマンドラインには手を入れないでほしい",
-  reviseNote:
-    "書かれた言葉はそのままゲートに渡り、2 周目はその言葉で作業をやり直すよう頼まれます。" +
+  reviseNote: (next) =>
+    `書かれた言葉はそのままゲートに渡り、${lapJa(next)}はその言葉で作業をやり直すよう頼まれます。` +
     "その周回と費用は、この周回が動いた承認の枠に数えられます。周回の名前は rondo が" +
     "付けるので、入力の必要はありません。",
+  reviseRaises: (rounds) =>
+    `承認したレビュー回数 (${String(rounds)} 回) をすべて使っています。押すと、まずレビュー回数を` +
+    "下の数まで引き上げ、続けて変更を依頼します。引き上げは新しい承認として記録され、今の承認と" +
+    "置き換わります。ほかの予算は変わりません。",
   reviseNoScope:
-    "承認済みの範囲のもとで始めた周回ではないため、2 周目を数える枠がありません。" +
+    "承認済みの範囲のもとで始めた周回ではないため、次の周回を数える枠がありません。" +
     "ここから変更を依頼することはできません。",
   reviseDraftFinding: (severity, text) => `- ${severityJa(severity)}: ${text}`,
   reviseDraftBases: (bases) => `  場所: ${bases}`,
@@ -923,26 +933,26 @@ export const JA: Chrome = Object.freeze({
     "何も回答していません。ゲートには別の言葉ですでに回答していて、その処理が続いています。" +
     "終わるのを待ってから、ゲートを読み込み直して状態を確認してください。",
   reviseRefusedNotSetUp:
-    "何も回答せず、ゲートにも触れていません。2 周目を用意できませんでした。" +
+    "何も回答せず、ゲートにも触れていません。次の周回を用意できませんでした。" +
     "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
   reviseRefusedNoContinuo: "何も回答していません。作業を動かす部分が起動しません。",
   reviseRefusedOutside: (test) =>
-    `何も回答せず、何も消費していません。2 周目はこの周回が動いた範囲の外で、${test} の判定で` +
-    `外れました。ゲートはそのままです。選択肢は依頼のスレッドに書かれたメッセージにあります。`,
+    `何も回答せず、何も消費していません。次の周回はこの周回が動いた範囲の外です。${scopeTestJa(test)}。` +
+    `ゲートはそのままです。選択肢は依頼のスレッドに書かれたメッセージにあります。`,
   reviseRefusedWalkFailed:
-    "ゲートへの回答が途中で終わり、2 周目も開始していません。書かれた言葉はすでにゲートに" +
+    "ゲートへの回答が途中で終わり、次の周回も開始していません。書かれた言葉はすでにゲートに" +
     "届いているかもしれません。もう一度押す前に、戻ってゲートの状態を確認してください。" +
     "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
   reviseRefusedNotSettled:
-    "ゲートには書かれた言葉で回答しましたが、2 周目は開始していません。回答した周回の後始末が" +
+    "ゲートには書かれた言葉で回答しましたが、次の周回は開始していません。回答した周回の後始末が" +
     "終わりませんでした。何も消費していません。" +
     "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
   reviseRefusedAfterGate:
-    "ゲートには書かれた言葉で回答しましたが、2 周目は開始していません。承認がもう 1 周回を" +
+    "ゲートには書かれた言葉で回答しましたが、次の周回は開始していません。承認がもう 1 周回を" +
     "受け付けませんでした。書かれた内容は記録されています。選択肢は依頼のスレッドに書かれた" +
     "メッセージにあります。",
   reviseRefusedNotStarted:
-    "2 周目は開始していません。ここで書いた内容は失われていません。" +
+    "次の周回は開始していません。ここで書いた内容は失われていません。" +
     "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
   reviseForked:
     "ここでは変更を依頼できません。この依頼で承認した予算が別々に 2 回引き上げられていて、" +

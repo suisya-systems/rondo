@@ -2947,10 +2947,50 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (typeof body !== "string") {
       return reviseRefused(c, 400, "reviseRefusedForm", request);
     }
-    const revised = await revise.revise(minting.press, {
+    let press = minting.press;
+    let spends = decision;
+    // **Raise and ask on one press** (rondo#547): where the gate drew the
+    // approval's spent laps or review rounds, the press first records a
+    // budgets-only successor of it, as the answering box's raise does (D-0140
+    // rule 3), and the change spends that. A refused raise asks nothing, unless
+    // this is a second press whose raise and lap both landed.
+    if (form["raise"] !== undefined) {
+      const budgets = budgetsOf(form);
+      if (scope === null) {
+        return reviseRefused(c, 403, "reviseRefusedNoApprover", request);
+      }
+      if (form["raise"] !== decision || budgets === null || body.trim() === "") {
+        return reviseRefused(
+          c,
+          400,
+          body.trim() === "" ? "reviseRefusedNoWords" : "reviseRefusedForm",
+          request,
+        );
+      }
+      const raised = await scope.raise(press, {
+        scopeId: newScopeId(),
+        requestMessageId: request,
+        scopeDecisionId: decision,
+        iterationId,
+        budgets,
+      });
+      if (!raised.ok || raised.scopeDecisionId === undefined) {
+        if ((await reading.store.read(successorId)).kind === "read") {
+          return c.redirect(
+            viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)),
+            303,
+          );
+        }
+        return reviseRefused(c, 409, "reviseRefusedNotItsScope", request, null, raised.note);
+      }
+      spends = raised.scopeDecisionId;
+      press = Object.freeze({}) as Press;
+      minted.add(press);
+    }
+    const revised = await revise.revise(press, {
       iterationId,
       successorId,
-      scopeDecisionId: decision,
+      scopeDecisionId: spends,
       body,
     });
     if (!revised.ok) {

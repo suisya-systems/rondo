@@ -128,7 +128,12 @@ import { goalScopeStanding } from "./goal-scope.js";
 import { ago, gatherInbox, type LiveRow } from "./inbox.js";
 import { type IssueComment, parseForgeRead } from "./issue-read.js";
 import { isModelDrafterName, REDRAFT_AUTHOR } from "./model-draft/judgement.js";
-import { retakeOffered } from "./model-review/judgement.js";
+import {
+  retakeOffered,
+  reviewPolicyOf,
+  reviewRoundDecision,
+  reviewRoundsAlong,
+} from "./model-review/judgement.js";
 import { unlandedPrefix } from "./order-host.js";
 import type {
   ClaimReach,
@@ -235,7 +240,7 @@ import {
 import { readingsByDigest } from "./read-in.js";
 import { denialLine, LIST_LIMIT } from "./review.js";
 import { type ReviseBox, reviseBoxOf, reviseLabels } from "./revise-draft/judgement.js";
-import { approvalTip, budgetRefusal, stopRaises } from "./scope.js";
+import { approvalTip, budgetRefusal, reviewScopeOf, stopRaises } from "./scope.js";
 import { goalScopeView } from "./screens/goal-scope.js";
 import { mergeView } from "./screens/merge.js";
 import { publishView } from "./screens/publish.js";
@@ -1317,8 +1322,9 @@ function storyView(
   work: LapWorkInspection | null,
 ) {
   // **Bounded, so the presses stay in reach on arrival** (D-0106, the Fable
-  // pass on rondo#497): quotes are clamped to three lines, and an earlier
-  // lap's asked words are folded, since its one line already says how it ended.
+  // pass on rondo#497): quotes are clamped to three lines. **Never folded**
+  // (rondo#547): a fold whose summary read "what was asked" was taken for the
+  // words themselves, and the lap's row then said nothing of what was sent.
   const QUOTE =
     "mt-1 line-clamp-3 border-l-2 border-border pl-2 text-body leading-5 wrap-anywhere whitespace-pre-wrap";
   return (
@@ -1347,7 +1353,9 @@ function storyView(
               ? wording.storyToldRequest
               : lap.told.kind === "asked"
                 ? wording.storyToldAsked
-                : wording.storyToldNotRecorded;
+                : lap.told.kind === "continued"
+                  ? wording.storyToldContinued(lap.told.lap)
+                  : wording.storyToldNotRecorded;
           const words = lap.told.kind === "asked" ? lap.told.words : null;
           const outcome = [
             lap.commits === null || lap.files === null
@@ -1365,27 +1373,11 @@ function storyView(
             .join(" ");
           return (
             <li class="text-body leading-5">
-              {now || words === null ? (
-                <>
-                  <span class="font-semibold">{wording.storyLapName(index + 1, now)}</span> {told}
-                  {words === null ? null : (
-                    <p class={QUOTE} lang="" title={words}>
-                      {words}
-                    </p>
-                  )}
-                </>
-              ) : (
-                <details class="group">
-                  <summary class="cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">
-                    <span class="font-semibold">{wording.storyLapName(index + 1, now)}</span> {told}{" "}
-                    <span class="text-meta text-faint underline underline-offset-2">
-                      {wording.storyShowAsked}
-                    </span>
-                  </summary>
-                  <p class={QUOTE} lang="">
-                    {words}
-                  </p>
-                </details>
+              <span class="font-semibold">{wording.storyLapName(index + 1, now)}</span> {told}
+              {words === null ? null : (
+                <p class={QUOTE} lang="" title={words}>
+                  {words}
+                </p>
               )}
               <p class="mt-0.5 text-muted-foreground">{outcome}</p>
               {subjects.length === 0 ? null : (
@@ -1697,7 +1689,15 @@ function approveView(
             {raised === null ? wording.approvePlain : wording.approveDespitePlain}
           </span>
         </form>
-        {reviseForm(wording, record, token, framing, newIterationId, raised !== null)}
+        {reviseForm(
+          wording,
+          record,
+          token,
+          framing,
+          newIterationId,
+          raised !== null,
+          story === null ? null : story.laps.length + 1,
+        )}
       </div>
       {/*
        * **What the press records, folded by default** (the S2 design pass on
@@ -1809,6 +1809,8 @@ function reviseForm(
   newIterationId: MintIterationId | null,
   /** Whether a reading raised something, which is what makes this the recommended answer. */
   recommended: boolean,
+  /** The number the lap this starts will have in its line, as the story counts it; null unread. */
+  next: number | null,
 ) {
   if (newIterationId === null) {
     return null;
@@ -1828,6 +1830,11 @@ function reviseForm(
   if (closed !== null && record.requestMessageId !== null) {
     return raiseBlock(wording, closed, record.requestMessageId, framing.scopeDecisionId, record.id);
   }
+  // **Spent review rounds are raised by the revise press itself** (D-0164,
+  // rondo#547): one round more than were taken is a number the gate can
+  // prefill, so the press raises and asks in one step.
+  const rounds = framing.roundsClosing;
+  const raising = rounds === null ? null : framing.budgets;
   const box = framing.revise;
   const draftKey = `revise:${record.id}:${record.gateId ?? ""}`;
   return (
@@ -1845,6 +1852,33 @@ function reviseForm(
         {/* Minted at render, as the scoped start's is, and for its reason:
             rondo names the lap (D-0023) and a double press is one lap. */}
         <input type="hidden" name="successor" value={newIterationId()} />
+        {raising === null || rounds === null ? null : (
+          <div id="revise-raise" class="space-y-1">
+            <p class="note text-meta leading-5 text-foreground">
+              {wording.reviseRaises(rounds.budget)}
+            </p>
+            {/* The approval's other budgets carried as drawn, as the
+                answering box's raise carries them (D-0140 rule 3). */}
+            <input type="hidden" name="raise" value={framing.scopeDecisionId} />
+            <input type="hidden" name="laps" value={String(raising.laps)} />
+            <input type="hidden" name="cost_usd" value={money(raising.cost_usd)} />
+            <input type="hidden" name="cost_reserve_usd" value={money(raising.cost_reserve_usd)} />
+            <input type="hidden" name="expires_at_ms" value={localTime(raising.expires_at_ms)} />
+            {/* Rounds are counted along the line, so one more than were taken
+                is what lets the next lap through (D-0065 4.3). */}
+            <label class="flex items-center gap-2 text-meta leading-5 text-muted-foreground">
+              <span>{wording.answerRaiseRoundsLabel}</span>
+              <input
+                type="number"
+                name="review_rounds"
+                min={String(rounds.taken + 1)}
+                step="1"
+                value={String(rounds.taken + 1)}
+                class="w-20 rounded-md border border-border bg-background px-2 py-1 text-body leading-5"
+              />
+            </label>
+          </div>
+        )}
         <label class="flex min-w-0 flex-col gap-1">
           <span class="text-meta leading-5 font-medium text-muted-foreground">
             {wording.reviseLabel}
@@ -1897,7 +1931,7 @@ function reviseForm(
           </p>
         ) : null}
         {box.kind === "unavailable" ? maintainerFold("revise-why", wording, box.reason) : null}
-        <p class="note text-meta leading-5 text-muted-foreground">{wording.reviseNote}</p>
+        <p class="note text-meta leading-5 text-muted-foreground">{wording.reviseNote(next)}</p>
         {/* **A change waits on the question, and says so before the press**
             (rondo#448): the scope's verdict refuses it while a question over
             this line stands, so the press is drawn but not pressable. The box
@@ -1968,7 +2002,7 @@ function reviseForm(
           {wording.lapBusyNote}
         </p>
         <span id="revise-plain" class="note sr-only">
-          {wording.revisePlain}
+          {wording.revisePlain(next)}
         </span>
       </form>
     </div>
@@ -2001,6 +2035,13 @@ interface Shown {
    * with the verdict's own arithmetic (D-0074 rule 4.1), or null when none does.
    */
   readonly closedBy: BudgetClosed | null;
+  /**
+   * The review rounds, where they are what would refuse the revise's lap at
+   * the readings test (D-0065 4.3), or null (rondo#547).
+   */
+  readonly roundsClosing: { readonly taken: number; readonly budget: number } | null;
+  /** The budgets of the approval a revise spends, or null where none reads. */
+  readonly budgets: ScopePayload["budgets"] | null;
   /** The revise box's content and what is said beside it (D-0077 section 4). */
   readonly revise: ReviseBox;
   /**
@@ -2110,6 +2151,49 @@ async function budgetClosing(
 }
 
 /**
+ * Whether the review rounds would refuse one more lap of this line, with the
+ * readings test's own arithmetic (D-0065 4.3): the decision stops at the
+ * approved budget and would not stop with one round more. A reading that is
+ * unavailable or ungraded stops whatever the budget, so it is not this.
+ */
+async function roundsClosing(
+  ports: WebPorts,
+  scopeDecisionId: string,
+  iterationId: string,
+  readings: readonly LapReading[],
+): Promise<Pick<Shown, "roundsClosing" | "budgets">> {
+  const none = { roundsClosing: null, budgets: null };
+  const decided = await ports.record.readScopeDecision(scopeDecisionId);
+  if (decided.kind !== "read") {
+    return none;
+  }
+  const stored = await ports.record.readScope(decided.decision.scopeId);
+  if (stored.kind !== "read") {
+    return none;
+  }
+  const budgets = stored.scope.payload.budgets;
+  const latest = latestReading(readings, isModelReadingDrafter);
+  const lineage = await ports.record.lineageOf(iterationId);
+  if (latest === null || lineage === null) {
+    return { roundsClosing: null, budgets };
+  }
+  const links = [];
+  for (const id of lineage) {
+    links.push({ readings: id === iterationId ? readings : await ports.store.readingsFor(id) });
+  }
+  const taken = reviewRoundsAlong(links);
+  const policy = reviewPolicyOf(reviewScopeOf(stored.scope.payload));
+  const stops = (roundBudget: number): boolean =>
+    reviewRoundDecision({ latest, roundsTaken: taken, policy: { ...policy, roundBudget } }).kind ===
+    "stop";
+  return {
+    roundsClosing:
+      stops(policy.roundBudget) && !stops(taken + 1) ? { taken, budget: policy.roundBudget } : null,
+    budgets,
+  };
+}
+
+/**
  * What a press would be recorded as having shown, for the rows that carry a
  * button (D-0042 rules 1 and 4).
  *
@@ -2178,6 +2262,9 @@ async function shownBeforePress(
       forked: tip.kind === "forked",
       closedBy:
         tip.kind === "tip" ? await budgetClosing(ports, tip.scopeDecisionId, ports.now()) : null,
+      ...(tip.kind === "tip"
+        ? await roundsClosing(ports, tip.scopeDecisionId, record.id, readings)
+        : { roundsClosing: null, budgets: null }),
       revise: withAnswer(
         await reviseBox(ports, wording, record.id, readings),
         workerQuestion?.answered ?? null,

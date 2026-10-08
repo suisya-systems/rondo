@@ -196,6 +196,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0161 | A worker's question is put to the person whether or not its lap committed anything: nothing committed is said on the page, not a reason to drop the question | accepted |
 | D-0162 | The model reviewer's answer is shaped by codex's `--output-schema`, which rondo writes as a file of its own beside the reviewer's empty directory | accepted |
 | D-0163 | A person changes which files an open line keeps: a widening for work still going and never onto another open line's files, a narrowing once nothing of the line can commit and never of a file it changed | accepted |
+| D-0164 | A gate whose review rounds are spent raises them on the change press itself: one press records the raised approval and asks for the change under it | accepted |
 | D-0165 | `revise --iteration-id` names the lap being revised, as on every other verb, and the second lap is named by `--successor-id`, so a revise works while several iterations are open | accepted |
 
 ---
@@ -28315,6 +28316,54 @@ At rondo `8fb7642` on **2026-10-08**, by reading the code:
 - **Two lines colliding on a path one of them gave up by this press**, which would mean rule 4's
   reading missed a commit.
 - Any measurement above failing to reproduce at rondo `8fb7642`.
+
+## D-0164 — A gate whose review rounds are spent raises them on the change press itself: one press records the raised approval and asks for the change under it
+
+**Status:** accepted (2026-10-08, rondo#547). Answers `D-0074`'s residual on a redo refused because
+`review_rounds` is spent. Refs `D-0065` rule 4.3, `D-0066` rule 4.2, `D-0070`, `D-0074` sections 1
+and 4, `D-0140` rule 3.
+
+### Context
+
+On the #228 flow's lap `lap-effd4c75…-again-1` (2026-09-28, operator language `ja`) the line had
+taken 3 of its 3 review rounds with a finding at or above the threshold. The gate still drew
+**Ask for a change**: `D-0074` rule 4.1 computes the revise verdict before the press for `laps`,
+`cost` and `expiry`, and its residual table left `review_rounds` to a later entry. The press was
+refused at the readings test, and the refusal page sent the person to `journalctl`. The owner's
+direction on the issue: at the approval's limit, the gate itself offers to widen the approval and
+send the change request in one step.
+
+### Decision
+
+1. **The gate computes the readings test's round arithmetic before the press.** With the gated
+   lap's latest model reading and the rounds taken along its lineage (`reviewRoundsAlong`), the
+   rounds are what closes the change path when `reviewRoundDecision` stops at the approved
+   `review_rounds` and would not stop at one round more than were taken. An unavailable or
+   ungraded reading stops at any budget, so it is not this case and draws what it drew before.
+2. **The revise form then carries the raise.** It says how many rounds were approved and that the
+   press raises them first; the rounds field is prefilled with one more than were taken, and the
+   approval's other four budgets travel as drawn, as the answering box's raise carries them
+   (`D-0140` rule 3).
+3. **One press, two writes, in order.** `/revise` records a budgets-only successor of the drawn
+   approval through the raise port (`D-0074` rule 4.3's writes and refusals), then asks for the
+   change under the approval that write returned. A refused raise asks nothing; a change with no
+   words raises nothing. A second press whose raise and lap both landed finds its successor lap
+   and returns to the thread.
+4. **`laps`, `cost` and `expiry` keep `D-0074` rule 4.1's raise screen.** Laps could be prefilled
+   the same way; changing that is a supersession of rule 4.1, not part of this entry.
+
+### What it costs
+
+- **The raise is recorded even when the change it was pressed for is refused afterwards** (by
+  another test, or a question that arrived since the gate was drawn). The person returns to a gate
+  whose approval is already raised, and the next press only asks.
+
+### What would falsify it
+
+- **A rounds raise pressed from the gate being refused at the readings test anyway**: the gate's
+  arithmetic and the verdict's then read different lineages or readings.
+- **`D-0065` rule 4.3 changing how rounds are counted**, which this entry copies by calling the same
+  functions rather than restating them.
 
 ---
 

@@ -495,8 +495,8 @@ export interface Chrome extends PageWords {
   /** Leads the words a revise at the gate before the lap asked it to change, quoted below. */
   readonly storyToldAsked: string;
   readonly storyToldNotRecorded: string;
-  /** Opens the fold holding an earlier lap's asked words. */
-  readonly storyShowAsked: string;
+  /** A lap that carried on lap `n` of the line, which ended without a gate answer (rondo#547). */
+  readonly storyToldContinued: (n: number) => string;
   readonly storyChanged: (commits: number, files: number) => string;
   readonly storyChangedUnread: string;
   readonly storyNow: string;
@@ -1060,10 +1060,16 @@ export interface Chrome extends PageWords {
    * approving, with rondo's draft of what to change already in the box.
    */
   readonly reviseAction: string;
-  readonly revisePlain: string;
+  /** `next` is the number the lap this starts will have in its line, or null where unread (rondo#547). */
+  readonly revisePlain: (next: number | null) => string;
   readonly reviseLabel: string;
   readonly revisePlaceholder: string;
-  readonly reviseNote: string;
+  readonly reviseNote: (next: number | null) => string;
+  /**
+   * The approval's review rounds are spent, `rounds` of them, and the press
+   * raises them before it asks (D-0164, rondo#547).
+   */
+  readonly reviseRaises: (rounds: number) => string;
   /**
    * Why there is no revise here: the lap was not admitted under an approval, so
    * a second lap has no budget to be counted against (D-0070 section 1.2). Said
