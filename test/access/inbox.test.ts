@@ -106,6 +106,7 @@ const EMPTY: InboxSnapshot = {
   unspent: [],
   transcripts: new Map(),
   latestTriage: new Set(),
+  taken: new Set(),
 };
 
 /**
@@ -606,6 +607,21 @@ test("a proposal that binds nothing is folded once its subject has moved on (ron
     expect(rendered).not.toContain(folded);
   }
   expect(rendered).toContain("and 4 more whose lap has ended or that a newer one replaced");
+});
+
+test("an approvable proposal whose successor identity is taken is a count, not a row (rondo#584)", () => {
+  const rendered = inboxLines(EN, "operator-1", {
+    ...EMPTY,
+    open: [
+      { proposalId: "p-taken", kind: "run_plan", iterationId: "i-1", createdAtMs: 1_000 },
+      { proposalId: "p-free", kind: "contract_keys", iterationId: "i-1", createdAtMs: 2_000 },
+    ],
+    taken: new Set(["p-taken"]),
+  }).join("\n");
+  expect(rendered).toContain("approve them (1)");
+  expect(rendered).toContain("p-free  ");
+  expect(rendered).not.toContain("p-taken");
+  expect(rendered).toContain("and 1 more whose successor identity another lap already holds");
 });
 
 test("nothing waiting is a section that says zero, not a section that vanishes", () => {

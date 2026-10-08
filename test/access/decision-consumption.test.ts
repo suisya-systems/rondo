@@ -20,6 +20,8 @@ import { expect, test } from "vitest";
 import type { ProposePorts } from "../../src/access/advisory.js";
 import { approvedRetry, proposeRetry, recordAnswer } from "../../src/access/advisory.js";
 import { admit } from "../../src/access/conductor.js";
+import { gatherInbox, type InboxReadPorts } from "../../src/access/inbox.js";
+import { waitingBinding } from "../../src/access/inbox-current.js";
 import type { CatalogLayer } from "../../src/cadenza/facade.js";
 import type { AdmittedPlan, RunPlan } from "../../src/refrain/plan.js";
 import type { LoopPolicy } from "../../src/refrain/policy.js";
@@ -666,4 +668,95 @@ test("an approval whose digest two options share is refused rather than resolved
     expect(resolved.reason).toContain("does not say which of them was taken");
   }
   expect(rowsIn(h.connection, "decision_consumption").length).toBe(0);
+});
+
+test("a proposal whose successor identity another admission took stops waiting, and admit() refuses it (rondo#584)", async () => {
+  // **Two open proposals naming one successor.** The unprompted
+  // `contract_keys-<subject>` minted `<subject>-r2`, and an operator proposed a
+  // `run_plan` for the same identity while it was still free -- `proposeRetry`
+  // checks freedom when it drafts, and nothing checks it again while the
+  // proposal stays open.
+  const { h, decisionId, approved } = await approvedChain();
+  const operator = await proposeRetry(
+    { ...h.advisory, present: () => undefined },
+    "run_plan",
+    SUBJECT,
+    SUCCESSOR,
+  );
+  if (operator.kind !== "proposed") {
+    throw new Error("the operator's run_plan proposal was not drafted");
+  }
+  const inboxPorts: InboxReadPorts = {
+    store: h.advisory.store,
+    record: h.advisory.record,
+    now: () => NOW_MS,
+    locateTranscript: () => Promise.resolve({ kind: "unknown", reason: "not asked here" }),
+  };
+  const waiting = async (): Promise<readonly string[]> => {
+    const inbox = await gatherInbox(inboxPorts, APPROVER);
+    return waitingBinding(inbox.open, inbox.taken).map((row) => row.proposalId);
+  };
+  // **The control**: while the identity is free, the operator's proposal waits
+  // on the person (the unprompted one is answered, so it is no longer open).
+  expect(await waiting()).toEqual([operator.proposalId]);
+
+  h.answers.classify = answered("allowed");
+  const taken = await approvedRetry(h.advisory, PROPOSAL_ID);
+  if (taken.kind !== "resolved") {
+    throw new Error("the chain did not resolve");
+  }
+  const first = await admit(
+    h.ports,
+    h.advisory,
+    taken.retry.plan,
+    POLICY,
+    SUCCESSOR,
+    SUBJECT,
+    { decisionId, contractDigest: approved },
+    REQUEST,
+  );
+  expect(first.iterationId).toBe(SUCCESSOR);
+
+  // The leftover is still an open proposal nobody has decided, and still reads
+  // back; it no longer waits on the person, in the inbox's list or the page's
+  // count, which both take `waitingBinding`.
+  expect((await h.advisory.record.openProposals(NOW_MS)).map((row) => row.proposalId)).toEqual([
+    operator.proposalId,
+  ]);
+  expect((await h.advisory.record.readProposal(operator.proposalId)).kind).toBe("read");
+  expect(await waiting()).toEqual([]);
+
+  // **Approving it runs nothing, and the refusal is admit()'s.** The digest
+  // names the successor as grantee, and that grantee has not moved, so
+  // `approvedRetry` still re-derives the approved contract; what stops it is
+  // the reservation, on identifiers the first admission already holds.
+  const answer = await recordAnswer(
+    { record: h.advisory.record, now: () => NOW_MS },
+    {
+      proposalId: operator.proposalId,
+      outcome: "approved",
+      contractDigest: operator.options[0]?.value as string,
+      actorId: APPROVER,
+    },
+  );
+  if (answer.kind !== "answered") {
+    throw new Error("the leftover proposal could not be answered");
+  }
+  const resolved = await approvedRetry(h.advisory, operator.proposalId);
+  if (resolved.kind !== "resolved") {
+    throw new Error("the leftover's approval did not resolve");
+  }
+  const report = await admit(
+    h.ports,
+    h.advisory,
+    resolved.retry.plan,
+    POLICY,
+    SUCCESSOR,
+    SUBJECT,
+    { decisionId: answer.decisionId, contractDigest: resolved.retry.contractDigest },
+    REQUEST,
+  );
+  expect(report.iterationId).toBeNull();
+  expect(report.lines.join("\n")).toContain("already held by another iteration");
+  expect(rowsIn(h.connection, "decision_consumption").length).toBe(1);
 });

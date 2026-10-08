@@ -14,7 +14,6 @@
 import { readTriagePayload, type TriagePayload } from "../../advisory/triage.js";
 import {
   type IterationRecord,
-  isApprovableKind,
   isTerminal,
   type NonTerminalStatus,
   opensFlowRequest,
@@ -27,6 +26,7 @@ import { draftedStanding } from "../drafted-view.js";
 import { flowStopOf } from "../flow-stop.js";
 import { goalScopeStanding } from "../goal-scope.js";
 import { gatherInbox, type LiveRow } from "../inbox.js";
+import { waitingBinding } from "../inbox-current.js";
 import { unlandedPrefix } from "../order-host.js";
 import type { MintMessageId, WebPorts } from "../page/contract.js";
 import type { HeldReads } from "../page/held.js";
@@ -261,10 +261,12 @@ export async function pageModel(
   // undecidable by construction -- `recordDecision` refuses the non-binding
   // kinds -- so every press this page makes would leave a row here for ever and
   // the count would climb with each approval. The test is
-  // {@link isApprovableKind}, the closed set the compiler checks, which is what
+  // `isApprovableKind`, the closed set the compiler checks, which is what
   // `inbox` splits on too; the rest are in the reading, in the inbox's own two
   // sections, where they are material rather than a queue.
-  const open = (inbox?.open ?? []).filter((proposal) => isApprovableKind(proposal.kind));
+  // One whose successor identity another lap already holds is not counted
+  // either: approving it cannot run anything (D-0176, `waitingBinding`).
+  const open = inbox === null ? [] : waitingBinding(inbox.open, inbox.taken);
   // **One count of what waits on the person** (#220 S1): the header pill and the
   // summary's *waiting for your answer* heading both say this number -- gates,
   // questions in threads, and proposals an answer can settle -- so they cannot

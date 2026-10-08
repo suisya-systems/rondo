@@ -11,6 +11,8 @@
  * still in the store and still read back by `rondo show --proposal-id`.
  */
 import { isApprovableKind, type OpenProposal } from "../store/records.js";
+import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
+import { storedSuccessorId } from "./advisory.js";
 
 /** The ones still listed, and how many were folded. */
 export interface NonBindingSplit {
@@ -59,4 +61,44 @@ export function splitNonBinding(
     );
   });
   return { current, movedOn: nonBinding.length - current.length };
+}
+
+/**
+ * The approvable open proposals whose successor identity is already in the
+ * store (rondo#584, D-0176).
+ *
+ * `proposeRetry` refuses a taken successor when it drafts, and nothing checks
+ * again while the proposal stays open. Once another admission holds the
+ * identity, approving this one cannot run anything: `admit()` refuses on the
+ * identifiers that admission already holds. A row that will not read is left
+ * waiting, since only a successor seen in the store is evidence it is taken.
+ */
+export async function takenSuccessors(
+  ports: {
+    readonly store: Pick<IterationStore, "read">;
+    readonly record: Pick<AdvisoryRecord, "readProposal">;
+  },
+  open: readonly OpenProposal[],
+): Promise<ReadonlySet<string>> {
+  const taken = new Set<string>();
+  for (const proposal of open.filter((each) => isApprovableKind(each.kind))) {
+    const stored = await ports.record.readProposal(proposal.proposalId);
+    const successorId = stored.kind === "read" ? storedSuccessorId(stored.proposal) : null;
+    // Not absent is taken, as `proposeRetry` decides it: an undecodable row
+    // still holds its primary key.
+    if (successorId !== null && (await ports.store.read(successorId)).kind !== "absent") {
+      taken.add(proposal.proposalId);
+    }
+  }
+  return taken;
+}
+
+/** The approvable proposals still waiting on the person: the inbox's list and the page's count. */
+export function waitingBinding(
+  open: readonly OpenProposal[],
+  taken: ReadonlySet<string>,
+): readonly OpenProposal[] {
+  return open.filter(
+    (proposal) => isApprovableKind(proposal.kind) && !taken.has(proposal.proposalId),
+  );
 }
