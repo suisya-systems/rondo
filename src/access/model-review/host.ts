@@ -95,6 +95,12 @@ export interface ModelReviewPorts {
    * The gate report went first, so without this the thread never hears it.
    */
   readonly thread?: RequestThread | null;
+  /**
+   * The language the host's operator reads (`RONDO_OPERATOR_LANGUAGE`), asked
+   * for where the lap's plan names none (rondo#547): a flow's lap carries no
+   * language of its own, and its findings are still read at a gate.
+   */
+  readonly language?: string | null;
 }
 
 /** The ports the command line uses: the real forge and continuo's gate. */
@@ -102,10 +108,12 @@ export function modelReviewPorts(
   continuo: VerifiedContinuo,
   store: IterationStore,
   thread: RequestThread | null = null,
+  language: string | null = null,
 ): ModelReviewPorts {
   return {
     store,
     thread,
+    language,
     rationale: async (record) => {
       const db = record.plan["db"];
       if (record.gateId === null || typeof db !== "string") {
@@ -258,7 +266,7 @@ async function take(ports: ModelReviewPorts, iterationId: string): Promise<reado
             rationale: await ports.rationale(record),
             deterministicFindings: deterministic.findings,
             criterion,
-            language: plan.materialLanguage,
+            language: plan.materialLanguage ?? ports.language ?? null,
             ruleFiles: facts.ruleFiles,
           };
   }

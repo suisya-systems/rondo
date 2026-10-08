@@ -43,12 +43,16 @@ export function raisedIn(reading: LapReading | null): RaisedCounts | null {
 
 /**
  * What a lap was asked to do: the request itself (the line's first lap), the
- * words a revise at the gate before it added, or not recorded -- a retry, a
- * conflict fix, or a prompt whose shape rondo does not know.
+ * words a revise at the gate before it added, the carrying on of an earlier lap
+ * that ended without a gate answer (a lost or stopped lap started again,
+ * rondo#547), or not recorded -- a conflict fix, or a prompt whose shape rondo
+ * does not know.
  */
 export type StoryTold =
   | { readonly kind: "request" }
   | { readonly kind: "asked"; readonly words: string }
+  /** `lap` is the earlier lap's number in the line, from 1. */
+  | { readonly kind: "continued"; readonly lap: number }
   | { readonly kind: "notRecorded" };
 
 export interface StoryLap {
@@ -71,7 +75,8 @@ export function lapStory(
 ): readonly StoryLap[] {
   const laps = line.toSorted((left, right) => left.createdAtMs - right.createdAtMs);
   return laps.map((record, index): StoryLap => {
-    const before = laps.find((lap) => lap.id === record.supersedesIterationId);
+    const beforeIndex = laps.findIndex((lap) => lap.id === record.supersedesIterationId);
+    const before = laps[beforeIndex];
     const words =
       before === undefined || before.gateAnswer !== "revise"
         ? null
@@ -83,9 +88,11 @@ export function lapStory(
       told:
         index === 0
           ? { kind: "request" }
-          : words === null
-            ? { kind: "notRecorded" }
-            : { kind: "asked", words },
+          : words !== null
+            ? { kind: "asked", words }
+            : before !== undefined && before.gateAnswer === null
+              ? { kind: "continued", lap: beforeIndex + 1 }
+              : { kind: "notRecorded" },
       commits: evidence?.commitCount ?? null,
       files: evidence?.fileCount ?? null,
       raised: raisedIn(latestReading(readings, isModelReadingDrafter)),

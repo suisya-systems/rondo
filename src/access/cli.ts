@@ -688,8 +688,13 @@ export function operatorLanguage(
  * command that only writes a stop's ask is no place to refuse it again.
  */
 function hostWords(environment: Readonly<Record<string, string | undefined>>): Chrome {
+  return chromeFor(hostLanguage(environment));
+}
+
+/** The host's language tag, or null where it names none or one that is not a tag. */
+function hostLanguage(environment: Readonly<Record<string, string | undefined>>): string | null {
   const selected = operatorLanguage(environment);
-  return chromeFor("tag" in selected ? selected.tag : null);
+  return "tag" in selected ? selected.tag : null;
 }
 
 /**
@@ -4580,7 +4585,11 @@ async function commandAnswer(
     // bytes to the reviewer again and append a second round nobody asked for.
     await sayGateOpen(
       modelReadingDue(await store.readingsFor(record.id))
-        ? () => takeModelReading(modelReviewPorts(continuo, store, ports.thread ?? null), record.id)
+        ? () =>
+            takeModelReading(
+              modelReviewPorts(continuo, store, ports.thread ?? null, hostLanguage(environment)),
+              record.id,
+            )
         : null,
     );
   }
@@ -6588,7 +6597,12 @@ export async function restartLostFromPage(
     if (report.status === "awaiting_human") {
       await sayGateOpen(() =>
         takeModelReading(
-          modelReviewPorts(startup.continuo, store, ports.thread ?? null),
+          modelReviewPorts(
+            startup.continuo,
+            store,
+            ports.thread ?? null,
+            hostLanguage(environment),
+          ),
           report.iterationId ?? successorId,
         ),
       );
@@ -6805,7 +6819,7 @@ async function conflictFixPage(
   if (report.status === "awaiting_human") {
     await sayGateOpen(() =>
       takeModelReading(
-        modelReviewPorts(continuo, store, ports.thread ?? null),
+        modelReviewPorts(continuo, store, ports.thread ?? null, hostLanguage(environment)),
         report.iterationId ?? input.successorId,
       ),
     );
@@ -6921,7 +6935,7 @@ async function retakeReviewPage(
   }
   const ports = conductorPorts(startup.continuo, store, advisory, Date.now, hostWords(environment));
   const lines = await takeModelReading(
-    modelReviewPorts(startup.continuo, store, ports.thread ?? null),
+    modelReviewPorts(startup.continuo, store, ports.thread ?? null, hostLanguage(environment)),
     record.id,
   );
   for (const line of lines) {
@@ -7212,7 +7226,7 @@ async function revisePage(
   if (report.status === "awaiting_human") {
     await sayGateOpen(() =>
       takeModelReading(
-        modelReviewPorts(continuo, store, ports.thread ?? null),
+        modelReviewPorts(continuo, store, ports.thread ?? null, hostLanguage(environment)),
         report.iterationId ?? input.successorId,
       ),
     );
@@ -7629,7 +7643,7 @@ async function admitScopedPlan(
   if (outcome.report.status === "awaiting_human") {
     await sayGateOpen(() =>
       takeModelReading(
-        modelReviewPorts(continuo, store, ports.thread ?? null),
+        modelReviewPorts(continuo, store, ports.thread ?? null, hostLanguage(environment)),
         outcome.report.iterationId ?? input.iterationId,
       ),
     );

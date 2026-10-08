@@ -68,6 +68,11 @@ function agentTypeSourceEn(from: AgentTypeSource): string {
   }
 }
 
+/** The lap a change starts, by its number in the line where it was read. */
+function lapEn(next: number | null): string {
+  return next === null ? "the next lap" : `lap ${String(next)}`;
+}
+
 function scopeTestEn(test: string): string {
   switch (test) {
     case "decision":
@@ -490,7 +495,7 @@ explanation you pressed on and then answers the gate.`,
   storyToldAsked: "Asked to change:",
   storyToldNotRecorded:
     "Carried on from the lap before; what it was asked beyond that is not recorded.",
-  storyShowAsked: "what was asked",
+  storyToldContinued: (n) => `Carried on lap ${String(n)}, which ended before it reached its gate.`,
   storyChanged: (commits, files) =>
     `${String(commits)} commit${commits === 1 ? "" : "s"}, ${String(files)} file${files === 1 ? "" : "s"} changed.`,
   storyChangedUnread: "What it committed has not been read.",
@@ -859,16 +864,20 @@ explanation you pressed on and then answers the gate.`,
   scopeBack: "Back to the scope",
 
   reviseAction: "Ask for a change",
-  revisePlain:
-    "Sends what you wrote to this gate, and runs a second lap with it under the same approval.",
+  revisePlain: (next) =>
+    `Sends what you wrote to this gate, and runs ${lapEn(next)} with it under the same approval.`,
   reviseLabel: "What to change",
   revisePlaceholder: "e.g. keep the change to the parser, and leave the command line alone",
-  reviseNote:
-    "Your words go to the gate exactly as you leave them, and the second lap is asked to do the " +
+  reviseNote: (next) =>
+    `Your words go to the gate exactly as you leave them, and ${lapEn(next)} is asked to do the ` +
     "work again with them. The lap and its cost are counted against the approval this one ran " +
     "under. rondo names the lap; you do not.",
+  reviseRaises: (rounds) =>
+    `The ${String(rounds)} review round(s) you approved are all used. Pressing first raises the ` +
+    "review rounds to the number below, then asks for the change. The raise is recorded as a new " +
+    "approval in place of this one; no other budget changes.",
   reviseNoScope:
-    "This lap was not started under an approved scope, so a second lap has no budget to be " +
+    "This lap was not started under an approved scope, so the next lap has no budget to be " +
     "counted against, and asking for a change is not offered here.",
   reviseDraftFinding: (severity, text) => `- [${severity}] ${text}`,
   reviseDraftBases: (bases) => `  where: ${bases}`,
@@ -911,27 +920,27 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was answered: this gate is already being answered with other words, and that is " +
     "still running. Wait for it, then reload the gate to see how it stands.",
   reviseRefusedNotSetUp:
-    "Nothing was answered and the gate was not touched: the second lap could not be set up. " +
+    "Nothing was answered and the gate was not touched: the next lap could not be set up. " +
     "Whoever maintains rondo on this machine can see what it said.",
   reviseRefusedNoContinuo:
     "Nothing was answered: the part of rondo that runs the work will not start.",
   reviseRefusedOutside: (test) =>
-    `Nothing was answered and nothing was spent: a second lap is outside the scope this one ran ` +
-    `under, at the ${test} test. The gate is untouched, and a message in the request's thread ` +
+    `Nothing was answered and nothing was spent: the next lap is outside the scope this one ran ` +
+    `under: ${scopeTestEn(test)}. The gate is untouched, and a message in the request's thread ` +
     `says what the choices are.`,
   reviseRefusedWalkFailed:
-    "Answering this gate did not finish, and no second lap started. Your words may already have " +
+    "Answering this gate did not finish, and no next lap started. Your words may already have " +
     "reached it: go back and read how the gate stands before pressing again. Whoever maintains " +
     "rondo on this machine can see what it said.",
   reviseRefusedNotSettled:
-    "The gate was answered with your words, and no second lap started: the lap you answered did " +
+    "The gate was answered with your words, and no next lap started: the lap you answered did " +
     "not finish settling. Nothing was spent. Whoever maintains rondo on this machine can see what it said.",
   reviseRefusedAfterGate:
-    "The gate was answered with your words, and no second lap started: the approval would not " +
+    "The gate was answered with your words, and no next lap started: the approval would not " +
     "take another lap. What you wrote is recorded; a message in the request's thread says what " +
     "the choices are.",
   reviseRefusedNotStarted:
-    "No second lap started, and nothing here is lost. " +
+    "No next lap started, and nothing here is lost. " +
     "Whoever maintains rondo on this machine can see what it said.",
   reviseForked:
     "Asking for a change is not offered here: what you approved for this request was raised " +

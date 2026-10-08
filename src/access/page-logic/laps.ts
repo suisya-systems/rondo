@@ -90,11 +90,17 @@ export function endedHow(wording: Chrome, record: IterationRecord, nowMs: number
 }
 
 export function endedWhy(wording: Chrome, record: IterationRecord): string {
+  // A lost lap's and a fault's reasons are rondo's English for whoever keeps
+  // the host (D-0139, D-0076 rule 4.5), so the person reads the thread's line.
   return record.gateOutcome !== null
     ? wording.gateAnswered(record.gateOutcome)
-    : record.reason === null
-      ? wording.noReasonRecorded
-      : (refusalSaid(wording, record, record.reason) ?? record.reason);
+    : record.failureKind === "lost"
+      ? wording.evLost
+      : record.failureKind === "defect"
+        ? wording.evBroke
+        : record.reason === null
+          ? wording.noReasonRecorded
+          : (refusalSaid(wording, record, record.reason) ?? record.reason);
 }
 
 /**

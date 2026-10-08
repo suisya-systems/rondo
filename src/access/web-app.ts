@@ -2947,10 +2947,49 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (typeof body !== "string") {
       return reviseRefused(c, 400, "reviseRefusedForm", request);
     }
-    const revised = await revise.revise(minting.press, {
+    let press = minting.press;
+    let spends = decision;
+    // **Raise and ask on one press** (D-0164, rondo#547): where the gate drew
+    // the approval's spent review rounds, the press first records a
+    // budgets-only successor of it, as the answering box's raise does (D-0140
+    // rule 3), and the change spends that. A refused raise asks nothing --
+    // except where the tip has moved or the gate has closed, which a second
+    // press of this same form also finds: the revise port then joins a press
+    // with the same words still running, and refuses an edited or stale form
+    // before it tests anything, as it does for any double press.
+    if (form["raise"] !== undefined) {
+      const budgets = budgetsOf(form);
+      if (scope === null) {
+        return reviseRefused(c, 403, "reviseRefusedNoApprover", request);
+      }
+      if (form["raise"] !== decision || budgets === null || body.trim() === "") {
+        return reviseRefused(
+          c,
+          400,
+          body.trim() === "" ? "reviseRefusedNoWords" : "reviseRefusedForm",
+          request,
+        );
+      }
+      const raised = await scope.raise(press, {
+        scopeId: newScopeId(),
+        requestMessageId: request,
+        scopeDecisionId: decision,
+        iterationId,
+        budgets,
+      });
+      if (raised.ok && raised.scopeDecisionId !== undefined) {
+        spends = raised.scopeDecisionId;
+      } else if (raised.why !== "raiseRefusedNotTip" && raised.why !== "raiseRefusedNotAtGate") {
+        return reviseRefused(c, 409, "reviseRefusedNotItsScope", request, null, raised.note);
+      }
+      // The one press the person made carries its second write, the change.
+      press = Object.freeze({}) as Press;
+      minted.add(press);
+    }
+    const revised = await revise.revise(press, {
       iterationId,
       successorId,
-      scopeDecisionId: decision,
+      scopeDecisionId: spends,
       body,
     });
     if (!revised.ok) {

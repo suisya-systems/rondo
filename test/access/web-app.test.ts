@@ -919,6 +919,74 @@ test("(revise) a person's native press answers the gate with a change, once", as
   expect(await closed).toBe(0);
 });
 
+test("(revise) a press drawn over spent review rounds raises them first, then spends the raised approval (D-0164)", async () => {
+  const raised: RaiseInput[] = [];
+  const revised: Revised = [];
+  const ports = (answer: ScopeRecorded) =>
+    ({
+      ...raisePorts(raised, answer),
+      revise: new RevisePort(async (input) => {
+        revised.push(input);
+        return await Promise.resolve({ ok: true, note: "" });
+      }),
+    }) as unknown as ServedPorts;
+  const form = reviseForm({
+    raise: "decision-1",
+    laps: "1",
+    review_rounds: "2",
+    cost_usd: "7.5",
+    cost_reserve_usd: "2.5",
+    expires_at_ms: "2026-01-01T00:00",
+  });
+  const ok = await served(
+    createApp(ports({ ok: true, note: "", scopeDecisionId: "decision-2" }), TOKEN),
+  );
+  const pressed = await send(ok.base, "/revise", "POST", pressHeaders(ok.base), form);
+  expect(pressed.status).toBe(303);
+  expect(raised).toHaveLength(1);
+  expect(raised[0]?.scopeDecisionId).toBe("decision-1");
+  expect(raised[0]?.budgets.review_rounds).toBe(2);
+  expect(revised.map((input) => input.scopeDecisionId)).toEqual(["decision-2"]);
+  ok.stop.abort();
+  expect(await ok.closed).toBe(0);
+
+  // A raise the port refuses asks for nothing.
+  raised.length = 0;
+  revised.length = 0;
+  const no = await served(
+    createApp(ports({ ok: false, note: "forked", why: "raiseRefusedForked" }), TOKEN),
+  );
+  const refused = await send(no.base, "/revise", "POST", pressHeaders(no.base), {
+    ...form,
+    successor: newIterationId(),
+  });
+  expect(refused.status).toBe(409);
+  expect(raised).toHaveLength(1);
+  expect(revised).toEqual([]);
+  // Nor is a raise recorded for a change with no words.
+  const empty = await send(no.base, "/revise", "POST", pressHeaders(no.base), {
+    ...form,
+    body: "  ",
+  });
+  expect(empty.status).toBe(400);
+  expect(raised).toHaveLength(1);
+  no.stop.abort();
+  expect(await no.closed).toBe(0);
+
+  // A tip already moved or a gate already closed -- this form's own first
+  // press, perhaps -- is the revise port's to tell: it is handed the change
+  // against the drawn approval.
+  for (const why of ["raiseRefusedNotTip", "raiseRefusedNotAtGate"] as const) {
+    revised.length = 0;
+    const moved = await served(createApp(ports({ ok: false, note: "moved", why }), TOKEN));
+    const again = await send(moved.base, "/revise", "POST", pressHeaders(moved.base), form);
+    expect(again.status, why).toBe(303);
+    expect(revised.map((input) => input.scopeDecisionId)).toEqual(["decision-1"]);
+    moved.stop.abort();
+    expect(await moved.closed).toBe(0);
+  }
+});
+
 test("(fix-conflict) a person's press starts the fix once; a script, a stale form or no port starts nothing", async () => {
   const fixed: ConflictFixInput[] = [];
   const withFix = (fix: boolean) => {
