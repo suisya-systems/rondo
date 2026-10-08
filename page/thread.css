@@ -11,16 +11,16 @@
 .ev {
   display: grid;
   grid-template-columns: 28px 1fr auto;
-  gap: 14px;
+  gap: 16px;
   align-items: start;
-  padding: 3px 0;
+  padding: 4px 0;
   min-height: 28px;
   max-width: 780px;
 }
 
 .ev p {
   grid-column: 2;
-  font-size: calc(14px * var(--text-scale));
+  font-size: var(--text-body);
   line-height: 1.7;
   color: var(--color-muted-foreground);
   /* Rule 1: prose stays at 45 to 90 characters at every width. */
@@ -29,8 +29,8 @@
 
 .ev time {
   grid-column: 3;
-  padding-top: 2px;
-  font-size: calc(12px * var(--text-scale));
+  padding-top: 4px;
+  font-size: var(--text-id);
   color: var(--color-muted-foreground);
   white-space: nowrap;
 }
@@ -40,7 +40,7 @@
   justify-self: center;
   width: 7px;
   height: 7px;
-  margin-top: 9px;
+  margin-top: 8px;
   border-radius: 50%;
   background: var(--color-border);
 }
@@ -90,7 +90,7 @@
   align-items: center;
   gap: 12px;
   margin: 12px 0;
-  font-size: calc(12px * var(--text-scale));
+  font-size: var(--text-id);
   color: var(--color-muted-foreground);
 }
 
@@ -111,7 +111,7 @@
 }
 
 .thread-head {
-  padding-bottom: 10px;
+  padding-bottom: 12px;
   margin-bottom: 8px;
   border-bottom: 1px solid var(--color-border);
 }
@@ -133,7 +133,7 @@
 
 .msg {
   display: flex;
-  gap: 14px;
+  gap: 16px;
   padding: 8px 0;
   max-width: 780px;
 }
@@ -143,13 +143,13 @@
 }
 
 .msg h5 {
-  font-size: calc(13px * var(--text-scale));
+  font-size: var(--text-meta);
   font-weight: 700;
 }
 
 .msg h5 time {
   margin-left: 8px;
-  font-size: calc(12px * var(--text-scale));
+  font-size: var(--text-id);
   font-weight: 400;
   color: var(--color-muted-foreground);
 }
@@ -158,7 +158,7 @@
 .msg p {
   margin-top: 4px;
   max-width: 45em;
-  font-size: calc(16px * var(--text-scale));
+  font-size: var(--text-title);
   line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -166,8 +166,8 @@
 
 .msg-back {
   display: inline-block;
-  margin-top: 6px;
-  font-size: calc(13px * var(--text-scale));
+  margin-top: 8px;
+  font-size: var(--text-meta);
 }
 
 /*
@@ -196,18 +196,18 @@
 
 /* The mark that a question waits on the person. Amber is D-0082 rule 2's. */
 .msg-wait {
-  padding: 1px 7px;
+  padding: 0 8px;
   border-radius: 999px;
-  font-size: calc(11.5px * var(--text-scale));
+  font-size: var(--text-id);
   font-weight: 500;
   color: var(--color-wait-ink);
   background: var(--color-wait-wash);
 }
 
 .msg-answered {
-  padding: 1px 7px;
+  padding: 0 8px;
   border-radius: 999px;
-  font-size: calc(11.5px * var(--text-scale));
+  font-size: var(--text-id);
   font-weight: 500;
   color: var(--color-muted-foreground);
   background: var(--color-muted);
@@ -216,7 +216,7 @@
 /* A waiting question is the one thing in the thread drawn at the waiting weight. */
 .msg[data-waiting] .msg-body {
   border-left: 3px solid var(--color-wait);
-  padding-left: 11px;
+  padding-left: 12px;
 }
 
 .msg-bases {
@@ -224,14 +224,14 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
-  margin-top: 6px;
-  font-size: calc(12px * var(--text-scale));
+  margin-top: 8px;
+  font-size: var(--text-id);
   line-height: 1.5;
   color: var(--color-muted-foreground);
 }
 
 .msg-bases-label {
-  font-size: calc(11px * var(--text-scale));
+  font-size: var(--text-id);
   font-weight: 500;
   color: var(--color-faint);
 }
@@ -249,8 +249,8 @@
 
 /* A name rondo has been given and has not read yet (D-0078 section 4.3). */
 .msg-pending {
-  margin-top: 6px;
-  font-size: calc(12.5px * var(--text-scale));
+  margin-top: 8px;
+  font-size: var(--text-id);
   line-height: 1.5;
   color: var(--color-muted-foreground);
 }
@@ -264,28 +264,28 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 14px;
-  margin-top: 6px;
-  font-size: calc(12.5px * var(--text-scale));
+  gap: 4px 16px;
+  margin-top: 8px;
+  font-size: var(--text-id);
   line-height: 1.6;
   color: var(--color-muted-foreground);
 }
 
 .gov-repo {
   font-family: var(--font-mono);
-  font-size: calc(11.5px * var(--text-scale));
+  font-size: var(--text-id);
 }
 
 .gov-chain {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* The arrow is drawn, not typed: the chain's order is not a character. */
 .gov-step + .gov-step::before {
   content: "→";
-  margin-right: 6px;
+  margin-right: 8px;
   color: var(--color-faint);
 }
 
@@ -304,23 +304,23 @@
 
 /* One step per part (D-0098 rule 8.2): the part's name, then what it waits on. */
 .side-parts-heading {
-  margin-top: 10px;
-  font-size: calc(12px * var(--text-scale));
+  margin-top: 12px;
+  font-size: var(--text-id);
   font-weight: 700;
 }
 
 .side-parts {
-  margin-top: 6px;
+  margin-top: 8px;
   list-style: none;
 }
 
 .side-part {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 2px 10px;
+  gap: 4px 12px;
   padding: 4px 0 4px 8px;
   border-left: 2px solid var(--color-border);
-  font-size: calc(12px * var(--text-scale));
+  font-size: var(--text-id);
   line-height: 1.5;
 }
 
@@ -363,7 +363,7 @@
 .result {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 10px;
+  gap: 8px 12px;
   margin-top: 8px;
   font-size: var(--text-body);
 }
@@ -372,7 +372,7 @@
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
-  padding: 2px 10px;
+  padding: 4px 12px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
 }
@@ -435,7 +435,7 @@
 }
 
 .result-commits {
-  margin: 4px 0 0 18px;
+  margin: 4px 0 0 20px;
   padding: 0;
   list-style: disc;
   font-size: var(--text-meta);
@@ -465,9 +465,9 @@
 .thread-walk {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 2px;
-  font-size: calc(12.5px * var(--text-scale));
+  gap: 12px;
+  margin-top: 4px;
+  font-size: var(--text-id);
   color: var(--color-muted-foreground);
 }
 
@@ -496,15 +496,15 @@
 }
 
 .empty-lead {
-  margin-top: 10px;
+  margin-top: 12px;
   max-width: 45em;
-  font-size: calc(15px * var(--text-scale));
+  font-size: var(--text-body);
   line-height: 1.7;
   color: var(--color-muted-foreground);
 }
 
 .empty-centre form {
-  margin-top: 22px;
+  margin-top: 24px;
 }
 
 /*
@@ -515,8 +515,8 @@
 .thread-acts {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 18px;
+  gap: 12px;
+  margin-top: 20px;
 }
 
 /*
@@ -532,9 +532,9 @@
 .ev-fold > summary {
   display: grid;
   grid-template-columns: 28px 1fr auto auto;
-  gap: 14px;
+  gap: 16px;
   align-items: start;
-  padding: 3px 0;
+  padding: 4px 0;
   min-height: 28px;
   max-width: 780px;
   cursor: pointer;
@@ -544,37 +544,37 @@
 
 .ev-fold > summary::marker {
   color: var(--color-muted-foreground);
-  font-size: calc(12px * var(--text-scale));
+  font-size: var(--text-id);
 }
 
 .ev-fold-said {
   grid-column: 2;
-  font-size: calc(14px * var(--text-scale));
+  font-size: var(--text-body);
   line-height: 1.7;
   max-width: 48em;
 }
 
 .ev-fold-open {
   grid-column: 3;
-  padding-top: 2px;
-  font-size: calc(12px * var(--text-scale));
+  padding-top: 4px;
+  font-size: var(--text-id);
   color: var(--color-link);
   white-space: nowrap;
 }
 
 .ev-fold > summary > time {
   grid-column: 4;
-  padding-top: 2px;
-  font-size: calc(12px * var(--text-scale));
+  padding-top: 4px;
+  font-size: var(--text-id);
   white-space: nowrap;
 }
 
 /* Opened, the lines inside sit under the summary, indented to the dot's column. */
 .ev-fold[open] {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   border-left: 1px solid var(--color-border);
-  padding-left: 13px;
-  margin-left: 1px;
+  padding-left: 12px;
+  margin-left: 0;
 }
 
 /*
@@ -588,9 +588,9 @@
  * with and wraps rather than widening the thread.
  */
 .ev-aside {
-  margin: 0 0 6px 42px;
+  margin: 0 0 8px 44px;
   max-width: 738px;
-  font-size: calc(12px * var(--text-scale));
+  font-size: var(--text-id);
   color: var(--color-muted-foreground);
 }
 
@@ -601,7 +601,7 @@
 
 .ev-aside > p {
   margin-top: 4px;
-  padding-left: 13px;
+  padding-left: 12px;
   border-left: 1px solid var(--color-border);
   font-family: var(--font-mono);
   line-height: 1.6;
@@ -629,11 +629,11 @@
 }
 
 .triage-repo {
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .triage-repo + .triage-repo {
-  padding-top: 18px;
+  padding-top: 20px;
   border-top: 1px solid var(--color-border);
 }
 
@@ -644,7 +644,7 @@
 
 /* The one candidate in full. */
 .triage-card {
-  padding: 14px 16px 16px;
+  padding: 16px 16px 16px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-card);
@@ -663,14 +663,14 @@
 .triage-facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 8px 14px;
+  gap: 8px 16px;
   margin-top: 12px;
   font-size: var(--text-body);
   line-height: 1.6;
 }
 
 .triage-facts dt {
-  padding-top: 1px;
+  padding-top: 0;
   font-size: var(--text-id);
   font-weight: 500;
   color: var(--color-faint);
@@ -702,7 +702,7 @@
 .triage-points li {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 6px;
+  gap: 0 8px;
   color: var(--color-muted-foreground);
 }
 
@@ -714,7 +714,7 @@
 /* The dash is drawn, not typed: the words file carries no punctuation. */
 .triage-points span::before {
   content: "-";
-  margin-right: 6px;
+  margin-right: 8px;
   color: var(--color-faint);
 }
 
@@ -733,8 +733,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-top: 14px;
+  gap: 12px;
+  margin-top: 16px;
 }
 
 .triage-acts form {
@@ -756,14 +756,14 @@
  * same act at lower rank, so each runner-up carries its own presses.
  */
 .triage-fold {
-  margin-top: 10px;
+  margin-top: 12px;
   font-size: var(--text-meta);
   color: var(--color-muted-foreground);
 }
 
 .triage-fold > summary {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: baseline;
   cursor: pointer;
   list-style-position: inside;
@@ -776,12 +776,12 @@
 }
 
 .triage-runners {
-  margin: 6px 0 0 1px;
-  padding-left: 13px;
+  margin: 8px 0 0 0;
+  padding-left: 12px;
   border-left: 1px solid var(--color-border);
   list-style: none;
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .triage-runners .triage-ask {
@@ -791,7 +791,7 @@
 
 .triage-runners .triage-clause {
   display: inline-block;
-  margin-top: 2px;
+  margin-top: 4px;
   font-size: var(--text-id);
 }
 
@@ -812,7 +812,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px 16px;
-  margin-top: 14px;
+  margin-top: 16px;
   padding-top: 12px;
   border-top: 1px dashed var(--color-border);
   font-size: var(--text-meta);
@@ -871,7 +871,7 @@
 .triage-goal-stop {
   display: grid;
   flex: 1 1 24em;
-  gap: 6px;
+  gap: 8px;
   max-width: 45em;
 }
 
@@ -891,14 +891,14 @@
 
 .triage-goal-stop > p:not(:first-child),
 .triage-goal-skipped {
-  padding-left: 15px;
+  padding-left: 16px;
   color: var(--color-muted-foreground);
 }
 
 .triage-goal-skipped {
   display: grid;
-  gap: 6px;
-  margin: 2px 0;
+  gap: 8px;
+  margin: 4px 0;
 }
 
 .triage-goal-skipped > li {
@@ -927,15 +927,15 @@
  * it carries the waiting edge and wash the list uses (D-0082 rule 2).
  */
 .triage-flow-ask {
-  margin-top: 14px;
-  padding: 12px 12px 12px 14px;
+  margin-top: 16px;
+  padding: 12px 12px 12px 16px;
   border-left: 3px solid var(--color-wait);
   border-radius: 0 6px 6px 0;
   background: var(--color-wait-wash);
 }
 
 .triage-flow-ask-lead {
-  margin-top: 2px;
+  margin-top: 4px;
   font-size: var(--text-meta);
   line-height: 1.5;
   color: var(--color-muted-foreground);
@@ -947,8 +947,8 @@
 
 .triage-flow-ask-points {
   display: grid;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 12px;
+  margin-top: 12px;
   padding-left: 0;
   list-style: none;
   max-width: 45em;
@@ -957,8 +957,8 @@
 /* The request line and why, the person's to fix before it starts (rondo#492). */
 .triage-flow-ask-words {
   display: grid;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 12px;
+  margin-top: 12px;
   max-width: 45em;
 }
 
@@ -972,7 +972,7 @@
 }
 
 .triage-flow-ask + .triage-goal-scope {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 /* The request line is what gets sent: its weight mirrors the card's request. */
@@ -990,7 +990,7 @@
 
 /* Words that mix in another script after a second reading (rondo#492). */
 .triage-mixed {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: var(--text-meta);
   line-height: 1.5;
   color: var(--color-wait-ink);
@@ -1029,21 +1029,21 @@
 
 .goal-clauses {
   display: grid;
-  gap: 14px;
-  margin-top: 22px;
+  gap: 16px;
+  margin-top: 24px;
   list-style: none;
 }
 
 .goal-clause {
   display: grid;
   grid-template-columns: 2em minmax(0, 1fr);
-  gap: 6px 10px;
+  gap: 8px 12px;
   scroll-margin-top: 16px;
 }
 
 .goal-n {
   grid-row: 1 / 3;
-  padding-top: 26px;
+  padding-top: 28px;
   font-size: var(--text-title);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1057,7 +1057,7 @@
 
 .goal-clause label > span {
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
   font-size: var(--text-id);
   font-weight: 500;
   color: var(--color-faint);
@@ -1067,8 +1067,8 @@
    ink rule down its edge, never amber. */
 .goal-clause:target {
   box-shadow: inset 3px 0 0 var(--color-foreground);
-  padding-left: 11px;
-  margin-left: -14px;
+  padding-left: 12px;
+  margin-left: -16px;
 }
 
 .goal-kept {
@@ -1080,7 +1080,7 @@
 
 /* The press again under the last row, for whoever has just filled it in. */
 .goal-acts-end {
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .goal-back {
@@ -1092,7 +1092,7 @@
 @media (max-width: 640px) {
   .triage-facts {
     grid-template-columns: 1fr;
-    gap: 2px 0;
+    gap: 4px 0;
   }
   .triage-facts dd {
     margin-bottom: 8px;
@@ -1114,11 +1114,11 @@
 }
 
 .held-press {
-  margin-top: 2px;
+  margin-top: 4px;
   padding: 0;
   border: 0;
   background: none;
-  font-size: calc(12px * var(--text-scale));
+  font-size: var(--text-id);
   color: var(--color-link);
   cursor: pointer;
 }
@@ -1130,7 +1130,7 @@
 
 .held-original > summary {
   cursor: pointer;
-  font-size: calc(12px * var(--text-scale));
+  font-size: var(--text-id);
   color: var(--color-muted-foreground);
 }
 
@@ -1139,7 +1139,7 @@
 }
 
 .held-cost {
-  font-size: calc(12px * var(--text-scale));
+  font-size: var(--text-id);
   color: var(--color-faint);
 }
 
@@ -1148,7 +1148,7 @@
 .msg .held-original > div {
   margin-top: 4px;
   max-width: 45em;
-  font-size: calc(16px * var(--text-scale));
+  font-size: var(--text-title);
   line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

@@ -15,8 +15,8 @@
 
 .side-heading {
   margin-top: 24px;
-  margin-bottom: 10px;
-  font-size: calc(13px * var(--text-scale));
+  margin-bottom: 12px;
+  font-size: var(--text-meta);
   font-weight: 700;
   color: var(--color-muted-foreground);
 }
@@ -37,7 +37,7 @@
 .side-week {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
+  gap: 0;
   margin-bottom: 4px;
   background: var(--color-border);
   border: 1px solid var(--color-border);
@@ -46,7 +46,7 @@
 }
 
 .side-week > div {
-  padding: 10px 12px;
+  padding: 12px 12px;
   background: var(--color-card);
 }
 
@@ -55,24 +55,24 @@
 }
 
 .side-week dt {
-  font-size: calc(12px * var(--text-scale));
+  font-size: var(--text-id);
   line-height: 1.5;
   color: var(--color-muted-foreground);
 }
 
 .side-week dd {
-  font-size: calc(18px * var(--text-scale));
+  font-size: var(--text-section);
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
 }
 
 /* The sentence that stands for the pair is prose, not a figure (rule 6). */
 .side-week-wide dd {
-  font-size: calc(13px * var(--text-scale));
+  font-size: var(--text-meta);
 }
 
 .side-work {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   padding: 12px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
@@ -80,7 +80,7 @@
 
 .side-work-title {
   display: block;
-  font-size: calc(14px * var(--text-scale));
+  font-size: var(--text-body);
   line-height: 1.5;
   color: var(--color-foreground);
   text-decoration: none;
@@ -93,15 +93,15 @@
 .side-work-gov {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: 4px 12px;
   margin-top: 4px;
-  font-size: calc(12px * var(--text-scale));
+  font-size: var(--text-id);
   color: var(--color-muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .side-repo {
-  padding: 0 5px;
+  padding: 0 4px;
   border: 1px solid var(--color-border);
   border-radius: 4px;
   white-space: nowrap;
@@ -114,15 +114,15 @@
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  gap: 6px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 12px;
   list-style: none;
 }
 
 .side-step {
-  padding-top: 6px;
+  padding-top: 8px;
   border-top: 2px solid var(--color-border);
-  font-size: calc(11px * var(--text-scale));
+  font-size: var(--text-id);
   line-height: 1.4;
   color: var(--color-muted-foreground);
 }
@@ -154,8 +154,8 @@
 }
 
 .side-note {
-  margin-top: 10px;
-  font-size: calc(12px * var(--text-scale));
+  margin-top: 12px;
+  font-size: var(--text-id);
   line-height: 1.6;
   color: var(--color-muted-foreground);
 }
@@ -178,8 +178,8 @@
 
 .side-material + .side-gov,
 .side-gov + .side-material {
-  margin-top: 22px;
-  padding-top: 18px;
+  margin-top: 24px;
+  padding-top: 20px;
   border-top: 1px solid var(--color-border);
 }
 
@@ -188,7 +188,7 @@
 .side-decided h3 {
   margin-top: 16px;
   margin-bottom: 8px;
-  font-size: calc(12px * var(--text-scale));
+  font-size: var(--text-id);
   font-weight: 600;
   color: var(--color-muted-foreground);
 }
@@ -210,20 +210,20 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 8px;
-  font-size: calc(12px * var(--text-scale));
+  font-size: var(--text-id);
   line-height: 1.5;
 }
 
 .side-root {
   font-family: var(--font-mono);
-  font-size: calc(11.5px * var(--text-scale));
+  font-size: var(--text-id);
   color: var(--color-muted-foreground);
   overflow-wrap: anywhere;
 }
 
 .side-touch p {
-  margin-top: 6px;
-  font-size: calc(12px * var(--text-scale));
+  margin-top: 8px;
+  font-size: var(--text-id);
   line-height: 1.6;
   color: var(--color-muted-foreground);
 }
@@ -234,13 +234,13 @@
  * a withholding whose rule cannot be named is refused where it is written.
  */
 .side-decided-count {
-  font-size: calc(18px * var(--text-scale));
+  font-size: var(--text-section);
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
 }
 
 .side-decided ul {
-  margin-top: 6px;
+  margin-top: 8px;
   display: grid;
   gap: 4px;
   list-style: none;
@@ -249,8 +249,8 @@
 .side-decided li {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  font-size: calc(12px * var(--text-scale));
+  gap: 12px;
+  font-size: var(--text-id);
   line-height: 1.5;
   color: var(--color-muted-foreground);
 }
@@ -280,10 +280,10 @@
     grid-column: 1 / -1;
   }
   .side-week dd {
-    font-size: calc(16px * var(--text-scale));
+    font-size: var(--text-title);
   }
   .side-step {
-    font-size: calc(10px * var(--text-scale));
+    font-size: var(--text-id);
   }
 }
 
@@ -293,6 +293,6 @@
     grid-template-columns: repeat(3, 1fr);
   }
   .side-step {
-    font-size: calc(11px * var(--text-scale));
+    font-size: var(--text-id);
   }
 }
