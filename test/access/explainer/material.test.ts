@@ -10,7 +10,9 @@ import { answerBody, deterministicAnswer } from "../../../src/access/explainer/j
 import { gatherExplainerMaterial } from "../../../src/access/explainer/material.js";
 import { EN } from "../../../src/access/wording.js";
 import { planDigest } from "../../../src/store/plan.js";
+import { FLOW_AUTHOR } from "../../../src/store/records.js";
 import { agentTypeDigestOf, planDocument, world } from "../fixtures/drafter.js";
+import { fresh, PLAN } from "../page-world.js";
 import { approve, asked, LAP, QUESTION, REQUEST } from "./world.js";
 
 test("a question beside a lap is handed its thread, the lap waiting at its gate, and no approval", async () => {
@@ -57,6 +59,35 @@ test("the approval in force is read with what is spent, held and left", async ()
   expect(material.scope).toMatchObject({ decisionId: "sd-1", scopeId: "scope-1", approvedUsd: 10 });
   expect(material.scope?.leftUsd).toBeCloseTo(10 - (material.scope?.heldUsd ?? 0));
   expect(material.locators).toContain("scope:scope-1");
+});
+
+test("a goal's approval over a request the flow opened is the approval in force", async () => {
+  const w = fresh();
+  const goal = await w.record.recordGoal({
+    goalId: "goal-1",
+    repository: PLAN.repository,
+    clauses: [{ said: "setup finishes by itself", unmetIf: "setup asks for anything" }],
+    writtenBy: "ada",
+    writtenAtMs: 1,
+  });
+  expect(goal.kind).toBe("recorded");
+  // As the flow host opens one (`src/access/flow-host.ts`), and a question in it.
+  for (const message of [
+    { messageId: REQUEST, authorKind: "drafter" as const, authorId: FLOW_AUTHOR, inReplyTo: null },
+    { messageId: QUESTION, authorKind: "operator" as const, authorId: "ada", inReplyTo: REQUEST },
+  ]) {
+    const said = await w.record.recordThreadMessage({
+      ...message,
+      body: "Make setup finish without a shell",
+      atMs: 2_000,
+      bases: message.inReplyTo === null ? [{ form: "goal", goalId: "goal-1" }] : [],
+      asks: false,
+    });
+    expect(said.kind).toBe("recorded");
+  }
+  await approve(w, 10, 10_000_000, { from_goal: "goal-1" });
+  const material = await gatherExplainerMaterial(w, QUESTION, 5_000);
+  expect(material.scope).toMatchObject({ decisionId: "sd-1", scopeId: "scope-1", approvedUsd: 10 });
 });
 
 test("a question that is not in the store throws, for the host to try again", async () => {

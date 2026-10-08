@@ -82,7 +82,12 @@ export async function answerBands(
           snapshot == null
             ? ""
             : typeof cost === "number"
-              ? wording.answerCost(money(cost))
+              ? // An answer over its cap says so on the page too (Codex): the
+                // page body leaves the stored body's cost lines to this band.
+                wording.answerCost(money(cost)) +
+                (typeof cap === "number" && cost > cap
+                  ? ` ${wording.explainOverCap(money(cap))}`
+                  : "")
               : ran && typeof cap === "number"
                 ? wording.answerCostUnread(money(cap))
                 : wording.answerFree;

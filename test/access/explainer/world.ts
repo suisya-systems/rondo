@@ -55,12 +55,17 @@ export async function ask(
 }
 
 /** An approval of `costUsd` in force over the request, expiring at `expiresAtMs`. */
-export async function approve(w: World, costUsd = 10, expiresAtMs = 10_000_000): Promise<void> {
+export async function approve(
+  w: World,
+  costUsd = 10,
+  expiresAtMs = 10_000_000,
+  requests: JsonRecord[string] = [REQUEST],
+): Promise<void> {
   // An agent type the scope records from a plan (D-0066 rule 1.2.3).
   const document = planDocument();
   const digest = agentTypeDigestOf(document);
   const payload: JsonRecord = {
-    requests: [REQUEST],
+    requests,
     workspaces: [{ repository: PLAN.repository, workspace_root: PLAN.workspaceRoot }],
     agent_types: [digest],
     budgets: {

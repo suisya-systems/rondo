@@ -280,8 +280,9 @@ export async function gatherExplainerMaterial(
  * successor replaced -- rondo's drafted scope or the person's own -- with what
  * has been spent and held against it, or null.
  *
- * ponytail: a goal scope (D-0128) is not followed; a flow request is explained
- * from the records without a model until it is.
+ * A goal's approval (D-0128) that covers a request the flow opened is one of
+ * them (`scopesFor` returns it): the week's allowance sums it like any other,
+ * and the triage reading is already counted against it (rondo#469).
  */
 async function approvalInForce(
   ports: ExplainerPorts,

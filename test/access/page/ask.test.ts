@@ -209,6 +209,11 @@ test("the band says a free answer cost nothing, and an unreported one what was c
   expect(
     await bands({ cost_usd: null, cap_usd: 0.5, unexplained: { kind: "failed" }, counted: false }),
   ).toBe(EN.answerFree);
+  // A read cost over the cap says so in the band, which is all the page shows of it (Codex).
+  expect(await bands({ cost_usd: 0.03, cap_usd: 0.5 })).toBe(EN.answerCost("0.03"));
+  expect(await bands({ cost_usd: 0.61, cap_usd: 0.5 })).toBe(
+    `${EN.answerCost("0.61")} ${EN.explainOverCap("0.50")}`,
+  );
 });
 
 test("a cited lap waiting at its gate leads to where it is answered", async () => {

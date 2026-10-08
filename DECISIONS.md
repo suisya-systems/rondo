@@ -29686,9 +29686,10 @@ the reads open to one later. This entry writes those points down as rules, at ro
 5. **Its cost is counted in the week's allowance, against the approval in force, and capped per
    answer.**
    - The cost is a `scope_consumption` claim of act kind `explanation_reading` on the approval in
-     force for the question's request, summed with the lap costs wherever an approval's spend is
-     read (`spentUnder` and the lap cap's read), as `D-0097` point 5 (a) did for the triage
-     reading. The amount is the proposal snapshot's `cost_usd`, or its `cap_usd` when the cost was
+     force for the question's request -- the request's own, or the goal's (`D-0128`) when the flow
+     opened it, as the triage reading is counted (rondo#469) -- summed with the lap costs wherever
+     an approval's spend is read (`spentUnder` and the lap cap's read), as `D-0097` point 5 (a)
+     did for the triage reading. The amount is the proposal snapshot's `cost_usd`, or its `cap_usd` when the cost was
      not read. Every admitted run is counted, including one whose answer the check refused; a run
      whose process never started (no directory for it, no executable) spent nothing and is not.
    - **A run is paid for once.** Its result is held until its answer is written: a store fault on
@@ -29776,7 +29777,6 @@ the reads open to one later. This entry writes those points down as rules, at ro
 |---|---|---|
 | A read-only MCP surface over the material reads | The owner left it for later (rule 8) | a later entry, when it is built |
 | A per-run budget flag on the explainer's `claude -p` | Not confirmed for the bare CLI; admission checks the cap | the building change, if the CLI is shown to honour one |
-| An approval reached through a goal (`D-0128`) | The material follows only an approval on the request itself, so a request the flow started is answered deterministically | the change that follows the goal scope in the material read |
 | What the K4 signals are read for | Recording is decided; no reader of the count exists yet | a later entry that reads them against `D-0173` |
 | A hold on the approval while an answer's run is in flight | Admission checks what is left once, and the claim is written with the answer, so a lap admitted during the run can take the last reserve and the approval ends up to one cap over. Holding it needs the claim written before the run and its cost after, which `scope_consumption` and an unchanging proposal row do not do today | the change that gives a reading a claim before its cost |
 | A run held for writing across a restart | The held result is the host's memory, so a process that stops between the run and a landed write runs the model once more on the next start | a later change, if a store fault that outlives a restart is seen |
