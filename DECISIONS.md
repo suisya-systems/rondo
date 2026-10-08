@@ -198,6 +198,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0163 | A person changes which files an open line keeps: a widening for work still going and never onto another open line's files, a narrowing once nothing of the line can commit and never of a file it changed | accepted |
 | D-0164 | A gate whose review rounds are spent raises them on the change press itself: one press records the raised approval and asks for the change under it | accepted |
 | D-0165 | `revise --iteration-id` names the lap being revised, as on every other verb, and the second lap is named by `--successor-id`, so a revise works while several iterations are open | accepted |
+| D-0166 | A form the redraw would replace while the person is writing in it is kept: a notice says what changed, nothing is sent until they choose, and an answer is taken from any round of the candidate the flow waits on | accepted |
 
 ---
 
@@ -28417,3 +28418,74 @@ whenever more than one was open (rondo#36). The page's revise press (rondo#235,
 - **An operator who reads `--iteration-id` on `revise` as the new lap** and is refused for it
   repeatedly: then the successor would be better minted (the option not taken).
 - Any statement above failing to hold at rondo `5890528`.
+
+## D-0166 — A form the redraw would replace while the person is writing in it is kept: a notice says what changed, nothing is sent until they choose, and an answer is taken from any round of the candidate the flow waits on
+
+**Status:** accepted (2026-10-08, rondo#494 items 2 and 3; the open point on the issue taken as
+recommended: keep the ask being answered and offer the new round). Adds to `D-0054` rule 2 and to
+its annotation of 2026-09-27, which left these two items open. Supersedes nothing. Refs `D-0059`
+section 5a, `D-0077` rule 4.4, `D-0079`, `D-0082` rule 3, rondo#487, rondo#504.
+
+### Context
+
+On lap 18 (2026-09-27) the owner was answering the flow's ask of four points when triage read the
+same candidate again and the flow asked a new round of three. The ask's form is drawn under one id
+per repository, so the five-second morph turned the form into the new round's: the hidden ask id,
+the points and the answer boxes. `page/composer.js` keeps a box's words under its `data-draft` key
+and, when the key changes, lets the server's words in (the box is a different draft now). The owner
+saw something move, not that their answers were gone, and the press sent rondo's suggestions for the
+new round. The claim and revise boxes on a gate have the same shape: another gate's form arriving
+where theirs was takes the words off the screen. The scope and goal scope screens do not redraw
+(`isLive`), so nothing replaces them.
+
+### Decision
+
+1. **A form whose round changes while one of its fields holds the person's words is kept as it
+   is.** The server marks the round on the form (`data-round`: the ask id on the flow's ask, the lap
+   and gate on the claim and revise forms). `page/rounds.js` refuses the morph for that form,
+   keeps the server's newest form beside it, and puts a notice inside it. A form with no edits is
+   morphed as before, and `page/changed.js` washes it.
+2. **The notice says what changed and offers the ways on.** It lists the points no longer asked
+   and the points newly asked (`data-round-item`), and offers *Use the new points* and, only where
+   the server drew the same `data-round-keeps` on both forms, *Keep answering these*. The flow's ask
+   carries its goal and candidate there, the two `unanswerable` (rule 5) holds an older round to; a gate's forms carry none, since an old gate cannot be answered,
+   and their notice says the words are kept to be copied.
+3. **Until one is chosen, a press of the kept form is not sent.** The submit is cancelled before
+   `page/composer.js` marks it pressed, a line saying nothing was sent is added to the notice, and
+   focus moves there. The notice is drawn once per new round: a poll bringing the same round leaves
+   it, its focus and that line alone. *Keep answering these* removes it, and the same round does not
+   raise it again; a later one does.
+4. **Taking the new form takes what still means the same.** Where both forms are about the same
+   candidate (`data-round-keeps`), a field with the same `data-round-carry` on both moves across: the request line and why, and an answer whose
+   point has the same words. The carried words are then kept as a draft by `page/composer.js`.
+   Answers to points that changed do not move (rondo#504: points are worded fresh on each reading).
+5. **The server takes an answer from any round of the candidate the flow waits on, and refuses one
+   for another candidate** (`unanswerable`, in the answer port). An older round of the same
+   candidate is heard, because the flow injects the newest answer for its candidate whichever
+   round it came from (rondo#504). A round over a candidate the flow no longer asks about, or for
+   a goal it waits on no answer for, is refused with `flowAskRefused` and a note naming the
+   candidate it asks about now. Before this it was recorded and never read.
+6. **Every word is the server's, in each catalogue** (`D-0079`): the notice, the two lists' labels,
+   the buttons and the held line are attributes on the form, in the request's language.
+
+### Options not taken
+
+- **Swap the form and say so afterwards.** The words would be gone from the screen before the
+  person read the notice, and it is their words the issue asks to keep.
+- **Refuse every answer to an older round.** The flow can use it, and *Keep answering these*
+  would then lead to a refusal every time.
+- **Carry every typed answer into the new round by position.** Point 2 of the old round is not
+  point 2 of the new one.
+
+### What it costs
+
+- **A kept form goes stale on purpose.** While it is kept, the rest of the page redraws around it.
+  The notice is how the person learns that.
+- **The kept form only lasts while idiomorph pairs it with the new one by id.** If the redraw
+  removes the block it sits in, the form goes with it, as before.
+
+### What would falsify it
+
+- A person who chose *Keep answering these* and whose answer the flow did not use.
+- A redraw that changes a marked form under typed words without the notice.
+- Any statement above failing to hold at rondo `c599497` plus this change.

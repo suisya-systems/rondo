@@ -287,6 +287,14 @@ test("a candidate still mixing scripts is marked on the card, on a runner-up and
   // The card, the runner-up and the ask each say it; the ask ties it to the field.
   expect(html.split(EN.triageMixedScript)).toHaveLength(4);
   expect(html).toContain('aria-describedby="flow-ask-o-r-mixed"');
+  // **The round, each point, and what moves to a new round** (rondo#494
+  // item 2): what `page/rounds.js` reads to keep this form over a new one.
+  expect(html).toContain('data-round="ask-1"');
+  expect(html).toContain('data-round-keeps="g-1 issue:o/r#1"');
+  expect(html).toContain('data-round-item="p"');
+  expect(html).toContain('data-round-carry="point:p"');
+  expect(html).toContain('data-round-carry="request"');
+  expect(html).toContain(`data-round-keep-label="${EN.roundKeepAsk}"`);
 });
 
 test("an ask left open over a candidate an earlier answer covers is not waited on (rondo#504)", async () => {
@@ -317,6 +325,60 @@ test("an ask left open over a candidate an earlier answer covers is not waited o
   expect(waitingPointsAsk([ask("ask-1", { answers: ["a"] }), open], "g-1", payload, [])).toBe(
     undefined,
   );
+});
+
+test("an answer is taken from any round of the candidate the flow waits on, and refused for another (rondo#494)", async () => {
+  const { unanswerable } = await import("../../src/access/page/triage.js");
+  const ask = (askId: string, candidate: string, askedAtMs: number) => ({
+    askId,
+    repository: "o/r",
+    goalId: "g-1",
+    scopeDecisionId: "sd-1",
+    proposalId: "t-1",
+    candidate,
+    points: [{ point: "p", recommendation: "r" }],
+    request: null,
+    why: null,
+    askedAtMs,
+    answer: null,
+  });
+  const ranking = (...numbers: number[]) => [
+    {
+      repository: "o/r",
+      payload: {
+        repository: "o/r",
+        goal_id: "g-1",
+        ranked: numbers.map((number) => ({
+          key: `issue:o/r#${String(number)}`,
+          clause: 1,
+          request: "r",
+          why: "w",
+          title: "t",
+          labels: [],
+          source: { form: "issue", repository: "o/r", number },
+          open_points: [],
+        })),
+        withheld: [],
+        read: { issues: numbers.length, stopped: 0 },
+        unavailable: null,
+      },
+    },
+  ];
+  const first = ask("ask-1", "issue:o/r#1", 1);
+  const second = ask("ask-2", "issue:o/r#1", 2);
+  // Keeping the round the person began is heard: same candidate, either round.
+  expect(unanswerable([first, second], ranking(1), [], "ask-1")).toBe(null);
+  expect(unanswerable([first, second], ranking(1), [], "ask-2")).toBe(null);
+  // A round over a candidate the flow no longer asks about goes nowhere.
+  const other = ask("ask-3", "issue:o/r#2", 3);
+  expect(unanswerable([first, other], ranking(2), [], "ask-1")).toBe(
+    "'ask-1' is not what rondo waits on: it asks about 'issue:o/r#2' now",
+  );
+  expect(
+    unanswerable([first], ranking(1), [{ repository: "o/r", candidate: "issue:o/r#1" }], "ask-1"),
+  ).toBe("'ask-1' is not what rondo waits on: it waits on no answer for this goal now");
+  // An id rondo never asked is the store's to refuse, in its own words.
+  expect(unanswerable([first], ranking(1), [], "ask-9")).toBe(null);
 });
 
 test("the card is the candidate the flow asks about, and a candidate put aside leaves it at once (rondo#540)", async () => {

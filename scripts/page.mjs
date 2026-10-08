@@ -51,6 +51,7 @@ const COPIES = {
   "composer.js": join(root, "page/composer.js"),
   "chime.js": join(root, "page/chime.js"),
   "changed.js": join(root, "page/changed.js"),
+  "rounds.js": join(root, "page/rounds.js"),
   "icon.svg": join(root, "page/icon.svg"),
   "icon-wait.svg": join(root, "page/icon-wait.svg"),
   "text-size.js": join(root, "page/text-size.js"),

@@ -533,6 +533,9 @@ test("liveness is per view: two views poll and swap, and the answer view updates
       // What the redraw changed, said in colour (rondo#494 item 1): loaded
       // where the page keeps itself current, since that is what it listens to.
       '<script src="/changed.js" defer="">',
+      // A form being filled in is not swapped under the person (rondo#494
+      // items 2 and 3): it hooks the same morph, so it is loaded beside it.
+      '<script src="/rounds.js" defer="">',
     ]);
     expect(html).not.toContain("//cdn");
     // **The count and the badge in the tab strip** (rondo#414), before any

@@ -18,7 +18,7 @@
  * sentence and the line of what was read and when, which is what tells a quiet
  * triage from one that is not running.
  */
-import type { Ranked, TriagePayload } from "../../advisory/triage.js";
+import { type Ranked, readTriagePayload, type TriagePayload } from "../../advisory/triage.js";
 import type { GoalClause, StoredFlowAsk, StoredGoal, StoredTriage } from "../../store/records.js";
 import type { FlowStopRead } from "../flow-stop.js";
 import { ago } from "../inbox.js";
@@ -71,6 +71,8 @@ export interface GoalScopeLine {
 /** The open points the flow asks before it starts a candidate (rondo#487). */
 export interface PointsAsk {
   readonly askId: string;
+  /** The goal it was asked under: a round of another goal cannot be kept answering (D-0166). */
+  readonly goalId: string;
   /** The candidate asked about: its card does not list the same points again. */
   readonly candidate: string;
   /** Where the form is: the card over the candidate leads here instead of to the box. */
@@ -221,6 +223,36 @@ export function waitingPointsAsk(
   );
 }
 
+/**
+ * Why an answer to `askId` would go nowhere, or null when it is answerable
+ * (rondo#494 item 2, D-0166): **an answer is taken for the candidate the flow
+ * waits on, from any of its rounds**, so a person who keeps answering the round
+ * they began is heard, and a round over a candidate the flow no longer waits on
+ * is refused rather than kept where nothing reads it. An ask rondo never asked
+ * is the store's to refuse.
+ */
+export function unanswerable(
+  asks: readonly StoredFlowAsk[],
+  latest: readonly Pick<StoredTriage, "repository" | "payload">[],
+  putAside: readonly { readonly repository: string; readonly candidate: string }[],
+  askId: string,
+): string | null {
+  const ask = asks.find((one) => one.askId === askId);
+  if (ask === undefined) {
+    return null;
+  }
+  const row = latest.find((one) => one.repository === ask.repository);
+  const payload = row === undefined ? null : readTriagePayload(row.payload);
+  const waiting =
+    payload === null ? undefined : waitingPointsAsk(asks, ask.goalId, payload, putAside);
+  if (waiting?.candidate === ask.candidate) {
+    return null;
+  }
+  return waiting === undefined
+    ? `'${askId}' is not what rondo waits on: it waits on no answer for this goal now`
+    : `'${askId}' is not what rondo waits on: it asks about '${waiting.candidate}' now`;
+}
+
 /** The newest goal of each repository. */
 export function currentGoals(goals: readonly StoredGoal[]): ReadonlyMap<string, StoredGoal> {
   return new Map(goals.map((goal) => [goal.repository, goal]));
@@ -258,6 +290,7 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
           ? null
           : {
               askId: asked.askId,
+              goalId: asked.goalId,
               candidate: asked.candidate,
               anchor: `flow-ask-${repository.replace(/[^A-Za-z0-9_-]/g, "-")}`,
               request: asked.request ?? rankedAsked?.request ?? asked.candidate,
@@ -749,6 +782,19 @@ function PointsAskForm({
       // reading of the same candidate replaces this ask with another round,
       // and lap 18 found a person answering one who could not see that.
       data-can-act="ask"
+      // **Kept, not swapped, when a new round arrives over the person's
+      // words** (rondo#494 item 2, D-0166; `page/rounds.js`): the round is
+      // the ask, and an older round of the same candidate can still be
+      // answered, which is what `data-round-keeps` says -- under the same goal,
+      // since `unanswerable` refuses a round of another (Codex).
+      data-round={ask.askId}
+      data-round-keeps={`${ask.goalId} ${ask.candidate}`}
+      data-round-said={wording.roundChangedAsk}
+      data-round-gone={wording.roundGone}
+      data-round-added={wording.roundAdded}
+      data-round-use-label={wording.roundUseAsk}
+      data-round-keep-label={wording.roundKeepAsk}
+      data-round-held-label={wording.roundHeld}
       aria-label={wording.flowAskLead}
       method="post"
       action={`/flow-answer?lang=${encodeURIComponent(wording.lang)}`}
@@ -767,6 +813,7 @@ function PointsAskForm({
             name="request"
             aria-describedby={ask.mixedScript ? `${ask.anchor}-mixed` : undefined}
             data-draft={`flow-ask:${ask.askId}:request`}
+            data-round-carry="request"
             rows={3}
             required
             className={FIELD}
@@ -783,6 +830,7 @@ function PointsAskForm({
           <textarea
             name="why"
             data-draft={`flow-ask:${ask.askId}:why`}
+            data-round-carry="why"
             rows={2}
             required
             className={FIELD}
@@ -792,7 +840,7 @@ function PointsAskForm({
       </div>
       <ol className="triage-flow-ask-points">
         {ask.points.map((point, at) => (
-          <li key={String(at)}>
+          <li key={String(at)} data-round-item={point.point}>
             {reads === null ? (
               // biome-ignore lint/a11y/noLabelWithoutControl: the textarea is inside, drawn by PointAnswer
               <label>
@@ -845,6 +893,8 @@ function PointAnswer({
       // Kept across the page's redraw as the composer's words are
       // (`page/composer.js`), so an edited answer is what is sent.
       data-draft={`flow-ask:${ask.askId}:${String(at + 1)}`}
+      // An answer goes to the new round only beside the same point.
+      data-round-carry={`point:${point.point}`}
       rows={1}
       required
       className={FIELD}

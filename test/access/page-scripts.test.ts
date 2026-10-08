@@ -808,7 +808,7 @@ test("an element the redraw built is a change, and a ledger with no word marks i
  * extension -- are not run: what they declare is theirs, and a name of ours
  * colliding with a name of theirs is not what this fixes.
  */
-const LOADED = ["text-size.js", "keys.js", "composer.js", "chime.js", "changed.js"];
+const LOADED = ["text-size.js", "keys.js", "composer.js", "chime.js", "changed.js", "rounds.js"];
 
 /** An element of the page below: everything these five touch on a node. */
 class Painted {
