@@ -338,13 +338,15 @@ test(
   async () => {
     const w = await world(["src/"], [split(CLAIM)]);
     try {
-      // A runs: the part is held, named by its request, with no release to offer.
+      // A runs: the part is held, named by its request, with no release to
+      // offer, only changing what it keeps (D-0163).
       await w.pass();
       expect(seams.admitted).toEqual([]);
       const running = await w.screen();
       expect(running).toContain(EN.planHeld(CLAIM));
       expect(running).toContain(HOLDER_WORDS);
-      expect(running).not.toContain("?release=");
+      expect(running).not.toContain(`>${EN.releaseLink}<`);
+      expect(running).toContain(`>${EN.holdsLink}<`);
 
       // A is closed at its gate having left nothing, and nothing publishes it.
       await w.closeALeavingNothing();

@@ -1568,12 +1568,12 @@ async function planStart(
               <span class="min-w-0 truncate" lang="">
                 {request === null ? "" : firstLine(request)}
               </span>
-              {holder.inFlight || token === null || ports.releasable !== true ? null : (
+              {token === null || ports.releasable !== true ? null : (
                 <a
                   href={viewHref({ kind: "release", iterationId: holder.lineageId }, wording.lang)}
                   class="text-link underline-offset-2 hover:underline"
                 >
-                  {wording.releaseLink}
+                  {holder.inFlight ? wording.holdsLink : wording.releaseLink}
                 </a>
               )}
               {/* **Why so wide, where it said** (rondo#509): the words its
@@ -1996,7 +1996,8 @@ export async function waitHolders(ports: WebPorts, repository: string): Promise<
 /**
  * One holder of a waiting start, **with its release once it has finished**
  * (rondo#553): a finished line that will never publish is released there, and
- * the wait then ends by itself. A line still running is only named.
+ * the wait then ends by itself. A line still running links to changing what it
+ * keeps (D-0163).
  */
 export function heldByLine(wording: Chrome, holder: WaitHolder, releasable: boolean) {
   return (
@@ -2005,12 +2006,12 @@ export function heldByLine(wording: Chrome, holder: WaitHolder, releasable: bool
       <span class="min-w-0 truncate" lang="">
         {holder.request === null ? "" : firstLine(holder.request)}
       </span>
-      {holder.inFlight || !releasable ? null : (
+      {!releasable ? null : (
         <a
           href={viewHref({ kind: "release", iterationId: holder.lineageId }, wording.lang)}
           class="text-link underline-offset-2 hover:underline"
         >
-          {wording.releaseLink}
+          {holder.inFlight ? wording.holdsLink : wording.releaseLink}
         </a>
       )}
     </p>

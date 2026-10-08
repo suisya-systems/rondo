@@ -1051,6 +1051,53 @@ explanation you pressed on and then answers the gate.`,
   releaseRefusedNotRecorded:
     "Nothing was released: rondo could not record your decision. The files stay with this work; " +
     "pressing again is safe.",
+  holdsLink: "Change the files it keeps",
+  holdsHeading: "Change the files this work keeps",
+  holdsLead:
+    "Write the files this work keeps from now on, one per line; a path ending in / is a " +
+    "folder. A file or folder you leave out is given to other work at once.",
+  holdsLabel: "The files it keeps",
+  holdsRunning:
+    "Part of this work is still running: you can add files now, and leave files out once it " +
+    "stops at review.",
+  holdsAtReview:
+    "A file or folder you add is kept from other work at once, unless other work keeps it.",
+  holdsEnded: "This work has ended: you can leave files out, but not add any.",
+  holdsStillOpen:
+    "Part of this work is still running or waiting for your review, so its files cannot be " +
+    "released yet. You can change which files it keeps below.",
+  othersHold: (paths) => `Files other work keeps: ${filesEn(paths)}`,
+  holdsAction: "Keep these files",
+  holdsPlain: "Records which files this work keeps, as your decision",
+  holdsRefusedNoApprover:
+    "Nothing was changed: rondo on this machine does not yet know who you are, so nothing " +
+    "here can be decided as you.",
+  holdsRefusedPress:
+    "Nothing was changed: this is done by a person pressing this page's button, and a script " +
+    "cannot.",
+  holdsRefusedForm:
+    "Nothing was changed: that form did not come from this page. Reload it and press again.",
+  holdsRefusedChanged:
+    "Nothing was changed: this work changed after the screen was drawn (it reached review, " +
+    "was tried again, or its files changed). Go back to see where it stands now.",
+  holdsRefusedHeld:
+    "Nothing was changed: other work keeps files you added, and two pieces of open work never " +
+    "keep the same file.",
+  holdsRefusedBusy:
+    "Nothing was changed: part of this work is still running, and it may still change the " +
+    "files you left out. Leave them out once it stops at review.",
+  holdsRefusedKept:
+    "Nothing was changed: this work has already changed files you left out, and it keeps " +
+    "those until it lands or ends.",
+  holdsRefusedUnread:
+    "Nothing was changed: rondo could not read which files this work has changed, so it " +
+    "gives none up.",
+  holdsRefusedPaths:
+    "Nothing was changed: the files written could not be kept as they are (an empty list, a " +
+    "pattern, the files it already keeps, or more files for work that has ended).",
+  holdsRefusedNotRecorded:
+    "Nothing was changed: rondo could not record your decision. The work keeps the files it " +
+    "kept.",
   planHeld: (paths) =>
     `Waiting: other work is changing ${filesEn(paths)}. rondo starts this by itself once that ` +
     "work's pull request is opened or its files are released; there is nothing to press.",

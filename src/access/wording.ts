@@ -1257,6 +1257,36 @@ export interface Chrome extends PageWords {
   readonly releaseRefusedForm: string;
   readonly releaseRefusedChanged: string;
   readonly releaseRefusedNotRecorded: string;
+  /** The way from a running holder to the screen that changes what it keeps (D-0163). */
+  readonly holdsLink: string;
+  readonly holdsHeading: string;
+  /** What the form does: the files written are what the work keeps from now on. */
+  readonly holdsLead: string;
+  readonly holdsLabel: string;
+  /** While a part is running: files can be added, and given up once it stops (D-0163 rule 3). */
+  readonly holdsRunning: string;
+  /** At review: files can be added and left out. */
+  readonly holdsAtReview: string;
+  /** Every part has ended: files can be left out, and none added (D-0163 rule 2). */
+  readonly holdsEnded: string;
+  /** Over the form of a line still open, in place of {@link releaseStillOpen}. */
+  readonly holdsStillOpen: string;
+  /** The files another piece of work keeps, after a refused widening. */
+  readonly othersHold: (paths: readonly string[]) => string;
+  readonly holdsAction: string;
+  readonly holdsPlain: string;
+  readonly holdsRefusedNoApprover: string;
+  readonly holdsRefusedPress: string;
+  readonly holdsRefusedForm: string;
+  readonly holdsRefusedChanged: string;
+  /** Followed by the files other work keeps; the holders are listed under it. */
+  readonly holdsRefusedHeld: string;
+  readonly holdsRefusedBusy: string;
+  /** Followed by the files the work changed. */
+  readonly holdsRefusedKept: string;
+  readonly holdsRefusedUnread: string;
+  readonly holdsRefusedPaths: string;
+  readonly holdsRefusedNotRecorded: string;
   /** A drafted plan that other work's files hold back (D-0073 rule 3.1). */
   readonly planHeld: (paths: readonly string[]) => string;
   /** The label before the request of the work that holds them. */

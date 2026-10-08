@@ -1271,6 +1271,63 @@ export class ReleasePort {
   }
 }
 
+/**
+ * What one press that changes a line's files names (D-0163): a lap of the
+ * line, the claim and laps the screen was drawn over, and the files the
+ * person wrote it is to keep now.
+ */
+export interface HoldsInput {
+  readonly iterationId: string;
+  readonly claimId: string;
+  readonly lapIds: readonly string[];
+  readonly paths: readonly string[];
+}
+
+/** Why a press that changes a line's files changed nothing, as the wording key the page says it in. */
+export type HoldsRefusal =
+  | "holdsRefusedChanged"
+  | "holdsRefusedHeld"
+  | "holdsRefusedBusy"
+  | "holdsRefusedKept"
+  | "holdsRefusedUnread"
+  | "holdsRefusedPaths"
+  | "holdsRefusedNotRecorded";
+
+export interface HoldsMoved {
+  readonly ok: boolean;
+  readonly note: string;
+  readonly why?: HoldsRefusal;
+  /** On `holdsRefusedKept`: the files the work changed, which it keeps. */
+  readonly paths?: readonly string[];
+  /** On `holdsRefusedHeld`: the lines keeping the files it asked for. */
+  readonly holders?: Started["holders"];
+}
+
+/** Change which files one open line keeps, as the person wrote them. */
+export type HoldsFromWeb = (input: HoldsInput) => Promise<HoldsMoved>;
+
+/**
+ * What a line keeps, changed by a person while it is open (D-0073 rules 4.1
+ * and 4.2, D-0163): its own class for {@link ReleasePort}'s reason, and the
+ * check is inside it as it is there.
+ */
+export class HoldsPort {
+  readonly #move: HoldsFromWeb;
+
+  constructor(move: HoldsFromWeb) {
+    this.#move = move;
+  }
+
+  /** Change one line's files, on one press. */
+  async move(press: Press, input: HoldsInput): Promise<HoldsMoved> {
+    if (!minted.has(press)) {
+      return { ok: false, note: "nothing was changed: this was not a person's press" };
+    }
+    minted.delete(press);
+    return await this.#move(input);
+  }
+}
+
 /** What one add-repository press names (rondo#383): the request, and the repository it named. */
 export interface AddRepositoryInput {
   readonly requestMessageId: string;
@@ -1531,6 +1588,8 @@ export interface ServedPorts extends WebPorts {
    * judgement, so it needs an actor the allowlist accepts (D-0073 rule 4.3).
    */
   readonly release: ReleasePort | null;
+  /** Null on {@link release}'s condition: what a line keeps is changed as the person (D-0163). Absent is null. */
+  readonly holds?: HoldsPort | null;
   /** Null on {@link release}'s condition: the recorded plan is the approver's, as setup's is. */
   readonly addRepository?: AddRepositoryPort | null;
   /**
@@ -1660,6 +1719,7 @@ const PUBLISH_ROUTE = "/publish";
  * that says which work holds them and why rondo has not let go of them.
  */
 const RELEASE_ROUTE = "/release";
+const HOLDS_ROUTE = "/holds";
 
 /**
  * The route that adds a repository a request named and rondo does not work in
@@ -1724,6 +1784,7 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   START_PLAN_ROUTE,
   PUBLISH_ROUTE,
   RELEASE_ROUTE,
+  HOLDS_ROUTE,
   ADD_REPOSITORY_ROUTE,
   MERGE_ROUTE,
   NOT_NOW_ROUTE,
@@ -2066,6 +2127,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     revise,
     publish,
     release,
+    holds = null,
     addRepository,
     merge = null,
     triage = null,
@@ -3012,6 +3074,55 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     return c.redirect(viewHref({ kind: "release", iterationId }, tagOf(c)), 303);
   });
 
+  // **The press that changes what a line keeps** (D-0163): the files the
+  // person wrote, one per line, over the claim and laps the screen was drawn
+  // over, so a line that moved under the screen changes nothing.
+  app.post(HOLDS_ROUTE, async (c) => {
+    if (holds === null) {
+      return holdsRefused(c, 403, "holdsRefusedNoApprover", null);
+    }
+    const form = await c.req.parseBody();
+    const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return holdsRefused(c, minting.status, "holdsRefusedPress", iterationId);
+    }
+    const claimId = form["claim"];
+    const laps = form["laps"];
+    const paths = form["paths"];
+    if (
+      iterationId === "" ||
+      typeof claimId !== "string" ||
+      claimId === "" ||
+      typeof laps !== "string" ||
+      laps === "" ||
+      typeof paths !== "string"
+    ) {
+      return holdsRefused(c, 400, "holdsRefusedForm", iterationId);
+    }
+    const moved = await holds.move(minting.press, {
+      iterationId,
+      claimId,
+      lapIds: laps.split(" "),
+      paths: paths
+        .split(/\r?\n/)
+        .map((path) => path.trim())
+        .filter((path) => path !== ""),
+    });
+    if (!moved.ok) {
+      return holdsRefused(
+        c,
+        409,
+        moved.why ?? "holdsRefusedNotRecorded",
+        iterationId,
+        moved.note,
+        moved.paths,
+        moved.holders,
+      );
+    }
+    return c.redirect(viewHref({ kind: "release", iterationId }, tagOf(c)), 303);
+  });
+
   // **The add-repository press** (rondo#383, D-0090): the one confirmation a
   // person gives for a repository their request named. Back to the request's
   // thread, whose draft now waits on nothing; refused, a page that says why in
@@ -3673,6 +3784,35 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       ),
       wording.mergeBack,
       note,
+    );
+  }
+
+  function holdsRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why: "holdsRefusedNoApprover" | "holdsRefusedPress" | "holdsRefusedForm" | HoldsRefusal,
+    iterationId: string | null,
+    note: string | null = null,
+    paths: readonly string[] = [],
+    holders: Started["holders"] = [],
+  ) {
+    const wording = wordingOf(c);
+    return pressRefused(
+      c,
+      status,
+      wording.holdsAction,
+      paths.length === 0
+        ? wording[why]
+        : `${wording[why]} ${why === "holdsRefusedHeld" ? wording.othersHold(paths) : wording.holds(paths)}`,
+      viewHref(
+        iterationId === null || iterationId === ""
+          ? { kind: "summary" }
+          : { kind: "release", iterationId },
+        wording.lang,
+      ),
+      wording.releaseBack,
+      note,
+      holders,
     );
   }
 

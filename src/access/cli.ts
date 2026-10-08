@@ -68,7 +68,7 @@ import {
   type LoopPolicy,
 } from "../refrain/policy.js";
 import { revisionPlan, stoppedRetryPlan } from "../refrain/revision.js";
-import { pathsOverlap, repositoryKey } from "../store/lanes.js";
+import { claimMove, pathsOverlap, quiescent, repositoryKey } from "../store/lanes.js";
 import { canonicalJson, contentDigest } from "../store/plan.js";
 import {
   type AgentTypeRecordDraft,
@@ -136,6 +136,7 @@ import {
   endFaulted,
   endLost,
   issuesClosedOver,
+  lineChanged,
   notRereadSentence,
   type ReportingPorts,
   type RequestThread,
@@ -281,6 +282,9 @@ import {
   type ConflictFixInput,
   type GoalPauseInput,
   type GoalScopeInput,
+  type HoldsInput,
+  type HoldsMoved,
+  HoldsPort,
   MergePort,
   newDraftId,
   newIterationId,
@@ -2351,6 +2355,21 @@ export async function main(
                 // A start these files held is attempted now (rondo#284).
                 order?.kick();
                 return released;
+              }),
+        holds:
+          sender === null || "refusal" in sender
+            ? null
+            : new HoldsPort(async (input) => {
+                const moved = await holdsFromPage(
+                  environment,
+                  store,
+                  record,
+                  sender.actorId,
+                  input,
+                );
+                // Files a narrowing gave up may be what a held start waits on.
+                order?.kick();
+                return moved;
               }),
         publishing:
           sender === null || "refusal" in sender
@@ -10001,6 +10020,108 @@ export async function releaseFromPage(
       return { ok: false, why: "releaseRefusedChanged", note: outcome.reason };
     default:
       return { ok: false, why: "releaseRefusedNotRecorded", note: outcome.reason };
+  }
+}
+
+/**
+ * Change which files an open line keeps, on a press from the page (D-0073
+ * rules 4.1 and 4.2, D-0163), as `releaseFromPage` releases them.
+ *
+ * **A narrowing reads what the line changed first** (rule 4.2), over the
+ * laps the screen was drawn over: the store refuses when those moved, and
+ * refuses a narrowing while a lap may still commit, so what was read is what
+ * the line has.
+ */
+export async function holdsFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  store: IterationStore,
+  record: Pick<AdvisoryRecord, "threadMessages">,
+  approver: string,
+  input: HoldsInput,
+): Promise<HoldsMoved> {
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return { ok: false, why: "holdsRefusedNotRecorded", note: actor.refusal };
+  }
+  const line = await store.laneLine(input.iterationId);
+  if (line.kind !== "read") {
+    return {
+      ok: false,
+      why: "holdsRefusedNotRecorded",
+      note: line.kind === "defect" ? line.reason : "the lap is not in this store",
+    };
+  }
+  const drawn = [...input.lapIds].sort().join(" ");
+  if (
+    line.line.claim?.claimId !== input.claimId ||
+    line.line.laps
+      .map((lap) => lap.id)
+      .sort()
+      .join(" ") !== drawn
+  ) {
+    return { ok: false, why: "holdsRefusedChanged", note: "" };
+  }
+  // Read only when it can matter: a move refused as written, or one that
+  // gives nothing up, needs no git, and one over a line still running is
+  // refused as busy by the store.
+  const asked = claimMove(line.line.claim.paths, input.paths);
+  if (asked.kind === "refused") {
+    return { ok: false, why: "holdsRefusedPaths", note: asked.reason };
+  }
+  const changed =
+    asked.dropped.length > 0 && quiescent(line.line.laps)
+      ? await lineChanged({ store, readChangedPaths }, line.line.laps)
+      : null;
+  if (changed?.kind === "undetermined") {
+    return { ok: false, why: "holdsRefusedUnread", note: changed.reason };
+  }
+  const outcome = await store.moveClaim({
+    iterationId: input.iterationId,
+    takenOver: { claimId: input.claimId, lapIds: input.lapIds },
+    paths: input.paths,
+    changed: changed === null ? null : changed.paths,
+    authorId: actor.actorId,
+    nowMs: Date.now(),
+  });
+  switch (outcome.kind) {
+    case "moved":
+      say(
+        `Line ${outcome.lineageId} keeps other files now, on a press from the page: ` +
+          `took ${outcome.added.join(", ") || "none"}, gave up ${outcome.dropped.join(", ") || "none"}.`,
+      );
+      return { ok: true, note: "" };
+    case "stale":
+      return { ok: false, why: "holdsRefusedChanged", note: "" };
+    case "busy":
+      return { ok: false, why: "holdsRefusedBusy", note: "" };
+    case "kept":
+      return { ok: false, why: "holdsRefusedKept", note: "", paths: outcome.paths };
+    case "held": {
+      const read = await record.threadMessages();
+      const messages = read.kind === "read" ? read.messages : [];
+      const ledger = await store.laneLedger().catch(() => []);
+      const holders = await Promise.all(
+        outcome.holders.map(async ({ lineageId }) => {
+          const root = await store.read(lineageId);
+          return {
+            lineageId,
+            request: root.kind === "read" ? requestWords(messages, root.record) : null,
+            inFlight: ledger.find((each) => each.lineageId === lineageId)?.inFlight ?? true,
+          };
+        }),
+      );
+      return {
+        ok: false,
+        why: "holdsRefusedHeld",
+        note: "",
+        paths: [...new Set(outcome.holders.flatMap(({ sharedPaths }) => sharedPaths))],
+        holders,
+      };
+    }
+    case "refused":
+      return { ok: false, why: "holdsRefusedPaths", note: outcome.reason };
+    default:
+      return { ok: false, why: "holdsRefusedNotRecorded", note: outcome.reason };
   }
 }
 

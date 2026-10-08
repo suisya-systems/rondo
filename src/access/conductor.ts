@@ -1096,6 +1096,61 @@ export async function compareClaim(
       };
 }
 
+/**
+ * What a line has changed, as a narrowing must keep it (D-0073 rule 4.2,
+ * D-0163 rule 4): over every lap of `laps` (root first), the paths between
+ * the lineage's first base and that lap's tip, whatever its status. Read only
+ * once nothing of the line can still commit.
+ *
+ * A lap whose identifiers were never handed to continuo changed nothing. A lap that ran
+ * and left no reading of its tip cannot be read, so nothing is given up:
+ * `undetermined`. Nothing taken in is subtracted (rule 4.2 counts what exists
+ * on the branch, not what the line owes), which keeps a path, never loses one.
+ */
+export async function lineChanged(
+  lanes: ClaimPorts,
+  laps: readonly IterationRecord[],
+): Promise<ChangedPathsReading> {
+  const tips: {
+    readonly repository: unknown;
+    readonly baseCommit: string;
+    readonly tipCommit: string;
+  }[] = [];
+  for (const lap of laps) {
+    const evidence = latestReading(
+      await lanes.store.readingsFor(lap.id),
+      isDeterministicReadingDrafter,
+    )?.evidence;
+    if (evidence !== undefined && evidence !== null) {
+      tips.push({ repository: lap.plan["repository"], ...evidence });
+    } else if (lap.identifiersSpent !== 0) {
+      return {
+        kind: "undetermined",
+        reason: "a lap of this line left no reading of what it committed",
+      };
+    }
+  }
+  const first = tips[0];
+  const paths = new Set<string>();
+  for (const tip of tips) {
+    if (typeof tip.repository !== "string" || first === undefined) {
+      return { kind: "undetermined", reason: "a lap of this line names no repository" };
+    }
+    const read = await lanes.readChangedPaths({
+      repository: tip.repository,
+      baseCommit: first.baseCommit,
+      tipCommit: tip.tipCommit,
+    });
+    if (read.kind === "undetermined") {
+      return read;
+    }
+    for (const path of read.paths) {
+      paths.add(path);
+    }
+  }
+  return { kind: "read", paths: [...paths].sort() };
+}
+
 /** A stored lap plan's `take_in.commit` (D-0098 rule 2.1), or null when it takes nothing in. */
 export function takenInCommit(plan: JsonRecord): string | null {
   const takeIn = plan["take_in"];
