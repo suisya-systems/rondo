@@ -74,6 +74,18 @@ export async function pageDocument({
   faces,
 }: PageDocument): Promise<string> {
   const here = viewHref(view, wording.lang);
+  // **The keys that do something on this view**, for the hints and the `?`
+  // sheet alike; the summary has nowhere to go back to.
+  const keys: readonly (readonly [string, string])[] = [
+    ["j k", wording.keyMove],
+    ["↵", wording.keyOpen],
+    ...(view.kind === "summary"
+      ? []
+      : ([
+          ["esc", wording.keyBack],
+          ...(onThreads && forms ? ([["r", wording.keyWrite]] as const) : []),
+        ] as const)),
+  ];
   const page = (
     // **The document declares the language rondo actually wrote it in, and
     // never the one that was asked for** (D-0055 rule 7). `wording.lang` is the
@@ -317,33 +329,52 @@ export async function pageDocument({
              * 1,060px at the default size in English and 1,200px at the
              * largest, of which the hints are 300 to 335; below `xl` they would
              * push the switch off the row, so they are left out there, and the
-             * keys still work.
+             * keys still work -- and the `?` beside them lists them at every
+             * width (rondo#588).
              */}
             <span class="js-only hidden items-center gap-1.5 text-xs text-muted-foreground xl:flex">
-              {
-                // Each view names only the keys that do something on it,
-                // and the summary has nowhere to go back to.
+              {keys.map(([key, word]) => (
                 <>
-                  {kbd("j")}
-                  {kbd("k")}
-                  <span class="mr-2">{wording.keyMove}</span>
-                  {kbd("↵")}
-                  <span class="mr-2">{wording.keyOpen}</span>
+                  {key.split(" ").map(kbd)}
+                  <span class="mr-2">{word}</span>
                 </>
-              }
-              {view.kind === "summary" ? null : (
-                <>
-                  {kbd("esc")}
-                  <span class="mr-2">{wording.keyBack}</span>
-                  {onThreads && forms ? (
-                    <>
-                      {kbd("r")}
-                      <span class="ml-0.5">{wording.keyWrite}</span>
-                    </>
-                  ) : null}
-                </>
-              )}
+              ))}
             </span>
+            {/*
+             * **The keys, at every width** (rondo#588). A native popover: the
+             * button opens it with no script, `?` opens it from
+             * `page/keys.js`, and `Esc` or a click outside shuts it. Script
+             * only, as the hints are: with script off no key does anything.
+             * Outside `#ledger`, so the redraw never shuts it.
+             */}
+            <button
+              type="button"
+              popovertarget="key-sheet"
+              aria-label={wording.keySheet}
+              title={wording.keySheet}
+              class="js-only inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border font-mono text-meta text-muted-foreground hover:text-foreground"
+            >
+              ?
+            </button>
+            <div
+              id="key-sheet"
+              popover="auto"
+              role="dialog"
+              aria-labelledby="key-sheet-title"
+              class="m-auto w-64 max-w-[calc(100vw-2rem)] whitespace-normal rounded-md border border-border bg-card p-4 text-body text-foreground shadow-lg"
+            >
+              <h2 id="key-sheet-title" class="mb-3 text-meta font-semibold">
+                {wording.keySheet}
+              </h2>
+              <dl class="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 text-meta">
+                {[...keys, ["?", wording.keyShowSheet] as const].map(([key, word]) => (
+                  <>
+                    <dt class="flex gap-1">{key.split(" ").map(kbd)}</dt>
+                    <dd class="text-muted-foreground">{word}</dd>
+                  </>
+                ))}
+              </dl>
+            </div>
             {/*
              * **The text size, which a person can change** (rondo#379). Three
              * steps of the one type scale, each an "A" drawn at the step it

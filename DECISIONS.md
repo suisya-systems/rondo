@@ -13831,6 +13831,27 @@ answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`
 >
 > - Amends: D-0059 R3
 
+> **Annotation (2026-10-08, from rondo#588), and not additive.** Added after this entry was
+> accepted, by rondo#588. **R3's key script, which
+> moves focus between server-rendered rows and follows server-rendered links, also shows and hides
+> one server-rendered list: the page's keys** (`#key-sheet`).
+> - **What it is.** The header's key hints are drawn only at `xl` and up (rondo#379), so in a
+>   half-screen window no key was named anywhere. The server now draws the keys that work on the
+>   view a second time, in a native popover beside a `?` button in the header at every width. The
+>   button opens it with no script (`popovertarget`); `?` opens and shuts it from `page/keys.js`;
+>   `Esc` and a click outside shut it, which the browser does. While it is open the other keys do
+>   nothing, so `Esc` shuts the list rather than also following the way back.
+> - **What it does not change.** Showing an element the server drew makes no request and builds no
+>   `POST`, so R3's vocabulary -- one polling `GET` of the page's own address and the send's
+>   `hx-post` -- and R4 at the door are unchanged. The button is `.js-only`, as the hints are: with
+>   script off no key does anything, so nothing lists them.
+> - **What it costs.** One more thing `page/keys.js` does, in a file the audit already reads. A
+>   browser that predates popovers (before 2024) draws the list open in the header instead of
+>   behind the button.
+> - Nothing else in this entry is changed, and nothing below is edited.
+>
+> - Amends: D-0059 R3
+
 > **Annotation (2026-09-21, from D-0087).** Added after this entry was accepted, and additive.
 > **The residual *"cross-platform build reproducibility"*, whose decider this entry names as
 > *"the implementing change's CI"*, is now decided a night later.** `npm run page:check` still
