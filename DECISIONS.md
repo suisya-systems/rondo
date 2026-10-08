@@ -199,6 +199,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0164 | A gate whose review rounds are spent raises them on the change press itself: one press records the raised approval and asks for the change under it | accepted |
 | D-0165 | `revise --iteration-id` names the lap being revised, as on every other verb, and the second lap is named by `--successor-id`, so a revise works while several iterations are open | accepted |
 | D-0166 | A form the redraw would replace while the person is writing in it is kept: a notice says what changed, nothing is sent until they choose, and an answer is taken from any round of the candidate the flow waits on | accepted |
+| D-0167 | Each drafted part says on the scope screen which model it runs on, in the person's words: the tier, the model and worker it maps to, the drafter's grounds for a lighter tier, and each lap's model and cost | accepted |
 
 ---
 
@@ -28489,3 +28490,56 @@ where theirs was takes the words off the screen. The scope and goal scope screen
 - A person who chose *Keep answering these* and whose answer the flow did not use.
 - A redraw that changes a marked form under typed words without the notice.
 - Any statement above failing to hold at rondo `c599497` plus this change.
+
+## D-0167 — Each drafted part says on the scope screen which model it runs on, in the person's words: the tier, the model and worker it maps to, the drafter's grounds for a lighter tier, and each lap's model and cost
+
+**Status:** accepted (2026-10-08, rondo#473). Supersedes nothing: `D-0122` left which screen shows
+the tier and the grounds, and in what words, undecided ("What it costs", third point). Refs
+`D-0044` rule 1, `D-0062` rule 2.2, `D-0071` rule 4.2, `D-0076`, `D-0122` rule 3, `D-0123`
+rule 2, rondo#462.
+
+### Context
+
+A drafted plan may run on `mechanical` (`claude-sonnet-5`) when its drafter grounds each condition
+of `D-0044` rule 1 (`D-0122`). The grounds were kept on the split row, and the tier reached the
+page only as the token `mechanical` inside the folded "as recorded" line. A person approved a scope
+without seeing that a part ran on the cheaper model, or the claims that let it.
+
+### Decision
+
+1. **Each drafted part's card on the scope screen carries a block saying which model does it**, on
+   the draft and on the approval alike, above the fold and in a tinted box when the tier is not
+   `standard`. The tier is said in the person's words (`D-0076`): the full model, the lighter model
+   that costs less and is only for work checked without a person reading it, or that rondo cannot
+   tell. The tier is read from the draft's own snapshot (`DrafterMaterial.agentTypes`).
+2. **The model and the worker are named beside it**, from `roles.ts`'s table for the host's
+   default worker (`workers.fallback`), which is what a drafted part's start runs on. A host that
+   names no worker gets the tier without a model, rather than one the page guessed. **A
+   `mechanical` part on a worker with no lighter model** (the Codex table, `D-0123` rule 2) says it
+   runs on the same model as other work, rather than promising a saving.
+3. **The grounds are drawn under it**: each condition in the person's words ("the request names
+   the files", "the change is bounded", "the tests decide whether it is done"), the drafter's own
+   text in its own language, and a link to each message it rests on. A sentence above them says
+   rondo checked that they are there and rest on the person's messages, not that they are true
+   (`D-0062` rule 2.2).
+4. **Each lap of the part is listed with the model and worker its row recorded and its cost**
+   (`lapCostUsd`), or "cost not read yet" where it is null (`D-0046`). This is the comparison the
+   issue asks for: what the tier was worth when it ran, read off the row.
+
+### Options not taken
+
+- **A saving figure** (the same work's cost on `standard`). Nothing measures the same work on both
+  tiers; a figure from other laps' costs would be a guess drawn as a measurement (rondo#378).
+- **The tier on the thread's part steps too.** The scope screen is where the approval is given;
+  the thread links to it.
+
+### What it costs
+
+- **A part's laps are found by scanning laps** (`partLine`, the same scan `partsOf` does), once per
+  part per draw of an approved scope screen.
+
+### What would falsify it
+
+- **A person approving a `mechanical` part and saying afterwards they did not see it was the
+  lighter model**: the block is then not visible enough.
+- Any statement above failing to hold at rondo `a3bd6a0`.

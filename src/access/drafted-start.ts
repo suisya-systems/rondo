@@ -615,6 +615,17 @@ export async function partsOf(
   );
 }
 
+/** The line started from plan `planIndex` of split `proposalId`, or null while none is (rondo#473). */
+export async function partLine(
+  ports: Pick<DraftedStartPorts, "store" | "record">,
+  requestMessageId: string,
+  proposalId: string,
+  planIndex: number,
+): Promise<string | null> {
+  const run = await draftedPlanRun(ports, requestMessageId, proposalId, planIndex);
+  return run.kind === "runnable" ? await startedFrom(ports, requestMessageId, run) : null;
+}
+
 /**
  * Whether the approval standing over `requestMessageId`'s newest draft has a
  * plan no lap has started from (rondo#512): a split drafted again after a lap
