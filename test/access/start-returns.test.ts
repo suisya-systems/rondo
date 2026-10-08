@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { answerOnceReserved } from "../../src/access/cli.js";
+import { answerOnceReserved } from "../../src/access/page-actions.js";
 import type { Started } from "../../src/access/web-app.js";
 import { JA } from "../../src/access/wording/ja.js";
 import { EN } from "../../src/access/wording.js";

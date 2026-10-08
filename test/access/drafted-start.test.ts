@@ -13,8 +13,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test, vi } from "vitest";
-
-import { recordDraftedScopeFromPage, startSplitFromPage } from "../../src/access/cli.js";
 import {
   approvedUnstarted,
   asPart,
@@ -25,6 +23,10 @@ import {
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { ISSUES_QUOTE_OPENING } from "../../src/access/issue-read.js";
 import { draftedPlanRun } from "../../src/access/model-draft/host.js";
+import {
+  recordDraftedScopeFromPage,
+  startSplitFromPage,
+} from "../../src/access/page-scope-actions.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";

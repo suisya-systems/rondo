@@ -17,9 +17,8 @@
  * something else.
  */
 import { expect, test } from "vitest";
-
-import { pageReach } from "../../src/access/cli.js";
 import type { ClaimReach } from "../../src/access/page/contract.js";
+import { pageReach } from "../../src/access/page-actions.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import {
   fresh,

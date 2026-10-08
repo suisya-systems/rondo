@@ -94,20 +94,21 @@ import { delimiter, dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
+import { main } from "../../src/access/cli.js";
+import { consoleSeams } from "../../src/access/console.js";
+import { GATE_ACTOR } from "../../src/access/gate-host.js";
 import {
   answerFromPage,
   answerUnderScope,
-  main,
-  publishFromPage,
-  publishingForPage,
-  raiseScopeFromPage,
-  recordScopeFromPage,
   reviseFromPage,
   reviseUnderScope,
+} from "../../src/access/page-actions.js";
+import { publishFromPage, publishingForPage } from "../../src/access/page-publish-actions.js";
+import {
+  raiseScopeFromPage,
+  recordScopeFromPage,
   startScopedFromPage,
-} from "../../src/access/cli.js";
-import { consoleSeams } from "../../src/access/console.js";
-import { GATE_ACTOR } from "../../src/access/gate-host.js";
+} from "../../src/access/page-scope-actions.js";
 import { agentTypeRecordOf } from "../../src/access/scope.js";
 import { newIterationId, newScopeId, type ScopeFormDraft } from "../../src/access/web-app.js";
 import { EN } from "../../src/access/wording.js";

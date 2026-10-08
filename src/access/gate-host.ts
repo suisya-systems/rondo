@@ -102,7 +102,10 @@ export interface GateHostPorts {
     | "scopeSpent"
     | "reviseDraftFor"
   >;
-  /** Walk the gate with the delegation and settle rondo's row (`answerUnderScope`, `cli.ts`). */
+  /**
+   * Walk the gate with the delegation and settle rondo's row (`answerUnderScope`,
+   * `page-actions.ts`).
+   */
   readonly answer: (record: IterationRecord, delegation: GateDelegation) => Promise<ScopedAnswer>;
   /** Null where no approver the allowlist accepts is set: then the host only approves. */
   readonly revise: GateRevisePorts | null;

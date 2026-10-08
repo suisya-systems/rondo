@@ -1,8 +1,7 @@
 import { request as httpRequest } from "node:http";
 import { expect, test } from "vitest";
-
-import { recordPagePress } from "../../src/access/cli.js";
 import type {} from "../../src/access/inbox.js";
+import { recordPagePress } from "../../src/access/page-actions.js";
 import { AnswerPort, type ServedPorts } from "../../src/access/web-app.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import {

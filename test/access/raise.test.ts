@@ -15,7 +15,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
-import { raiseScopeFromPage, reviseFromPage } from "../../src/access/cli.js";
+import { reviseFromPage } from "../../src/access/page-actions.js";
+import { raiseScopeFromPage } from "../../src/access/page-scope-actions.js";
 import { approvalTip } from "../../src/access/scope.js";
 import type { RaiseInput } from "../../src/access/web-app.js";
 import { contentDigest } from "../../src/store/plan.js";

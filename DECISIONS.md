@@ -201,6 +201,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0166 | A form the redraw would replace while the person is writing in it is kept: a notice says what changed, nothing is sent until they choose, and an answer is taken from any round of the candidate the flow waits on | accepted |
 | D-0167 | Each drafted part says on the scope screen which model it runs on, in the person's words: the tier, the model and worker it maps to, the drafter's grounds for a lighter tier, and each lap's model and cost | accepted |
 | D-0168 | A source file holds at most 2000 lines, and the ten files already over it may only shrink | accepted |
+| D-0170 | `rondo web`'s composition root leaves `main` for `host.ts`, and the page's presses leave `cli.ts` for three modules of their own; what the commands share with them stays in `cli.ts` | accepted |
 
 ---
 
@@ -28564,3 +28565,40 @@ shrunk below it (lower the entry) or fits the budget (delete the entry), so a ca
 ### What would falsify it
 
 - A `src/` file over 2000 lines on `main` with no allowlist entry, or a cap above its file's lines.
+
+## D-0170 — `rondo web`'s composition root leaves `main` for `host.ts`, and the page's presses leave `cli.ts` for three modules of their own; what the commands share with them stays in `cli.ts`
+
+**Status:** accepted (2026-10-08, rondo#570). Supersedes nothing.
+
+### Decision
+
+A refactor under D-0168 that changes no behaviour, no command output and no page.
+
+1. `main`'s `web` branch is `serveWeb` in `src/access/host.ts`. `main` keeps the dispatch and the
+   comment saying why `web` is dispatched before continuo starts. The gate pass's kick, which
+   `sayGateOpen` reads, is installed through `setAfterGateReading`, since a module cannot assign
+   another module's binding.
+2. The page's presses move by what they act on: `page-actions.ts` (answer, revise, conflict fix,
+   restart, retake, release, holds, repository add, and the material and reach shown beside them),
+   `page-scope-actions.ts` (record, raise and pause a scope; scoped, split and held starts) and
+   `page-publish-actions.ts` (the publish press and the scoped publish). Each is under 2000 lines.
+   A helper moved with them only when nothing left in `cli.ts` uses it.
+3. A helper a command and a press both use (`say`, `refuse`, `approvedActor`, `walkGate`,
+   `publishPlanFor`, ...) stays in `cli.ts` and is exported; the new modules import it from there.
+   `cli.ts` imports `serveWeb`, so the modules form an import cycle. No module reads another's
+   binding while it is being evaluated, so any of the five can be loaded first.
+4. The new modules play `cli.ts`'s role, `Human (product manager)`, in the boundary test's
+   `ROLES_BY_MODULE`, and take no Node builtin.
+
+### Options not taken
+
+- **Moving the shared helpers to a module of their own first.** It would break the cycle, but it is
+  most of what is left in `cli.ts` and a larger move than the issue asks for; it can follow.
+- **One module for every press.** About 3600 lines, over D-0168's budget on arrival.
+- **Re-exporting the moved names from `cli.ts`.** It would have spared the tests their import
+  edits, at the price of a second place every name can be reached from.
+
+### What would falsify it
+
+- A difference in any test, command output or page caused by this move.
+- A module of the five that fails when it is the first one loaded.

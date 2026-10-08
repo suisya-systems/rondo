@@ -939,8 +939,8 @@ export async function readHolder(
  * outside the claim. **Both are lines of the report and write nothing.** The
  * report is printed by the command line and by nothing else, so the page reads
  * the comparison for itself where the press is ({@link compareClaim}, and
- * `pageMaterial` in `src/access/cli.ts`): rondo#294, because a person who only
- * reads the page met a collision at merge time instead. Rule
+ * `pageMaterial` in `src/access/page-actions.ts`): rondo#294, because a person
+ * who only reads the page met a collision at merge time instead. Rule
  * 5's widening onto an unheld path is not written for a drafted claim: the
  * person answered at rondo#283's gate that the ledger does not widen a claim
  * by itself, and whether to widen it is theirs. **A line that declared
