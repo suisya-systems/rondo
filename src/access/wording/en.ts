@@ -526,6 +526,8 @@ explanation you pressed on and then answers the gate.`,
   keyShowSheet: "show this list",
   textSizeLabel: "Text size",
   textSizes: ["Standard text", "Large text", "Larger text"],
+  themeLabel: "Colours",
+  themes: ["Light", "Dark", "As the system is set"],
 
   inboxNote: "Reading this does not move your last-look mark: that is what rondo inbox does.",
 

@@ -524,6 +524,8 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     // before the body is drawn, so the chosen size is the first size painted.
     expect(scriptTagsIn(html)).toEqual([
       '<script src="/text-size.js">',
+      // The palette's, the same way (rondo#590).
+      '<script src="/theme.js">',
       '<script src="/htmx.min.js" defer="">',
       '<script src="/idiomorph-ext.min.js" defer="">',
       '<script src="/keys.js" defer="">',
@@ -659,6 +661,7 @@ test("liveness is per view: two views poll and swap, and the answer view updates
   // there is no reading for it to compare and no event to compare it on.
   expect(scriptTagsIn(still)).toEqual([
     '<script src="/text-size.js">',
+    '<script src="/theme.js">',
     '<script src="/keys.js" defer="">',
     '<script src="/composer.js" defer="">',
     '<script src="/chime.js" defer="">',
@@ -1181,5 +1184,26 @@ test("the header offers three text sizes, script only, outside what the redraw s
     ]);
     // The header is not swapped; only `#ledger` is, and the control is above it.
     expect(html.indexOf("data-text-size-choice")).toBeLessThan(html.indexOf('id="ledger"'));
+  }
+});
+
+test("the header offers light, dark and the system's palette, script only, outside what the redraw swaps (rondo#590)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const ports = portsOver(world, "ada", []);
+  for (const wording of [EN, chromeFor("ja")]) {
+    const html = await operatorPage(ports, "t", { kind: "summary" }, wording, mint);
+    const group = [
+      ...html.matchAll(/<fieldset aria-label="([^"]*)" class="js-only[^"]*">(.*?)<\/fieldset>/g),
+    ].find(([, label]) => label === wording.themeLabel);
+    const choices = [
+      ...(group?.[2] ?? "").matchAll(/data-theme-choice="([^"]*)"[^>]*aria-label="([^"]*)"/g),
+    ];
+    expect(choices.map(([, choice, name]) => [choice, name])).toEqual([
+      ["light", wording.themes[0]],
+      ["dark", wording.themes[1]],
+      ["", wording.themes[2]],
+    ]);
+    expect(html.indexOf("data-theme-choice")).toBeLessThan(html.indexOf('id="ledger"'));
   }
 });
