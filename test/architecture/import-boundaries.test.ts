@@ -1323,6 +1323,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/gate-host.ts": ["Reviewer"],
   "src/access/host-failure.ts": [HUMAN],
   "src/access/inbox.ts": [DIALOGUE],
+  // rondo#579 (D-0175): which proposals that bind nothing the inbox still lists.
+  "src/access/inbox-current.ts": [DIALOGUE],
   // rondo#490 (D-0144): the record's English read in the person's language, on a press.
   "src/access/read-in.ts": [DIALOGUE],
   "src/access/issue-read.ts": [SPLITTING],

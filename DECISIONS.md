@@ -214,6 +214,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0171 | One module owns the SQLite driver and opens every connection; the schema and the queries live in per-concern store modules handed a structural connection, and the driver is still `node:sqlite` | accepted |
 | D-0173 | The completion definition has an entry of its own: K1 to K4 as they read today, what each one's failure looks like, and where the line has been drawn; a redrawing is a dated annotation on this entry, and an entry that needs the definition cites `D-0173 K<n>` rather than copying it | accepted |
 | D-0174 | Where the prose enumerates something the tree also enumerates, a test compares the two lists, the prose states no count, and the check fails when its sentence is gone; a negative claim and a pinned dependency's own surface stay hand-maintained | accepted |
+| D-0175 | The inbox lists a proposal that binds nothing only while its subject is open and nothing newer replaces it; the rest are a count, and every row stays in the store | accepted |
 
 ---
 
@@ -29303,3 +29304,61 @@ prose, has no check at all; it held in rondo#327 because the diff deleted the co
 - **A count restated in the prose next to the list it counts**, going stale; the second occurrence is
   the recurrence that would justify the counts check declined above.
 - **A case that passes after its sentence is deleted.**
+
+## D-0175 — The inbox lists a proposal that binds nothing only while its subject is open and nothing newer replaces it; the rest are a count, and every row stays in the store
+
+**Status:** accepted (2026-10-08, rondo#579). Supersedes nothing. Refs `D-0032`, `D-0036`, `D-0097`,
+`D-0173`.
+
+### Context
+
+A proposal that binds nothing (`explanation`, `split`, `revise_draft`, `publish_body`, `triage`, and
+any kind this rondo does not know) is never answered by a `human_decision`: `recordDecision` refuses
+one (`D-0032` rule 5). `openProposals` is the absence of a decision, so every such row is open for
+ever, and `rondo inbox` listed each one under *waiting on you*. On 2026-10-08 the lap-19 host's inbox
+listed 100 of them, all waiting 11 days, over the few rows that did wait on the person (rondo#579).
+That fails `D-0173` K3: the person has to dig for what matters. The page already counts only the
+approvable kinds as waiting (`waitingCount` in `web.tsx`), so the terminal was the surface left.
+
+### Decision
+
+1. **A proposal that binds nothing is listed only while it is current.** It is current when its
+   subject is still open and no newer open proposal of its kind is about the same subject:
+   - about a lap: the lap is live (an undecodable live row counts, since it still holds a slot) and
+     this is the newest of its kind about that lap;
+   - a `triage` reading: it is its repository's newest (`latestTriage`, the reading the page draws,
+     `D-0097`);
+   - about no row: the newest of its kind.
+2. **The rest are one line with a count, and nothing is deleted.** Every row stays in the store and
+   `rondo show --proposal-id` still reads it back. The rule is a render over rows already read, so
+   nothing new is stored.
+3. **Approvable proposals are not folded.** An answer still settles one, which is what waiting means.
+4. **What is folded is neither presented nor withheld in `operator_attention`.** The inbox counts as
+   presented only the proposals it lists. A `withheld` row has no once-per-subject index, so writing
+   one per look would count renders, which `D-0036` rule 1 refuses.
+
+The rule lives in `src/access/inbox-current.ts`, beside the inbox and outside `cli.ts` and
+`web.tsx` (`D-0168`).
+
+### Options not taken
+
+- **Listing no proposal that binds nothing as waiting**, as the page does. A revise draft for the
+  lap at its gate and the newest triage reading are things the person acts on next, and the
+  terminal has no other place that names them.
+- **A status column or a closing row for a proposal that binds nothing.** `proposal` is immutable
+  (`D-0032` rule 6's shape), and every subject that moves on would need a writer to close its
+  proposals: a second home for a fact the lap's status and the newer row already hold.
+- **Recording the folded proposals as `withheld`.** See rule 4.
+
+### What it costs
+
+- *Newest of its kind* for a row about no lap folds an older `split` drafted for a different
+  request. A split is answered on the scope screen, where it waits; the inbox line was a pointer.
+- A triage reading with some candidates put aside is still current; the inbox does not read
+  `triage_decline`.
+- The accounting under-reports: a folded proposal is in neither count.
+
+### What would falsify it
+
+- A folded proposal that the person could still act on and had no other way to find.
+- A kind that binds nothing whose subject is neither a lap, a repository's triage, nor nothing.

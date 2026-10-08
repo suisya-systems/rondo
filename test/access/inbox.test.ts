@@ -105,6 +105,7 @@ const EMPTY: InboxSnapshot = {
   attentionSince: null,
   unspent: [],
   transcripts: new Map(),
+  latestTriage: new Set(),
 };
 
 /**
@@ -314,6 +315,55 @@ test("a subject drawn twice is counted once, and the second look still succeeds"
   });
 });
 
+test("a folded proposal is not counted as presented (D-0175)", async () => {
+  // Only what is listed was put in front of the person; a revise draft for a
+  // lap that is not live is folded into a count and leaves no row.
+  const { connection, store, record } = fresh();
+  await reserveOne(store, "i-0001");
+  for (const [proposalId, iterationId] of [
+    ["p-live", "i-0001"],
+    ["p-gone", "i-gone"],
+  ] as const) {
+    const written = await record.recordProposal({
+      proposalId,
+      kind: "revise_draft",
+      drafter: "rondo/advisory/deterministic",
+      payload: { instruction: null },
+      snapshot: {},
+      derivation: null,
+      iterationId,
+      supersedesIterationId: null,
+      supersedesProposalId: null,
+      predecessorPlanDigest: null,
+      predecessorContractDigest: null,
+      agentTypeDigest: null,
+      configDigest: null,
+      contractDigest: null,
+      continuoRevision: null,
+      cadenzaRevision: null,
+      elevatedFromMessageId: null,
+      elevatedByActorId: null,
+      createdAtMs: 2_000,
+    });
+    expect(written).toEqual({ kind: "recorded" });
+  }
+  const shows = screen();
+  await showInbox(
+    {
+      store,
+      record,
+      locateTranscript: transcriptPort().locateTranscript,
+      present: shows.present,
+      now: () => 5_000,
+    },
+    "operator-1",
+  );
+  expect(shows.shown.join("\n")).toContain("and 1 more whose lap has ended");
+  expect(connection.prepare("SELECT subject_id FROM operator_attention").all()).toEqual([
+    { subject_id: "p-live" },
+  ]);
+});
+
 test("a look whose mark could not be written says so, and the screen still stands", async () => {
   const { store, record } = fresh();
   await reserveOne(store, "i-0001");
@@ -505,6 +555,7 @@ test("the two voices are separated by kind and by nothing else", () => {
   // below carry the same drafter and the same subject; only `kind` differs.
   const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
+    live: [{ kind: "read", record: liveRow("i-1", "awaiting_human") }],
     open: [
       { proposalId: "p-plan", kind: "run_plan", iterationId: "i-1", createdAtMs: 9_000 },
       { proposalId: "p-said", kind: "explanation", iterationId: "i-1", createdAtMs: 9_000 },
@@ -520,6 +571,41 @@ test("the two voices are separated by kind and by nothing else", () => {
   // binds nothing, which is the same answer `isApprovableKind` gives.
   expect(rendered.slice(nonBinding)).toContain("p-huh");
   expect(rendered.slice(binding, nonBinding)).toContain("p-plan");
+});
+
+test("a proposal that binds nothing is folded once its subject has moved on (rondo#579)", () => {
+  // D-0175. Nothing answers a proposal that binds nothing, so each one is open
+  // for ever; only the newest about a subject still open is listed, and the
+  // rest are a count rather than a hundred lines waiting on the person.
+  const rendered = inboxLines(EN, "operator-1", {
+    ...EMPTY,
+    live: [
+      { kind: "read", record: liveRow("i-live", "awaiting_human") },
+      { kind: "unreadable", id: "i-odd", reason: "status column is 'wat'" },
+    ],
+    open: [
+      { proposalId: "p-ended", kind: "explanation", iterationId: "i-done", createdAtMs: 1_000 },
+      { proposalId: "p-older", kind: "revise_draft", iterationId: "i-live", createdAtMs: 2_000 },
+      { proposalId: "p-newer", kind: "revise_draft", iterationId: "i-live", createdAtMs: 3_000 },
+      { proposalId: "p-odd", kind: "explanation", iterationId: "i-odd", createdAtMs: 3_000 },
+      { proposalId: "p-said", kind: "explanation", iterationId: "i-live", createdAtMs: 3_000 },
+      { proposalId: "p-old-triage", kind: "triage", iterationId: null, createdAtMs: 4_000 },
+      { proposalId: "p-triage", kind: "triage", iterationId: null, createdAtMs: 5_000 },
+      { proposalId: "p-between-1", kind: "explanation", iterationId: null, createdAtMs: 5_000 },
+      { proposalId: "p-between-2", kind: "explanation", iterationId: null, createdAtMs: 6_000 },
+      // A binding proposal is never folded: an answer still settles it.
+      { proposalId: "p-plan", kind: "run_plan", iterationId: "i-done", createdAtMs: 1_000 },
+    ],
+    latestTriage: new Set(["p-triage"]),
+  }).join("\n");
+  expect(rendered).toContain("bind nothing (5)");
+  for (const shown of ["p-newer", "p-odd", "p-said", "p-triage", "p-between-2", "p-plan"]) {
+    expect(rendered).toContain(`${shown}  `);
+  }
+  for (const folded of ["p-ended", "p-older", "p-old-triage", "p-between-1"]) {
+    expect(rendered).not.toContain(folded);
+  }
+  expect(rendered).toContain("and 4 more whose lap has ended or that a newer one replaced");
 });
 
 test("nothing waiting is a section that says zero, not a section that vanishes", () => {

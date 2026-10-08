@@ -547,6 +547,8 @@ export const JA: Chrome = Object.freeze({
   waitingOnYou: "あなたを待っているもの",
   bindingProposals: (count) => `  承認すると契約になる proposal (${String(count)})`,
   nonBindingProposals: (count) => `  何も拘束しない proposal (${String(count)})`,
+  movedOnProposals: (count) =>
+    `    ほかに ${String(count)} 件は lap が終わったか新しいものに置き換わり、誰も待っていない`,
   readOneBack: "    選択肢と各々の根拠つきで 1 件読み直す: rondo show --proposal-id ID",
   iterationsWaiting: (count) => `  あなたを待っている iteration (${String(count)})`,
   newMark: "  新着",
