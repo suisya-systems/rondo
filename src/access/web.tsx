@@ -4696,23 +4696,27 @@ export async function operatorPage(
     if (ask === undefined || !threads.waiting.has(askId)) {
       return null;
     }
-    const tip = latestReading(readingsByLap.get(gatedLap.id) ?? [], isDeterministicReadingDrafter)
-      ?.evidence?.tipCommit;
-    if (tip === undefined) {
+    const evidence = latestReading(
+      readingsByLap.get(gatedLap.id) ?? [],
+      isDeterministicReadingDrafter,
+    )?.evidence;
+    if (evidence == null) {
       return null;
     }
+    // rondo#550: a lap that committed nothing still asked; it is said so, with no card to open.
+    const built = evidence.tipCommit === evidence.baseCommit ? null : evidence.tipCommit;
     const why = gateFraming?.material?.why ?? null;
     const read = why === null ? null : readWorkerQuestion(why);
     return {
       id: `${askId}:built`,
       kind: "other" as const,
       said: wording.evQuestionBuilt(
-        tip.slice(0, 7),
+        built?.slice(0, 7) ?? null,
         read?.kind === "question" ? read.question.waits : null,
       ),
       at: wording.age(ago(ask.atMs, nowMs)),
       atMs: ask.atMs,
-      ...(gateFraming?.material == null
+      ...(gateFraming?.material == null || built === null
         ? {}
         : { href: "#changed", linkSaid: wording.evQuestionBuiltLink }),
     };

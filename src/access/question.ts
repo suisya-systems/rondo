@@ -211,10 +211,11 @@ export interface QuestionPorts {
  * `askStandsOver` hold the line's `revise` until the person answers (rule 4.3):
  * nothing else waits.
  *
- * - **Nothing committed, nothing put** (rule 4.2: "a question about nothing the
- *   person can see is not put"). With a deterministic reading whose tip is its
- *   base, no ask is written; the lap stays an ordinary gate, still the
- *   person's turn, with the worker's words in its rationale.
+ * - **Nothing committed is still put** (rondo#550, superseding rule 4.2's "a
+ *   question about nothing the person can see is not put"). Lap-4350ed77's
+ *   question was dropped that way, and the person was sent to answer a question
+ *   the page never showed. The commit line is the tip, which is the base: the
+ *   commit the next lap builds on.
  * - **Not read is not nothing committed**: with no reading of the lap's
  *   commits, or one rondo could not take, the question is still put, and the
  *   line where the commit goes says rondo could not read it.
@@ -249,8 +250,6 @@ export async function relayQuestion(
     body =
       `Lap '${iterationId}' ended with a question rondo could not read (${read.reason}). ` +
       "Its words are in the gate's rationale; answer at the gate.";
-  } else if (evidence !== null && evidence.tipCommit === evidence.baseCommit) {
-    return `Lap '${iterationId}' asked a question with nothing committed, so it was not put to the request '${row.requestMessageId}'.`;
   } else {
     body = questionBody(
       read.question,
