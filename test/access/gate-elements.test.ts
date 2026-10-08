@@ -24,7 +24,7 @@
  * there. What this file pins is that neither wording is ever lost.
  */
 import { expect, test } from "vitest";
-import { APPROVE_BODY } from "../../src/access/web.js";
+import { APPROVE_BODY } from "../../src/access/page/approve.js";
 import { EN } from "../../src/access/wording.js";
 import {
   EVIDENCE,

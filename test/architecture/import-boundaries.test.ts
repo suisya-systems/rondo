@@ -442,6 +442,12 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   "src/access/page/document.tsx": {
     "hono/html": ["raw"],
   },
+  // The same grant, for the same seam: the gate's material places English-held
+  // text read in the person's language as markup (rondo#341 moved it out of
+  // `src/access/web.tsx`).
+  "src/access/page/gate-material.tsx": {
+    "hono/html": ["raw"],
+  },
   // **The renderer names no external at all now.** `hono/utils/accept` moved
   // with the language resolution it was imported for, to the module below:
   // the page's rebuild lifted that resolution out of the view layer, and the
@@ -1342,6 +1348,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/record-numbers.ts": [SPLITTING],
   "src/access/model-review/host.ts": ["Reviewer"],
   "src/access/model-review/judgement.ts": ["Reviewer"],
+  "src/access/page/approve.tsx": [HUMAN],
+  "src/access/page/composer.tsx": [HUMAN],
   "src/access/page/contract.ts": [HUMAN],
   "src/access/page/document.tsx": [HUMAN],
   // rondo#470: publish inside a scope, through the press's own path.
@@ -1353,6 +1361,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page/held.tsx": [HUMAN],
   "src/access/page/events.tsx": [HUMAN],
   "src/access/page/faces.tsx": [HUMAN],
+  "src/access/page/gate-material.tsx": [HUMAN],
+  "src/access/page/gate-shown.tsx": [HUMAN],
   "src/access/page/governance.tsx": [HUMAN],
   "src/access/page/list.tsx": [HUMAN],
   "src/access/page-logic/days.ts": [HUMAN],
@@ -1375,7 +1385,9 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page/result.tsx": [HUMAN],
   "src/access/page/shell.tsx": [HUMAN],
   "src/access/page/steps.tsx": [HUMAN],
+  "src/access/page/thread-acts.tsx": [HUMAN],
   "src/access/page/thread-side.tsx": [HUMAN],
+  "src/access/page/thread-stops.tsx": [HUMAN],
   "src/access/page/thread.tsx": [HUMAN],
   "src/access/page/vocabulary.tsx": [HUMAN],
   "src/access/page/words.ts": [HUMAN],

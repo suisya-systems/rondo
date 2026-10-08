@@ -198,7 +198,9 @@ const source = (path: string) =>
 
 test("the presses that start a lap carry their busy label and what a lap waits on", () => {
   // *Ask for a change* starts the second lap, and waits on it as a start does.
-  const revise = source("src/access/web.tsx");
+  // The revise form is drawn in `page/approve.tsx` and the conflict fix's press
+  // in `page/thread-acts.tsx` (rondo#341), so the two are read as one.
+  const revise = source("src/access/page/approve.tsx") + source("src/access/page/thread-acts.tsx");
   expect(revise).toContain("data-busy={wording.reviseBusy}");
   // And so does the conflict fix's attempt (rondo#417, D-0105), or the red
   // checks' repair (rondo#551) that the same press starts.
