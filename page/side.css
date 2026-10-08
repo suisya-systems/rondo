@@ -285,12 +285,13 @@
 }
 
 /*
- * Under 480px the steps stand one under another. Seven across left each about
- * 40px and a word like "Automatic" ran into the next step, and a row cut into
- * two lines is no longer a line to read; a column still reads in the order
- * they happen in.
+ * Under 640px the steps stand one under another. Seven across left each 40 to
+ * 60px -- a 320px column at 1280, or under the thread at 760 -- and a word
+ * like "Automatic" at a larger text size ran into the next step, and a row cut
+ * into two lines is no longer a line to read; a column still reads in the
+ * order they happen in.
  */
-@container (max-width: 480px) {
+@container (max-width: 640px) {
   .side-steps {
     grid-auto-flow: row;
     grid-template-columns: minmax(0, 1fr);

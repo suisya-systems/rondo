@@ -29866,7 +29866,7 @@ taken before and after by the window.
 5. **The centre and the right face are drawn by their own width, not the window's.** The same right
    face is a 320px column at 1280 and about 700px across under the thread at 1000, so a window width
    cannot say which drawing it needs: `@container` rules put the week's figures two across under
-   600px and the steps one under another under 480px.
+   600px and the steps one under another under 640px.
 6. **It lives in `page/faces.css`, `page/side.css`, `page/thread.css`, `src/access/page/faces.tsx`**
    and the header in `src/access/page/document.tsx`, not in `web.tsx` or `cli.ts` (`D-0168`). The
    thread's crumb in the header shows from 1536px rather than 1280.
