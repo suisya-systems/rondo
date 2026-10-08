@@ -256,7 +256,11 @@ async function flowOne(
       throw new Error(asks.reason);
     }
     const own = opener.messageId.startsWith(prefix);
-    const asked = asks.asks.length > 0;
+    // Asked by anyone but the flow: its own question is not the drafter asking
+    // (Codex, rondo#549) -- counted, its `failed_twice` stop would turn the
+    // `abandoned` it was asked over into `waiting_to_start`, and be taken back
+    // and asked again on alternate passes.
+    const asked = asks.asks.some((ask) => ask.holdsNothing !== true);
     // **The refused draft's own note is not an ask that holds the flow**
     // (rondo#549, the gate's second reading). It is written so the request
     // stays the person's turn rather than vanishing, and the flow is free to

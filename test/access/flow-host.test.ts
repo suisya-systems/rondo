@@ -617,6 +617,23 @@ test("rondo#549: a stop taken back and then standing again is asked again under 
   expect(messages.filter((m) => m.inReplyTo === null)).toHaveLength(2);
 });
 
+test("rondo#549: a stop over two splits of no plans stays, and is not taken back and asked again", async () => {
+  const w = await world({}, [ranked(7), ranked(8), ranked(9)]);
+  await w.pass();
+  // The drafter split each request into nothing and asked nothing: abandoned.
+  await w.drafted("split-1", first, 0);
+  await w.pass();
+  await w.drafted("split-2", second, 0);
+  for (let pass = 0; pass < 4; pass += 1) {
+    await w.pass();
+  }
+  const messages = await w.messages();
+  expect(messages.filter((m) => m.asks).map((m) => m.messageId)).toEqual([
+    `flow-stop-sd-goal-failed_twice-${second}`,
+  ]);
+  expect(messages.some((m) => m.messageId.startsWith("flow-withdrawn-"))).toBe(false);
+});
+
 test("rondo#549: a stop the person answered stop is theirs, and is not taken back", async () => {
   const w = await world({}, [ranked(7), ranked(8), ranked(9)]);
   const stopId = await staleStop(w);
