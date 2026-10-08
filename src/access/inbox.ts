@@ -33,6 +33,7 @@ import {
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { PROPOSAL_SUBJECT } from "./advisory.js";
+import { splitNonBinding } from "./inbox-current.js";
 import { type Chrome, EN } from "./wording.js";
 
 /**
@@ -47,7 +48,12 @@ export interface InboxReadPorts {
   readonly store: Pick<IterationStore, "readLive">;
   readonly record: Pick<
     AdvisoryRecord,
-    "lastView" | "openProposals" | "attentionBreakdown" | "unconsumedDecisions" | "changedSince"
+    | "lastView"
+    | "openProposals"
+    | "attentionBreakdown"
+    | "unconsumedDecisions"
+    | "changedSince"
+    | "latestTriage"
   >;
   readonly now: () => number;
   /**
@@ -167,6 +173,25 @@ export interface InboxSnapshot {
    * `unknown`.
    */
   readonly transcripts: ReadonlyMap<string, TranscriptLocation>;
+  /**
+   * The newest triage proposal of each repository, by id: the only one of a
+   * repository's readings still about what to ask next (D-0175).
+   */
+  readonly latestTriage: ReadonlySet<string>;
+}
+
+/**
+ * The open proposals this look lists, and how many that bind nothing it folded
+ * because their subject has moved on (D-0175).
+ */
+function listedProposals(snapshot: InboxSnapshot) {
+  const liveIds = new Set(
+    snapshot.live.map((row) => (row.kind === "read" ? row.record.id : row.id)),
+  );
+  return {
+    binding: snapshot.open.filter((proposal) => isApprovableKind(proposal.kind)),
+    ...splitNonBinding(snapshot.open, liveIds, snapshot.latestTriage),
+  };
 }
 
 /**
@@ -260,15 +285,17 @@ export function unblockedBy(wording: Chrome, record: IterationRecord): string {
 function waitingOnYouLines(wording: Chrome, snapshot: InboxSnapshot): readonly string[] {
   const seenProposals = changedIds(snapshot.changed, "proposal");
   const seenIterations = changedIds(snapshot.changed, "iteration");
-  const binding = snapshot.open.filter((proposal) => isApprovableKind(proposal.kind));
-  const nonBinding = snapshot.open.filter((proposal) => !isApprovableKind(proposal.kind));
+  const { binding, current, movedOn } = listedProposals(snapshot);
   const waiting = onSide(snapshot, "waitingOnYou");
   return [
     wording.waitingOnYou,
     wording.bindingProposals(binding.length),
     ...proposalLines(wording, binding, snapshot, seenProposals),
-    wording.nonBindingProposals(nonBinding.length),
-    ...proposalLines(wording, nonBinding, snapshot, seenProposals),
+    wording.nonBindingProposals(current.length),
+    ...proposalLines(wording, current, snapshot, seenProposals),
+    // **Folded and not dropped** (D-0175): the rows are still in the store and
+    // still read back one by one, and the count says they are there.
+    ...(movedOn === 0 ? [] : [wording.movedOnProposals(movedOn)]),
     // **The verb that makes one of those lines answerable** (#39). The list
     // above is ids and kinds; what a person answers is the option set, its
     // bases and what approving forecloses, and that screen is one command away
@@ -544,6 +571,7 @@ export async function gatherInbox(ports: InboxReadPorts, actorId: string): Promi
         : await ports.record.attentionBreakdown({ fromMs: sinceMs, toMs: atMs }),
     unspent: await ports.record.unconsumedDecisions(),
     transcripts: await locateRunning(ports, live),
+    latestTriage: new Set((await ports.record.latestTriage()).map((triage) => triage.proposalId)),
   };
   return snapshot;
 }
@@ -617,16 +645,17 @@ export async function showInbox(ports: InboxPorts, actorId: string): Promise<Inb
   // subject and not once per render, so a proposal looked at twenty times over
   // a morning is one row: the second write stores nothing and reports success,
   // and the ratio #40 asked for stays a count of subjects on both sides.
-  for (const proposal of snapshot.open) {
+  const { binding, current } = listedProposals(snapshot);
+  for (const proposal of [...binding, ...current]) {
     const counted = await ports.record.recordAttention({
       atMs,
       subjectKind: PROPOSAL_SUBJECT,
       subjectId: proposal.proposalId,
       disposition: "presented",
-      // Null because this surface withholds nothing: it shows every open
-      // proposal, with no cap and no paging, so there is no policy to name. The
-      // withheld side belongs to whatever decides what an operator does *not*
-      // see, which #40 says nothing owns yet.
+      // Null because what is listed is shown with no cap and no paging. The
+      // proposals folded into a count (D-0175) are neither presented nor
+      // withheld here: a withheld row has no once-per-subject index, so
+      // writing one per look would count renders, which D-0036 rule 1 refuses.
       ruleName: null,
     });
     if (counted.kind !== "recorded") {

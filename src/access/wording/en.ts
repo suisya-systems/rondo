@@ -532,6 +532,8 @@ explanation you pressed on and then answers the gate.`,
   bindingProposals: (count) =>
     `  proposals that become contracts when you approve them (${String(count)})`,
   nonBindingProposals: (count) => `  proposals that bind nothing (${String(count)})`,
+  movedOnProposals: (count) =>
+    `    and ${String(count)} more whose lap has ended or that a newer one replaced, waiting on nobody`,
   readOneBack:
     "    read one back, with its options and what each rests on: rondo show --proposal-id ID",
   iterationsWaiting: (count) => `  iterations waiting on you (${String(count)})`,

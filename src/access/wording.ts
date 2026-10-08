@@ -593,6 +593,8 @@ export interface Chrome extends PageWords {
   readonly waitingOnYou: string;
   readonly bindingProposals: (count: number) => string;
   readonly nonBindingProposals: (count: number) => string;
+  /** How many that bind nothing were folded because their subject moved on (D-0175). */
+  readonly movedOnProposals: (count: number) => string;
   readonly readOneBack: string;
   readonly iterationsWaiting: (count: number) => string;
   readonly newMark: string;
