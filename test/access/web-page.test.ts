@@ -706,6 +706,13 @@ test("every view is whole with the script gone", async () => {
   expect(summary).toMatch(/<span class="js-only [^"]*"><span[^>]*><\/span>live<\/span>/);
   expect(summary).not.toContain('<html lang="en" class="js"');
   expect(bytesOf("page/app.css").toString("utf8")).toContain("html:not(.js) .js-only");
+  // **Live is not a state, so it is not green** (rondo#593, D-0082 rule 3).
+  const live = summary.match(/<span class="js-only [^"]*"><span[^>]*><\/span>live<\/span>/)?.[0];
+  expect(live).not.toMatch(/\b(?:text|bg)-ok\b/);
+  // **The page is the viewport and the foot sentence spans what the faces
+  // span** (rondo#593): no second scroll, no narrower column under the faces.
+  expect(summary).toContain('<body class="page-shell ');
+  expect(summary).toMatch(/<p class="note faces-width [^"]*text-faint/);
 });
 
 test("an unattended poll writes nothing, however many times it goes round", async () => {

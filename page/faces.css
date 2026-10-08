@@ -11,11 +11,36 @@
  * design, and 1600 and 1280 are folds of it, not designs of their own.
  */
 
+/*
+ * **The page is the viewport, and the faces are what is left of it** (rondo#593).
+ * The header, the notes over the faces and the sentence under them take their
+ * own height and the faces the rest, so the page itself never scrolls and only
+ * a face does. The faces' height used to be the viewport less the header's
+ * 3rem, which left a note or the foot sentence outside the viewport and a
+ * second scroll bar for the page. `dvh`, so a phone's moving toolbar is not
+ * counted as room.
+ */
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.page-shell > main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.page-shell #ledger {
+  flex: 1;
+  min-height: 0;
+}
+
 .page-faces {
   display: grid;
   grid-template-columns: 440px minmax(0, 1040px) 720px;
   justify-content: center;
-  height: calc(100vh - 3rem);
+  height: 100%;
 }
 
 /* Each face scrolls on its own, so the list and the thread keep their places. */
@@ -44,6 +69,12 @@
  * is inside the box that holds the press.
  */
 @media (max-width: 1400px) {
+  /* The faces stack, so the page scrolls again and the faces do not. */
+  .page-shell,
+  .page-shell > main {
+    display: block;
+    height: auto;
+  }
   .page-faces {
     grid-template-columns: 300px minmax(0, 1fr);
     grid-template-rows: auto 1fr;

@@ -190,14 +190,17 @@ export async function pageDocument({
           keepsCurrent ? <script src="/rounds.js" defer /> : null
         }
       </head>
-      <body class="min-h-screen bg-background font-sans text-foreground antialiased">
+      <body class="page-shell min-h-screen bg-background font-sans text-foreground antialiased">
         <header class="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-sm">
           {/*
            * As wide as the faces (`.faces-width`), and **no item wraps**
            * (rondo#379): in a 1,024px column a larger text size folded
-           * "依頼" and the key hints one character to a line.
+           * "依頼" and the key hints one character to a line. **The row
+           * does** (rondo#593): on a phone the items need more than the
+           * screen, and a row that cannot wrap ran off its right edge, so an
+           * item that does not fit moves whole to a second line.
            */}
-          <div class="faces-width mx-auto flex h-12 items-center gap-3 whitespace-nowrap px-4 sm:px-6">
+          <div class="faces-width mx-auto flex min-h-12 flex-wrap items-center gap-x-3 gap-y-2 whitespace-nowrap px-4 py-2 sm:px-6">
             <h1 class="text-title font-semibold tracking-tight">
               {
                 // `data-back` is what `Esc` follows; on the summary there is
@@ -257,9 +260,13 @@ export async function pageDocument({
                  * meta refresh reloads the document, which the foot note says,
                  * and a *live* pill there claimed an in-place redraw that is not
                  * happening.
+                 *
+                 * **Muted, because it is not a state** (rondo#593): green is
+                 * *finished well* (D-0082 rule 3), and a page redrawing itself
+                 * has finished nothing.
                  */}
-                <span class={`js-only ${PILL} gap-1.5 font-sans ${TONE.ok}`}>
-                  <span class="size-1.5 rounded-full bg-ok motion-safe:animate-pulse" />
+                <span class={`js-only ${PILL} gap-1.5 font-sans ${TONE.muted}`}>
+                  <span class="size-1.5 rounded-full bg-muted-foreground motion-safe:animate-pulse" />
                   {wording.liveLabel}
                 </span>
                 {/*
@@ -375,7 +382,7 @@ export async function pageDocument({
               // the only thing on this page that writes rule 5's memory. The
               // links carry no class of their own; the nav styles them, so a
               // link is still exactly its address, its tag and its name.
-              // Muted, so the one thing in the header in colour is the live state.
+              // Muted, so the one thing in the header in colour is the waiting count.
               <nav class="switch flex shrink-0 gap-3 whitespace-nowrap text-meta text-muted-foreground [&>a]:hover:text-foreground [&>a]:hover:underline">
                 {[...SHIPPED_SETS]
                   .filter(([tag]) => tag !== wording.lang)
@@ -406,7 +413,7 @@ export async function pageDocument({
             // reason rondo knows and did not say. It sits above the faces
             // because it is true of the whole page and not of one of them.
             actorId === null ? (
-              <p class="note faces-width mx-auto rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
+              <p class="note faces-width mx-auto w-full rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
                 {wording.noApproverNote}
               </p>
             ) : null
@@ -417,7 +424,7 @@ export async function pageDocument({
             // redraw that recovers (#220 S1, Codex). Above the faces, because
             // with the threads unreadable there is no centre to put it in.
             threadRead.kind === "unreadable" ? (
-              <p class="note faces-width mx-auto rounded-md border border-fail/40 px-3 py-2 text-body leading-5 text-fail">
+              <p class="note faces-width mx-auto w-full rounded-md border border-fail/40 px-3 py-2 text-body leading-5 text-fail">
                 {wording.threadsUnreadable(threadRead.reason)}
               </p>
             ) : null
@@ -497,8 +504,9 @@ export async function pageDocument({
             //
             // **Outside the swap**, because it is true of the document and not
             // of the faces; the header's live pill is its pair and is outside
-            // too.
-            <p class="note mx-auto max-w-5xl px-4 text-meta leading-5 text-faint sm:px-6">
+            // too. As wide as the header and the notes (rondo#593), so its
+            // first word sits under the header's first.
+            <p class="note faces-width mx-auto w-full px-4 py-1 text-meta leading-5 text-faint sm:px-6">
               <span
                 title={
                   onThreads
