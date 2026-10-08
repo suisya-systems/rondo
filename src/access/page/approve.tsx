@@ -38,8 +38,6 @@ import { CARD, CARD_HEADING, chevron, DESPITE, glyph, PRIMARY, SECONDARY } from 
  */
 export const APPROVE_BODY = "approve";
 
-/** The tone of any lap by its status: the reading's folds use it for their glyph. */
-
 /**
  * Claims under the basis they rest on, each basis written once (rondo#91).
  *
@@ -158,9 +156,10 @@ function modelRaised(wording: Chrome, reading: LapReading | null): string | null
  * this from the gate: the story was in the folded records as raw text, and a
  * split's second part was not named anywhere near the press.
  *
- * rondo's words over recorded facts only ({@link lapStory}); the words a
- * change was asked with and the drafter's summary are quoted, in their own
- * language (`lang=""`), and nothing is summarised.
+ * rondo's words over recorded facts only
+ * ({@link import("../page-logic/story.js").lapStory}); the words a change was
+ * asked with and the drafter's summary are quoted, in their own language
+ * (`lang=""`), and nothing is summarised.
  */
 export interface GateStory {
   readonly laps: readonly StoryLap[];

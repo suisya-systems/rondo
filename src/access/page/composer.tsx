@@ -15,8 +15,6 @@ import { kbd } from "./document.js";
 import { scopeStop } from "./thread-stops.js";
 import { localTime, money, PRIMARY, SECONDARY, whoWrote } from "./vocabulary.js";
 
-/** A pull request body split around the request fold it carries. */
-
 /**
  * The raise's fields in a budget stop's answering box (D-0140 rule 3): the
  * amount, prefilled with what the approval allowed, and the approval's other

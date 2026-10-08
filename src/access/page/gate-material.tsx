@@ -30,47 +30,15 @@ import { heldMarkup } from "./render.js";
 import { CARD, CARD_HEADING, chevron, pill, SECONDARY, type Tone } from "./vocabulary.js";
 
 /**
- * What the worker's fence refused, in the three states the column has (#122).
- *
- * SQL null is rondo holding no reading, and is a line the lead does not draw:
- * every row before its first suspend is in that state and a screen that said so
- * on each of them would be back to counting zeros. The text `"null"` is continuo
- * saying it could not tell, which is **not** the same as nothing having been
- * refused and is the distinction the column was added to carry -- so it gets a
- * line of its own. The bytes are printed as continuo wrote them.
- */
-function fenceLine(wording: Chrome, record: IterationRecord) {
-  const refused = record.permissionDenials;
-  if (refused === null) {
-    return null;
-  }
-  // **Plain words on the row, the console's sentence as its `title`** (#220
-  // S2): "the fence refused [...]" is a JSON array in a sentence about a
-  // mechanism, and what a person reads from it is a count. The bytes continuo
-  // wrote are still here, and listed one by one in the answer view's fence card.
-  const denials = decodedDenials(refused);
-  const raw =
-    refused === "null"
-      ? wording.fenceUnknown
-      : refused === "[]"
-        ? wording.fenceRefusedNothing
-        : wording.fenceRefused(refused);
-  return (
-    <span class="line min-w-0 wrap-anywhere" title={raw}>
-      {!Array.isArray(denials)
-        ? wording.blockedUnknown
-        : denials.length === 0
-          ? wording.blockedNothing
-          : wording.blockedCount(denials.length)}
-    </span>
-  );
-}
-
-/**
  * **What the fence blocked, on the gate itself** (#220 S2): the count in plain
  * words and each refused call as `rondo answer` spells it ({@link denialLine}),
  * so a person approving sees that a command was stopped without opening the
- * text fold. No row reading (SQL null) draws nothing, as {@link fenceLine}.
+ * text fold.
+ *
+ * No row reading (SQL null) draws nothing: every row before its first suspend
+ * is in that state. The text `"null"` is continuo saying it could not tell,
+ * which is **not** the same as nothing having been refused (#122), so it is
+ * said in words of its own.
  */
 function fenceView(wording: Chrome, record: IterationRecord) {
   const refused = record.permissionDenials;
