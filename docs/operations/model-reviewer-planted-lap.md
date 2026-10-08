@@ -141,10 +141,8 @@ and caught, p2 1 of 1, control 3 of 3 raised nothing, and both planted 0 of 1 re
 reviewer's JSON stopped short of its closing `]}`. Such a run never read as `clear`, and never as a
 passed variant. Across every run, no planted variant came back without a `major` finding, and no
 control came back with one. With the operator's config kept, the parse failures did not occur
-(0 of 3 on p1 as an A/B, and 0 of about 9 earlier). The cause is not found. codex's
-`--output-schema` would enforce the shape on the server side, but rondo would have to write the
-schema file, which `src/access/forge.ts` is not granted. This is reported as a residual rather than
-settled here.
+(0 of 3 on p1 as an A/B, and 0 of about 9 earlier). The cause is not found. Section 7 is what
+removed it: codex's `--output-schema` (rondo#190, `D-0162`).
 
 ## 6. What this does not show
 
@@ -160,3 +158,24 @@ settled here.
   them off was found. What the event check refuses is using one, not having one.
 - **Windows is not walked.** `spawn` without a shell does not resolve an npm `.cmd` shim. That shows
   up as a failed run, so the reading is `unavailable`, never `clear`.
+
+## 7. Re-measured with `--output-schema` (rondo#190, `D-0162`)
+
+On 2026-10-08 (WSL2 `Linux 6.18.40.1-microsoft-standard-WSL2`, `codex-cli 0.153.4`,
+`gpt-6-astra`), `runReviewer` was given `--output-schema` with the output contract as a JSON Schema,
+written into a temp directory of its own (the reviewer's `-C` directory stays empty). Each variant
+was run 10 times, the four variants in parallel, with section 2's command. The same day and the same
+way, 10 runs per variant were taken with `8fb7642`'s reviewer (section 5's flags, no schema):
+
+| variant | without the schema: recorded | findings when recorded | with the schema: recorded | findings |
+|---|---|---|---|---|
+| both planted | 8 of 10 | 2 `major` each | **10 of 10** | 2 `major` each |
+| p1 only | 9 of 10 | 1 or 2 `major` | **10 of 10** | 1 `major` each |
+| p2 only | 10 of 10 | 1 `major` each | **10 of 10** | 1 `major` each |
+| control | 10 of 10 | none | **10 of 10** | none |
+
+Every finding's bases resolved. The 3 runs not recorded without the schema all ended right after a
+finding's closing `}`, short of the `]}` that closes the array and the answer: section 5's
+truncation, reproduced the same day. With the schema, 0 of 40 truncated, every planted run raised a
+`major` finding, and the control raised nothing in 10 of 10. That is the issue's bar, so the schema
+was adopted. The cause of the truncation is still not found; the schema avoids it.

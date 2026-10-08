@@ -2642,7 +2642,7 @@ export async function runReviewer(
     removeDirectories([directory, schemaDirectory]);
     return {
       kind: "failed",
-      reason: `no empty directory for the reviewer: ${hostFailure(error).text}`,
+      reason: `no empty directory or schema file for the reviewer: ${hostFailure(error).text}`,
     };
   }
   try {
