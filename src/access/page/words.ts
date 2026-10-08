@@ -309,6 +309,20 @@ export interface PageWords extends DayWords {
   readonly flowAskRefusedPress: string;
   readonly flowAskRefused: string;
   /**
+   * A form the redraw would have replaced while the person was writing in it
+   * (rondo#494 items 2 and 3, D-0166): kept, with these words above it. The
+   * flow's ask, and a gate's claim or revise box.
+   */
+  readonly roundChangedAsk: string;
+  readonly roundChangedStep: string;
+  readonly roundGone: string;
+  readonly roundAdded: string;
+  readonly roundUseAsk: string;
+  readonly roundKeepAsk: string;
+  readonly roundUseStep: string;
+  /** A press of the kept form before either way was chosen: not sent. */
+  readonly roundHeld: string;
+  /**
    * The press beside English-held text (rondo#490, D-0144), naming the page's
    * own language: it reads the record in the language this set is written in.
    */
@@ -846,6 +860,16 @@ export const PAGE_EN: PageWords = Object.freeze({
     "Nothing was answered: no approver is set for this rondo, so it writes nothing from the page.",
   flowAskRefusedPress: "Nothing was answered: this did not come from a press on this page.",
   flowAskRefused: "Nothing was answered: the question has moved on since the page was drawn.",
+  roundChangedAsk:
+    "rondo read the candidates again while you were answering, and asks something else now. What you wrote is kept here.",
+  roundChangedStep:
+    "This step changed while you were writing: rondo is at another step now. What you wrote is kept here, so you can copy it.",
+  roundGone: "No longer asked:",
+  roundAdded: "Newly asked:",
+  roundUseAsk: "Use the new points",
+  roundKeepAsk: "Keep answering these",
+  roundUseStep: "Show the new step",
+  roundHeld: "Nothing was sent. Choose what to do above first.",
   readInAction: "Read in English",
   readInBusy: "Putting it in English...",
   readInOriginal: "Original (the record)",
@@ -1470,6 +1494,16 @@ export const PAGE_JA: PageWords = Object.freeze({
     "回答していません。この rondo には承認者が設定されていないので、画面からは何も書き込みません。",
   flowAskRefusedPress: "回答していません。この画面のボタンから送られたものではありません。",
   flowAskRefused: "回答していません。画面を開いたあとで、この質問は新しくなっています。",
+  roundChangedAsk:
+    "回答している間に rondo が候補を読み直し、聞く内容が変わりました。書いた内容はここに残してあります。",
+  roundChangedStep:
+    "書いている間にこの段階が変わり、rondo は別の段階に進んでいます。書いた内容はここに残してあるので、写して使えます。",
+  roundGone: "聞かなくなったこと：",
+  roundAdded: "新しく聞いていること：",
+  roundUseAsk: "新しい質問に切り替える",
+  roundKeepAsk: "このまま答える",
+  roundUseStep: "新しい段階を表示する",
+  roundHeld: "何も送っていません。先に上のボタンでどうするか選んでください。",
   readInAction: "日本語で読む",
   readInBusy: "日本語にしています…",
   readInOriginal: "原文（記録）",

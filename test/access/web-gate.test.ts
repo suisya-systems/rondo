@@ -216,6 +216,10 @@ test("the gate offers a change beside approve, drafted from the findings and edi
   // address as it always did, the change posts to its own route.
   expect(bar).toContain('<form id="approve-form" method="post" action="/?lang=en"');
   expect(bar).toContain('<form id="revise-form" method="post" action="/revise?lang=en"');
+  // **Each is kept over the person's words when another gate's arrives**
+  // (rondo#494 item 3): the round is the gate, and none says it can be kept.
+  expect(bar.split(`data-round-said="${EN.roundChangedStep}"`)).toHaveLength(3);
+  expect(bar).not.toContain("data-round-keeps");
   // **Both answers are presses, and neither is inside a fold** (rondo#351,
   // D-0082 rule 7): the change used to be a `<details>` summary and only the
   // despite press was a button, so the screen drew the exception and folded

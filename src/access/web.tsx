@@ -1444,6 +1444,21 @@ function storyView(
  * page that can produce anything else -- and only a person's click produces the
  * `Sec-Fetch-User: ?1` the press is minted from.
  */
+/**
+ * **A gate's form is kept, not swapped, when the redraw brings another gate's
+ * over the person's words** (rondo#494 item 3, D-0166; `page/rounds.js`). The
+ * round is the gate; the old gate cannot be answered any more, so nothing says
+ * it can be kept answering, and the words stay on the page to be copied.
+ */
+function stepRound(wording: Chrome, record: IterationRecord) {
+  return {
+    "data-round": `${record.id}:${record.gateId ?? ""}`,
+    "data-round-said": wording.roundChangedStep,
+    "data-round-use-label": wording.roundUseStep,
+    "data-round-held-label": wording.roundHeld,
+  };
+}
+
 function approveView(
   wording: Chrome,
   record: IterationRecord,
@@ -1624,6 +1639,7 @@ function approveView(
           method="post"
           action={viewHref({ kind: "summary" }, wording.lang)}
           class="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3"
+          {...stepRound(wording, record)}
         >
           <input type="hidden" name="token" value={token} />
           <input type="hidden" name="iteration" value={record.id} />
@@ -1844,6 +1860,7 @@ function reviseForm(
         method="post"
         action={`/revise?lang=${encodeURIComponent(wording.lang)}`}
         class="flex flex-col gap-2"
+        {...stepRound(wording, record)}
       >
         <input type="hidden" name="token" value={token} />
         <input type="hidden" name="iteration" value={record.id} />
@@ -5413,6 +5430,12 @@ export async function operatorPage(
           // keeps itself current and nowhere else: a view that holds still
           // changes nothing under anybody.
           keepsCurrent ? <script src="/changed.js" defer /> : null
+        }
+        {
+          // **A form being filled in is not swapped under the person**
+          // (rondo#494 items 2 and 3, D-0166): it hooks the same morph, after
+          // `page/composer.js` has, so it is loaded where the morph is.
+          keepsCurrent ? <script src="/rounds.js" defer /> : null
         }
       </head>
       <body class="min-h-screen bg-background font-sans text-foreground antialiased">

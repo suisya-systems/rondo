@@ -240,6 +240,7 @@ import type {
   ReviewBlock,
   WebPorts,
 } from "./page/contract.js";
+import { unanswerable } from "./page/triage.js";
 import { workerRuns } from "./page-logic/laps.js";
 import { asksOverLine, conflictFixBlock, fixCauseOf, resultOf } from "./page-logic/result.js";
 import { requestWords, threadsOf } from "./page-logic/threads.js";
@@ -2326,6 +2327,18 @@ export async function main(
                   return put.kind === "recorded" ? { ok: true } : { ok: false, note: put.reason };
                 },
                 async (input) => {
+                  // **Only what the flow waits on** (rondo#494 item 2, D-0166):
+                  // a round over a candidate it no longer asks about is refused,
+                  // not kept where nothing reads it.
+                  const stale = unanswerable(
+                    await record.flowAsks(),
+                    await record.latestTriage(),
+                    await record.triageDeclines(),
+                    input.askId,
+                  );
+                  if (stale !== null) {
+                    return { ok: false, note: stale };
+                  }
                   const answered = await record.recordFlowAnswer({
                     askId: input.askId,
                     answers: input.answers,
