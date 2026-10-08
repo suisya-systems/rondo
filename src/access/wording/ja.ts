@@ -538,6 +538,8 @@ export const JA: Chrome = Object.freeze({
   keyOpen: "開く",
   keyBack: "戻る",
   keyWrite: "書く",
+  keySheet: "キーボードショートカット",
+  keyShowSheet: "この一覧を開く",
   textSizeLabel: "文字の大きさ",
   textSizes: ["標準の文字", "大きい文字", "もっと大きい文字"],
 

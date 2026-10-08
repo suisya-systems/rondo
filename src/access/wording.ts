@@ -582,6 +582,9 @@ export interface Chrome extends PageWords {
   readonly keyOpen: string;
   readonly keyBack: string;
   readonly keyWrite: string;
+  /** The `?` sheet's heading and its button's name (rondo#588), and what `?` itself does. */
+  readonly keySheet: string;
+  readonly keyShowSheet: string;
   /** The header's text-size control (rondo#379): the group's name, and one name per step, smallest first. */
   readonly textSizeLabel: string;
   readonly textSizes: readonly [string, string, string];

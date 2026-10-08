@@ -713,6 +713,17 @@ test("every view is whole with the script gone", async () => {
   // span** (rondo#593): no second scroll, no narrower column under the faces.
   expect(summary).toContain('<body class="page-shell ');
   expect(summary).toMatch(/<p class="note faces-width [^"]*text-faint/);
+
+  // **The keys are listed at every width** (rondo#588): a popover the server
+  // drew, opened by a `?` button that is script only, as the hints are, and
+  // naming only what works here -- the summary has no way back.
+  const sheet = /<div id="key-sheet" popover="auto"[^>]*>(.*?)<\/div>/s.exec(summary)?.[1] ?? "";
+  expect(summary).toMatch(/<button type="button" popovertarget="key-sheet"[^>]* class="js-only /);
+  expect(sheet).toContain("Keyboard shortcuts");
+  for (const key of [">j<", ">k<", ">↵<", ">?<"]) {
+    expect(sheet).toContain(key);
+  }
+  expect(sheet).not.toContain(">esc<");
 });
 
 test("an unattended poll writes nothing, however many times it goes round", async () => {
@@ -791,6 +802,8 @@ test("rondo's own script moves focus and follows the server's links, and asks fo
   expect(code).toContain('"[data-row]"');
   expect(code).toContain('"a[data-open]"');
   expect(code).toContain('"a[data-back]"');
+  // And the list of them the server drew, shown and hidden as a popover (rondo#588).
+  expect(code).toContain('"key-sheet"');
   // And the one mark it leaves, which is what un-hides the hints (rule 7).
   expect(code).toContain('document.documentElement.classList.add("js")');
 

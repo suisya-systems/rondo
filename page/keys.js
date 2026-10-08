@@ -1,10 +1,12 @@
 // The one script rondo owns on its page (DECISIONS.md D-0059 rule 5, R3).
 //
-// Four keys and one class, and that is the whole vocabulary: `j` and `k` move
+// These keys and one class, and that is the whole vocabulary: `j` and `k` move
 // focus between the rows the server rendered (`[data-row]`), `Enter` follows the
 // focused row's server-rendered link (`[data-open]`), `Esc` follows the view's
-// server-rendered way back (`[data-back]`), and `r` puts the caret in the
-// composer's box (`textarea[data-draft]`), which types nothing and sends nothing. Following a link is a
+// server-rendered way back (`[data-back]`), `r` puts the caret in the
+// composer's box (`textarea[data-draft]`), which types nothing and sends nothing,
+// and `?` shows and hides the server-rendered list of them (`#key-sheet`, a
+// native popover the header's `?` button also opens; rondo#588). Following a link is a
 // navigation `GET` to an address the server wrote into the page. It constructs
 // no request of its own, reads no form, submits nothing and holds nothing a
 // server reads: every write this page can make is a form's own submit, and a
@@ -32,6 +34,22 @@ document.addEventListener("keydown", (event) => {
     return;
   }
   if (event.target instanceof Element && event.target.closest("input, textarea, select")) {
+    return;
+  }
+  // While the list is open the keys are its: `?` shuts it, and `Esc` is left
+  // to the browser, which shuts a popover on it -- not followed back as well.
+  const sheet = document.getElementById("key-sheet");
+  const sheetOpen = sheet?.matches(":popover-open") ?? false;
+  if (event.key === "?" && sheet !== null) {
+    event.preventDefault();
+    if (sheetOpen) {
+      sheet.hidePopover();
+    } else {
+      sheet.showPopover();
+    }
+    return;
+  }
+  if (sheetOpen) {
     return;
   }
   // Only rows on screen: a row inside a shut fold cannot take focus.

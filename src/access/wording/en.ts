@@ -522,6 +522,8 @@ explanation you pressed on and then answers the gate.`,
   keyOpen: "open",
   keyBack: "back",
   keyWrite: "write",
+  keySheet: "Keyboard shortcuts",
+  keyShowSheet: "show this list",
   textSizeLabel: "Text size",
   textSizes: ["Standard text", "Large text", "Larger text"],
 
