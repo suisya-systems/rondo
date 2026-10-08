@@ -496,6 +496,35 @@ test("a press answers at once: its buttons are marked disabled, it says what it 
   expect(morphed?.(new HTMLFormElement("post", []), form)).not.toBe(false);
 });
 
+test("a native send leaves its landing marker where the route lands it, a question's renamed (rondo#401)", () => {
+  const page = composerPage();
+  const box = new HTMLTextAreaElement();
+  box.dataset = { draft: "reply:m-0001" };
+  const form = (action: string) => ({
+    getAttribute: (name: string) => (name === "action" ? action : null),
+    querySelector: (selector: string) =>
+      selector === "textarea[data-draft]"
+        ? box
+        : selector === "input[name=message_id]"
+          ? { value: "reply-u1" }
+          : null,
+    querySelectorAll: () => [],
+  });
+  const press = (formaction: string | null) => ({
+    getAttribute: (name: string) => (name === "formaction" ? formaction : null),
+  });
+  const submit = page.submit as (form: unknown, submitter: unknown) => boolean;
+  submit(form("/reply?lang=en"), press(null));
+  expect(page.stored.get("rondo:sent:reply-u1")).toBe("rondo:draft:reply:m-0001");
+  // *Ask rondo* posts the reply box's id to `/question`, which records and
+  // lands it as `question-<the same uuid>`.
+  submit(form("/reply?lang=en"), press("/question?lang=en"));
+  expect(page.stored.get("rondo:sent:question-u1")).toBe("rondo:draft:reply:m-0001");
+  page.stored.delete("rondo:sent:question-u1");
+  submit(form("/question?lang=en"), press(null));
+  expect(page.stored.get("rondo:sent:question-u1")).toBe("rondo:draft:reply:m-0001");
+});
+
 test("a send htmx took, and a form that only reads, are not presses", () => {
   const page = composerPage();
   const button = new HTMLButtonElement();

@@ -190,17 +190,26 @@ test("a request run as one line keeps its one sentence of state", async () => {
 /** The right face's steps, one per part, as text: name, then what it says. */
 function partSteps(html: string): string[] {
   return [...html.matchAll(/<li class="side-part( side-part-yours)?"[^>]*>([\s\S]*?)<\/li>/g)].map(
-    (m) => `${m[1] === undefined ? "" : "[yours] "}${(m[2] ?? "").replace(/<[^>]+>/g, "")}`,
+    (m) =>
+      `${m[1] === undefined ? "" : "[yours] "}${(m[2] ?? "")
+        // The "?" a part with a try carries (rondo#401) is `test/access/page/ask.test.ts`'s.
+        .replace(/<span> <a [^>]*class="ask"[^>]*>[^<]*<\/a><\/span>/, "")
+        .replace(/<[^>]+>/g, "")}`,
   );
 }
 
 test("each part's wait is one step of what remains, and starts by itself (D-0098 rule 8.2)", async () => {
   const w = await split([undefined, 0]);
   await w.start(0, "lap-one");
-  expect(partSteps(await page(w.world))).toEqual([
+  const html = await page(w.world);
+  expect(partSteps(html)).toEqual([
     "Part 1under way",
     "Part 2waiting until part 1 is merged; then it starts by itself",
   ]);
+  // rondo#401: a part with a try carries the "?" about that try; one with none does not.
+  const parts = /<ol class="side-parts">([\s\S]*?)<\/ol>/.exec(html)?.[1] ?? "";
+  expect(parts.match(/class="ask"/g)).toHaveLength(1);
+  expect(parts).toContain("ask=iteration%3Alap-one");
 });
 
 test("a part whose earlier part ended unmerged is the person's: amber, with the question linked (D-0098 rules 1.5 and 8.2)", async () => {

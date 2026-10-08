@@ -21,12 +21,12 @@ import {
   type AnswerOutcome,
   isApprovableKind,
   type JsonRecord,
-  readScopePayload,
   type ScopeDecisionDraft,
   type ScopeDraft,
   scopePayloadWithDefaults,
   type ThreadMessageDraft,
 } from "../../src/store/records.js";
+import { readScopePayload } from "../../src/store/scope-payload.js";
 import { advisoryRecord, type ReserveInput, type ScopeSpend } from "../../src/store/sqlite.js";
 import { laneFor } from "../lane-claims.js";
 import { REQUEST, storeWithRequest } from "../request-fixture.js";

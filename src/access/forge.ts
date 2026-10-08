@@ -46,7 +46,7 @@ import { contentDigest } from "../store/plan.js";
 import type { IterationRecord, ReadingEvidence } from "../store/records.js";
 import { FINDING_SEVERITIES } from "../store/records.js";
 import { hostFailure } from "./host-failure.js";
-import type { DrafterRun } from "./model-draft/judgement.js";
+import { type DrafterRun, drafterFailed } from "./model-draft/judgement.js";
 import type { ReviewerRun } from "./model-review/judgement.js";
 
 /** What one forge command did. Streams as they arrived, unparsed. */
@@ -2785,10 +2785,7 @@ export async function runDrafter(
   try {
     directory = mkdtempSync(join(tmpdir(), "rondo-drafter-"));
   } catch (error) {
-    return {
-      kind: "failed",
-      reason: `no empty directory for the drafter: ${hostFailure(error).text}`,
-    };
+    return drafterFailed(`no empty directory for the drafter: ${hostFailure(error).text}`, null);
   }
   try {
     const outcome = await runCommand(
@@ -2798,7 +2795,10 @@ export async function runDrafter(
       { input: document, cwd: directory },
     );
     if (outcome.spawnError !== null) {
-      return { kind: "failed", reason: `${outcome.commandLine}: ${outcome.spawnError}` };
+      return drafterFailed(
+        `${outcome.commandLine}: ${outcome.spawnError}`,
+        outcome.status ?? outcome.signal,
+      );
     }
     if (outcome.status !== 0) {
       const ended =

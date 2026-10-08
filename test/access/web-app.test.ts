@@ -1853,6 +1853,8 @@ const WRITE_TABLE = [
   "ALL /",
   "ALL /request",
   "ALL /reply",
+  // A question for rondo to explain (rondo#401, D-0177): a send, asking for no work.
+  "ALL /question",
   "ALL /answer-ask",
   "ALL /revise",
   // The goal a repository's triage is ranked against (D-0097 point 2.1 (a)).
@@ -1892,6 +1894,7 @@ const WRITE_TABLE = [
   "POST /",
   "POST /request",
   "POST /reply",
+  "POST /question",
   "POST /answer-ask",
   "POST /scope",
   "POST /scope-draft",
@@ -1977,7 +1980,7 @@ const PRESS_ROUTES = [
  * same-origin script can post a message no person typed -- and why the
  * residual is bounded: a message is append-only and answers no gate.
  */
-const SEND_ROUTES = ["/request", "/reply"];
+const SEND_ROUTES = ["/request", "/reply", "/question"];
 
 /**
  * The one write that is neither (rondo#414): an open tab's report of what its
@@ -2596,6 +2599,132 @@ test("(send) a reply cannot answer an ask that waits, so a send releases no hold
   const other = { ...reply, message_id: newMessageId("reply"), in_reply_to: "req" };
   expect((await send(base, "/reply", "POST", htmxHeaders(base), other)).status).toBe(303);
   expect(sent).toHaveLength(1);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(send) a question is recorded under its own prefix with what it asks about (rondo#401)", async () => {
+  const sent: Sent = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], sent), TOKEN));
+  const htmx = htmxHeaders(base);
+  // The reply box's second submit carries the reply's minted id: the question takes its uuid.
+  const reply = newMessageId("reply");
+  const asked = await send(base, "/question?lang=ja", "POST", htmx, {
+    token: TOKEN,
+    message_id: reply,
+    in_reply_to: "req",
+    about: "iteration:i-1",
+    body: "what is this lap doing?",
+  });
+  expect(asked.status).toBe(303);
+  const id = `question-${reply.slice("reply-".length)}`;
+  expect(asked.location).toBe(`/?thread=${id}&lang=ja#${id}`);
+  const free = newMessageId("question");
+  expect(
+    (
+      await send(base, "/question", "POST", htmx, {
+        token: TOKEN,
+        message_id: free,
+        in_reply_to: "req",
+        body: "and this?",
+      })
+    ).status,
+  ).toBe(303);
+  expect(sent).toEqual([
+    {
+      messageId: id,
+      body: "what is this lap doing?",
+      inReplyTo: "req",
+      about: { form: "iteration", iterationId: "i-1" },
+    },
+    { messageId: free, body: "and this?", inReplyTo: "req", about: null },
+  ]);
+
+  // A question is always asked inside a thread, and about something rondo can name.
+  const form = { token: TOKEN, message_id: newMessageId("question"), body: "why?" };
+  for (const [shape, posted] of [
+    ["no thread", form],
+    ["an empty thread", { ...form, in_reply_to: "" }],
+    ["an unknown form", { ...form, in_reply_to: "req", about: "proposal:p-1" }],
+    ["a gate with no sequence", { ...form, in_reply_to: "req", about: "gate:g-1" }],
+    ["no locator at all", { ...form, in_reply_to: "req", about: "nonsense" }],
+  ] as const) {
+    expect((await send(base, "/question", "POST", htmx, posted)).status, shape).toBe(400);
+  }
+  expect(sent).toHaveLength(2);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(send) a question may ask about an ask that waits, and leaves it waiting (rondo#401)", async () => {
+  const connection = new DatabaseSync(":memory:");
+  const record = advisoryRecord(connection);
+  const write = async (draft: Parameters<typeof record.recordThreadMessage>[0]) => {
+    const outcome = await record.recordThreadMessage(draft);
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("recorded");
+  };
+  const at = { authorId: "rondo-drafter", atMs: 1 } as const;
+  await write({
+    ...at,
+    messageId: "req",
+    body: "r",
+    authorKind: "operator",
+    inReplyTo: null,
+    bases: [],
+    asks: false,
+  });
+  await write({
+    ...at,
+    messageId: "ask",
+    body: "a?",
+    authorKind: "drafter",
+    inReplyTo: "req",
+    bases: [{ form: "message", messageId: "req" }],
+    asks: true,
+  });
+  // The host's writer, as `src/access/host.ts` records a send: the question's one basis.
+  const ports = {
+    ...spyPorts([]),
+    record,
+    say: new SayPort(
+      async (message) => {
+        const outcome = await record.recordThreadMessage({
+          messageId: message.messageId,
+          body: message.body,
+          authorKind: "operator",
+          authorId: "ada",
+          inReplyTo: message.inReplyTo,
+          atMs: 2,
+          bases: message.about == null ? [] : [{ ...message.about }],
+          asks: false,
+        });
+        return { ok: outcome.kind === "recorded", note: "" };
+      },
+      async () => await record.threadMessages(),
+    ),
+  } as ServedPorts;
+  const { base, stop, closed } = await served(createApp(ports, TOKEN));
+  const question = newMessageId("question");
+  const asked = await send(base, "/question", "POST", htmxHeaders(base), {
+    token: TOKEN,
+    message_id: question,
+    in_reply_to: "ask",
+    about: "message:ask",
+    body: "what does this ask mean?",
+  });
+  expect(asked.status).toBe(303);
+  const read = await record.threadMessages();
+  expect(
+    read.kind === "read" && read.messages.find((m) => m.messageId === question)?.bases,
+  ).toEqual([{ form: "message", messageId: "ask" }]);
+  // Asking answered nothing: the ask still holds its line.
+  const open = await record.openAsksIn("req");
+  expect(open.kind === "read" && open.asks.map((ask) => ask.messageId)).toEqual(["ask"]);
+  // A reply to it is still refused: only a question passes.
+  const reply = { token: TOKEN, message_id: newMessageId("reply"), in_reply_to: "ask", body: "b" };
+  expect((await send(base, "/reply", "POST", htmxHeaders(base), reply)).status).toBe(409);
 
   stop.abort();
   expect(await closed).toBe(0);

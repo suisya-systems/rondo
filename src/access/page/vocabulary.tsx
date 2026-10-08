@@ -357,6 +357,8 @@ export function basisWord(
   threads: Threads,
   root: string | null,
   actorId: string | null,
+  /** The laps of this thread waiting at a gate, by gate id (rondo#401): where a lap is answered. */
+  gates: ReadonlyMap<string, string> = new Map(),
 ): ThreadLink {
   const form = basis["form"];
   let said: string;
@@ -380,6 +382,22 @@ export function basisWord(
     // at its section in the reading fold; with the fold gone (D-0083) none of
     // these has a place on the page to lead to, so it is named and not linked.
     said = wording.basisKind(form) ?? "";
+    // **Except where there is now a place to lead** (rondo#401, D-0177): a lap
+    // waiting at its gate leads to where it is answered, an approval to the
+    // request's scope screen. Any other lap is named and not linked: the
+    // answer citing it is drawn in the lap's own thread already.
+    const lap =
+      form === "gateTransition"
+        ? gates.get(String(basis["gateId"]))
+        : [...gates.values()].find((id) => form === "iteration" && id === basis["iterationId"]);
+    if (root !== null && lap !== undefined) {
+      href = `${viewHref({ kind: "thread", messageId: root, to: null, gate: lap }, wording.lang)}#answering`;
+    } else if (root !== null && form === "scope") {
+      href = viewHref(
+        { kind: "scope", messageId: root, rounds: null, decisionId: null, plan: null },
+        wording.lang,
+      );
+    }
   } else if ((BASIS_FORMS as readonly unknown[]).includes(form)) {
     said = basisLine(basis as unknown as Basis, {});
   } else {

@@ -10,7 +10,7 @@
  * subject still open**; the rest are folded into a count, and every row is
  * still in the store and still read back by `rondo show --proposal-id`.
  */
-import { isApprovableKind, type OpenProposal } from "../store/records.js";
+import { EXPLAINER_PREFIX, isApprovableKind, type OpenProposal } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { storedSuccessorId } from "./advisory.js";
 
@@ -43,7 +43,12 @@ export function splitNonBinding(
   liveIds: ReadonlySet<string>,
   latestTriage: ReadonlySet<string>,
 ): NonBindingSplit {
-  const nonBinding = open.filter((proposal) => !isApprovableKind(proposal.kind));
+  // An explainer's answer is read in its thread, where it was asked (D-0177):
+  // not listed here and not counted as moved on.
+  const nonBinding = open.filter(
+    (proposal) =>
+      !isApprovableKind(proposal.kind) && !proposal.drafter.startsWith(EXPLAINER_PREFIX),
+  );
   // `openProposals` is oldest first, so the last one seen per key is the newest.
   const newest = new Map<string, string>();
   for (const proposal of nonBinding) {

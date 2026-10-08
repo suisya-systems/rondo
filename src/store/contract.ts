@@ -994,6 +994,37 @@ export type DraftWriteOutcome =
   /** Another run already covered the thread (a second host): nothing is written twice. */
   | { readonly kind: "covered" };
 
+/**
+ * What the thread explainer writes for one question (D-0177), all in one
+ * transaction or nothing: the `explanation` proposal, which binds nothing
+ * (D-0032 rule 5), the drafter's answer replying to the question, and -- when
+ * a model ran under an approval -- the `explanation_reading` claim that counts
+ * its cost there.
+ */
+export interface AnswerWrite {
+  readonly questionId: string;
+  /** What the explainer's rows are named under; the proposal's drafter and the message's author start with it. */
+  readonly drafterPrefix: string;
+  readonly proposal: ProposalDraft;
+  /** Asks nothing, replies to the question, and cites it and the proposal by their bases. */
+  readonly message: ThreadMessageDraft;
+  /** The approval in force a model's answer counts against; null when no model ran. */
+  readonly claim: { readonly scopeDecisionId: string; readonly nowMs: number } | null;
+}
+
+/**
+ * How {@link AdvisoryRecord.recordAnswer} ended. `malformed` names the field
+ * of the write that breaks D-0177's shape and nothing is written;
+ * `alreadyAnswered` is a second writer finding the answer in place.
+ */
+export type AnswerWriteOutcome =
+  | { readonly kind: "answered"; readonly proposalId: string; readonly messageId: string }
+  | { readonly kind: "alreadyAnswered"; readonly questionId: string }
+  | { readonly kind: "notAQuestion"; readonly questionId: string }
+  | { readonly kind: "malformed"; readonly field: string; readonly reason: string }
+  | { readonly kind: "refused"; readonly reason: string }
+  | { readonly kind: "defect"; readonly reason: string };
+
 /** One revise draft as a reader needs it (D-0077 rule 5.1): whose it is and what it holds. */
 export interface StoredReviseDraft {
   readonly proposalId: string;
@@ -1374,6 +1405,13 @@ export interface AdvisoryRecord {
    * a message it covers, so it is never in this set.
    */
   draftedMessageIds(drafterPrefix: string): Promise<ReadonlySet<string>>;
+  /** One explainer answer (D-0177), all or nothing; see {@link AnswerWrite}. */
+  recordAnswer(write: AnswerWrite): Promise<AnswerWriteOutcome>;
+  /**
+   * The person's questions (`question-` ids, D-0177) that no drafter message
+   * named with `drafterPrefix` cites by `message:` yet, oldest first.
+   */
+  unansweredQuestionIds(drafterPrefix: string): Promise<readonly string[]>;
   /**
    * The newest split a drafter named with `drafterPrefix` wrote for
    * `requestMessageId` (its snapshot's material names the request), or null
@@ -1487,7 +1525,9 @@ export interface AdvisoryRecord {
    * id), a scoped publish's push and pull request (`push_branch`,
    * `open_pull_request`, rondo#470, subject the iteration id), or a triage
    * reading the flow host injects from (`triage_reading`, rondo#469, subject
-   * the triage proposal id). **One per subject, whichever approval claims it**:
+   * the triage proposal id), or an explainer's answer (`explanation_reading`,
+   * D-0177, subject the explanation proposal id; `recordAnswer` claims it in its
+   * own transaction). **One per subject, whichever approval claims it**:
    * the key alone would let a successor approval claim the same subject again.
    */
   claimScopedAct(claim: {

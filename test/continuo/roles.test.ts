@@ -20,6 +20,7 @@ import { admitRun, type VerifiedContinuo } from "../../src/continuo/invoker.js";
 import {
   apiCostUsd,
   CONTINUO_ROSTER,
+  explainerRow,
   mapModelTier,
   mapNeutralRole,
   mappedModelTiers,
@@ -362,4 +363,11 @@ describe("a Codex lap's tokens at the public API price (D-0123)", () => {
     expect(apiCostUsd({ ...tokens, cachedInputTokens: 2_000_000 })).toBeNull();
     expect(apiCostUsd({ ...tokens, cacheWriteInputTokens: -1 })).toBeNull();
   });
+});
+
+test("the explainer runs on the light tier's model, filed under its family (D-0177)", () => {
+  const row = explainerRow();
+  expect(row).toEqual({ model: "claude-sonnet-5", family: "claude", executable: "claude" });
+  expect(mapModelTier("mechanical")).toMatchObject({ model: row.model });
+  expect(modelFamilyOf(row.model)).toBe(row.family);
 });

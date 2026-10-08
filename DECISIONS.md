@@ -79,7 +79,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0031 | The last field `revise` could not see before it spends the gate: rondo reads one run, and only an answer counts | accepted |
 | D-0032 | The record the operator's surface has to be able to show: alternatives inside one immutable proposal, a basis that is a locator, a durable last-look mark, and one table counting what was put to the operator and what was not | accepted, amended |
 | D-0033 | Nothing new owns the work between laps: three existing owners, a snapshot that widens instead of a component that decides, and one gap named rather than filled | accepted |
-| D-0034 | An explanation carries claims and no recommendation: how `D-0032` rule 1 and rule 5 are read together | accepted |
+| D-0034 | An explanation carries claims and no recommendation: how `D-0032` rule 1 and rule 5 are read together | accepted, amended |
 | D-0035 | What actually releases the conductor's slot: the exit status continuo's contract defines, and an abnormal end that keeps it | accepted |
 | D-0036 | The operator's inbox, decided as three open questions and not as a fourth record design: a presentation counted once per subject, the conversation only as far as elevation reaches, and a two-way wait that admits it is not three | accepted |
 | D-0037 | The between-laps composition: a fourth snapshot rather than a fourth component, three claim families rondo can ground, one verb an operator runs, and a breakdown that answers over an interval | accepted |
@@ -113,7 +113,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0065 | The model reviewer: a reader of another model family that rondo runs outside the lap over bytes it hands over and digests, graded findings with bases on the reading record, a round budget and a threshold that are the scope's, and the three defects a person caught sorted into caught, half caught and not caught | accepted, amended |
 | D-0066 | The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it | accepted, amended |
 | D-0067 | The secretary's running half has no new owner: the advisory reads lines against each other and drafts an order, the surface attempts acts in that order, the store keeps the person's standing policies, and review extensions and merges still reach the person | accepted, amended |
-| D-0068 | One voice and a patrol: the person asks rondo why a line waits and gets an answer joined from rows with bases, a timer in the resident host reads rows against each lap's own declared patience, and nothing it finds is handled silently | accepted |
+| D-0068 | One voice and a patrol: the person asks rondo why a line waits and gets an answer joined from rows with bases, a timer in the resident host reads rows against each lap's own declared patience, and nothing it finds is handled silently | accepted, amended |
 | D-0069 | A scope before the first lap: an agent type becomes a record rondo holds when an operator's scope is written from a plan, `start` spends a scope through the `lineage_start` arm, and an operator-written first admission waits on every open question in its request's thread | superseded by D-0071 |
 | D-0070 | A revise inside a scope: the person still answers the gate, the lap it starts spends the scope through the `redo` arm, the verdict is computed before the gate is walked, and the added text is carried and never tested | accepted, amended |
 | D-0071 | The model drafter: a Claude model rondo runs outside the lap over a thread it hands over, which chooses among held plans and agent types and writes words, while every number in a drafted scope is computed from recorded laps and may only be narrowed; and a plan the person pastes into the thread is how a fresh store gets its first template and agent type | superseded by D-0075 |
@@ -218,6 +218,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0176 | An approvable proposal whose successor identity is already in the store no longer waits on the person: the inbox counts it in a line and the page's count leaves it out, and the row stays readable | accepted |
 | D-0183 | A list row that waits on nobody is one line, its title and its time, with its state in the mark's shape; the sentence and the repository stay in the markup for a reader, and a waiting row keeps both lines | accepted |
 | D-0184 | The page offers light, dark and the system's palette, kept in this browser as the text size is; the system's is the default, and each colour token holds both values in one declaration | accepted |
+| D-0177 | A person asks rondo on the page what something means or what happened, and a model explainer answers in the thread: an explanation with bases that binds nothing, counted against the approval in force, capped per answer | accepted |
 
 ---
 
@@ -5405,6 +5406,12 @@ On **2026-09-11**, against the pinned continuo built from a clean clone at
 
 **Status:** accepted (2026-09-11, rondo's human gate). Refs rondo#39, rondo#40, rondo#41.
 
+> **Annotation (2026-10-08, from D-0177).** Added after this entry was accepted, and additive.
+> The residual on `derivation`'s members (rule 8) is answered by the entry that admits a model
+> explainer, as the residual table says it would be: the members are `store_rows`,
+> `operator_elevation` and `model` (`D-0177` rule 1). Rules 5 and 8 stand as written: an
+> explanation binds nothing, and explaining is not reviewing. Nothing below is edited.
+
 > **Annotation (2026-10-08, from D-0169).** Not additive, and written only to carry the lines below
 > for notes written in an older form, which the index does not read: the note from `D-0036` under
 > the paper screen says its row *"Waiting on you / on CI / still running"* "over-describes what that
@@ -6067,6 +6074,15 @@ material.
 ## D-0034 — An explanation carries claims and no recommendation: how `D-0032` rule 1 and rule 5 are read together
 
 **Status:** accepted (2026-09-11, rondo's human gate). Refs rondo#39, rondo#40, rondo#41.
+
+> **Annotation (2026-10-08, from D-0177).** Added after this entry was accepted, and **not additive**.
+> `D-0177` admits a model explainer: a person asks by a press on the page, and a model on
+> `claude-sonnet-5` composes an `explanation` with `derivation` `model`, whose every basis is
+> checked against material read from rows, or the deterministic answer when the check refuses it.
+> Rules 1 to 4 stand: the explanation is claims with bases, carries no recommendation and binds
+> nothing. Nothing below is edited.
+>
+> - Amends: D-0034 "It does not admit a model explainer"
 
 > **Annotation (2026-09-13, from D-0064).** Added after this entry was accepted, and additive. This
 > entry is not reversed: an `explanation` still binds nothing and carries no recommendation, and it is
@@ -13277,6 +13293,12 @@ the same, and only the thing that authorises its admission differs.
 > split is admitted under an approved scope that lists its agent types, and `D-0062` rule 3's per-split
 > approval is retired (`D-0066` rule 5.1). The paragraph above is unedited.
 
+> **Annotation (2026-10-08, from D-0177).** Added after this entry was accepted, and additive.
+> The table above gains one row, **Explain**, when a person asks what something means or what
+> happened: the advisory holds it, as a `drafter` message with `asks` unset and an `explanation`
+> proposal with bases into rows, and asking is the person's press (`D-0177` rule 1). The rows above
+> stand, and approving and deciding stay where they put them. Nothing above is edited.
+
 ### Decision
 
 1. **The advisory is the drafting half of the secretary's role, as section 1 divides it.** It reads
@@ -15542,6 +15564,18 @@ residuals and says nothing about how `D-0068` answers them.
 the recommended option on both; the answers are recorded in section "What was put to the human gate,
 and its answer". Refs `D-0019`, `D-0023`, `D-0032`, `D-0033`, `D-0034`, `D-0036`, `D-0038`, `D-0046`, `D-0048`,
 `D-0054`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`, `D-0067`.
+
+> **Annotation (2026-10-08, from D-0177).** Added after this entry was accepted, and **not additive**.
+> Section 1 rule 2.5 changes for a question asked by press. **Recognising a question is the
+> person's press** (the "?" beside a message or a lap, or the reply box's *Ask rondo*), and no
+> model reads an ordinary reply as a question (`D-0177` rule 2). **A model may compose the body of
+> the answer**, not only one summary sentence above a deterministic body: the body is claims whose
+> bases are locators from material read from rows, it passes `D-0063` rule 2.2's check, and on a
+> refusal the deterministic answer is written (`D-0177` rule 3). The answer is still a `drafter`
+> message in the same thread with `asks` unset. Section 2 rule 2.1 stands: the patrol calls no
+> model. Nothing below is edited.
+>
+> - Amends: D-0068 section 1 rule 2.5
 
 > **Annotation (2026-09-21, from rondo#311).** Added after this entry was accepted, and additive.
 > rondo#311 builds the half of this entry that reaches a person who is not looking at the page, and
@@ -29349,6 +29383,14 @@ prose, has no check at all; it held in rondo#327 because the diff deleted the co
 **Status:** accepted (2026-10-08, rondo#579). Supersedes nothing. Refs `D-0032`, `D-0036`, `D-0097`,
 `D-0173`.
 
+> **Annotation (2026-10-08, from D-0177).** Added after this entry was accepted, and **not additive**.
+> An explainer's answer (an `explanation` whose drafter starts `rondo/explainer/`) is neither listed
+> nor counted: it is presented once, in the thread where the question was asked (`D-0177` rule 4).
+> Rules 1 and 2 hold for every other proposal that binds nothing. Nothing below is edited.
+>
+> - Amends: D-0175 rule 1
+> - Amends: D-0175 rule 2
+
 > **Annotation (2026-10-08, from D-0176).** Not additive. An approvable proposal whose successor
 > identity is already in the store is folded too: an answer can still be recorded against it, but
 > nothing it approves can be admitted, so it no longer waits on the person.
@@ -29548,3 +29590,199 @@ review for rondo#318).
 
 - A person who chose a palette and found it lost on the next visit in the same browser.
 - A page that paints in one palette and then the other on load.
+
+## D-0177 — A person asks rondo on the page what something means or what happened, and a model explainer answers in the thread: an explanation with bases that binds nothing, counted against the approval in force, capped per answer
+
+**Status:** accepted (2026-10-08, rondo#401). Supersedes nothing. Amends `D-0034`, `D-0068` and
+`D-0175` (their annotations from this entry). Refs `D-0032`, `D-0044`, `D-0063`, `D-0064`,
+`D-0071`, `D-0083`, `D-0097`, `D-0122`, `D-0168`, `D-0173`, `D-0175`.
+
+### Context
+
+A person reading the page meets a gate, a lap's status, a check that went red or a word that is
+rondo's rather than theirs, and has nowhere on the page to ask what it means. That is `D-0173` K4's
+failure, and lap 12's sentence the owner asked about is its standing example. Three accepted entries
+kept the answer away from a model: `D-0034` does not admit a model explainer, `D-0032` leaves
+`derivation`'s members to the entry that does, and `D-0068` section 1 rule 2.5 lets a model drafter
+put one summary sentence over a deterministic answer and no more.
+
+The 2026-10-08 design survey for rondo#401 set out options for the explainer, and the owner chose
+option B, an explainer that answers in the thread, and approved five points: admit the model as an
+explainer and widen the advisory to the explaining half of the secretary's role; take a question
+from a "?" beside what is asked about and from free text in the reply box; count the cost in the
+week's allowance, show it on the answer, cap one answer and say whether the light tier may answer;
+record each question as a `D-0173` K4 failure signal; and build no MCP surface now, while keeping
+the reads open to one later. This entry writes those points down as rules, at rondo `82dd364`.
+
+### Decision
+
+1. **A model explainer is admitted, and the advisory widens to the explaining half of the
+   secretary's role.** `D-0034`'s "it does not admit a model explainer" is amended (its annotation
+   from this entry). `D-0032`'s residual on `derivation`'s members is answered: the members are
+   `store_rows` (composed by deterministic code from rows), `operator_elevation` (as before) and
+   `model` (composed by a model over material from rows). `D-0063` section 1's table gains one row
+   by this entry:
+
+   | The secretary's part | The advisory | Somewhere else |
+   |---|---|---|
+   | **Explain**, when a person asks what something means or what happened | **Holds it.** A `drafter` message with `asks` unset and an `explanation` proposal, both with bases into rows (rules 3 and 4) | Asking is the person's press (rule 2). Approving and deciding stay where the table puts them; an explanation binds nothing (`D-0032` rule 5) |
+
+   Everything else in `D-0032` rules 5 and 8 and `D-0034` rules 1 to 3 stands: the explanation is
+   claims with bases, carries no recommendation and binds nothing.
+
+2. **A question is asked by a press, and only by a press.** The page offers it in two places: a
+   "?" beside a thread message or a lap, which fills the reply box with a question about that
+   place, and an *Ask rondo* submit on the reply box, which sends free text as a question.
+   - A question is an operator message whose id starts `question-`. The prefix is the person's
+     press; **no model reads an ordinary reply to decide it was a question**.
+   - A question asked by the "?" carries one basis, the locator of what it was pressed beside; free
+     text carries none.
+   - **A question never asks for work** (`asksForWork`): the split drafter, the issue reader and
+     the repository reading ignore it, and it starts nothing. Neither it nor its answer is in the
+     split drafter's thread material, and a plan pasted in a question is no plan offered (no
+     template, and no agent type recorded from it), so a question quoting an option is never read
+     as its choice.
+
+3. **The answer is composed from rondo's rows only, in one turn with no tools.**
+   - The material is gathered by pure reads of the store: the question's thread, every lap of its
+     request with its gate, its publish, pull request and checks result, its wait reasons, the
+     approval in force for the request, and the words asked about when they are rondo's. No forge,
+     no continuo call and no file is read. The material lists every locator the answer may cite.
+   - The model runs as `claude -p` with one turn and no tools, in the drafter's frame (`D-0071`
+     rule 1, `D-0063` rule 2.1): called from `src/access`, outside `drive()`, the material fenced
+     as data and never as an instruction.
+   - Its answer passes `D-0063` rule 2.2's structural check, a pure function: one object of the
+     answer form, act `answer` and nothing else, no split, scope, asks or question in it, at least
+     one claim, bounded lengths, and every basis one of the material's locators. **The check reads
+     form, not truth** (`D-0063` rule 7).
+   - **On any refusal of the check, a failed run or no admission (rule 5), the deterministic
+     answer is written instead**: claims composed from the same material, the subject asked about
+     first, never empty, and saying why the model's answer is not there.
+
+4. **The answer is a `drafter` message and an `explanation` proposal, and it binds nothing.**
+   - The message replies to the question, has `asks` unset (`D-0068` section 1 rule 2.5's form),
+     and carries bases: every claim's basis, every lap of the request waiting at its gate, the
+     question, and the proposal. **A question is answered only by an explainer message that
+     replies to it**: an answer that also cites another question leaves that one owed.
+   - What waits on the person is read as the page reads it: a lap at its gate (`awaiting_human`),
+     a lap held for their decision with no gate to answer (`stalled`, `withdrawal_requested`,
+     named by its status), a question asked of them, a lap past its ceiling, and a drafted scope
+     nobody has decided, which leads to the scope screen.
+   - The proposal is `kind` `explanation` with `derivation` `model`, or `store_rows` for the
+     deterministic answer (drafter `rondo/explainer/1/deterministic`; a model answer's drafter is
+     `rondo/explainer/1/<model>`); its payload is the claims; its snapshot keeps the material, the
+     document the model was given, the cost (`cost_usd`, null when not read, `cap_usd`, and
+     `counted`, whether a run is counted), under `unexplained` why no model's answer is there if it
+     is not (re-readable, `D-0063` rule 5), and under `page` the answer's text without the band and
+     cost, which the page draws as a block of their own rather than twice, and under `prose` a
+     model answer's own words. **The page draws the answer in the language it is read in**: the
+     body is written once in the host's language, so the page composes the text again from the
+     row -- the records' answer whole, a model's answer around its prose and claims, which stay as
+     written -- and draws what was stored only for a row it cannot compose.
+     Its `iteration_id` is null, so no lap's freshness regathers it.
+   - **It is kept out of the inbox's list of proposals that bind nothing** (`D-0175`): it is
+     presented in its thread, once, where it was asked.
+   - It is drawn with a band that says **it is an explanation, not an approval or a decision**,
+     with its cost, with its bases as links, and, when a gate waits on the person, with where that
+     gate is answered (a link to the gate's answering form). **Explaining never reads as passing**
+     (`D-0032` rule 8): nothing on the answer approves, answers a gate or starts work.
+
+5. **Its cost is counted in the week's allowance, against the approval in force, and capped per
+   answer.**
+   - The cost is a `scope_consumption` claim of act kind `explanation_reading` on the approval in
+     force for the question's request -- the request's own, or the goal's (`D-0128`) when the flow
+     opened it, as the triage reading is counted (rondo#469) -- summed with the lap costs wherever
+     an approval's spend is read (`spentUnder` and the lap cap's read), as `D-0097` point 5 (a)
+     did for the triage reading. The amount is the proposal snapshot's `cost_usd`, or its `cap_usd` when the cost was
+     not read. Every admitted run is counted, including one whose answer the check refused; a run
+     whose process never started (no directory for it, no executable) spent nothing and is not.
+   - **A run is paid for once.** Its result is held until its answer is written: a store fault on
+     the write writes the same answer on a later scan without running the model again, and a model
+     answer the store refuses is written as the deterministic answer carrying the same count. While
+     a run is held unwritten no other run is admitted, since its spend is not yet in what admission
+     reads.
+   - **One answer is capped at 0.50 USD, checked at admission**: the model runs only when an
+     approval is in force for the request and what it has left (approved less spent less held) is
+     at least the cap. Nothing is held while the run is in flight (residual below). With no
+     approval, or not enough left, **no model is called**: the deterministic answer is written,
+     costs nothing, and says which of the two it was.
+   - A run's cost that was not read counts as the cap. A read cost above the cap is recorded as
+     read and the answer says so; nothing is hidden to keep under it.
+
+6. **The explainer runs on the light tier's model, `claude-sonnet-5`.** `D-0044` rule 1's axis is
+   whether the work can be checked by something other than a person's reading, not its price, and
+   every basis of every answer is checked mechanically against the material (rule 3). The row is
+   `EXPLAINER_TABLE` in `src/continuo/roles.ts`, beside `DRAFTER_TABLE`, and is not an agent type
+   or a tier; **a changed row is a new entry**, as `D-0071` rule 1.2 holds for the drafter.
+
+7. **Every question is recorded as a `D-0173` K4 failure signal.** The explanation proposal's
+   snapshot carries the signal: the clause cited as `D-0173 K4` (never copied, `D-0173` rule 5),
+   the question, its origin (`button` or `text`) and the locator asked about. The row is the
+   record; nothing else is written for it, and it redraws nothing in `D-0173`.
+
+8. **No MCP surface is built here.** The material reads are pure functions over the store, so a
+   later read-only MCP surface can expose them unchanged. Approving stays a press on the page.
+
+9. **The modules live in `src/access/explainer/`**, beside the page and outside `cli.ts` and
+   `web.tsx` (`D-0168`): the material reads, the pure judgement (document, check, deterministic
+   answer, body) and the host that runs one question at a time. The store gains one writer,
+   `recordAnswer`, which writes the proposal, the message and the claim in one transaction.
+
+### Options not taken
+
+- **Recognising a question by a model's reading of an ordinary reply** (`D-0068` section 1 rule
+  2.5 as written). A misread reply would spend money unasked or swallow an instruction; the
+  person's press costs one click and cannot be misread.
+- **The deterministic answer alone.** It answers what a lap's rows say, and not what a word means
+  or why a sentence was written; K4's failure is the second kind.
+- **Answering with no approval, uncounted.** Every spend rondo shows is shown against what it was
+  approved against (`D-0083` rule 6), and a spend no approval bounds is `D-0068` section 2 rule
+  2.1's objection. A thread with no approval gets the deterministic answer.
+- **The drafter's row, `claude-opus-5`.** The answer is checked mechanically and is short; the
+  heavier model buys fluency the check does not read.
+- **A cap passed to the CLI per run.** It was not confirmed that the bare `claude -p` honours a
+  budget flag; admission checks the cap without relying on it (residual below).
+- **An MCP surface now.** It would add a second place to ask with no page band and no press, and
+  the owner left it for later.
+- **`D-0068` option B as that entry described it**, an answer from the thread and the model's
+  memory. This entry is not that option: the answer rests on rows, and every claim's basis
+  resolves to one.
+
+### What it costs
+
+- An answer can be fluent and wrong. The check reads form, not truth (`D-0063` rule 7); the band
+  and the bases are what the person has against it.
+- Each model answer spends up to the cap from an approval the person gave for work, and a run
+  whose cost was not read is counted at the cap even if it cost less.
+- A question on a thread with no approval, or one nearly spent, gets the deterministic answer only,
+  which cannot say what a word means.
+- The K4 signal is a count of presses. A person who did not ask is not counted.
+
+### What would falsify it
+
+- An answer the person took as an approval, a gate answer or a decision, which is `D-0032`'s
+  falsifier for the third voice.
+- A question asked about something whose rows the material does not reach, so every answer to it
+  is a deterministic one or a refused one.
+- A model answer that passed the check and whose cost exceeded the cap often enough that admission
+  by the cap does not bound what the week spends.
+
+### Annotations this entry adds
+
+- `D-0032`, additive: the residual on `derivation`'s members is answered by rule 1.
+- `D-0034`, **not additive**: "It does not admit a model explainer" no longer holds (rule 1).
+- `D-0068`, **not additive**: section 1 rule 2.5's model drafter may compose the body of an answer
+  to a question asked by press, and recognising a question is the person's press (rules 2 and 3).
+- `D-0063`, additive: section 1's table gains the **Explain** row (rule 1).
+- `D-0175`, **not additive**: an explainer's answer is neither listed nor counted in the inbox
+  (rule 4).
+
+### Residuals, with who decides
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| A read-only MCP surface over the material reads | The owner left it for later (rule 8) | a later entry, when it is built |
+| A per-run budget flag on the explainer's `claude -p` | Not confirmed for the bare CLI; admission checks the cap | the building change, if the CLI is shown to honour one |
+| What the K4 signals are read for | Recording is decided; no reader of the count exists yet | a later entry that reads them against `D-0173` |
+| A hold on the approval while an answer's run is in flight | Admission checks what is left once, and the claim is written with the answer, so a lap admitted during the run can take the last reserve and the approval ends up to one cap over. Holding it needs the claim written before the run and its cost after, which `scope_consumption` and an unchanging proposal row do not do today | the change that gives a reading a claim before its cost |
+| A run held for writing across a restart | The held result is the host's memory, so a process that stops between the run and a landed write runs the model once more on the next start | a later change, if a store fault that outlives a restart is seen |

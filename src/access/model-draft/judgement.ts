@@ -571,7 +571,19 @@ export type DrafterRun =
       /** What the CLI reported the run cost, or null when it reported none (a residual D-0071 names). */
       readonly costUsd: number | null;
     }
-  | { readonly kind: "failed"; readonly reason: string };
+  | {
+      readonly kind: "failed";
+      readonly reason: string;
+      /** Set when no model process was started (no directory, no executable): nothing was spent. */
+      readonly notStarted?: true;
+    };
+
+/**
+ * A failed drafter run. `exit` is the process's exit status or signal; null is
+ * a process that never started (no directory, no executable), which spent nothing.
+ */
+export const drafterFailed = (reason: string, exit: number | string | null): DrafterRun =>
+  exit === null ? { kind: "failed", reason, notStarted: true } : { kind: "failed", reason };
 
 /** The checks before the drafter runs. A refusal is an unavailable run (rule 1.5). */
 export type DraftPreparation =

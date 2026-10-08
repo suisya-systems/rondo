@@ -169,8 +169,13 @@ export type Claim = {
  * an operator typed (D-0036 rule 3 property 2); calling that `store_rows` would
  * report the operator's own observation as something rondo read out of the
  * ledger, which is precisely the substitution the attribute exists to prevent.
+ *
+ * **`model` is the residual answered** (D-0177): the thread explainer's answer,
+ * a model's prose whose every claim cites a locator its material holds. It
+ * binds nothing, as every explanation does; its fallback, composed from the
+ * store alone, stays `store_rows`.
  */
-export const DERIVATIONS = Object.freeze(["store_rows", "operator_elevation"] as const);
+export const DERIVATIONS = Object.freeze(["store_rows", "operator_elevation", "model"] as const);
 
 export type Derivation = (typeof DERIVATIONS)[number];
 

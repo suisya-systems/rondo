@@ -558,9 +558,27 @@ test("the two voices are separated by kind and by nothing else", () => {
     ...EMPTY,
     live: [{ kind: "read", record: liveRow("i-1", "awaiting_human") }],
     open: [
-      { proposalId: "p-plan", kind: "run_plan", iterationId: "i-1", createdAtMs: 9_000 },
-      { proposalId: "p-said", kind: "explanation", iterationId: "i-1", createdAtMs: 9_000 },
-      { proposalId: "p-huh", kind: "from_the_future", iterationId: "i-1", createdAtMs: 9_000 },
+      {
+        proposalId: "p-plan",
+        kind: "run_plan",
+        iterationId: "i-1",
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 9_000,
+      },
+      {
+        proposalId: "p-said",
+        kind: "explanation",
+        iterationId: "i-1",
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 9_000,
+      },
+      {
+        proposalId: "p-huh",
+        kind: "from_the_future",
+        iterationId: "i-1",
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 9_000,
+      },
     ],
   }).join("\n");
   const binding = rendered.indexOf("become contracts when you approve them (1)");
@@ -585,17 +603,77 @@ test("a proposal that binds nothing is folded once its subject has moved on (ron
       { kind: "unreadable", id: "i-odd", reason: "status column is 'wat'" },
     ],
     open: [
-      { proposalId: "p-ended", kind: "explanation", iterationId: "i-done", createdAtMs: 1_000 },
-      { proposalId: "p-older", kind: "revise_draft", iterationId: "i-live", createdAtMs: 2_000 },
-      { proposalId: "p-newer", kind: "revise_draft", iterationId: "i-live", createdAtMs: 3_000 },
-      { proposalId: "p-odd", kind: "explanation", iterationId: "i-odd", createdAtMs: 3_000 },
-      { proposalId: "p-said", kind: "explanation", iterationId: "i-live", createdAtMs: 3_000 },
-      { proposalId: "p-old-triage", kind: "triage", iterationId: null, createdAtMs: 4_000 },
-      { proposalId: "p-triage", kind: "triage", iterationId: null, createdAtMs: 5_000 },
-      { proposalId: "p-between-1", kind: "explanation", iterationId: null, createdAtMs: 5_000 },
-      { proposalId: "p-between-2", kind: "explanation", iterationId: null, createdAtMs: 6_000 },
+      {
+        proposalId: "p-ended",
+        kind: "explanation",
+        iterationId: "i-done",
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 1_000,
+      },
+      {
+        proposalId: "p-older",
+        kind: "revise_draft",
+        iterationId: "i-live",
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 2_000,
+      },
+      {
+        proposalId: "p-newer",
+        kind: "revise_draft",
+        iterationId: "i-live",
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 3_000,
+      },
+      {
+        proposalId: "p-odd",
+        kind: "explanation",
+        iterationId: "i-odd",
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 3_000,
+      },
+      {
+        proposalId: "p-said",
+        kind: "explanation",
+        iterationId: "i-live",
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 3_000,
+      },
+      {
+        proposalId: "p-old-triage",
+        kind: "triage",
+        iterationId: null,
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 4_000,
+      },
+      {
+        proposalId: "p-triage",
+        kind: "triage",
+        iterationId: null,
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 5_000,
+      },
+      {
+        proposalId: "p-between-1",
+        kind: "explanation",
+        iterationId: null,
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 5_000,
+      },
+      {
+        proposalId: "p-between-2",
+        kind: "explanation",
+        iterationId: null,
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 6_000,
+      },
       // A binding proposal is never folded: an answer still settles it.
-      { proposalId: "p-plan", kind: "run_plan", iterationId: "i-done", createdAtMs: 1_000 },
+      {
+        proposalId: "p-plan",
+        kind: "run_plan",
+        iterationId: "i-done",
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 1_000,
+      },
     ],
     latestTriage: new Set(["p-triage"]),
   }).join("\n");
@@ -613,8 +691,20 @@ test("an approvable proposal whose successor identity is taken is a count, not a
   const rendered = inboxLines(EN, "operator-1", {
     ...EMPTY,
     open: [
-      { proposalId: "p-taken", kind: "run_plan", iterationId: "i-1", createdAtMs: 1_000 },
-      { proposalId: "p-free", kind: "contract_keys", iterationId: "i-1", createdAtMs: 2_000 },
+      {
+        proposalId: "p-taken",
+        kind: "run_plan",
+        iterationId: "i-1",
+        createdAtMs: 1_000,
+        drafter: "d",
+      },
+      {
+        proposalId: "p-free",
+        kind: "contract_keys",
+        iterationId: "i-1",
+        createdAtMs: 2_000,
+        drafter: "d",
+      },
     ],
     taken: new Set(["p-taken"]),
   }).join("\n");
@@ -761,7 +851,15 @@ test("a first look has no interval to report, and says so rather than repeating 
 });
 
 test("NEW marks only what landed since the mark, and only when there is a mark", () => {
-  const open = [{ proposalId: "p-new", kind: "run_plan", iterationId: "i-1", createdAtMs: 9_000 }];
+  const open = [
+    {
+      proposalId: "p-new",
+      kind: "run_plan",
+      iterationId: "i-1",
+      drafter: "rondo/advisory/deterministic",
+      createdAtMs: 9_000,
+    },
+  ];
   const changed = [{ kind: "proposal", id: "p-new", atMs: 9_000 }];
   expect(
     inboxLines(EN, "operator-1", { ...EMPTY, open, changed, sinceMs: 8_000 }).join("\n"),
@@ -850,4 +948,31 @@ test("a stalled row is never offered a gate to answer, even when it kept one", (
   expect(rendered).toContain("no gate answer releases this (stopped at g-0011)");
   expect(rendered).toContain("i-0007  awaiting_human");
   expect(rendered).toContain("answer gate g-0007");
+});
+
+test("an explainer's answer is read in its thread, not listed or counted here (D-0177)", () => {
+  const explainer = "rondo/explainer/1/claude-sonnet-5";
+  const rendered = inboxLines(EN, "operator-1", {
+    ...EMPTY,
+    open: [
+      {
+        proposalId: "p-answer",
+        kind: "explanation",
+        iterationId: null,
+        drafter: explainer,
+        createdAtMs: 6_000,
+      },
+      {
+        proposalId: "p-between",
+        kind: "explanation",
+        iterationId: null,
+        drafter: "rondo/advisory/deterministic",
+        createdAtMs: 5_000,
+      },
+    ],
+  }).join("\n");
+  expect(rendered).toContain("bind nothing (1)");
+  expect(rendered).toContain("p-between  ");
+  expect(rendered).not.toContain("p-answer");
+  expect(rendered).not.toContain("more whose lap has ended");
 });

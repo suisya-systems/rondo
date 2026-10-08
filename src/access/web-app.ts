@@ -48,6 +48,7 @@ import { bodyLimit } from "hono/body-limit";
 import { setCookie } from "hono/cookie";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
+import type { Basis } from "../advisory/proposal.js";
 import {
   // Aliased: this module already exports an `AnswerOutcome` of its own, for
   // what one *gate* answer came to (D-0041). The store's is what a person's
@@ -58,12 +59,14 @@ import {
   FINDING_SEVERITIES,
   type FindingSeverity,
   type GoalClause,
+  isQuestion,
   SCOPE_OUTWARD_ACTS,
   type ScopeBudgets,
   type ScopeOutwardAct,
   type ThreadMessageDraft,
 } from "../store/records.js";
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
+import { basisOf } from "./explainer/material.js";
 import type { WebPorts } from "./page/contract.js";
 import { postedAnswers, postedClauses } from "./page/triage.js";
 import {
@@ -73,7 +76,7 @@ import {
   type LanguageAsked,
   resolveLanguage,
 } from "./page-logic/language.js";
-import { MAX_REVIEW_ROUNDS, type PageView, viewHref } from "./page-logic/routes.js";
+import { viewHref, viewOf } from "./page-logic/routes.js";
 import { questionRevise } from "./question.js";
 import { TAB_OUTCOMES, type TabOutcome } from "./reach.js";
 import { heldAnchor, pressable } from "./read-in.js";
@@ -167,11 +170,12 @@ function header(incoming: Arrival, name: string): string | undefined {
 }
 
 /**
- * The two kinds of message a person sends into a request thread from the page
- * (D-0061 rule 4, D-0059 section 5a's second write kind): a new request, or a
- * reply to a message already in a thread.
+ * The kinds of message a person sends into a request thread from the page
+ * (D-0061 rule 4, D-0059 section 5a's second write kind): a new request, a
+ * reply to a message already in a thread, or a question for rondo to explain
+ * (rondo#401, D-0177), which asks for no work (`isQuestion`).
  */
-type SentKind = "request" | "reply";
+type SentKind = "request" | "reply" | "question";
 
 /**
  * A message id for one form, minted **when the form is rendered** and carried
@@ -194,7 +198,7 @@ export function newMessageId(kind: SentKind): string {
  * accepts: a posted id that is not one is not this page's form.
  */
 const SENT_MESSAGE_ID =
-  /^(request|reply)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  /^(request|reply|question)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** A refusal a mint gives, as a status and a line a person can read. */
 type Refused = { readonly status: 403; readonly line: string };
@@ -457,6 +461,8 @@ export interface SentMessage {
   readonly body: string;
   /** Null for a new request; the message replied to otherwise. */
   readonly inReplyTo: string | null;
+  /** What a question asks about (rondo#401), recorded as its one basis; absent on the rest. */
+  readonly about?: Basis | null;
 }
 
 /**
@@ -525,7 +531,12 @@ export class SayPort {
     // {@link answerAsk}, on a press (D-0059 section 5a's falsifier, D-0069 rule
     // 5). Not a race: `asks` never changes on a row, and an ask answered in
     // between has no hold left.
-    if (message.inReplyTo !== null && (await this.#waiting(message.inReplyTo))) {
+    // A question answers nothing and releases no hold (rondo#401): it may ask about an ask.
+    if (
+      message.inReplyTo !== null &&
+      !isQuestion({ authorKind: "operator", messageId: message.messageId }) &&
+      (await this.#waiting(message.inReplyTo))
+    ) {
       return {
         ok: false,
         note: "a question still waiting is answered by a press",
@@ -1646,6 +1657,7 @@ const MAX_FORM_BYTES = 12 * 1024;
 const SEND_ROUTES: ReadonlyMap<string, SentKind> = new Map([
   ["/request", "request"],
   ["/reply", "reply"],
+  ["/question", "question"],
 ]);
 
 /**
@@ -2004,79 +2016,6 @@ function typeOf(name: string): string {
   return name.endsWith(".woff2") ? "font/woff2" : "application/octet-stream";
 }
 
-/**
- * Which of the one page's three views is being read, off the query and nothing
- * else. Total: anything that is not one of the two queries is the summary,
- * because a typo in a query is an operator who wanted the page.
- */
-function viewOf(query: URLSearchParams): PageView {
-  const thread = query.get("thread");
-  if (thread !== null && thread !== "") {
-    const to = query.get("to");
-    const gate = query.get("gate");
-    return {
-      kind: "thread",
-      messageId: thread,
-      to: to === null || to === "" ? null : to,
-      ...(gate === null || gate === "" ? {} : { gate }),
-    };
-  }
-  const scoping = query.get("scope");
-  if (scoping !== null && scoping !== "") {
-    const asked = query.get("rounds");
-    const rounds = asked === null ? Number.NaN : Number.parseInt(asked, 10);
-    const decision = query.get("decision");
-    const plan = query.get("plan");
-    const raise = query.get("raise");
-    const gate = query.get("gate");
-    return {
-      ...(raise === null || raise === "" || gate === null || gate === ""
-        ? {}
-        : { raise: { decisionId: raise, iterationId: gate } }),
-      kind: "scope",
-      messageId: scoping,
-      plan: plan === null || plan === "" ? null : plan,
-      // Total, as the rest of this function is: a typo in a query is an
-      // operator who wanted the page, so an unreadable or out-of-range count is
-      // the default rather than a refusal.
-      rounds:
-        Number.isSafeInteger(rounds) && rounds >= 0 && rounds <= MAX_REVIEW_ROUNDS ? rounds : null,
-      decisionId: decision === null || decision === "" ? null : decision,
-    };
-  }
-  if (query.get("requests") === "open") {
-    const take = query.get("take");
-    const candidate = query.get("candidate");
-    return take === null || take === "" || candidate === null || candidate === ""
-      ? { kind: "requests" }
-      : { kind: "requests", take: { proposalId: take, candidate } };
-  }
-  const goalScope = query.get("goal_scope");
-  if (goalScope !== null && goalScope !== "") {
-    return { kind: "goalScope", repository: goalScope };
-  }
-  const goal = query.get("goal");
-  if (goal !== null && goal !== "") {
-    return { kind: "goal", repository: goal };
-  }
-  const publishing = query.get("publish");
-  if (publishing !== null && publishing !== "") {
-    return { kind: "publish", iterationId: publishing };
-  }
-  const merging = query.get("merge");
-  if (merging !== null && merging !== "") {
-    return { kind: "merge", iterationId: merging };
-  }
-  const releasing = query.get("release");
-  if (releasing !== null && releasing !== "") {
-    return { kind: "release", iterationId: releasing };
-  }
-  // `?answer=` and `?reading=open` are not read and have no redirect: D-0083
-  // rules 3 and 4 replaced both screens, and an address that once meant one
-  // of them is the page a person arrives on.
-  return { kind: "summary" };
-}
-
 /** Text made safe to place in HTML, as element content or a quoted attribute. */
 function escapeHtml(text: string): string {
   return text
@@ -2348,19 +2287,27 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       if (!("send" in minting)) {
         return refused(c, minting.status, "sendRefusedForm", back);
       }
-      const messageId = form["message_id"];
-      if (typeof messageId !== "string" || !SENT_MESSAGE_ID.test(messageId)) {
+      const posted = form["message_id"];
+      if (typeof posted !== "string" || !SENT_MESSAGE_ID.test(posted)) {
+        return refused(c, 400, "sendRefusedForm", back);
+      }
+      // A question is a reply box's second submit too (rondo#401): its minted id, as a question's.
+      const messageId =
+        kind === "question" ? `question-${posted.slice(posted.indexOf("-") + 1)}` : posted;
+      const asked = typeof form["about"] === "string" ? form["about"] : "";
+      const about = asked === "" ? null : basisOf(asked);
+      if (kind === "question" && asked !== "" && about === null) {
         return refused(c, 400, "sendRefusedForm", back);
       }
       const body = form["body"];
       if (typeof body !== "string" || body.trim() === "") {
         return refused(c, 400, "sendRefusedNoWords", back);
       }
-      const inReplyTo = kind === "reply" ? back : null;
-      if (kind === "reply" && (inReplyTo === null || inReplyTo === "")) {
+      const inReplyTo = kind === "request" ? null : back;
+      if (kind !== "request" && (inReplyTo === null || inReplyTo === "")) {
         return refused(c, 400, "sendRefusedForm", null);
       }
-      const message = { messageId, body, inReplyTo };
+      const message = { messageId, body, inReplyTo, ...(kind === "question" ? { about } : {}) };
       const sent = await say.say(minting.send, message);
       // The port's own refusal of an answer to a waiting ask (`SayPort.say`).
       if (sent.waitingAsk === true) {

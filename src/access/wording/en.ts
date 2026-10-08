@@ -5,6 +5,7 @@
 
 import { APPROVED_OUTCOME, READING_COVERAGE } from "../../store/records.js";
 import type { GateAuto, GateAutoReason } from "../gate-auto.js";
+import { EXPLAIN_EN } from "../page/explain-words.js";
 import { PAGE_EN } from "../page/words.js";
 import type { AgentTypeSource, Chrome } from "../wording.js";
 
@@ -151,6 +152,7 @@ export const EN: Chrome = Object.freeze({
   // that say it. Spread rather than re-declared, so `satisfies Chrome` below
   // still fails on a word this set is missing.
   ...PAGE_EN,
+  ...EXPLAIN_EN,
   lang: "en",
 
   liveNote: (seconds) =>

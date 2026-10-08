@@ -181,8 +181,14 @@ document.addEventListener("input", (event) => {
 document.addEventListener("submit", (event) => {
   const draft = event.target.querySelector?.("textarea[data-draft]");
   const id = event.target.querySelector?.("input[name=message_id]")?.value;
-  if (draft && id && !event.defaultPrevented) {
-    store.set(`rondo:sent:${id}`, draftKey(draft));
+  // A question lands at `question-<the same uuid>` (rondo#401): the route
+  // renames the minted id, so the marker is left where the landing looks.
+  const action =
+    event.submitter?.getAttribute?.("formaction") ?? event.target.getAttribute?.("action");
+  const asked = typeof action === "string" && action.startsWith("/question");
+  const landing = id && asked ? `question-${id.slice(id.indexOf("-") + 1)}` : id;
+  if (draft && landing && !event.defaultPrevented) {
+    store.set(`rondo:sent:${landing}`, draftKey(draft));
   }
 });
 

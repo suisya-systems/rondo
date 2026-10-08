@@ -100,6 +100,7 @@ import {
 import { flowStopAskedFacts } from "./flow-stop.js";
 import { ago } from "./inbox.js";
 import { approveView, type GateStory } from "./page/approve.js";
+import { answerBands, askLink, gatesOf } from "./page/ask.js";
 import { type AnswerRevise, budgetRaises, composerView } from "./page/composer.js";
 import type { MintIterationId, MintMessageId, MintScopeId, WebPorts } from "./page/contract.js";
 import { pageDocument } from "./page/document.js";
@@ -462,6 +463,9 @@ async function threadModel(
         }),
     ),
   );
+  // rondo#401: an explainer answer's band and cost, and where a cited lap is answered.
+  const bands = await answerBands(ports.record, selectedMessages, wording);
+  const gates = gatesOf(selectedLaps.map((lap) => lap.record));
   /** Each message's moment, for rule 7's line: the items themselves do not carry it. */
   const messageTimes = new Map(selectedMessages.map((m) => [m.messageId, m.atMs]));
   /*
@@ -560,8 +564,9 @@ async function threadModel(
           pending: (threads.unread.get(message.messageId) ?? []).map((ref) => ref.named),
           pendingSaid: wording.issuePending,
           bases: message.bases.map((basis) =>
-            basisWord(wording, basis, threads, selectedRoot, ports.actorId),
+            basisWord(wording, basis, threads, selectedRoot, ports.actorId, gates),
           ),
+          band: bands.get(message.messageId) ?? null,
           basesLabel: wording.basesLabel,
           // Said only where the reply is to neither the message above it nor
           // the request itself, which is what every reply is read as.
@@ -584,6 +589,10 @@ async function threadModel(
                   ),
                   said: waits ? wording.answerAskAction : wording.replyAction,
                 },
+          ask:
+            !forms || selectedRoot === null
+              ? null
+              : askLink(wording, selectedRoot, message.messageId, `message:${message.messageId}`),
         },
       };
     }),
@@ -825,7 +834,9 @@ async function threadBoxes(
           // **The message the box answers is the one the address names**
           // (`replyTarget`): a person who followed a message's own *reply*
           // link asked for that message, and the box has to be aimed at it.
-          { kind: "thread", messageId: selectedRoot, to: view.kind === "thread" ? view.to : null },
+          view.kind === "thread"
+            ? { ...view, messageId: selectedRoot }
+            : { kind: "thread", messageId: selectedRoot, to: null },
           threads,
           token,
           newId,
@@ -1159,7 +1170,7 @@ async function threadSideOf(
   ports: WebPorts,
   wording: Chrome,
   token: string | null,
-  { reads, threads, partsOfRequest }: PageModel,
+  { reads, threads, partsOfRequest, forms }: PageModel,
   {
     selectedRoot,
     selectedLap,
@@ -1196,6 +1207,11 @@ async function threadSideOf(
    * is no gated lap and the selected one is the subject.
    */
   const sideLap = governedLap;
+  // rondo#401 (D-0177): the "?" about a try, where the page can write.
+  const asks = (lap: string | null) =>
+    !forms || selectedRoot === null || lap === null
+      ? null
+      : { ...askLink(wording, selectedRoot, null, `iteration:${lap}`), ask: true as const };
   const sideAsking = gatedLap !== null && gateFraming !== undefined;
   const sideReadings =
     gateFraming?.readings ??
@@ -1268,6 +1284,7 @@ async function threadSideOf(
             })(),
             material: sideMaterial === null ? null : Raw({ html: sideMaterial }),
             asking: sideAsking,
+            ask: asks(sideLap.id),
             parts:
               selectedRoot === null
                 ? []
@@ -1276,7 +1293,7 @@ async function threadSideOf(
                     const atGate = part.laps.find(
                       (lap) => lap.status === "awaiting_human" && lap.id !== gatedLap?.id,
                     );
-                    return partStepOf(
+                    const step = partStepOf(
                       wording,
                       part,
                       gatedLap !== null && holdsLap(part, gatedLap.id) ? takeIn : null,
@@ -1287,6 +1304,8 @@ async function threadSideOf(
                             wording.lang,
                           ),
                     );
+                    const ask = asks(part.laps.at(-1)?.id ?? null);
+                    return ask === null ? step : { ...step, links: [...step.links, ask] };
                   }),
           }),
         };

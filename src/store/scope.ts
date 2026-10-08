@@ -20,7 +20,6 @@ import {
   type JsonValue,
   lapBudgetCap,
   type RequestOpener,
-  readScopePayload,
   requestsGoal,
   type ScopePayload,
   type ScopeRefusal,
@@ -43,6 +42,7 @@ import {
   type StoreConnection,
   StoreDefect,
 } from "./rows.js";
+import { readScopePayload } from "./scope-payload.js";
 import { openAsksIn } from "./thread.js";
 
 /**
@@ -339,7 +339,7 @@ export function lapBudgetCapFor(
       basis.runningLaps += 1;
     }
   }
-  basis.readCostUsd += triageCostUnder(connection, decisionId);
+  basis.readCostUsd += readingCostUnder(connection, decisionId);
   return lapBudgetCap(budgets, basis, maxOccupying);
 }
 
@@ -356,23 +356,26 @@ export function spentUnder(connection: StoreConnection, scopeDecisionId: string)
     .get(scopeDecisionId) as SqlRow;
   return Object.freeze({
     admissions: Number(row["admissions"]),
-    readCostUsd: Number(row["read_cost"]) + triageCostUnder(connection, scopeDecisionId),
+    readCostUsd: Number(row["read_cost"]) + readingCostUnder(connection, scopeDecisionId),
     unreadLaps: Number(row["unread"]),
   });
 }
 
 /**
- * What the triage readings claimed under an approval cost (rondo#469): each
- * reading's `cost_usd`, as its snapshot recorded it. A reading that reported
- * no cost adds nothing, as a reading of it would say.
+ * What the model readings claimed under an approval cost: each triage reading's
+ * (rondo#469) and each explanation's (D-0177) `cost_usd`, as its snapshot
+ * recorded it. A triage reading that reported no cost adds nothing, as a
+ * reading of it would say; an explanation whose cost was not read counts its
+ * `cap_usd` instead, the most it may have spent.
  */
-function triageCostUnder(connection: StoreConnection, scopeDecisionId: string): number {
+function readingCostUnder(connection: StoreConnection, scopeDecisionId: string): number {
+  const snapshot = "CASE WHEN json_valid(p.snapshot) THEN p.snapshot ELSE '{}' END";
   const row = connection
     .prepare(
-      "SELECT COALESCE(SUM(json_extract(CASE WHEN json_valid(p.snapshot) THEN p.snapshot " +
-        "ELSE '{}' END, '$.cost_usd')), 0) AS cost FROM scope_consumption c " +
-        "JOIN proposal p ON p.proposal_id = c.subject_id " +
-        "WHERE c.scope_decision_id = ? AND c.act_kind = 'triage_reading'",
+      `SELECT COALESCE(SUM(COALESCE(json_extract(${snapshot}, '$.cost_usd'), ` +
+        `json_extract(${snapshot}, '$.cap_usd'))), 0) AS cost FROM scope_consumption c ` +
+        "JOIN proposal p ON p.proposal_id = c.subject_id WHERE c.scope_decision_id = ? " +
+        "AND c.act_kind IN ('triage_reading', 'explanation_reading')",
     )
     .get(scopeDecisionId) as SqlRow;
   return Number(row["cost"]);
