@@ -78,6 +78,7 @@ import { againId, startsAgainOnCarryOn, stoppedLapOf } from "./lost-laps.js";
 import { type DrafterPorts, requestRepository } from "./model-draft/host.js";
 import { modelReviewPorts, takeModelReading } from "./model-review/host.js";
 import { retakeOffered, reviewRoundsAlong } from "./model-review/judgement.js";
+import { APPROVE_BODY } from "./page/approve.js";
 import type { ClaimReach, LapMaterialRead } from "./page/contract.js";
 import { asksOverLine, conflictFixBlock, fixCauseOf, resultOf } from "./page-logic/result.js";
 import { requestWords, threadsOf } from "./page-logic/threads.js";
@@ -88,7 +89,6 @@ import {
   setupRootOf,
 } from "./repository-add.js";
 import { admitUnderScope, agentTypeRecordOf, approvalTip } from "./scope.js";
-import { APPROVE_BODY } from "./web.js";
 import type {
   AddedRepository,
   AddRepositoryInput,

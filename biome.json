@@ -46,6 +46,12 @@
       "includes": [
         "src/access/web.tsx",
         "src/access/page/document.tsx",
+        "src/access/page/approve.tsx",
+        "src/access/page/composer.tsx",
+        "src/access/page/gate-material.tsx",
+        "src/access/page/gate-shown.tsx",
+        "src/access/page/thread-acts.tsx",
+        "src/access/page/thread-stops.tsx",
         "src/access/screens/*.tsx"
       ],
       "linter": {
