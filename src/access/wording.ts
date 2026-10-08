@@ -1388,7 +1388,11 @@ export interface Chrome extends PageWords, ExplainWords {
   /** The model's reading, material beside the rest and read by nothing (D-0065 5.5). */
   readonly publishModelHeading: string;
   readonly publishModelNote: string;
-  readonly publishNote: string;
+  /**
+   * What the press does, and whether rondo then merges on green: `merges` is
+   * the lap's approved scope including `merge_default_branch` (D-0187, D-0126).
+   */
+  readonly publishNote: (merges: boolean) => string;
   readonly publishPlain: string;
   readonly publishBack: string;
   /** Why there is no publish screen at all: this host cannot publish from the page. */
@@ -1449,7 +1453,8 @@ export interface Chrome extends PageWords, ExplainWords {
   readonly nextStepAnswer: string;
   readonly nextStepStart: string;
   readonly nextStepStartAction: string;
-  readonly nextStepPublish: string;
+  /** As {@link publishNote}, `merges` the scope's merge on green (D-0187). */
+  readonly nextStepPublish: (merges: boolean) => string;
   /**
    * A request that names a repository rondo does not work in yet (rondo#383,
    * D-0090): what was named, that nothing was drafted, and what adding does.
@@ -1647,12 +1652,12 @@ export interface Chrome extends PageWords, ExplainWords {
    * request that is already open and opens none, so every sentence that says
    * *open* says *update* instead.
    */
-  readonly nextStepPublishUpdate: (pullRequest: string) => string;
+  readonly nextStepPublishUpdate: (pullRequest: string, merges: boolean) => string;
   readonly publishUpdates: (pullRequest: string, base: string) => string;
   readonly publishUpdateAction: (pullRequest: string) => string;
   readonly publishBusyUpdate: string;
   readonly publishPlainUpdate: string;
-  readonly publishNoteUpdate: string;
+  readonly publishNoteUpdate: (merges: boolean) => string;
 }
 
 /**

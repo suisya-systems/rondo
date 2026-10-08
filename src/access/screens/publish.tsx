@@ -1,5 +1,6 @@
 import { type IterationRecord, isModelReadingDrafter, latestReading } from "../../store/records.js";
 import { markdownHtml } from "../markdown.js";
+import { scopedAuthority } from "../merge.js";
 import type { PublishBlock, ReviewBlock, WebPorts } from "../page/contract.js";
 import {
   backHead,
@@ -239,6 +240,10 @@ export async function publishView(
   const updates = shown.updates ?? null;
   const updating =
     updates === null ? null : wording.pullRequest(/\/pull\/(\d+)/.exec(updates.url)?.[1] ?? null);
+  // Whether rondo merges it on green afterwards (D-0187): the note says what
+  // the scope does, not only what this press does.
+  const merges =
+    (await scopedAuthority(ports, record.id, ["merge_default_branch"]).catch(() => null)) !== null;
   return framed(
     <>
       {/* The lead says which screen this is, because the two differ in what a
@@ -296,7 +301,7 @@ export async function publishView(
           ? publishForm(wording, record, token, shown.shown, updating)
           : despiteForm(wording, record, token, shown.shown)}
       <p class="note text-meta leading-5 text-muted-foreground">
-        {updating === null ? wording.publishNote : wording.publishNoteUpdate}
+        {updating === null ? wording.publishNote(merges) : wording.publishNoteUpdate(merges)}
       </p>
       {/* **The press above what it sends** (D-0106, rondo#408): the target,
           anything noticed and a standing refusal are short and come first,

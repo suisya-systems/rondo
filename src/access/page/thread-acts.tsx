@@ -4,6 +4,7 @@
  * moved it out of `src/access/web.tsx`).
  */
 import { approvedForPublication, isTerminal } from "../../store/records.js";
+import { scopedAuthority } from "../merge.js";
 import type { LapUnderRequest } from "../page-logic/laps.js";
 import { draftingOver, scopeStanding } from "../page-logic/model.js";
 import {
@@ -278,6 +279,13 @@ export async function threadActs(
   }
   const openedResult = above === null ? null : resultOf(threads.byId, above);
   const updating = openedResult === null ? null : wording.pullRequest(openedResult.number);
+  // Whether its scope has rondo merge it on green (D-0187): the card says so
+  // rather than *nothing is merged* over a scope that merges.
+  const publishMerges =
+    nextPublish !== null &&
+    (await scopedAuthority(ports, nextPublish.record.id, ["merge_default_branch"]).catch(
+      () => null,
+    )) !== null;
   // The conflict fix (rondo#417, D-0105): a press, since the attempt it starts
   // is counted against the approval and nothing is between it and the act.
   // A red check's repair (rondo#551) is the same press, in its own words.
@@ -354,8 +362,8 @@ export async function threadActs(
                 `publish-${nextPublish.record.id}`,
                 viewHref({ kind: "publish", iterationId: nextPublish.record.id }, wording.lang),
                 updating === null
-                  ? wording.nextStepPublish
-                  : wording.nextStepPublishUpdate(updating),
+                  ? wording.nextStepPublish(publishMerges)
+                  : wording.nextStepPublishUpdate(updating, publishMerges),
                 updating === null ? tryName(nextPublish) : wording.publishUpdateAction(updating),
               )
             : asked !== null && !gated

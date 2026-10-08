@@ -5,6 +5,7 @@
  */
 import { describe, expect, test } from "vitest";
 
+import { GATE_ACTOR } from "../../src/access/gate-host.js";
 import type { ScopedPublish } from "../../src/access/page-publish-actions.js";
 import { publishHost } from "../../src/access/publish-host.js";
 import {
@@ -49,6 +50,7 @@ const lap = (id: string, over: Partial<IterationRecord> = {}): IterationRecord =
     status: "closed",
     gateOutcome: APPROVED_OUTCOME,
     gateAnswer: "approve",
+    gateAnswerActor: GATE_ACTOR,
     ...over,
   }) as unknown as IterationRecord;
 
@@ -263,6 +265,26 @@ describe("publishHost (rondo#470)", () => {
     for (const w of [raised, unread, asked]) {
       await pass(w);
       expect(w.claims).toEqual([]);
+      expect(w.publishedIds).toEqual([]);
+    }
+  });
+
+  test("D-0187: a person's approval over a finding, or with no model reading, is published; a question still holds it", async () => {
+    const raised = world([lap("i-1", { gateAnswerActor: "ada" })]);
+    raised.readings = [checks, model(["major"])];
+    const unread = world([lap("i-1", { gateAnswerActor: "ada" })]);
+    unread.readings = [checks];
+    for (const w of [raised, unread]) {
+      await pass(w);
+      expect(w.publishedIds).toEqual(["i-1"]);
+    }
+    const asked = world([lap("i-1", { gateAnswerActor: "ada" })]);
+    asked.asked = true;
+    // An answer with no actor recorded is not read as a person's.
+    const unnamed = world([lap("i-1", { gateAnswerActor: null })]);
+    unnamed.readings = [checks, model(["major"])];
+    for (const w of [asked, unnamed]) {
+      await pass(w);
       expect(w.publishedIds).toEqual([]);
     }
   });

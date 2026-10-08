@@ -636,18 +636,23 @@ export async function serveWeb(
             // holds it writes nothing without a press minted from a person's
             // navigation, so the page's server is not the only thing standing
             // between a `GET` and this walk.
-            new AnswerPort(
-              async (iterationId, body, claim) =>
-                await answerFromPage(
-                  environment,
-                  store,
-                  storePath,
-                  approver,
-                  iterationId,
-                  body,
-                  claim,
-                ),
-            ),
+            new AnswerPort(async (iterationId, body, claim) => {
+              const answered = await answerFromPage(
+                environment,
+                store,
+                storePath,
+                approver,
+                iterationId,
+                body,
+                claim,
+              );
+              // A person's approval publishes under its scope now, not on
+              // the minute (D-0187), as rondo's own does above.
+              if (answered.ok) {
+                publisher?.kick();
+              }
+              return answered;
+            }),
       // What an open tab's notice did (rondo#414), on `say`'s condition: the
       // page carries the token only where it has a writer.
       notice:
