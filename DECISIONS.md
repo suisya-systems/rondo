@@ -17628,6 +17628,34 @@ Each dated and additive unless marked, and added with this entry's acceptance:
 > 4.2 are built for a person's press only; the held widening, rule 4.4's drafted rows and the
 > **Scope binding** residual stay open. The table above is not edited.
 
+> **Annotation (2026-10-08, from rondo#280's build, recorded on rondo#287), and not additive for
+> its first point.** Four things the store half (rondo#280) settled that this entry did not record,
+> as the code holds them at `cabb2ba`:
+> 1. **Migration** (the residual above): a line admitted before the ledger, which has no
+>    `lane_claim` row, holds `/` only while a lap of its tree has not ended, a lap at its gate
+>    included. Once every lap has ended it is not open to the ledger, a `closed` tip that was never
+>    published or merged included, so rule 3.3 (as `D-0114` amended it) does not hold it open for a
+>    closed tip. What this gives up: such a line's paths can be taken by a new line, and the
+>    collision is met at merge. Holding every such line instead would refuse every admission to a
+>    repository with history until a person pressed release once per old line, since a squash merge
+>    hides whether the old line landed and rule 6 cannot read it over the lines that changed the same
+>    files since.
+> 2. **The default branch rule 6 reads is named by the forge**, through the remote's `HEAD` symref
+>    (`git ls-remote --symref`), and not taken from the plan's base branch. A line cut from another
+>    branch is not released until its work reaches the default branch, and a remote that names no
+>    `HEAD` leaves the reading `undetermined` (fail closed).
+> 3. **"The paths changed between" a base and a tip (rules 4.2, 5 and 6) is read from the fork
+>    point**, `git diff base...tip`, and not as a two-dot diff, so a base that moved while the line
+>    ran is not counted as the line's work.
+> 4. **"Of one repository" (rule 3) compares repositories lexically only** (`repositoryKey`): a
+>    trailing `/`, `.` and `..` segments and `\` separators are folded away. A symlinked path, a case
+>    variant on a case-insensitive filesystem, or a second clone of one forge repository counts as a
+>    different repository, with a ledger of its own.
+>
+> Points 2 to 4 are additive. The text above is not edited.
+>
+> - Amends: D-0073 rule 3.3
+
 ### What would falsify it
 
 - **Two lines under this ledger colliding after merge on a path both declared**, which would mean rule 3
