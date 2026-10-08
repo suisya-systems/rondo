@@ -28448,11 +28448,12 @@ where theirs was takes the words off the screen. The scope and goal scope screen
 2. **The notice says what changed and offers the ways on.** It lists the points no longer asked
    and the points newly asked (`data-round-item`), and offers *Use the new points* and, only where
    the server drew the same `data-round-keeps` on both forms, *Keep answering these*. The flow's ask
-   carries the candidate there; a gate's forms carry none, since an old gate cannot be answered,
+   carries its goal and candidate there, the two `unanswerable` (rule 5) holds an older round to; a gate's forms carry none, since an old gate cannot be answered,
    and their notice says the words are kept to be copied.
 3. **Until one is chosen, a press of the kept form is not sent.** The submit is cancelled before
    `page/composer.js` marks it pressed, a line saying nothing was sent is added to the notice, and
-   focus moves there. *Keep answering these* removes the notice, and the same new round does not
+   focus moves there. The notice is drawn once per new round: a poll bringing the same round leaves
+   it, its focus and that line alone. *Keep answering these* removes it, and the same round does not
    raise it again; a later one does.
 4. **Taking the new form takes what still means the same.** Where both forms are about the same
    candidate (`data-round-keeps`), a field with the same `data-round-carry` on both moves across: the request line and why, and an answer whose

@@ -71,6 +71,8 @@ export interface GoalScopeLine {
 /** The open points the flow asks before it starts a candidate (rondo#487). */
 export interface PointsAsk {
   readonly askId: string;
+  /** The goal it was asked under: a round of another goal cannot be kept answering (D-0166). */
+  readonly goalId: string;
   /** The candidate asked about: its card does not list the same points again. */
   readonly candidate: string;
   /** Where the form is: the card over the candidate leads here instead of to the box. */
@@ -288,6 +290,7 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
           ? null
           : {
               askId: asked.askId,
+              goalId: asked.goalId,
               candidate: asked.candidate,
               anchor: `flow-ask-${repository.replace(/[^A-Za-z0-9_-]/g, "-")}`,
               request: asked.request ?? rankedAsked?.request ?? asked.candidate,
@@ -782,9 +785,10 @@ function PointsAskForm({
       // **Kept, not swapped, when a new round arrives over the person's
       // words** (rondo#494 item 2, D-0166; `page/rounds.js`): the round is
       // the ask, and an older round of the same candidate can still be
-      // answered, which is what `data-round-keeps` says.
+      // answered, which is what `data-round-keeps` says -- under the same goal,
+      // since `unanswerable` refuses a round of another (Codex).
       data-round={ask.askId}
-      data-round-keeps={ask.candidate}
+      data-round-keeps={`${ask.goalId} ${ask.candidate}`}
       data-round-said={wording.roundChangedAsk}
       data-round-gone={wording.roundGone}
       data-round-added={wording.roundAdded}

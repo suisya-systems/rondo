@@ -290,7 +290,7 @@ test("a candidate still mixing scripts is marked on the card, on a runner-up and
   // **The round, each point, and what moves to a new round** (rondo#494
   // item 2): what `page/rounds.js` reads to keep this form over a new one.
   expect(html).toContain('data-round="ask-1"');
-  expect(html).toContain('data-round-keeps="issue:o/r#1"');
+  expect(html).toContain('data-round-keeps="g-1 issue:o/r#1"');
   expect(html).toContain('data-round-item="p"');
   expect(html).toContain('data-round-carry="point:p"');
   expect(html).toContain('data-round-carry="request"');

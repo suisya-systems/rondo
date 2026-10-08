@@ -220,6 +220,11 @@ test("a new round over the person's words is kept, says what changed, and holds 
   expect(tab.submit()).toBe(false);
   expect(tab.notice()?.focused).toBe(true);
   expect(tab.notice()?.textContent).toContain("Nothing was sent");
+  // The next poll bringing the same round leaves the notice as it is.
+  const notice = tab.notice();
+  expect(tab.redraw(ask("ask-2", ["a", "b", "e"]))).toBe(false);
+  expect(tab.notice()).toBe(notice);
+  expect(tab.notice()?.focused).toBe(true);
 });
 
 test("keeping the round sends its press, and the same new round does not ask again", () => {

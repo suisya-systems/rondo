@@ -31,7 +31,7 @@
   }
   const NOTICE = "data-round-notice";
 
-  /** Each kept form: the server's newest form for it, and the round declined. */
+  /** Each kept form: the server's newest form for it, and the round the notice said. */
   const held = new WeakMap();
 
   /** Whether a field of the form holds words the server did not draw. */
@@ -113,8 +113,12 @@
     ) {
       const kept = held.get(old);
       if (next.dataset.round !== old.dataset.round && (kept !== undefined || edited(old))) {
-        held.set(old, { next: next.cloneNode(true), declined: kept?.declined ?? null });
-        if (kept?.declined !== next.dataset.round) {
+        // **Said once per round** (Codex): a poll bringing the same new round
+        // leaves the notice, its focus and its held line as they are, and a
+        // round the person chose to keep answering over is not said again.
+        const said = kept?.said ?? null;
+        held.set(old, { next: next.cloneNode(true), said: next.dataset.round });
+        if (said !== next.dataset.round) {
           notify(old, next);
         }
         return false;
@@ -134,7 +138,6 @@
     }
     form.querySelector(`[${NOTICE}]`)?.remove();
     if (press.dataset.roundAct === "keep") {
-      kept.declined = kept.next.dataset.round;
       return;
     }
     // **What the person wrote goes with them where it still means the same**:
