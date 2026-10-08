@@ -70,9 +70,12 @@ export type FlowStopFacts =
   | { readonly reason: "failed_twice" }
   | { readonly reason: "nothing_eligible"; readonly skipped: readonly Skipped[] };
 
+/** How every stop of the flow's begins, under whichever approval raised it. */
+export const FLOW_STOP = "flow-stop-";
+
 /** How the stops an approval raises are named, as asks and as rows. */
 export function stopPrefix(scopeDecisionId: string): string {
-  return `flow-stop-${scopeDecisionId}-`;
+  return `${FLOW_STOP}${scopeDecisionId}-`;
 }
 
 /** The id of the flow's reply that takes back the stop `askId` (rondo#549, `withdrawnByFlow`). */

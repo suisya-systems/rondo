@@ -41,6 +41,10 @@ function headingFor(wording: Chrome, cut: DayCut): string {
 
 /** A row's one sentence of state, from the set in force. */
 function stateFor(wording: Chrome, row: RequestRow): string {
+  // The flow's stop, not the request, is what waits (rondo#611, D-0188).
+  if (row.flowStop === true) {
+    return wording.rowFlowStopped;
+  }
   // One row for a request run as several lines, its sentence counting them
   // (D-0098 rule 8.1); the amber is still the row's *your turn* alone.
   if (row.parts != null) {

@@ -36,6 +36,7 @@ import {
 } from "../../store/records.js";
 import type { AdvisoryRecord } from "../../store/sqlite.js";
 import { draftedStanding } from "../drafted-view.js";
+import { FLOW_STOP } from "../flow-stop.js";
 import type { Threads } from "./threads.js";
 
 /**
@@ -101,6 +102,25 @@ export function waitsOnYou(threads: Threads, laps: readonly IterationRecord[]): 
     }
   }
   return waits;
+}
+
+/**
+ * **The requests whose only wait is the goal flow's stop** (rondo#611, D-0188).
+ *
+ * The flow asks its stop in the thread of its latest request (`askStop`),
+ * which can be one injected under an earlier approval and long since answered
+ * and run: the stop that followed a resume was drawn as that request waiting
+ * on the person, under its own words, and read as the old question asked
+ * again. The stop is still the person's turn and its box is in that thread, so
+ * the row stays under *your turn*; what changes is that it says it is the
+ * flow's stop, and not the request, that waits. A gate or another question in
+ * the same thread is the request's own, and the row says so as before.
+ */
+export function flowStopOnly(waits: readonly Wait[]): ReadonlySet<string> {
+  const own = new Set(
+    waits.filter((wait) => !wait.episode.startsWith(`ask:${FLOW_STOP}`)).map((wait) => wait.root),
+  );
+  return new Set(waits.map((wait) => wait.root).filter((root) => !own.has(root)));
 }
 
 /**

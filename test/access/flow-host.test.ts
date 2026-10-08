@@ -17,7 +17,7 @@ import { flowStopOf } from "../../src/access/flow-stop.js";
 import { unreadIssues } from "../../src/access/issue-read.js";
 import { MODEL_DRAFTER_PREFIX } from "../../src/access/model-draft/judgement.js";
 import { threadsOf } from "../../src/access/page-logic/threads.js";
-import { waitsOnYou } from "../../src/access/page-logic/waits.js";
+import { flowStopOnly, waitsOnYou } from "../../src/access/page-logic/waits.js";
 import { JA } from "../../src/access/wording/ja.js";
 import { type Chrome, EN } from "../../src/access/wording.js";
 import { flowMessageId } from "../../src/advisory/flow.js";
@@ -498,6 +498,8 @@ test("rondo#549: a refused draft is said in the request's thread, and stays the 
   expect(
     waitsOnYou(threadsOf(messages, new Set(), new Map()), []).map((wait) => wait.root),
   ).toEqual([first]);
+  // It is about the request itself, so the row says the request waits (rondo#611).
+  expect(flowStopOnly(waitsOnYou(threadsOf(messages, new Set(), new Map()), [])).size).toBe(0);
   // The flow went on to the goal's next request rather than stopping there,
   // and the note is not written twice.
   expect(messages.filter((m) => m.inReplyTo === null).map((m) => m.messageId)).toEqual([
@@ -768,6 +770,65 @@ test("a successor approval's stop in an inherited thread holds it too", async ()
   await w.triage("t-2", 0, [ranked(7), ranked(8)]);
   await w.pass();
   expect((await w.messages()).filter((m) => m.inReplyTo === null)).toHaveLength(1);
+});
+
+test("rondo#611: a stop asked after a resume in an answered request's thread is the flow's wait, not the request's", async () => {
+  // The ask over #7 is answered, its request sent and run, under the first approval.
+  const w = await world({}, [ranked(7, 1)]);
+  await w.pass();
+  const [ask] = await w.record.flowAsks();
+  if (ask === undefined) throw new Error("no ask");
+  expect(
+    await w.record.recordFlowAnswer({
+      askId: ask.askId,
+      answers: ["yes"],
+      request: null,
+      why: null,
+      answeredBy: "oidc|operator-1",
+      answeredAtMs: 11_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  await w.pass();
+  await w.drafted("split-1", first, 1);
+  w.lap("lap-1", first, "closed", 1);
+  // Resumed under a new approval: nothing is left, and the stop is asked in #7's thread.
+  const payload = goalPayload({ laps: 9 });
+  expect(
+    await w.record.recordScope({
+      scopeId: "s-resume",
+      payload,
+      supersedesScopeId: "s-goal",
+      authorKind: "operator",
+      authorId: "oidc|operator-1",
+      bases: [],
+      createdAtMs: 4,
+      agentTypeRecords: [],
+    }),
+  ).toEqual({ kind: "recorded" });
+  expect(
+    await w.record.recordScopeDecision({
+      scopeDecisionId: "sd-resume",
+      scopeId: "s-resume",
+      scopeDigest: contentDigest(payload),
+      outcome: "approved",
+      actorId: "oidc|operator-1",
+      recordedBy: "rondo/cli",
+      decidedAtMs: 5,
+    }),
+  ).toEqual({ kind: "recorded" });
+  await w.pass();
+  const messages = await w.messages();
+  expect(messages.filter((m) => m.asks).map((m) => m.messageId)).toEqual([
+    `flow-stop-sd-resume-nothing_eligible-${first}`,
+  ]);
+  // Still the person's turn, in the thread where its box is -- and read as the
+  // flow's stop, so the row does not say the answered request waits again.
+  const waits = waitsOnYou(threadsOf(messages, new Set(), new Map()), []);
+  expect(waits.map((wait) => wait.root)).toEqual([first]);
+  expect([...flowStopOnly(waits)]).toEqual([first]);
+  // A gate on the request itself is its own wait, and the row says so.
+  w.lap("lap-2", first, "awaiting_human", 2);
+  expect(flowStopOnly(waitsOnYou(threadsOf(messages, new Set(), new Map()), w.laps)).size).toBe(0);
 });
 
 test("the flow's opener names an issue the reader reads, as a person's message does", () => {

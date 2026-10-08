@@ -47,7 +47,7 @@ import { type PartView, partCounts, partViews } from "./parts.js";
 import { resultOf } from "./result.js";
 import type { PageView } from "./routes.js";
 import { firstLine, type Threads, threadsOf } from "./threads.js";
-import { draftsOwedNow, scopesAwaitingYou, type Wait, waitsOnYou } from "./waits.js";
+import { draftsOwedNow, flowStopOnly, scopesAwaitingYou, type Wait, waitsOnYou } from "./waits.js";
 
 /** The newest approval in force over a scope the person wrote, if any. */
 async function ownApproval(
@@ -256,6 +256,8 @@ export async function pageModel(
   const waits = [...waitsOnYou(threads, [...waiting, ...running]), ...scopeWaits];
   /** The requests of those, which is the row the list draws and the person opens. */
   const turnsHere = new Set(waits.map((wait) => wait.root));
+  /** Of those, the ones where only the goal flow's stop waits (rondo#611). */
+  const flowStops = flowStopOnly(waits);
   // **Only the ones an answer can settle** (D-0032 rule 5). `openProposals`
   // returns every proposal nobody has decided, and an explanation is
   // undecidable by construction -- `recordDecision` refuses the non-binding
@@ -459,6 +461,7 @@ export async function pageModel(
           const parts = partsOfRequest(root.messageId);
           return parts.length === 0 ? null : partCounts(parts);
         })(),
+        flowStop: flowStops.has(root.messageId),
         atMs: Math.max(...members.map((message) => message.atMs)),
       };
     });

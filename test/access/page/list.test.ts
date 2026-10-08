@@ -127,3 +127,25 @@ test("a paused goal flow stands with your turn and leads to the screen that resu
   expect(html).toContain('data-mark="paused"');
   expect(html).toContain(EN.triageGoalScopePaused);
 });
+
+test("a row where only the goal flow's stop waits says so, under your turn (rondo#611)", () => {
+  const html = renderToStaticMarkup(
+    RequestsFace({
+      wording: EN,
+      list: {
+        yourTurn: [row("waitingOnYou", { title: "Fix issue 194", flowStop: true })],
+        days: [],
+        lastLookedAbove: null,
+      },
+      hrefOf: (id) => `/?thread=${id}`,
+      agoOf: () => "now",
+      allowance: null,
+      newRequestHref: null,
+      lastLookedSaid: "",
+      openId: null,
+    }),
+  );
+  expect(html).toContain('data-mark="wait"');
+  expect(html).toContain(EN.rowFlowStopped);
+  expect(html).not.toContain(EN.rowWaitingOnYou);
+});

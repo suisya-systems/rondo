@@ -222,6 +222,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0185 | The page is designed for the half screen beside an editor as well as for 2560: about 760px and about 1280px are widths of their own, and above a phone the list and the thread scroll on their own | accepted |
 | D-0186 | A paused goal flow is a row under *your turn* in the list, on every view, leading to the screen that resumes it; it is the one row there that is not a request | accepted |
 | D-0187 | A person's approval at the gate carries the lap to its pull request under a scope that allows it, without a second press, and the page's publish sentences say whether rondo then merges on green | accepted |
+| D-0188 | A request whose only wait is the goal flow's stop says the flow waits, not the request, though it stays under *your turn* | accepted |
 
 ---
 
@@ -30046,3 +30047,55 @@ rule 2), however it was published.
   said in the terminal.
 - A publish sentence that says rondo merges over a scope without the merge, or *nothing is merged*
   over one with it.
+
+## D-0188 — A request whose only wait is the goal flow's stop says the flow waits, not the request, though it stays under *your turn*
+
+**Status:** accepted (2026-10-09, rondo#611, with its pull request's approval). Amends nothing.
+Supersedes nothing. Refs `D-0072` rule 3, `D-0083` rule 2, `D-0128`, `D-0168`, `D-0173 K3`/`K4`,
+`D-0186`.
+
+### Context
+
+On 2026-10-09 the list on the lap-19 host (main `0cd7a2c`) drew the request the goal flow had sent
+for #194 under *your turn*, as *waiting on your answer*, 19 minutes old. That request's open points
+had been asked (`flow_ask`) and answered ten days before, and the request had been sent under that
+answer. What waited was something else: the goal flow had just been resumed under a new goal scope
+approval, found nothing left it could start, and asked its `nothing_eligible` stop. The flow asks a
+stop in the thread of its latest request (`askStop`), and that was the #194 request, injected under
+the earlier approval. The list names a request by its own words and says one sentence of state, so
+the stop read as the answered question asked again (`D-0173 K3`/`K4`).
+
+### Decision
+
+1. **A request whose only wait is the goal flow's stop is still the person's turn.** The stop is a
+   question only the person answers (`D-0072` rule 3), and its box is in that thread, so the row
+   stays under *your turn* and still leads there.
+2. **Its sentence says the flow waits, not the request**: *rondo stopped working toward the goal and
+   asks you here*, in place of *waiting on your answer*. The title stays the request's own words
+   (`D-0083` rule 2).
+3. **Any other wait in the thread is the request's own**, and the row says *waiting on your answer*
+   as before: a gate, a person's question, or the flow's note that a draft was refused, which is
+   about the request itself.
+4. The reading is one function, `flowStopOnly` in `src/access/page-logic/waits.ts`, over the waits
+   `waitsOnYou` already returns. It lives in `page-logic/` and the list, with nothing added to
+   `web.tsx` or `cli.ts` (`D-0168`).
+
+### Options not taken
+
+- **Ask the stop somewhere other than an old request's thread.** A stop with no thread has no box,
+  and the flow's hold on an asked stop (`ownOpenAsk`) is read from the threads; moving it changes
+  how the flow waits, which is more than this bug asks.
+- **Take the row off *your turn*.** The stop is waiting on the person, and the triage block that
+  also says it is withheld while anything else waits (`D-0097` point 4.1 (d)), so it would be
+  reachable only by its address.
+- **Say the stop as the row's title.** The title is the request, named by the person's words
+  (`D-0083` rule 2); the sentence is what says its state.
+
+### What it costs
+
+- One more sentence a row can say, and a row whose title is a request that is itself finished.
+
+### What would falsify it
+
+- A person who reads a flow-stopped row as the request asking again.
+- A stop asked anywhere but a flow request's thread, which this reading would not find.
