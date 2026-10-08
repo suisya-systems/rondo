@@ -394,9 +394,11 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   "src/access/lost-laps.ts": {
     "node:os": ["hostname"],
   },
+  // `writeFileSync` writes the reviewer's output schema (rondo#190), into a
+  // directory of its own beside the reviewer's empty one.
   "src/access/forge.ts": {
     "node:child_process": ["spawn"],
-    "node:fs": ["mkdtempSync", "rmSync"],
+    "node:fs": ["mkdtempSync", "rmSync", "writeFileSync"],
     "node:os": ["tmpdir"],
     "node:path": ["join"],
   },
@@ -1977,14 +1979,13 @@ const PLANTED: ReadonlyArray<
     "takes execSync from node:child_process",
   ],
   [
-    // D-0065's directory grant is two bindings. A write beside them would let
-    // the module that starts the reviewer leave a file in the directory it
-    // starts it in, which is the reviewer reading something rondo did not hand
-    // over and digest.
-    "the-forge-cannot-write-into-the-reviewer-directory",
+    // The forge writes one file, its own schema (rondo#190). Copying a file in
+    // is a different binding and stays refused: that would put something rondo
+    // did not author beside the reviewer.
+    "the-forge-cannot-copy-a-file-in",
     "src/access/forge.ts",
-    'import { mkdtempSync, writeFileSync } from "node:fs";\nexport const x = [mkdtempSync, writeFileSync];\n',
-    "takes writeFileSync from node:fs",
+    'import { mkdtempSync, copyFileSync } from "node:fs";\nexport const x = [mkdtempSync, copyFileSync];\n',
+    "takes copyFileSync from node:fs",
   ],
   [
     // Nor read: the document is assembled from git's answers, not from files
@@ -1997,9 +1998,9 @@ const PLANTED: ReadonlyArray<
   [
     // The control: exactly what D-0065 granted is accepted, so the two cases
     // above are caught for the binding and not for the module.
-    "control-the-forge-may-make-and-remove-an-empty-directory",
+    "control-the-forge-may-make-and-remove-a-directory-and-write-its-schema",
     "src/access/forge.ts",
-    'import { mkdtempSync, rmSync } from "node:fs";\nimport { tmpdir } from "node:os";\nimport { join } from "node:path";\nexport const x = [mkdtempSync, rmSync, tmpdir, join];\n',
+    'import { mkdtempSync, rmSync, writeFileSync } from "node:fs";\nimport { tmpdir } from "node:os";\nimport { join } from "node:path";\nexport const x = [mkdtempSync, rmSync, writeFileSync, tmpdir, join];\n',
     null,
   ],
   [

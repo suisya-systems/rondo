@@ -34,7 +34,7 @@
  * went wrong far better than a translation of them would.
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -44,6 +44,7 @@ import { KEPT_WORK_SUBJECT } from "../refrain/revision.js";
 import { recordNumber, recordNumbers } from "../store/lanes.js";
 import { contentDigest } from "../store/plan.js";
 import type { IterationRecord, ReadingEvidence } from "../store/records.js";
+import { FINDING_SEVERITIES } from "../store/records.js";
 import { hostFailure } from "./host-failure.js";
 import type { DrafterRun } from "./model-draft/judgement.js";
 import type { ReviewerRun } from "./model-review/judgement.js";
@@ -2396,6 +2397,68 @@ const REVIEWER_DISABLED_FEATURES = Object.freeze([
   "tool_suggest",
 ]);
 
+/**
+ * The reviewer's output contract (`model-review/judgement.ts`'s prompt and
+ * `parseAnswer`) as the JSON Schema codex's `--output-schema` takes, so the
+ * answer's shape is enforced while it is generated (rondo#190). Strict mode's
+ * rules: every object closed and every property required. `parseAnswer` still
+ * reads the answer as untrusted; this narrows what can arrive, it proves nothing.
+ */
+const REVIEWER_OUTPUT_SCHEMA = JSON.stringify({
+  type: "object",
+  additionalProperties: false,
+  required: ["findings"],
+  properties: {
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["severity", "text", "bases"],
+        properties: {
+          severity: { type: "string", enum: [...FINDING_SEVERITIES] },
+          text: { type: "string" },
+          bases: {
+            type: "array",
+            items: {
+              anyOf: [
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["kind", "path", "line"],
+                  properties: {
+                    kind: { type: "string", enum: ["file", "rule"] },
+                    path: { type: "string" },
+                    line: { type: "integer" },
+                  },
+                },
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["kind", "sha"],
+                  properties: {
+                    kind: { type: "string", enum: ["commit"] },
+                    sha: { type: "string" },
+                  },
+                },
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["kind", "index"],
+                  properties: {
+                    kind: { type: "string", enum: ["event"] },
+                    index: { type: "integer" },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  },
+});
+
 /** How long one reviewer-supplied message may be inside a persisted reason. */
 const REVIEWER_MESSAGE_BOUND = 300;
 
@@ -2564,10 +2627,19 @@ export async function runReviewer(
           deliveredDigest: contentDigest({ delivered: document }),
         };
   }
-  let directory: string;
+  // **The schema file is not in the reviewer's directory**: that one stays
+  // empty, so nothing rondo did not hand over and digest sits where the
+  // reviewer runs. The schema is rondo's own constant, beside it.
+  let directory: string | null = null;
+  let schemaDirectory: string | null = null;
+  let schemaPath: string;
   try {
     directory = mkdtempSync(join(tmpdir(), "rondo-reviewer-"));
+    schemaDirectory = mkdtempSync(join(tmpdir(), "rondo-reviewer-schema-"));
+    schemaPath = join(schemaDirectory, "output-schema.json");
+    writeFileSync(schemaPath, REVIEWER_OUTPUT_SCHEMA);
   } catch (error) {
+    removeDirectories([directory, schemaDirectory]);
     return {
       kind: "failed",
       reason: `no empty directory for the reviewer: ${hostFailure(error).text}`,
@@ -2589,13 +2661,13 @@ export async function runReviewer(
         "never",
         "--ignore-user-config",
         // Pinned here rather than inherited from the ignored config.
-        // ponytail: measured on 2026-09-13, with the config ignored about a
-        // third of the two-finding answers came back as JSON cut short of its
-        // closing brackets, which is an unavailable reading (fail closed) and
-        // noise; with the config kept, none did. Cause not found; codex's
-        // `--output-schema` (a file rondo would have to write) is the candidate.
         "-c",
         "model_reasoning_effort=medium",
+        // rondo#190: measured on 2026-09-13, with the config ignored about a
+        // third of the two-finding answers came back as JSON cut short of its
+        // closing brackets -- an unavailable reading (fail closed), and noise.
+        "--output-schema",
+        schemaPath,
         ...REVIEWER_DISABLED_FEATURES.flatMap((feature) => ["-c", `features.${feature}=false`]),
         "-c",
         "tools.web_search=false",
@@ -2644,10 +2716,19 @@ export async function runReviewer(
       deliveredDigest: contentDigest({ delivered: document }),
     };
   } finally {
+    removeDirectories([directory, schemaDirectory]);
+  }
+}
+
+function removeDirectories(directories: readonly (string | null)[]): void {
+  for (const directory of directories) {
+    if (directory === null) {
+      continue;
+    }
     try {
       rmSync(directory, { recursive: true, force: true });
     } catch {
-      // An empty directory left in the temp dir costs nothing; a throw here
+      // A small directory left in the temp dir costs nothing; a throw here
       // would lose a reading that was already taken.
     }
   }
