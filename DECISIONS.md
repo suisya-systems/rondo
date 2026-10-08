@@ -50,7 +50,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0002 | The TypeScript configuration: ESM, NodeNext, strictness beyond `strict`, and no build output yet | accepted |
 | D-0003 | The double-green rule, and where it is enforced | accepted |
 | D-0004 | ASCII-only for anything rondo prints | accepted, amended |
-| D-0005 | One module owns SQLite, and the driver is `node:sqlite` | accepted |
+| D-0005 | One module owns SQLite, and the driver is `node:sqlite` | accepted, amended |
 | D-0006 | The import boundary is a test that parses the tree, not a lint rule | accepted |
 | D-0007 | Install from the lockfile, with `--ignore-scripts` | accepted |
 | D-0008 | Biome, knip, and what `npm run verify` means | accepted |
@@ -211,6 +211,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0168 | A source file holds at most 2000 lines, and the ten files already over it may only shrink | accepted |
 | D-0170 | `rondo web`'s composition root leaves `main` for `host.ts`, and the page's presses leave `cli.ts` for three modules of their own; what the commands share with them stays in `cli.ts` | accepted |
 | D-0169 | A dated annotation may change a clause of an accepted entry when it says it is not additive and ends with an `Amends:` line per part it changes, and the index's status column is the live-rule index | accepted |
+| D-0171 | One module owns the SQLite driver and opens every connection; the schema and the queries live in per-concern store modules handed a structural connection, and the driver is still `node:sqlite` | accepted |
 
 ---
 
@@ -756,6 +757,17 @@ must not be a way to acquire a second owner.
 experimental-API break across 22 and 24 — in which case the driver changes and the ownership does
 not. Or a design in which rondo does not own durable state at all, which would be a much larger
 decision than this one.
+
+> **Annotation (2026-10-08, from D-0171).** Added after this entry was accepted, and **not additive**.
+> The schema and the queries no longer sit in `src/store/sqlite.ts`: they moved to per-concern modules
+> beside it, which are handed a structural connection and cannot open one. The decision above still
+> holds as written (one module names the driver, the boundary test asserts equality on it, the driver
+> is `node:sqlite`). What no longer holds is that replacing the store is a diff in one file: a driver
+> swap touches `sqlite.ts` and the connection's shape in `src/store/rows.ts`, and a schema change
+> touches the modules that hold the schema and the queries. Nothing above is edited.
+>
+> - Amends: D-0005 "a diff in one file"
+> - Amends: D-0005 "swapping the driver touches one file"
 
 ---
 
@@ -29007,3 +29019,66 @@ entries are still read as written, so the rules in force could not be read in on
 - A not-additive annotation whose change cannot be named as parts of its entry, so that its
   `Amends:` lines say less than the annotation does: that change was a supersession.
 - An entry reaching so many `Amends:` lines that its live rules cannot be read from it: supersede it.
+
+---
+
+## D-0171 — One module owns the SQLite driver and opens every connection; the schema and the queries live in per-concern store modules handed a structural connection, and the driver is still `node:sqlite`
+
+**Status:** accepted (2026-10-08, rondo#572). Amends D-0005 (its annotation from this entry).
+Supersedes nothing.
+
+### Decision
+
+`src/store/sqlite.ts` stays the only module that names a SQLite driver, and so the only one that
+can open a connection: `test/architecture/import-boundaries.test.ts` still asserts that the set of
+modules importing one is exactly `{src/store/sqlite.ts}` and grants `node:sqlite`'s `DatabaseSync`
+to that module alone. The driver is still `node:sqlite`, for D-0005's reasons.
+
+What changes is what "owns SQLite" covers. D-0005 put every statement in that one file, and by
+rondo#572 it was 9011 lines (D-0168's largest cap). The schema and the queries now live beside it,
+one module per concern:
+
+- `schema.ts`: the `CREATE` statements, the added columns and the migration.
+- `iteration.ts`: `iterationStore`, the `IterationStore` port's implementation.
+- `advisory.ts`: `advisoryRecord`, the `AdvisoryRecord` port's implementation.
+- `thread.ts`, `scope.ts`, `claims.ts`: the thread's, the approvals' and scopes', and the lane
+  ledger's reads and refusals, shared by both ports.
+- `contract.ts`: the two ports and the inputs and outcomes they speak in.
+- `rows.ts`: what all of them share, including the row decoders, the transaction helper and
+  `StoreConnection`.
+
+`StoreConnection` is a structural handle (`exec`, and `prepare` returning a statement with `get`,
+`all` and `run`) written in `node:sqlite`'s own value types without importing the module. These
+modules take one and cannot make one. `sqlite.ts` opens the file, sets the busy timeout and hands
+the connection in; it also re-exports the ports, so no caller's import line moved.
+
+### Why this amends D-0005 rather than superseding it
+
+D-0005's purpose is kept, and so is its decision as written: one module names the driver, the
+boundary test asserts equality on it, and a second file in `src/store/` still cannot open its own
+connection. Two clauses of its reasoning no longer hold: replacing the store is "a diff in one
+file", and "swapping the driver touches one file". A driver swap now touches `sqlite.ts` and
+`StoreConnection`'s shape in `rows.ts`, and the compiler checks a `DatabaseSync` against that shape,
+so a driver whose statements differ fails type-checking in `rows.ts` rather than in every module
+that queries. A schema replacement now touches the modules that hold the schema and the queries.
+Under `D-0169` that is a not-additive annotation in D-0005 with an `Amends:` line per clause, and
+D-0005 is indexed `accepted, amended`; a supersession would carry its whole text forward to change
+two sentences.
+
+### Options not taken
+
+- **Granting `node:sqlite` to the whole `src/store/` layer.** It would let any store module open a
+  second connection, which is the thing D-0005 was drawn to stop.
+- **Importing `DatabaseSync` as a type in each concern module.** A type-only import is still an
+  import of the driver, and the boundary test counts it.
+- **Keeping one file and allowlisting it.** D-0168 lets a cap only move down; 9011 lines was the
+  largest file in `src/`.
+
+### What would falsify it
+
+- A module other than `src/store/sqlite.ts` naming a SQLite driver, or opening a connection by any
+  other means.
+- A concern module needing more of the driver than `StoreConnection` names, in which case the handle
+  grows in `rows.ts` and the owner does not change.
+- D-0005's own falsifiers for the driver choice: `node:sqlite` proving inadequate across the Node
+  versions rondo supports.

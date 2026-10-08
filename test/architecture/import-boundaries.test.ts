@@ -496,8 +496,8 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
  * Both the standard-library driver rondo uses today and the native package the
  * sibling repositories use, because claim 3 is about the database, not about
  * which library reaches it: swapping drivers must not be a way to acquire a
- * second owner. Any addition here is a decision, and D-0005 is where it gets
- * taken.
+ * second owner. Any addition here is a decision, and D-0005 (as amended by
+ * D-0171) is where it gets taken.
  */
 const SQLITE_DRIVERS: ReadonlySet<string> = new Set([
   "node:sqlite",
@@ -542,6 +542,8 @@ const EXPECTED_MODULES: readonly string[] = [
   "src/refrain/policy.ts",
   "src/refrain/ports.ts",
   "src/refrain/revision.ts",
+  "src/store/advisory.ts",
+  "src/store/iteration.ts",
   "src/store/plan.ts",
   "src/store/records.ts",
   "src/store/sqlite.ts",
@@ -1415,10 +1417,19 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/refrain/policy.ts": [DISPATCHER],
   "src/refrain/ports.ts": [DISPATCHER],
   "src/refrain/revision.ts": [DISPATCHER],
+  // D-0171: the store split by concern behind the one driver owner.
+  "src/store/advisory.ts": [RECORD],
+  "src/store/claims.ts": [RECORD],
+  "src/store/contract.ts": [RECORD],
+  "src/store/iteration.ts": [RECORD],
   "src/store/lanes.ts": [RECORD],
   "src/store/plan.ts": [RECORD],
   "src/store/records.ts": [RECORD],
+  "src/store/rows.ts": [RECORD],
+  "src/store/schema.ts": [RECORD],
+  "src/store/scope.ts": [RECORD],
   "src/store/sqlite.ts": [RECORD],
+  "src/store/thread.ts": [RECORD],
 };
 
 interface Relocation {
@@ -2439,7 +2450,8 @@ for (const [id, module, source, expected] of PLANTED) {
  * would be a check that fails for the wrong reasons.
  */
 test("no store transaction body is async or awaits", () => {
-  const module = "src/store/sqlite.ts";
+  // `inTransaction` is the iteration store's, which moved out of the driver owner (D-0171).
+  const module = "src/store/iteration.ts";
   const tree = parseSourceFile(parseNameOf(module), sourceOf(module));
   const offenders: string[] = [];
 
