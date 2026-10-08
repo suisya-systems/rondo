@@ -201,6 +201,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0166 | A form the redraw would replace while the person is writing in it is kept: a notice says what changed, nothing is sent until they choose, and an answer is taken from any round of the candidate the flow waits on | accepted |
 | D-0167 | Each drafted part says on the scope screen which model it runs on, in the person's words: the tier, the model and worker it maps to, the drafter's grounds for a lighter tier, and each lap's model and cost | accepted |
 
+
 ---
 
 ## D-0001 — How rondo consumes continuo and cadenza in lap 1: a CLI process boundary for continuo, and nothing at all for cadenza
@@ -28543,3 +28544,23 @@ without seeing that a part ran on the cheaper model, or the claims that let it.
 - **A person approving a `mechanical` part and saying afterwards they did not see it was the
   lighter model**: the block is then not visible enough.
 - Any statement above failing to hold at rondo `a3bd6a0`.
+
+## D-0168 — A source file holds at most 2000 lines, and the ten files already over it may only shrink
+
+**Status:** accepted (2026-10-08, rondo#571). Supersedes nothing.
+
+### Decision
+
+`npm run file-size` (part of `npm run verify`) fails when a file under `src/` has more than 2000
+lines. The ten files that were already over (`scripts/file-size-allowlist.json`) each carry their
+line count as a cap. The check fails when such a file grows past its cap, and also when it has
+shrunk below it (lower the entry) or fits the budget (delete the entry), so a cap only moves down.
+
+### Options not taken
+
+- **A cap with slack.** A file could regrow into the room a split gave it.
+- **Counting `test/` as well.** The issue asks for `src/`; the tests can follow once the sources fit.
+
+### What would falsify it
+
+- A `src/` file over 2000 lines on `main` with no allowlist entry, or a cap above its file's lines.
