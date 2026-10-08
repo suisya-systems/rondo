@@ -38,7 +38,10 @@ document.addEventListener("keydown", (event) => {
   }
   // While the list is open the keys are its: `?` shuts it, and `Esc` is left
   // to the browser, which shuts a popover on it -- not followed back as well.
-  const sheet = document.getElementById("key-sheet");
+  // Only where the browser has popovers: an older one draws the list open in
+  // the header, and would throw on `:popover-open` and lose every key.
+  const found = document.getElementById("key-sheet");
+  const sheet = found !== null && "showPopover" in found ? found : null;
   const sheetOpen = sheet?.matches(":popover-open") ?? false;
   if (event.key === "?" && sheet !== null) {
     event.preventDefault();
