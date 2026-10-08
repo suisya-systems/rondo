@@ -28927,7 +28927,7 @@ changing what an entry asserted is a supersession. The file's practice has been 
 *not additive*, because supersession is whole-entry and carrying every other section of a long entry
 forward to replace one clause is the heavier act (rondo#273, raised while landing `D-0076`).
 
-At `b158c57`, by a census of every `**Annotation (` blockquote in this file, read with its quote
+At `561fce6`, by a census of every `**Annotation (` blockquote in this file, read with its quote
 marks taken off (a "**not" ending one line and "> additive**" starting the next is common): 232
 annotations, 151 marked additive, 51 marked not additive in 30 entries, and 30 marked neither way.
 28 of the 51 named no rule of the entry they changed. 13 of the 30 unmarked ones withdraw, narrow or
@@ -28951,8 +28951,8 @@ entries are still read as written, so the rules in force could not be read in on
    number. The lines are the mark the index reads; the words "not additive" are for the reader.
 3. **The index's status column is the live-rule index.** An accepted entry with an `Amends:` line is
    indexed `accepted, amended` and read with those lines; an `accepted` entry is read as written; a
-   `superseded by D-NNNN` entry is read in its replacement. At this entry, with `D-0167` and
-   `D-0168`: 108 accepted, 48 accepted and amended, 8 superseded.
+   `superseded by D-NNNN` entry is read in its replacement. At this entry, with `D-0167`,
+   `D-0168` and `D-0170`: 107 accepted, 50 accepted and amended, 8 superseded.
 4. **`test/architecture/docs-claims.test.ts` holds rules 2 and 3**: an annotation whose words say
    it is not additive and carries no `Amends:` line fails; one with prose after its first `Amends:`
    line fails; a quoted line naming `Amends:` that is not a well-formed line inside an annotation of
@@ -28974,7 +28974,7 @@ entries are still read as written, so the rules in force could not be read in on
 ### Options not taken
 
 - **Move the practice to the rule**: supersede each entry a not-additive annotation changed. That
-  is 48 whole entries carried forward for clause-level corrections, the cost rondo#273
+  is 50 whole entries carried forward for clause-level corrections, the cost rondo#273
   names.
 - **`Amends:` in the amending entry rather than the amended one.** A reader of the amended entry
   then needs a search of the whole file to learn that it changed, which is the gap this closes; an
