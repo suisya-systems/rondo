@@ -211,22 +211,124 @@ describe("DECISIONS.md's index matches its entries", () => {
    * an entry's status line goes on to give the date and the gate.
    */
   const DECISIONS = readFileSync(join(ROOT, "DECISIONS.md"), "utf8");
-  const status = (text: string) => /^[a-z]+(?: by D-\d{4})?/.exec(text)?.[0] ?? text;
+  const status = (text: string) => /^[a-z]+(?: by D-\d{4})?(?:, amended)?/.exec(text)?.[0] ?? text;
+  const lines = DECISIONS.split("\n");
+
+  /**
+   * Every dated annotation, with the entry it sits in (D-0169). An annotation
+   * is a blockquote opening on `**Annotation (`, at any indent and inside a
+   * list item; it runs over the blockquote's following lines and ends at the
+   * first line that is not quoted or opens the next annotation.
+   */
+  const annotations: { entry: string; line: number; text: string[] }[] = [];
+  let entry = "";
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    entry = /^## (D-\d{4}) — /.exec(line)?.[1] ?? entry;
+    if (entry === "" || !/^\s*(?:\d+\.\s+|- )?> \*\*Annotation \(/.test(line)) {
+      continue;
+    }
+    const text = [line];
+    while (/^\s*>/.test(lines[index + 1] ?? "") && !lines[index + 1]?.includes("**Annotation (")) {
+      index += 1;
+      text.push(lines[index] ?? "");
+    }
+    annotations.push({ entry, line: index - text.length + 2, text });
+  }
+  const QUOTE = /^\s*(?:\d+\.\s+|- )?>[\s>]*/;
+  const AMENDS = /^\s*(?:\d+\.\s+|- )?>[\s>]*(?:- )?Amends: (D-\d{4}) (\S.*)$/;
+  const amended = new Set(
+    annotations.flatMap((note) =>
+      note.text.flatMap((line) => (AMENDS.exec(line)?.[1] === note.entry ? [note.entry] : [])),
+    ),
+  );
+
   const entries = [...DECISIONS.matchAll(/^## (D-\d{4}) — (.*)$/gm)].map((match) => {
     const body = DECISIONS.slice(match.index).split(/^## (?=D-\d{4})/m)[1] ?? "";
-    const line = /^\*\*Status:\*\*\s*(.*)$/m.exec(body)?.[1] ?? "<no Status line>";
-    return `${match[1]} | ${match[2]} | ${status(line)}`;
+    // An entry's own Status line never says `amended`; only its Amends lines do.
+    const line = status(/^\*\*Status:\*\*\s*(.*)$/m.exec(body)?.[1] ?? "<no Status line>").replace(
+      ", amended",
+      "",
+    );
+    const live = line === "accepted" && amended.has(match[1] ?? "") ? "accepted, amended" : line;
+    return `${match[1]} | ${match[2]} | ${live}`;
   });
   const rows = [...DECISIONS.matchAll(/^\| (D-\d{4}) \| (.*) \| (.*) \|$/gm)].map(
     (match) => `${match[1]} | ${match[2]} | ${status(match[3] ?? "")}`,
   );
 
-  it("has one row per entry, with the entry's title and status", () => {
+  it("has one row per entry, with the entry's title and its live status", () => {
     expect(entries.length).toBeGreaterThan(0);
     expect(
       [...rows].sort(),
       "DECISIONS.md's index and its entries disagree. Every entry needs an index row whose title " +
-        "is the entry's heading and whose status begins as the entry's Status line does.",
+        "is the entry's heading and whose status begins as the entry's Status line does, followed " +
+        "by ', amended' exactly when the entry is accepted and an annotation in it carries an " +
+        "'Amends:' line (D-0169).",
     ).toEqual([...entries].sort());
+  });
+
+  it("gives every annotation marked not additive the rules it amends", () => {
+    const unnamed = annotations
+      // The quote marks come off first: "**not" ends a line and "> additive**"
+      // starts the next often enough that the raw lines would hide 21 of them.
+      // Emphasis and code marks come off too, so `**not** additive` and
+      // `not-additive` are read as the same words.
+      .filter((note) =>
+        /\bno[nt][\s-]+additive/i.test(
+          note.text.map((line) => line.replace(QUOTE, "").replace(/[*_`]/g, "")).join(" "),
+        ),
+      )
+      .filter((note) => !note.text.some((line) => AMENDS.test(line)))
+      .map((note) => `${note.entry}, the annotation at line ${note.line}`);
+    expect(
+      unnamed,
+      "An annotation that says it is not additive changes what its entry asserted, so it ends " +
+        "with a list of 'Amends: D-NNNN <rule>' lines, one per part it changes (AGENTS.md section 3, D-0169).",
+    ).toEqual([]);
+  });
+
+  it("ends an annotation with its Amends lines", () => {
+    const trailing = annotations
+      .filter((note) => {
+        const first = note.text.findIndex((line) => AMENDS.test(line));
+        return (
+          first !== -1 &&
+          note.text
+            .slice(first)
+            .some((line) => !AMENDS.test(line) && line.replace(QUOTE, "") !== "")
+        );
+      })
+      .map((note) => `${note.entry}, the annotation at line ${note.line}`);
+    expect(
+      trailing,
+      "An annotation's Amends lines are its last lines, so everything it changes is said above them " +
+        "and named by them; prose after them would change a part no line names (D-0169).",
+    ).toEqual([]);
+  });
+
+  it("puts every Amends line inside an annotation of the entry it names", () => {
+    const inside = new Set(
+      annotations.flatMap((note) =>
+        note.text.flatMap((line, offset) =>
+          AMENDS.exec(line)?.[1] === note.entry ? [note.line + offset] : [],
+        ),
+      ),
+    );
+    const stray = lines
+      .map((line, index) => ({ line, at: index + 1 }))
+      // Any quoted line naming `Amends:`, however it is spelled around it, or a
+      // bare line opening on it: a near miss of AMENDS is reported, not skipped.
+      .filter(
+        ({ line, at }) =>
+          (QUOTE.test(line) ? /\bAmends:/.test(line) : /^[\s\d.-]*Amends:/.test(line)) &&
+          !inside.has(at),
+      )
+      .map(({ line, at }) => `line ${at}: ${line.trim()}`);
+    expect(
+      stray,
+      "An 'Amends:' line names the entry whose annotation it closes and the rule it changes; " +
+        "one outside an annotation, or naming another entry, marks nothing amended.",
+    ).toEqual([]);
   });
 });
