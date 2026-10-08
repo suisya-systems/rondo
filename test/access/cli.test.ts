@@ -372,7 +372,7 @@ test("--prompt and --prompt-file together are refused rather than ranked", () =>
 });
 
 test("D-0098 rule 5.2: --closing-fix reaches revise, with or without a named scope", () => {
-  const base = ["revise", "--actor-id", "me", "--body=fix", "--iteration-id", "i-2"];
+  const base = ["revise", "--actor-id", "me", "--body=fix", "--successor-id", "i-2"];
   const scoped = parseCommand([...base, "--scope-decision-id", "sd-1", "--closing-fix"]);
   expect(scoped.kind === "parsed" && scoped.parsed.closingFix).toBe(true);
   const plain = parseCommand([...base, "--scope-decision-id", "sd-1"]);
@@ -891,9 +891,9 @@ test("each command still accepts every flag it does read", () => {
     ],
     ["abandon", "--iteration-id", "i1", "--reason", "wedged"],
     // `--run-id`, `--topic-branch` and `--workspace` are gone from `revise`
-    // too (D-0023 rule 9): `--iteration-id` is the one identifier left, and it
-    // names the successor.
-    ["revise", "--actor-id", "me", "--body=use the existing helper", "--iteration-id", "i-2"],
+    // too (D-0023 rule 9): `--successor-id` is the one identifier left for the
+    // second lap, and `--iteration-id` names the lap being revised (D-0165).
+    ["revise", "--actor-id", "me", "--body=use the existing helper", "--successor-id", "i-2"],
   ]) {
     const outcome = parseCommand(argv);
     expect(outcome.kind).toBe("parsed");
@@ -909,13 +909,15 @@ test("each command still accepts every flag it does read", () => {
  * worktree stands at the workspace. What crosses the two laps is the branch,
  * and rondo sets that itself.
  */
-test("revise carries the instruction and the successor's iteration id", () => {
+test("revise carries the instruction, the lap it revises and the successor's iteration id", () => {
   const outcome = parseCommand([
     "revise",
     "--actor-id",
     "me",
     "--body=-- use the existing helper",
     "--iteration-id",
+    "r-1",
+    "--successor-id",
     "r-2",
   ]);
   expect(outcome.kind).toBe("parsed");
@@ -928,7 +930,10 @@ test("revise carries the instruction and the successor's iteration id", () => {
     // Carried byte for byte, dash and all: an instruction at a gate may
     // legitimately begin with one, which is why USAGE spells `--body=TEXT`.
     body: "-- use the existing helper",
-    iterationId: "r-2",
+    // D-0165 (rondo#36): `--iteration-id` names the row being revised, as on
+    // every other verb, and the successor has a flag of its own.
+    iterationId: "r-1",
+    successorId: "r-2",
   });
 });
 
@@ -998,7 +1003,7 @@ test("a revision is blocked before the walk when a name is taken or the gate is 
   expect(held).toContain("rondo-iter-2");
   expect(held).toContain("running");
   expect(held).toContain("Nothing was touched");
-  expect(held).toContain("--iteration-id");
+  expect(held).toContain("--successor-id");
 
   // The gate is checked first: a person whose gate has closed needs to hear
   // that before they hear about an identifier.
@@ -2462,7 +2467,7 @@ test("the scope verbs take their own flags and refuse the others (D-0066)", () =
       "--actor-id",
       "oidc|operator-1",
       "--body=fix the finding",
-      "--iteration-id",
+      "--successor-id",
       "iter-2",
       "--scope-decision-id",
       "scope-decision-scope-2-1",
@@ -2471,7 +2476,7 @@ test("the scope verbs take their own flags and refuse the others (D-0066)", () =
     kind: "parsed",
     parsed: {
       command: "revise",
-      iterationId: "iter-2",
+      successorId: "iter-2",
       scopeDecisionId: "scope-decision-scope-2-1",
     },
   });

@@ -186,7 +186,9 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // record (`D-0157`), so it is an override rather than the way in.
   // `--closing-fix` presses the closing lap (D-0098 rule 5.2): a scope's
   // option, and every revise now names one, so it stands on its own.
-  revise: ["actor-id", "body", "iteration-id", "scope-decision-id", "closing-fix"],
+  // `--iteration-id` names the lap being revised and `--successor-id` the lap
+  // it starts, `retry`'s and `propose`'s shape (D-0165, rondo#36).
+  revise: ["actor-id", "body", "iteration-id", "successor-id", "scope-decision-id", "closing-fix"],
   publish: [
     "repo",
     "actor-id",
