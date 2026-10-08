@@ -107,6 +107,92 @@ export interface ListProps {
   readonly openId: string | null;
 }
 
+/** Which shape a row's mark is drawn in: one per thing a row can be. */
+type Mark = "wait" | "run" | "ok" | "fail" | "done" | "stopped" | "idle";
+
+/**
+ * A row's mark, from its state and, once published, its checks.
+ *
+ * **The shape says the state and the colour only adds to it** (rondo#589,
+ * WCAG 1.4.1). Running, done, stopped and not started were one grey dot, so
+ * they could not be told apart, and running had lost the turning mark
+ * `D-0082` rule 3 keeps for it.
+ */
+function markOf(row: RequestRow): Mark {
+  const checks = row.published?.checks.kind;
+  if (row.state === "waitingOnYou") {
+    return "wait";
+  }
+  if (checks === "green") {
+    return "ok";
+  }
+  if (checks === "red") {
+    return "fail";
+  }
+  switch (row.state) {
+    case "running":
+      return "run";
+    case "approved":
+    case "finished":
+      return "done";
+    case "stopped":
+      return "stopped";
+    default:
+      return "idle";
+  }
+}
+
+/**
+ * The shapes are the page's own status glyphs (`glyph` in `vocabulary.tsx`),
+ * drawn here in React: a ring round a dot for *your turn*, a turning arc for
+ * running, a tick and a cross for the checks, a slashed ring for stopped. A
+ * finished row is a plain disc and one not started yet a dashed ring -- the
+ * shape with nothing in it.
+ */
+function MarkShape({ mark }: { readonly mark: Mark }) {
+  switch (mark) {
+    case "wait":
+      return (
+        <>
+          <circle cx="8" cy="8" r="6.2" />
+          <circle cx="8" cy="8" r="2.4" fill="currentColor" stroke="none" />
+        </>
+      );
+    case "run":
+      return (
+        <>
+          <circle cx="8" cy="8" r="6.2" opacity="0.3" />
+          <path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" />
+        </>
+      );
+    case "ok":
+      return (
+        <>
+          <circle cx="8" cy="8" r="6.2" />
+          <path d="m5.4 8.2 1.8 1.8 3.4-3.6" />
+        </>
+      );
+    case "fail":
+      return (
+        <>
+          <circle cx="8" cy="8" r="6.2" />
+          <path d="m5.8 5.8 4.4 4.4m0-4.4-4.4 4.4" />
+        </>
+      );
+    case "done":
+      return <circle cx="8" cy="8" r="5" fill="currentColor" stroke="none" />;
+    case "stopped":
+      return (
+        <>
+          <circle cx="8" cy="8" r="6.2" />
+          <path d="m3.8 12.2 8.4-8.4" />
+        </>
+      );
+    default:
+      return <circle cx="8" cy="8" r="6.2" strokeDasharray="2.6 2.3" />;
+  }
+}
+
 function Row({
   wording,
   row,
@@ -121,10 +207,7 @@ function Row({
   readonly open: boolean;
 }) {
   const waiting = row.state === "waitingOnYou";
-  // Green or red where the checks have said so (D-0082 rule 2), and the
-  // neutral dot otherwise: the colour is the whole of what it says.
-  const checks = row.published?.checks.kind;
-  const tone = checks === "green" ? " list-dot-ok" : checks === "red" ? " list-dot-fail" : "";
+  const mark = markOf(row);
   return (
     // **The open request is marked, and every row is a `j`/`k` stop**
     // (rondo#587): the header's hint moves through this list as it does
@@ -136,11 +219,23 @@ function Row({
       aria-current={open ? "page" : undefined}
     >
       {/*
-       * One dot, amber only where a person must act. A row that needs nobody
-       * carries a neutral one, so the column stays aligned and the colour is
-       * the whole of what it says (D-0082 rule 2).
+       * One mark, amber only where a person must act (D-0082 rule 2), green
+       * or red where the checks have said so. Hidden from a reader because
+       * the sentence beside it says the same.
        */}
-      <i className={`list-dot${waiting ? " list-dot-wait" : tone}`} aria-hidden="true" />
+      <svg
+        className={`list-dot list-dot-${mark}`}
+        data-mark={mark}
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <MarkShape mark={mark} />
+      </svg>
       <div className="list-row-body">
         {/* The person's own words. `lang=""` because rondo does not know what
             language they wrote in (D-0055 rule 8). */}
