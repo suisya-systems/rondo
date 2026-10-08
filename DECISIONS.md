@@ -20608,6 +20608,13 @@ little is on it.
 >
 > - Amends: D-0083 rule 5
 
+> **Annotation (2026-10-08, from D-0183).** Not additive (rondo#592): on the left face, a request not
+> waiting on the person is drawn on one line, its title and its time, with its state in the mark's
+> shape; its repository's name and its sentence of state stay in the markup for a screen reader and
+> are hidden from the eye (`D-0183`). A request under *your turn* keeps both. Nothing above is edited.
+>
+> - Amends: D-0083 rule 5
+
 **6. Governance is permanent, in one line under the title, and in full on the right.** Under every
 thread's title, at every width: repository | when it was asked | spent / approved | which try of how
 many | how many things rondo decided without asking | what remains, as a chain (*your answer ->
