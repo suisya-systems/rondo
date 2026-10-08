@@ -4859,7 +4859,7 @@ export async function operatorPage(
         inbox?.sinceMs === null || inbox?.sinceMs === undefined
           ? wording.lastLookedNever
           : wording.lastLookedHere(wording.age(ago(inbox.sinceMs, nowMs))),
-      openId: thread.selectedRoot,
+      openId: onOwnScreen ? null : thread.selectedRoot,
     }),
   };
   // **Awaited here** for `scoping`'s reason: the dry-run reads a workspace and
