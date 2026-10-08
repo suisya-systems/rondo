@@ -220,6 +220,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0184 | The page offers light, dark and the system's palette, kept in this browser as the text size is; the system's is the default, and each colour token holds both values in one declaration | accepted |
 | D-0177 | A person asks rondo on the page what something means or what happened, and a model explainer answers in the thread: an explanation with bases that binds nothing, counted against the approval in force, capped per answer | accepted |
 | D-0185 | The page is designed for the half screen beside an editor as well as for 2560: about 760px and about 1280px are widths of their own, and above a phone the list and the thread scroll on their own | accepted |
+| D-0186 | A paused goal flow is a row under *your turn* in the list, on every view, leading to the screen that resumes it; it is the one row there that is not a request | accepted |
 
 ---
 
@@ -20614,6 +20615,13 @@ list is amber, and a finished request's line may be cut to one line.
 >
 > - Amends: D-0083 rule 2
 
+> **Annotation (2026-10-08, from D-0186).** Not additive (rondo#606): a row in the list is a
+> request, **except a goal flow that is paused**, which stands under *your turn* with the requests
+> that wait on the person and leads to the goal scope screen (`D-0186` rule 1). Nothing above is
+> edited.
+>
+> - Amends: D-0083 rule 2
+
 **3. The summary and the gate are one screen.** There is no separate decision screen. Arriving from a
 notification and opening the page land on the same screen: from a notification the request it names
 is selected; opened by hand, the oldest request waiting on the person is selected; with nothing
@@ -29896,3 +29904,54 @@ taken before and after by the window.
 - A person beside an editor who still loses the list's place while reading a thread.
 - A thread at 1101px whose text runs under 45 characters to a line.
 - A horizontal scroll bar on a phone at 390px.
+
+## D-0186 — A paused goal flow is a row under *your turn* in the list, on every view, leading to the screen that resumes it; it is the one row there that is not a request
+
+**Status:** accepted (2026-10-08, rondo#606, with its pull request's approval). Amends `D-0083`
+rule 2. Supersedes nothing. Refs `D-0082` rules 1 and 2, `D-0097`, `D-0128`, `D-0168`,
+`D-0173 K3`, `D-0185`.
+
+### Context
+
+On 2026-10-08 a goal flow on the lap-19 host was paused, and nothing on the page led to the screen
+that resumes it: it was reached only by typing `/?goal_scope=<repository>`. The only way in was the
+goal scope line under the repository's block on the empty centre (`D-0128`), and that whole section
+is withheld while any request is in the person's turn (`D-0097` point 4.1 (d)). So the button that
+resumes the work was on the page only when nothing else waited, and never beside a thread. That is
+something the person has to remember (`D-0173 K3`).
+
+### Decision
+
+1. **A paused goal flow is a row under *your turn* in the list**, one per repository whose newest
+   goal's approval is paused, above the requests that wait. The list is drawn on every view, so the
+   way in is there whatever the centre holds. The row says the work toward the goal is paused, the
+   repository, and *see the approval, or resume*, in the words the triage line already uses.
+2. **It is drawn at the weight of a request waiting on the person**, bold, untruncated, on the amber
+   ground and edge, with its own mark (a ring with two bars). Nothing but the person resumes it, so
+   it is the person's turn in `D-0082` rule 1's sense, and the amber says *a person must act* and
+   nothing else (rule 2). *Your turn* is drawn when only a paused flow is under it.
+3. **The row is a link to the goal scope screen, never the press.** Resuming is an approval, made
+   over what that screen shows (`D-0128`).
+4. **It is not a request.** The walk (*your turn 1 / 3, next*), the waiting count in the title and
+   the icon, and which request opens on arrival still read requests alone (`D-0083` rule 3).
+5. It lives in `src/access/page/list.tsx` and `src/access/page-logic/`, with one changed line in
+   `web.tsx` and none added (`D-0168`).
+
+### Options not taken
+
+- **Draw the triage block while something waits.** It brings the whole ranking back into a turn the
+  person came to answer, which `D-0097` withdrew it from, and it is still only on the empty centre.
+- **A line in the week's face.** The right face is the request's own beside a thread, so the way in
+  would go whenever a thread is open.
+- **A quiet row among the days.** A flow only the person can resume is waiting on them; drawing it
+  as finished work is the burying `D-0082` rule 1 was written against.
+
+### What it costs
+
+- A row in the list that is not a request, and an eighth mark shape.
+- A flow paused on purpose stays amber until it is resumed or its goal changes.
+
+### What would falsify it
+
+- A person who paused a flow on purpose and reads the amber row as noise they learn to skip.
+- A paused flow whose screen a person still reaches by typing its address.

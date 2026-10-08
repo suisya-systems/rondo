@@ -72,6 +72,12 @@ export interface RequestList {
    * looked, or that they have seen everything.
    */
   readonly lastLookedAbove: string | null;
+  /**
+   * The repositories whose goal flow is paused (D-0128, rondo#606): only the
+   * person resumes it, so it is drawn with *your turn* and leads to the screen
+   * that does.
+   */
+  readonly paused?: readonly string[];
 }
 
 /** The repository a lap's plan names (D-0081), or null where it names none. */

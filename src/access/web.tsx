@@ -1445,7 +1445,7 @@ export async function operatorPage(
   const listContent = {
     react: RequestsFace({
       wording,
-      list: requestsList,
+      list: { ...requestsList, paused: triage.paused },
       hrefOf: (messageId) => viewHref({ kind: "thread", messageId, to: null }, wording.lang),
       agoOf: (atMs) => wording.age(ago(atMs, nowMs)),
       allowance: null,
