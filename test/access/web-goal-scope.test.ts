@@ -239,6 +239,14 @@ test("pause writes the laps: 0 successor, and resume succeeds the pause", async 
   expect(standing.scope.payload.budgets.laps).toBe(0);
   expect(standing.scope.payload.budgets.cost_usd).toBe(BUDGETS.cost_usd);
   expect(await w.page({ kind: "requests" })).toContain(EN.triageGoalScopePaused);
+  // **And in the list, on every view** (rondo#606): the triage block is not
+  // drawn while something is in the person's turn, and the list always is.
+  const listed = (html: string) => html.slice(html.indexOf('class="list"'));
+  for (const view of [{ kind: "requests" }, { kind: "goal", repository: "o/r" }] as const) {
+    expect(listed(await w.page(view))).toMatch(
+      /<a class="list-row list-row-mine" href="\/\?goal_scope=o%2Fr&amp;lang=en" data-row="" data-paused="">/,
+    );
+  }
 
   // Paused, the screen offers the draft again, pressed as a resume.
   const screen = await w.page({ kind: "goalScope", repository: "o/r" });
@@ -253,6 +261,7 @@ test("pause writes the laps: 0 successor, and resume succeeds the pause", async 
   expect(resumed.ok).toBe(true);
   const after = await goalScopeStanding(w.record, "goal-1");
   expect(after.kind).toBe("running");
+  expect(await w.page({ kind: "requests" })).not.toContain('data-paused=""');
   if (after.kind === "none") return;
   expect(after.scope.supersedesScopeId).toBe(standing.scope.scopeId);
   // Pausing what is already paused is refused.

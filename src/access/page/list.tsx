@@ -20,6 +20,7 @@
 
 import type { DayCut } from "../page-logic/days.js";
 import type { RequestList, RequestRow, RowState } from "../page-logic/list.js";
+import { viewHref } from "../page-logic/routes.js";
 import type { Chrome } from "../wording.js";
 
 /** Each day cut's heading, from the set in force. */
@@ -258,6 +259,51 @@ function Row({
   );
 }
 
+/**
+ * **A paused goal flow is the person's turn** (rondo#606, D-0173 K3): nothing
+ * but the person resumes it, and the screen that does was reached only by its
+ * address. So it stands with the requests that wait on them, at their weight
+ * and in their amber, and leads to that screen -- a link, never the press
+ * (approving is made over what the screen shows, D-0128).
+ */
+function PausedRow({
+  wording,
+  repository,
+}: {
+  readonly wording: Chrome;
+  readonly repository: string;
+}) {
+  return (
+    <a
+      className="list-row list-row-mine"
+      href={viewHref({ kind: "goalScope", repository }, wording.lang)}
+      data-row=""
+      data-paused=""
+    >
+      <svg
+        className="list-dot list-dot-wait"
+        data-mark="paused"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        aria-hidden="true"
+      >
+        <circle cx="8" cy="8" r="6.2" />
+        <path d="M6.4 5.6v4.8m3.2-4.8v4.8" />
+      </svg>
+      <div className="list-row-body">
+        <b>{wording.triageGoalScopePaused}</b>
+        <p>
+          <span className="list-repo">{repository}</span>
+          {wording.triageGoalScopeResume}
+        </p>
+      </div>
+    </a>
+  );
+}
+
 export function RequestsFace({
   wording,
   list,
@@ -268,6 +314,7 @@ export function RequestsFace({
   lastLookedSaid,
   openId,
 }: ListProps) {
+  const paused = list.paused ?? [];
   const empty = list.yourTurn.length === 0 && list.days.length === 0;
   return (
     <div className="list">
@@ -276,9 +323,12 @@ export function RequestsFace({
           {wording.writeNewRequest}
         </a>
       )}
-      {list.yourTurn.length === 0 ? null : (
+      {list.yourTurn.length === 0 && paused.length === 0 ? null : (
         <>
           <h6 className="list-heading list-heading-mine">{wording.yourTurn}</h6>
+          {paused.map((repository) => (
+            <PausedRow key={repository} wording={wording} repository={repository} />
+          ))}
           {list.yourTurn.map((row) => (
             <Row
               key={row.messageId}

@@ -528,7 +528,7 @@ export async function approvalOf(
 export async function triageModel(
   ports: WebPorts,
   threads: Threads,
-): Promise<Required<TriageReads>> {
+): Promise<Required<TriageReads> & { readonly paused: readonly string[] }> {
   const triageRepositories = (await ports.triageRepositories?.()) ?? [];
   const goals = triageRepositories.length === 0 ? [] : await ports.record.goals();
   /*
@@ -577,5 +577,8 @@ export async function triageModel(
     flowOpeners,
     flowAsks,
     putAside,
+    paused: [...currentGoals(goals).values()]
+      .filter((goal) => goalScopes.get(goal.goalId)?.state === "paused")
+      .map((goal) => goal.repository),
   };
 }

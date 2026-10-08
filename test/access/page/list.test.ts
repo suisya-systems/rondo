@@ -105,3 +105,25 @@ test("a row that needs nobody is one line, its sentence stays for a reader, and 
   expect(cut).toContain(`title="finished\norg/repo\n${EN.rowFinished}"`);
   expect(html).toContain(`<span class="list-repo">org/repo</span>${EN.rowFinished}</p>`);
 });
+
+test("a paused goal flow stands with your turn and leads to the screen that resumes it (rondo#606)", () => {
+  const html = renderToStaticMarkup(
+    RequestsFace({
+      wording: EN,
+      list: { yourTurn: [], days: [], lastLookedAbove: null, paused: ["org/repo"] },
+      hrefOf: (id) => `/?thread=${id}`,
+      agoOf: () => "now",
+      allowance: null,
+      newRequestHref: null,
+      lastLookedSaid: "",
+      openId: null,
+    }),
+  );
+  // Drawn under *your turn* even with no request waiting, at its weight.
+  expect(html).toContain(`<h6 class="list-heading list-heading-mine">${EN.yourTurn}</h6>`);
+  expect(html).toMatch(
+    /<a class="list-row list-row-mine" href="\/\?goal_scope=org%2Frepo&amp;[^"]*"/,
+  );
+  expect(html).toContain('data-mark="paused"');
+  expect(html).toContain(EN.triageGoalScopePaused);
+});
