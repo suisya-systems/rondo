@@ -667,3 +667,77 @@ test("an approval whose digest two options share is refused rather than resolved
   }
   expect(rowsIn(h.connection, "decision_consumption").length).toBe(0);
 });
+
+test("an approved proposal whose successor identity was taken meanwhile resolves, and admit() refuses it (rondo#584)", async () => {
+  // **Two open proposals naming one successor.** The unprompted
+  // `contract_keys-<subject>` minted `<subject>-r2`, and an operator proposed a
+  // `run_plan` for the same identity while it was still free -- `proposeRetry`
+  // checks freedom when it drafts, and nothing checks it again while the
+  // proposal stays open.
+  const { h, decisionId, approved } = await approvedChain();
+  const operator = await proposeRetry(
+    { ...h.advisory, present: () => undefined },
+    "run_plan",
+    SUBJECT,
+    SUCCESSOR,
+  );
+  if (operator.kind !== "proposed") {
+    throw new Error("the operator's run_plan proposal was not drafted");
+  }
+  h.answers.classify = answered("allowed");
+  const taken = await approvedRetry(h.advisory, PROPOSAL_ID);
+  if (taken.kind !== "resolved") {
+    throw new Error("the chain did not resolve");
+  }
+  const first = await admit(
+    h.ports,
+    h.advisory,
+    taken.retry.plan,
+    POLICY,
+    SUCCESSOR,
+    SUBJECT,
+    { decisionId, contractDigest: approved },
+    REQUEST,
+  );
+  expect(first.iterationId).toBe(SUCCESSOR);
+
+  // The leftover is still an open proposal nobody has decided: the record
+  // stays readable, which is what the page's count was reading.
+  expect((await h.advisory.record.openProposals(NOW_MS)).map((row) => row.proposalId)).toEqual([
+    operator.proposalId,
+  ]);
+
+  // **Approving it runs nothing, and the refusal is admit()'s.** The digest
+  // names the successor as grantee, and that grantee has not moved, so
+  // `approvedRetry` still re-derives the approved contract; what stops it is
+  // the reservation, on identifiers the first admission already holds.
+  const answer = await recordAnswer(
+    { record: h.advisory.record, now: () => NOW_MS },
+    {
+      proposalId: operator.proposalId,
+      outcome: "approved",
+      contractDigest: operator.options[0]?.value as string,
+      actorId: APPROVER,
+    },
+  );
+  if (answer.kind !== "answered") {
+    throw new Error("the leftover proposal could not be answered");
+  }
+  const resolved = await approvedRetry(h.advisory, operator.proposalId);
+  if (resolved.kind !== "resolved") {
+    throw new Error("the leftover's approval did not resolve");
+  }
+  const report = await admit(
+    h.ports,
+    h.advisory,
+    resolved.retry.plan,
+    POLICY,
+    SUCCESSOR,
+    SUBJECT,
+    { decisionId: answer.decisionId, contractDigest: resolved.retry.contractDigest },
+    REQUEST,
+  );
+  expect(report.iterationId).toBeNull();
+  expect(report.lines.join("\n")).toContain("already held by another iteration");
+  expect(rowsIn(h.connection, "decision_consumption").length).toBe(1);
+});
