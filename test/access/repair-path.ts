@@ -52,16 +52,11 @@ import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
 
 import { type ChecksRead, checksHost, type FailingCheck } from "../../src/access/checks-host.js";
-import {
-  answerFromPage,
-  conflictFixFromPage,
-  publishFromPage,
-  publishingForPage,
-  recordScopeFromPage,
-  startScopedFromPage,
-} from "../../src/access/cli.js";
 import { rerunFailedJobs } from "../../src/access/forge.js";
 import { scopedAuthority } from "../../src/access/merge.js";
+import { answerFromPage, conflictFixFromPage } from "../../src/access/page-actions.js";
+import { publishFromPage, publishingForPage } from "../../src/access/page-publish-actions.js";
+import { recordScopeFromPage, startScopedFromPage } from "../../src/access/page-scope-actions.js";
 import { agentTypeRecordOf } from "../../src/access/scope.js";
 import {
   AnswerPort,

@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from "vitest";
 
-import type { ScopedPublish } from "../../src/access/cli.js";
+import type { ScopedPublish } from "../../src/access/page-publish-actions.js";
 import { publishHost } from "../../src/access/publish-host.js";
 import {
   APPROVED_OUTCOME,

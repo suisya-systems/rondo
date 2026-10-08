@@ -17,7 +17,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test, vi } from "vitest";
-import { recordDraftedScopeFromPage, startSplitFromPage } from "../../src/access/cli.js";
 import {
   type DraftedStartReadiness,
   draftedStartReadiness,
@@ -29,6 +28,10 @@ import { approvedSplits } from "../../src/access/drafted-view.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { draftedPlanRun } from "../../src/access/model-draft/host.js";
 import { type OrderHostPorts, orderHost } from "../../src/access/order-host.js";
+import {
+  recordDraftedScopeFromPage,
+  startSplitFromPage,
+} from "../../src/access/page-scope-actions.js";
 import type { Started } from "../../src/access/web-app.js";
 import type { SplitPayload } from "../../src/advisory/proposal.js";
 import { allocate } from "../../src/refrain/allocator.js";

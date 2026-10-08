@@ -8,8 +8,6 @@
  * the port; `gh` and the network are not CI's.
  */
 import { expect, test } from "vitest";
-
-import { addRepositoryFromPage } from "../../src/access/cli.js";
 import {
   type CommandOutcome,
   type RepositoryClone,
@@ -17,6 +15,7 @@ import {
 } from "../../src/access/forge.js";
 import { workRepository } from "../../src/access/issue-read.js";
 import { heldPlans, requestRepository } from "../../src/access/model-draft/host.js";
+import { addRepositoryFromPage } from "../../src/access/page-actions.js";
 import { projectNameOf, repositoryParts } from "../../src/access/repository-add.js";
 import { allowedCommandsFor, COMMON_BASH } from "../../src/cadenza/facade.js";
 import { readRunPlan } from "../../src/refrain/plan.js";

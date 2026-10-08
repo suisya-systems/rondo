@@ -19,14 +19,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test, vi } from "vitest";
-
-import { recordDraftedScopeFromPage, startSplitFromPage } from "../../src/access/cli.js";
 import { draftedStartReadiness } from "../../src/access/drafted-start.js";
 import { approvedSplits } from "../../src/access/drafted-view.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import type { DrafterRun } from "../../src/access/model-draft/judgement.js";
 import { orderHost } from "../../src/access/order-host.js";
 import { viewHref } from "../../src/access/page-logic/routes.js";
+import {
+  recordDraftedScopeFromPage,
+  startSplitFromPage,
+} from "../../src/access/page-scope-actions.js";
 import { ScopePort } from "../../src/access/web-app.js";
 import { EN } from "../../src/access/wording.js";
 import { allocate } from "../../src/refrain/allocator.js";

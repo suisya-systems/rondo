@@ -1288,6 +1288,11 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/checks-host.ts": ["Publishing"],
   "src/access/cli-parse.ts": [HUMAN],
   "src/access/cli.ts": [HUMAN],
+  // rondo#570: lifted out of `cli.ts` unchanged, so they play its role.
+  "src/access/host.ts": [HUMAN],
+  "src/access/page-actions.ts": [HUMAN],
+  "src/access/page-publish-actions.ts": [HUMAN],
+  "src/access/page-scope-actions.ts": [HUMAN],
   "src/access/conductor.ts": [DISPATCHER],
   "src/access/console.ts": [HUMAN],
   "src/access/delegation.ts": [RECORD],

@@ -25,9 +25,7 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 import {
   approvedActor,
-  claimThenWalk,
   type GateVerbs,
-  lapStartedAgainAt,
   operatorLanguage,
   parseBasis,
   publishModelReadingLines,
@@ -55,6 +53,7 @@ import {
   repositoryFromRemoteUrl,
 } from "../../src/access/forge-preflight.js";
 import { bareIssueRepository } from "../../src/access/issue-read.js";
+import { claimThenWalk, lapStartedAgainAt } from "../../src/access/page-actions.js";
 import { type PullRequestTextInput, pullRequestText } from "../../src/access/pull-request.js";
 import { evidenceOf } from "../../src/access/review.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";

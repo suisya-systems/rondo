@@ -15,10 +15,13 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
 import { DETERMINISTIC_DRAFTER } from "../../src/access/advisory.js";
-import { pauseGoalScopeFromPage, recordGoalScopeFromPage } from "../../src/access/cli.js";
 import { flowHost } from "../../src/access/flow-host.js";
 import type { CommandOutcome } from "../../src/access/forge.js";
 import { goalScopeMaterial, goalScopeStanding } from "../../src/access/goal-scope.js";
+import {
+  pauseGoalScopeFromPage,
+  recordGoalScopeFromPage,
+} from "../../src/access/page-scope-actions.js";
 import { triageHost } from "../../src/access/triage-host.js";
 import type { GoalScopeInput } from "../../src/access/web-app.js";
 import { chromeFor, EN } from "../../src/access/wording.js";

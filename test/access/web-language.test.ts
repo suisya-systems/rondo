@@ -1,8 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
-
-import { recordPagePress } from "../../src/access/cli.js";
 import type {} from "../../src/access/inbox.js";
+import { recordPagePress } from "../../src/access/page-actions.js";
 import type { ServedPorts } from "../../src/access/web-app.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
 import {

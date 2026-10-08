@@ -10,24 +10,20 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 
-import {
-  commandPublishBody,
-  holdsFromPage,
-  lapReport,
-  main,
-  publishFromPage,
-  publishingForPage,
-  publishPlanFor,
-  publishUnderScope,
-  releaseFromPage,
-  type ScopedPublish,
-} from "../../src/access/cli.js";
+import { commandPublishBody, lapReport, main, publishPlanFor } from "../../src/access/cli.js";
 import { reportToRequest } from "../../src/access/conductor.js";
 import { consoleSeams } from "../../src/access/console.js";
 import { inspectLapWork } from "../../src/access/forge.js";
 import type {} from "../../src/access/inbox.js";
+import { holdsFromPage, releaseFromPage } from "../../src/access/page-actions.js";
 import { resultOf } from "../../src/access/page-logic/result.js";
 import { threadsOf } from "../../src/access/page-logic/threads.js";
+import {
+  publishFromPage,
+  publishingForPage,
+  publishUnderScope,
+  type ScopedPublish,
+} from "../../src/access/page-publish-actions.js";
 import {
   COMPOSED_SECTIONS,
   PUBLISH_BODY_DRAFTER_PREFIX,

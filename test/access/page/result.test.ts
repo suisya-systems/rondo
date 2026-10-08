@@ -13,9 +13,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
-import { conflictFixFromPage, pullRequestUpdated } from "../../../src/access/cli.js";
+import { pullRequestUpdated } from "../../../src/access/cli.js";
 import { reportToRequest } from "../../../src/access/conductor.js";
 import { basisWord } from "../../../src/access/page/vocabulary.js";
+import { conflictFixFromPage } from "../../../src/access/page-actions.js";
 import {
   askHoldingMerge,
   conflictFixBlock,

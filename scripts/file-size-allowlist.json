@@ -1,6 +1,6 @@
 {
   "src/access/advisory.ts": 2915,
-  "src/access/cli.ts": 10301,
+  "src/access/cli.ts": 5665,
   "src/access/conductor.ts": 2253,
   "src/access/forge.ts": 2859,
   "src/access/screens/scope.tsx": 2047,

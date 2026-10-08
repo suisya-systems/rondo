@@ -4,11 +4,12 @@
  * whose scope's approved tip includes both `push_branch` and
  * `open_pull_request` is published in the resident host, today the `rondo web`
  * process, on the minute it already rescans on and right after rondo answers a
- * gate. The act is the press's own path (`publishUnderScope`, `cli.ts`), so
- * every refusal of the press holds; the review's verdict is one, and passing it
- * stays a person's act (`--despite-review`, the page's second press). So is a
- * lap whose model reading is missing, unavailable or raised a finding at or
- * above the line an automatic approval keeps (D-0066 rule 4.2's reading).
+ * gate. The act is the press's own path (`publishUnderScope`,
+ * `page-publish-actions.ts`), so every refusal of the press holds; the review's
+ * verdict is one, and passing it stays a person's act (`--despite-review`, the
+ * page's second press). So is a lap whose model reading is missing,
+ * unavailable or raised a finding at or above the line an automatic approval
+ * keeps (D-0066 rule 4.2's reading).
  *
  * **Claim, then act** (D-0042): each leg's `scope_consumption` row is written
  * right before it runs, asking the scope again first, so a lap is pushed and
@@ -20,11 +21,11 @@
  */
 import { approvedForPublication, reviewedReading } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
-import type { ScopedPublish } from "./cli.js";
 import { modelReason } from "./gate-auto.js";
 import { scopedAuthority } from "./merge.js";
 import { askOverLine, resultOf } from "./page-logic/result.js";
 import { threadsOf } from "./page-logic/threads.js";
+import type { ScopedPublish } from "./page-publish-actions.js";
 
 const PUBLISH_ACTS = ["push_branch", "open_pull_request"] as const;
 
@@ -42,7 +43,7 @@ export interface PublishHostPorts {
     | "readScope"
     | "claimScopedAct"
   >;
-  /** The press's path under a scope (`publishUnderScope`, `cli.ts`). */
+  /** The press's path under a scope (`publishUnderScope`, `page-publish-actions.ts`). */
   readonly publish: (
     iterationId: string,
     scoped: ScopedPublish,

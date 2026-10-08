@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
-
-import { recordScopeFromPage, reviseFromPage, startScopedFromPage } from "../../src/access/cli.js";
 import type {} from "../../src/access/inbox.js";
+import { reviseFromPage } from "../../src/access/page-actions.js";
+import { recordScopeFromPage, startScopedFromPage } from "../../src/access/page-scope-actions.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
 import { newScopeId, type ScopeFormDraft } from "../../src/access/web-app.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
