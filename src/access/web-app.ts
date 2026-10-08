@@ -2953,9 +2953,10 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     // the approval's spent review rounds, the press first records a
     // budgets-only successor of it, as the answering box's raise does (D-0140
     // rule 3), and the change spends that. A refused raise asks nothing --
-    // except where the tip has moved, which a second press of this same form
-    // also finds: the revise port then tells a replay with the same words from
-    // a stale or edited form, as it does for any double press.
+    // except where the tip has moved or the gate has closed, which a second
+    // press of this same form also finds: the revise port then joins a press
+    // with the same words still running, and refuses an edited or stale form
+    // before it tests anything, as it does for any double press.
     if (form["raise"] !== undefined) {
       const budgets = budgetsOf(form);
       if (scope === null) {
@@ -2978,7 +2979,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       });
       if (raised.ok && raised.scopeDecisionId !== undefined) {
         spends = raised.scopeDecisionId;
-      } else if (raised.why !== "raiseRefusedNotTip") {
+      } else if (raised.why !== "raiseRefusedNotTip" && raised.why !== "raiseRefusedNotAtGate") {
         return reviseRefused(c, 409, "reviseRefusedNotItsScope", request, null, raised.note);
       }
       // The one press the person made carries its second write, the change.

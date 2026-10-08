@@ -451,6 +451,11 @@ test("a gate whose review rounds are spent raises them on the change press itsel
   expect(form).toContain('<input type="hidden" name="scope_decision" value="sd-1"/>');
   expect(form).toContain('name="review_rounds" min="2" step="1" value="2"');
   expect(form).toContain('<input type="hidden" name="laps" value="5"/>');
+  // The budgets it does not raise go as stored: 7.5 and the expiry to the second.
+  expect(form).toContain('<input type="hidden" name="cost_usd" value="7.5"/>');
+  expect(form).toContain(
+    `<input type="hidden" name="expires_at_ms" value="${new Date(4_000_000_000_000).toISOString().slice(0, 19)}"/>`,
+  );
   // The lap a change starts is the line's second, as the story counts it.
   expect(form).toContain(EN.reviseNote(2));
 

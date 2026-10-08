@@ -1857,13 +1857,20 @@ function reviseForm(
             <p class="note text-meta leading-5 text-foreground">
               {wording.reviseRaises(rounds.budget)}
             </p>
-            {/* The approval's other budgets carried as drawn, as the
-                answering box's raise carries them (D-0140 rule 3). */}
+            {/* The approval's other budgets carried as stored, not as a
+                person reads them: rounded to cents or minutes, the raise
+                would change budgets the person was told stay as they are. */}
             <input type="hidden" name="raise" value={framing.scopeDecisionId} />
             <input type="hidden" name="laps" value={String(raising.laps)} />
-            <input type="hidden" name="cost_usd" value={money(raising.cost_usd)} />
-            <input type="hidden" name="cost_reserve_usd" value={money(raising.cost_reserve_usd)} />
-            <input type="hidden" name="expires_at_ms" value={localTime(raising.expires_at_ms)} />
+            <input type="hidden" name="cost_usd" value={String(raising.cost_usd)} />
+            <input type="hidden" name="cost_reserve_usd" value={String(raising.cost_reserve_usd)} />
+            {/* ponytail: the form's expiry reads to the second, so a stored
+                millisecond part is dropped (under a second earlier). */}
+            <input
+              type="hidden"
+              name="expires_at_ms"
+              value={new Date(raising.expires_at_ms).toISOString().slice(0, 19)}
+            />
             {/* Rounds are counted along the line, so one more than were taken
                 is what lets the next lap through (D-0065 4.3). */}
             <label class="flex items-center gap-2 text-meta leading-5 text-muted-foreground">

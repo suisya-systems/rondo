@@ -973,17 +973,18 @@ test("(revise) a press drawn over spent review rounds raises them first, then sp
   no.stop.abort();
   expect(await no.closed).toBe(0);
 
-  // A tip already moved -- this form's own first press, perhaps -- is the
-  // revise port's to tell: it is handed the change against the drawn approval.
-  revised.length = 0;
-  const moved = await served(
-    createApp(ports({ ok: false, note: "moved", why: "raiseRefusedNotTip" }), TOKEN),
-  );
-  const again = await send(moved.base, "/revise", "POST", pressHeaders(moved.base), form);
-  expect(again.status).toBe(303);
-  expect(revised.map((input) => input.scopeDecisionId)).toEqual(["decision-1"]);
-  moved.stop.abort();
-  expect(await moved.closed).toBe(0);
+  // A tip already moved or a gate already closed -- this form's own first
+  // press, perhaps -- is the revise port's to tell: it is handed the change
+  // against the drawn approval.
+  for (const why of ["raiseRefusedNotTip", "raiseRefusedNotAtGate"] as const) {
+    revised.length = 0;
+    const moved = await served(createApp(ports({ ok: false, note: "moved", why }), TOKEN));
+    const again = await send(moved.base, "/revise", "POST", pressHeaders(moved.base), form);
+    expect(again.status, why).toBe(303);
+    expect(revised.map((input) => input.scopeDecisionId)).toEqual(["decision-1"]);
+    moved.stop.abort();
+    expect(await moved.closed).toBe(0);
+  }
 });
 
 test("(fix-conflict) a person's press starts the fix once; a script, a stale form or no port starts nothing", async () => {

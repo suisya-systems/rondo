@@ -28342,12 +28342,12 @@ send the change request in one step.
    ungraded reading stops at any budget, so it is not this case and draws what it drew before.
 2. **The revise form then carries the raise.** It says how many rounds were approved and that the
    press raises them first; the rounds field is prefilled with one more than were taken, and the
-   approval's other four budgets travel as drawn, as the answering box's raise carries them
-   (`D-0140` rule 3).
+   approval's other four budgets travel as stored (amounts unrounded, the expiry to the second), as
+   the answering box's raise carries them (`D-0140` rule 3).
 3. **One press, two writes, in order.** `/revise` records a budgets-only successor of the drawn
    approval through the raise port (`D-0074` rule 4.3's writes and refusals), then asks for the
    change under the approval that write returned. A refused raise asks nothing; a change with no
-   words raises nothing. **A raise refused because the tip moved is handed on** to the revise port
+   words raises nothing. **A raise refused because the tip moved or the gate closed is handed on** to the revise port
    with the drawn approval: a second press of the same form with the same words joins the first, as
    any double press does, and an edited or stale form is refused there.
 4. **`laps`, `cost` and `expiry` keep `D-0074` rule 4.1's raise screen.** Laps could be prefilled
