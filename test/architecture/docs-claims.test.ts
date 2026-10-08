@@ -245,7 +245,11 @@ describe("DECISIONS.md's index matches its entries", () => {
 
   const entries = [...DECISIONS.matchAll(/^## (D-\d{4}) — (.*)$/gm)].map((match) => {
     const body = DECISIONS.slice(match.index).split(/^## (?=D-\d{4})/m)[1] ?? "";
-    const line = status(/^\*\*Status:\*\*\s*(.*)$/m.exec(body)?.[1] ?? "<no Status line>");
+    // An entry's own Status line never says `amended`; only its Amends lines do.
+    const line = status(/^\*\*Status:\*\*\s*(.*)$/m.exec(body)?.[1] ?? "<no Status line>").replace(
+      ", amended",
+      "",
+    );
     const live = line === "accepted" && amended.has(match[1] ?? "") ? "accepted, amended" : line;
     return `${match[1]} | ${match[2]} | ${live}`;
   });
@@ -268,8 +272,12 @@ describe("DECISIONS.md's index matches its entries", () => {
     const unnamed = annotations
       // The quote marks come off first: "**not" ends a line and "> additive**"
       // starts the next often enough that the raw lines would hide 21 of them.
+      // Emphasis and code marks come off too, so `**not** additive` and
+      // `not-additive` are read as the same words.
       .filter((note) =>
-        /not\s+additive/i.test(note.text.map((line) => line.replace(QUOTE, "")).join(" ")),
+        /\bno[nt][\s-]+additive/i.test(
+          note.text.map((line) => line.replace(QUOTE, "").replace(/[*_`]/g, "")).join(" "),
+        ),
       )
       .filter((note) => !note.text.some((line) => AMENDS.test(line)))
       .map((note) => `${note.entry}, the annotation at line ${note.line}`);
@@ -277,6 +285,25 @@ describe("DECISIONS.md's index matches its entries", () => {
       unnamed,
       "An annotation that says it is not additive changes what its entry asserted, so it ends " +
         "with a list of 'Amends: D-NNNN <rule>' lines, one per part it changes (AGENTS.md section 3, D-0169).",
+    ).toEqual([]);
+  });
+
+  it("ends an annotation with its Amends lines", () => {
+    const trailing = annotations
+      .filter((note) => {
+        const first = note.text.findIndex((line) => AMENDS.test(line));
+        return (
+          first !== -1 &&
+          note.text
+            .slice(first)
+            .some((line) => !AMENDS.test(line) && line.replace(QUOTE, "") !== "")
+        );
+      })
+      .map((note) => `${note.entry}, the annotation at line ${note.line}`);
+    expect(
+      trailing,
+      "An annotation's Amends lines are its last lines, so everything it changes is said above them " +
+        "and named by them; prose after them would change a part no line names (D-0169).",
     ).toEqual([]);
   });
 

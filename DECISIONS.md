@@ -71,13 +71,13 @@ C-NN`, so the spaces can never be read as one.
 | D-0025 | The lap-1 operating surface is a command line: `start`, `answer`, `publish`, `abandon`, with the plan file as the whole of configuration | accepted, amended |
 | D-0026 | The pull request `publish` opens is written for a person: the lap's own commit subjects are the summary, and the request is quoted input | accepted, amended |
 | D-0023 | The identifier allocator and the capacity ledger: rondo mints the triple, `awaiting_human` stops occupying capacity, and the single-flight index becomes a counted bound | accepted |
-| D-0027 | "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt | accepted |
+| D-0027 | "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt | accepted, amended |
 | D-0028 | The plan payload carries its own version: an ordered read-side upgrade ladder, strict again at the version that introduced each field, and separate from the schema's migration on purpose | accepted |
 | D-0022 | The advisory component: a pure function in its own layer, three authorities, one ledger per fact — and the widening a lap-1 retry actually takes, which is a fresh plan and not a successor contract | superseded by D-0063 |
 | D-0029 | An independent reading of what a lap produced: material for the person at the gate, one refusal at `publish`, and a verdict that cannot certify what it never read | accepted |
 | D-0030 | The lineage `D-0027` deferred: one nullable column on the iteration row, written once at reservation, refused when it names nothing, and read where provenance is shown | accepted |
 | D-0031 | The last field `revise` could not see before it spends the gate: rondo reads one run, and only an answer counts | accepted |
-| D-0032 | The record the operator's surface has to be able to show: alternatives inside one immutable proposal, a basis that is a locator, a durable last-look mark, and one table counting what was put to the operator and what was not | accepted |
+| D-0032 | The record the operator's surface has to be able to show: alternatives inside one immutable proposal, a basis that is a locator, a durable last-look mark, and one table counting what was put to the operator and what was not | accepted, amended |
 | D-0033 | Nothing new owns the work between laps: three existing owners, a snapshot that widens instead of a component that decides, and one gap named rather than filled | accepted |
 | D-0034 | An explanation carries claims and no recommendation: how `D-0032` rule 1 and rule 5 are read together | accepted |
 | D-0035 | What actually releases the conductor's slot: the exit status continuo's contract defines, and an abnormal end that keeps it | accepted |
@@ -3368,6 +3368,12 @@ type-checked against.
 
 **Status:** accepted (2026-09-06, rondo's human gate)
 
+> **Annotation (2026-10-08, from D-0169).** Not additive, and written only to carry the lines below
+> for notes written in an older form, which the index does not read: the note from `D-0031` under
+> rule 8 says "Six verbs now". Those notes say what changed. Nothing above is edited.
+>
+> - Amends: D-0025 rule 8
+
 Everything rondo needed to walk one request existed and nothing could reach it. `D-0019` built the
 conductor; `D-0021` moved the pin so a lap completes; the lap-1 dogfood
 ([`docs/operations/lap-1-dogfood.md`](docs/operations/lap-1-dogfood.md)) walked one end to end — by
@@ -3639,6 +3645,15 @@ one commit), through `inspectLapWork` and `pullRequestText` as `publish` calls t
 ## D-0027 — "Revise" at the gate becomes a second lap: fresh identifiers, the predecessor's branch as the base, and the instruction carried into the prompt
 
 **Status:** accepted (2026-09-06, rondo's human gate)
+
+> **Annotation (2026-10-08, from D-0169).** Not additive, and written only to carry the lines below
+> for notes written in an older form, which the index does not read: the note from `D-0028` under
+> rule 5 says the field is "No longer the one key that may be absent", and the note from `D-0030`
+> under rule 9 says "this rule's first sentence no longer describes the tree". Those notes say what
+> changed. Nothing above is edited.
+>
+> - Amends: D-0027 rule 5
+> - Amends: D-0027 rule 9
 
 `gate_options` has read `["approve", "revise"]` since the first dogfood run and the second word
 bought nothing. `D-0025` gave the operator `answer`, and `answer` carries a body byte for byte to
@@ -5371,6 +5386,13 @@ On **2026-09-11**, against the pinned continuo built from a clean clone at
 ## D-0032 — The record the operator's surface has to be able to show: alternatives inside one immutable proposal, a basis that is a locator, a durable last-look mark, and one table counting what was put to the operator and what was not
 
 **Status:** accepted (2026-09-11, rondo's human gate). Refs rondo#39, rondo#40, rondo#41.
+
+> **Annotation (2026-10-08, from D-0169).** Not additive, and written only to carry the lines below
+> for notes written in an older form, which the index does not read: the note from `D-0036` under
+> the paper screen says its row *"Waiting on you / on CI / still running"* "over-describes what that
+> source distinguishes". Those notes say what changed. Nothing above is edited.
+>
+> - Amends: D-0032 the paper screen's row "Waiting on you / on CI / still running"
 
 > **Annotation (2026-09-13, from D-0064).** Added after this entry was accepted, and additive. Rules
 > 1, 2 and 10 are kept, and `D-0064` relies on them (section 4 on rule 1, O8 on rule 10). **Rule 4 is
@@ -21659,7 +21681,7 @@ rondo#310, rondo#367, rondo#375, rondo#376, rondo#380.
 > narrows `D-0091` rule 1's "nothing in the thread waiting on the person". Those entries say what
 > changed. Nothing above is edited.
 >
-> - Amends: D-0091 rule 1's "nothing in the thread waiting on the person"
+> - Amends: D-0091 rule 1.2.3
 
 **Why an entry is needed.** In lap 11 rondo opened #372, read its checks and reported green; the
 owner then went to GitHub to merge it (`docs/operations/lap-11-dogfood.md`, N-54: green at 22:26:48,
@@ -23999,11 +24021,12 @@ which would have to be threaded through four layers to save at most a quarter se
 **Status:** accepted (2026-09-23, rondo#432). Point 1 was taken by the owner, as options A and Y. Refs `D-0015`, `D-0068`,
 `D-0076`, `D-0079`, `D-0108`, `D-0109`, rondo#311, rondo#378, rondo#432.
 
-> **Annotation (2026-10-08, from D-0169).** Not additive, and written only to carry the
-> lines below, which the entries that changed this one left out: `D-0149`'s Status line amends
-> `D-0110` rule 2 (*carry on* releases the line and the person starts again). Those entries say what
-> changed. Nothing above is edited.
+> **Annotation (2026-10-08, from D-0169).** Not additive, and written only to carry the lines below,
+> which the entries that changed this one left out: `D-0149`'s Status line amends `D-0110` rule 2
+> (*carry on* releases the line and the person starts again). `D-0143`'s heading says `D-0110` rule
+> 1's option Z is narrowed. Those entries say what changed. Nothing above is edited.
 >
+> - Amends: D-0110 rule 1
 > - Amends: D-0110 rule 2
 
 **Numbering.** `D-0110` is taken by this lane; a parallel lane may renumber at merge.
@@ -28910,8 +28933,10 @@ annotations, 151 marked additive, 51 marked not additive in 30 entries, and 30 m
 28 of the 51 named no rule of the entry they changed. 13 of the 30 unmarked ones withdraw, narrow or
 replace a clause ("Superseded in part", "Narrowed", "Amended by", "No longer holds") without saying
 so. And 19 entries were changed by a later entry whose `Status` line or table
-says so (*amends*, *narrows*, *partly supersedes*, a row marked not additive) with no annotation in
-the entry changed, or with one that names fewer parts. Nothing machine-readable said which accepted
+or heading says so (*amends*, *narrows*, *partly supersedes*, a row marked not additive) with no
+annotation in the entry changed, or with one that names fewer parts. 11 more dated notes are in two
+older forms (`**Note (D-NNNN, date).**` and `**Annotated <date> by D-NNNN.**`), and 4 of them change a
+clause. Nothing machine-readable said which accepted
 entries are still read as written, so the rules in force could not be read in one place.
 
 ### Decision
@@ -28929,9 +28954,10 @@ entries are still read as written, so the rules in force could not be read in on
    `superseded by D-NNNN` entry is read in its replacement. At this entry, with `D-0167` and
    `D-0168`: 108 accepted, 48 accepted and amended, 8 superseded.
 4. **`test/architecture/docs-claims.test.ts` holds rules 2 and 3**: an annotation whose words say
-   it is not additive and carries no `Amends:` line fails; a quoted line naming `Amends:` that is not
-   a well-formed line inside an annotation of the entry it names fails; and an index row whose
-   status does not end in `, amended` exactly when its accepted entry has such a line fails.
+   it is not additive and carries no `Amends:` line fails; one with prose after its first `Amends:`
+   line fails; a quoted line naming `Amends:` that is not a well-formed line inside an annotation of
+   the entry it names fails; and an index row whose status does not end in `, amended` exactly when
+   its accepted entry has such a line fails.
 5. **The existing annotations gain their lines now**, appended under each and editing none of their
    words: the 51 marked not additive and the 13 unmarked ones that change a clause. Where the
    annotation named no rule, the part is read from the entry's body; where the entry that made the
@@ -28941,7 +28967,9 @@ entries are still read as written, so the rules in force could not be read in on
    of the 16 entries changed: `D-0065`, `D-0071`, `D-0072`, `D-0077`, `D-0091`, `D-0097`, `D-0098`,
    `D-0105`, `D-0106`, `D-0110`, `D-0121`, `D-0125`, `D-0130`, `D-0140`, `D-0141` and `D-0143`. Each
    quotes the other entry's own words for what it changed, says nothing of its own about the change,
-   and carries the lines. A later entry that changes an earlier one writes this annotation itself.
+   and carries the lines. `D-0025`, `D-0027` and `D-0032` get one too, for the four older-form notes
+   that change a clause; the index reads only `**Annotation (`. A later entry that changes an
+   earlier one writes the annotation itself.
 
 ### Options not taken
 

@@ -259,8 +259,8 @@ read as written, an `accepted, amended` one with its `Amends:` lines, and a
 `superseded by D-NNNN` one in its replacement.
 `test/architecture/docs-claims.test.ts` fails when an entry has no row, when a
 row's title or status differs from its entry, when an annotation marked not
-additive has no `Amends:` line, or when an `Amends:` line sits outside an
-annotation of the entry it names.
+additive has no `Amends:` line or has prose after it, or when an `Amends:` line
+sits outside an annotation of the entry it names.
 
 ## 4. Verification
 
