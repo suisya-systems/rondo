@@ -97,6 +97,8 @@ export interface PageWords extends DayWords {
   readonly weekNoAllowance: string;
   /** A request's state, in one sentence, on its row in the list (rule 5). */
   readonly rowWaitingOnYou: string;
+  /** A row whose only wait is the goal flow's stop asked in its thread (rondo#611). */
+  readonly rowFlowStopped: string;
   readonly rowRunning: string;
   readonly rowFinished: string;
   readonly rowStopped: string;
@@ -671,6 +673,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   weekSpent: (spent, approved, left) => `${spent} of ${approved}, ${left} left`,
   weekNoAllowance: "No allowance approved yet",
   rowWaitingOnYou: "Waiting on your answer",
+  rowFlowStopped: "rondo stopped working toward the goal and asks you here",
   rowRunning: "Working on it",
   rowFinished: "Finished",
   rowStopped: "Stopped",
@@ -1311,6 +1314,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   weekSpent: (spent, approved, left) => `${spent} ／ ${approved}　残り ${left}`,
   weekNoAllowance: "まだ枠が決まっていません",
   rowWaitingOnYou: "あなたの返事を待っています",
+  rowFlowStopped: "rondo は目標に向けた依頼を止め、ここであなたに尋ねています",
   rowRunning: "作業中です",
   rowFinished: "終わりました",
   rowStopped: "取りやめました",

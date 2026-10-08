@@ -56,6 +56,11 @@ export interface RequestRow {
    * or null for a request run as one line.
    */
   readonly parts?: PartCounts | null;
+  /**
+   * Where what waits is only the goal flow's stop, asked in this request's
+   * thread (rondo#611, D-0188): the row says the flow waits, not the request.
+   */
+  readonly flowStop?: boolean;
   /** When the request last moved, which is what the day cut reads. */
   readonly atMs: number;
 }
