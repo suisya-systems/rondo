@@ -73,7 +73,7 @@ test("the running mark turns, and holds still where motion is reduced", () => {
   );
 });
 
-test("a row that needs nobody is one line, and its sentence stays for a reader (rondo#592)", () => {
+test("a row that needs nobody is one line, its sentence stays for a reader, and hover reads it whole (rondo#592)", () => {
   const css = readFileSync(new URL("../../../page/list.css", import.meta.url), "utf8");
   const rule = (selector: string): string =>
     new RegExp(`${selector.replace(/[.()]/g, "\\$&")} \\{([^}]*)\\}`).exec(css)?.[1] ?? "";
@@ -87,8 +87,8 @@ test("a row that needs nobody is one line, and its sentence stays for a reader (
     RequestsFace({
       wording: EN,
       list: {
-        yourTurn: [],
-        days: [{ cut: "today", rows: [row("finished")] }],
+        yourTurn: [row("waitingOnYou")],
+        days: [{ cut: "today", rows: [row("finished", { repository: "org/repo" })] }],
         lastLookedAbove: null,
       },
       hrefOf: (id) => `/?thread=${id}`,
@@ -99,5 +99,9 @@ test("a row that needs nobody is one line, and its sentence stays for a reader (
       openId: null,
     }),
   );
-  expect(html).toMatch(/<p>[^<]+<\/p>/);
+  const [mine, cut] = html.match(/<a class="list-row[^>]*>/g) ?? [];
+  expect(mine).not.toContain("title=");
+  // Two requests with one title are told apart on hover by repository and state.
+  expect(cut).toContain(`title="finished\norg/repo\n${EN.rowFinished}"`);
+  expect(html).toContain(`<span class="list-repo">org/repo</span>${EN.rowFinished}</p>`);
 });

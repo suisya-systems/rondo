@@ -29474,13 +29474,16 @@ sighted reader finds it.
    in the markup, clipped the way a screen reader still reads, because the mark is `aria-hidden`.
 2. **A row under *your turn* keeps both lines**, untruncated, as `D-0082` rule 2 and `D-0083` rule 2
    say. It is the one row whose sentence the person came for.
-3. It is CSS alone, in `page/list.css` (`D-0168`); the row's markup is unchanged.
+3. **A cut row reads whole on hover**: its link's `title` is the title, the repository and the
+   sentence, one to a line, because two requests with one title were told apart only by what the
+   cut hid. A waiting row carries none; nothing of it is cut.
+4. It lives in `page/list.css` and `src/access/page/list.tsx`, not `web.tsx` (`D-0168`).
 
 ### What it costs
 
-- The repository (`D-0081`) and the state sentence of a row that needs nobody are read on the
-  centre's thread once the row is opened: a person with several repositories tells two finished
-  requests apart by title alone in the list.
+- The repository (`D-0081`) and the state sentence of a row that needs nobody are read by hovering
+  it or on the centre's thread once it is opened, not at a glance: two finished requests with one
+  title look the same in the list until the pointer is on them.
 
 ### What would falsify it
 
