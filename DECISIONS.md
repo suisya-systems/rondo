@@ -213,6 +213,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0169 | A dated annotation may change a clause of an accepted entry when it says it is not additive and ends with an `Amends:` line per part it changes, and the index's status column is the live-rule index | accepted |
 | D-0171 | One module owns the SQLite driver and opens every connection; the schema and the queries live in per-concern store modules handed a structural connection, and the driver is still `node:sqlite` | accepted |
 | D-0173 | The completion definition has an entry of its own: K1 to K4 as they read today, what each one's failure looks like, and where the line has been drawn; a redrawing is a dated annotation on this entry, and an entry that needs the definition cites `D-0173 K<n>` rather than copying it | accepted |
+| D-0174 | Where the prose enumerates something the tree also enumerates, a test compares the two lists, the prose states no count, and the check fails when its sentence is gone; a negative claim and a pinned dependency's own surface stay hand-maintained | accepted |
 
 ---
 
@@ -29229,3 +29230,76 @@ place says what the definition is today.
 - **The operator reading rule 2 and finding it is not what they said.**
 - **A redrawing recorded as an annotation here that replaces the goal rather than moving a clause**:
   that was a supersession.
+
+## D-0174 — Where the prose enumerates something the tree also enumerates, a test compares the two lists, the prose states no count, and the check fails when its sentence is gone; a negative claim and a pinned dependency's own surface stay hand-maintained
+
+**Status:** accepted (2026-10-08, rondo#329). Supersedes nothing. Refs `D-0006`, `D-0018`, `D-0169`,
+rondo#324.
+
+### Context
+
+rondo#324 walked `DECISIONS.md` and the prose against the code. `DECISIONS.md`, 83 entries, had drifted
+in one place; `AGENTS.md` and `docs/` in seven. The difference was not care: the code had
+`test/architecture/import-boundaries.test.ts` behind it and the prose had nothing.
+`test/architecture/docs-claims.test.ts` (rondo#327) answered with a convention, practised in that file
+and described in `AGENTS.md` section 5, but never taken as a decision. `AGENTS.md` section 7 says a
+convention is named on an issue rather than settled inside an implementation diff; rondo#329 is that
+issue, and asks whether the test and the bullet are enough.
+
+They are not, for two reasons measured at `cabb2ba`. The test holds five lists by name: the commands
+in `docs/operations/rondo-cli.md`, and in `AGENTS.md` the layers under `src/`, the modules that may
+start a process, the continuo verbs rondo drives, with `DECISIONS.md`'s index against its entries. It
+holds those instances, not the rule: a sixth enumerative sentence written tomorrow gets no case unless
+its author knows to add one, and nothing in the tree tells them. And part 2 below, no counts in the
+prose, has no check at all; it held in rondo#327 because the diff deleted the counts by hand.
+
+### Decision
+
+1. **Where the prose enumerates something the tree also enumerates, a test compares the two lists.**
+   The prose is `README.md`, `AGENTS.md` and `docs/`, excluding the dated records of laps already
+   walked (`docs/operations/lap-*`), which are left as written. The tree's side is read from the
+   tree (a directory walk, an exported table, a parsed file), never from a second hand-kept list. A
+   change that adds such a sentence adds its case to `test/architecture/docs-claims.test.ts` in the
+   same diff. Whether a sentence is enumerative is the review's call; this rule is what the review
+   cites.
+2. **The prose states no count of a set it enumerates.** It names the members. A count duplicates
+   the list beside it and the two go out of step (*five layers*, *twelve commands*, both false at
+   rondo#324), and comparing the members is strictly stronger: a count can be right while the
+   members are wrong. A count of a set the prose does not list is outside this rule.
+3. **Each case finds its sentence by an anchor phrase and fails when the phrase is gone.** Otherwise
+   the cheapest way to make a red case green is to delete the claim it guards. A sentence that has
+   truly lost its fact is deleted with its case, and the diff says why.
+4. **Two kinds of claim stay hand-maintained, and that is the rule, not a gap.** A **negative claim**
+   (*there is no MCP surface yet*) has no counterpart in the tree: a set of things that do not exist
+   cannot be compared with one that does. A **fact about a pinned dependency's own surface** (a
+   continuo verb's flags, a cadenza export) lives outside this tree and is held by the pin and that
+   repository's own checks (`D-0018`), not by this file.
+5. **This entry holds the rule; the test holds the instances.** The entry does not list the cases,
+   so adding one never edits it.
+
+### Options not taken
+
+- **The test and the `AGENTS.md` bullet, no entry** (rondo#329's case against). The test enforces
+  the five sentences it knows and not the rule, and rule 2 has no enforcement at all; the next
+  author of an enumerative sentence learns the convention only by reading the test. Rule 5 answers
+  the cost the issue names: the entry restates no case, so there is no second place to keep true.
+- **A mechanical check for counts in the prose** (number words next to a plural noun). Prose
+  legitimately counts things it does not enumerate (*twelve handles and no content* in a design
+  note), so the check is a heuristic with false positives to allowlist. Not taken without a
+  recurrence to justify it.
+- **Checking every sentence that names a backticked path.** That is a review of the documentation,
+  not a comparison of two closed sets, and a test cannot hold it.
+
+### What it costs
+
+- Rule 1 holds by review for a sentence nobody has written a case for yet. The drift it prevents is
+  the kind rondo#324 found, one stale sentence at a time.
+- Rule 2 holds by review alone.
+
+### What would falsify it
+
+- **An enumerative sentence in the prose that drifted from the tree with no case behind it**, found
+  after this entry; if it recurs, rule 1 needs a mechanical trigger rather than the review.
+- **A count restated in the prose next to the list it counts**, going stale; the second occurrence is
+  the recurrence that would justify the counts check declined above.
+- **A case that passes after its sentence is deleted.**
