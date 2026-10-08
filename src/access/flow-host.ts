@@ -43,7 +43,13 @@
  * While the ask is open the flow waits, and the wait is not a failure.
  */
 
-import { type Answered, type Injection, type InjectionState, pickNext } from "../advisory/flow.js";
+import {
+  type Answered,
+  failedTwice,
+  type Injection,
+  type InjectionState,
+  pickNext,
+} from "../advisory/flow.js";
 import { readSplitPayload } from "../advisory/proposal.js";
 import { type Ranked, readTriagePayload } from "../advisory/triage.js";
 import type { HostPolicy } from "../refrain/policy.js";
@@ -61,7 +67,7 @@ import {
   type ThreadMessageDraft,
 } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
-import { type FlowStopFacts, flowStopBody, stopPrefix } from "./flow-stop.js";
+import { type FlowStopFacts, flowStopBody, stopPrefix, withdrawnId } from "./flow-stop.js";
 import { hostFailure } from "./host-failure.js";
 import { MODEL_DRAFTER_PREFIX } from "./model-draft/judgement.js";
 import type { Chrome } from "./wording.js";
@@ -236,6 +242,14 @@ async function flowOne(
   );
   const injections: Injection[] = [];
   let ownOpenAsk = false;
+  // **A `failed_twice` stop asked earlier is weighed again on every pass**
+  // (rondo#549): one asked before that reading was narrowed, or over a lap
+  // that was lost and has since been started again, can stop standing. It
+  // holds the flow only while the two failures it was asked over still read
+  // as failures; otherwise the flow takes it back below. One the person
+  // answered `stop` is theirs, and stays.
+  const failedTwiceStop = `${stopPrefix(scopeDecisionId)}failed_twice-`;
+  const failedTwiceAsks: string[] = [];
   for (const opener of openers) {
     const asks = await ports.record.openAsksIn(opener.messageId);
     if (asks.kind !== "read") {
@@ -248,12 +262,18 @@ async function flowOne(
     // stays the person's turn rather than vanishing, and the flow is free to
     // ask for the goal's next request meanwhile -- exactly what `draft_refused`
     // not being a failure says. Every other ask in an own thread holds it.
-    const holds = asks.asks.filter((ask) => ask.messageId !== draftRefusedNoteId(opener.messageId));
+    const reweighed = asks.asks.filter(
+      (ask) => ask.messageId.startsWith(failedTwiceStop) && !ask.answeredStop,
+    );
+    failedTwiceAsks.push(...reweighed.map((ask) => ask.messageId));
+    const holds = asks.asks.filter(
+      (ask) => ask.messageId !== draftRefusedNoteId(opener.messageId) && !reweighed.includes(ask),
+    );
     // This approval's own stop holds it in whichever request's thread it was
     // asked, an inherited one included.
     ownOpenAsk ||=
       (own && holds.length > 0) ||
-      asks.asks.some((ask) => ask.messageId.startsWith(stopPrefix(scopeDecisionId)));
+      holds.some((ask) => ask.messageId.startsWith(stopPrefix(scopeDecisionId)));
     const state = await injectionState(ports, seen, opener.messageId, asked);
     if (state === "draft_refused") {
       await tellDraftRefused(ports, flow, repository, opener);
@@ -264,8 +284,13 @@ async function flowOne(
       state: own || (state !== "failed" && state !== "abandoned") ? state : "closed",
     });
   }
+  if (!failedTwice(injections)) {
+    for (const askId of failedTwiceAsks) {
+      await withdrawStop(ports, flow, repository, askId);
+    }
+  }
   const stop = async (facts: FlowStopFacts, detail: string): Promise<void> =>
-    await askStop(ports, sayOnce, flow, repository, openers.at(-1) ?? null, facts, detail);
+    await askStop(ports, sayOnce, flow, repository, seen, openers.at(-1) ?? null, facts, detail);
 
   // The scope and the goal first: past either, nothing the picker says matters.
   const newest = seen.goals.filter((one) => one.repository === repository).at(-1);
@@ -428,6 +453,39 @@ async function flowOne(
       `under scope '${scope.scopeId}'`,
   );
   ports.injected?.();
+}
+
+/**
+ * **The flow takes back a `failed_twice` stop that no longer stands**
+ * (rondo#549): a reply in its own voice under its own question, which closes
+ * it (`withdrawnByFlow`), in the operator's language (D-0055). The goal's
+ * screen and the person's list stop showing it, and the flow goes on. One per
+ * stop, so a pass that reads it again writes nothing.
+ */
+async function withdrawStop(
+  ports: FlowHostPorts,
+  flow: Flow,
+  repository: string,
+  askId: string,
+): Promise<void> {
+  const outcome = await ports.record.recordThreadMessage({
+    messageId: withdrawnId(askId),
+    body: ports.words.flowStopWithdrawn,
+    authorKind: "drafter",
+    authorId: FLOW_AUTHOR,
+    inReplyTo: askId,
+    atMs: ports.now(),
+    bases: [
+      { form: "message", messageId: askId },
+      { form: "goal", goalId: flow.goal.goalId },
+    ],
+    asks: false,
+  });
+  if (outcome.kind === "recorded") {
+    ports.log(`flow     ${repository}: the stop '${askId}' no longer stands; it is taken back`);
+  } else if (outcome.kind !== "duplicate") {
+    ports.log(`flow     ${repository}: the stop '${askId}' was not taken back: ${outcome.reason}`);
+  }
 }
 
 /**
@@ -599,6 +657,7 @@ async function askStop(
   sayOnce: (line: string) => void,
   flow: Flow,
   repository: string,
+  seen: Seen,
   latest: ThreadMessageDraft | null,
   facts: FlowStopFacts,
   detail: string,
@@ -629,7 +688,15 @@ async function askStop(
         : `stopped before its first request: ${detail}`,
     );
   }
-  const messageId = `${stopPrefix(flow.scopeDecisionId)}${reason}-${latest.messageId}`;
+  // A stop the flow took back (`withdrawStop`) is closed for good, so the same
+  // stop asked again in the same thread is a new question under a new id.
+  const asked = `${stopPrefix(flow.scopeDecisionId)}${reason}-${latest.messageId}`;
+  const takenBack = (id: string): boolean =>
+    seen.messages.some((one) => one.messageId === withdrawnId(id));
+  let messageId = asked;
+  for (let round = 2; takenBack(messageId); round += 1) {
+    messageId = `${asked}-${String(round)}`;
+  }
   // **The stop's facts are kept beside the ask, under the ask's own id**
   // (rondo#549, the gate's third reading). The body below is one language's
   // wording of them -- the host's -- and the person reading the thread may have

@@ -1265,6 +1265,13 @@ explanation you pressed on and then answers the gate.`,
     "Recommended: starting this part again.",
     "This line stays stopped until this message is answered.",
   ].join("\n"),
+  flowStopWithdrawn: [
+    "This stop no longer stands: the last two requests rondo started are no longer both read " +
+      "as failed. A draft rondo refused, or a lap a restart lost and that was started again, is " +
+      "not a failed request.",
+    "rondo has taken this question back and goes on asking for the goal's requests. Nothing " +
+      "here needs your answer.",
+  ].join("\n"),
   flowDraftRefusedAsk: [
     "rondo could not draft a plan for this request, so none of its work has started. What was " +
       "refused is the draft rondo wrote, and not your request.",

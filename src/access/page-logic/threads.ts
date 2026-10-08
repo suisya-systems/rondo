@@ -12,7 +12,11 @@
  * port while the line stayed held. That agreement is what {@link threadsOf}
  * computes, off the same rows `openAsksIn` queries.
  */
-import type { AnswerOutcome, ThreadMessageDraft } from "../../store/records.js";
+import {
+  type AnswerOutcome,
+  type ThreadMessageDraft,
+  withdrawnByFlow,
+} from "../../store/records.js";
 import { issueName, type NamedIssue, parseForgeRead } from "../issue-read.js";
 
 /**
@@ -62,7 +66,8 @@ export function threadsOf(
   const byId = new Map(messages.map((message) => [message.messageId, message]));
   // Only an operator's `carry_on` closes a question (D-0072 rule 3). The
   // `author_kind` is rule 4.4's "the person's reply" read literally: a drafter
-  // message threaded under a stop does not release it.
+  // message threaded under a stop does not release it -- except the flow's
+  // own reply under its own question (`withdrawnByFlow`, rondo#549).
   const answered = (outcome: AnswerOutcome): ReadonlySet<string> =>
     new Set(
       messages.flatMap((message) =>
@@ -73,7 +78,13 @@ export function threadsOf(
           : [],
       ),
     );
-  const carriedOn = answered("carry_on");
+  const carriedOn = new Set([
+    ...answered("carry_on"),
+    ...messages.flatMap((message) => {
+      const ask = message.inReplyTo === null ? undefined : byId.get(message.inReplyTo);
+      return ask !== undefined && withdrawnByFlow(ask, message) ? [ask.messageId] : [];
+    }),
+  ]);
   const stoppedBy = answered("stop");
   // ponytail: a walk per message per render, which is O(messages x depth); a
   // thread is a conversation's worth of rows. A `root` column is the upgrade.

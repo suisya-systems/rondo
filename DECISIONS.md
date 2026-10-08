@@ -25607,6 +25607,28 @@ the newest goal: an edit would widen an approval nobody re-read.
 > is this issue's own complaint arriving as a wait instead of a stop. Still not taken here: drafting
 > the request again by itself, which is rondo#554's. Nothing above is edited.
 
+> **Annotation (2026-10-08, from rondo#549's close).** Added after the two annotations above, and
+> **additive to them**, plus one narrow exception to `D-0072` rule 3. Those annotations changed what
+> a `failed_twice` stop counts and how it is worded, but not a stop that was already asked: the
+> lap-19 store's stop (the one this issue reports) was still open after the narrowing. It held the
+> flow (`open_ask`), stayed under *your turn*, and recommended stopping the goal over failures that
+> had not happened. **The flow takes back a `failed_twice` stop that no longer stands.** On every
+> pass, an open `failed_twice` stop of the approval that the person has not answered `stop` holds
+> the flow only while `failedTwice` (the picker's own test, now exported) still reads true. When it
+> reads false, the flow replies under the stop in its own voice, in the operator's language
+> (`Chrome.flowStopWithdrawn`, id `withdrawnId`), and goes on. **The exception to `D-0072` rule 3:**
+> a `FLOW_AUTHOR` reply under a `FLOW_AUTHOR` question closes it, as a person's `carry_on` does
+> (`withdrawnByFlow`, read by `openAsksIn` and `threadsOf` alike). This does not reach what
+> `D-0066` rule 4.4 keeps for the person: the flow's question holds only the flow and no act of the
+> request (`holdsNothing`), so no message rondo writes can release a hold on the request's work. A
+> stop the person answered `stop` is theirs and is never taken back. A taken-back stop that later
+> stands again is asked under a new id (`<id>-2`, …), because a closed question is not reopened.
+> The goal's screen reads a taken-back stop as no stop (`flowStopOf`). Options not taken: writing
+> an `operator` `carry_on` in rondo's name (that is rule 4.4's breach), and only leaving the stop
+> out of `ownOpenAsk` (the person would still be asked a question nobody is waiting on). Known
+> limit: only `failed_twice` is weighed again; the other stops are about budgets, time and the
+> ranking, which the person changes by answering. Nothing above is edited.
+
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 
 **Status:** accepted (2026-09-27, rondo#452). The issue records `D-0098`'s gate (2026-09-22, point

@@ -177,6 +177,16 @@ const FAILED: readonly InjectionState[] = ["failed", "abandoned"];
  */
 const PENDING: readonly InjectionState[] = ["drafting", "waiting_to_start", "lost"];
 
+/**
+ * Whether the last two injections whose work ended both ended failed or
+ * abandoned: the `failed_twice` stop, read on its own so the flow host can tell
+ * a stop it asked earlier that no longer stands (rondo#549).
+ */
+export function failedTwice(injections: readonly Injection[]): boolean {
+  const last = injections.filter((one) => ENDED.includes(one.state)).slice(-FAILURES_TO_STOP);
+  return last.length === FAILURES_TO_STOP && last.every((one) => FAILED.includes(one.state));
+}
+
 /** The request id an injection is sent under: the same pick always names the same message. */
 export function flowMessageId(scopeDecisionId: string, candidateKey: string): string {
   return `flow-${scopeDecisionId}-${candidateKey}`;
@@ -208,9 +218,7 @@ export function pickNext(input: FlowInput): FlowPick {
   if (input.triage.unavailable !== null) {
     return wait("triage_unavailable");
   }
-  const ended = input.injections.filter((one) => ENDED.includes(one.state));
-  const last = ended.slice(-FAILURES_TO_STOP);
-  if (last.length === FAILURES_TO_STOP && last.every((one) => FAILED.includes(one.state))) {
+  if (failedTwice(input.injections)) {
     return wait("failed_twice");
   }
   if (input.injections.some((one) => PENDING.includes(one.state))) {
