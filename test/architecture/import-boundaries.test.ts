@@ -437,6 +437,11 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   "src/access/web.tsx": {
     "hono/html": ["raw"],
   },
+  // The same grant, for the same seam: the document places the faces a view
+  // composed as markup (rondo#341 moved it out of `operatorPage`).
+  "src/access/page/document.tsx": {
+    "hono/html": ["raw"],
+  },
   // **The renderer names no external at all now.** `hono/utils/accept` moved
   // with the language resolution it was imported for, to the module below:
   // the page's rebuild lifted that resolution out of the view layer, and the
@@ -1336,6 +1341,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/model-review/host.ts": ["Reviewer"],
   "src/access/model-review/judgement.ts": ["Reviewer"],
   "src/access/page/contract.ts": [HUMAN],
+  "src/access/page/document.tsx": [HUMAN],
   // rondo#470: publish inside a scope, through the press's own path.
   "src/access/publish-host.ts": ["Publishing"],
   "src/access/page/empty-side.tsx": [HUMAN],
@@ -1353,6 +1359,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page-logic/language.ts": [HUMAN],
   "src/access/page-logic/laps.ts": [HUMAN],
   "src/access/page-logic/list.ts": [HUMAN],
+  "src/access/page-logic/model.ts": [HUMAN],
   "src/access/page-logic/parts.ts": [HUMAN],
   "src/access/page-logic/result.ts": [HUMAN],
   "src/access/page-logic/routes.ts": [HUMAN],
@@ -1390,6 +1397,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/screens/release.tsx": [HUMAN],
   "src/access/screens/scope.tsx": [HUMAN],
   "src/access/screens/tier.tsx": [HUMAN],
+  "src/access/screens/week.ts": [HUMAN],
   "src/access/screens/goal-scope.tsx": [HUMAN],
   "src/access/web-app.ts": [HUMAN],
   "src/access/web.tsx": [HUMAN],
