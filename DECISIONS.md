@@ -212,6 +212,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0170 | `rondo web`'s composition root leaves `main` for `host.ts`, and the page's presses leave `cli.ts` for three modules of their own; what the commands share with them stays in `cli.ts` | accepted |
 | D-0169 | A dated annotation may change a clause of an accepted entry when it says it is not additive and ends with an `Amends:` line per part it changes, and the index's status column is the live-rule index | accepted |
 | D-0171 | One module owns the SQLite driver and opens every connection; the schema and the queries live in per-concern store modules handed a structural connection, and the driver is still `node:sqlite` | accepted |
+| D-0173 | The completion definition has an entry of its own: K1 to K4 as they read today, what each one's failure looks like, and where the line has been drawn; a redrawing is a dated annotation on this entry, and an entry that needs the definition cites `D-0173 K<n>` rather than copying it | accepted |
 
 ---
 
@@ -17882,6 +17883,11 @@ screen has to be asked about. Below, its clauses are named **K1** (request to pu
 >
 > - Amends: D-0075 K3
 
+> **Annotation (2026-10-08, from D-0173).** Added after this entry was accepted, and additive. The
+> completion definition now has an entry of its own, `D-0173`, which holds the words above, K3 as
+> the annotation from `D-0080` reads it, and every later redrawing. Read K1 to K4 there. Nothing
+> above is edited.
+
 rondo#265 is the one open gap that plainly fails K3. Under `D-0071` point 1(a) a fresh store gets its
 first template **only** from a plan the person pastes into a request thread. A plan carries this host's
 absolute paths, so it cannot be written by hand, and the only thing that writes one is
@@ -18257,6 +18263,11 @@ beside the page. `D-0075`'s completion definition (K3: they never open a termina
 screen has to be asked about) removes those other surfaces from the operator's walk, so on the page
 the clause keeps every identifier and status name on screen for a match nobody makes. This entry is
 the reader `D-0055` rule 2 assumed, replaced.
+
+> **Annotation (2026-10-08, from D-0173).** Added after this entry was accepted, and additive. K3 and
+> K4 as quoted in the paragraph above are the 2026-09-19 wording. The definition is held by
+> `D-0173`, where K3 reads *nothing the person has to remember*; the paragraph's point, that the
+> person keeps no terminal open beside the page, holds under either. Nothing above is edited.
 
 ### What was measured, and how
 
@@ -18867,6 +18878,10 @@ person whose work is already written down in an issue must either restate it or 
 request, and a request that says only "fix #237" reaches a worker that cannot read #237. The first
 fails rule 1.3.1; the second is the thinner request N-43 warns about, and it fails silently.
 
+> **Annotation (2026-10-08, from D-0173).** Added after this entry was accepted, and additive. The
+> definition quoted above is the 2026-09-19 wording; it is held by `D-0173`, which says how each
+> clause reads today. Nothing above is edited.
+
 ### What was measured, and how
 
 At rondo `207c8be` on **2026-09-20**, by reading, and at continuo as noted. Line numbers drift;
@@ -19426,6 +19441,11 @@ on `D-0075`, and at the same time said that restating K1 to K4 as an entry of th
 (c) -- is its own task, because the definition was redrawn by hand today and three entries quote its
 words. That is rondo#298, and nothing here waits on it.
 
+> **Annotation (2026-10-08, from D-0173).** Added after this entry was accepted, and additive. rondo#298
+> is answered by `D-0173`, which holds the completion definition, records this entry's redrawing of
+> K3 as the reading in force, and is where a later redrawing is written. The residual row for
+> rondo#298 below is answered there. Nothing above is edited.
+
 **Numbering.** `D-0080` is the next number after `D-0079` on `main` at `f9676de`.
 
 **Why an entry is needed.** `D-0075` names it as a residual: *starting the resident host without a
@@ -19803,6 +19823,10 @@ time they move. The completion definition's clauses are `D-0075`'s **K1** (reque
 **K2** (only approvals and disputes in between), **K3** (no terminal, read since `D-0080` as *nothing
 the person has to remember*) and **K4** (no word to ask about). Under rule 1.1, K1 to K3 hold inside
 one repository and fail at the boundary of it.
+
+> **Annotation (2026-10-08, from D-0173).** Added after this entry was accepted, and additive. The
+> clauses named above, and this entry's rule 1.1 judging K1 to K3 across a person's day, are held by
+> `D-0173`. Nothing above is edited.
 
 **`D-0080`'s own falsifier is what fires.** It lists *"a second page wanted on another port, or a
 second repository, often enough that the one word is a cage"* as the condition under which
@@ -29082,3 +29106,98 @@ two sentences.
   grows in `rows.ts` and the owner does not change.
 - D-0005's own falsifiers for the driver choice: `node:sqlite` proving inadequate across the Node
   versions rondo supports.
+
+## D-0173 — The completion definition has an entry of its own: K1 to K4 as they read today, what each one's failure looks like, and where the line has been drawn; a redrawing is a dated annotation on this entry, and an entry that needs the definition cites `D-0173 K<n>` rather than copying it
+
+**Status:** accepted (2026-10-08, rondo#298). Supersedes nothing. Refs `D-0075`, `D-0076`, `D-0078`,
+`D-0080`, `D-0081`, `D-0097`, `D-0112`, `D-0169`, rondo#265, rondo#296.
+
+### Context
+
+The completion definition is the operator's: the words they use for when this stack is done. It was
+written down on 2026-09-19 as a paragraph inside `D-0075`, an entry about setup and a fresh store's
+first plan, and has had no entry of its own. On 2026-09-20 the operator redrew K3, and `D-0080`, an
+entry about starting the host, restated it in its own text and annotated `D-0075` (`Amends: D-0075
+K3`). The same day `D-0081` rule 1.1 said K1 to K3 are judged across a person's day, not inside one
+repository. So at `068fa28` the words are in `D-0075`, the current reading of K3 in `D-0080`, a
+further reading in `D-0081`, and copies of the 2026-09-19 wording in `D-0076` and `D-0078`; no single
+place says what the definition is today.
+
+`D-0080` point 6 (c) names `D-0075`, `D-0076` and `D-0079` as the entries quoting it. At `068fa28`
+`D-0079` names none of K1 to K4; the second copy is in `D-0078`.
+
+### Decision
+
+1. **This entry holds the completion definition.** It is the operator's, and rondo records it rather
+   than deciding it: nothing here changes what the operator said. The words as written on
+   2026-09-19:
+
+   > the person writes the request and rondo goes as far as opening the pull request; in between they
+   > only approve and answer disputes; they never open a terminal. It is unmet if a terminal is ever
+   > required, or if a word on screen has to be asked about.
+
+2. **The clauses, as they read today, and what each one's failure looks like.** K1 to K3 are judged
+   across a person's day, not inside one repository (`D-0081` rule 1.1).
+
+   | Clause | Reads | Fails when | Seen in the record |
+   |---|---|---|---|
+   | **K1** | The person writes the request, and rondo goes as far as opening the pull request | The walk stops before a pull request is open, or something other than rondo has to carry it the rest of the way | A request in a second repository needed a second host (`D-0081`, before which K1 to K3 failed at a repository's boundary) |
+   | **K2** | Between the request and the pull request, the person only approves and answers disputes | Anything else is asked of them on the way: a plan to paste, a value to supply, a refusal that leaves them nothing to approve or dispute | A new kind of work in an installed repository has the drafter ask for a pasted plan (`D-0075` point 3) |
+   | **K3** | Nothing the person has to remember: starting rondo by one word in a terminal is inside the line; an argument, a path, a directory to be in, a file to source or a variable to set after that word is not, and no step after the start sends them to a terminal | A start needs more than the one word, or a step of the walk is done in a terminal | A fresh store's first plan pasted from a script's output (rondo#265, `D-0075`); `rondo release` as the only release the person knew of (`D-0113`); a host fact that moved still needs setup in a terminal (`D-0080`'s residual) |
+   | **K4** | No word on screen has to be asked about | The person asks what something on the page means, or meets a word that is rondo's rather than theirs | Lap 14's gate in rondo's identifiers on a Japanese page (`D-0112`); lap 12's sentence the owner asked about (`docs/operations/lap-12-dogfood.md`); `--repo OWNER/NAME` as a thing to remember (`D-0080`) |
+
+3. **Where the line has been drawn.**
+   - **2026-09-19**, the operator: the words in rule 1, quoted by `D-0075` (accepted that day,
+     rondo#265) with the clauses named K1 to K4. K3 read literally: *they never open a terminal*.
+   - **2026-09-20**, the operator, relayed by the window (rondo#296, `D-0080` point 6 (a)): *starting
+     by a command is fine; what must go is having to add anything to it.* K3 became *nothing the person
+     has to remember*, and K4 was said to cover the word after the command too.
+   - **2026-09-20**, `D-0081` rule 1.1, from the operator's point that the organisation rondo replaces
+     is not bound to one repository: K1 to K3 are judged across a person's day.
+
+4. **A redrawing is a dated annotation on this entry, not a new ID.** When the operator moves the line
+   again, the entry that records it adds an annotation here, marked as changing the clause, quoting
+   the operator's words with the date and who relayed them, and ending with an Amends line for each
+   clause it redraws (`D-0173 K3`), as `D-0169` rule 2 has it. This entry is then indexed `accepted,
+   amended` and read with those lines. It is superseded only when the definition is replaced rather
+   than redrawn: a different goal, or so many clauses moved that the live definition can no longer be
+   read off this entry and its Amends lines (`D-0169` rule 1). The definition being the operator's is
+   the reason for this and not against it: rondo does not decide a redrawing, so there is nothing of
+   rondo's to replace, only the operator's words to record where they are read.
+
+5. **An entry that needs the definition cites it, and does not copy it.** It names the clause as
+   `D-0173 K<n>`. The entries that already copy or restate it keep their words, as the append-only
+   rule requires, and gain an additive annotation from this entry pointing here: `D-0075`, `D-0076`,
+   `D-0078`, `D-0080` and `D-0081`. Entries that only name a clause (`K4`, *breaks K3*) are left as
+   they are; the name reads the same here.
+
+### Options not taken
+
+- **Supersede this entry at each redrawing**, a new ID each time the operator moves the line. Every
+  entry citing the definition would then cite a superseded entry after the next redrawing, and the
+  annotations pointing here would have to be written again in each of them: the scatter this entry
+  removes, rebuilt at every redrawing.
+- **Supersede `D-0075` to carry the definition forward.** Its other rules stand, and `D-0080` point 6
+  (b) declined to re-mark it for one clause; moving the definition out does not change that.
+- **Leave the definition in `D-0075` and keep annotating it.** The current reading is then spread
+  across `D-0075`'s words, `D-0080`'s annotation and `D-0081`'s rule, which is rondo#298.
+- **A file outside this one** (a goal file in the repository or in rondo's store). Every entry quoting
+  the definition already lives here and cites by ID; whether a repository's goal belongs in rondo's
+  store is `D-0097`'s question, and this entry does not answer it.
+
+### What it costs
+
+- Two places still show K3's words: `D-0075`'s 2026-09-19 wording with `D-0080`'s annotation on it,
+  and rule 2 here. The annotation added to `D-0075` says which one is read.
+- Nothing checks that a redrawing reaches this entry. A redrawing relayed and recorded only in the
+  entry that acts on it leaves this entry stale, as `D-0075` was left; rule 4 holds only by review.
+- `docs/operations/lap-11-runbook.md` and `lap-12-dogfood.md` cite `D-0075` and `D-0080` for the
+  definition. They are records of laps already walked and are left as written.
+
+### What would falsify it
+
+- **An entry after this one that copies the definition's words instead of citing `D-0173 K<n>`**, or
+  restates a clause in a reading this entry does not hold.
+- **The operator reading rule 2 and finding it is not what they said.**
+- **A redrawing recorded as an annotation here that replaces the goal rather than moving a clause**:
+  that was a supersession.
