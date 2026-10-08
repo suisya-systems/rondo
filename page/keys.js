@@ -40,8 +40,15 @@ document.addEventListener("keydown", (event) => {
   );
   const at = rows.indexOf(document.activeElement);
   if (event.key === "j" || event.key === "k") {
-    // From no row, either key lands on the first: there is nothing above it.
-    const to = at === -1 ? 0 : at + (event.key === "j" ? 1 : -1);
+    // From no row, either key lands on the open request's (rondo#587), and
+    // where nothing is open on the first: there is nothing above it.
+    const to =
+      at === -1
+        ? Math.max(
+            rows.findIndex((row) => row.matches("[aria-current]")),
+            0,
+          )
+        : at + (event.key === "j" ? 1 : -1);
     const row = rows[Math.min(Math.max(to, 0), rows.length - 1)];
     if (row !== undefined) {
       event.preventDefault();
