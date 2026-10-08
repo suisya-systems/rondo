@@ -2786,7 +2786,7 @@ export async function sayGateOpen(take: (() => Promise<readonly string[]>) | nul
  */
 let afterGateReading: (() => void) | null = null;
 
-/** `serveWeb` installs its gate pass's kick here; nothing else writes it. */
+/** `./host.ts`'s `serveWeb` installs its gate pass's kick here; nothing else writes it. */
 export function setAfterGateReading(kick: () => void): void {
   afterGateReading = kick;
 }
@@ -2818,7 +2818,7 @@ async function sayLapMaterial(
   // **`EN` and not the host's set** (D-0055 rule 10). This is the console, and
   // D-0004's escape has no CJK substitutes: a Japanese fence block would print
   // here as `\uXXXX`. The page's copy of the same lines is handed the
-  // operator's set in `pageMaterial`.
+  // operator's set in `./page-actions.ts`'s `pageMaterial`.
   for (const line of await lapMaterialLines(EN, store, record, continuo, true)) {
     say(line);
   }
@@ -2969,9 +2969,9 @@ export function publishModelReadingLines(
  * rule 11, the place it is also written in the operator's language.
  *
  * ponytail: one more `run show` per redraw, on top of the `gate show` that
- * `pageMaterial` already pays. Same ceiling and same upgrade as that one -- a
- * rondo-side column written at admission -- not taken now because the whole
- * value of this half is that the bytes come back from continuo.
+ * `./page-actions.ts`'s `pageMaterial` already pays. Same ceiling and same upgrade
+ * as that one -- a rondo-side column written at admission -- not taken now because
+ * the whole value of this half is that the bytes come back from continuo.
  */
 async function fenceLines(
   wording: Chrome,
@@ -3675,10 +3675,10 @@ export function transcriptPort(
 }
 
 /**
- * Admit one plan under an approved scope, from the page: the tail a person-
- * written plan (`startScoped`) and a drafted split's plan (`startSplit`)
- * share -- continuo started, `admitUnderScope` with the plan's proposal, the
- * report said, and the model reading taken at the gate.
+ * Admit one plan under an approved scope, from the page: the tail a person-written
+ * plan (`startScoped`) and a drafted split's plan (`startSplit`), both in
+ * `./page-scope-actions.ts`, share -- continuo started, `admitUnderScope` with the
+ * plan's proposal, the report said, and the model reading taken at the gate.
  */
 /**
  * `plan` with what rondo puts after its prompt: the definition of done
@@ -3942,10 +3942,10 @@ export type RevisionReady =
  * Everything that happens before a `revise` answers a gate, as one function.
  *
  * **Extracted so the terminal and the page cannot drift** (rondo#233 S4, the
- * argument `answerFromPage` makes for reaching `walkGate` and `resume` through
- * the same calls the command line makes). Every step here is a read or a pure
- * composition: the successor's plan, the gate document, the allocation, the
- * store's row, git's answer about the branch and continuo's about the run id.
+ * argument `./page-actions.ts`'s `answerFromPage` makes for reaching `walkGate` and
+ * `resume` through the same calls the command line makes). Every step here is a read
+ * or a pure composition: the successor's plan, the gate document, the allocation,
+ * the store's row, git's answer about the branch and continuo's about the run id.
  * **Nothing in it can be taken back**, which is the property that lets both
  * surfaces run it before the walk and refuse for free.
  *
@@ -4801,8 +4801,8 @@ export async function lapReport(
  * the same way. So neither route composes what is already recorded: the first
  * one there composes and writes the row, and every route after it reads that
  * row. This is the read half of "composed once" as well as the write half, which
- * is why the press ({@link pressedPublishBody}) can read the row and compose
- * nothing at all.
+ * is why the press (`./page-publish-actions.ts`'s `pressedPublishBody`) can read
+ * the row and compose nothing at all.
  *
  * **What a surface supplies is how it reaches a report and a drafter**, and
  * nothing else: the terminal has continuo already verified in its hand, the page
@@ -5301,10 +5301,10 @@ async function plansDraftedFor(
  * Door three: push the branch, open the pull request, close the run.
  *
  * **Every leg is the operator's, and the operator is who typed this.** No
- * other command calls this function, and there is no flag or environment
- * variable that makes any of it happen without the word `publish` on a
- * command line. The page's press and a publish under a scope (rondo#470) reach
- * the same legs through `publishPage`, not through here. Merging is not here.
+ * other command calls this function, and there is no flag or environment variable
+ * that makes any of it happen without the word `publish` on a command line. The
+ * page's press and a publish under a scope (rondo#470) reach the same legs through
+ * `./page-publish-actions.ts`'s `publishPage`, not through here. Merging is not here.
  *
  * The three legs run in order and stop at the first failure, because each one
  * is the precondition of the next: there is no pull request to open for a
