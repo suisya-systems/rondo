@@ -7,6 +7,5 @@
   "src/access/web-app.ts": 4153,
   "src/access/web.tsx": 5823,
   "src/refrain/interpreter.ts": 2220,
-  "src/store/records.ts": 2679,
-  "src/store/sqlite.ts": 9011
+  "src/store/records.ts": 2679
 }
