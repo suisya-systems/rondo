@@ -662,7 +662,9 @@ CREATE TABLE IF NOT EXISTS scope_decision (
 -- two legs, each claimed before it runs, once per iteration (rondo#470), and
 -- triage_reading, a triage proposal whose ranking the flow host injected from,
 -- claimed before the injection so its model spend counts toward the goal
--- scope's cost (rondo#469). **No CHECK spells the union**: proposal.kind's
+-- scope's cost (rondo#469), and explanation_reading, an explainer's answer
+-- proposal, claimed with the answer so its model spend counts toward the
+-- approval it was asked under (D-0177). **No CHECK spells the union**: proposal.kind's
 -- precedent, so that a new writable act kind changes a constant and not a table.
 --
 -- **Budgets are counted from these rows and never kept as counters** (rule 3.4,

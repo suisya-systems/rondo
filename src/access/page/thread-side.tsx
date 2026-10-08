@@ -56,12 +56,16 @@ export interface ThreadSideProps {
    * 8.2, D-0129), in the split's order; empty for a request run as one.
    */
   readonly parts?: readonly PartStep[];
+  /** The "?" about the try this face describes (rondo#401, D-0177), or null. */
+  readonly ask?: PartLink | null;
 }
 
 /** A link a part's step carries: a pull request, or a question in the thread. */
 export interface PartLink {
   readonly href: string;
   readonly said: string;
+  /** The "?" that asks rondo what this part's try means (rondo#401), drawn as one. */
+  readonly ask?: true;
 }
 
 /** One part's step, already said. */
@@ -184,7 +188,9 @@ function PartSteps({ parts }: { readonly parts: readonly PartStep[] }) {
             {part.links.map((link) => (
               <span key={link.href}>
                 {" "}
-                <a href={link.href}>{link.said}</a>
+                <a href={link.href} {...(link.ask ? { className: "ask" } : {})}>
+                  {link.said}
+                </a>
               </span>
             ))}
           </p>
@@ -368,8 +374,21 @@ export function ThreadSide({
   material,
   asking,
   parts = [],
+  ask = null,
 }: ThreadSideProps) {
-  const agreed = <Agreed wording={wording} governance={governance} steps={steps} parts={parts} />;
+  const agreed = (
+    <>
+      {/* rondo#401 (D-0177): the "?" about the try this face describes. */}
+      {ask === null ? null : (
+        <p className="side-ask">
+          <a className="ask" href={ask.href}>
+            {ask.said}
+          </a>
+        </p>
+      )}
+      <Agreed wording={wording} governance={governance} steps={steps} parts={parts} />
+    </>
+  );
   const known =
     material === null ? null : (
       <section className="side-material">

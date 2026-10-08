@@ -225,6 +225,9 @@ test("a request thread is drawn whole: every body byte for byte, voices apart, b
   // The stop is drawn before the carry-on, so the press that releases work is
   // not the one under the thumb by accident.
   expect(html.indexOf('value="stop"')).toBeLessThan(html.indexOf('value="carry_on"'));
+  // **Asking rondo is offered here too** (rondo#401): free words about the
+  // waiting ask, sent as a question that answers nothing.
+  expect(html).toContain('formaction="/question?lang=en"');
   // And the note under the box says what each of them does.
   expect(html).toContain("Stop this line keeps it stopped");
   // **The send chord is not advertised here** (#206, Codex): it submits without

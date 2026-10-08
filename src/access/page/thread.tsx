@@ -81,6 +81,18 @@ export interface ThreadMessage {
   readonly inReplyTo: ThreadLink | null;
   /** The way to point the box at this message; null with no write port. */
   readonly reply: { readonly href: string; readonly said: string } | null;
+  /** The "?" that asks rondo what this means (rondo#401, D-0177); absent with no write port. */
+  readonly ask?: ThreadLink | null;
+  /**
+   * The band over an answer of rondo's explainer, and what it cost: an
+   * explanation, not an approval or a decision. Absent on every other message.
+   */
+  readonly band?: {
+    readonly heading: string;
+    readonly cost: string;
+    /** The answer's text without the band and cost drawn above it, or null. */
+    readonly body: string | null;
+  } | null;
 }
 
 export interface ThreadProps {
@@ -212,7 +224,18 @@ function Message({ message }: { readonly message: ThreadMessage }) {
               {message.reply.said}
             </a>
           )}
+          {message.ask == null || message.ask.href === null ? null : (
+            <a className="msg-ask" href={message.ask.href} title={message.ask.title} data-open="">
+              {message.ask.said}
+            </a>
+          )}
         </h5>
+        {message.band == null ? null : (
+          <p className="msg-band" role="note">
+            <b>{message.band.heading}</b>
+            <span>{message.band.cost}</span>
+          </p>
+        )}
         {message.inReplyTo === null ? null : <Word link={message.inReplyTo} className="msg-back" />}
         {/*
          * `lang=""` is HTML's own way of saying *the language here is
@@ -220,7 +243,7 @@ function Message({ message }: { readonly message: ThreadMessage }) {
          * out what language they are in, and an absent attribute would
          * inherit the chrome's, which is a guess.
          */}
-        {message.drawn ?? <p lang="">{message.body}</p>}
+        {message.drawn ?? <p lang="">{message.band?.body ?? message.body}</p>}
         {message.pending.map((named) => (
           <p className="msg-pending" key={named}>
             <b>{named}</b> {message.pendingSaid}

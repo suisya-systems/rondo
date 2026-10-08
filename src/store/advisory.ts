@@ -8,6 +8,8 @@
 
 import {
   type AdvisoryRecord,
+  type AnswerWrite,
+  type AnswerWriteOutcome,
   asRefusal,
   type DraftRunWrite,
   type DraftWriteOutcome,
@@ -36,6 +38,7 @@ import {
   type HumanDecisionDraft,
   isApprovableKind,
   isModelReadingDrafter,
+  isQuestion,
   type JsonRecord,
   type JsonValue,
   type LapReading,
@@ -47,7 +50,6 @@ import {
   type RecordChange,
   type RequestOpener,
   readingContent,
-  readScopePayload,
   requestsGoal,
   type ScopeDecisionDraft,
   type ScopeDraft,
@@ -102,6 +104,7 @@ import {
   tipOf,
   toScope,
 } from "./scope.js";
+import { readScopePayload } from "./scope-payload.js";
 import {
   coveredMessageIds,
   flowPoints,
@@ -116,10 +119,49 @@ import {
   threadOperatorMessages,
   triageKeys,
   triageRepository,
+  unansweredQuestionIds,
 } from "./thread.js";
 
 /** Thrown inside a draft's transaction to roll back what it already inserted. */
 class DraftRefusal extends Error {}
+
+/**
+ * Where an explainer write breaks D-0177's shape, or null. Checked before the
+ * transaction: an answer binds nothing and asks nothing, is the explainer's own
+ * voice on both rows, replies to the question it cites, and cites the
+ * explanation it is the prose of -- the citation `unansweredQuestionIds` reads.
+ */
+function answerFault(write: AnswerWrite): AnswerWriteOutcome | null {
+  const { proposal, message, questionId } = write;
+  const cites = (form: string, key: string, id: string): boolean =>
+    message.bases.some((basis) => basis["form"] === form && basis[key] === id);
+  const faults: readonly (readonly [boolean, string, string])[] = [
+    [proposal.kind !== "explanation", "proposal.kind", "an answer's proposal is an explanation"],
+    [proposal.derivation === null, "proposal.derivation", "an explanation names its derivation"],
+    [
+      !proposal.drafter.startsWith(write.drafterPrefix),
+      "proposal.drafter",
+      `the explainer writes under '${write.drafterPrefix}'`,
+    ],
+    [message.authorKind !== "drafter", "message.authorKind", "an answer is a drafter message"],
+    [
+      message.authorId !== proposal.drafter,
+      "message.authorId",
+      "the answer and its explanation have one author",
+    ],
+    [message.asks, "message.asks", "an explanation asks nothing"],
+    [message.answerOutcome !== undefined, "message.answerOutcome", "an answer answers no ask"],
+    [message.inReplyTo !== questionId, "message.inReplyTo", "an answer replies to its question"],
+    [
+      !cites("message", "messageId", questionId) ||
+        !cites("proposal", "proposalId", proposal.proposalId),
+      "message.bases",
+      "an answer cites its question and its explanation",
+    ],
+  ];
+  const fault = faults.find(([broken]) => broken);
+  return fault === undefined ? null : { kind: "malformed", field: fault[1], reason: fault[2] };
+}
 
 /**
  * The advisory record over an open connection.
@@ -281,6 +323,27 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
       );
     return { kind: "recorded" };
   };
+
+  /**
+   * One `scope_consumption` claim, **inside whatever transaction the caller
+   * holds**: true when written, false when the subject is already claimed under
+   * any approval (`claimScopedAct`'s one-per-subject rule).
+   */
+  const insertClaim = (
+    scopeDecisionId: string,
+    actKind: (typeof WRITABLE_SCOPE_ACT_KINDS)[number],
+    subjectId: string,
+    nowMs: number,
+  ): boolean =>
+    Number(
+      connection
+        .prepare(
+          "INSERT INTO scope_consumption (scope_decision_id, act_kind, subject_id, proposal_id, " +
+            "consumed_at_ms) SELECT ?, ?, ?, NULL, ? WHERE NOT EXISTS (SELECT 1 FROM " +
+            "scope_consumption WHERE act_kind = ? AND subject_id = ?)",
+        )
+        .run(scopeDecisionId, actKind, subjectId, nowMs, actKind, subjectId).changes,
+    ) === 1;
 
   /**
    * One scope row and the agent types it records, **with no transaction of its
@@ -757,7 +820,7 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
     async openProposals(uptoMs: number): Promise<readonly OpenProposal[]> {
       return connection
         .prepare(
-          "SELECT proposal_id, kind, iteration_id, created_at_ms FROM proposal " +
+          "SELECT proposal_id, kind, iteration_id, drafter, created_at_ms FROM proposal " +
             "WHERE created_at_ms <= ? " +
             "AND proposal_id NOT IN (SELECT proposal_id FROM human_decision) " +
             "ORDER BY created_at_ms, proposal_id",
@@ -775,6 +838,7 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
             // question is "what is waiting" and not "what may be approved".
             kind: String(record["kind"]),
             iterationId: iterationId === null ? null : String(iterationId),
+            drafter: String(record["drafter"]),
             createdAtMs: Number(record["created_at_ms"]),
           };
         });
@@ -1097,6 +1161,69 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
 
     async draftedMessageIds(drafterPrefix: string): Promise<ReadonlySet<string>> {
       return coveredMessageIds(connection, drafterPrefix);
+    },
+
+    async recordAnswer(write: AnswerWrite): Promise<AnswerWriteOutcome> {
+      const malformed = answerFault(write);
+      if (malformed !== null) {
+        return malformed;
+      }
+      const { proposal, message } = write;
+      try {
+        return immediateTransaction<AnswerWriteOutcome>(connection, () => {
+          const asked = connection
+            .prepare("SELECT author_kind FROM conversation_message WHERE message_id = ?")
+            .get(write.questionId) as SqlRow | undefined;
+          if (
+            asked === undefined ||
+            !isQuestion({ authorKind: String(asked["author_kind"]), messageId: write.questionId })
+          ) {
+            return { kind: "notAQuestion", questionId: write.questionId };
+          }
+          if (!unansweredQuestionIds(connection, write.drafterPrefix).includes(write.questionId)) {
+            return { kind: "alreadyAnswered", questionId: write.questionId };
+          }
+          // All or nothing, as `recordDraft`: a refusal after the first insert
+          // is thrown so the transaction rolls back.
+          const inserted = insertProposal(proposal);
+          if (inserted.kind !== "recorded") {
+            throw new DraftRefusal(`the explanation was refused: ${inserted.reason}`);
+          }
+          const refusal = threadMessageRefusal(connection, message);
+          const written =
+            refusal === null ? asRefusal(insertMessage(message.messageId, message)) : null;
+          if (written === null || written.kind !== "recorded") {
+            throw new DraftRefusal(`the answer was refused: ${refusal ?? written?.reason}`);
+          }
+          if (
+            write.claim !== null &&
+            !insertClaim(
+              write.claim.scopeDecisionId,
+              "explanation_reading",
+              proposal.proposalId,
+              write.claim.nowMs,
+            )
+          ) {
+            throw new DraftRefusal(
+              `the explanation '${proposal.proposalId}' is already claimed under a scope`,
+            );
+          }
+          return {
+            kind: "answered",
+            proposalId: proposal.proposalId,
+            messageId: message.messageId,
+          };
+        });
+      } catch (error) {
+        if (error instanceof DraftRefusal) {
+          return { kind: "refused", reason: error.message };
+        }
+        return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async unansweredQuestionIds(drafterPrefix: string): Promise<readonly string[]> {
+      return unansweredQuestionIds(connection, drafterPrefix);
     },
 
     async latestSplitFor(requestMessageId: string, drafterPrefix: string) {
@@ -1773,21 +1900,7 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
     async claimScopedAct(claim): Promise<RecordOutcome> {
       const actKind: (typeof WRITABLE_SCOPE_ACT_KINDS)[number] = claim.actKind;
       try {
-        const written = connection
-          .prepare(
-            "INSERT INTO scope_consumption (scope_decision_id, act_kind, subject_id, proposal_id, " +
-              "consumed_at_ms) SELECT ?, ?, ?, NULL, ? WHERE NOT EXISTS (SELECT 1 FROM " +
-              "scope_consumption WHERE act_kind = ? AND subject_id = ?)",
-          )
-          .run(
-            claim.scopeDecisionId,
-            actKind,
-            claim.subjectId,
-            claim.nowMs,
-            actKind,
-            claim.subjectId,
-          );
-        return Number(written.changes) === 1
+        return insertClaim(claim.scopeDecisionId, actKind, claim.subjectId, claim.nowMs)
           ? { kind: "recorded" }
           : {
               kind: "refused",

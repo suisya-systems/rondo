@@ -1159,3 +1159,33 @@
 .triage-points .held > div {
   white-space: pre-wrap;
 }
+
+/* rondo#401 (D-0177): the "?" that asks rondo what something means. A labelled
+   button and not a bare mark: asking is meant to be found. */
+.msg-ask,
+a.ask {
+  padding: 1px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: calc(11.5px * var(--text-scale));
+  font-weight: 500;
+  color: var(--color-link);
+  white-space: nowrap;
+}
+
+/* An answer of rondo's explainer: the band says it decides nothing. */
+.msg-band {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 4px 0 6px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--color-link);
+  border-radius: 4px;
+  background: var(--color-muted);
+  font-size: calc(12.5px * var(--text-scale));
+}
+
+.side-ask {
+  margin-top: 6px;
+}

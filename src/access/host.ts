@@ -9,6 +9,7 @@
  */
 import { readLapLog } from "../continuo/transcript.js";
 import { readRunPlan } from "../refrain/plan.js";
+import { isQuestion } from "../store/records.js";
 import { asRefusal, type IterationStore, openAdvisoryRecord } from "../store/sqlite.js";
 import { checksHost, continuoChecksReader } from "./checks-host.js";
 import {
@@ -31,6 +32,7 @@ import { endLost, issuesClosedOver, readHolder } from "./conductor.js";
 import { draftedStartReadiness } from "./drafted-start.js";
 import { approvedSplits } from "./drafted-view.js";
 import { drafterHost } from "./drafter-host.js";
+import { explainerHost } from "./explainer/host.js";
 import { flowHost } from "./flow-host.js";
 import {
   listOpenIssues,
@@ -208,6 +210,18 @@ export async function serveWeb(
     // **An answer to a stop whose lap is started again is not drafted**
     // (D-0149, D-0139): the start is its work.
     startsAgain: async (ask) => (await lapStartedAgainAt(store, record, ask)) !== null,
+  });
+
+  // **And the thread explainer** (D-0177): a person's question answered once,
+  // kicked when one is recorded and on the same rescan.
+  const explainer = explainerHost({
+    store,
+    record,
+    runDrafter,
+    now: Date.now,
+    mintId: newDraftId,
+    language: selected.tag,
+    log: say,
   });
 
   // **And the revise drafter beside it** (D-0077 rule 2.2): a model reading
@@ -519,6 +533,7 @@ export async function serveWeb(
       lost.kick();
       issues.kick();
       drafter.kick();
+      explainer.kick();
       reviser.kick();
       checks.kick();
       triage.kick();
@@ -535,6 +550,7 @@ export async function serveWeb(
         lost.kick();
         issues.kick();
         drafter.kick();
+        explainer.kick();
         reviser.kick();
         checks.kick();
         triage.kick();
@@ -658,7 +674,8 @@ export async function serveWeb(
                     authorId: sender.actorId,
                     inReplyTo: message.inReplyTo,
                     atMs: Date.now(),
-                    bases: [],
+                    // A question's one basis: what its "?" was pressed beside (rondo#401).
+                    bases: message.about == null ? [] : [{ ...message.about }],
                     asks: false,
                     // Absent and not null, for `exactOptionalPropertyTypes`:
                     // a send answers nothing (D-0072 rule 2).
@@ -668,6 +685,9 @@ export async function serveWeb(
                 if (outcome.kind === "recorded") {
                   issues.kick();
                   drafter.kick();
+                  if (isQuestion({ authorKind: "operator", messageId: message.messageId })) {
+                    explainer.kick();
+                  }
                   // An answer may carry on at a lost lap's stop (D-0139).
                   if (answerOutcome !== null) {
                     lost.kick();

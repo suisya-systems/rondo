@@ -16,9 +16,11 @@ import {
   FLOW_AUTHOR,
   FLOW_AUTHOR_PREFIX,
   isFlowAuthor,
+  isQuestion,
   type JsonRecord,
   type LapReading,
   type OpenAsk,
+  QUESTION_ID_PREFIX,
   readingContent,
   type ScopeDraft,
   type ThreadMessageDraft,
@@ -169,6 +171,8 @@ export function publishBodyHolding(
 /**
  * The operator messages at or before `table`'s one row, writing that row on
  * the first call: the moment a host that does this work first ran here.
+ * Questions (D-0177) stay in: the set only holds messages back from a host, and
+ * no host reads a question as asking for work anyway (`asksForWork`).
  */
 export function messagesBeforeEpoch(
   connection: StoreConnection,
@@ -300,6 +304,33 @@ export function coveredMessageIds(connection: StoreConnection, drafterPrefix: st
   return covered;
 }
 
+/**
+ * The person's questions (D-0177, `question-` ids) no drafter named with
+ * `drafterPrefix` has answered yet, oldest first. Answered means a drafter
+ * message under the prefix **replies to** the question and cites it by a
+ * `message:` basis, as `recordAnswer` writes one. Citing alone is not answering:
+ * an answer to one question may cite another, which is still owed its own.
+ */
+export function unansweredQuestionIds(
+  connection: StoreConnection,
+  drafterPrefix: string,
+): string[] {
+  return (
+    connection
+      .prepare(
+        "SELECT q.message_id FROM conversation_message q WHERE q.author_kind = 'operator' " +
+          "AND substr(q.message_id, 1, length(?)) = ? AND NOT EXISTS (SELECT 1 FROM " +
+          "conversation_message m, json_each(CASE WHEN json_valid(m.bases) THEN m.bases " +
+          "ELSE '[]' END) j WHERE m.author_kind = 'drafter' AND " +
+          "m.in_reply_to = q.message_id AND substr(m.author_id, 1, length(?)) = ? AND " +
+          "json_type(j.value) = 'object' AND " +
+          "json_extract(j.value, '$.form') = 'message' AND " +
+          "json_extract(j.value, '$.messageId') = q.message_id) ORDER BY q.rowid",
+      )
+      .all(QUESTION_ID_PREFIX, QUESTION_ID_PREFIX, drafterPrefix, drafterPrefix) as SqlRow[]
+  ).map((row) => String(row["message_id"]));
+}
+
 /** A flow ask's points read back; a row that will not read asks nothing. */
 export function flowPoints(
   json: string,
@@ -325,6 +356,8 @@ export function flowPoints(
  * Every operator message in a request's thread -- the request and every reply
  * under it, through any voice (D-0071 rule 7.2) -- and the flow host's opener,
  * which asks for the work as a person's message does (rondo#469, `asksForWork`).
+ * A person's question is left out (D-0177): it asks for an explanation, not the
+ * work, so asking one while a split draft runs does not make that draft stale.
  */
 export function threadOperatorMessages(
   connection: StoreConnection,
@@ -336,10 +369,17 @@ export function threadOperatorMessages(
         "WITH RECURSIVE thread(id) AS (SELECT ? UNION " +
           "SELECT m.message_id FROM conversation_message m JOIN thread t ON m.in_reply_to = t.id) " +
           "SELECT m.message_id FROM conversation_message m JOIN thread t ON m.message_id = t.id " +
-          "WHERE m.author_kind = 'operator' OR (m.author_kind = 'drafter' AND " +
-          "m.in_reply_to IS NULL AND substr(m.author_id, 1, length(?)) = ?)",
+          "WHERE (m.author_kind = 'operator' AND substr(m.message_id, 1, length(?)) <> ?) OR " +
+          "(m.author_kind = 'drafter' AND m.in_reply_to IS NULL AND " +
+          "substr(m.author_id, 1, length(?)) = ?)",
       )
-      .all(requestMessageId, FLOW_AUTHOR_PREFIX, FLOW_AUTHOR_PREFIX) as SqlRow[]
+      .all(
+        requestMessageId,
+        QUESTION_ID_PREFIX,
+        QUESTION_ID_PREFIX,
+        FLOW_AUTHOR_PREFIX,
+        FLOW_AUTHOR_PREFIX,
+      ) as SqlRow[]
   ).map((row) => String(row["message_id"]));
 }
 
@@ -386,6 +426,11 @@ export function pastedPlanRefusal(
   if (row === undefined || row["author_kind"] !== "operator") {
     return {
       refusal: `${where} from '${messageId}', which is no operator message: the bytes must be a person's (D-0071 point 1 (a))`,
+    };
+  }
+  if (isQuestion({ authorKind: "operator", messageId })) {
+    return {
+      refusal: `${where} from '${messageId}', which is a question: a plan pasted to ask about it is no plan offered (D-0177 rule 2)`,
     };
   }
   let plan: unknown;

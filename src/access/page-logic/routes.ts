@@ -75,6 +75,11 @@ export type PageView =
        * or naming no lap at a gate, the first waiting one is answered.
        */
       readonly gate?: string;
+      /**
+       * What a "?" was pressed beside (rondo#401, D-0177), as a locator: the
+       * box asks rondo about it. Never drawn as text; it travels hidden.
+       */
+      readonly ask?: string;
     }
   /**
    * One request's scope (rondo#233 S3, D-0066 rule 1): the form rondo drafts
@@ -234,7 +239,9 @@ export function viewHref(view: PageView, tag: string): string {
     case "thread":
       return `/?thread=${encodeURIComponent(view.messageId)}${
         view.to === null ? "" : `&to=${encodeURIComponent(view.to)}`
-      }${view.gate === undefined ? "" : `&gate=${encodeURIComponent(view.gate)}`}&${lang}`;
+      }${view.gate === undefined ? "" : `&gate=${encodeURIComponent(view.gate)}`}${
+        view.ask === undefined ? "" : `&ask=${encodeURIComponent(view.ask)}`
+      }&${lang}`;
     case "scope":
       return (
         `/?scope=${encodeURIComponent(view.messageId)}` +
@@ -249,4 +256,79 @@ export function viewHref(view: PageView, tag: string): string {
     default:
       return `/?${lang}`;
   }
+}
+
+/**
+ * Which of the one page's three views is being read, off the query and nothing
+ * else. Total: anything that is not one of the two queries is the summary,
+ * because a typo in a query is an operator who wanted the page.
+ */
+export function viewOf(query: URLSearchParams): PageView {
+  const thread = query.get("thread");
+  if (thread !== null && thread !== "") {
+    const to = query.get("to");
+    const gate = query.get("gate");
+    const ask = query.get("ask");
+    return {
+      kind: "thread",
+      messageId: thread,
+      to: to === null || to === "" ? null : to,
+      ...(gate === null || gate === "" ? {} : { gate }),
+      ...(ask === null || ask === "" ? {} : { ask }),
+    };
+  }
+  const scoping = query.get("scope");
+  if (scoping !== null && scoping !== "") {
+    const asked = query.get("rounds");
+    const rounds = asked === null ? Number.NaN : Number.parseInt(asked, 10);
+    const decision = query.get("decision");
+    const plan = query.get("plan");
+    const raise = query.get("raise");
+    const gate = query.get("gate");
+    return {
+      ...(raise === null || raise === "" || gate === null || gate === ""
+        ? {}
+        : { raise: { decisionId: raise, iterationId: gate } }),
+      kind: "scope",
+      messageId: scoping,
+      plan: plan === null || plan === "" ? null : plan,
+      // Total, as the rest of this function is: a typo in a query is an
+      // operator who wanted the page, so an unreadable or out-of-range count is
+      // the default rather than a refusal.
+      rounds:
+        Number.isSafeInteger(rounds) && rounds >= 0 && rounds <= MAX_REVIEW_ROUNDS ? rounds : null,
+      decisionId: decision === null || decision === "" ? null : decision,
+    };
+  }
+  if (query.get("requests") === "open") {
+    const take = query.get("take");
+    const candidate = query.get("candidate");
+    return take === null || take === "" || candidate === null || candidate === ""
+      ? { kind: "requests" }
+      : { kind: "requests", take: { proposalId: take, candidate } };
+  }
+  const goalScope = query.get("goal_scope");
+  if (goalScope !== null && goalScope !== "") {
+    return { kind: "goalScope", repository: goalScope };
+  }
+  const goal = query.get("goal");
+  if (goal !== null && goal !== "") {
+    return { kind: "goal", repository: goal };
+  }
+  const publishing = query.get("publish");
+  if (publishing !== null && publishing !== "") {
+    return { kind: "publish", iterationId: publishing };
+  }
+  const merging = query.get("merge");
+  if (merging !== null && merging !== "") {
+    return { kind: "merge", iterationId: merging };
+  }
+  const releasing = query.get("release");
+  if (releasing !== null && releasing !== "") {
+    return { kind: "release", iterationId: releasing };
+  }
+  // `?answer=` and `?reading=open` are not read and have no redirect: D-0083
+  // rules 3 and 4 replaced both screens, and an address that once meant one
+  // of them is the page a person arrives on.
+  return { kind: "summary" };
 }

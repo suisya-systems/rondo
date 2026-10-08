@@ -27,7 +27,9 @@ import { planPayload, type RunPlan, readPlan, readRunPlan } from "../../refrain/
 import { canonicalJson, planDigest } from "../../store/plan.js";
 import {
   asksForWork,
+  EXPLAINER_PREFIX,
   type IterationRecord,
+  isQuestion,
   type JsonRecord,
   type JsonValue,
   type LaneClaimAsk,
@@ -216,8 +218,16 @@ export async function gatherDrafterMaterial(
     throw new Error(`the thread will not read: ${read.reason}`);
   }
   const inThread = threadOf(read.messages, requestMessageId);
+  // **A question and its explanation are not the split drafter's material**
+  // (D-0177 rule 2): neither asks for work, and a question quoting an option
+  // is no choice of it.
   const thread = read.messages
-    .filter((m) => inThread.has(m.messageId))
+    .filter(
+      (m) =>
+        inThread.has(m.messageId) &&
+        !isQuestion(m) &&
+        !(m.authorKind === "drafter" && m.authorId.startsWith(EXPLAINER_PREFIX)),
+    )
     .map((m) => ({
       messageId: m.messageId,
       authorKind: m.authorKind,
@@ -531,7 +541,11 @@ async function heldTemplates(
     if (template !== null) held.push(template);
   }
   for (const message of messages) {
-    if (message.authorKind !== "operator" || !thread.has(message.messageId)) {
+    if (
+      message.authorKind !== "operator" ||
+      isQuestion(message) ||
+      !thread.has(message.messageId)
+    ) {
       continue;
     }
     let document: unknown;

@@ -359,6 +359,23 @@ export function drafterRow(): DrafterRow {
 }
 
 /**
+ * The thread explainer's executable, model and family (D-0177): the drafter's
+ * shape, run the same way (one turn, no tools), so like the other tables **a
+ * changed row is a new decision entry**. It is the light (`mechanical`) tier's
+ * model, admitted because every answer it gives is checked mechanically: each
+ * claim must cite a locator the material holds, or the answer is replaced.
+ */
+const EXPLAINER_TABLE: readonly DrafterRow[] = Object.freeze([
+  Object.freeze({ model: "claude-sonnet-5", family: "claude", executable: "claude" }),
+]);
+
+/** The explainer row in force. */
+export function explainerRow(): DrafterRow {
+  // A frozen literal with one row, as DRAFTER_TABLE is.
+  return EXPLAINER_TABLE[0] as DrafterRow;
+}
+
+/**
  * The family rondo files a model id under, looked up in rondo's own tables --
  * the tier rows and the reviewer rows -- or null for an id neither table holds.
  *

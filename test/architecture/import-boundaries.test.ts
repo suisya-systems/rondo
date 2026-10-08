@@ -1333,6 +1333,10 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/inbox-current.ts": [DIALOGUE],
   // rondo#490 (D-0144): the record's English read in the person's language, on a press.
   "src/access/read-in.ts": [DIALOGUE],
+  // rondo#401 (D-0177): the thread explainer, which answers a person's question and decides nothing.
+  "src/access/explainer/host.ts": [DIALOGUE],
+  "src/access/explainer/judgement.ts": [DIALOGUE],
+  "src/access/explainer/material.ts": [DIALOGUE],
   "src/access/issue-read.ts": [SPLITTING],
   "src/access/local.ts": [HUMAN],
   "src/access/markdown.ts": ["Publishing"],
@@ -1391,6 +1395,10 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page/thread.tsx": [HUMAN],
   "src/access/page/vocabulary.tsx": [HUMAN],
   "src/access/page/words.ts": [HUMAN],
+  // rondo#401 (D-0177): the explainer's words, a slice of the catalogue.
+  "src/access/page/explain-words.ts": [HUMAN],
+  // rondo#401 (D-0177): the "?" that asks rondo, and the band over its answer.
+  "src/access/page/ask.ts": [HUMAN],
   // D-0079 section 4 (rondo#290): the body's English, composed from the lap's
   // own report rather than translated from it.
   "src/access/publish-body.ts": ["Publishing"],
@@ -1450,6 +1458,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/store/rows.ts": [RECORD],
   "src/store/schema.ts": [RECORD],
   "src/store/scope.ts": [RECORD],
+  "src/store/scope-payload.ts": [RECORD],
   "src/store/sqlite.ts": [RECORD],
   "src/store/thread.ts": [RECORD],
 };

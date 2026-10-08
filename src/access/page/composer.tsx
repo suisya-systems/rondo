@@ -4,9 +4,10 @@
  * question (rondo#341 moved it out of `src/access/web.tsx`).
  */
 import { requestsGoal, type ScopePayload } from "../../store/records.js";
+import { basisOf } from "../explainer/material.js";
 import { ago } from "../inbox.js";
 import { type PageView, viewHref } from "../page-logic/routes.js";
-import { replyTarget, type Threads } from "../page-logic/threads.js";
+import { lineOf, replyTarget, type Threads } from "../page-logic/threads.js";
 import { approvalTip, stopRaises } from "../scope.js";
 import type { Chrome } from "../wording.js";
 import type { MintMessageId, WebPorts } from "./contract.js";
@@ -273,7 +274,15 @@ export function composerView(
     return null;
   }
   const kind = replying === null ? "request" : "reply";
-  const answers = replying?.answers === true;
+  // **A "?" was pressed** (rondo#401, D-0177): the box asks rondo about what it
+  // was pressed beside, so it is never the answering press, whatever it aims at.
+  const ask = view.kind === "thread" && replying !== null ? (view.ask ?? null) : null;
+  const about = ask === null ? null : basisOf(ask);
+  const asking = about !== null;
+  const answers = !asking && replying?.answers === true;
+  const cited = about?.form === "message" ? threads.byId.get(about.messageId) : undefined;
+  const asked =
+    wording.askPrefill + (cited === undefined ? "" : `\n${wording.askQuote(lineOf(cited))}`);
   const offered =
     answers && replying !== null ? (raises.get(replying.target.messageId) ?? null) : null;
   const raise = offered !== null && "budgets" in offered ? offered : null;
@@ -284,7 +293,8 @@ export function composerView(
     replying?.target.messageId === `question-${answerRevise.iterationId}`
       ? answerRevise
       : null;
-  const action = `/${answers ? "answer-ask" : kind}?lang=${encodeURIComponent(wording.lang)}`;
+  const lang = `?lang=${encodeURIComponent(wording.lang)}`;
+  const action = `/${answers ? "answer-ask" : asking ? "question" : kind}${lang}`;
   return (
     <form
       id="composer"
@@ -308,10 +318,13 @@ export function composerView(
             // well took it out of the response before the ledger landed, so
             // the box disappeared until the next poll.
             "hx-select-oob": "#waiting-count",
-            // **One send per press, visibly** (the S1 design pass): the button
-            // is disabled while its request is in flight. The store's refusal
-            // of a repeated id is still what makes a double send one message.
-            "hx-disabled-elt": "find button[type='submit']",
+            // **One send per press, visibly** (the S1 design pass): every
+            // submit is disabled while a request is in flight -- Send and
+            // *Ask rondo* both, since `find` takes only the first match. The
+            // store's refusal of a repeated id is still what makes a double
+            // send one message.
+            "hx-disabled-elt":
+              "find button[type='submit']:not([formaction]), find button[formaction]",
           })}
       class={
         replying === null
@@ -328,6 +341,8 @@ export function composerView(
         {replying === null ? null : (
           <>
             <input type="hidden" name="in_reply_to" value={replying.target.messageId} />
+            {/* What the question is about, by its locator: never on screen (D-0076). */}
+            {asking ? <input type="hidden" name="about" value={ask ?? ""} /> : null}
             <div class="mx-4 mt-2.5 flex min-w-0 items-center gap-1">
               <a
                 href={`#${encodeURIComponent(replying.target.messageId)}`}
@@ -356,7 +371,7 @@ export function composerView(
                 // **A target chosen by hand can be let go** (the S1 design
                 // pass): a navigation back to the thread's default target, which
                 // keeps the draft (`page/composer.js`).
-                view.kind === "thread" && view.to !== null ? (
+                view.kind === "thread" && (view.to !== null || asking) ? (
                   <a
                     href={viewHref(
                       { kind: "thread", messageId: replying.root, to: null },
@@ -425,7 +440,9 @@ export function composerView(
           ? wording.newRequestHeading
           : answers
             ? wording.answerAskAction
-            : wording.replyAction}
+            : asking
+              ? wording.askSubmit
+              : wording.replyAction}
       </label>
       <textarea
         id="composer-body"
@@ -434,17 +451,20 @@ export function composerView(
         required={!answers}
         rows={replying === null ? 4 : 3}
         placeholder={replying === null ? wording.requestPlaceholder : wording.replyPlaceholder}
-        data-draft={replying === null ? "request" : `reply:${replying.root}`}
+        // A question keeps its own draft: pressing "?" leaves an unsent reply
+        // where it was, and leaving question mode leaves the question behind.
+        data-draft={replying === null ? "request" : `${asking ? "ask" : "reply"}:${replying.root}`}
         {...(replying === null && taken !== null
           ? { "data-draft-take": taken.key, autofocus: true }
           : {})}
         {...(view.kind === "thread" && view.to !== null ? { autofocus: true } : {})}
+        {...(asking ? { "data-draft-take": `ask:${ask ?? ""}`, autofocus: true } : {})}
         // **The box grows with the words** (the S1 design pass): at a fixed
         // two rows a three-line draft scrolled its first line out of sight
         // under the line above it. Capped, then it scrolls.
         class="block max-h-[40vh] min-h-[4.5rem] w-full resize-y bg-transparent px-4 pt-2 text-body leading-6 outline-none [field-sizing:content] placeholder:text-faint"
       >
-        {replying === null && taken !== null ? taken.text : ""}
+        {replying === null && taken !== null ? taken.text : asking ? asked : ""}
       </textarea>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pt-1 pb-2.5">
         <span class="note px-1 text-meta leading-5 text-faint">
@@ -473,6 +493,15 @@ export function composerView(
             // for a browser that sends none.
             answers ? (
               <>
+                {/* Asking rondo answers nothing (rondo#401): free words about
+                    the waiting ask, sent as a question and not as an answer. */}
+                <button
+                  type="submit"
+                  formaction={`/question${lang}`}
+                  class={`${SECONDARY} h-9 px-4 text-sm`}
+                >
+                  {wording.askSubmit}
+                </button>
                 <button
                   type="submit"
                   name="outcome"
@@ -503,24 +532,37 @@ export function composerView(
                 )}
               </>
             ) : (
-              <button
-                type="submit"
-                class="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-4 text-sm font-semibold text-background shadow-xs outline-none hover:bg-foreground/85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-wait disabled:opacity-60"
-              >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="size-3.5"
+              <>
+                {/* **Free words, asked as a question** (rondo#401): the second
+                    submit of an ordinary reply box, which asks for no work. */}
+                {replying === null || asking ? null : (
+                  <button
+                    type="submit"
+                    formaction={`/question${lang}`}
+                    class={`${SECONDARY} h-9 px-4 text-sm`}
+                  >
+                    {wording.askSubmit}
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  class="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-4 text-sm font-semibold text-background shadow-xs outline-none hover:bg-foreground/85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-wait disabled:opacity-60"
                 >
-                  <path d="M8 13V3m-4 4 4-4 4 4" />
-                </svg>
-                {wording.sendAction}
-              </button>
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="size-3.5"
+                  >
+                    <path d="M8 13V3m-4 4 4-4 4 4" />
+                  </svg>
+                  {asking ? wording.askSubmit : wording.sendAction}
+                </button>
+              </>
             )
           }
         </span>
