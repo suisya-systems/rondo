@@ -315,14 +315,16 @@ honest as rondo grows. Two habits keep it worth its runtime:
   point is fine and expected. Granting anything at all to `src/refrain/` is the
   boundary Issue #1 drew, and needs a `D-` entry.
 - **`test/architecture/docs-claims.test.ts` is the same habit pointed at the
-  prose** (rondo#324). Where this file or `docs/operations/rondo-cli.md`
+  prose** (rondo#324, D-0174). Where this file or `docs/operations/rondo-cli.md`
   *enumerates* something the tree also enumerates — the layers under `src/`,
   the modules that may start a process, the continuo verbs rondo drives, the
   commands the CLI dispatches, and `DECISIONS.md`'s index against its entries —
   the two lists are compared, so a sentence that
   went stale is a red gate rather than something a reader discovers. Each list
   is found by an anchor phrase, and deleting the sentence fails the test too:
-  the cheap way out of a red check must not be removing the claim.
+  the cheap way out of a red check must not be removing the claim. A new
+  enumerative sentence adds its case in the same diff, and the prose names the
+  members rather than counting them.
 
 The sweep generates its cases from a directory walk, so its failure mode is
 finding nothing and reporting a clean tree. `PLANTED` inside the file guards
