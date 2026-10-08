@@ -75,6 +75,11 @@ export function stopPrefix(scopeDecisionId: string): string {
   return `flow-stop-${scopeDecisionId}-`;
 }
 
+/** The id of the flow's reply that takes back the stop `askId` (rondo#549, `withdrawnByFlow`). */
+export function withdrawnId(askId: string): string {
+  return `flow-withdrawn-${askId}`;
+}
+
 const SKIPS: readonly SkipReason[] = ["started", "put_aside", "not_issue"];
 
 /** A `flow_stop` row's facts, read back; null for bytes this build does not read. */
@@ -180,7 +185,12 @@ export async function flowStopOf(
       .at(-1);
     const rest = stop?.messageId.slice(prefix.length);
     const reason = FLOW_STOPS.find((one) => rest?.startsWith(`${one}-`));
-    if (stop === undefined || reason === undefined) {
+    // A stop the flow took back (rondo#549) is no stop: the flow went on.
+    if (
+      stop === undefined ||
+      reason === undefined ||
+      messages.some((one) => one.messageId === withdrawnId(stop.messageId))
+    ) {
       return null;
     }
     const asks = await record.openAsksIn(latest.messageId);

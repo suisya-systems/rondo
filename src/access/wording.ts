@@ -1445,6 +1445,13 @@ export interface Chrome extends PageWords {
    */
   readonly flowDraftRefusedAsk: string;
   /**
+   * What the goal flow says under its own stop when that stop no longer stands
+   * (rondo#549): the two requests it counted as failed are no longer read as
+   * failed -- a refused draft, a lap lost to a restart whose start again went
+   * on -- so the flow takes the question back and goes on with the goal.
+   */
+  readonly flowStopWithdrawn: string;
+  /**
    * The same stop, when rondo could not end the lap either (D-0109 rule 3):
    * said as itself, because inviting somebody to start again over work that is
    * still holding its place would be the page lying about its own state.

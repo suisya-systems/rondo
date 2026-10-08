@@ -1849,6 +1849,24 @@ export function isFlowAuthor(authorId: unknown): boolean {
 }
 
 /**
+ * **The flow takes back its own question by replying to it** (rondo#549): a
+ * flow message in reply to a flow question closes it, as a person's `carry_on`
+ * closes any question (D-0072 rule 3). Only the flow's own, because its
+ * question holds the flow and no act of the request it is asked in
+ * (`holdsNothing`), so this releases nothing D-0066 rule 4.4 keeps for the
+ * person. The flow writes it when a stop it asked no longer stands. The store
+ * and the page read the same rule here.
+ */
+export function withdrawnByFlow(
+  ask: { readonly authorId: unknown },
+  reply: {
+    readonly authorId: unknown;
+  },
+): boolean {
+  return isFlowAuthor(ask.authorId) && isFlowAuthor(reply.authorId);
+}
+
+/**
  * Whether a message is a request the flow host opened (rondo#469): a drafter
  * row with no `in_reply_to` whose author starts with {@link FLOW_AUTHOR_PREFIX}.
  * `authorId` is absent on a drafter snapshot written before it was carried.

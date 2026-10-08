@@ -536,6 +536,129 @@ test("rondo#549: a lap lost to a restart is not a failure; its start again says 
   expect((await w.messages()).filter((m) => m.asks)).toEqual([]);
 });
 
+/**
+ * The lap-19 store (rondo#549): a `failed_twice` stop asked by a build that
+ * counted a lap lost to a restart as a failure. The ask is written as that
+ * build wrote it, in the flow's voice under the latest request.
+ */
+const staleStop = async (w: Awaited<ReturnType<typeof world>>) => {
+  await w.pass();
+  await w.drafted("split-1", first, 1);
+  w.lap("lap-1", first, "failed", 1);
+  await w.pass();
+  await w.drafted("split-2", second, 1);
+  w.lap("lap-2", second, "failed", 2, { failureKind: "lost" });
+  const stopId = `flow-stop-sd-goal-failed_twice-${second}`;
+  expect(
+    await w.record.recordThreadMessage({
+      messageId: stopId,
+      body: "Stopped: rondo starts no further request toward the goal ...",
+      authorKind: "drafter",
+      authorId: FLOW_AUTHOR,
+      inReplyTo: second,
+      atMs: 5,
+      bases: [{ form: "message", messageId: second }],
+      asks: true,
+    }),
+  ).toEqual({ kind: "recorded" });
+  return stopId;
+};
+
+test("rondo#549: a failed_twice stop that no longer stands is taken back, and the flow goes on", async () => {
+  const w = await world({}, [ranked(7), ranked(8), ranked(9)], JA);
+  const stopId = await staleStop(w);
+  await w.pass();
+  const messages = await w.messages();
+  const note = messages.find((m) => m.inReplyTo === stopId);
+  expect(note?.messageId).toBe(`flow-withdrawn-${stopId}`);
+  expect(note?.authorId).toBe(FLOW_AUTHOR);
+  expect(note?.asks).toBe(false);
+  expect(note?.body).toBe(JA.flowStopWithdrawn);
+  expect(w.log).toContain(`flow     o/r: the stop '${stopId}' no longer stands; it is taken back`);
+  // Closed where the store reads it, where the page reads it, and on the
+  // goal's screen: nothing is the person's turn, and the goal is not stopped.
+  const asks = await w.record.openAsksIn(second);
+  expect(asks.kind === "read" ? asks.asks : null).toEqual([]);
+  expect(waitsOnYou(threadsOf(messages, new Set(), new Map()), [])).toEqual([]);
+  expect(await flowStopOf(w.record, messages, "g-1", "sd-goal")).toBeNull();
+  // The lost lap still holds the flow until its start again says the end, and
+  // then the flow asks for the next request.
+  expect(w.log).toContain("flow     o/r: waiting (injection_pending)");
+  w.lap("lap-2-again-1", second, "closed", 3, { supersedesIterationId: "lap-2" });
+  await w.pass();
+  expect((await w.messages()).filter((m) => m.inReplyTo === null).map((m) => m.messageId)).toEqual([
+    first,
+    second,
+    third,
+  ]);
+  expect((await w.messages()).filter((m) => m.inReplyTo === stopId)).toEqual([note]);
+});
+
+test("rondo#549: a stop taken back and then standing again is asked again under a new id", async () => {
+  const w = await world({}, [ranked(7), ranked(8), ranked(9)]);
+  const stopId = await staleStop(w);
+  await w.pass();
+  // The start again failed too: now the two really did.
+  w.lap("lap-2-again-1", second, "failed", 3, { supersedesIterationId: "lap-2" });
+  await w.pass();
+  await w.pass();
+  const messages = await w.messages();
+  expect(messages.filter((m) => m.asks).map((m) => m.messageId)).toEqual([stopId, `${stopId}-2`]);
+  const asks = await w.record.openAsksIn(second);
+  expect(asks.kind === "read" ? asks.asks.map((one) => one.messageId) : null).toEqual([
+    `${stopId}-2`,
+  ]);
+  expect(await flowStopOf(w.record, messages, "g-1", "sd-goal")).toEqual({
+    kind: "asked",
+    reason: "failed_twice",
+    askedIn: second,
+    open: true,
+  });
+  expect(messages.filter((m) => m.inReplyTo === null)).toHaveLength(2);
+});
+
+test("rondo#549: a stop over two splits of no plans stays, and is not taken back and asked again", async () => {
+  const w = await world({}, [ranked(7), ranked(8), ranked(9)]);
+  await w.pass();
+  // The drafter split each request into nothing and asked nothing: abandoned.
+  await w.drafted("split-1", first, 0);
+  await w.pass();
+  await w.drafted("split-2", second, 0);
+  for (let pass = 0; pass < 4; pass += 1) {
+    await w.pass();
+  }
+  const messages = await w.messages();
+  expect(messages.filter((m) => m.asks).map((m) => m.messageId)).toEqual([
+    `flow-stop-sd-goal-failed_twice-${second}`,
+  ]);
+  expect(messages.some((m) => m.messageId.startsWith("flow-withdrawn-"))).toBe(false);
+});
+
+test("rondo#549: a stop the person answered stop is theirs, and is not taken back", async () => {
+  const w = await world({}, [ranked(7), ranked(8), ranked(9)]);
+  const stopId = await staleStop(w);
+  expect(
+    await w.record.recordThreadMessage({
+      messageId: "op-stop",
+      body: "stop",
+      authorKind: "operator",
+      authorId: "oidc|operator-1",
+      inReplyTo: stopId,
+      atMs: 6,
+      bases: [],
+      asks: false,
+      answerOutcome: "stop",
+    }),
+  ).toEqual({ kind: "recorded" });
+  // The two no longer read as failures, and still the person's stop holds.
+  w.lap("lap-2-again-1", second, "closed", 3, { supersedesIterationId: "lap-2" });
+  await w.pass();
+  const messages = await w.messages();
+  expect(messages.some((m) => m.messageId === `flow-withdrawn-${stopId}`)).toBe(false);
+  expect(w.log).toContain("flow     o/r: waiting (open_ask)");
+  expect(messages.filter((m) => m.inReplyTo === null)).toHaveLength(2);
+});
+
 test("the scope's cost, triage readings included, stops the flow before the request is written", async () => {
   // 10 USD, 2 reserved per lap: a 9 USD reading leaves no room for the next request.
   const w = await world();

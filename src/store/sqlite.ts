@@ -71,6 +71,7 @@ import {
   FINDING_SEVERITIES,
   type FindingBasis,
   type FindingSeverity,
+  FLOW_AUTHOR,
   FLOW_AUTHOR_PREFIX,
   type FlowAnswerDraft,
   type FlowAskDraft,
@@ -8073,9 +8074,12 @@ function openAsksIn(connection: DatabaseSync, requestMessageId: string): OpenAsk
         "WHERE m.message_id IN (SELECT id FROM thread) AND m.asks = 1 AND NOT EXISTS " +
         "(SELECT 1 FROM conversation_message r WHERE r.in_reply_to = m.message_id " +
         "AND r.author_kind = 'operator' AND r.answer_outcome = 'carry_on') " +
+        // `withdrawnByFlow`: a flow question the flow replied to is closed.
+        "AND NOT (m.author_id = ? AND EXISTS (SELECT 1 FROM conversation_message w " +
+        "WHERE w.in_reply_to = m.message_id AND w.author_id = ?)) " +
         "ORDER BY m.at_ms, m.message_id",
     )
-    .all(requestMessageId) as SqlRow[];
+    .all(requestMessageId, FLOW_AUTHOR, FLOW_AUTHOR) as SqlRow[];
   const asks: OpenAsk[] = [];
   for (const row of rows) {
     const messageId = String(row["message_id"]);
