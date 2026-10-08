@@ -28347,8 +28347,9 @@ send the change request in one step.
 3. **One press, two writes, in order.** `/revise` records a budgets-only successor of the drawn
    approval through the raise port (`D-0074` rule 4.3's writes and refusals), then asks for the
    change under the approval that write returned. A refused raise asks nothing; a change with no
-   words raises nothing. A second press whose raise and lap both landed finds its successor lap
-   and returns to the thread.
+   words raises nothing. **A raise refused because the tip moved is handed on** to the revise port
+   with the drawn approval: a second press of the same form with the same words joins the first, as
+   any double press does, and an edited or stale form is refused there.
 4. **`laps`, `cost` and `expiry` keep `D-0074` rule 4.1's raise screen.** Laps could be prefilled
    the same way; changing that is a supersession of rule 4.1, not part of this entry.
 

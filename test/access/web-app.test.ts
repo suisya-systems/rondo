@@ -929,7 +929,6 @@ test("(revise) a press drawn over spent review rounds raises them first, then sp
         revised.push(input);
         return await Promise.resolve({ ok: true, note: "" });
       }),
-      store: { read: async () => await Promise.resolve({ kind: "missing" }) },
     }) as unknown as ServedPorts;
   const form = reviseForm({
     raise: "decision-1",
@@ -955,7 +954,7 @@ test("(revise) a press drawn over spent review rounds raises them first, then sp
   raised.length = 0;
   revised.length = 0;
   const no = await served(
-    createApp(ports({ ok: false, note: "moved", why: "raiseRefusedNotTip" }), TOKEN),
+    createApp(ports({ ok: false, note: "forked", why: "raiseRefusedForked" }), TOKEN),
   );
   const refused = await send(no.base, "/revise", "POST", pressHeaders(no.base), {
     ...form,
@@ -973,6 +972,18 @@ test("(revise) a press drawn over spent review rounds raises them first, then sp
   expect(raised).toHaveLength(1);
   no.stop.abort();
   expect(await no.closed).toBe(0);
+
+  // A tip already moved -- this form's own first press, perhaps -- is the
+  // revise port's to tell: it is handed the change against the drawn approval.
+  revised.length = 0;
+  const moved = await served(
+    createApp(ports({ ok: false, note: "moved", why: "raiseRefusedNotTip" }), TOKEN),
+  );
+  const again = await send(moved.base, "/revise", "POST", pressHeaders(moved.base), form);
+  expect(again.status).toBe(303);
+  expect(revised.map((input) => input.scopeDecisionId)).toEqual(["decision-1"]);
+  moved.stop.abort();
+  expect(await moved.closed).toBe(0);
 });
 
 test("(fix-conflict) a person's press starts the fix once; a script, a stale form or no port starts nothing", async () => {
