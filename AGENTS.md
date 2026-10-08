@@ -233,15 +233,17 @@ rules, from that file's own "How to use this file":
   `Status: superseded by D-XXXX` and the replacement is appended with a new ID.
 - **Append-only forbids removing and rewriting, not annotating.** A later entry
   may add a marked, dated note to an earlier one, leaving every original claim
-  readable underneath, and the note says whether it is additive (D-0169). An
-  *additive* annotation changes nothing the entry asserted: which falsifier
-  fired, which entry answered it, that a request was carried out. D-0001 carries
-  three such annotations from D-0015 and D-0016. A *not additive* annotation
-  withdraws, narrows or replaces a clause of what the entry asserted, and ends
-  with a list of `Amends: D-NNNN <rule>` lines, one per part it changes: the entry it sits
-  in, and the rule as that entry numbers it. Changing what an entry is *for*,
-  or so much of it that its live rules can no longer be read off its text and
-  its `Amends:` lines, is a supersession and takes a new ID.
+  readable underneath (D-0169). An *additive* annotation changes nothing the
+  entry asserted: which falsifier fired, which entry answered it, that a request
+  was carried out. D-0001 carries three such annotations from D-0015 and D-0016.
+  An annotation that withdraws, narrows or replaces a clause of what the entry
+  asserted is *not additive*, says so, and ends with a list of
+  `Amends: D-NNNN <rule>` lines, one per part it changes: the entry it sits in,
+  and the part as that entry numbers it, or a few quoted words where it has no
+  number. Those lines are the mark the index reads, so an entry that changes an
+  earlier one writes that annotation there. Changing what an entry is
+  *for*, or so much of it that its live rules can no longer be read off its
+  text and its `Amends:` lines, is a supersession and takes a new ID.
 - **Cross-reference by ID only** — never by line number or heading order.
 - **Every entry states what would falsify it.** An entry taken on facts that can
   change records the fact and the date it was measured at, so a later reader can

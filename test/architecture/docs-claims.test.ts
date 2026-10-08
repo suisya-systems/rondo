@@ -211,7 +211,7 @@ describe("DECISIONS.md's index matches its entries", () => {
    * an entry's status line goes on to give the date and the gate.
    */
   const DECISIONS = readFileSync(join(ROOT, "DECISIONS.md"), "utf8");
-  const status = (text: string) => /^[a-z]+(?: by D-\d{4}|, amended)?/.exec(text)?.[0] ?? text;
+  const status = (text: string) => /^[a-z]+(?: by D-\d{4})?(?:, amended)?/.exec(text)?.[0] ?? text;
   const lines = DECISIONS.split("\n");
 
   /**
@@ -235,6 +235,7 @@ describe("DECISIONS.md's index matches its entries", () => {
     }
     annotations.push({ entry, line: index - text.length + 2, text });
   }
+  const QUOTE = /^\s*(?:\d+\.\s+|- )?>[\s>]*/;
   const AMENDS = /^\s*(?:\d+\.\s+|- )?>[\s>]*(?:- )?Amends: (D-\d{4}) (\S.*)$/;
   const amended = new Set(
     annotations.flatMap((note) =>
@@ -265,13 +266,17 @@ describe("DECISIONS.md's index matches its entries", () => {
 
   it("gives every annotation marked not additive the rules it amends", () => {
     const unnamed = annotations
-      .filter((note) => /not additive/i.test(note.text.join(" ")))
+      // The quote marks come off first: "**not" ends a line and "> additive**"
+      // starts the next often enough that the raw lines would hide 21 of them.
+      .filter((note) =>
+        /not\s+additive/i.test(note.text.map((line) => line.replace(QUOTE, "")).join(" ")),
+      )
       .filter((note) => !note.text.some((line) => AMENDS.test(line)))
       .map((note) => `${note.entry}, the annotation at line ${note.line}`);
     expect(
       unnamed,
       "An annotation that says it is not additive changes what its entry asserted, so it ends " +
-        "with one 'Amends: D-NNNN <rule>' line per part it changes (AGENTS.md section 3, D-0169).",
+        "with a list of 'Amends: D-NNNN <rule>' lines, one per part it changes (AGENTS.md section 3, D-0169).",
     ).toEqual([]);
   });
 
@@ -285,7 +290,13 @@ describe("DECISIONS.md's index matches its entries", () => {
     );
     const stray = lines
       .map((line, index) => ({ line, at: index + 1 }))
-      .filter(({ line, at }) => /^[\s>\d.-]*Amends:/.test(line) && !inside.has(at))
+      // Any quoted line naming `Amends:`, however it is spelled around it, or a
+      // bare line opening on it: a near miss of AMENDS is reported, not skipped.
+      .filter(
+        ({ line, at }) =>
+          (QUOTE.test(line) ? /\bAmends:/.test(line) : /^[\s\d.-]*Amends:/.test(line)) &&
+          !inside.has(at),
+      )
       .map(({ line, at }) => `line ${at}: ${line.trim()}`);
     expect(
       stray,
