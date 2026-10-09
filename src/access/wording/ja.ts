@@ -296,7 +296,7 @@ export const JA: Chrome = Object.freeze({
   walkAt: (at, of) => `あなたの番 ${String(at)} ／ ${String(of)}`,
   walkNext: "次へ",
   govSpent: (spent, approved) => `$${spent} ／ $${approved}`,
-  govTries: (at, of) => `${String(at)} 回目 ／ ${String(of)} 回まで`,
+  govTries: (at, of) => `この範囲で ${String(at)} 回目 ／ ${String(of)} 回まで`,
   chainAnswer: "あなたの答え",
   chainProposal: "プルリクエスト",
   chainMerge: "マージ",
@@ -506,7 +506,8 @@ export const JA: Chrome = Object.freeze({
   modelNotTaken: "チェックだけが読みました。モデルレビューは取れていません。",
   neitherReadingTaken: "チェックもモデルレビューも、この作業を読めませんでした。",
   storyHeading: "これまでの経緯",
-  storyLaps: (count) => `この作業はこれで ${String(count)} 周目です。`,
+  storyLaps: (count) =>
+    `この作業はこれで ${String(count)} 周目です。以下の周目はこの作業の中での数で、依頼全体の通し番号ではありません。`,
   storyPart: (part, parts) =>
     `この依頼は ${String(parts)} つに分けて起案されました。このゲートはその ${String(part)} つ目 (作業 ${String(part)}) のものです。`,
   storyLapName: (n, current) => (current ? `${String(n)} 周目 (今回)` : `${String(n)} 周目`),

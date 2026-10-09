@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 
 import type {} from "../../src/access/inbox.js";
 import { viewHref } from "../../src/access/page-logic/routes.js";
+import { JA } from "../../src/access/wording/ja.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import { revisionPlan } from "../../src/refrain/revision.js";
 import { contentDigest } from "../../src/store/plan.js";
@@ -1504,6 +1505,8 @@ test("the gate opens on what happened: each lap, what it was asked, what it comm
     box.indexOf("</section>", box.indexOf('id="story"')),
   );
   expect(story).toContain(EN.storyLaps(2));
+  expect(EN.storyLaps(2)).toContain("within this work");
+  expect(JA.storyLaps(2)).toContain("この作業の中での数");
   expect(story).toContain(EN.storyToldRequest);
   expect(story).toContain(EN.modelRaised(1, 1));
   expect(story).toContain(EN.storyEnded("revise", ""));
