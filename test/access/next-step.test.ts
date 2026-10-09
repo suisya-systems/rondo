@@ -274,6 +274,15 @@ test("rondo#618: once published under a scope that merges on green, the result s
     expect(yours).toContain(wording.resultNotMerged);
     expect(yours).not.toContain(wording.resultMergesOnGreen);
   }
+  // A line the person released is out of the checks host's window.
+  const store = {
+    ...world.store,
+    laneLedger: async () =>
+      (await world.store.laneLedger()).map((line) => ({ ...line, releasedBy: "person" })),
+  } as unknown as typeof world.store;
+  const released = await operatorPage(scoped({ ...ports, store }, MERGES), "t", threadOf("req-1"));
+  expect(released).toContain(EN.resultNotMerged);
+  expect(released).not.toContain(EN.resultMergesOnGreen);
 });
 
 test("rondo#618: where the checks host will not merge on green after all, the result says the merge is the person's", async () => {

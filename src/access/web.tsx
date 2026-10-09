@@ -1042,8 +1042,8 @@ async function threadCentre(
   const { goals } = triage;
   // Whether the result's merge is rondo's on green (D-0187, rondo#618), the
   // test `mergeOnGreen` asks: the strip says so rather than *merging is yours*.
-  // Not over a head somebody else moved, nor once a merge was withheld for a
-  // reason the checks host does not retry: that merge is the person's press.
+  // Not over a head somebody else moved, a line released, or a merge withheld
+  // for a reason it does not retry: the checks host reads none of them again.
   const resultRecord = resultLap(selectedLaps.map((each) => each.record));
   const withheldWhy = selectedResult?.withheld?.why;
   const mergesOnGreen =
@@ -1051,6 +1051,9 @@ async function threadCentre(
     selectedResult?.merged == null &&
     selectedResult?.moved == null &&
     !NOT_RETRIED.some((token) => token === withheldWhy) &&
+    (await ports.store.laneLedger()).some(
+      (line) => line.releasedBy === null && line.lapIds.includes(resultRecord.id),
+    ) &&
     (await scopedAuthority(ports, resultRecord.id, ["merge_default_branch"]).catch(() => null)) !==
       null;
   const centreContent = noSuchThread
