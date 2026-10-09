@@ -212,7 +212,9 @@ describe("DECISIONS.md's index matches its entries", () => {
    */
   const DECISIONS = readFileSync(join(ROOT, "DECISIONS.md"), "utf8");
   const status = (text: string) => /^[a-z]+(?: by D-\d{4})?(?:, amended)?/.exec(text)?.[0] ?? text;
-  const lines = DECISIONS.split("\n");
+  // A Windows checkout ends each line in CRLF, and AMENDS's `.*$` cannot run
+  // over the `\r` a "\n" split leaves behind (#614).
+  const lines = DECISIONS.split(/\r?\n/);
 
   /**
    * Every dated annotation, with the entry it sits in (D-0169). An annotation
