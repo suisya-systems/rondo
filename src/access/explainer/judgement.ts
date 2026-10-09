@@ -15,7 +15,7 @@ import { sectionFramer } from "../framing.js";
 import { answerJson } from "../model-draft/judgement.js";
 import { firstLine } from "../page-logic/threads.js";
 import type { Chrome } from "../wording.js";
-import { basisOf, type ExplainerMaterial } from "./material.js";
+import { acrossRequests, basisOf, type ExplainerMaterial, waitLocator } from "./material.js";
 
 export const EXPLAINER_INSTRUCTIONS_VERSION = 1;
 /** The most one answer may cost, and what is counted when its cost is not reported. */
@@ -38,6 +38,8 @@ export function explainerName(row: DrafterRow): string {
 /** Why no model's answer is shown, each a different sentence to the person. */
 export type Unexplained =
   | { readonly kind: "noApproval" }
+  /** A question across every request: no one request's approval to count it against (D-0189). */
+  | { readonly kind: "acrossRequests" }
   | { readonly kind: "expired" }
   | { readonly kind: "tooLittleLeft"; readonly leftUsd: number }
   /** A model ran: the run failed, or its answer did not pass the check. */
@@ -52,6 +54,9 @@ export function admission(
   material: ExplainerMaterial,
   nowMs: number,
 ): { readonly kind: "admitted"; readonly scopeDecisionId: string } | Unexplained {
+  if (acrossRequests(material)) {
+    return { kind: "acrossRequests" };
+  }
   const scope = material.scope;
   if (scope === null) {
     return { kind: "noApproval" };
@@ -223,6 +228,8 @@ function unexplainedLine(words: Chrome, why: Unexplained): string {
   switch (why.kind) {
     case "noApproval":
       return words.explainNoApproval;
+    case "acrossRequests":
+      return words.explainAcrossRequests;
     case "expired":
       return words.explainExpired;
     case "tooLittleLeft":
@@ -243,6 +250,9 @@ export function deterministicAnswer(
   words: Chrome,
   why: Unexplained,
 ): { readonly answer: string; readonly claims: readonly Claim[] } {
+  if (acrossRequests(material)) {
+    return acrossAnswer(material, words, why);
+  }
   const byId = new Map(material.thread.map((m) => [m.messageId, m]));
   const claims: Claim[] = [];
   const about = material.question.about;
@@ -328,6 +338,49 @@ export function deterministicAnswer(
   };
 }
 
+/**
+ * The answer to a question that opened its own thread (rondo#626, D-0189):
+ * what was asked, then each wait on the person under the request it is in,
+ * every one resting on the row that waits. Never empty: the question is a
+ * claim, and with nothing waiting that is said, resting on the question.
+ */
+function acrossAnswer(
+  material: ExplainerMaterial,
+  words: Chrome,
+  why: Unexplained,
+): { readonly answer: string; readonly claims: readonly Claim[] } {
+  const question = { form: "message", messageId: material.question.messageId } as const;
+  const waitWord = {
+    ask: words.explainWaitsAsk,
+    gate: words.explainWaitsGate,
+    decide: words.explainWaitsDecide,
+    overdue: words.explainOverdue,
+    scope: words.explainWaitsScope,
+  };
+  const claims: Claim[] = [
+    { label: words.explainYouAsked, value: firstLine(material.question.body), basis: question },
+    ...material.waits.flatMap((wait): Claim[] => {
+      const basis = basisOf(waitLocator(wait));
+      return basis === null
+        ? []
+        : [
+            {
+              label: wait.request?.title || words.explainRequest,
+              value: waitWord[wait.kind],
+              basis,
+            },
+          ];
+    }),
+  ];
+  if (claims.length === 1) {
+    claims.push({ label: words.explainWaiting, value: words.explainNothingWaits, basis: question });
+  }
+  return {
+    answer: `${unexplainedLine(words, why)}\n${words.explainAcrossLead}`,
+    claims,
+  };
+}
+
 /** What an answer cost, as its body says it. */
 export type AnswerCost =
   | { readonly kind: "free" }
@@ -362,10 +415,13 @@ export function answerBody(
             ...(cost.costUsd > EXPLAINER_CAP_USD ? [words.explainOverCap(cap)] : []),
           ];
   const lead = [answer, "", ...claims.map((claim) => `- ${claim.label}: ${claim.value}`), ""];
-  const where = [
-    ...(material.waits.some((w) => w.kind === "gate") ? [words.explainWhereToAnswer] : []),
-    ...(material.waits.some((w) => w.kind === "scope") ? [words.explainWhereToApprove] : []),
-  ];
+  // Across every request, each wait's own link is where it is answered.
+  const where = acrossRequests(material)
+    ? []
+    : [
+        ...(material.waits.some((w) => w.kind === "gate") ? [words.explainWhereToAnswer] : []),
+        ...(material.waits.some((w) => w.kind === "scope") ? [words.explainWhereToApprove] : []),
+      ];
   return {
     body: [...lead, words.explainBand, ...costLines, ...where].join("\n"),
     page: [...lead, ...where].join("\n").trimEnd(),

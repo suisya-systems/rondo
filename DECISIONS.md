@@ -218,11 +218,12 @@ C-NN`, so the spaces can never be read as one.
 | D-0176 | An approvable proposal whose successor identity is already in the store no longer waits on the person: the inbox counts it in a line and the page's count leaves it out, and the row stays readable | accepted |
 | D-0183 | A list row that waits on nobody is one line, its title and its time, with its state in the mark's shape; the sentence and the repository stay in the markup for a reader, and a waiting row keeps both lines | accepted |
 | D-0184 | The page offers light, dark and the system's palette, kept in this browser as the text size is; the system's is the default, and each colour token holds both values in one declaration | accepted |
-| D-0177 | A person asks rondo on the page what something means or what happened, and a model explainer answers in the thread: an explanation with bases that binds nothing, counted against the approval in force, capped per answer | accepted |
+| D-0177 | A person asks rondo on the page what something means or what happened, and a model explainer answers in the thread: an explanation with bases that binds nothing, counted against the approval in force, capped per answer | accepted, amended |
 | D-0185 | The page is designed for the half screen beside an editor as well as for 2560: about 760px and about 1280px are widths of their own, and above a phone the list and the thread scroll on their own | accepted |
 | D-0186 | A paused goal flow is a row under *your turn* in the list, on every view, leading to the screen that resumes it; it is the one row there that is not a request | accepted |
 | D-0187 | A person's approval at the gate carries the lap to its pull request under a scope that allows it, without a second press, and the page's publish sentences say whether rondo then merges on green | accepted, amended |
 | D-0188 | A request whose only wait is the goal flow's stop says the flow waits, not the request, though it stays under *your turn* | accepted |
+| D-0189 | The secretary-like role rondo#626 asks for is the one `D-0063`, `D-0064`, `D-0067`, `D-0068` and `D-0177` already split across parts: no new role and no wider advisory, the gaps between the parts listed with where each is closed, and a question asked from the new request box answered across every request | accepted |
 
 ---
 
@@ -13204,6 +13205,11 @@ acceptance, as that entry's third gate answer requires. Two points were put to t
 the recommended option on both; see "What was put to the human gate, and its answer". Refs `D-0009`, `D-0019`, `D-0020`, `D-0022`,
 `D-0029`, `D-0032`, `D-0034`, `D-0036`, `D-0061`, `D-0062`, `D-0064`.
 
+> **Annotation (2026-10-10, from D-0189).** Added after this entry was accepted, and additive.
+> rondo#626 asked for a secretary-like role. `D-0189` answers that it is the role section 1 maps,
+> carried by the advisory, the surface and the store under one voice, with no new role and no
+> wider advisory. That entry's rule 4 lists the gaps that remain and where each one is closed.
+
 > **Annotation (2026-09-20, from D-0079).** Added after this entry was accepted, and additive:
 > nothing below is removed or rewritten. **Rule 4.2**: with an operator language set, the prompt of a
 > drafted plan is written in that language rather than its template's (`D-0079` section 2.2).
@@ -15578,6 +15584,14 @@ residuals and says nothing about how `D-0068` answers them.
 the recommended option on both; the answers are recorded in section "What was put to the human gate,
 and its answer". Refs `D-0019`, `D-0023`, `D-0032`, `D-0033`, `D-0034`, `D-0036`, `D-0038`, `D-0046`, `D-0048`,
 `D-0054`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`, `D-0067`.
+
+> **Annotation (2026-10-10, from D-0189).** Added after this entry was accepted, and additive.
+> Section 1 rule 2.5's second bullet, a question in a message that opens a thread, is built in a
+> narrower form (rondo#626). The question is the new request box's *Ask rondo* press, and its
+> answer lists what waits on the person across every request, each wait under its request with
+> its row as the basis. Rule 2.1's wait reading is still unbuilt, so the answer has no *in flight*,
+> *held by order* or *held by bound* lines and gives no reason beyond the kind of wait. The list
+> draws such a thread as a question rather than a request. It still proposes no split.
 
 > **Annotation (2026-10-08, from D-0177).** Added after this entry was accepted, and **not additive**.
 > Section 1 rule 2.5 changes for a question asked by press. **Recognising a question is the
@@ -29643,6 +29657,20 @@ review for rondo#318).
 `D-0175` (their annotations from this entry). Refs `D-0032`, `D-0044`, `D-0063`, `D-0064`,
 `D-0071`, `D-0083`, `D-0097`, `D-0122`, `D-0168`, `D-0173`, `D-0175`.
 
+> **Annotation (2026-10-10, from D-0189).** Added after this entry was accepted, and **not
+> additive**: three rules change for a question that opens a thread of its own (rondo#626). Rule
+> 2: the page also offers *Ask rondo* on the new request box, and a question sent from there has
+> no thread and carries no basis; one with a basis and no thread is refused. Rule 3: such a
+> question's material is everything that waits on the person across every request, each wait
+> named by its request, with no laps and no approval. Rule 5: such a question is never admitted to
+> a model, since no one request's approval stands behind it; the deterministic answer is written
+> and costs nothing (`D-0189` rule 5). A question asked in a request's thread is unchanged. Nothing
+> below is edited.
+>
+> - Amends: D-0177 rule 2
+> - Amends: D-0177 rule 3
+> - Amends: D-0177 rule 5
+
 ### Context
 
 A person reading the page meets a gate, a lap's status, a check that went red or a word that is
@@ -30119,3 +30147,245 @@ the stop read as the answered question asked again (`D-0173 K3`/`K4`).
 
 - A person who reads a flow-stopped row as the request asking again.
 - A stop asked anywhere but a flow request's thread, which this reading would not find.
+
+## D-0189 — The secretary-like role rondo#626 asks for is the one `D-0063`, `D-0064`, `D-0067`, `D-0068` and `D-0177` already split across parts: no new role and no wider advisory, the gaps between the parts listed with where each is closed, and a question asked from the new request box answered across every request
+
+**Status:** accepted (2026-10-10, rondo#626, with its pull request's approval). Amends `D-0177`
+rules 2, 3 and 5 (its annotation from this entry). Supersedes nothing. Refs `D-0022`, `D-0036`,
+`D-0061`, `D-0062`, `D-0063`, `D-0064`, `D-0066`, `D-0067`, `D-0068`, `D-0071`, `D-0072`,
+`D-0083`, `D-0097`, `D-0112`, `D-0128`, `D-0147`, `D-0168`.
+
+### Context
+
+rondo#626 asks for a role that works like claude-org's secretary. A person gives it a request in
+plain words, it asks back with options when the request is unclear, it splits the work and sends
+it out as laps, it says what is going on and what waits on the person, and it raises only real
+decisions. The issue gives four done criteria:
+
+- **C1.** One role on the page takes a plain-words request, asks back with options, and splits and
+  dispatches laps with no contract written by hand.
+- **C2.** The same role answers *what is going on / what is waiting on me / what happened* from one
+  place, in plain language, and every statement traces to the rows it rests on.
+- **C3.** Every decision the role asked the person for is recorded durably, and survives a host
+  restart and a handover.
+- **C4.** Only real decisions reach the person, and routine progress does not.
+
+The issue reads the advisory as narrow (`D-0022`) and names `D-0061` and `D-0062` as covering
+parts of the role. That reading is out of date. `D-0022` is superseded by `D-0063`, which made the
+advisory *the secretary's drafting half* and mapped the secretary's role onto rondo part by part.
+`D-0064` decided what reaches the person (P1-P5) and what the organisation decides without asking
+(O1-O8). `D-0067` placed the secretary's running half on existing parts and refused a new owner
+for it. `D-0068` gave the parts one voice. `D-0177` added *Explain*. **So the question rondo#626
+puts, widen the advisory or add a new role, was already answered once, on 2026-09-13.** This
+entry checks that answer against the four criteria, and against what is now built. It names what
+each option loses as well as what it gains. It lists the gaps that remain and where each one is
+closed, and it builds the first of them.
+
+The owner was not available when this was written and had asked for the recommended option to be
+taken on every open point, with the reason recorded. Each point below is taken that way, and none
+of them is irreversible.
+
+### What was measured, and how
+
+At rondo `3d92cad` on **2026-10-10**, by reading `DECISIONS.md`, `src/` and `test/`, and by
+running `npm run verify` (2622 passed, 22 skipped, before this change). claude-org's secretary is
+the one `D-0063`'s measurement read. Line numbers drift: re-measure the claim, not the number.
+
+- **C1 is built, except at its edges.**
+  - A plain-words request enters through the new request box (`/request`).
+  - The model drafter runs once for each operator message and picks one act: split, ask or none
+    (`src/access/model-draft/judgement.ts`).
+  - An ask-back carries options, what each gives up and one recommendation, with `asks` set.
+  - A split names plans from held templates and agent types (`D-0062`, `D-0069`).
+  - The person approves one drafted scope (`D-0151`, `D-0154`), and the order tick then starts
+    every part (`src/access/order-host.ts`).
+  - Nobody writes a plan or a contract by hand.
+  - **What is missing.** The options are prose in the message body, flattened by `optionLines`
+    (`src/access/question.ts`). The person answers by typing and pressing *Carry on*, and no single
+    press chooses an option. A store with no template plan gets back only a list of holes
+    (`D-0063` rule 4.4). `D-0071` rule 7.4's two planted drafter requests are not recorded under
+    `docs/operations/`.
+- **C2 is built per request and not across requests.**
+  - Inside a request thread, the `D-0177` explainer answers a question asked by press, with checked
+    bases (`src/access/explainer/`).
+  - Across requests, *what waits on me* is drawn but cannot be asked for in words. The list's *your
+    turn* rows and the header's count show it (`src/access/page-logic/model.ts`).
+  - `/question` refused a post with no `in_reply_to`, and the new request box drew no *Ask rondo*
+    (`src/access/page/composer.tsx`). The explainer's material was cut to the question's own
+    request (`src/access/explainer/material.ts`).
+  - `D-0068` section 1 rule 2.5 decided that a question which opens a thread covers every open line
+    on the host. It is decided and not built, and so are that entry's wait reading and patrol (its
+    rondo#311 annotation).
+  - `D-0064` P5, one report per request, is not built either. The deterministic drafter reports
+    each lap's events into the thread (`src/access/conductor.ts`, `D-0061` step 5.3), and no
+    message rolls them up per request.
+- **C3 is met for every decision rondo asks for today.** Every answer the person gives is an
+  append-only SQLite row with an actor and a time:
+  - `conversation_message` holds replies, with `answer_outcome` for a press on an ask;
+  - `human_decision`, `scope_decision` and `gate_answer` hold approvals and gate answers;
+  - `flow_ask` and `flow_answer`, `triage_decline` and `goal` hold the goal flow's questions and
+    the person's answers;
+  - `held_start` holds a start waiting to be retried.
+  What the organisation decided without asking is `scope_consumption`, and what it kept from the
+  person is `operator_attention`. Whether an ask is open is read from rows each time
+  (`src/store/thread.ts`), and the drafter finds its work by rows, so a restart loses no
+  decision. **What is missing:**
+  - The cross-request memory of what the person wants, `D-0067` rule 6's `standing_policy`, is
+    decided and not built (`src/access/model-draft/judgement.ts` passes it as always empty).
+  - No single reader joins the nine tables into one list of decisions for a successor.
+  - Which option the person chose in an ask-back can be read only from prose.
+  - The explainer holds a paid but unwritten answer in memory, so a restart pays for it again.
+    That loses money, not a decision.
+- **C4 is decided and mostly built.**
+  - *Your turn* holds only asks, gates, drafted scopes and paused flows (`waitsOnYou`,
+    `scopesAwaitingYou`).
+  - The per-lap reports are written with `asks` unset, so they never ring.
+  - A clear gate is answered by rondo (`D-0125`), and push, pull request and merge go by the
+    scope (`D-0126`, `D-0187`).
+  - **What is missing.** Triage puts open points on almost every candidate (measured in rondo#487),
+    so the goal flow asks almost every time. Nothing measures whether the drafter asks too often.
+    A conflict with a standing policy cannot become P3 while no policy record exists. P5 arrives
+    lap by lap rather than once per request.
+
+### Decision
+
+1. **rondo's secretary-like role is the parts `D-0063` section 1 names, and this entry adds no
+   role.** For rondo#626, the role is:
+   - the **advisory**, which drafts: it reads the request, asks back, drafts a split, brings the
+     material for a point in dispute with one recommendation, reports, proposes next work
+     (`D-0097`) and explains (`D-0177`);
+   - the **operating surface**, which acts inside a scope a person approved: it tests the draft
+     against the scope, hands the work over and records each act against the scope
+     (`D-0064` section 3, `D-0066`);
+   - the **store**, which remembers (`D-0067` R7);
+   - **one voice**: every message is shown as `rondo`, and the column saying which part wrote it
+     stays (`D-0068` section 1 rule 1).
+
+   `D-0063`'s two lines hold unchanged. **Every summary and proposal leads back to its material**,
+   which is the bases rule rondo#626 asks to keep. **An act that cannot be undone is approved by a
+   person**, and the advisory decides nothing.
+
+2. **What the role may do without the person is `D-0064`'s list, unchanged.** Inside a scope the
+   person approved, the organisation decides without asking:
+   - the split, the agent type and a worker's wording (O1-O3);
+   - a retry or a revise (O4);
+   - review findings below the threshold (O5);
+   - the gate answer when it is clear (O6, `D-0125`);
+   - push, pull request and merge on green by the scope (O7, `D-0126`, `D-0187`);
+   - what it keeps from the person (O8).
+
+   What reaches the person is:
+   - a scope to approve or widen (P1);
+   - a question back (P2);
+   - a point in dispute, with one recommendation (P3);
+   - an irreversible act (P4);
+   - a report (P5).
+
+   This entry widens neither list. rondo#626's *only real decisions are raised* is that test, and
+   what is still short of it (the measurements under C4) is closed under rule 4. No new rule is
+   needed.
+
+3. **The role's decisions are durable as rows, and this entry adds no table.** Every decision the
+   role asks the person for is an append-only row, listed under C3 above. A host restart re-reads
+   them, and a successor or a handover reads them from the store, as `D-0067` R7 decided: no
+   session holds coordination state. Two durable records are still missing, and each is closed
+   under rule 4 and not here: `D-0067` rule 6's `standing_policy`, and one reader over the decision
+   rows.
+
+4. **The gaps between the parts, each with where it is closed.** These are the gaps that keep
+   rondo#626 open after this entry. Each row needs a later issue, and a row marked *new entry*
+   needs a decision of its own before it is built (AGENTS.md section 7).
+
+   | Criterion | Gap | Where it is closed |
+   |---|---|---|
+   | C1 | An ask-back's options are prose, and no single press chooses one | **New entry.** It amends `D-0072` rule 1 and `D-0112`: store the options and the recommended index beside the body, and give each option a *carry on* press whose words are that option's text |
+   | C1 | `D-0071` rule 7.4's two planted drafter requests are not recorded | An operations record under `docs/operations/`, with no decision needed |
+   | C1 | A store with no template gets back only a list of holes | `D-0071`'s *paste a plan* path stands. A drafter that writes a plan with no template widens `D-0063` rule 4 and needs a **new entry** |
+   | C2 | No place answers *what waits on me* across every request | **This entry, rule 5** (built) |
+   | C2 | No reason per wait, and no *in flight* or *held by order* line in an answer | `D-0068` section 1's wait reading, as decided |
+   | C2, C4 | P5 arrives lap by lap, not once per request | `D-0064` P5 as decided: a deterministic roll-up that is written once every part of a request's approved split has ended (`partsOf`), with the bases of each part |
+   | C2 | The empty centre has no *since you last looked* | `D-0083` rule 4 as decided, reusing the inbox's `changed` |
+   | C3 | No `standing_policy` | `D-0067` rule 6 as decided |
+   | C3 | No single reader over the decision rows | A derived reader that adds no table (`D-0032` rule 3), with no decision needed |
+   | C4 | An open `flow_ask` is not a row under *your turn* | **New entry.** It amends `D-0147`, as `D-0186` did for a paused flow |
+   | C4 | Triage puts open points on almost every candidate | **New entry.** It amends `D-0097`'s open points with a test for which of them are real decisions |
+
+5. **The first slice: the new request box asks rondo across every request.** This builds a
+   narrower form of `D-0068` section 1 rule 2.5's second bullet.
+   1. **A question may open a thread of its own.** The new request box gains *Ask rondo* as a
+      second submit, the same press the reply box has. A question is still recognised only by
+      the person's press (`D-0177` rule 2). A question with no thread names no place, so `/question`
+      refuses one that carries `about` and no `in_reply_to`.
+   2. **Its material is everything that waits on the person, across every request.** The reading
+      is the one the list's *your turn* uses: an unanswered ask, a lap at its gate, a lap held for a
+      decision with no gate to answer, a lap past its plan's ceiling, and a drafted scope nobody
+      has decided. Each wait carries its request's id and first line, and the wait's own row is a
+      locator the answer may cite. The material has no laps and no approval.
+   3. **It is answered from the records, and never by a model.** No one request's approval stands
+      behind a question about every request, so `D-0177` rule 5 has nothing to count a run against.
+      Admission says so as a reason of its own, `acrossRequests`, and the deterministic answer is
+      written. The answer costs nothing.
+   4. **The answer names each wait under its request**, with the wait's row as its basis, so each
+      line leads to the place where it is answered. With nothing waiting, it says so, resting on the
+      question. It drops the *answer it at the gate in this thread* lines, which would name a thread
+      the answer is not in. It is a `drafter` message with `asks` unset, and an `explanation`
+      proposal, as `D-0177` rule 4 has it.
+   5. **The list names such a thread as a question.** Its row says *a question to rondo*, not *not
+      started*, and its thread draws no scope card and no steps, because a question asks for no
+      work. `D-0068` rule 2.5 calls such a thread a request that ends in its answer. It still ends
+      there and proposes no split, but the list does not call it a request.
+   6. **Where it lives.** The code is in `src/access/explainer/` (`material.ts` and
+      `judgement.ts`), plus the composer, the `/question` route, the list's row state, and one
+      guard in `web.tsx` (`D-0168`). The words are in `src/access/page/explain-words.ts` and
+      `src/access/page/words.ts`, in both catalogues (`D-0079`).
+
+### Options considered
+
+The test for each option is whether a person could hand rondo a request and be supported the way
+the claude-org secretary supports them.
+
+| Option | What it gains | What it loses |
+|---|---|---|
+| **A. A new `secretary` role**: one module that drafts and acts, with its own authority | One name and one place to point at. The closest match to claude-org's mental model | `D-0022`'s three authorities, which `D-0063` kept: advise, compose and issue would have one owner. A second owner of acts the surface already owns (the scope test, admission, the record against the scope). `D-0067` options A and C refused a role of its own for the running half for this reason, and C added that rondo's parts are functions over one store, so a split into roles buys no context. In claude-org, too, the secretary *relays* a decision and never makes one (`D-0063` measurement) |
+| **B. Widen the advisory to act**: hand over and approve inside the scope | One hop less between a draft and its admission | `D-0063`'s second line, *the advisory decides nothing*. The import boundary that keeps `src/advisory` pure (`D-0006`). Re-deriving a deterministic proposal. `D-0067` option B was refused for this reason |
+| **C. The parts, named as one role, with the gaps listed** (taken) | Nothing decided is reopened, and every built part counts toward rondo#626. Each gap gets an owner and a place where it is closed, and the first one is built | **No single module to point at.** *The secretary* is read across five entries, and a gap can fall between them, as the P5 report and `standing_policy` did. The table in rule 4 is the guard against that, and it guards only while it is kept current |
+| **D. One box that reads intent**: a model decides whether each message is a request, a follow-up, an answer or a question | The secretary's single conversation: the person never picks a button | `D-0177` rule 2. A misread reply could start paid work, or swallow an answer to a gate or an ask. `D-0177` refused this for that reason, and nothing has changed since. **Not taken now.** It stays open as a later entry in which a model *proposes* an intent and a press confirms it |
+
+Within option C, two smaller choices were taken as recommended.
+
+- **The cross-request answer is deterministic, not a model's.** A model's answer has to be counted
+  against an approval (`D-0177` rule 5), and a question about every request has none to count
+  against. Charging it to the newest approval or to the week's allowance would be a spend that
+  approval does not bound. Taken: deterministic. It costs nothing, and it is checked by
+  construction.
+- **The first slice is the cross-request question, not the P5 report.** The question closes C2's
+  *from one place* with a rule already decided (`D-0068` rule 2.5) and code already built (the
+  explainer). The P5 roll-up needs a trigger at the end of a split, and that trigger is more than
+  a thin slice.
+
+### What it costs
+
+- The new request box has two submits, so a person who presses the wrong one either asks a
+  question or starts work. The same is true of the reply box today.
+- A question thread is a list row that is not a request, and it is drawn without a scope card,
+  which is one more state on the page. A reply posted inside such a thread is not drafted,
+  because its opener asks for no work (`asksForWork`). A person who wants work done uses the new
+  request box.
+- The cross-request answer says only what waits on the person. It does not yet say what is in
+  flight, what is held, or why. That is `D-0068`'s wait reading, still unbuilt.
+
+### What would falsify it
+
+- A person who asks *what is waiting on me?* on the new request box and finds something waiting
+  that the answer did not name, or the reverse. The answer and the *your turn* list read the same
+  rows, so a difference between them is a bug in one of the two.
+- A gap that rondo#626 needs and that neither rule 4's table nor a decided entry covers. If
+  option C's guard has failed, the role needs one owner after all, which is option A's argument.
+- A person who, given the choice, keeps typing questions into the reply box as plain replies and
+  is not answered. That is the evidence option D would need.
+
+### Annotations this entry adds
+
+- `D-0177`, **not additive**: rules 2, 3 and 5 for a question that opens a thread of its own.
+- `D-0068`, additive: section 1 rule 2.5's second bullet is built in a narrower form.
+- `D-0063`, additive: rondo#626's role is the one section 1 maps, and this entry lists its gaps.

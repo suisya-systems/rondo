@@ -37,7 +37,9 @@ export type RowState =
   | "finished"
   | "stopped"
   | "drafting"
-  | "notStarted";
+  | "notStarted"
+  /** A thread a person opened with a question to rondo, which asks for no work (D-0189). */
+  | "question";
 
 /** One request, as the list draws it. */
 export interface RequestRow {

@@ -2291,7 +2291,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       if (typeof posted !== "string" || !SENT_MESSAGE_ID.test(posted)) {
         return refused(c, 400, "sendRefusedForm", back);
       }
-      // A question is a reply box's second submit too (rondo#401): its minted id, as a question's.
+      // A question is a box's second submit (rondo#401), with no thread one of its own (D-0189).
       const messageId =
         kind === "question" ? `question-${posted.slice(posted.indexOf("-") + 1)}` : posted;
       const asked = typeof form["about"] === "string" ? form["about"] : "";
@@ -2303,8 +2303,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       if (typeof body !== "string" || body.trim() === "") {
         return refused(c, 400, "sendRefusedNoWords", back);
       }
-      const inReplyTo = kind === "request" ? null : back;
-      if (kind !== "request" && (inReplyTo === null || inReplyTo === "")) {
+      const inReplyTo = kind === "request" || back === "" ? null : back;
+      if (inReplyTo === null && (kind === "reply" || about !== null)) {
         return refused(c, 400, "sendRefusedForm", null);
       }
       const message = { messageId, body, inReplyTo, ...(kind === "question" ? { about } : {}) };

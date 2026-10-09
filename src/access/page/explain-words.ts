@@ -24,6 +24,14 @@ export interface ExplainWords {
   readonly explainFree: string;
   /** Why no model was asked: nothing approved to count its cost against. */
   readonly explainNoApproval: string;
+  /** Why no model was asked: the question spans every request, so no one approval counts it. */
+  readonly explainAcrossRequests: string;
+  /** The lead of an answer across every request (D-0189). */
+  readonly explainAcrossLead: string;
+  /** The label of the question itself in an answer across every request. */
+  readonly explainYouAsked: string;
+  /** Nothing waits on the person anywhere. */
+  readonly explainNothingWaits: string;
   /** Why no model was asked: the approval in force has expired. */
   readonly explainExpired: string;
   /** Why no model was asked: less left than one answer may cost. */
@@ -80,6 +88,11 @@ export const EXPLAIN_EN: ExplainWords = Object.freeze({
   explainFree: "This answer spent nothing: no model was asked.",
   explainNoApproval:
     "No model was asked: this request has no approval in force to count the cost against.",
+  explainAcrossRequests:
+    "No model was asked: a question about every request is answered from rondo's records alone.",
+  explainAcrossLead: "Here is what waits on you, request by request.",
+  explainYouAsked: "You asked",
+  explainNothingWaits: "nothing waits on you now",
   explainExpired: "No model was asked: the approval for this request has expired.",
   explainTooLittleLeft: (left, cap) =>
     `No model was asked: the approval has $${left} left, less than the $${cap} an answer may cost.`,
@@ -129,6 +142,11 @@ export const EXPLAIN_JA: ExplainWords = Object.freeze({
   explainOverCap: (cap) => `1 回の上限 $${cap} を超えています。`,
   explainFree: "この回答に費用はかかっていません。モデルには尋ねていません。",
   explainNoApproval: "モデルには尋ねていません。この依頼には費用を数える承認がまだありません。",
+  explainAcrossRequests:
+    "モデルには尋ねていません。すべての依頼にまたがる質問には、rondo の記録だけから答えます。",
+  explainAcrossLead: "あなたを待っているものを、依頼ごとにまとめます。",
+  explainYouAsked: "あなたの質問",
+  explainNothingWaits: "いまあなたを待っているものはありません",
   explainExpired: "モデルには尋ねていません。この依頼の承認は期限が切れています。",
   explainTooLittleLeft: (left, cap) =>
     `モデルには尋ねていません。承認の残りが $${left} で、1 回の上限 $${cap} に足りません。`,
