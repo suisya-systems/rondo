@@ -27,7 +27,11 @@
  * not the React half that `page/faces.tsx` and its siblings are.
  */
 import { BASIS_FORMS, type Basis } from "../../advisory/proposal.js";
-import type { IterationRecord, ThreadMessageDraft } from "../../store/records.js";
+import {
+  type IterationRecord,
+  QUESTION_ID_PREFIX,
+  type ThreadMessageDraft,
+} from "../../store/records.js";
 import { basisLine } from "../advisory.js";
 import { type ForgeRead, issueName } from "../issue-read.js";
 import { viewHref } from "../page-logic/routes.js";
@@ -392,7 +396,8 @@ export function basisWord(
         : [...gates.values()].find((id) => form === "iteration" && id === basis["iterationId"]);
     if (root !== null && lap !== undefined) {
       href = `${viewHref({ kind: "thread", messageId: root, to: null, gate: lap }, wording.lang)}#answering`;
-    } else if (root !== null && form === "scope") {
+    } else if (root !== null && form === "scope" && !root.startsWith(QUESTION_ID_PREFIX)) {
+      // A question's thread has no scope screen: its scopes are other requests' (D-0189).
       href = viewHref(
         { kind: "scope", messageId: root, rounds: null, decisionId: null, plan: null },
         wording.lang,

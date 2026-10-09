@@ -256,6 +256,10 @@ async function write(
           ? [{ form: "scope", scopeId: w.scopeId }]
           : [],
     ),
+    // Across every request (D-0189): each wait's request, whose thread is where it is answered.
+    ...material.waits.flatMap((w): JsonRecord[] =>
+      w.request === undefined ? [] : [{ form: "message", messageId: w.request.messageId }],
+    ),
     { form: "message", messageId: questionId },
     { form: "proposal", proposalId },
   ]);

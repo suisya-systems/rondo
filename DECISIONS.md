@@ -30334,9 +30334,11 @@ the one `D-0063`'s measurement read. Line numbers drift: re-measure the claim, n
       behind a question about every request, so `D-0177` rule 5 has nothing to count a run against.
       Admission says so as a reason of its own, `acrossRequests`, and the deterministic answer is
       written. The answer costs nothing.
-   4. **The answer names each wait under its request**, with the wait's row as its basis, so each
-      line leads to the place where it is answered. With nothing waiting, it says so, resting on the
-      question. It drops the *answer it at the gate in this thread* lines, which would name a thread
+   4. **The answer names each wait under its request**, with the wait's row as its basis. Its
+      bases also carry each wait's request, whose link opens the thread where the wait is answered.
+      From a question's thread a gate or a scope is named and not linked, since that thread has no
+      gate or scope screen of its own. A paused goal flow is reached from its row under *your turn*.
+      With nothing waiting, the answer says so, resting on the question. It drops the *answer it at the gate in this thread* lines, which would name a thread
       the answer is not in (this narrows `D-0177` rule 4). It is otherwise as that rule has it: a
       `drafter` message with `asks` unset, and an `explanation` proposal.
    5. **The list names such a thread as a question.** Its row says *a question to rondo*, not *not

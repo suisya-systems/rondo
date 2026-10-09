@@ -181,3 +181,17 @@ test("the goal flow's stop is said as the flow's, not as the old request it is a
     basis: { form: "message", messageId: `${FLOW_STOP}1` },
   });
 });
+
+test("on the page, the answer leads to each wait's request, and to no scope screen of the question's own", async () => {
+  const w = await asked();
+  await askAcross(w);
+  await answerAll(w);
+  const html = await operatorPage(portsOver(w), "t", {
+    kind: "thread",
+    messageId: ACROSS,
+    to: null,
+  });
+  const answer = /<article id="drafter-[^"]*"[\s\S]*?<\/article>/.exec(html)?.[0] ?? "";
+  expect(answer).toContain(`href="/?thread=${REQUEST}&amp;lang=en#${REQUEST}"`);
+  expect(answer).not.toContain(`?scope=${ACROSS}`);
+});
