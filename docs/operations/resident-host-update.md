@@ -15,8 +15,11 @@ So the first step is not an update step at all: it is the check that says the sw
 is refused the bus ([`lap-12-runbook.md`](lap-12-runbook.md) section 1), so steps 1, 3 and 4 cannot
 be done from there.
 
-Paste the blocks below into **one** terminal, in order: each uses the variables section 0 set, and
-the `unsetopt` line at the top of it covers the whole session
+Paste the blocks below into **one** terminal, in order and **one block at a time**, reading what it
+printed before you paste the next. Two of them are questions rather than steps -- step 1's and
+step 3.1's -- and the answer decides whether there is a next block at all: a lap under the in-flight
+heading means stopping here and waiting, not going on. Every block uses the variables section 0 set,
+and the `unsetopt` line at the top of it covers the whole session
 ([runbook conventions 1](runbook-conventions.md)).
 
 ## 0. The host's facts, read off its own unit
@@ -55,8 +58,21 @@ Stop and find out what wrote it.
 are read from the environment by the CLI, and **the word does not pass them on**: `rondo <anything>`
 hands its arguments to the checkout's CLI with the host's `PATH` and nothing else (`D-0080` rules
 1.1 and 1.2), so a bare `rondo inbox` in a fresh terminal refuses for a missing `RONDO_STORE`. The
-other three are only typed into commands below. If your shell cannot find the word at all, write
-`node "$CHECKOUT/bin/rondo.mjs"` wherever a step below writes `rondo`.
+other three are only typed into commands below.
+
+**If your shell cannot find the word at all** (`command -v rondo` prints nothing), what stands in
+for it is **only the commands that have something after them**. `rondo inbox --actor-id ...` in
+steps 1 and 3.1 becomes `node "$CHECKOUT/bin/rondo.mjs" inbox --actor-id ...`, which is the same
+program with the same arguments -- a word with anything after it `exec`s node on exactly that file
+([`../../scripts/start-command.sh`](../../scripts/start-command.sh)), and it is how
+[`rondo-cli.md`](rondo-cli.md) section 8 writes the command. What it does not add is the host's
+`PATH`, which `inbox` does not need: it reads rondo's own rows and starts no program of its own
+([`../../src/access/cli.ts`](../../src/access/cli.ts) dispatches it before continuo). **The bare `rondo` of step 4 has no
+substitute of that shape**, so do not extend this rule to it: with nothing after it the word is a
+program that starts the service, waits for the page and opens it, while the launcher with no
+arguments is a command line with no command -- it prints the CLI's usage and exits 0 (`parseCommand`
+in [`../../src/access/cli-parse.ts`](../../src/access/cli-parse.ts)), having started nothing. Step 4
+carries the check to run instead.
 
 ## 1. Check that no lap is running, before anything else
 
@@ -94,8 +110,8 @@ but it is deliberately **not** suspended: "a person must decide" includes rondo 
 that nothing is running, so it holds its execution slot fail-closed. It is a row to settle, not
 evidence that the host is idle.
 
-**This check is a look, not a lock.** Nothing stops a lap from starting while you build, so step 3
-asks it again immediately before the restart. Looking also moves your last-look mark and counts what
+**This check is a look, not a lock.** Nothing stops a lap from starting while you build, so step 3.1
+asks it again in its own block immediately before the restart, and this table applies there too. Looking also moves your last-look mark and counts what
 was put to you (`D-0032` rules 9 and 10) -- that is the same screen your day starts on, and it is
 the only cursor there is.
 
@@ -175,20 +191,40 @@ new bytes from old code, and 404 an asset only the new manifest names.
 
 ## 3. The restart
 
-Ask step 1's question once more -- the host has been live and admitting all through step 2 -- and
-then restart:
+**This step is two blocks, and the gap between them is where you read the answer.** The host has
+been live and admitting all through step 2, so step 1's answer is not this moment's answer, and the
+question has to be asked again -- then *read*, and only then restarted. One block holding both would
+restart a host with a lap running, which is the cost the top of this page describes.
+
+### 3.1 Ask step 1's question once more
 
 ```sh
 rondo inbox --actor-id "$RONDO_APPROVER"
 systemctl --user show -p MainPID --value rondo.service
+```
+
+- `実行中 (0)` / `in flight (0)` again, as in step 1 -- the heading with its count, and nothing
+  beneath it.
+- One number from `MainPID`, non-zero: the process that is about to be replaced. Note it; 3.2
+  compares against it.
+
+**Stop here and read that screen. Do not paste 3.2 while anything is under the in-flight heading.**
+A `performing` row is a worker that is running and spending money, and the restart in 3.2 takes down
+its whole control group: the lap ends `failed` with the kind `lost` and what it spent is never
+counted. The shorter statuses of step 1's table are no better a moment to restart in, for that
+table's reasons. So a count that is not `(0)` puts you back in step 1: wait, and ask again with this
+same block -- laps take tens of minutes -- and go on to 3.2 only when it reads `(0)`. The build of
+step 2 is done and harmless, and it waits as long as this does.
+
+### 3.2 Restart, once the count is `(0)`
+
+```sh
 systemctl --user restart rondo.service
 systemctl --user show -p MainPID --value rondo.service
 ```
 
-- `実行中 (0)` / `in flight (0)` again. If a lap started while you were building, you are back at
-  step 1: the build is done and harmless, and it waits.
-- The two `MainPID` lines are **different numbers**, the second non-zero. That is the one cheap
-  proof the process was replaced.
+- A **different number** from the one 3.1 printed, and non-zero. That is the one cheap proof the
+  process was replaced.
 - No `daemon-reload`: this changed the checkout, not the unit. (Setup is the thing that rewrites the
   unit, and it restarts the host itself when it does -- `systemctl --user try-restart rondo.service`
   in `scripts/dogfood-env.sh`.)
@@ -200,6 +236,8 @@ service is called active the moment it is spawned, before it has bound the port;
 the check.
 
 ## 4. The page opens
+
+### 4.1 The word, with nothing after it
 
 ```sh
 rondo
@@ -229,6 +267,65 @@ said is in the journal, which is yours:
 ```sh
 journalctl --user --no-pager -n 50 -u rondo.service
 ```
+
+### 4.2 Without the word: the same three things, by hand
+
+**This is the step section 0's substitute does not reach.** `node "$CHECKOUT/bin/rondo.mjs"` with
+nothing after it is a command line with no command: it prints the usage and exits 0, having started
+no service, waited for nothing and opened nothing. What the word does is in
+[`../../scripts/start-command.sh`](../../scripts/start-command.sh), and the three things it does are
+typed out below.
+
+**Start the host, and wait for the page to answer.** `$PORT` and `$UNIT` are section 0's; node is
+the one the unit runs the host with, which is where the word gets it too. The 30-second bound and
+the `fetch` line are the word's own, copied:
+
+```sh
+NODE=$(sed -n 's/^ExecStart="\([^"]*\)".*/\1/p' "$UNIT")
+URL="http://127.0.0.1:$PORT/"
+systemctl --user start rondo.service
+seconds=0
+while [ "$seconds" -lt 30 ]; do
+  if "$NODE" -e 'fetch(process.argv[1],{signal:AbortSignal.timeout(2000)}).then(()=>{},()=>process.exit(1))' "$URL"; then
+    printf 'ANSWERED after %ss: %s\n' "$seconds" "$URL"
+    break
+  fi
+  seconds=$((seconds + 1))
+  sleep 1
+done
+[ "$seconds" -lt 30 ] || printf 'NO ANSWER after 30s: %s\n' "$URL"
+```
+
+`ANSWERED` and the address is the first half. `NO ANSWER` is 4.1's failure by another route, and the
+journal above is where the service said why. Any answer at all counts -- the page answers a redirect
+at the root, and a redirect is an answer.
+
+**Then ask who answered**, because that is the half an answer alone does not give you:
+
+```sh
+ss -ltnpH "sport = :$PORT"
+systemctl --user show -p MainPID --value rondo.service
+```
+
+- The `pid=` in the `ss` line and the `MainPID` number are **the same number**. Then the page that
+  answered is this service's.
+- A **different** number, or a listener with no `pid=` at all, is somebody else on that port -- a
+  socket whose owner this user cannot see belongs to another user -- and the word counts that as a
+  rondo that did not come up. Nothing here is proven; find out what is holding the port.
+- **No `ss` on this machine** is the one case with nothing to compare, and then the page's answer is
+  all there is. The word does the same.
+
+**Then open it.** The address is the `$URL` printed above. Type it into a browser, or run whichever
+of `xdg-open`, `wslview`, `explorer.exe` or `open` this machine has -- that is the list setup picks
+the opener from, first found winning
+([`../../scripts/dogfood-env.sh`](../../scripts/dogfood-env.sh)) -- and the page in the browser is
+the swap done.
+
+**The missing word itself is not a thing to fix here.** Setup writes it, from facts it resolves, and
+a host without it is a setup that did not finish; writing it again is a setup run
+(`scripts/start-command.sh`, as `scripts/dogfood-env.sh` calls it), never a hand-edit (`D-0080` rule
+2.4). Which one it chose as the opener is spelled into the word and not into the unit, which is why
+a machine with no word has no record of it and the paragraph above offers the list instead.
 
 **"Which `main` is this?" is a question about the checkout, not about the page.** What the host runs
 is the checkout's HEAD as it stood when the process started -- which is the whole reason the restart
