@@ -97,6 +97,7 @@ import {
   latestReading,
   WORKER_QUESTION_AUTHOR,
 } from "../store/records.js";
+import { NOT_RETRIED } from "./checks-host.js";
 import { flowStopAskedFacts } from "./flow-stop.js";
 import { ago } from "./inbox.js";
 import { scopedAuthority } from "./merge.js";
@@ -1041,10 +1042,15 @@ async function threadCentre(
   const { goals } = triage;
   // Whether the result's merge is rondo's on green (D-0187, rondo#618), the
   // test `mergeOnGreen` asks: the strip says so rather than *merging is yours*.
+  // Not over a head somebody else moved, nor once a merge was withheld for a
+  // reason the checks host does not retry: that merge is the person's press.
   const resultRecord = resultLap(selectedLaps.map((each) => each.record));
+  const withheldWhy = selectedResult?.withheld?.why;
   const mergesOnGreen =
     resultRecord !== null &&
     selectedResult?.merged == null &&
+    selectedResult?.moved == null &&
+    !NOT_RETRIED.some((token) => token === withheldWhy) &&
     (await scopedAuthority(ports, resultRecord.id, ["merge_default_branch"]).catch(() => null)) !==
       null;
   const centreContent = noSuchThread

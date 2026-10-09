@@ -711,7 +711,7 @@ async function rerunOnce(
  * forge failed or did not confirm -- or the forge refused for a reason only a
  * person or a new head changes.
  */
-const NOT_RETRIED = [
+export const NOT_RETRIED = [
   "claim",
   "mergeRefusedFailed",
   "mergeRefusedUnconfirmed",

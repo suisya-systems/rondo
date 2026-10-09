@@ -30054,7 +30054,9 @@ rule 2), however it was published.
 > and rondo then merged on green. It also showed a few seconds, between the person's approve and the
 > pass's publish, when the card offered the press rule 1 removed. **The result strip's merge line is
 > a publish sentence too**: under rule 3's test it says rondo merges once the checks pass, and says
-> *merging is yours* otherwise. **And the option not taken, *draw the next-step card as rondo's
+> *merging is yours* otherwise. It also says *merging is yours* where the checks host will not merge
+> on green after all: over a head somebody else moved, and after a withheld merge it does not retry
+> (`NOT_RETRIED`). **And the option not taken, *draw the next-step card as rondo's
 > turn while the pass runs*, is taken.** It was set aside because the page could not tell a lap the
 > pass is about to publish from one it tried and left for the press. The pass now tells it:
 > `PublishHost.untried` is true until the process's one try of the lap has returned. While it is

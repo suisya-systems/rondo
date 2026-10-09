@@ -276,6 +276,34 @@ test("rondo#618: once published under a scope that merges on green, the result s
   }
 });
 
+test("rondo#618: where the checks host will not merge on green after all, the result says the merge is the person's", async () => {
+  // A merge withheld for a reason the host does not retry is the person's press.
+  const world = await approvedByPerson();
+  await reportToRequest(
+    world,
+    "i-0001",
+    { kind: "published", pullRequestUrl: "https://github.com/suisya-systems/rondo/pull/617" },
+    6_000,
+  );
+  const ports = scoped(
+    portsOver(world, "ada", [], null, null, async () => DRY_RUN),
+    MERGES,
+  );
+  await reportToRequest(
+    world,
+    "i-0001",
+    {
+      kind: "mergeWithheld",
+      head: "abc1234",
+      withheld: { why: "refused", refusal: "mergeRefusedMethod", note: "no method allowed" },
+    },
+    7_000,
+  );
+  const html = await operatorPage(ports, "t", threadOf("req-1"));
+  expect(html).toContain(EN.resultNotMerged);
+  expect(html).not.toContain(EN.resultMergesOnGreen);
+});
+
 test("a lap answered with a change, or with no record of which answer, offers no pull request (rondo#385)", async () => {
   // Publishing cannot be taken back, so the way onto it is drawn only over an
   // approval rondo recorded (D-0092) -- never over a change the person asked
