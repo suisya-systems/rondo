@@ -274,14 +274,63 @@ journalctl --user --no-pager -n 50 -u rondo.service
 nothing after it is a command line with no command: it prints the usage and exits 0, having started
 no service, waited for nothing and opened nothing. What the word does is in
 [`../../scripts/start-command.sh`](../../scripts/start-command.sh), and the three things it does are
-typed out below.
+typed out below, after the one fact all three are typed with.
 
-**Start the host, and wait for the page to answer.** `$PORT` and `$UNIT` are section 0's; node is
-the one the unit runs the host with, which is where the word gets it too. The 30-second bound and
-the `fetch` line are the word's own, copied:
+**First, the node the unit runs the host with.** The word carries it as a fact setup resolved and
+wrote into it (`NODE=` in [`../../scripts/start-command.sh`](../../scripts/start-command.sh)), so a
+machine without the word has only the unit -- and `ExecStart=` holds that path **as systemd reads it
+back, not as it stands**. systemd rewrites that line three times over, so setup writes the path
+quoted, with `\` and `"` escaped, every `%` doubled and every `$` doubled (`sd_exec_quote`, same
+file). All three have to be undone, in the reverse of the order setup applied them, or what comes out
+is not a program:
 
 ```sh
-NODE=$(sed -n 's/^ExecStart="\([^"]*\)".*/\1/p' "$UNIT")
+NODE=$(sed -n -E 's/^ExecStart="(([^"\\]|\\.)*)".*/\1/p' "$UNIT" |
+  sed -E 's/\\(.)/\1/g; s/%%/%/g; s/\$\$/$/g')
+printf '%s\n' "$NODE"
+"$NODE" --version
+```
+
+**You may go on when that prints one path and then one version**, which is two lines of this shape:
+
+```console
+/home/happy_ryo/.local/share/fnm/node-versions/v22.17.0/installation/bin/node
+v22.17.0
+```
+
+An empty first line is section 0's case again -- a unit setup did not write -- and
+`No such file or directory` is a unit naming a node that has gone. Both are stop and find out, not
+something to repair by typing a node of your own here: what the page is served with is the fact in
+the unit.
+
+**What the two `sed`s undo, and in which order.** The first takes the first quoted word of the line
+and counts `\"` as a character of that word rather than as its end, so a path holding a quote is not
+cut short at it. The second undoes what is left: `\` before any character, then `%%` to `%` -- `%`
+followed by a letter is a specifier systemd expands in every setting -- then `$$` to `$`, which
+`ExecStart=` expands and a path setting does not.
+
+**What was measured, and what was not.** On 2026-10-10, in a scratch directory with a real node
+symlinked at each of eight paths holding `%`, a space, `"`, `\`, `$` and combinations of those, the
+`ExecStart=` line was written by `scripts/start-command.sh`'s own quoting helpers and the two `sed`s
+above were run over it: all eight came back as the exact path given, exit 0, in `zsh`, `bash` and
+`dash` alike, and `"$NODE" --version` then answered `v22.17.0` for all eight. That measurement ends
+at the extraction and the version: no service was started and no page was asked to answer in it, so
+what the blocks below check -- that the page answers, and whose page it is -- is not what was checked
+here.
+
+**The shorter reading of that line is wrong three ways**, which is why it is not what is above:
+`sed -n 's/^ExecStart="\([^"]*\)".*/\1/p'` hands back `%%` for every `%` and `$$` for every `$`, and
+`[^"]*` ends at the first `\"`, so a quote in the path leaves half a path behind. Over the same eight
+units: a node in a directory named `100%$x"q"\z node` came back from it with both doublings still in
+and the path cut at the quote -- `.../100%%$$x\` -- and running that string was exit 127, which is
+`No such file or directory` in `bash` and `not found` in `dash`. Two of the eight survived that
+reading: the path with none of these characters, and the one whose only oddity was a space. `%`,
+`"`, `\` and `$` did not.
+
+**Then start the host, and wait for the page to answer.** `$PORT` and `$UNIT` are section 0's and
+`$NODE` is the block above. The 30-second bound and the `fetch` line are the word's own, copied:
+
+```sh
 URL="http://127.0.0.1:$PORT/"
 systemctl --user start rondo.service
 seconds=0
