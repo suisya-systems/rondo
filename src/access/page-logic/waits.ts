@@ -35,7 +35,7 @@ import {
   WAIT_SIDE,
 } from "../../store/records.js";
 import type { AdvisoryRecord } from "../../store/sqlite.js";
-import { draftedStanding } from "../drafted-view.js";
+import { draftAwaiting, draftedStanding } from "../drafted-view.js";
 import { FLOW_STOP } from "../flow-stop.js";
 import type { Threads } from "./threads.js";
 
@@ -150,7 +150,9 @@ export async function draftsOwedNow(ports: {
  * conditions: a request with no lap, no question in its thread, no draft still
  * owed (`D-0151`) and no repository to add first, whose standing is a draft
  * nobody has decided. Only a draft: a request with none is not waited on by
- * anything rondo holds.
+ * anything rondo holds. A redraft after an approval that stands waits too,
+ * laps or not (rondo#621): a follow-up to a merged request read *merged* in
+ * the list while its new scope waited ({@link draftAwaiting}).
  *
  * The episode is the draft's scope, so a redraft over a newer message is a new
  * wait and a person already told about the old one is told again.
@@ -165,7 +167,7 @@ export async function scopesAwaitingYou(
     readonly unheld: (requestMessageId: string) => Promise<boolean>;
   },
   threads: Threads,
-  /** Every lap the store holds, ended ones too: a request with any is past its scope card. */
+  /** Every lap the store holds, ended ones too: a request with any is past its first draft. */
   laps: readonly IterationRecord[],
   owes: (requestMessageId: string) => boolean,
 ): Promise<readonly Wait[]> {
@@ -175,19 +177,14 @@ export async function scopesAwaitingYou(
     threads.messages
       .filter(
         (message) =>
-          message.inReplyTo === null &&
-          !owes(message.messageId) &&
-          !lapped.has(message.messageId) &&
-          !asked.has(message.messageId),
+          message.inReplyTo === null && !owes(message.messageId) && !asked.has(message.messageId),
       )
       .map(async ({ messageId: root }): Promise<Wait[]> => {
         if (await ports.unheld(root)) {
           return [];
         }
-        const standing = await draftedStanding(ports, root);
-        return standing.kind === "drafted"
-          ? [{ root, episode: `scope:${standing.drafted.scope.scopeId}` }]
-          : [];
+        const draft = draftAwaiting(await draftedStanding(ports, root), lapped.has(root));
+        return draft === null ? [] : [{ root, episode: `scope:${draft.scope.scopeId}` }];
       }),
   );
   return waits.flat();

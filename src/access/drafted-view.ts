@@ -85,6 +85,23 @@ export type DraftedStanding =
       readonly newer: DraftedScopeShown | null;
     };
 
+/**
+ * **The draft waiting on the person's approval**, or null (rondo#534, #621):
+ * a draft nobody has decided on a request with no lap, or a redraft written
+ * after an approval that stands -- a follow-up to work already done or merged
+ * is drafted again (D-0071 rule 3.1) and waits as a first draft does.
+ */
+export function draftAwaiting(
+  standing: DraftedStanding,
+  lapped: boolean,
+): DraftedScopeShown | null {
+  return standing.kind === "decided"
+    ? standing.newer
+    : standing.kind === "drafted" && !lapped
+      ? standing.drafted
+      : null;
+}
+
 /** Changes a scope's chain is followed through before it is given up on. */
 const CHAIN_BOUND = 100;
 

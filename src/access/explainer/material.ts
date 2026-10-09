@@ -11,7 +11,7 @@
 import type { Basis } from "../../advisory/proposal.js";
 import type { IterationRecord, JsonRecord, ThreadMessageDraft } from "../../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
-import { draftedStanding } from "../drafted-view.js";
+import { draftAwaiting, draftedStanding } from "../drafted-view.js";
 import { threadOf } from "../model-draft/host.js";
 import { type LapResult, resultOf } from "../page-logic/result.js";
 import { threadsOf } from "../page-logic/threads.js";
@@ -239,11 +239,11 @@ export async function gatherExplainerMaterial(
   }
 
   const scope = await approvalInForce(ports, root);
-  // A drafted scope nobody has decided, on a request with no lap yet: the
-  // person's turn is its approval (`scopesAwaitingYou`'s reading).
-  const standing = records.length > 0 ? null : await draftedStanding(ports, root);
-  if (standing?.kind === "drafted") {
-    waits.push({ kind: "scope", scopeId: standing.drafted.scope.scopeId });
+  // A drafted scope nobody has decided: the person's turn is its approval
+  // (`scopesAwaitingYou`'s reading).
+  const draft = draftAwaiting(await draftedStanding(ports, root), records.length > 0);
+  if (draft !== null) {
+    waits.push({ kind: "scope", scopeId: draft.scope.scopeId });
   }
   const about = aboutOf(question.bases);
   const asked =
