@@ -489,7 +489,7 @@ explanation you pressed on and then answers the gate.`,
   storyLaps: (count) =>
     count === 1
       ? "One lap has run for this work."
-      : `${String(count)} laps have run for this work.`,
+      : `${String(count)} laps have run for this work. The numbers below count within this work, not across the whole request.`,
   storyPart: (part, parts) =>
     `The request was drafted as ${String(parts)} separate parts, and this gate is part ${String(part)}.`,
   storyLapName: (n, current) => (current ? `Lap ${String(n)} (this one)` : `Lap ${String(n)}`),

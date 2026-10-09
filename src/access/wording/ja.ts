@@ -506,7 +506,8 @@ export const JA: Chrome = Object.freeze({
   modelNotTaken: "チェックだけが読みました。モデルレビューは取れていません。",
   neitherReadingTaken: "チェックもモデルレビューも、この作業を読めませんでした。",
   storyHeading: "これまでの経緯",
-  storyLaps: (count) => `この作業はこれで ${String(count)} 周目です。`,
+  storyLaps: (count) =>
+    `この作業はこれで ${String(count)} 周目です。以下の周目はこの作業の中での数で、依頼全体の通し番号ではありません。`,
   storyPart: (part, parts) =>
     `この依頼は ${String(parts)} つに分けて起案されました。このゲートはその ${String(part)} つ目 (作業 ${String(part)}) のものです。`,
   storyLapName: (n, current) => (current ? `${String(n)} 周目 (今回)` : `${String(n)} 周目`),
