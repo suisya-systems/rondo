@@ -307,17 +307,25 @@ the unit.
 and counts `\"` as a character of that word rather than as its end, so a path holding a quote is not
 cut short at it. The second undoes what is left: `\` before any character, then `%%` to `%` -- `%`
 followed by a letter is a specifier systemd expands in every setting -- then `$$` to `$`, which
-`ExecStart=` expands and a path setting does not. Measured here on 2026-10-10, against units
-`scripts/start-command.sh` wrote for node paths holding `%`, a space, `"`, `\`, `$` and combinations
-of those: each comes back as the path setup was given, in `zsh`, `bash` and `dash` alike, and
-`"$NODE"` then runs.
+`ExecStart=` expands and a path setting does not.
+
+**What was measured, and what was not.** On 2026-10-10, in a scratch directory with a real node
+symlinked at each of eight paths holding `%`, a space, `"`, `\`, `$` and combinations of those, the
+`ExecStart=` line was written by `scripts/start-command.sh`'s own quoting helpers and the two `sed`s
+above were run over it: all eight came back as the exact path given, exit 0, in `zsh`, `bash` and
+`dash` alike, and `"$NODE" --version` then answered `v22.17.0` for all eight. That measurement ends
+at the extraction and the version: no service was started and no page was asked to answer in it, so
+what the blocks below check -- that the page answers, and whose page it is -- is not what was checked
+here.
 
 **The shorter reading of that line is wrong three ways**, which is why it is not what is above:
 `sed -n 's/^ExecStart="\([^"]*\)".*/\1/p'` hands back `%%` for every `%` and `$$` for every `$`, and
-`[^"]*` ends at the first `\"`, so a quote in the path leaves half a path behind. Measured the same
-day on the same units: a node at `/opt/100%$x"q"\z node/bin/node` came back from it as
-`/opt/100%%$$x\`, and `"$NODE"` was then `No such file or directory` -- exit 127 on a host that was
-serving perfectly well. A space on its own survived that reading; `%`, `"`, `\` and `$` did not.
+`[^"]*` ends at the first `\"`, so a quote in the path leaves half a path behind. Over the same eight
+units: a node in a directory named `100%$x"q"\z node` came back from it with both doublings still in
+and the path cut at the quote -- `.../100%%$$x\` -- and running that string was exit 127, which is
+`No such file or directory` in `bash` and `not found` in `dash`. Two of the eight survived that
+reading: the path with none of these characters, and the one whose only oddity was a space. `%`,
+`"`, `\` and `$` did not.
 
 **Then start the host, and wait for the page to answer.** `$PORT` and `$UNIT` are section 0's and
 `$NODE` is the block above. The 30-second bound and the `fetch` line are the word's own, copied:
