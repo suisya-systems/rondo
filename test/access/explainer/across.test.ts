@@ -6,8 +6,12 @@
 import { expect, test } from "vitest";
 
 import { explainerHost } from "../../../src/access/explainer/host.js";
-import { DETERMINISTIC_EXPLAINER } from "../../../src/access/explainer/judgement.js";
+import {
+  DETERMINISTIC_EXPLAINER,
+  deterministicAnswer,
+} from "../../../src/access/explainer/judgement.js";
 import { gatherExplainerMaterial } from "../../../src/access/explainer/material.js";
+import { FLOW_STOP } from "../../../src/access/flow-stop.js";
 import type { DrafterRun } from "../../../src/access/model-draft/judgement.js";
 import { PAGE_EN } from "../../../src/access/page/words.js";
 import { EN } from "../../../src/access/wording.js";
@@ -111,4 +115,69 @@ test("the list names the thread as a question, and its page offers no scope", as
   expect(html).toContain(PAGE_EN.rowQuestion);
   expect(html).not.toContain(PAGE_EN.rowNotStarted);
   expect(html).not.toContain(`id="scope-${ACROSS}"`);
+});
+
+test("a question asked again in a question's thread still asks across every request", async () => {
+  const w = await asked();
+  await askAcross(w);
+  const said = await w.record.recordThreadMessage({
+    messageId: "question-again",
+    body: "And now?",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: ACROSS,
+    atMs: 4_500,
+    bases: [],
+    asks: false,
+  });
+  if (said.kind !== "recorded") throw new Error(JSON.stringify(said));
+  const material = await gatherExplainerMaterial(w, "question-again", 5_000);
+  expect(material.requestMessageId).toBe(ACROSS);
+  expect(material.waits.map((wait) => wait.request?.messageId)).toEqual([REQUEST]);
+});
+
+test("a paused goal flow is named in the answer, as it is a row under your turn", async () => {
+  const w = fresh();
+  await askAcross(w);
+  const record = {
+    ...w.record,
+    goals: async () => [{ goalId: "g-1", repository: "acme/widgets" }],
+    approvalsInForce: async () => [{ scopeId: "s-1", scopeDecisionId: "sd-1" }],
+    readScope: async () => ({
+      kind: "read",
+      scope: { scopeId: "s-1", payload: { requests: { from_goal: "g-1" }, budgets: { laps: 0 } } },
+    }),
+  } as unknown as typeof w.record;
+  const ports = { store: w.store, record, triageRepositories: async () => ["acme/widgets"] };
+  const material = await gatherExplainerMaterial(ports, ACROSS, 5_000);
+  expect(material.waits).toEqual([{ kind: "paused", scopeId: "s-1", repository: "acme/widgets" }]);
+  expect(material.locators).toContain("scope:s-1");
+  // Without the repositories the page draws, no flow is read, as on the page.
+  const unread = await gatherExplainerMaterial({ store: w.store, record }, ACROSS, 5_000);
+  expect(unread.waits).toEqual([]);
+});
+
+test("the goal flow's stop is said as the flow's, not as the old request it is asked in (D-0188)", () => {
+  const material = {
+    question: { messageId: ACROSS, body: "What is waiting on me?", about: null, origin: "text" },
+    requestMessageId: ACROSS,
+    thread: [],
+    laps: [],
+    waits: [
+      {
+        kind: "ask",
+        messageId: `${FLOW_STOP}1`,
+        request: { messageId: REQUEST, title: "Fix the flaky test." },
+      },
+    ],
+    scope: null,
+    words: null,
+    locators: [],
+  } as const;
+  const { claims } = deterministicAnswer(material, EN, { kind: "acrossRequests" });
+  expect(claims[1]).toEqual({
+    label: EN.explainWaiting,
+    value: PAGE_EN.rowFlowStopped,
+    basis: { form: "message", messageId: `${FLOW_STOP}1` },
+  });
 });

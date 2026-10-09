@@ -29662,13 +29662,16 @@ review for rondo#318).
 > 2: the page also offers *Ask rondo* on the new request box, and a question sent from there has
 > no thread and carries no basis; one with a basis and no thread is refused. Rule 3: such a
 > question's material is everything that waits on the person across every request, each wait
-> named by its request, with no laps and no approval. Rule 5: such a question is never admitted to
-> a model, since no one request's approval stands behind it; the deterministic answer is written
-> and costs nothing (`D-0189` rule 5). A question asked in a request's thread is unchanged. Nothing
-> below is edited.
+> named by its request, with no laps and no approval. Rule 4: its answer's claims rest on each
+> wait's own row and it carries no *answer it at the gate* line, since each wait's link leads to
+> where it is answered. Rule 5: such a question is never admitted to a model, since no one request's
+> approval stands behind it; the deterministic answer is written and costs nothing (`D-0189` rule
+> 5). A question asked again in such a thread is read the same way. A question asked in a request's
+> thread is unchanged. Nothing below is edited.
 >
 > - Amends: D-0177 rule 2
 > - Amends: D-0177 rule 3
+> - Amends: D-0177 rule 4
 > - Amends: D-0177 rule 5
 
 ### Context
@@ -30151,7 +30154,7 @@ the stop read as the answered question asked again (`D-0173 K3`/`K4`).
 ## D-0189 — The secretary-like role rondo#626 asks for is the one `D-0063`, `D-0064`, `D-0067`, `D-0068` and `D-0177` already split across parts: no new role and no wider advisory, the gaps between the parts listed with where each is closed, and a question asked from the new request box answered across every request
 
 **Status:** accepted (2026-10-10, rondo#626, with its pull request's approval). Amends `D-0177`
-rules 2, 3 and 5 (its annotation from this entry). Supersedes nothing. Refs `D-0022`, `D-0036`,
+rules 2, 3, 4 and 5 (its annotation from this entry). Supersedes nothing. Refs `D-0022`, `D-0036`,
 `D-0061`, `D-0062`, `D-0063`, `D-0064`, `D-0066`, `D-0067`, `D-0068`, `D-0071`, `D-0072`,
 `D-0083`, `D-0097`, `D-0112`, `D-0128`, `D-0147`, `D-0168`.
 
@@ -30307,7 +30310,7 @@ the one `D-0063`'s measurement read. Line numbers drift: re-measure the claim, n
    | C2 | The empty centre has no *since you last looked* | `D-0083` rule 4 as decided, reusing the inbox's `changed` |
    | C3 | No `standing_policy` | `D-0067` rule 6 as decided |
    | C3 | No single reader over the decision rows | A derived reader that adds no table (`D-0032` rule 3), with no decision needed |
-   | C4 | An open `flow_ask` is not a row under *your turn* | **New entry.** It amends `D-0147`, as `D-0186` did for a paused flow |
+   | C4 | An open `flow_ask` is not a row under *your turn* | **New entry.** It amends `D-0147`, which kept the ask off the list. `D-0186` made a paused flow such a row by amending `D-0083` rule 2, and is the precedent |
    | C4 | Triage puts open points on almost every candidate | **New entry.** It amends `D-0097`'s open points with a test for which of them are real decisions |
 
 5. **The first slice: the new request box asks rondo across every request.** This builds a
@@ -30315,12 +30318,18 @@ the one `D-0063`'s measurement read. Line numbers drift: re-measure the claim, n
    1. **A question may open a thread of its own.** The new request box gains *Ask rondo* as a
       second submit, the same press the reply box has. A question is still recognised only by
       the person's press (`D-0177` rule 2). A question with no thread names no place, so `/question`
-      refuses one that carries `about` and no `in_reply_to`.
+      refuses one that carries `about` and no `in_reply_to`. A question asked again inside such a
+      thread asks across every request too, since the thread is about nothing narrower.
    2. **Its material is everything that waits on the person, across every request.** The reading
-      is the one the list's *your turn* uses: an unanswered ask, a lap at its gate, a lap held for a
-      decision with no gate to answer, a lap past its plan's ceiling, and a drafted scope nobody
-      has decided. Each wait carries its request's id and first line, and the wait's own row is a
-      locator the answer may cite. The material has no laps and no approval.
+      is the list's *your turn*, read through the same functions and the same predicates: an
+      unanswered ask, a lap at its gate, a lap held for a decision with no gate to answer, a
+      drafted scope nobody has decided (`scopesAwaitingYou`, with the drafts rondo still owes and
+      the repositories it does not hold, so a scope the page withholds is not named), and a paused
+      goal flow (`D-0186`). To these it adds one wait the list does not draw and the host already
+      reaches the person about: a lap past its plan's ceiling (`lapsPastTheirCeiling`, the rondo#311
+      tick). The goal flow's stop, asked in an old request's thread, is said as the flow's and not
+      that request's (`D-0188`). Each wait carries its request's id and first line, and the wait's
+      own row is a locator the answer may cite. The material has no laps and no approval.
    3. **It is answered from the records, and never by a model.** No one request's approval stands
       behind a question about every request, so `D-0177` rule 5 has nothing to count a run against.
       Admission says so as a reason of its own, `acrossRequests`, and the deterministic answer is
@@ -30328,11 +30337,11 @@ the one `D-0063`'s measurement read. Line numbers drift: re-measure the claim, n
    4. **The answer names each wait under its request**, with the wait's row as its basis, so each
       line leads to the place where it is answered. With nothing waiting, it says so, resting on the
       question. It drops the *answer it at the gate in this thread* lines, which would name a thread
-      the answer is not in. It is a `drafter` message with `asks` unset, and an `explanation`
-      proposal, as `D-0177` rule 4 has it.
+      the answer is not in (this narrows `D-0177` rule 4). It is otherwise as that rule has it: a
+      `drafter` message with `asks` unset, and an `explanation` proposal.
    5. **The list names such a thread as a question.** Its row says *a question to rondo*, not *not
-      started*, and its thread draws no scope card and no steps, because a question asks for no
-      work. `D-0068` rule 2.5 calls such a thread a request that ends in its answer. It still ends
+      started*, its thread draws no scope card and no steps, and the empty centre's week figure of
+      requests asked does not count it, because a question asks for no work. `D-0068` rule 2.5 calls such a thread a request that ends in its answer. It still ends
       there and proposes no split, but the list does not call it a request.
    6. **Where it lives.** The code is in `src/access/explainer/` (`material.ts` and
       `judgement.ts`), plus the composer, the `/question` route, the list's row state, and one
@@ -30376,9 +30385,10 @@ Within option C, two smaller choices were taken as recommended.
 
 ### What would falsify it
 
-- A person who asks *what is waiting on me?* on the new request box and finds something waiting
-  that the answer did not name, or the reverse. The answer and the *your turn* list read the same
-  rows, so a difference between them is a bug in one of the two.
+- A person who asks *what is waiting on me?* on the new request box and finds something under *your
+  turn* that the answer did not name, or an answer naming a wait the page withholds. The answer
+  reads the list's rows through the list's own functions, so a difference is a bug in one of the
+  two. The overdue lap is the one deliberate addition (rule 5.2).
 - A gap that rondo#626 needs and that neither rule 4's table nor a decided entry covers. If
   option C's guard has failed, the role needs one owner after all, which is option A's argument.
 - A person who, given the choice, keeps typing questions into the reply box as plain replies and
@@ -30386,6 +30396,6 @@ Within option C, two smaller choices were taken as recommended.
 
 ### Annotations this entry adds
 
-- `D-0177`, **not additive**: rules 2, 3 and 5 for a question that opens a thread of its own.
+- `D-0177`, **not additive**: rules 2, 3, 4 and 5 for a question that opens a thread of its own.
 - `D-0068`, additive: section 1 rule 2.5's second bullet is built in a narrower form.
 - `D-0063`, additive: rondo#626's role is the one section 1 maps, and this entry lists its gaps.

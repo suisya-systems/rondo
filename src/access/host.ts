@@ -217,6 +217,11 @@ export async function serveWeb(
   const explainer = explainerHost({
     store,
     record,
+    // What the list's *your turn* reads, for a question across every request (D-0189).
+    draftsOwed: () => drafter.owed(),
+    unheld: async (id) =>
+      (await requestRepository({ store, record, now: Date.now }, id)).work.kind === "unheld",
+    triageRepositories: async () => await triageRepositories(),
     runDrafter,
     now: Date.now,
     mintId: newDraftId,

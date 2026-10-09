@@ -11,6 +11,7 @@
 import type { Claim } from "../../advisory/proposal.js";
 import type { DrafterRow } from "../../continuo/roles.js";
 import { EXPLAINER_PREFIX } from "../../store/records.js";
+import { FLOW_STOP } from "../flow-stop.js";
 import { sectionFramer } from "../framing.js";
 import { answerJson } from "../model-draft/judgement.js";
 import { firstLine } from "../page-logic/threads.js";
@@ -303,10 +304,10 @@ export function deterministicAnswer(
             value: words.explainWaitsAsk,
             basis: { form: "message", messageId: wait.messageId },
           }
-        : wait.kind === "scope"
+        : wait.kind === "scope" || wait.kind === "paused"
           ? {
               label: words.explainWaiting,
-              value: words.explainWaitsScope,
+              value: wait.kind === "scope" ? words.explainWaitsScope : words.triageGoalScopePaused,
               basis: { form: "scope", scopeId: wait.scopeId },
             }
           : {
@@ -356,6 +357,7 @@ function acrossAnswer(
     decide: words.explainWaitsDecide,
     overdue: words.explainOverdue,
     scope: words.explainWaitsScope,
+    paused: words.triageGoalScopePaused,
   };
   const claims: Claim[] = [
     { label: words.explainYouAsked, value: firstLine(material.question.body), basis: question },
@@ -364,11 +366,17 @@ function acrossAnswer(
       return basis === null
         ? []
         : [
-            {
-              label: wait.request?.title || words.explainRequest,
-              value: waitWord[wait.kind],
-              basis,
-            },
+            // The goal flow's stop is the flow's, not the request's it is asked in (D-0188).
+            wait.kind === "ask" && wait.messageId.startsWith(FLOW_STOP)
+              ? { label: words.explainWaiting, value: words.rowFlowStopped, basis }
+              : {
+                  label:
+                    wait.kind === "paused"
+                      ? wait.repository
+                      : wait.request?.title || words.explainRequest,
+                  value: waitWord[wait.kind],
+                  basis,
+                },
           ];
     }),
   ];
