@@ -15,6 +15,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "vitest";
 import { EmptySide } from "../../../src/access/page/empty-side.js";
 import { stepsOf, WEEK_MS } from "../../../src/access/page-logic/week.js";
+import { JA } from "../../../src/access/wording/ja.js";
 import { EN } from "../../../src/access/wording.js";
 import type { IterationRecord } from "../../../src/store/records.js";
 import { fresh, openRequest, operatorPage, portsOver, reserve } from "../page-world.js";
@@ -86,6 +87,9 @@ test("a running request carries its allowance and the five steps to its end", ()
   expect(html).toContain("shop/app");
   expect(html).toContain("$0.62 of $5.00, with $2.50 held for a try whose cost was not reported");
   expect(html).toContain(EN.govTries(1, 3));
+  // The card's count is the scope's, not the request's: the words say so (rondo#624).
+  expect(EN.govTries(1, 3)).toContain("in this scope");
+  expect(JA.govTries(1, 3)).toContain("この範囲で");
   for (const step of [EN.stepWork, EN.stepChecks, EN.stepReading, EN.stepApproval, EN.stepLanding])
     expect(html).toContain(step);
   // The way in is the thread's address and never a press: what a press needs

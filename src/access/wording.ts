@@ -257,6 +257,12 @@ export interface Chrome extends PageWords, ExplainWords {
   readonly walkAt: (at: number, of: number) => string;
   readonly walkNext: string;
   readonly govSpent: (spent: string, approved: string) => string;
+  /**
+   * The gate card counts the tries **under the approved scope** (its admissions
+   * against its ceiling), where {@link evOfTry} counts across the whole request.
+   * A follow-up scope restarts the first, so the words say whose count it is
+   * (rondo#624).
+   */
   readonly govTries: (at: number, of: number) => string;
   readonly chainAnswer: string;
   readonly chainProposal: string;

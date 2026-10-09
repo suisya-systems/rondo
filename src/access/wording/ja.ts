@@ -296,7 +296,7 @@ export const JA: Chrome = Object.freeze({
   walkAt: (at, of) => `あなたの番 ${String(at)} ／ ${String(of)}`,
   walkNext: "次へ",
   govSpent: (spent, approved) => `$${spent} ／ $${approved}`,
-  govTries: (at, of) => `${String(at)} 回目 ／ ${String(of)} 回まで`,
+  govTries: (at, of) => `この範囲で ${String(at)} 回目 ／ ${String(of)} 回まで`,
   chainAnswer: "あなたの答え",
   chainProposal: "プルリクエスト",
   chainMerge: "マージ",
