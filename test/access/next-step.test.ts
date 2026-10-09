@@ -141,18 +141,8 @@ test("an approved lap's next step is drawn filled and named for what it does: a 
   expect(chromeFor("ja").publishAction).toBe("プルリクエストを作る");
 });
 
-test("D-0187: under a scope that merges on green, the next step says rondo merges it, not that nothing is", async () => {
-  const world = fresh();
-  await gateWithChecks(world);
-  await recordAnswer(world, "i-0001");
-  await world.store.transition(
-    "i-0001",
-    "awaiting_human",
-    "closed",
-    { gateOutcome: "answered_and_forwarded" },
-    5_000,
-  );
-  const ports = portsOver(world, "ada", [], null, null, async () => DRY_RUN);
+/** The ports with `i-0001` admitted under an approved, unexpired scope that includes `acts`. */
+function scoped(ports: ReturnType<typeof portsOver>, acts: readonly string[]) {
   const record = {
     ...ports.record,
     scopeDecisionAdmitting: async () => "sd-merge",
@@ -177,16 +167,113 @@ test("D-0187: under a scope that merges on green, the next step says rondo merge
             expires_at_ms: Number.MAX_SAFE_INTEGER,
           },
           severity_threshold: "major",
-          outward_acts: ["push_branch", "open_pull_request", "merge_default_branch"],
+          outward_acts: acts,
         } as unknown as JsonRecord),
       },
     }),
   } as unknown as typeof ports.record;
-  const html = await operatorPage({ ...ports, record }, "t", threadOf("req-1"));
+  return { ...ports, record };
+}
+
+/** `i-0001` approved by a person at its gate and closed, not yet published. */
+async function approvedByPerson() {
+  const world = fresh();
+  await gateWithChecks(world);
+  await recordAnswer(world, "i-0001");
+  await world.store.transition(
+    "i-0001",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "answered_and_forwarded" },
+    5_000,
+  );
+  return world;
+}
+
+const MERGES = ["push_branch", "open_pull_request", "merge_default_branch"];
+
+test("D-0187: under a scope that merges on green, the next step says rondo merges it, not that nothing is", async () => {
+  const world = await approvedByPerson();
+  const ports = portsOver(world, "ada", [], null, null, async () => DRY_RUN);
+  const html = await operatorPage(scoped(ports, MERGES), "t", threadOf("req-1"));
   expect(html).toContain(EN.nextStepPublish(true));
   expect(html).not.toContain(EN.nextStepPublish(false));
   expect(chromeFor("ja").nextStepPublish(true)).not.toContain("マージはしません");
   expect(chromeFor("ja").nextStepPublish(false)).toContain("マージはしません");
+});
+
+test("rondo#619: between a person's approval and rondo's publish, the page says rondo is opening it and offers no press", async () => {
+  const world = await approvedByPerson();
+  // The line holding the lap as its one closed tip, which the publish pass asks.
+  const store = {
+    ...world.store,
+    laneLedger: async () => [
+      {
+        lapIds: ["i-0001"],
+        closedTips: ["i-0001"],
+        releasedBy: null,
+        inFlight: false,
+        paths: [],
+        claimId: null,
+      },
+    ],
+  } as unknown as typeof world.store;
+  const ports = scoped(
+    portsOver({ ...world, store }, "ada", [], null, null, async () => DRY_RUN),
+    MERGES,
+  );
+  for (const lang of ["en", "ja"] as const) {
+    const wording = chromeFor(lang);
+    const running = await operatorPage(
+      { ...ports, publishUntried: () => true },
+      "t",
+      threadOf("req-1"),
+      wording,
+    );
+    expect(running).toContain(wording.nextStepPublishing(null, true));
+    expect(running).not.toContain('id="publish-i-0001"');
+    expect(running).not.toContain(wording.nextStepPublish(true));
+    // A host that runs no publish pass, or one whose try left the lap for the
+    // press (D-0187's objection), still offers the press.
+    for (const host of [ports, { ...ports, publishUntried: () => false }]) {
+      const press = await operatorPage(host, "t", threadOf("req-1"), wording);
+      expect(press).toContain('id="publish-i-0001"');
+      expect(press).not.toContain(wording.nextStepPublishing(null, true));
+    }
+  }
+  // Under a scope that does not publish, the pass would not: the press stays.
+  const unpublished = await operatorPage(
+    { ...scoped(ports, ["push_branch"]), publishUntried: () => true },
+    "t",
+    threadOf("req-1"),
+  );
+  expect(unpublished).toContain('id="publish-i-0001"');
+  expect(chromeFor("ja").nextStepPublishing(null, true)).toContain("プルリクエストを作っています");
+});
+
+test("rondo#618: once published under a scope that merges on green, the result says rondo merges it, not the person", async () => {
+  const world = await approvedByPerson();
+  await reportToRequest(
+    world,
+    "i-0001",
+    { kind: "published", pullRequestUrl: "https://github.com/suisya-systems/rondo/pull/617" },
+    6_000,
+  );
+  const ports = portsOver(world, "ada", [], null, null, async () => DRY_RUN);
+  for (const lang of ["en", "ja"] as const) {
+    const wording = chromeFor(lang);
+    const merges = await operatorPage(scoped(ports, MERGES), "t", threadOf("req-1"), wording);
+    expect(merges).toContain(wording.resultMergesOnGreen);
+    expect(merges).not.toContain(wording.resultNotMerged);
+    const yours = await operatorPage(
+      scoped(ports, ["push_branch", "open_pull_request"]),
+      "t",
+      threadOf("req-1"),
+      wording,
+    );
+    expect(yours).toContain(wording.resultNotMerged);
+    expect(yours).not.toContain(wording.resultMergesOnGreen);
+  }
 });
 
 test("a lap answered with a change, or with no record of which answer, offers no pull request (rondo#385)", async () => {

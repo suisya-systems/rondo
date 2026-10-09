@@ -61,6 +61,12 @@ export interface PublishHost {
   kick(): void;
   /** Resolves when no pass is in flight (for tests). */
   settled(): Promise<void>;
+  /**
+   * Whether this process has yet to finish its one try of the lap (rondo#619):
+   * false once a try returned, published or left for the press, so the page
+   * offers the press again over a lap the pass gave up on.
+   */
+  untried(lapId: string): boolean;
 }
 
 export function publishHost(ports: PublishHostPorts): PublishHost {
@@ -70,15 +76,19 @@ export function publishHost(ports: PublishHostPorts): PublishHost {
   // once; a refusal is the person's press from then on, and a restart tries
   // once more. A retry policy is the upgrade if a transient refusal is felt.
   const tried = new Set<string>();
+  // The lap whose try has not returned: still rondo's to publish, to the page
+  // (rondo#619). Emptied after every pass, so a try that threw is not.
+  const trying = new Set<string>();
 
   const pass = async (): Promise<void> => {
     while (again) {
       again = false;
       try {
-        await publishDue(ports, tried);
+        await publishDue(ports, tried, trying);
       } catch (error) {
         ports.log(`publish  ${describe(error)}`);
       }
+      trying.clear();
     }
   };
 
@@ -98,10 +108,15 @@ export function publishHost(ports: PublishHostPorts): PublishHost {
         await running;
       }
     },
+    untried: (lapId) => !tried.has(lapId) || trying.has(lapId),
   };
 }
 
-async function publishDue(ports: PublishHostPorts, tried: Set<string>): Promise<void> {
+async function publishDue(
+  ports: PublishHostPorts,
+  tried: Set<string>,
+  trying: Set<string>,
+): Promise<void> {
   for (const found of await ports.store.terminalIterations()) {
     if (found.kind !== "read" || tried.has(found.record.id)) {
       continue;
@@ -112,6 +127,7 @@ async function publishDue(ports: PublishHostPorts, tried: Set<string>): Promise<
       continue;
     }
     tried.add(lapId);
+    trying.add(lapId);
     const published = await ports.publish(lapId, {
       scopeId: authority.scopeId,
       // **Everything is asked again at each claim** (Codex round 1): a line
@@ -133,6 +149,7 @@ async function publishDue(ports: PublishHostPorts, tried: Set<string>): Promise<
         });
       },
     });
+    trying.delete(lapId);
     if (published.ok) {
       ports.log(`publish  ${lapId}: published by rondo under scope '${authority.scopeId}'`);
       ports.published();
@@ -142,9 +159,15 @@ async function publishDue(ports: PublishHostPorts, tried: Set<string>): Promise<
   }
 }
 
-/** The approval a lap is published under now, or null where it is not rondo's to publish. */
-async function publishable(
-  ports: PublishHostPorts,
+/**
+ * The approval a lap is published under now, or null where it is not rondo's
+ * to publish. The page asks it too (rondo#619), so the card between a
+ * person's approval and this pass says rondo is publishing, not *press*.
+ */
+export async function publishable(
+  ports: Pick<PublishHostPorts, "store" | "now"> & {
+    readonly record: Omit<PublishHostPorts["record"], "claimScopedAct">;
+  },
   lapId: string,
 ): Promise<Awaited<ReturnType<typeof scopedAuthority>>> {
   const found = await ports.store.read(lapId);

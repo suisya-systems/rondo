@@ -1288,6 +1288,15 @@ export const JA: Chrome = Object.freeze({
     (merges
       ? "チェックが通れば、範囲にしたがって rondo がデフォルトブランチにマージします。"
       : "マージはしません。"),
+  nextStepPublishing: (updating, merges) =>
+    (updating === null
+      ? "作業は承認済みです。範囲にしたがって、rondo がいまプルリクエストを作っています。" +
+        "押すものはありません。"
+      : `競合の解消は承認済みです。範囲にしたがって、rondo がいま ${updating} に push しています。` +
+        "押すものはありません。") +
+    (merges
+      ? "チェックが通れば、rondo がデフォルトブランチにマージします。"
+      : "マージはしません。"),
   nextStepAddRepository: (named, repo) =>
     `この依頼は ${named} を名指ししていますが、rondo はまだ ${repo} で作業していないので、` +
     `何も下書きしていません。追加すると、${repo} を rondo のほかのリポジトリと同じ場所に` +

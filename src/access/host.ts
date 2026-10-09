@@ -941,6 +941,7 @@ export async function serveWeb(
               },
             ),
       mergeable: sender !== null && !("refusal" in sender),
+      ...(publisher === null ? {} : { publishUntried: publisher.untried }),
       fixesConflicts: sender !== null && !("refusal" in sender),
       retakesReviews: sender !== null && !("refusal" in sender),
       merge:

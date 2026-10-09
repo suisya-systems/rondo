@@ -99,6 +99,7 @@ import {
 } from "../store/records.js";
 import { flowStopAskedFacts } from "./flow-stop.js";
 import { ago } from "./inbox.js";
+import { scopedAuthority } from "./merge.js";
 import { approveView, type GateStory } from "./page/approve.js";
 import { answerBands, askLink, gatesOf } from "./page/ask.js";
 import { type AnswerRevise, budgetRaises, composerView } from "./page/composer.js";
@@ -1038,6 +1039,14 @@ async function threadCentre(
   { askBox, addBox, questionLead, answeringBox, acts, actsMarkup, nextMarkup }: ThreadBoxes,
 ) {
   const { goals } = triage;
+  // Whether the result's merge is rondo's on green (D-0187, rondo#618), the
+  // test `mergeOnGreen` asks: the strip says so rather than *merging is yours*.
+  const resultRecord = resultLap(selectedLaps.map((each) => each.record));
+  const mergesOnGreen =
+    resultRecord !== null &&
+    selectedResult?.merged == null &&
+    (await scopedAuthority(ports, resultRecord.id, ["merge_default_branch"]).catch(() => null)) !==
+      null;
   const centreContent = noSuchThread
     ? { rendered: await note(wording.noSuchThread).toString() }
     : view.kind === "goal"
@@ -1134,11 +1143,12 @@ async function threadCentre(
               // the pull request and its checks, and the merge that is the
               // person's -- said once, here, for the lap the result belongs to.
               result:
-                resultLap(selectedLaps.map((each) => each.record)) === null
+                resultRecord === null
                   ? null
                   : ResultLine({
                       wording,
                       result: selectedResult,
+                      mergesOnGreen,
                       conflictFix:
                         acts?.fixOffered === true
                           ? "offered"

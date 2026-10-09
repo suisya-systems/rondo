@@ -1456,6 +1456,13 @@ export interface Chrome extends PageWords, ExplainWords {
   /** As {@link publishNote}, `merges` the scope's merge on green (D-0187). */
   readonly nextStepPublish: (merges: boolean) => string;
   /**
+   * An approved lap rondo publishes under its scope with no press (D-0187,
+   * rondo#619): said between the approval and the publish, with no button, so
+   * the press D-0187 removed is not offered back. `updating` is the open pull
+   * request a conflict fix pushes onto, or null.
+   */
+  readonly nextStepPublishing: (updating: string | null, merges: boolean) => string;
+  /**
    * A request that names a repository rondo does not work in yet (rondo#383,
    * D-0090): what was named, that nothing was drafted, and what adding does.
    */

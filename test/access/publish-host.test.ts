@@ -200,6 +200,22 @@ describe("publishHost (rondo#470)", () => {
     expect(w.publishedIds).toEqual(["i-1"]);
   });
 
+  test("rondo#619: a lap is untried until its one try returns, published or left for the press", async () => {
+    const w = world([lap("i-1"), lap("i-2")]);
+    const h = host(w);
+    const during: boolean[] = [];
+    w.beforeLegs = () => during.push(h.untried("i-1"));
+    // i-2's try is refused, so it is the press's again.
+    w.claims.push("push_branch i-2");
+    expect(h.untried("i-1")).toBe(true);
+    h.kick();
+    await h.settled();
+    expect(during[0]).toBe(true);
+    expect(w.publishedIds).toEqual(["i-1"]);
+    expect(h.untried("i-1")).toBe(false);
+    expect(h.untried("i-2")).toBe(false);
+  });
+
   test("nothing is published without both acts, past expiry, or off a line the person released", async () => {
     const one = world([lap("i-1")]);
     one.acts = ["push_branch"];

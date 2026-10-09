@@ -1285,6 +1285,15 @@ explanation you pressed on and then answers the gate.`,
     (merges
       ? "Once its checks are green, rondo merges it into the default branch, as the scope allows."
       : "Nothing is merged."),
+  nextStepPublishing: (updating, merges) =>
+    (updating === null
+      ? "The work is approved. rondo is opening its pull request now, as the scope allows; " +
+        "there is nothing to press."
+      : `The conflict fix is approved. rondo is pushing it onto ${updating} now, as the scope ` +
+        "allows; there is nothing to press.") +
+    (merges
+      ? " Once its checks are green, rondo merges it into the default branch."
+      : " Nothing is merged."),
   nextStepAddRepository: (named, repo) =>
     `This request names ${named}, but rondo does not work in ${repo} yet, so nothing has been ` +
     `drafted. Adding it copies ${repo} onto this computer beside rondo's other repositories, and ` +
