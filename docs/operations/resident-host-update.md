@@ -22,9 +22,9 @@ the `unsetopt` line at the top of it covers the whole session
 ## 0. The host's facts, read off its own unit
 
 Every fact the host runs with was spelled into `~/.config/systemd/user/rondo.service` by setup
-(`scripts/start-command.sh`, `D-0080` rule 2), and a hand-edited copy of either file is outside what
-rondo supports (rule 2.4). So the unit is where these come from, and nothing below has a path
-written into it.
+(`scripts/start-command.sh`, `D-0080` rule 2), and a hand-edited unit or word is outside what rondo
+supports (rule 2.4). So the unit is where these come from, and nothing below has a path written into
+it.
 
 ```sh
 unsetopt correct correct_all
@@ -80,7 +80,7 @@ command; laps take tens of minutes. In particular:
 
 | What the in-flight section shows | What it means | What to do |
 |---|---|---|
-| a row whose status word is `performing` | `lap perform` is in flight: a worker is running, and it is spending money | Wait. A restart now kills it, and section 0's paragraph above is what that costs |
+| a row whose status word is `performing` | `lap perform` is in flight: a worker is running, and it is spending money | Wait. A restart now kills it, and the paragraph at the top of this page is what that costs |
 | a row whose status is `planned`, `classified`, `admitting` or `admitted` | a short step on the way to `performing` | Wait. These are not covered by the lost-lap sweep, which reads `performing` rows only: a restart in `admitting` leaves a row that holds the single-flight lock with nothing able to release it but `rondo abandon` (`RELEASED_BY` in [`../../src/store/records.ts`](../../src/store/records.ts)) |
 | a row reading `will not decode` / `読み取れません` | a live row rondo cannot read. It still holds a slot, and it is counted in the heading | Not a wait: it will not clear by itself. `rondo abandon --iteration-id ID --reason ...` ([`rondo-cli.md`](rondo-cli.md) section 7) |
 
@@ -212,7 +212,7 @@ compares** -- the unit is active, the process holding the port is the service's 
 the page answers. A stranger on that port answers exactly as well as rondo does, which is what
 `scripts/start-command.sh` measured and why it looks at the owner too.
 
-What you want to see, on a `ja` host and an English one:
+One line, in the host's own language -- `ja` here, and the same sentence on an English host:
 
 ```console
 rondo の画面を開きました。出てこないときは、ここにあります: http://127.0.0.1:7333/
@@ -230,7 +230,7 @@ said is in the journal, which is yours:
 journalctl --user --no-pager -n 50 -u rondo.service
 ```
 
-**Nothing on the page names the revision it is serving.** What the host runs is the checkout's HEAD
-as it stood when the process started, which is the whole reason the restart comes after the build
-and nothing else moves the checkout in between. `git -C "$CHECKOUT" rev-parse HEAD` is the answer to
-"which `main` is this?", and it is a question about the checkout, not about the page.
+**"Which `main` is this?" is a question about the checkout, not about the page.** What the host runs
+is the checkout's HEAD as it stood when the process started -- which is the whole reason the restart
+comes after the build and nothing else moves the checkout in between -- so the answer is
+`git -C "$CHECKOUT" rev-parse HEAD`.
