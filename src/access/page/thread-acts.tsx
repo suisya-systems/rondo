@@ -17,6 +17,7 @@ import {
 import { viewHref } from "../page-logic/routes.js";
 import { resultLap } from "../page-logic/thread-events.js";
 import { type Threads, waitingAsk } from "../page-logic/threads.js";
+import { publishable as rondoPublishes } from "../publish-host.js";
 import { approvalTip } from "../scope.js";
 import { heldByLine, waitHolders } from "../screens/scope.js";
 import type { Chrome } from "../wording.js";
@@ -286,6 +287,14 @@ export async function threadActs(
     (await scopedAuthority(ports, nextPublish.record.id, ["merge_default_branch"]).catch(
       () => null,
     )) !== null;
+  // **Between a person's approval and rondo's publish** (rondo#619, D-0187):
+  // a lap the publish pass has yet to try is said as rondo's, with no press, on
+  // the pass's own test -- a button here invites the press D-0187 removed. One
+  // it tried and left is the press's again.
+  const publishing =
+    nextPublish !== null &&
+    ports.publishUntried?.(nextPublish.record.id) === true &&
+    (await rondoPublishes(ports, nextPublish.record.id).catch(() => null)) !== null;
   // The conflict fix (rondo#417, D-0105): a press, since the attempt it starts
   // is counted against the approval and nothing is between it and the act.
   // A red check's repair (rondo#551) is the same press, in its own words.
@@ -342,6 +351,13 @@ export async function threadActs(
       <p class="mt-1 text-body leading-6">{wording.nextStepDrafting}</p>
     </section>
   );
+  // The same neutral card for a lap rondo is publishing (rondo#619).
+  const publishingCard = (
+    <section class="next-step mb-4 rounded-lg border border-run/35 bg-run-wash px-4 py-3">
+      <h2 class="text-meta leading-5 font-semibold text-run-ink">{wording.nextStepRondoHeading}</h2>
+      <p class="mt-1 text-body leading-6">{wording.nextStepPublishing(updating, publishMerges)}</p>
+    </section>
+  );
   // The same neutral card for a start rondo keeps waiting (rondo#284).
   const waitsCard = (
     <section class="next-step mb-4 rounded-lg border border-run/35 bg-run-wash px-4 py-3">
@@ -350,6 +366,19 @@ export async function threadActs(
       {waitHolding.map((holder) => heldByLine(wording, holder, ports.releasable === true))}
     </section>
   );
+  const publishCard =
+    nextPublish === null
+      ? null
+      : publishing
+        ? publishingCard
+        : card(
+            `publish-${nextPublish.record.id}`,
+            viewHref({ kind: "publish", iterationId: nextPublish.record.id }, wording.lang),
+            updating === null
+              ? wording.nextStepPublish(publishMerges)
+              : wording.nextStepPublishUpdate(updating, publishMerges),
+            updating === null ? tryName(nextPublish) : wording.publishUpdateAction(updating),
+          );
   const next =
     unheld !== null
       ? unheldCard(unheld)
@@ -357,15 +386,8 @@ export async function threadActs(
         ? fixCard(nextFix)
         : nextMerge !== null
           ? mergeCard(nextMerge)
-          : nextPublish !== null
-            ? card(
-                `publish-${nextPublish.record.id}`,
-                viewHref({ kind: "publish", iterationId: nextPublish.record.id }, wording.lang),
-                updating === null
-                  ? wording.nextStepPublish(publishMerges)
-                  : wording.nextStepPublishUpdate(updating, publishMerges),
-                updating === null ? tryName(nextPublish) : wording.publishUpdateAction(updating),
-              )
+          : publishCard !== null
+            ? publishCard
             : asked !== null && !gated
               ? // **A question waiting in the thread is the next step** (rondo#431):
                 // on lap 13 the band sent the person to a scope while the

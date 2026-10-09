@@ -32,6 +32,7 @@ export function ResultLine({
   wording,
   result,
   conflictFix = null,
+  mergesOnGreen = false,
 }: {
   readonly wording: Chrome;
   /** The approved lap's publish, or null where it has not been published. */
@@ -43,6 +44,11 @@ export function ResultLine({
    * line waits on the person (rondo#500); null for none.
    */
   readonly conflictFix?: "offered" | "running" | "waits" | null;
+  /**
+   * Whether the lap's approved scope has rondo merge it on green (D-0187,
+   * rondo#618): the merge is then rondo's, and not said as the person's.
+   */
+  readonly mergesOnGreen?: boolean;
 }) {
   const detail = result === null ? null : wording.checksDetail(result.checks);
   const moved = result?.moved ?? null;
@@ -145,7 +151,9 @@ export function ResultLine({
           )}
         </>
       ) : result?.closedAtMs == null ? (
-        <li className="result-ahead">{wording.resultNotMerged}</li>
+        <li className="result-ahead">
+          {mergesOnGreen ? wording.resultMergesOnGreen : wording.resultNotMerged}
+        </li>
       ) : (
         <li className="result-ended">{wording.resultClosed}</li>
       )}

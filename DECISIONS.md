@@ -221,7 +221,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0177 | A person asks rondo on the page what something means or what happened, and a model explainer answers in the thread: an explanation with bases that binds nothing, counted against the approval in force, capped per answer | accepted |
 | D-0185 | The page is designed for the half screen beside an editor as well as for 2560: about 760px and about 1280px are widths of their own, and above a phone the list and the thread scroll on their own | accepted |
 | D-0186 | A paused goal flow is a row under *your turn* in the list, on every view, leading to the screen that resumes it; it is the one row there that is not a request | accepted |
-| D-0187 | A person's approval at the gate carries the lap to its pull request under a scope that allows it, without a second press, and the page's publish sentences say whether rondo then merges on green | accepted |
+| D-0187 | A person's approval at the gate carries the lap to its pull request under a scope that allows it, without a second press, and the page's publish sentences say whether rondo then merges on green | accepted, amended |
 | D-0188 | A request whose only wait is the goal flow's stop says the flow waits, not the request, though it stays under *your turn* | accepted |
 
 ---
@@ -30047,6 +30047,26 @@ rule 2), however it was published.
   said in the terminal.
 - A publish sentence that says rondo merges over a scope without the merge, or *nothing is merged*
   over one with it.
+
+> **Annotation (2026-10-10, from rondo#618 and rondo#619).** Not additive. The #615 confirmation
+> lap showed this entry's second falsifier firing in a sentence rule 3 did not list. Under a scope
+> that included the merge, the result strip under the title said *merging is yours* after approval,
+> and rondo then merged on green. It also showed a few seconds, between the person's approve and the
+> pass's publish, when the card offered the press rule 1 removed. **The result strip's merge line is
+> a publish sentence too**: under rule 3's test it says rondo merges once the checks pass, and says
+> *merging is yours* otherwise. It also says *merging is yours* where the checks host will not merge
+> on green after all: over a head somebody else moved, on a line released, and after a withheld
+> merge it does not retry (`NOT_RETRIED`). **And the option not taken, *draw the next-step card as
+> rondo's turn while the pass runs*, is taken.** It was set aside because the page could not tell a lap the
+> pass is about to publish from one it tried and left for the press. The pass now tells it:
+> `PublishHost.untried` is true until the process's one try of the lap has returned. While it is
+> true, and the pass's own test (`publishable`) holds, the card is rondo's, in the neutral family,
+> with no press, and says the pull request is being opened (or the open one pushed onto). Once a
+> try has returned without publishing, the press is drawn again, as before. A host with no pass
+> draws the press. Nothing above is edited.
+>
+> - Amends: D-0187 rule 3
+> - Amends: D-0187 "Draw the next-step card as rondo's turn while the pass runs"
 
 ## D-0188 — A request whose only wait is the goal flow's stop says the flow waits, not the request, though it stays under *your turn*
 

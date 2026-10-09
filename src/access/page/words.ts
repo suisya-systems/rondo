@@ -484,6 +484,8 @@ export interface PageWords extends DayWords {
   readonly resultPushedOnto: string;
   readonly resultChecks: string;
   readonly resultNotMerged: string;
+  /** {@link resultNotMerged} under a scope that has rondo merge on green (D-0187, rondo#618). */
+  readonly resultMergesOnGreen: string;
   readonly resultMerged: (into: string, method: string) => string;
   /**
    * What the pull request came to on the forge after rondo read it
@@ -1121,6 +1123,8 @@ export const PAGE_EN: PageWords = Object.freeze({
   resultPushedOnto: "Pushed onto the open pull request:",
   resultChecks: "Checks",
   resultNotMerged: "Merging is yours: once the checks pass, you can merge it from this page.",
+  resultMergesOnGreen:
+    "Once the checks pass, rondo merges it into the default branch, as the scope allows.",
   resultMerged: (into, method) =>
     `Merged into ${into}${
       (
@@ -1733,6 +1737,8 @@ export const PAGE_JA: PageWords = Object.freeze({
   resultPushedOnto: "開いているプルリクエストに push しました:",
   resultChecks: "チェック",
   resultNotMerged: "マージはあなたが行います。チェックが通れば、このページからマージできます。",
+  resultMergesOnGreen:
+    "チェックが通れば、範囲にしたがって rondo がデフォルトブランチにマージします。",
   resultMerged: (into, method) =>
     `${into} にマージしました${
       (

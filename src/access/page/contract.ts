@@ -162,6 +162,12 @@ export interface WebPorts extends InboxReadPorts {
    */
   readonly mergeable?: boolean;
   /**
+   * Whether the host's publish pass (rondo#470, D-0187) has yet to finish its
+   * try of a lap, so a lap it will publish is said as rondo's and offers no
+   * press (rondo#619). Absent where the host runs no pass: the press stays.
+   */
+  readonly publishUntried?: (iterationId: string) => boolean;
+  /**
    * Whether the host holds a conflict-fix press (rondo#417, D-0105): true
    * exactly where the revise port carries one, so the card is drawn only where
    * a press could start the attempt. Absent is false.
