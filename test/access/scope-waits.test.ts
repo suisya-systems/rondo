@@ -17,7 +17,15 @@ import { REACH_SUBJECT, reachThePerson } from "../../src/access/reach.js";
 import { EN } from "../../src/access/wording.js";
 import { planDigest } from "../../src/store/plan.js";
 import { agentTypeDigestOf, world as drafterWorld, planDocument } from "./fixtures/drafter.js";
-import { fresh, openRequest, operatorPage, portsOver } from "./page-world.js";
+import {
+  fresh,
+  openGate,
+  openRequest,
+  operatorPage,
+  portsOver,
+  recordAnswer,
+  reserve,
+} from "./page-world.js";
 
 const threadOf = (messageId: string) => ({ kind: "thread" as const, messageId, to: null });
 
@@ -122,17 +130,14 @@ test("with no drafter host, nothing is owed and the page is as it was", async ()
   expect(html).not.toContain(EN.nextStepDrafting);
 });
 
-/** A request rondo's drafter has drafted a scope for, waiting on the person's approval. */
-async function drafted() {
-  const w = await drafterWorld();
+/** Run rondo's drafter once over the thread, as the host does on the person's message. */
+async function draft(w: Awaited<ReturnType<typeof drafterWorld>>, atMs: number) {
   const document = planDocument();
-  await w.say("r1", "Fix the cost box.", null, 1_000);
-  await w.say("r1-plan", JSON.stringify(document), "r1", 1_100);
-  let n = 0;
+  let n = atMs;
   const host = drafterHost({
     store: w.store,
     record: w.record,
-    now: () => 1_500,
+    now: () => atMs,
     language: null,
     log: () => undefined,
     mintId: (kind) => {
@@ -160,6 +165,14 @@ async function drafted() {
   });
   host.kick();
   await host.idle();
+}
+
+/** A request rondo's drafter has drafted a scope for, waiting on the person's approval. */
+async function drafted() {
+  const w = await drafterWorld();
+  await w.say("r1", "Fix the cost box.", null, 1_000);
+  await w.say("r1-plan", JSON.stringify(planDocument()), "r1", 1_100);
+  await draft(w, 1_500);
   const { scope_id: scopeId } = w.connection
     .prepare("SELECT scope_id FROM scope WHERE author_kind = 'drafter'")
     .get() as { scope_id: string };
@@ -224,4 +237,85 @@ test("the host reaches the person once for a drafted scope, and not while a draf
       .all(REACH_SUBJECT)
       .map((row) => (row as { subject_id: string }).subject_id),
   ).toEqual([`scope:${w.scopeId}`]);
+});
+
+test("a follow-up drafted after a merged lap is the person's turn, and its draft leads the scope page (rondo#621)", async () => {
+  const w = await drafted();
+  const read = await w.record.readScope(w.scopeId);
+  if (read.kind !== "read") throw new Error("the drafted scope did not read");
+  const approved = await w.record.recordScopeDecision({
+    scopeDecisionId: "decision-1",
+    scopeId: w.scopeId,
+    scopeDigest: read.scope.scopeDigest,
+    outcome: "approved",
+    actorId: "ada",
+    recordedBy: "test",
+    decidedAtMs: 1_600,
+  });
+  expect(approved.kind).toBe("recorded");
+  // The approved lap, published and merged, as the issue's request #617 was.
+  await reserve(w, "lap-1", "Fix the cost box.", null, "r1");
+  await openGate(w, "lap-1");
+  await recordAnswer(w, "lap-1");
+  const closed = await w.store.transition(
+    "lap-1",
+    "awaiting_human",
+    "closed",
+    { gateOutcome: "answered_and_forwarded" },
+    3_000,
+  );
+  expect(closed.kind).toBe("transitioned");
+  for (const [id, body] of [
+    [
+      "report-published-lap-1",
+      "Lap 'lap-1' was published: pull request https://f/o/r/pull/617 was opened.",
+    ],
+    [
+      "report-merged-lap-1",
+      "Lap 'lap-1' was merged on a person's press on the page: pull request #617 went into 'main' by squash.",
+    ],
+  ] as const) {
+    const said = await w.record.recordThreadMessage({
+      messageId: id,
+      body,
+      authorKind: "drafter",
+      authorId: "rondo/deterministic/1",
+      inReplyTo: "r1",
+      atMs: 3_100,
+      bases: [{ form: "iteration", iterationId: "lap-1" }],
+      asks: false,
+    });
+    expect(said.kind).toBe("recorded");
+  }
+  const ports = { ...portsOver(w), draftsOwed: async () => new Set<string>() };
+  const merged = await operatorPage(ports, "t", threadOf("r1"));
+  expect(merged).toContain(PAGE_EN.rowMerged(EN.pullRequest("617")));
+  expect(merged).not.toContain("list-row-mine");
+
+  // The person's follow-up, drafted again: a new scope waits on them.
+  await w.say("r1-more", "One more thing.", "r1", 4_000);
+  await draft(w, 4_500);
+  const { scope_id: newer } = w.connection
+    .prepare("SELECT scope_id FROM scope WHERE author_kind = 'drafter' AND scope_id <> ?")
+    .get(w.scopeId) as { scope_id: string };
+  const html = await operatorPage(ports, "t", threadOf("r1"));
+  expect(html).toContain("list-row-mine");
+  expect(html).toContain(PAGE_EN.rowWaitingOnYou);
+  expect(html).not.toContain(PAGE_EN.rowMerged(EN.pullRequest("617")));
+  expect(html).toContain(EN.waitingCount(1));
+  expect(html).toContain(`data-waits="[&quot;scope:${newer}&quot;]"`);
+
+  // The scope page puts the waiting draft above the approval already given.
+  const scope = await operatorPage(ports, "t", {
+    kind: "scope",
+    messageId: "r1",
+    rounds: null,
+    decisionId: null,
+    plan: null,
+  });
+  const redrafted = scope.indexOf(EN.scopeRedrafted);
+  expect(redrafted).toBeGreaterThan(-1);
+  const given = scope.indexOf(EN.scopeDigest(read.scope.scopeDigest));
+  expect(given).toBeGreaterThan(-1);
+  expect(redrafted).toBeLessThan(given);
 });

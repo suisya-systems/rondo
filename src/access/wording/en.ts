@@ -682,8 +682,8 @@ explanation you pressed on and then answers the gate.`,
     "rondo is waiting for your answer in this request's thread. Until you answer, the scope cannot " +
     "be set here. Answer it first.",
   scopeRedrafted:
-    "rondo drafted again after the scope above was approved. The new draft is below; approving " +
-    "it adds a second scope for this request, and the one above stays as it is.",
+    "rondo drafted again after the scope below was approved. The new draft is here; approving " +
+    "it adds a second scope for this request, and the one below stays as it is.",
   scopeDraftedAction: "Approve",
   scopeDraftedPlain: "Approves this scope, or your changed version of it",
   scopeDraftedPressNote:

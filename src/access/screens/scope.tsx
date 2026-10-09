@@ -394,12 +394,12 @@ export async function scopeView(
         </a>
       </section>
     );
-  // A draft written after an approval that stands is shown beside it, never in
-  // its place: the approval's starts and "started" links stay where they were.
+  // A draft written after an approval that stands is shown above it, as what waits
+  // (rondo#621), never in its place: the approval's starts and links stay put.
   const newer =
     view.decisionId === null && standing.kind === "decided" && standing.newer !== null
       ? (answerFirst ?? (
-          <section class="space-y-4 border-t border-border pt-4">
+          <section class="space-y-4 border-b border-border pb-4">
             {note(wording.scopeRedrafted)}
             {await draftedForm(ports, wording, view, standing.newer, threads, token, newScopeId)}
           </section>
@@ -408,6 +408,7 @@ export async function scopeView(
   const body =
     decisionId !== null ? (
       <>
+        {newer}
         {
           await scopeApproved(
             ports,
@@ -420,7 +421,6 @@ export async function scopeView(
             nowMs,
           )
         }
-        {newer}
       </>
     ) : answerFirst !== null ? (
       answerFirst
