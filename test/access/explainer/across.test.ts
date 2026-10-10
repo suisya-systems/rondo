@@ -7,10 +7,14 @@ import { expect, test } from "vitest";
 
 import { explainerHost } from "../../../src/access/explainer/host.js";
 import {
+  answerBody,
   DETERMINISTIC_EXPLAINER,
   deterministicAnswer,
 } from "../../../src/access/explainer/judgement.js";
-import { gatherExplainerMaterial } from "../../../src/access/explainer/material.js";
+import {
+  type ExplainerWait,
+  gatherExplainerMaterial,
+} from "../../../src/access/explainer/material.js";
 import { FLOW_STOP } from "../../../src/access/flow-stop.js";
 import type { DrafterRun } from "../../../src/access/model-draft/judgement.js";
 import { PAGE_EN } from "../../../src/access/page/words.js";
@@ -157,29 +161,52 @@ test("a paused goal flow is named in the answer, as it is a row under your turn"
   expect(unread.waits).toEqual([]);
 });
 
-test("the goal flow's stop is said as the flow's, not as the old request it is asked in (D-0188)", () => {
-  const material = {
+const FLAKY = { messageId: REQUEST, title: "Fix the flaky test." } as const;
+
+function across(waits: readonly ExplainerWait[]) {
+  return {
     question: { messageId: ACROSS, body: "What is waiting on me?", about: null, origin: "text" },
     requestMessageId: ACROSS,
     thread: [],
     laps: [],
-    waits: [
-      {
-        kind: "ask",
-        messageId: `${FLOW_STOP}1`,
-        request: { messageId: REQUEST, title: "Fix the flaky test." },
-      },
-    ],
+    waits,
     scope: null,
     words: null,
     locators: [],
   } as const;
+}
+
+test("the goal flow's stop is said as the flow's, under the request it is asked in (D-0188)", () => {
+  const material = across([{ kind: "ask", messageId: `${FLOW_STOP}1`, request: FLAKY }]);
   const { claims } = deterministicAnswer(material, EN, { kind: "acrossRequests" });
-  expect(claims[1]).toEqual({
-    label: EN.explainWaiting,
-    value: PAGE_EN.rowFlowStopped,
-    basis: { form: "message", messageId: `${FLOW_STOP}1` },
-  });
+  expect(claims).toEqual([
+    {
+      label: FLAKY.title,
+      value: PAGE_EN.rowFlowStopped,
+      basis: { form: "message", messageId: `${FLOW_STOP}1` },
+    },
+  ]);
+});
+
+test("one line per request, named by it; two stops of one flow read as one, and the question is not said again", () => {
+  const material = across([
+    { kind: "ask", messageId: `${FLOW_STOP}nothing`, request: FLAKY },
+    { kind: "ask", messageId: `${FLOW_STOP}expiry`, request: FLAKY },
+    { kind: "gate", iterationId: LAP, status: "awaiting_human", request: FLAKY },
+    {
+      kind: "gate",
+      iterationId: "lap-2",
+      status: "awaiting_human",
+      request: { messageId: "r-2", title: "Add a dark mode." },
+    },
+  ]);
+  const { claims } = deterministicAnswer(material, EN, { kind: "acrossRequests" });
+  const body = answerBody(EN, material, "", claims, { kind: "free" }).page;
+  expect(body.split("\n").filter((line) => line.startsWith("- "))).toEqual([
+    `- Fix the flaky test.: ${PAGE_EN.rowFlowStopped} / ${EN.explainWaitsGate}`,
+    `- Add a dark mode.: ${EN.explainWaitsGate}`,
+  ]);
+  expect(body).not.toContain("What is waiting on me?");
 });
 
 test("on the page, the answer leads to each wait's request, and to no scope screen of the question's own", async () => {

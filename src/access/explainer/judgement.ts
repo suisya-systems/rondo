@@ -340,17 +340,17 @@ export function deterministicAnswer(
 }
 
 /**
- * The answer to a question that opened its own thread (rondo#626, D-0189):
- * what was asked, then each wait on the person under the request it is in,
- * every one resting on the row that waits. Never empty: the question is a
- * claim, and with nothing waiting that is said, resting on the question.
+ * The answer to a question that opened its own thread (rondo#626, D-0189): one
+ * line per request that waits on the person, named by the request, saying in
+ * plain words what it waits on, and resting on a row that waits (the answer's
+ * bases carry every one). Never empty: with nothing waiting that is said,
+ * resting on the question.
  */
 function acrossAnswer(
   material: ExplainerMaterial,
   words: Chrome,
   why: Unexplained,
 ): { readonly answer: string; readonly claims: readonly Claim[] } {
-  const question = { form: "message", messageId: material.question.messageId } as const;
   const waitWord = {
     ask: words.explainWaitsAsk,
     gate: words.explainWaitsGate,
@@ -359,29 +359,35 @@ function acrossAnswer(
     scope: words.explainWaitsScope,
     paused: words.triageGoalScopePaused,
   };
-  const claims: Claim[] = [
-    { label: words.explainYouAsked, value: firstLine(material.question.body), basis: question },
-    ...material.waits.flatMap((wait): Claim[] => {
-      const basis = basisOf(waitLocator(wait));
-      return basis === null
-        ? []
-        : [
-            // The goal flow's stop is the flow's, not the request's it is asked in (D-0188).
-            wait.kind === "ask" && wait.messageId.startsWith(FLOW_STOP)
-              ? { label: words.explainWaiting, value: words.rowFlowStopped, basis }
-              : {
-                  label:
-                    wait.kind === "paused"
-                      ? wait.repository
-                      : wait.request?.title || words.explainRequest,
-                  value: waitWord[wait.kind],
-                  basis,
-                },
-          ];
-    }),
-  ];
-  if (claims.length === 1) {
-    claims.push({ label: words.explainWaiting, value: words.explainNothingWaits, basis: question });
+  const byRequest = new Map<string, { label: string; values: string[]; basis: Claim["basis"] }>();
+  for (const wait of material.waits) {
+    const basis = basisOf(waitLocator(wait));
+    if (basis === null) continue;
+    // The goal flow's stop is the flow's, not the request's it is asked in (D-0188).
+    const value =
+      wait.kind === "ask" && wait.messageId.startsWith(FLOW_STOP)
+        ? words.rowFlowStopped
+        : waitWord[wait.kind];
+    const key = wait.request?.messageId ?? waitLocator(wait);
+    const line = byRequest.get(key) ?? {
+      label: wait.kind === "paused" ? wait.repository : wait.request?.title || words.explainRequest,
+      values: [],
+      basis,
+    };
+    if (!line.values.includes(value)) line.values.push(value);
+    byRequest.set(key, line);
+  }
+  const claims: Claim[] = [...byRequest.values()].map((line) => ({
+    label: line.label,
+    value: line.values.join(" / "),
+    basis: line.basis,
+  }));
+  if (claims.length === 0) {
+    claims.push({
+      label: words.explainWaiting,
+      value: words.explainNothingWaits,
+      basis: { form: "message", messageId: material.question.messageId },
+    });
   }
   return {
     answer: `${unexplainedLine(words, why)}\n${words.explainAcrossLead}`,

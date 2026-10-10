@@ -30334,8 +30334,10 @@ the one `D-0063`'s measurement read. Line numbers drift: re-measure the claim, n
       behind a question about every request, so `D-0177` rule 5 has nothing to count a run against.
       Admission says so as a reason of its own, `acrossRequests`, and the deterministic answer is
       written. The answer costs nothing.
-   4. **The answer names each wait under its request**, with the wait's row as its basis. Its
-      bases also carry each wait's request, whose link opens the thread where the wait is answered.
+   4. **The answer names each wait under its request**: one line per request, titled by it, saying
+      in plain words what it waits on, the same wording said once (two stops of one goal flow are
+      one line). The question is not said again; it is shown above. Each line rests on a row that
+      waits, and the answer's bases carry every waiting row. They also carry each wait's request, whose link opens the thread where the wait is answered.
       From a question's thread a gate or a scope is named and not linked, since that thread has no
       gate or scope screen of its own. A paused goal flow is reached from its row under *your turn*.
       With nothing waiting, the answer says so, resting on the question. It drops the *answer it at the gate in this thread* lines, which would name a thread
