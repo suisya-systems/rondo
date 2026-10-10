@@ -30,9 +30,11 @@ import {
   type Unexplained,
 } from "./judgement.js";
 import {
+  basisOf,
   type ExplainerMaterial,
   type ExplainerPorts,
   gatherExplainerMaterial,
+  waitLocator,
 } from "./material.js";
 
 export interface ExplainerHostPorts extends ExplainerPorts {
@@ -256,6 +258,14 @@ async function write(
           ? [{ form: "scope", scopeId: w.scopeId }]
           : [],
     ),
+    // Across every request (D-0189): every waiting row, though one line says a
+    // request's waits, and each wait's request, whose thread is where it is answered.
+    ...material.waits.flatMap((w): JsonRecord[] => {
+      const row = basisOf(waitLocator(w));
+      return w.request === undefined || row === null
+        ? []
+        : [row as unknown as JsonRecord, { form: "message", messageId: w.request.messageId }];
+    }),
     { form: "message", messageId: questionId },
     { form: "proposal", proposalId },
   ]);

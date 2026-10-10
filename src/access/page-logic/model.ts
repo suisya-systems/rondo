@@ -14,6 +14,7 @@
 import { readTriagePayload, type TriagePayload } from "../../advisory/triage.js";
 import {
   type IterationRecord,
+  isQuestion,
   isTerminal,
   type NonTerminalStatus,
   opensFlowRequest,
@@ -445,11 +446,13 @@ export async function pageModel(
         title: firstLine(root.body),
         repository: placeOf(lap?.record ?? null),
         state: ((state) =>
-          state === "stopped" && unstarted.has(root.messageId)
-            ? "notStarted"
-            : state === "notStarted" && drafting.has(root.messageId)
-              ? "drafting"
-              : state)(
+          isQuestion(root)
+            ? "question"
+            : state === "stopped" && unstarted.has(root.messageId)
+              ? "notStarted"
+              : state === "notStarted" && drafting.has(root.messageId)
+                ? "drafting"
+                : state)(
           rowStateOf(lap?.record ?? null, turnsHere.has(root.messageId), (record) =>
             isTerminal(record.status),
           ),

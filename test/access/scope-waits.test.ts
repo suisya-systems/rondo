@@ -11,6 +11,8 @@
 import { expect, test } from "vitest";
 
 import { drafterHost } from "../../src/access/drafter-host.js";
+import { explainerHost } from "../../src/access/explainer/host.js";
+import { gatherExplainerMaterial } from "../../src/access/explainer/material.js";
 import type { WebPorts } from "../../src/access/page/contract.js";
 import { PAGE_EN } from "../../src/access/page/words.js";
 import { REACH_SUBJECT, reachThePerson } from "../../src/access/reach.js";
@@ -318,4 +320,80 @@ test("a follow-up drafted after a merged lap is the person's turn, and its draft
   const given = scope.indexOf(EN.scopeDigest(read.scope.scopeDigest));
   expect(given).toBeGreaterThan(-1);
   expect(redrafted).toBeLessThan(given);
+});
+
+test("asked across every request, rondo names a drafted scope only where the list does (D-0189)", async () => {
+  const w = await drafted();
+  const said = await w.record.recordThreadMessage({
+    messageId: "question-across",
+    body: "What is waiting on me?",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: 2_000,
+    bases: [],
+    asks: false,
+  });
+  expect(said.kind).toBe("recorded");
+  const scopes = async (over: {
+    readonly draftsOwed?: () => Promise<ReadonlySet<string>>;
+    readonly unheld?: (id: string) => Promise<boolean>;
+  }) =>
+    (
+      await gatherExplainerMaterial(
+        { store: w.store, record: w.record, ...over },
+        "question-across",
+        3_000,
+      )
+    ).waits.filter((wait) => wait.kind === "scope");
+  expect(await scopes({})).toEqual([
+    {
+      kind: "scope",
+      scopeId: w.scopeId,
+      request: { messageId: "r1", title: "Fix the cost box." },
+    },
+  ]);
+  // A redraft rondo owes, or a repository to add first: no turn on the list, none in the answer.
+  expect(await scopes({ draftsOwed: async () => new Set(["r1"]) })).toEqual([]);
+  expect(await scopes({ unheld: async () => true })).toEqual([]);
+});
+
+test("an answer across every request leads to the scope's request, not to a scope screen of the question's", async () => {
+  const w = await drafted();
+  await w.record.recordThreadMessage({
+    messageId: "question-across",
+    body: "What is waiting on me?",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: 2_000,
+    bases: [],
+    asks: false,
+  });
+  let n = 0;
+  const host = explainerHost({
+    store: w.store,
+    record: w.record,
+    runDrafter: async () => {
+      throw new Error("no model is asked across every request");
+    },
+    now: () => 3_000,
+    mintId: (kind) => {
+      n += 1;
+      return `${kind}-x${String(n)}`;
+    },
+    language: null,
+    log: () => undefined,
+  });
+  host.kick();
+  await host.idle();
+  const html = await operatorPage(
+    { ...portsOver(w), draftsOwed: async () => new Set() },
+    "t",
+    threadOf("question-across"),
+  );
+  const answer = /<article id="drafter-x[^"]*"[\s\S]*?<\/article>/.exec(html)?.[0] ?? "";
+  expect(answer).toContain(EN.explainWaitsScope);
+  expect(answer).toContain('href="/?thread=r1&amp;lang=en#r1"');
+  expect(answer).not.toContain("?scope=question-across");
 });

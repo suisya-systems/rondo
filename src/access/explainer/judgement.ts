@@ -11,11 +11,12 @@
 import type { Claim } from "../../advisory/proposal.js";
 import type { DrafterRow } from "../../continuo/roles.js";
 import { EXPLAINER_PREFIX } from "../../store/records.js";
+import { FLOW_STOP } from "../flow-stop.js";
 import { sectionFramer } from "../framing.js";
 import { answerJson } from "../model-draft/judgement.js";
 import { firstLine } from "../page-logic/threads.js";
 import type { Chrome } from "../wording.js";
-import { basisOf, type ExplainerMaterial } from "./material.js";
+import { acrossRequests, basisOf, type ExplainerMaterial, waitLocator } from "./material.js";
 
 export const EXPLAINER_INSTRUCTIONS_VERSION = 1;
 /** The most one answer may cost, and what is counted when its cost is not reported. */
@@ -38,6 +39,8 @@ export function explainerName(row: DrafterRow): string {
 /** Why no model's answer is shown, each a different sentence to the person. */
 export type Unexplained =
   | { readonly kind: "noApproval" }
+  /** A question across every request: no one request's approval to count it against (D-0189). */
+  | { readonly kind: "acrossRequests" }
   | { readonly kind: "expired" }
   | { readonly kind: "tooLittleLeft"; readonly leftUsd: number }
   /** A model ran: the run failed, or its answer did not pass the check. */
@@ -52,6 +55,9 @@ export function admission(
   material: ExplainerMaterial,
   nowMs: number,
 ): { readonly kind: "admitted"; readonly scopeDecisionId: string } | Unexplained {
+  if (acrossRequests(material)) {
+    return { kind: "acrossRequests" };
+  }
   const scope = material.scope;
   if (scope === null) {
     return { kind: "noApproval" };
@@ -223,6 +229,8 @@ function unexplainedLine(words: Chrome, why: Unexplained): string {
   switch (why.kind) {
     case "noApproval":
       return words.explainNoApproval;
+    case "acrossRequests":
+      return words.explainAcrossRequests;
     case "expired":
       return words.explainExpired;
     case "tooLittleLeft":
@@ -243,6 +251,9 @@ export function deterministicAnswer(
   words: Chrome,
   why: Unexplained,
 ): { readonly answer: string; readonly claims: readonly Claim[] } {
+  if (acrossRequests(material)) {
+    return acrossAnswer(material, words, why);
+  }
   const byId = new Map(material.thread.map((m) => [m.messageId, m]));
   const claims: Claim[] = [];
   const about = material.question.about;
@@ -293,10 +304,10 @@ export function deterministicAnswer(
             value: words.explainWaitsAsk,
             basis: { form: "message", messageId: wait.messageId },
           }
-        : wait.kind === "scope"
+        : wait.kind === "scope" || wait.kind === "paused"
           ? {
               label: words.explainWaiting,
-              value: words.explainWaitsScope,
+              value: wait.kind === "scope" ? words.explainWaitsScope : words.triageGoalScopePaused,
               basis: { form: "scope", scopeId: wait.scopeId },
             }
           : {
@@ -324,6 +335,67 @@ export function deterministicAnswer(
   }
   return {
     answer: `${unexplainedLine(words, why)}\n${words.explainFallbackLead}`,
+    claims,
+  };
+}
+
+/**
+ * The answer to a question that opened its own thread (rondo#626, D-0189): one
+ * line per request that waits on the person, named by the request, saying in
+ * plain words what it waits on, and resting on a row that waits (the answer's
+ * bases carry every one). Never empty: with nothing waiting that is said,
+ * resting on the question.
+ */
+function acrossAnswer(
+  material: ExplainerMaterial,
+  words: Chrome,
+  why: Unexplained,
+): { readonly answer: string; readonly claims: readonly Claim[] } {
+  const waitWord = {
+    ask: words.explainWaitsAsk,
+    gate: words.explainWaitsGate,
+    decide: words.explainWaitsDecide,
+    overdue: words.explainOverdue,
+    scope: words.explainWaitsScope,
+    paused: words.triageGoalScopePaused,
+  };
+  const byRequest = new Map<string, { label: string; values: string[]; basis: Claim["basis"] }>();
+  for (const wait of material.waits) {
+    const basis = basisOf(waitLocator(wait));
+    if (basis === null) continue;
+    // The goal flow's stop is the flow's, not the request's it is asked in (D-0188).
+    const value =
+      wait.kind === "ask" && wait.messageId.startsWith(FLOW_STOP)
+        ? words.rowFlowStopped
+        : waitWord[wait.kind];
+    const key = wait.request?.messageId ?? waitLocator(wait);
+    const line = byRequest.get(key) ?? {
+      label:
+        wait.kind === "paused"
+          ? wait.repository
+          : wait.request?.title
+            ? words.explainRequestQuoted(wait.request.title.replace(/[.!?。！？]+$/u, ""))
+            : words.explainRequest,
+      values: [],
+      basis,
+    };
+    if (!line.values.includes(value)) line.values.push(value);
+    byRequest.set(key, line);
+  }
+  const claims: Claim[] = [...byRequest.values()].map((line) => ({
+    label: line.label,
+    value: line.values.join(" / "),
+    basis: line.basis,
+  }));
+  if (claims.length === 0) {
+    claims.push({
+      label: words.explainWaiting,
+      value: words.explainNothingWaits,
+      basis: { form: "message", messageId: material.question.messageId },
+    });
+  }
+  return {
+    answer: `${unexplainedLine(words, why)}\n${words.explainAcrossLead}`,
     claims,
   };
 }
@@ -362,10 +434,13 @@ export function answerBody(
             ...(cost.costUsd > EXPLAINER_CAP_USD ? [words.explainOverCap(cap)] : []),
           ];
   const lead = [answer, "", ...claims.map((claim) => `- ${claim.label}: ${claim.value}`), ""];
-  const where = [
-    ...(material.waits.some((w) => w.kind === "gate") ? [words.explainWhereToAnswer] : []),
-    ...(material.waits.some((w) => w.kind === "scope") ? [words.explainWhereToApprove] : []),
-  ];
+  // Across every request, each wait's own link is where it is answered.
+  const where = acrossRequests(material)
+    ? []
+    : [
+        ...(material.waits.some((w) => w.kind === "gate") ? [words.explainWhereToAnswer] : []),
+        ...(material.waits.some((w) => w.kind === "scope") ? [words.explainWhereToApprove] : []),
+      ];
   return {
     body: [...lead, words.explainBand, ...costLines, ...where].join("\n"),
     page: [...lead, ...where].join("\n").trimEnd(),

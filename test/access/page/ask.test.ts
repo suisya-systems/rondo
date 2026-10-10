@@ -174,6 +174,16 @@ test("an ordinary reply box can send its words as a question", async () => {
   );
 });
 
+test("the new request box can send its words as a question across every request (rondo#626)", async () => {
+  const form = composer(
+    await operatorPage(portsOver(await asked()), "t", { kind: "requests" }, EN, mint),
+  );
+  expect(form).toContain('action="/request?lang=en"');
+  expect(form).toContain('formaction="/question?lang=en"');
+  expect(form).not.toContain('name="in_reply_to"');
+  expect(form).not.toContain('name="about"');
+});
+
 test("an explainer answer is drawn under its band, with what it cost", async () => {
   const html = await page(await asked());
   const answer = /<article id="answer-1"[\s\S]*?<\/article>/.exec(html)?.[0] ?? "";

@@ -9,13 +9,25 @@
  */
 
 import type { Basis } from "../../advisory/proposal.js";
-import type { IterationRecord, JsonRecord, ThreadMessageDraft } from "../../store/records.js";
+import {
+  type IterationRecord,
+  type JsonRecord,
+  QUESTION_ID_PREFIX,
+  type ThreadMessageDraft,
+} from "../../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
 import { draftAwaiting, draftedStanding } from "../drafted-view.js";
+import { goalScopeStanding } from "../goal-scope.js";
 import { threadOf } from "../model-draft/host.js";
+import { currentGoals } from "../page/triage.js";
 import { type LapResult, resultOf } from "../page-logic/result.js";
-import { threadsOf } from "../page-logic/threads.js";
-import { lapsPastTheirCeiling, waitsOnYou } from "../page-logic/waits.js";
+import { firstLine, threadsOf } from "../page-logic/threads.js";
+import {
+  draftsOwedNow,
+  lapsPastTheirCeiling,
+  scopesAwaitingYou,
+  waitsOnYou,
+} from "../page-logic/waits.js";
 
 /** One message's body is cut here, so one pasted log does not crowd out the thread. */
 const BODY_BOUND = 4_000;
@@ -31,7 +43,18 @@ export interface ExplainerPorts {
     | "readScope"
     | "scopeSpent"
     | "readProposal"
+    | "goals"
+    | "approvalsInForce"
   >;
+  /**
+   * What the list's *your turn* also reads, for a question across every
+   * request (D-0189): the drafts rondo still owes, a request's repository
+   * rondo does not hold, and the repositories whose goal flows it draws. The
+   * page's own ports; absent, nothing is owed or unheld and no flow is read.
+   */
+  readonly draftsOwed?: () => Promise<ReadonlySet<string>>;
+  readonly unheld?: (requestMessageId: string) => Promise<boolean>;
+  readonly triageRepositories?: () => Promise<readonly string[]>;
 }
 
 export interface ExplainerMessage {
@@ -68,12 +91,35 @@ export interface ExplainerLap {
  * a lap past its plan's ceiling, and a drafted scope nobody has decided. Not
  * D-0068's whole reading of a wait; the things rondo already says are waiting.
  */
-export type ExplainerWait =
+export type ExplainerWait = (
   | { readonly kind: "gate"; readonly iterationId: string; readonly status: string }
   | { readonly kind: "decide"; readonly iterationId: string; readonly status: string }
   | { readonly kind: "ask"; readonly messageId: string }
   | { readonly kind: "overdue"; readonly iterationId: string; readonly status: string }
-  | { readonly kind: "scope"; readonly scopeId: string };
+  | { readonly kind: "scope"; readonly scopeId: string }
+  /** A goal flow the person paused, by the scope that paused it (D-0186). */
+  | { readonly kind: "paused"; readonly scopeId: string; readonly repository: string }
+) & {
+  /**
+   * The request it waits in, by its opener's id and first line: set only for a
+   * question that opens a thread of its own, whose answer spans every request
+   * (rondo#626, D-0189).
+   */
+  readonly request?: { readonly messageId: string; readonly title: string };
+};
+
+/** Whether the question opened a thread of its own, and so asks across every request (D-0189). */
+export const acrossRequests = (material: ExplainerMaterial): boolean =>
+  material.requestMessageId.startsWith(QUESTION_ID_PREFIX);
+
+/** A wait's own locator: the question asked, or the lap or scope that waits. */
+export function waitLocator(wait: ExplainerWait): string {
+  return wait.kind === "ask"
+    ? `message:${wait.messageId}`
+    : wait.kind === "scope" || wait.kind === "paused"
+      ? `scope:${wait.scopeId}`
+      : `iteration:${wait.iterationId}`;
+}
 
 /** The approval in force for the request, with what is left of it. */
 export interface ExplainerScope {
@@ -221,29 +267,78 @@ export async function gatherExplainerMaterial(
     result: resultOf(said, r.id),
   }));
 
-  const ownLive = live.filter((r) => r.requestMessageId === root);
+  // **A question that opens its own thread asks across every request**, and so
+  // does one asked again in that thread (rondo#626, D-0189): what waits on the
+  // person anywhere, as the list's *your turn* reads it, each wait named by its
+  // request. It has no laps and no approval of its own.
+  const across = root.startsWith(QUESTION_ID_PREFIX);
+  const ownLive = across ? live : live.filter((r) => r.requestMessageId === root);
+  const titled = (request: string): Pick<ExplainerWait, "request"> =>
+    across
+      ? { request: { messageId: request, title: firstLine(said.get(request)?.body ?? "") } }
+      : {};
   const waits: ExplainerWait[] = waitsOnYou(threads, ownLive).flatMap((w): ExplainerWait[] => {
-    if (w.root !== root) {
+    if (!across && w.root !== root) {
       return [];
     }
     const [kind = "", id = "", status = ""] = w.episode.split(":");
     if (kind === "ask") {
-      return [{ kind: "ask", messageId: w.episode.slice("ask:".length) }];
+      return [{ kind: "ask", messageId: w.episode.slice("ask:".length), ...titled(w.root) }];
     }
     // Only a lap at its gate has a gate to answer; a stalled one waits on a decision.
-    return [{ kind: status === "awaiting_human" ? "gate" : "decide", iterationId: id, status }];
+    return [
+      {
+        kind: status === "awaiting_human" ? "gate" : "decide",
+        iterationId: id,
+        status,
+        ...titled(w.root),
+      },
+    ];
   });
   for (const key of lapsPastTheirCeiling(ownLive, nowMs)) {
     const at = key.lastIndexOf(":");
-    waits.push({ kind: "overdue", iterationId: key.slice(0, at), status: key.slice(at + 1) });
+    const iterationId = key.slice(0, at);
+    const request = ownLive.find((r) => r.id === iterationId)?.requestMessageId ?? root;
+    waits.push({ kind: "overdue", iterationId, status: key.slice(at + 1), ...titled(request) });
   }
 
-  const scope = await approvalInForce(ports, root);
+  const scope = across ? null : await approvalInForce(ports, root);
   // A drafted scope nobody has decided: the person's turn is its approval
   // (`scopesAwaitingYou`'s reading).
-  const draft = draftAwaiting(await draftedStanding(ports, root), records.length > 0);
-  if (draft !== null) {
-    waits.push({ kind: "scope", scopeId: draft.scope.scopeId });
+  if (across) {
+    // The page's own predicates (`page-logic/model.ts`), so the answer and the
+    // list cannot differ: a redraft owed or a repository not held is no turn.
+    const unheld = ports.unheld;
+    const scopes = await scopesAwaitingYou(
+      {
+        record: ports.record,
+        unheld: async (id) => (unheld === undefined ? false : await unheld(id).catch(() => false)),
+      },
+      threads,
+      [...live, ...ended],
+      await draftsOwedNow(ports),
+    );
+    for (const w of scopes) {
+      waits.push({ kind: "scope", scopeId: w.episode.slice("scope:".length), ...titled(w.root) });
+    }
+    // A paused goal flow is a row under *your turn* too (D-0186), as `triageModel` reads it.
+    if (((await ports.triageRepositories?.()) ?? []).length > 0) {
+      for (const goal of currentGoals(await ports.record.goals()).values()) {
+        const standing = await goalScopeStanding(ports.record, goal.goalId);
+        if (standing.kind === "paused") {
+          waits.push({
+            kind: "paused",
+            scopeId: standing.scope.scopeId,
+            repository: goal.repository,
+          });
+        }
+      }
+    }
+  } else {
+    const draft = draftAwaiting(await draftedStanding(ports, root), records.length > 0);
+    if (draft !== null) {
+      waits.push({ kind: "scope", scopeId: draft.scope.scopeId });
+    }
   }
   const about = aboutOf(question.bases);
   const asked =
@@ -252,6 +347,7 @@ export async function gatherExplainerMaterial(
     ...thread.map((m) => `message:${m.messageId}`),
     ...laps.map((lap) => `iteration:${lap.iterationId}`),
     ...(scope === null ? [] : [`scope:${scope.scopeId}`]),
+    ...(across ? waits.map(waitLocator) : []),
     ...waits.flatMap((w) => (w.kind === "scope" ? [`scope:${w.scopeId}`] : [])),
     ...(about === null ? [] : [locatorText(about) as string]),
   ]);

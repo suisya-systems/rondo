@@ -105,6 +105,8 @@ export interface PageWords extends DayWords {
   readonly rowNotStarted: string;
   /** No lap yet, and rondo still owes its draft (rondo#495): rondo's turn, not the person's. */
   readonly rowDrafting: string;
+  /** A thread opened by a question to rondo, which starts no work (D-0189). */
+  readonly rowQuestion: string;
   /**
    * The event lines a lap produces (rule 7).
    *
@@ -681,6 +683,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   rowStopped: "Stopped",
   rowNotStarted: "Not started yet",
   rowDrafting: "rondo is drafting a plan",
+  rowQuestion: "A question to rondo",
   evStarted: "Work started.",
   evFinished: "Finished.",
   evApproved: (published) =>
@@ -1324,6 +1327,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   rowStopped: "取りやめました",
   rowNotStarted: "まだ始まっていません",
   rowDrafting: "rondo が計画を下書きしています",
+  rowQuestion: "rondo への質問",
   evStarted: "作業を始めました。",
   evFinished: "終わりました。",
   evApproved: (published) =>

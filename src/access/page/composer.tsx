@@ -532,8 +532,9 @@ export function composerView(
             ) : (
               <>
                 {/* **Free words, asked as a question** (rondo#401): the second
-                    submit of an ordinary reply box, which asks for no work. */}
-                {replying === null || asking ? null : (
+                    submit of an ordinary box, which asks for no work. On the
+                    new request box it asks across every request (rondo#626). */}
+                {asking ? null : (
                   <button
                     type="submit"
                     formaction={`/question${lang}`}

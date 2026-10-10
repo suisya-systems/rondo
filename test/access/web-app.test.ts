@@ -2641,11 +2641,11 @@ test("(send) a question is recorded under its own prefix with what it asks about
     { messageId: free, body: "and this?", inReplyTo: "req", about: null },
   ]);
 
-  // A question is always asked inside a thread, and about something rondo can name.
+  // A question asks about something rondo can name, and a "?" names a place in a thread.
   const form = { token: TOKEN, message_id: newMessageId("question"), body: "why?" };
   for (const [shape, posted] of [
-    ["no thread", form],
-    ["an empty thread", { ...form, in_reply_to: "" }],
+    ["a place with no thread", { ...form, about: "iteration:i-1" }],
+    ["an empty thread", { ...form, in_reply_to: "", about: "iteration:i-1" }],
     ["an unknown form", { ...form, in_reply_to: "req", about: "proposal:p-1" }],
     ["a gate with no sequence", { ...form, in_reply_to: "req", about: "gate:g-1" }],
     ["no locator at all", { ...form, in_reply_to: "req", about: "nonsense" }],
@@ -2653,6 +2653,26 @@ test("(send) a question is recorded under its own prefix with what it asks about
     expect((await send(base, "/question", "POST", htmx, posted)).status, shape).toBe(400);
   }
   expect(sent).toHaveLength(2);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(send) a question with no thread opens one of its own, asking across every request (rondo#626)", async () => {
+  const sent: Sent = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], sent), TOKEN));
+  // The new request box's *Ask rondo*: the box's minted request id, as a question's.
+  const request = newMessageId("request");
+  const asked = await send(base, "/question", "POST", htmxHeaders(base), {
+    token: TOKEN,
+    message_id: request,
+    body: "What is waiting on me?",
+  });
+  expect(asked.status).toBe(303);
+  const id = `question-${request.slice("request-".length)}`;
+  expect(sent).toEqual([
+    { messageId: id, body: "What is waiting on me?", inReplyTo: null, about: null },
+  ]);
 
   stop.abort();
   expect(await closed).toBe(0);

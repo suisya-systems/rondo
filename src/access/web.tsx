@@ -93,6 +93,7 @@ import { revisionInstruction } from "../refrain/revision.js";
 import {
   type IterationRecord,
   isDeterministicReadingDrafter,
+  isQuestion,
   isTerminal,
   latestReading,
   WORKER_QUESTION_AUTHOR,
@@ -984,8 +985,10 @@ async function threadBoxes(
       : ((
           await approveView(wording, gatedLap, token, gateFraming, newIterationId, gateStory)
         )?.toString() ?? null);
+  // A thread a question opened asks for no work, so it has no scope or next act (D-0189).
+  const opener = selectedRoot === null ? undefined : threads.byId.get(selectedRoot);
   const acts =
-    selectedRoot === null
+    selectedRoot === null || (opener !== undefined && isQuestion(opener))
       ? null
       : await threadActs(
           wording,

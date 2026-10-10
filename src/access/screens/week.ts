@@ -12,7 +12,7 @@
  * **No figure here is stored** (`D-0032` rule 3): the week is counted from
  * rows that already exist each time it is drawn.
  */
-import { type IterationRecord, isTerminal } from "../../store/records.js";
+import { type IterationRecord, isQuestion, isTerminal } from "../../store/records.js";
 import { ago } from "../inbox.js";
 import type { WebPorts } from "../page/contract.js";
 import { EmptySide, type SideWork } from "../page/empty-side.js";
@@ -88,8 +88,9 @@ export async function weekSide(
       wording,
       figures: weekFigures(
         {
+          // A question to rondo asks for no work, so it is not a request asked (D-0189).
           askedAtMs: threads.messages
-            .filter((message) => message.inReplyTo === null)
+            .filter((message) => message.inReplyTo === null && !isQuestion(message))
             .map((message) => message.atMs),
           /*
            * **A request and not a lap, and only one that has stopped**
