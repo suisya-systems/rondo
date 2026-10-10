@@ -269,6 +269,17 @@ export async function relayQuestion(
     atMs: nowMs,
     bases,
     asks: true,
+    // D-0190 rule 4: a read question's options are stored beside its body, so
+    // each is a press; an unreadable block offers none and keeps today's presses.
+    ...(read.kind === "question"
+      ? {
+          askOptions: {
+            options: read.question.options,
+            recommended: read.question.recommended,
+            recommendation: read.question.recommendation,
+          },
+        }
+      : {}),
   };
   // `asRefusal`: this writer says the same thing about an id already spoken
   // for as it did before the store told the two apart.
@@ -282,6 +293,8 @@ export async function relayQuestion(
 export interface AnsweredQuestion {
   readonly question: string;
   readonly answer: string;
+  /** The option's text, when the answer was an option's press (D-0190 rule 7). */
+  readonly chose?: string | undefined;
 }
 
 /**
@@ -302,7 +315,9 @@ export function answeredQuestion(
         m.inReplyTo === messageId && m.authorKind === "operator" && m.answerOutcome === "carry_on",
     )
     .reduce<ThreadMessageDraft | null>((l, m) => (l === null || m.atMs >= l.atMs ? m : l), null);
-  return answer === null ? null : { question: asked.body, answer: answer.body };
+  const chose =
+    answer?.answerOption === undefined ? undefined : asked.askOptions?.options[answer.answerOption];
+  return answer === null ? null : { question: asked.body, answer: answer.body, chose: chose?.text };
 }
 
 /**
@@ -322,6 +337,7 @@ export function questionRevise(answered: AnsweredQuestion): string {
     "---",
     answered.answer,
     "---",
+    ...(answered.chose === undefined ? [] : [`They chose: ${answered.chose}`]),
     "Continue the work that waited on this answer.",
   ].join("\n");
 }

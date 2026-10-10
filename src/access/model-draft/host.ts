@@ -33,6 +33,7 @@ import {
   type JsonRecord,
   type JsonValue,
   type LaneClaimAsk,
+  type ThreadMessageDraft,
 } from "../../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
 import type { readRepositoryPaths, runDrafter } from "../forge.js";
@@ -183,6 +184,19 @@ function builtFacts(
 const priced = (tier: string | null): boolean =>
   tier !== null && (PRICED_MODEL_TIERS as readonly string[]).includes(tier);
 
+/** The words of the option an answer pressed, off the ask it replies to (D-0190 rule 9). */
+function chosen(
+  m: ThreadMessageDraft,
+  messages: readonly ThreadMessageDraft[],
+): { readonly chose?: string } {
+  if (m.answerOption === undefined) {
+    return {};
+  }
+  const asked = messages.find((one) => one.messageId === m.inReplyTo);
+  const text = asked?.askOptions?.options[m.answerOption]?.text;
+  return text === undefined ? {} : { chose: text };
+}
+
 /** The request and every reply under it. */
 export function threadOf(
   messages: readonly { readonly messageId: string; readonly inReplyTo: string | null }[],
@@ -234,6 +248,10 @@ export async function gatherDrafterMaterial(
       authorId: m.authorId,
       inReplyTo: m.inReplyTo,
       asks: m.asks,
+      // D-0190 rule 9: an answer's outcome, and the option it pressed in words,
+      // read off the ask it replies to.
+      ...(m.answerOutcome === undefined ? {} : { answerOutcome: m.answerOutcome }),
+      ...chosen(m, read.messages),
       // **An issue read reaches the drafter, cut from the head when it is long**
       // (`D-0131` rule 2): every other message's bytes are as written.
       body: m.authorKind === "forge" ? issueForDrafter(m.body) : m.body,

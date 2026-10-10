@@ -1,3 +1,5 @@
+import type { AskOptions } from "./ask-options.js";
+
 /**
  * The shapes the durable store persists.
  *
@@ -768,10 +770,7 @@ export interface ThreadMessageDraft {
   readonly body: string;
   /** Which voice spoke is a column and never a property of the prose (rule 2.3). */
   readonly authorKind: ThreadAuthorKind;
-  /**
-   * The approved actor id for an operator, the drafter's name for a drafter,
-   * the reader's name for a `forge` message.
-   */
+  /** The approved actor id for an operator, the drafter's or the reader's name otherwise. */
   readonly authorId: string;
   /** Null opens a request; otherwise the message this one answers (rule 2.4). */
   readonly inReplyTo: string | null;
@@ -787,15 +786,16 @@ export interface ThreadMessageDraft {
   /** Whether the message asks the person for an answer (rule 2.7). */
   readonly asks: boolean;
   /**
-   * Which of D-0072's two answers this message carries, absent on a message
-   * that answers nothing.
-   *
-   * **Absent is the default and the honest one**: an ordinary reply, a
-   * drafter's report and every row written before D-0072 carry no answer, and
-   * the ask they reply to stays open. Only the answering press sets it, and
-   * the writer refuses it anywhere else (rule 2 of that entry).
+   * Which of D-0072's two answers this message carries. **Absent is the default
+   * and the honest one**: an ordinary reply, a drafter's report and every row
+   * written before D-0072 carry no answer, and the ask they reply to stays
+   * open. Only the answering press sets it; the writer refuses it elsewhere.
    */
   readonly answerOutcome?: AnswerOutcome;
+  /** An ask's options beside its body (D-0190 rule 1); absent on every other message. */
+  readonly askOptions?: AskOptions;
+  /** The 0-based option a `carry_on` answer pressed (D-0190 rule 2); absent otherwise. */
+  readonly answerOption?: number;
 }
 
 /**

@@ -210,6 +210,7 @@ export const JA: Chrome = Object.freeze({
   askStoppedPill: "あなたが止めた線",
   answerStoppedPill: "この線を止めた",
   answerCarriedOnPill: "続けた",
+  answerChosePill: (option) => `${String(option)} を選んだ`,
   askedChangePill: "変更を頼んだ",
   reviseWaitsOnQuestion:
     "作業者の質問に答えるまで、変更の依頼は送れません。答えると送れるようになります。" +
@@ -273,6 +274,11 @@ export const JA: Chrome = Object.freeze({
   answerOutcomeNote:
     "書いたとおりに送られます。「続ける」は仕事をもう一度試させ、「この線を止める」は止めたままにします。" +
     "あとから「続ける」こともできます。",
+  answerInMyWordsAction: "自分の言葉で答える",
+  answerRecommended: "おすすめ",
+  answerOptionsNote:
+    "選択肢はそれぞれ押すだけで回答になり、書いた文も一緒に送られます。" +
+    "「この線を止める」は止めたままにし、あとから答えることもできます。",
   answerRaiseAction: "予算を増やして続ける",
   answerReviseNote: "「続ける」を押すと、この回答を持たせて次の試行をすぐに始めます。",
   answerReviseDraftLead: "次の試行には、次の変更依頼も一緒に渡します:",
@@ -321,6 +327,8 @@ export const JA: Chrome = Object.freeze({
   answerRefusedRaise:
     "予算は増えておらず、質問にもまだ答えていません。承認がすでに増やされたか、置き換えられた" +
     "可能性があります。スレッドを読み込み直して、もう一度答えてください。",
+  answerRefusedNoWords:
+    "「自分の言葉で答える」には文が要ります。書くか、選択肢のどれかを押してください。",
   replyNotAnswer: "返信しただけでは、このスレッドで待っている質問に答えたことになりません。",
   sendBack: "スレッドに戻る",
   sendBackNote: "ブラウザの「戻る」で、書いた文に戻れます。",

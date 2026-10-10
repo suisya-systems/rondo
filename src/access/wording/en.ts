@@ -222,6 +222,7 @@ explanation you pressed on and then answers the gate.`,
   askStoppedPill: "You stopped this line",
   answerStoppedPill: "Stopped this line",
   answerCarriedOnPill: "Carried on",
+  answerChosePill: (option) => `Chose ${String(option)}`,
   askedChangePill: "Asked for a change",
   reviseWaitsOnQuestion:
     "Until you answer the worker's question, the change cannot be sent. What you write here " +
@@ -286,6 +287,11 @@ explanation you pressed on and then answers the gate.`,
   answerOutcomeNote:
     "Sent as written. Carry on lets the work be tried again; Stop this line keeps it stopped, " +
     "and you can carry on later.",
+  answerInMyWordsAction: "Answer in my words",
+  answerRecommended: "Recommended",
+  answerOptionsNote:
+    "Each option answers on its own press; words you write go with it. Stop this line keeps " +
+    "it stopped, and you can answer later.",
   answerRaiseAction: "Raise the budget and carry on",
   answerReviseNote: "Carry on starts the next attempt right away, with this answer.",
   answerReviseDraftLead: "The next attempt is also given this change:",
@@ -332,6 +338,8 @@ explanation you pressed on and then answers the gate.`,
   answerRefusedRaise:
     "The budget was not raised, and the question is not answered yet: the approval may have " +
     "been raised or replaced already. Reload the thread and answer again.",
+  answerRefusedNoWords:
+    "Answer in my words needs your words. Write them, or press one of the options.",
   replyNotAnswer: "This reply does not answer the question waiting in this thread.",
   sendBack: "Back to the thread",
   sendBackNote: "Your browser's Back button returns to what you wrote.",

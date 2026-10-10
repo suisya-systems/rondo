@@ -156,7 +156,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0109 | A start press answers once its lap's row is there, not once the lap is at its gate: a refusal before the row is still the press's answer, and a start that ends badly after it is an ask in the request's thread | accepted |
 | D-0110 | A lap that stops short is the person's turn: setup gives a lap thirty minutes and tells it to commit as it goes, a stop is an ask in the request's thread until the person answers it, continuo's turn-timeout refusal is said in the person's words, and a try with no reported cost says so instead of *not yet* | accepted, amended |
 | D-0111 | While a question in the thread waits, the answer is the next step and no scope is offered; a brief says the person chose only on their words and names the choice as they saw it; the scope screen folds what rondo records | accepted |
-| D-0112 | rondo's lap reports are shut under the lines that say them in the person's words; a question is numbered once and points at its recommendation; the publish screen says what the body holds; the outlined scope waits for the work to end; merge gets a confirm screen | accepted |
+| D-0112 | rondo's lap reports are shut under the lines that say them in the person's words; a question is numbered once and points at its recommendation; the publish screen says what the body holds; the outlined scope waits for the work to end; merge gets a confirm screen | accepted, amended |
 | D-0113 | A lap merged from the page releases its files at once, the merge being its landing; a start refused by held files names the holding request and links its release | accepted |
 | D-0114 | A line gives its files up when its pull request opens, not when its work lands: the landing is still read and written after it, so an order still waits for a landing, and the numbers stay the line's | accepted |
 | D-0115 | The gate's card of the worker's words is *the worker's report*, on every gate, and the report is shut under a line in the person's language | accepted |
@@ -223,7 +223,8 @@ C-NN`, so the spaces can never be read as one.
 | D-0186 | A paused goal flow is a row under *your turn* in the list, on every view, leading to the screen that resumes it; it is the one row there that is not a request | accepted |
 | D-0187 | A person's approval at the gate carries the lap to its pull request under a scope that allows it, without a second press, and the page's publish sentences say whether rondo then merges on green | accepted, amended |
 | D-0188 | A request whose only wait is the goal flow's stop says the flow waits, not the request, though it stays under *your turn* | accepted |
-| D-0189 | The secretary-like role rondo#626 asks for is the one `D-0063`, `D-0064`, `D-0067`, `D-0068` and `D-0177` already split across parts: no new role and no wider advisory, the gaps between the parts listed with where each is closed, and a question asked from the new request box answered across every request | accepted |
+| D-0189 | The secretary-like role rondo#626 asks for is the one `D-0063`, `D-0064`, `D-0067`, `D-0068` and `D-0177` already split across parts: no new role and no wider advisory, the gaps between the parts listed with where each is closed, and a question asked from the new request box answered across every request | accepted, amended |
+| D-0190 | An ask-back's options are stored beside its words and each one is a press, the option pressed is kept on the answer, a stop on the drafter's own ask is not drafted again, and one reader lists every decision the store holds | accepted |
 
 ---
 
@@ -13800,6 +13801,11 @@ and R3/R4 after `D-0064`); the gate's answers are recorded in "What was put to t
 answer" below. Supersedes `D-0057`. Refs rondo#172, `D-0057`, `D-0054`, `D-0041`, `D-0042`, `D-0007`,
 `D-0055`, `D-0056`, `D-0002`, `D-0006`, `D-0061`, `D-0064`.
 
+> **Annotation (2026-10-11, from D-0190).** Added after this entry was accepted, and additive.
+> Section 5a's answering press gains values: on an ask that stores its options, each option is a
+> press posting `outcome=option:<n>`, recorded as `carry_on` with the option's index. It is the same
+> answering write, minted the same way, and no write kind is added (`D-0190` rule 5).
+
 > **Annotation (2026-09-22, from D-0096).** Added after this entry was accepted, and additive.
 > R3's `Esc` follows the view's `a[data-back]`. On a thread that was the header's "Requests" link,
 > which `D-0096` removes; the thread's way back is now the logo, to the bare address, as it already
@@ -17023,6 +17029,21 @@ Each dated and additive unless marked, and added with this entry's acceptance:
 options and it chose the recommended one; the answer is recorded in "What was put to the human gate,
 and its answer" below. Refs `D-0009`, `D-0032`, `D-0041`, `D-0047`, `D-0059`, `D-0061`, `D-0064`,
 `D-0066`, `D-0069`, `D-0070`, `D-0071`.
+
+> **Annotation (2026-10-11, from D-0190).** Added after this entry was accepted, and **not
+> additive**: an ask can now say which of its options the person took (rondo#626). Rule 1: the
+> thread gains two more nullable columns, `ask_options` on an ask (its options and recommended index
+> as canonical JSON, beside the unchanged body) and `answer_option` on the reply (the 0-based index
+> of the option pressed). `answer_outcome` still holds two values and no third: an option press is
+> `carry_on`. Rule 2: the writer also refuses `ask_options` that is malformed or on a message with
+> `asks` unset, and `answer_option` unless the reply is the operator's `carry_on` to an ask with
+> stored options and the index is one of them. The residual on which option a `carry_on` was is
+> closed for an ask that stores options. A scope stop stores none, and for it the residual stands.
+> Rule 3 and the open-ask readers are unchanged. Nothing below is edited.
+>
+> - Amends: D-0072 rule 1
+> - Amends: D-0072 rule 2
+> - Amends: D-0072 "Which of the stop's three options a `carry_on` was"
 
 > **Annotation (2026-10-08, from D-0169).** Not additive, and written only to carry the
 > lines below, which the entries that changed this one left out: `D-0141`'s Status line amends
@@ -24385,6 +24406,14 @@ all of them sign as rondo; only an operator is named by id.
 **Status:** accepted (2026-09-23, rondo#437). Refs `D-0055`, `D-0059`, `D-0071`, `D-0076`, `D-0082`,
 `D-0091`, `D-0111`, rondo#437.
 
+> **Annotation (2026-10-11, from D-0190).** Added after this entry was accepted, and **not
+> additive**. Rule 4: a drafter's question and a worker's question also store their options, what
+> each gives up, the recommended index and the recommendation in `ask_options`, beside the body.
+> The body is still `optionLines`' numbered prose, and each stored option is drawn as a press of its
+> own (`D-0190` rules 1 and 5). Nothing below is edited.
+>
+> - Amends: D-0112 rule 4
+
 **Why an entry is needed.** Lap 14 (2026-09-23, the request *do rondo#200*, a Japanese page) met K1
 to K3 and missed K4, *no word the person has to ask about*. The first thing the thread said at the
 gate was `Lap 'lap-…' reached gate 'gate/worker_escalation/…' at stage 'received'. Its independent
@@ -26948,6 +26977,15 @@ answer's words become optional), `D-0140` rule 3 (its press reaches a scope stop
 "the goal scope's own form keeps its empty default" (not for a resume). Refs `D-0065` 4.3, `D-0066`
 rules 1.4 and 4.4, `D-0074` section 4, `D-0098` rule 8.
 
+> **Annotation (2026-10-11, from D-0190).** Added after this entry was accepted, and **not
+> additive**. Rule 1: on an ask that stores its options, the free *carry on* press is labelled
+> *Answer in my words* and needs words, since no option was chosen; the route refuses it with an
+> empty box. An option press needs none: with the box empty, its body is that option's text. An ask
+> with no stored options is unchanged, and its answer needs no words (`D-0190` rules 5 and 6).
+> Nothing below is edited.
+>
+> - Amends: D-0141 rule 1
+
 > **Annotation (2026-10-08, from D-0169).** Not additive, and written only to carry the
 > lines below, which the entries that changed this one left out: `D-0148`'s Status line amends
 > `D-0141` "What it costs" (a raise on a paused goal scope carries its `laps: 0`). Those entries say
@@ -27023,6 +27061,12 @@ rule 8), which does not cover a split with one plan. It is left for when that vi
 the owner through the secretary). Amends `D-0098` rule 4.5 ("that `revise` is the person's press,
 offered with the answer already in it"), `D-0071` rule 3.2 (which messages make a request due) and
 `D-0125` rule 6 (what the gate host may approve). Refs `D-0059` section 5a, `D-0072`, `D-0140` rule 3.
+
+> **Annotation (2026-10-11, from D-0190).** Added after this entry was accepted, and additive. A
+> worker's question now stores its options, and each is a press (`D-0190` rules 4 and 5). An option
+> press is recorded `carry_on`, and rule 1's revise runs on that recorded outcome, so it revises as
+> *carry on* does. The revise text gains one line, `They chose: <option text>`. Rules 2 to 4 are
+> unchanged.
 
 ### Context
 
@@ -30158,6 +30202,21 @@ rules 2, 3, 4 and 5 (its annotation from this entry). Supersedes nothing. Refs `
 `D-0061`, `D-0062`, `D-0063`, `D-0064`, `D-0066`, `D-0067`, `D-0068`, `D-0071`, `D-0072`,
 `D-0083`, `D-0097`, `D-0112`, `D-0128`, `D-0147`, `D-0168`.
 
+> **Annotation (2026-10-11, from D-0190).** Added after this entry was accepted, and **not
+> additive**: rule 4's table changes. Two rows are closed by `D-0190`: C1's *an ask-back's options
+> are prose, and no single press chooses one* (its rules 1 to 7), and C3's *no single reader over
+> the decision rows* (its rule 10, a CLI with no page or explainer surface). Three rows are added:
+> - **A1** (C1, C4): a *Stop* on the drafter's own ask-back still made the request due, and the
+>   drafter could not see the answer. Closed by `D-0190` rules 8 and 9.
+> - **A2** (C4): nothing measures whether the drafter asks too often. Open, and it needs a later
+>   issue.
+> - **A3** (C3): the drafter host gives up on a failing request only in process memory, so a
+>   restart drafts and pays for it again. A known limit, carried with the explainer's unwritten
+>   answer; it loses money, not a decision.
+> The other rows stand. Nothing below is edited.
+>
+> - Amends: D-0189 rule 4
+
 ### Context
 
 rondo#626 asks for a role that works like claude-org's secretary. A person gives it a request in
@@ -30403,3 +30462,180 @@ Within option C, two smaller choices were taken as recommended.
 - `D-0177`, **not additive**: rules 2, 3, 4 and 5 for a question that opens a thread of its own.
 - `D-0068`, additive: section 1 rule 2.5's second bullet is built in a narrower form.
 - `D-0063`, additive: rondo#626's role is the one section 1 maps, and this entry lists its gaps.
+
+## D-0190 — An ask-back's options are stored beside its words and each one is a press, the option pressed is kept on the answer, a stop on the drafter's own ask is not drafted again, and one reader lists every decision the store holds
+
+**Status:** accepted (2026-10-11, rondo#626, with its pull request's approval; the forks were put to
+the owner through the secretary before any code, and the recommended option was taken on each).
+Amends `D-0072` rules 1 and 2 and its residual on which option a `carry_on` was, `D-0112` rule 4,
+`D-0141` rule 1 and `D-0189` rule 4 (their annotations from this entry). Supersedes nothing. Refs
+`D-0004`, `D-0009`, `D-0032`, `D-0059`, `D-0061`, `D-0064`, `D-0066`, `D-0067`, `D-0071`, `D-0079`,
+`D-0142`, `D-0149`, `D-0168`, `D-0177`.
+
+### Context
+
+`D-0189` rule 4 lists the gaps that keep rondo#626 open. Its first row is C1's: an ask-back's
+options are prose, and no single press chooses one. Its C3 rows say that which option the person
+chose can be read only from prose, and that no single reader joins the decision rows for a
+successor. This entry closes those rows as one change: *an ask-back is answered by one press, and
+the answer is a decision rondo keeps*.
+
+Reading the code for it found one gap the table does not list. A *Stop* pressed on the drafter's own
+ask-back still makes the request due, so a paid drafter run follows. The drafter's document does not
+show that the person pressed *Stop*, so the run may draft a split anyway. The person said stop, and
+rondo pays to ask again. This entry closes it too, and adds it to the table.
+
+### What was measured, and how
+
+At rondo `485edfc` on **2026-10-11**, by reading `DECISIONS.md`, `src/` and `test/`. Line numbers
+drift: re-measure the claim, not the number.
+
+- **The options exist only as prose.** The drafter's answer carries a question's options, what each
+  gives up, a recommended index and a recommendation (`question` in
+  `src/access/model-draft/judgement.ts`). A worker's question carries the same (`readWorkerQuestion`
+  in `src/access/question.ts`). Both are flattened into the body by `optionLines` (`D-0112` rule 4),
+  and nothing else is stored.
+- **The answer is one of two words.** The answering route reads `outcome` off the form as
+  `carry_on`, `stop` or `raise_carry_on`, and records `answer_outcome` as `carry_on` or `stop`
+  (`src/access/web-app.ts`). An empty box records the pressed button's label (`D-0141` rule 1).
+- **A worker's question is revised on the posted word.** The `D-0142` revise runs only when the
+  posted value is `carry_on`, not when the recorded outcome is.
+- **A stop on the drafter's ask is drafted.** `scan` in `src/access/drafter-host.ts` skips an
+  answer only when it answers a worker's question (`answersWorkerQuestion`) or a stop a *carry on*
+  starts again (`answersStartAgain`, `D-0149`). Every other operator reply makes its request due.
+  The THREAD section of the drafter's document shows each message's id, author kind, what it replies
+  to, whether it asks, and its body, and not its answer.
+- **The decision rows are eleven tables.** `conversation_message` (`answer_outcome`),
+  `human_decision`, `scope_decision`, `gate_answer`, `flow_ask`, `flow_answer`, `triage_decline`,
+  `goal`, `held_start`, `scope_consumption` and `operator_attention`, as `D-0189`'s C3 lists them.
+  No reader joins them. `CHANGE_SOURCES` (`src/store/schema.ts`) is the inbox's list of what
+  changed, and it leaves several of them out.
+
+### Decision
+
+1. **An ask stores its options beside its body.** `conversation_message` gains a nullable TEXT
+   column, `ask_options`, through `CONVERSATION_ADDED_COLUMNS`.
+   1. It holds one canonical JSON value:
+      `{"options":[{"text":"...","gives_up":"..."}],"recommended":<0-based index>}`, with
+      `"recommendation":"..."` after `"recommended"` when the writer gave one. Keys are in that
+      order, and there is at least one option.
+   2. It is written in the same row as the body. The body is unchanged: it is still `optionLines`'
+      prose, so every reader of the body reads what it read before.
+   3. No back-fill. An ask written before this entry reads NULL and keeps today's presses.
+2. **The answer stores the option pressed.** `conversation_message` gains a nullable INTEGER column,
+   `answer_option`, the 0-based index of the option pressed, on the operator's reply. Its
+   `answer_outcome` stays `carry_on`, so every reader of open asks is unchanged (`D-0072` rule 3).
+3. **The writer holds both columns.** `recordThreadMessage` refuses, inside the transaction that
+   writes the row and next to `answerOutcomeRefusal` (`src/store/thread.ts`):
+   1. `ask_options` on a message with `asks` unset;
+   2. `ask_options` that is malformed or not in rule 1.1's canonical form, or whose `recommended` is
+      not an index into its options;
+   3. `answer_option` unless all of these hold: the reply is the operator's, its outcome is
+      `carry_on`, it replies to a message with `asks` set and `ask_options` stored, and the index is
+      within that message's options.
+4. **Both writers of an ask with options store them.** The model drafter's ask carries its options
+   through `DraftedMessage` to the write. A worker's question relayed by `relayQuestion`
+   (`src/access/question.ts`) stores its options too. No other ask gains options here: a scope
+   stop's options stay prose, and its raise press already answers a budget stop (`D-0140`,
+   `D-0141` rule 2).
+5. **Each option is a press.** On an ask with stored options, the answering box draws one press per
+   option, in order, with the recommended one marked. Each posts `outcome=option:<n>`, `<n>` being
+   the 0-based index.
+   1. The route records it as `carry_on` with `answer_option` `<n>`. A form naming an index the ask
+      does not have is the route's form refusal.
+   2. The box's words stay optional on an option press. With the box empty, the body is that option's
+      text. With words, the body is the words, and the option is still recorded.
+   3. A second submit of the same form is found by `alreadyThere`, which matches `answer_option`
+      as well as the outcome.
+   4. The press is a press as `D-0059` section 5a has it: the same answering write, minted the same
+      way. No new write kind is added.
+6. **The free answer stays, and needs words, only where options exist.** On an ask with stored
+   options, the free *carry on* press is labelled *Answer in my words*, in both catalogues
+   (`D-0079`). It still posts `carry_on`, and the route refuses it with an empty body: the words are
+   the answer, since no option was chosen. *Stop* and *Ask rondo* are unchanged. On an ask with no
+   stored options nothing changes, and an answer needs no words (`D-0141` rule 1).
+7. **An option pressed on a worker's question still revises.** The `D-0142` rule 1 revise runs on
+   the recorded outcome `carry_on`, not on the posted word, so an option press revises as *carry on*
+   does. `questionRevise` adds one line, `They chose: <option text>`, when an option was pressed.
+   Rule 3 of `D-0142` holds: the answer does not make its request due.
+8. **A stop on the drafter's own ask is not drafted again.**
+   1. The drafter's own ask is a `drafter` message with `asks` set whose author id begins with
+      `MODEL_DRAFTER_PREFIX` (`rondo/drafter/`). An operator reply to it with outcome `stop` does
+      not make its request due. A predicate next to `answersStartAgain` and `answersWorkerQuestion`
+      in `src/access/drafter-host.ts` makes `scan` skip it.
+   2. The stop stays in the thread a later run reads. A later operator message in the thread makes
+      the request due again, as any message does.
+   3. A stop on any other ask is drafted as before.
+9. **The drafter sees each answer as a fact, not only as prose.** In the THREAD section of the
+   drafter's document, each operator reply that carries an answer shows its outcome (`carry_on` or
+   `stop`) and, when `answer_option` is set, the chosen option's text. The instructions say what
+   these mean: an answer is what the person pressed, and a chosen option is their choice among the
+   options the ask offered. `DRAFTER_INSTRUCTIONS_VERSION` moves from 9 to 10 (`D-0071` rule 1.4).
+10. **One reader lists every decision, and adds no table** (`D-0032` rule 3).
+    1. It is one `UNION ALL` statement over the decision tables, with only constants interpolated,
+       as `CHANGES_SINCE_SQL` is. It is kept apart from `CHANGE_SOURCES`, so the inbox's list of
+       what changed does not move.
+    2. Its sources are the operator replies in `conversation_message` with `answer_outcome` set,
+       `human_decision`, `scope_decision`, `gate_answer`, `flow_ask`, `flow_answer`,
+       `triage_decline`, `goal`, `held_start` and `scope_consumption`. `operator_attention` is read
+       only when the caller asks for it, since a tick can write many of its rows.
+    3. Each row is `{kind, id, atMs, actor, by, outcome, option, locator}`: `kind` is its table, `by`
+       is `person` or `rondo`, `outcome` is the row's own answer or verdict where it has one,
+       `option` is `answer_option` where it is set, and `locator` names the row. `by` is `rondo`
+       when the actor is one of rondo's own ids (beginning `rondo/`, as a gate answer rondo gave
+       is, `D-0125`) or the row is not a person's, and `person` otherwise. Rows come oldest first.
+    4. It is a store method. Its one surface is a read-only CLI command,
+       `rondo decisions [--since <time>] [--attention]`: `--since` takes an ISO 8601 instant and is
+       inclusive, and `--attention` adds `operator_attention`. It prints one line per row, ASCII
+       only (`D-0004`, AGENTS.md section 6), and prints the option's index, never its text or any
+       body. It is documented in `docs/operations/rondo-cli.md`.
+    5. It has no page view and is not explainer material. Either widens `D-0189` rule 5.2 or needs a
+       screen design, and each waits for an entry of its own.
+
+### Options considered
+
+| Fork | Taken | What the others lose |
+|---|---|---|
+| Where the options live | A column on the ask (rule 1) | Parsing them back out of the body breaks on any writer's wording, and a table of its own adds a join for one value per ask |
+| How the option pressed is recorded | A column beside `answer_outcome`, which stays `carry_on` (rule 2) | A third outcome value per option would change every reader of open asks (`D-0072` rule 3) and `reserve()`'s re-test |
+| The free answer on an ask with options | Kept, labelled *Answer in my words*, with words required (rule 6) | Dropping it takes away the answer none of the options fit. Keeping it wordless records only a label, which says less than an option press |
+| Which asks get option presses | The drafter's and a worker's question (rule 4) | Leaving out the worker's question means two layouts for one kind of question. Scope stops have no structured options to store |
+| A stop on the drafter's ask | Not drafted, and the drafter is shown the answer (rules 8, 9) | Drafting it with the answer shown still pays for a run the person declined, and the run may still draft |
+| The decision reader's surface | A CLI only (rule 10) | Explainer material widens `D-0189` rule 5.2, and a page view needs a screen design |
+
+### What it costs
+
+- **Two nullable columns** on `conversation_message`, and three more refusals in its writer.
+- **An answer on an ask with options needs a choice or words.** A person who only wants rondo to go
+  on presses the recommended option, not a bare *carry on*.
+- **A stop on the drafter's ask leaves the request silent** until the person writes again. That is
+  what *stop* means, but nothing reminds them that the request is stopped.
+- **Old asks keep today's presses**, so the thread holds two kinds of ask until the old ones are
+  answered.
+- **Known limits carried, not closed here:**
+  - The explainer keeps a paid but unwritten answer only in memory, so a restart pays for it again
+    (`D-0177`'s residual, `D-0189`'s C3). It loses money, not a decision.
+  - The drafter host keeps the requests it gave up on in process memory (`givenUp` in
+    `src/access/drafter-host.ts`), so after a restart a request that keeps failing is drafted and
+    paid for again. It also loses money, not a decision.
+  - Nothing measures whether the drafter asks too often. `D-0189` rule 4's table now lists it as
+    open.
+
+### What would falsify it
+
+- **People press *Answer in my words* with words that repeat an option**, often enough that the
+  option presses are not read as answers.
+- **A stopped request the person expected rondo to go on with**, without writing again.
+- **A drafter that, shown an answer and its chosen option, drafts against the choice**: the
+  instructions in rule 9 are not enough.
+- **A successor who cannot answer *what did the person decide, and what did rondo decide alone?*
+  from `rondo decisions`**: a decision table is missing from rule 10.2.
+
+### Annotations this entry adds
+
+- `D-0072`, **not additive**: rules 1 and 2, and its residual on which option a `carry_on` was.
+- `D-0112`, **not additive**: rule 4, the options are also stored.
+- `D-0141`, **not additive**: rule 1, words are required for the free answer on an ask with options.
+- `D-0189`, **not additive**: rule 4's table, two rows closed and three rows added.
+- `D-0142`, additive: an option press on a worker's question revises.
+- `D-0059`, additive: section 5a's answering press gains option values.

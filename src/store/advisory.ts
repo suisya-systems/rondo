@@ -6,6 +6,7 @@
  * opens the connection this is handed.
  */
 
+import { askOptionsJson } from "./ask-options.js";
 import {
   type AdvisoryRecord,
   type AnswerWrite,
@@ -24,6 +25,7 @@ import {
   type StoredReviseDraft,
   type ThreadMessagesReadOutcome,
 } from "./contract.js";
+import { type DecisionRow, readDecisions } from "./decision-log.js";
 import { canonicalJson, contentDigest, planDigest } from "./plan.js";
 import {
   type AdmissionRefusal,
@@ -217,8 +219,8 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
         connection
           .prepare(
             "INSERT INTO conversation_message (message_id, body, author_kind, author_id, " +
-              "in_reply_to, at_ms, bases, asks, answer_outcome) " +
-              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              "in_reply_to, at_ms, bases, asks, answer_outcome, ask_options, answer_option) " +
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           )
           .run(
             messageId,
@@ -230,6 +232,8 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
             canonicalJson([...thread.bases]),
             thread.asks ? 1 : 0,
             thread.answerOutcome ?? null,
+            thread.askOptions === undefined ? null : askOptionsJson(thread.askOptions),
+            thread.answerOption ?? null,
           );
       }
       return { kind: "recorded" };
@@ -998,6 +1002,10 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
             atMs: Number(record["at_ms"]),
           };
         });
+    },
+
+    async decisions(sinceMs: number | null, attention: boolean): Promise<readonly DecisionRow[]> {
+      return readDecisions(connection, sinceMs, attention);
     },
 
     async recordScope(draft: ScopeDraft): Promise<RecordOutcome> {

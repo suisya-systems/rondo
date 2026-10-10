@@ -35,8 +35,10 @@ import {
   type SplitPlan,
 } from "../../advisory/proposal.js";
 import type { DrafterRow } from "../../continuo/roles.js";
+import type { AskOptions } from "../../store/ask-options.js";
 import { normalizeClaim } from "../../store/lanes.js";
 import {
+  type AnswerOutcome,
   asksForWork,
   FINDING_SEVERITIES,
   type FindingSeverity,
@@ -51,7 +53,7 @@ import { optionLines } from "../question.js";
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
  * {@link INSTRUCTIONS} is a new version, a changed model a new table entry.
  */
-const DRAFTER_INSTRUCTIONS_VERSION = 9;
+const DRAFTER_INSTRUCTIONS_VERSION = 10;
 
 /** What every row a model drafter writes is named under (rule 1.4). */
 export const MODEL_DRAFTER_PREFIX = "rondo/drafter/";
@@ -95,6 +97,10 @@ export interface DraftMessage {
   readonly asks: boolean;
   /** The bytes as written (D-0009). */
   readonly body: string;
+  /** Which answer an operator reply carries (D-0072), absent on any other message. */
+  readonly answerOutcome?: AnswerOutcome;
+  /** The text of the option that answer pressed (D-0190 rule 9), absent when none was. */
+  readonly chose?: string;
 }
 
 /**
@@ -393,6 +399,9 @@ const INSTRUCTIONS = [
   '  A plan that writes new entries in it says how many by "entries" (1 or more); rondo reserves',
   "  their numbers and tells the worker which. Omit it for a plan that writes no new entry.",
   "- Every summary, question, plan and narrowing has bases: ids of messages in THREAD it rests on.",
+  "- An operator message that answers an ask says how: '(answer: carry_on)' goes on with the",
+  "  work, '(answer: stop)' declines what was asked. Where the person pressed one of the ask's",
+  "  options, '(chose: ...)' gives that option's words; their own words, if any, are the body.",
   "- rondo computes the scope's budgets from recorded laps (MEASUREMENTS shows what it reads). You",
   '  may only narrow one, when an operator message says so in words ("keep it under $3"), with',
   "  that message as the basis. A value that is not narrower is ignored. Fields you may narrow:",
@@ -404,7 +413,7 @@ const INSTRUCTIONS = [
 /** Every string the document carries from outside rondo, for choosing a fence none holds. */
 function carried(material: DrafterMaterial): string[] {
   return [
-    ...material.thread.flatMap((m) => [m.messageId, m.body]),
+    ...material.thread.flatMap((m) => [m.messageId, m.body, m.chose ?? ""]),
     ...material.templates.map((t) => JSON.stringify(t.plan)),
     ...material.repositoryPaths.flatMap((r) => r.paths ?? []),
     ...material.laps.flatMap((lap) => [
@@ -477,7 +486,9 @@ export function drafterDocument(material: DrafterMaterial): string {
           (m) =>
             `--- message ${m.messageId} by ${m.authorKind}` +
             `${m.inReplyTo === null ? " (opens the request)" : ` replying to ${m.inReplyTo}`}` +
-            `${m.asks ? " (asks)" : ""}\n${m.body}`,
+            `${m.asks ? " (asks)" : ""}` +
+            `${m.answerOutcome === undefined ? "" : ` (answer: ${m.answerOutcome})`}` +
+            `${m.chose === undefined ? "" : ` (chose: ${m.chose})`}\n${m.body}`,
         )
         .join("\n"),
     ),
@@ -655,6 +666,8 @@ export interface DraftedMessage {
   readonly body: string;
   readonly bases: readonly string[];
   readonly asks: boolean;
+  /** The question's options, stored beside its body (D-0190 rule 4); absent on a summary. */
+  readonly askOptions?: AskOptions;
 }
 
 /** What one run drafted, or why there is no draft (rule 1.5). */
@@ -849,16 +862,18 @@ function question(
   // **Every word of the body is the drafter's** (D-0071 rule 5.2): rondo adds
   // the numbering and the layout, and no label of its own, so a question is
   // wholly in the one language the drafter was asked to write in.
+  const recommendation = words(q["recommendation"], "the question's recommendation");
   const body = [
     words(q["text"], "the question's text"),
     "",
-    ...optionLines(
-      options,
-      recommended,
-      words(q["recommendation"], "the question's recommendation"),
-    ),
+    ...optionLines(options, recommended, recommendation),
   ].join("\n");
-  return { body, bases: bases(q["bases"], "the question"), asks: true };
+  return {
+    body,
+    bases: bases(q["bases"], "the question"),
+    asks: true,
+    askOptions: { options, recommended, recommendation },
+  };
 }
 
 interface CheckedPlan {

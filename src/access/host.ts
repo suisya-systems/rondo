@@ -673,7 +673,7 @@ export async function serveWeb(
             // `AnswerPort`: whatever holds it records nothing without a send
             // minted from a same-origin `POST` carrying the token.
             new SayPort(
-              async (message, answerOutcome) => {
+              async (message, answerOutcome, answerOption) => {
                 // `asRefusal`: the person composed this id, so an id already
                 // spoken for is the refusal it has always been.
                 const outcome = asRefusal(
@@ -690,6 +690,8 @@ export async function serveWeb(
                     // Absent and not null, for `exactOptionalPropertyTypes`:
                     // a send answers nothing (D-0072 rule 2).
                     ...(answerOutcome === null ? {} : { answerOutcome }),
+                    // The option an answer's press chose (D-0190 rule 5.1).
+                    ...(answerOption == null ? {} : { answerOption }),
                   }),
                 );
                 if (outcome.kind === "recorded") {

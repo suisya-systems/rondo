@@ -133,7 +133,7 @@ function refusal(answer: unknown, material: DrafterMaterial = MATERIAL): string 
 }
 
 test("the row name counts the drafter's instructions and names the table's model (D-0071 rule 1.4)", () => {
-  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/9/claude-opus-5");
+  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/10/claude-opus-5");
 });
 
 test("the document carries the thread, the templates, the agent types and the measurements, and never a ceiling", () => {
@@ -397,6 +397,15 @@ test("an ask: the question in the drafter's words, numbered, with its recommenda
     ].join("\n"),
     bases: ["r1"],
     asks: true,
+    // D-0190 rule 4: the same options, kept beside the body for the store.
+    askOptions: {
+      options: [
+        { text: "The scope screen test.", givesUp: "The gate test stays flaky." },
+        { text: "The gate test.", givesUp: "The scope test stays flaky." },
+      ],
+      recommended: 0,
+      recommendation: "The request names the scope screen.",
+    },
   });
 });
 

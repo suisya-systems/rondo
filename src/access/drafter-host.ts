@@ -255,6 +255,7 @@ async function scan(
     if (
       !asksForWork(m) ||
       answersWorkerQuestion(m, read.messages) ||
+      stopsDrafterAsk(m, read.messages) ||
       (await answersStartAgain(ports, m, read.messages))
     ) {
       continue;
@@ -305,6 +306,24 @@ function answersWorkerQuestion(
     m.answerOutcome !== undefined &&
     messages.some(
       (asked) => asked.messageId === m.inReplyTo && asked.authorId === WORKER_QUESTION_AUTHOR,
+    )
+  );
+}
+
+/**
+ * Whether `m` is a *stop* on the drafter's own ask (D-0190 rule 8): the person
+ * declined every option, so drafting again would put the same ask back. It is
+ * still in the thread, and a later operator message makes the request due again.
+ */
+function stopsDrafterAsk(m: ThreadMessageDraft, messages: readonly ThreadMessageDraft[]): boolean {
+  return (
+    m.answerOutcome === "stop" &&
+    messages.some(
+      (asked) =>
+        asked.messageId === m.inReplyTo &&
+        asked.asks &&
+        asked.authorKind === "drafter" &&
+        asked.authorId.startsWith(MODEL_DRAFTER_PREFIX),
     )
   );
 }
@@ -508,6 +527,8 @@ async function write(
     atMs: nowMs,
     bases: [...message.bases.map((messageId) => ({ form: "message", messageId })), onProposal],
     asks: message.asks,
+    // D-0190 rule 4: the question's options ride beside its body to the write.
+    ...(message.askOptions === undefined ? {} : { askOptions: message.askOptions }),
   }));
   const outcome = await ports.record.recordDraft({
     requestMessageId: material.requestMessageId,

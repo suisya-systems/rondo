@@ -158,6 +158,105 @@ test("an answer to a worker's question does not make the request due: it goes on
   expect(handed[1]).toContain("a.ts");
 });
 
+test("the drafter's question is stored with its options beside its body (D-0190 rule 4)", async () => {
+  const { w } = await requestWithPlan();
+  const { host } = hostOver(w, async () => ({
+    kind: "answered",
+    costUsd: 0.05,
+    finalMessage: JSON.stringify({
+      act: "ask",
+      summary: { text: "Two readings.", bases: ["r1"] },
+      question: {
+        text: "Which test is flaky?",
+        options: [
+          { text: "The scope test.", gives_up: "The gate test stays flaky." },
+          { text: "The gate test.", gives_up: "The scope test stays flaky." },
+        ],
+        recommended: 1,
+        recommendation: "The gate test failed twice.",
+        bases: ["r1"],
+      },
+    }),
+  }));
+  host.kick();
+  await host.idle();
+  const said = await drafterMessages(w);
+  expect(said.map((m) => [m.asks, m.askOptions])).toEqual([
+    [false, undefined],
+    [
+      true,
+      {
+        options: [
+          { text: "The scope test.", givesUp: "The gate test stays flaky." },
+          { text: "The gate test.", givesUp: "The scope test stays flaky." },
+        ],
+        recommended: 1,
+        recommendation: "The gate test failed twice.",
+      },
+    ],
+  ]);
+});
+
+test("a stop on the drafter's own ask is not drafted; a later message or an option press is (D-0190 rules 8, 9)", async () => {
+  const { w } = await requestWithPlan();
+  const { host, handed } = hostOver(w, async () => ({
+    kind: "answered",
+    costUsd: 0.05,
+    finalMessage: JSON.stringify({
+      act: "ask",
+      summary: { text: "Two readings.", bases: ["r1"] },
+      question: {
+        text: "Which test is flaky?",
+        options: [
+          { text: "The scope test.", gives_up: "The gate test stays flaky." },
+          { text: "The gate test.", gives_up: "The scope test stays flaky." },
+        ],
+        recommended: 1,
+        recommendation: "The gate test failed twice.",
+        bases: ["r1"],
+      },
+    }),
+  }));
+  const latestAsk = async () => {
+    const asks = (await drafterMessages(w)).filter((m) => m.asks);
+    return asks[asks.length - 1]?.messageId as string;
+  };
+  const answer = async (id: string, outcome: "carry_on" | "stop", option?: number) => {
+    const answered = await w.record.recordThreadMessage({
+      messageId: id,
+      body: "my answer",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: await latestAsk(),
+      atMs: 16_000,
+      bases: [],
+      asks: false,
+      answerOutcome: outcome,
+      ...(option === undefined ? {} : { answerOption: option }),
+    });
+    expect(answered.kind).toBe("recorded");
+  };
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+  await answer("a-stop", "stop");
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+  // A later message of the person's own makes it due, and the run reads the stop too.
+  await w.say("r1-more", "Look at both.", "r1", 20_000);
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(2);
+  expect(handed[1]).toMatch(/--- message a-stop by operator replying to \S+ \(answer: stop\)\n/);
+  // An option press is drafted, its outcome and the option's words in the THREAD line.
+  await answer("a-option", "carry_on", 1);
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(3);
+  expect(handed[2]).toContain("(answer: carry_on) (chose: The gate test.)\nmy answer");
+});
+
 test("an answer to a stop whose lap is started again does not make the request due (D-0149)", async () => {
   const { w, templateDigest, typeDigest } = await requestWithPlan();
   const asked: string[] = [];
@@ -202,11 +301,16 @@ test("an answer to a stop whose lap is started again does not make the request d
   await host.idle();
   expect(handed).toHaveLength(1);
   expect(asked).toContain("lap-stopped-lap-1");
+  // A stop this host does not start again is drafted too: the ask is not the drafter's.
+  await answer("a-4", "lap-stopped-lap-2", "stop");
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(2);
   // A stop this host does not start again is drafted, as every answer was before.
   await answer("a-3", "lap-stopped-lap-2", "carry_on");
   host.kick();
   await host.idle();
-  expect(handed).toHaveLength(2);
+  expect(handed).toHaveLength(3);
 });
 
 test("a run that goes stale is discarded and run again over the new thread (rule 3.3)", async () => {

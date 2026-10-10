@@ -40,6 +40,7 @@ export interface ParsedCommand {
     | "retry"
     | "show"
     | "web"
+    | "decisions"
     | "help";
   readonly planFile: string | null;
   /** Every `--plan`, in order: more than one only for `scope` (D-0069 section 1). */
@@ -76,6 +77,10 @@ export interface ParsedCommand {
    */
   readonly workerProvider: string | null;
   readonly port: number | null;
+  /** `decisions --since`, as epoch ms (D-0190 rule 10.4); null when absent. */
+  readonly sinceMs: number | null;
+  /** `decisions --attention`: add `operator_attention` (rule 10.2). */
+  readonly attention: boolean;
   readonly dryRun: boolean;
   readonly allowRemoteMismatch: boolean;
   readonly despiteReview: boolean;
@@ -117,6 +122,8 @@ const FLAGS = {
   "scope-decision-id": { type: "string" },
   "worker-provider": { type: "string" },
   port: { type: "string" },
+  since: { type: "string" },
+  attention: { type: "boolean" },
   "dry-run": { type: "boolean" },
   "allow-remote-mismatch": { type: "boolean" },
   "despite-review": { type: "boolean" },
@@ -144,6 +151,7 @@ export const COMMANDS = [
   "retry",
   "show",
   "web",
+  "decisions",
 ] as const;
 
 /**
@@ -279,6 +287,9 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // the same three flags `publish` takes, read the same way. A host that names
   // no repository serves the page without a publish press.
   web: ["port", "repo", "remote", "allow-remote-mismatch"],
+  // D-0190 rule 10.4: read-only, so no `--actor-id`. `--since` is a filter on
+  // a list and not `inbox`'s cursor -- it moves and compares to no mark.
+  decisions: ["since", "attention"],
 };
 
 /**
@@ -420,6 +431,17 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     };
   }
 
+  // An ISO 8601 instant, inclusive. The date prefix is checked because
+  // `Date.parse` also reads forms that are not ISO and would guess at them.
+  const rawSince = text("since");
+  const sinceMs = rawSince === null ? null : Date.parse(rawSince);
+  if (rawSince !== null && (!/^\d{4}-\d{2}-\d{2}/.test(rawSince) || Number.isNaN(sinceMs))) {
+    return {
+      kind: "refused",
+      reason: `--since is '${rawSince}', and it takes an ISO 8601 instant such as 2026-10-11T09:00:00Z.`,
+    };
+  }
+
   return {
     kind: "parsed",
     parsed: {
@@ -451,6 +473,8 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
       scopeDecisionId: text("scope-decision-id"),
       workerProvider: text("worker-provider"),
       port,
+      sinceMs,
+      attention: values["attention"] === true,
       dryRun: values["dry-run"] === true,
       allowRemoteMismatch: values["allow-remote-mismatch"] === true,
       despiteReview: values["despite-review"] === true,
@@ -489,6 +513,8 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     scopeDecisionId: null,
     workerProvider: null,
     port: null,
+    sinceMs: null,
+    attention: false,
     dryRun: false,
     allowRemoteMismatch: false,
     despiteReview: false,

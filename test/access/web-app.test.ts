@@ -76,6 +76,7 @@ import {
   type TriageWritten,
 } from "../../src/access/web-app.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
+import type { AskOptions } from "../../src/store/ask-options.js";
 import { advisoryRecord, asRefusal } from "../../src/store/sqlite.js";
 
 const TOKEN = "the-process-token";
@@ -2789,7 +2790,7 @@ test("(send) with no approver there is no say port, and a send says why", async 
 });
 
 /** An advisory record holding a request and a drafter's ask that waits on it. */
-async function askWaiting() {
+async function askWaiting(askOptions?: AskOptions) {
   const connection = new DatabaseSync(":memory:");
   const record = advisoryRecord(connection);
   const at = { authorId: "rondo-drafter", atMs: 1, bases: [] } as const;
@@ -2803,6 +2804,7 @@ async function askWaiting() {
       inReplyTo: "req",
       bases: [{ form: "message", messageId: "req" }],
       asks: true,
+      ...(askOptions === undefined ? {} : { askOptions }),
     },
   ] as const) {
     const outcome = await record.recordThreadMessage(draft);
@@ -2812,7 +2814,7 @@ async function askWaiting() {
     ...spyPorts([]),
     record,
     say: new SayPort(
-      async (message, answerOutcome) => {
+      async (message, answerOutcome, answerOption) => {
         const outcome = asRefusal(
           await record.recordThreadMessage({
             ...message,
@@ -2822,6 +2824,7 @@ async function askWaiting() {
             bases: [],
             asks: false,
             ...(answerOutcome === null ? {} : { answerOutcome }),
+            ...(answerOption == null ? {} : { answerOption }),
           }),
         );
         return outcome.kind === "recorded"
@@ -4244,4 +4247,130 @@ test("(answer) carry on at a lap's stop starts that lap again on the same press,
   expect(refused.pressed.status).toBe(409);
   expect(refused.pressed.body).toContain(EN.reviseRefusedNotStarted);
   expect(refused.pressed.body).toContain("the laps are spent");
+});
+
+const TWO_OPTIONS: AskOptions = {
+  options: [
+    { text: "Keep the old parser", givesUp: "the speedup" },
+    { text: "Rewrite the parser", givesUp: "a week" },
+  ],
+  recommended: 1,
+};
+
+test("(answer) an option is its own press: it records carry on and the option, and needs no words (D-0190 rule 5)", async () => {
+  const { ports, waitingAsks, record } = await askWaiting(TWO_OPTIONS);
+  const { base, stop, closed } = await served(createApp(ports, TOKEN));
+  const press = (outcome: string, body = "", id = newMessageId("reply")) =>
+    send(base, "/answer-ask", "POST", pressHeaders(base), {
+      token: TOKEN,
+      message_id: id,
+      in_reply_to: "ask",
+      body,
+      outcome,
+    });
+  const held = async (id: string) => {
+    const read = await record.threadMessages();
+    return read.kind === "read" ? read.messages.find((one) => one.messageId === id) : undefined;
+  };
+
+  // Never defaulted: an option the ask does not offer, or not written as an index, is the form refusal.
+  for (const outcome of ["option:2", "option:-1", "option:01", "option:", "option:x"]) {
+    expect((await press(outcome)).status, outcome).toBe(400);
+  }
+  // On an ask with options the free press is the person's words, and needs them (rule 6).
+  const bare = await press("carry_on", "  ");
+  expect(bare.status).toBe(400);
+  expect(bare.body).toContain(EN.answerRefusedNoWords);
+  expect(await waitingAsks()).toEqual(["ask"]);
+
+  // An empty box records the option's own text.
+  const id = newMessageId("reply");
+  expect((await press("option:1", "", id)).status).toBe(303);
+  expect(await held(id)).toMatchObject({
+    body: "Rewrite the parser",
+    answerOutcome: "carry_on",
+    answerOption: 1,
+  });
+  expect(await waitingAsks()).toEqual([]);
+  // The same press again is the answer it repeats; the same form naming another option is not.
+  expect((await press("option:1", "", id)).status).toBe(303);
+  expect((await press("option:0", "", id)).status).toBe(409);
+
+  // Words go with an option, and the option is still recorded.
+  const worded = newMessageId("reply");
+  expect((await press("option:0", "but keep it small", worded)).status).toBe(303);
+  expect(await held(worded)).toMatchObject({ body: "but keep it small", answerOption: 0 });
+  // The free press with words answers with no option.
+  const free = newMessageId("reply");
+  expect((await press("carry_on", "neither, do X", free)).status).toBe(303);
+  expect((await held(free))?.answerOption).toBeUndefined();
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(answer) on an ask with no options an option press is refused, and the bare free press still answers", async () => {
+  const { ports, waitingAsks } = await askWaiting();
+  const { base, stop, closed } = await served(createApp(ports, TOKEN));
+  const press = (outcome: string) =>
+    send(base, "/answer-ask", "POST", pressHeaders(base), {
+      token: TOKEN,
+      message_id: newMessageId("reply"),
+      in_reply_to: "ask",
+      body: "",
+      outcome,
+    });
+  expect((await press("option:0")).status).toBe(400);
+  expect(await waitingAsks()).toEqual(["ask"]);
+  expect((await press("carry_on")).status).toBe(303);
+  expect(await waitingAsks()).toEqual([]);
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(answer) an option pressed at a worker's question is the gate's revise too, and says what was chosen (D-0190 rule 7)", async () => {
+  const { record, ports } = await askWaiting();
+  const asked = await record.recordThreadMessage({
+    messageId: "question-lap-1",
+    body: "Which file?",
+    authorKind: "drafter",
+    authorId: "rondo/worker-question/1",
+    inReplyTo: "req",
+    atMs: 1,
+    bases: [{ form: "iteration", iterationId: "lap-1" }],
+    asks: true,
+    askOptions: {
+      options: [
+        { text: "a.ts", givesUp: "less" },
+        { text: "b.ts", givesUp: "more" },
+      ],
+      recommended: 0,
+    },
+  });
+  expect(asked.kind).toBe("recorded");
+  const revised: ReviseInput[] = [];
+  const withRevise = {
+    ...ports,
+    store: { read: async () => ({ kind: "read" }) },
+    revise: new RevisePort(async (input) => {
+      revised.push(input);
+      return await Promise.resolve({ ok: true, note: "" });
+    }),
+  } as unknown as ServedPorts;
+  const { base, stop, closed } = await served(createApp(withRevise, TOKEN));
+  const pressed = await send(base, "/answer-ask", "POST", pressHeaders(base), {
+    token: TOKEN,
+    message_id: newMessageId("reply"),
+    in_reply_to: "question-lap-1",
+    body: "",
+    outcome: "option:1",
+    revise_iteration: "lap-1",
+    revise_decision: "decision-1",
+    revise_successor: "lap-00000000-0000-4000-8000-000000000002",
+  });
+  stop.abort();
+  expect(await closed).toBe(0);
+  expect(pressed.status).toBe(303);
+  expect(revised).toHaveLength(1);
+  expect(revised[0]?.body).toContain("---\nb.ts\n---\nThey chose: b.ts\nContinue");
 });
