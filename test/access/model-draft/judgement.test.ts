@@ -187,6 +187,27 @@ test("a brief says the person chose only on their words, and names the choice as
   expect(document).toContain("Never write rondo's own words into one");
 });
 
+test("a chosen option stays on the THREAD header line, quoted, even with a newline in it (D-0190 rule 9)", () => {
+  const document = drafterDocument({
+    ...MATERIAL,
+    thread: [
+      ...MATERIAL.thread,
+      {
+        messageId: "a1",
+        authorKind: "operator",
+        inReplyTo: "d1",
+        asks: false,
+        body: "go",
+        answerOutcome: "carry_on",
+        chose: "Use the gate test\nkeep the other one",
+      },
+    ],
+  });
+  expect(document).toContain(
+    '(answer: carry_on) (chose: "Use the gate test\\nkeep the other one")\ngo\n',
+  );
+});
+
 test("a request that names no repository is asked back about, as a question about the work (D-0081 rule 2.4)", () => {
   // Gate answer 3: the drafter asks with a recommendation and rondo starts
   // nothing until the person answers. The templates are what span

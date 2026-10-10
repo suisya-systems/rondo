@@ -281,6 +281,8 @@ export const JA: Chrome = Object.freeze({
     "「この線を止める」は止めたままにし、あとから答えることもできます。",
   answerRaiseAction: "予算を増やして続ける",
   answerReviseNote: "「続ける」を押すと、この回答を持たせて次の試行をすぐに始めます。",
+  answerReviseOptionsNote:
+    "選択肢のどれか、または「自分の言葉で答える」を押すと、この回答を持たせて次の試行をすぐに始めます。",
   answerReviseDraftLead: "次の試行には、次の変更依頼も一緒に渡します:",
   answerRaiseLabel: "これからの予算（USD）",
   answerRaiseRoundsLabel: "この線のレビュー回数",

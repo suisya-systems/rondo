@@ -431,11 +431,13 @@ export function parseCommand(argv: readonly string[]): ParseOutcome {
     };
   }
 
-  // An ISO 8601 instant, inclusive. The date prefix is checked because
-  // `Date.parse` also reads forms that are not ISO and would guess at them.
+  // An ISO 8601 instant with its zone, or a bare date read as UTC; inclusive.
+  // The whole string is matched because `Date.parse` also reads forms that are
+  // not ISO and guesses at them, reads a time with no zone as local time, and
+  // rolls a day the month lacks (02-30) into the next month.
   const rawSince = text("since");
   const sinceMs = rawSince === null ? null : Date.parse(rawSince);
-  if (rawSince !== null && (!/^\d{4}-\d{2}-\d{2}/.test(rawSince) || Number.isNaN(sinceMs))) {
+  if (rawSince !== null && !isoInstant(rawSince)) {
     return {
       kind: "refused",
       reason: `--since is '${rawSince}', and it takes an ISO 8601 instant such as 2026-10-11T09:00:00Z.`,
@@ -520,4 +522,17 @@ function emptyCommand(command: ParsedCommand["command"]): ParsedCommand {
     despiteReview: false,
     closingFix: false,
   };
+}
+
+const ISO_INSTANT =
+  /^(\d{4})-(\d{2})-(\d{2})(T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2}))?$/;
+
+/** Whether `--since` holds an ISO 8601 instant `Date.parse` reads without guessing. */
+function isoInstant(raw: string): boolean {
+  const m = ISO_INSTANT.exec(raw);
+  if (m === null || Number.isNaN(Date.parse(raw))) {
+    return false;
+  }
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  return new Date(Date.UTC(y, mo - 1, d)).toISOString().slice(0, 10) === raw.slice(0, 10);
 }

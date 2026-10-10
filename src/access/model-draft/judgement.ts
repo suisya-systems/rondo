@@ -401,7 +401,8 @@ const INSTRUCTIONS = [
   "- Every summary, question, plan and narrowing has bases: ids of messages in THREAD it rests on.",
   "- An operator message that answers an ask says how: '(answer: carry_on)' goes on with the",
   "  work, '(answer: stop)' declines what was asked. Where the person pressed one of the ask's",
-  "  options, '(chose: ...)' gives that option's words; their own words, if any, are the body.",
+  "  options, '(chose: \"...\")' gives that option's words as a JSON string; their own words, if",
+  "  any, are the body.",
   "- rondo computes the scope's budgets from recorded laps (MEASUREMENTS shows what it reads). You",
   '  may only narrow one, when an operator message says so in words ("keep it under $3"), with',
   "  that message as the basis. A value that is not narrower is ignored. Fields you may narrow:",
@@ -488,7 +489,7 @@ export function drafterDocument(material: DrafterMaterial): string {
             `${m.inReplyTo === null ? " (opens the request)" : ` replying to ${m.inReplyTo}`}` +
             `${m.asks ? " (asks)" : ""}` +
             `${m.answerOutcome === undefined ? "" : ` (answer: ${m.answerOutcome})`}` +
-            `${m.chose === undefined ? "" : ` (chose: ${m.chose})`}\n${m.body}`,
+            `${m.chose === undefined ? "" : ` (chose: ${JSON.stringify(m.chose)})`}\n${m.body}`,
         )
         .join("\n"),
     ),

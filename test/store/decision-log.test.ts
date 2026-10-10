@@ -112,6 +112,16 @@ test("parse: decisions takes --since as an ISO 8601 instant and --attention", ()
     true,
   ]);
   expect(parseCommand(["decisions", "--since", "yesterday"]).kind).toBe("refused");
+  // Forms `Date.parse` would guess at: trailing junk, a rolled-over day, a time with no zone.
+  for (const guessed of ["2026-10-11 junk", "2026-02-30", "2026-10-11T09:00"]) {
+    expect(parseCommand(["decisions", "--since", guessed]).kind).toBe("refused");
+  }
+  const sinceOf = (raw: string) => {
+    const read = parseCommand(["decisions", "--since", raw]);
+    return read.kind === "parsed" ? read.parsed.sinceMs : null;
+  };
+  expect(sinceOf("2026-10-11")).toBe(Date.UTC(2026, 9, 11));
+  expect(sinceOf("2026-10-11T09:00+09:00")).toBe(Date.UTC(2026, 9, 11));
   expect(parseCommand(["decisions", "--actor-id", "me"]).kind).toBe("refused");
   expect(parseCommand(["inbox", "--since", "2026-10-11"]).kind).toBe("refused");
 });

@@ -187,13 +187,15 @@ export interface AnswerRevise {
 }
 
 /** The answer box's revise fields, and the drafted change it carries, where there is one. */
-function answerReviseFields(wording: Chrome, revise: AnswerRevise) {
+function answerReviseFields(wording: Chrome, revise: AnswerRevise, options: boolean) {
   return (
     <div class="mx-4 mt-2 space-y-1">
       <input type="hidden" name="revise_iteration" value={revise.iterationId} />
       <input type="hidden" name="revise_decision" value={revise.scopeDecisionId} />
       <input type="hidden" name="revise_successor" value={revise.successor} />
-      <p class="text-meta leading-5 text-muted-foreground">{wording.answerReviseNote}</p>
+      <p class="text-meta leading-5 text-muted-foreground">
+        {options ? wording.answerReviseOptionsNote : wording.answerReviseNote}
+      </p>
       {revise.draft === "" ? null : (
         <>
           <input type="hidden" name="revise_draft" value={revise.draft} />
@@ -424,7 +426,7 @@ export function composerView(
                 )}
               </p>
             )}
-            {revising === null ? null : answerReviseFields(wording, revising)}
+            {revising === null ? null : answerReviseFields(wording, revising, choices !== null)}
           </>
         )}
         {/* Where htmx puts a refusal (the page's `responseHandling`); the draft stays. */}

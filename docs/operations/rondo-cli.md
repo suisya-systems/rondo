@@ -1459,8 +1459,10 @@ $ node bin/rondo.mjs decisions --since 2026-10-11T00:00:00Z
   `scope_decision`, `gate_answer`, `flow_ask`, `flow_answer`, `triage_decline`, `goal`,
   `held_start` and `scope_consumption`. `--attention` adds `operator_attention`, what was presented
   or withheld, which a busy host writes many of.
-- **`--since` takes an ISO 8601 instant and is inclusive.** It is a filter on this list and not
-  `inbox`'s last-look mark; nothing is stored.
+- **`--since` takes an ISO 8601 instant and is inclusive.** The instant names its zone (`Z` or
+  `+09:00`), or is a bare date read as UTC; a time with no zone, a day the month lacks or any other
+  form is refused rather than guessed at. It is a filter on this list and not `inbox`'s last-look
+  mark; nothing is stored.
 - **It prints the option's index and never its text, nor any message body.** The words stay on the
   request's page.
 

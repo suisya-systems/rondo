@@ -254,7 +254,7 @@ test("a stop on the drafter's own ask is not drafted; a later message or an opti
   host.kick();
   await host.idle();
   expect(handed).toHaveLength(3);
-  expect(handed[2]).toContain("(answer: carry_on) (chose: The gate test.)\nmy answer");
+  expect(handed[2]).toContain('(answer: carry_on) (chose: "The gate test.")\nmy answer');
 });
 
 test("an answer to a stop whose lap is started again does not make the request due (D-0149)", async () => {

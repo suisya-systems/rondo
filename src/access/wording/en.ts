@@ -294,6 +294,9 @@ explanation you pressed on and then answers the gate.`,
     "it stopped, and you can answer later.",
   answerRaiseAction: "Raise the budget and carry on",
   answerReviseNote: "Carry on starts the next attempt right away, with this answer.",
+  answerReviseOptionsNote:
+    "Each option, or answering in your own words, starts the next attempt right away, with " +
+    "this answer.",
   answerReviseDraftLead: "The next attempt is also given this change:",
   answerRaiseLabel: "Budget from here on (USD)",
   answerRaiseRoundsLabel: "Review rounds for this line",

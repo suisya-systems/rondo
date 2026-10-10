@@ -17037,13 +17037,13 @@ and its answer" below. Refs `D-0009`, `D-0032`, `D-0041`, `D-0047`, `D-0059`, `D
 > of the option pressed). `answer_outcome` still holds two values and no third: an option press is
 > `carry_on`. Rule 2: the writer also refuses `ask_options` that is malformed or on a message with
 > `asks` unset, and `answer_option` unless the reply is the operator's `carry_on` to an ask with
-> stored options and the index is one of them. The residual on which option a `carry_on` was is
-> closed for an ask that stores options. A scope stop stores none, and for it the residual stands.
+> stored options and the index is one of them. Which option a `carry_on` was is now recorded for
+> an ask that stores options. A scope stop stores none, so the residual on the stop's three options
+> stands and is not amended.
 > Rule 3 and the open-ask readers are unchanged. Nothing below is edited.
 >
 > - Amends: D-0072 rule 1
 > - Amends: D-0072 rule 2
-> - Amends: D-0072 "Which of the stop's three options a `carry_on` was"
 
 > **Annotation (2026-10-08, from D-0169).** Not additive, and written only to carry the
 > lines below, which the entries that changed this one left out: `D-0141`'s Status line amends
@@ -30467,7 +30467,7 @@ Within option C, two smaller choices were taken as recommended.
 
 **Status:** accepted (2026-10-11, rondo#626, with its pull request's approval; the forks were put to
 the owner through the secretary before any code, and the recommended option was taken on each).
-Amends `D-0072` rules 1 and 2 and its residual on which option a `carry_on` was, `D-0112` rule 4,
+Amends `D-0072` rules 1 and 2, `D-0112` rule 4,
 `D-0141` rule 1 and `D-0189` rule 4 (their annotations from this entry). Supersedes nothing. Refs
 `D-0004`, `D-0009`, `D-0032`, `D-0059`, `D-0061`, `D-0064`, `D-0066`, `D-0067`, `D-0071`, `D-0079`,
 `D-0142`, `D-0149`, `D-0168`, `D-0177`.
@@ -30568,7 +30568,8 @@ drift: re-measure the claim, not the number.
    3. A stop on any other ask is drafted as before.
 9. **The drafter sees each answer as a fact, not only as prose.** In the THREAD section of the
    drafter's document, each operator reply that carries an answer shows its outcome (`carry_on` or
-   `stop`) and, when `answer_option` is set, the chosen option's text. The instructions say what
+   `stop`) and, when `answer_option` is set, the chosen option's text as a JSON string, so a
+   newline in an option cannot carry its end onto the lines the body holds. The instructions say what
    these mean: an answer is what the person pressed, and a chosen option is their choice among the
    options the ask offered. `DRAFTER_INSTRUCTIONS_VERSION` moves from 9 to 10 (`D-0071` rule 1.4).
 10. **One reader lists every decision, and adds no table** (`D-0032` rule 3).
@@ -30586,7 +30587,8 @@ drift: re-measure the claim, not the number.
        is, `D-0125`) or the row is not a person's, and `person` otherwise. Rows come oldest first.
     4. It is a store method. Its one surface is a read-only CLI command,
        `rondo decisions [--since <time>] [--attention]`: `--since` takes an ISO 8601 instant and is
-       inclusive, and `--attention` adds `operator_attention`. It prints one line per row, ASCII
+       inclusive (one that names its zone, or a bare date read as UTC; any form `Date.parse` would
+       guess at is refused), and `--attention` adds `operator_attention`. It prints one line per row, ASCII
        only (`D-0004`, AGENTS.md section 6), and prints the option's index, never its text or any
        body. It is documented in `docs/operations/rondo-cli.md`.
     5. It has no page view and is not explainer material. Either widens `D-0189` rule 5.2 or needs a
@@ -30633,7 +30635,7 @@ drift: re-measure the claim, not the number.
 
 ### Annotations this entry adds
 
-- `D-0072`, **not additive**: rules 1 and 2, and its residual on which option a `carry_on` was.
+- `D-0072`, **not additive**: rules 1 and 2. Its residual on a scope stop's three options stands.
 - `D-0112`, **not additive**: rule 4, the options are also stored.
 - `D-0141`, **not additive**: rule 1, words are required for the free answer on an ask with options.
 - `D-0189`, **not additive**: rule 4's table, two rows closed and three rows added.

@@ -226,6 +226,8 @@ export interface Chrome extends PageWords, ExplainWords {
    * the change the reading drafted, which goes with it as shown.
    */
   readonly answerReviseNote: string;
+  /** {@link answerReviseNote} where the ask stores options: no press says Carry on. */
+  readonly answerReviseOptionsNote: string;
   readonly answerReviseDraftLead: string;
   /**
    * A budget stop's first answer (D-0140 rule 3): a budgets-only successor of
