@@ -222,3 +222,35 @@ test("on the page, the answer leads to each wait's request, and to no scope scre
   expect(answer).toContain(`href="/?thread=${REQUEST}&amp;lang=en#${REQUEST}"`);
   expect(answer).not.toContain(`?scope=${ACROSS}`);
 });
+
+test("one request's waits are one line, and the answer still rests on every waiting row", async () => {
+  const w = await asked();
+  for (const [messageId, atMs] of [
+    ["ask-1", 3_500],
+    ["ask-2", 3_600],
+  ] as const) {
+    const said = await w.record.recordThreadMessage({
+      messageId,
+      body: "Which branch?",
+      authorKind: "drafter",
+      authorId: "rondo",
+      inReplyTo: REQUEST,
+      atMs,
+      bases: [{ form: "message", messageId: REQUEST }],
+      asks: true,
+    });
+    if (said.kind !== "recorded") throw new Error(JSON.stringify(said));
+  }
+  await askAcross(w);
+  const { answer } = await answerAll(w);
+  const lines = (answer?.body ?? "").split("\n").filter((line) => line.startsWith("- "));
+  expect(lines).toEqual([`- Fix the flaky test.: ${EN.explainWaitsAsk} / ${EN.explainWaitsGate}`]);
+  expect(answer?.bases).toEqual(
+    expect.arrayContaining([
+      { form: "message", messageId: "ask-1" },
+      { form: "message", messageId: "ask-2" },
+      { form: "iteration", iterationId: LAP },
+      { form: "message", messageId: REQUEST },
+    ]),
+  );
+});
