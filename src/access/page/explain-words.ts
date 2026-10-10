@@ -28,6 +28,8 @@ export interface ExplainWords {
   readonly explainAcrossRequests: string;
   /** The lead of an answer across every request (D-0189). */
   readonly explainAcrossLead: string;
+  /** A request named in a line, quoted. */
+  readonly explainRequestQuoted: (title: string) => string;
   /** The label of the question itself in an answer across every request. */
   /** Nothing waits on the person anywhere. */
   readonly explainNothingWaits: string;
@@ -90,6 +92,7 @@ export const EXPLAIN_EN: ExplainWords = Object.freeze({
   explainAcrossRequests:
     "No model was asked: a question about every request is answered from rondo's records alone.",
   explainAcrossLead: "Here is what waits on you, request by request.",
+  explainRequestQuoted: (title) => `"${title}"`,
   explainNothingWaits: "nothing waits on you now",
   explainExpired: "No model was asked: the approval for this request has expired.",
   explainTooLittleLeft: (left, cap) =>
@@ -143,6 +146,7 @@ export const EXPLAIN_JA: ExplainWords = Object.freeze({
   explainAcrossRequests:
     "モデルには尋ねていません。すべての依頼にまたがる質問には、rondo の記録だけから答えます。",
   explainAcrossLead: "あなたを待っているものを、依頼ごとにまとめます。",
+  explainRequestQuoted: (title) => `「${title}」`,
   explainNothingWaits: "いまあなたを待っているものはありません",
   explainExpired: "モデルには尋ねていません。この依頼の承認は期限が切れています。",
   explainTooLittleLeft: (left, cap) =>

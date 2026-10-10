@@ -370,7 +370,12 @@ function acrossAnswer(
         : waitWord[wait.kind];
     const key = wait.request?.messageId ?? waitLocator(wait);
     const line = byRequest.get(key) ?? {
-      label: wait.kind === "paused" ? wait.repository : wait.request?.title || words.explainRequest,
+      label:
+        wait.kind === "paused"
+          ? wait.repository
+          : wait.request?.title
+            ? words.explainRequestQuoted(wait.request.title.replace(/[.!?。！？]+$/u, ""))
+            : words.explainRequest,
       values: [],
       basis,
     };

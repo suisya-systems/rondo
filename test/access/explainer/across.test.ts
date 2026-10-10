@@ -18,7 +18,7 @@ import {
 import { FLOW_STOP } from "../../../src/access/flow-stop.js";
 import type { DrafterRun } from "../../../src/access/model-draft/judgement.js";
 import { PAGE_EN } from "../../../src/access/page/words.js";
-import { EN } from "../../../src/access/wording.js";
+import { chromeFor, EN } from "../../../src/access/wording.js";
 import { fresh, operatorPage, portsOver } from "../page-world.js";
 import { approve, asked, LAP, QUESTION, REQUEST, type World } from "./world.js";
 
@@ -92,7 +92,7 @@ test("it is answered from the records even under an approval, each wait under it
   expect(answer?.authorId).toBe(DETERMINISTIC_EXPLAINER);
   const body = answer?.body ?? "";
   expect(body).toContain(EN.explainAcrossRequests);
-  expect(body).toContain(`- Fix the flaky test.: ${EN.explainWaitsGate}`);
+  expect(body).toContain(`- "Fix the flaky test": ${EN.explainWaitsGate}`);
   expect(body).toContain(EN.explainFree);
   // Each wait's own link is where it is answered; no "in this thread" line.
   expect(body).not.toContain(EN.explainWhereToAnswer);
@@ -181,7 +181,7 @@ test("the goal flow's stop is said as the flow's, under the request it is asked 
   const { claims } = deterministicAnswer(material, EN, { kind: "acrossRequests" });
   expect(claims).toEqual([
     {
-      label: FLAKY.title,
+      label: `"Fix the flaky test"`,
       value: PAGE_EN.rowFlowStopped,
       basis: { form: "message", messageId: `${FLOW_STOP}1` },
     },
@@ -203,10 +203,25 @@ test("one line per request, named by it; two stops of one flow read as one, and 
   const { claims } = deterministicAnswer(material, EN, { kind: "acrossRequests" });
   const body = answerBody(EN, material, "", claims, { kind: "free" }).page;
   expect(body.split("\n").filter((line) => line.startsWith("- "))).toEqual([
-    `- Fix the flaky test.: ${PAGE_EN.rowFlowStopped} / ${EN.explainWaitsGate}`,
-    `- Add a dark mode.: ${EN.explainWaitsGate}`,
+    `- "Fix the flaky test": ${PAGE_EN.rowFlowStopped} / ${EN.explainWaitsGate}`,
+    `- "Add a dark mode": ${EN.explainWaitsGate}`,
   ]);
   expect(body).not.toContain("What is waiting on me?");
+  // In Japanese the title is quoted in brackets, its closing full stop dropped.
+  const ja = chromeFor("ja");
+  const jaClaims = deterministicAnswer(
+    across([
+      {
+        kind: "gate",
+        iterationId: LAP,
+        status: "awaiting_human",
+        request: { messageId: REQUEST, title: "前提をすり合わせてください。" },
+      },
+    ]),
+    ja,
+    { kind: "acrossRequests" },
+  ).claims;
+  expect(jaClaims.map((claim) => claim.label)).toEqual(["「前提をすり合わせてください」"]);
 });
 
 test("on the page, the answer leads to each wait's request, and to no scope screen of the question's own", async () => {
@@ -244,7 +259,7 @@ test("one request's waits are one line, and the answer still rests on every wait
   await askAcross(w);
   const { answer } = await answerAll(w);
   const lines = (answer?.body ?? "").split("\n").filter((line) => line.startsWith("- "));
-  expect(lines).toEqual([`- Fix the flaky test.: ${EN.explainWaitsAsk} / ${EN.explainWaitsGate}`]);
+  expect(lines).toEqual([`- "Fix the flaky test": ${EN.explainWaitsAsk} / ${EN.explainWaitsGate}`]);
   expect(answer?.bases).toEqual(
     expect.arrayContaining([
       { form: "message", messageId: "ask-1" },
