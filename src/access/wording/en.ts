@@ -341,7 +341,7 @@ explanation you pressed on and then answers the gate.`,
     "That message is longer than this page accepts. Shorten it, or split it into two replies.",
   sendRefusedUnknown: "rondo did not take this message. Reload the page and send again.",
   answerRefusedPress:
-    "An answer is taken only from a press of the Answer button. Reload the thread and press Answer again.",
+    "An answer is taken only from a press on this page. Reload the thread and press one of its buttons again.",
   answerRefusedRaise:
     "The budget was not raised, and the question is not answered yet: the approval may have " +
     "been raised or replaced already. Reload the thread and answer again.",
