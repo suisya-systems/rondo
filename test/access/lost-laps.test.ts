@@ -465,6 +465,28 @@ test("rondo#655: a lap another process resumes before its gate is driven by that
   expect((await row(w, "lap-2")).status).toBe("planned");
 });
 
+test("rondo#655: a lap another process resumes after the pass read the list is not ended", async () => {
+  const w = await world(true);
+  w.lap("lap-2", null, "planned");
+  await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
+  let lists = 0;
+  const store = Object.create(w.store, {
+    drivenLaps: {
+      value: async () => {
+        const laps = await w.store.drivenLaps();
+        lists += 1;
+        if (lists === 1) {
+          // Resumed elsewhere just after this pass read its dead driver.
+          await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_005 });
+        }
+        return laps;
+      },
+    },
+  });
+  await pass(portsOf(w, { store }));
+  expect((await row(w, "lap-2")).status).toBe("planned");
+});
+
 test("rondo#655: a lap ended from the page is never started again by itself, and carry on starts it", async () => {
   const w = await world(true);
   w.lap("lap-2", null, "stalled");

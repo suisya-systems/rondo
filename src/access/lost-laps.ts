@@ -245,6 +245,20 @@ export function lostLapHost(ports: LostLapPorts): LostLapHost {
   };
 }
 
+/** Whether the lap still stands at the status and with the processes the pass judged. */
+async function unchanged(ports: LostLapPorts, judged: DrivenLap): Promise<boolean> {
+  const now = (await ports.store.drivenLaps()).find(
+    (lap) => lap.iterationId === judged.iterationId,
+  );
+  return (
+    now !== undefined &&
+    now.status === judged.status &&
+    now.driverHost === judged.driverHost &&
+    now.driverPid === judged.driverPid &&
+    now.lapPid === judged.lapPid
+  );
+}
+
 async function endTheLost(ports: LostLapPorts): Promise<void> {
   for (const lap of await ports.store.drivenLaps()) {
     const row = await ports.store.read(lap.iterationId);
@@ -270,6 +284,13 @@ async function endTheLost(ports: LostLapPorts): Promise<void> {
             `${String(lap.driverHost)}) and its lap perform child ` +
             `(${lap.lapPid === null ? "never recorded, and past its ceiling" : `pid ${String(lap.lapPid)}`}) are both ` +
             "gone, so nothing will record its answer (D-0139)";
+    // rondo#655: another process may have resumed the lap since the list was
+    // read, naming itself its driver or walking it on; it is then not lost.
+    // ponytail: read again just before the write, not in the write's own
+    // statement; a driver predicate in the store's terminal UPDATE closes the gap.
+    if (!(await unchanged(ports, lap))) {
+      continue;
+    }
     const status = await ports.end(lap.iterationId, reason);
     ports.log(`lost     lap '${lap.iterationId}' was lost: ${reason}`);
     if (status !== "failed") {
