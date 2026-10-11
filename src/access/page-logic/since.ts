@@ -30,12 +30,14 @@ const LAP_KINDS: ReadonlySet<string> = new Set([
 /** One request that moved, and how, counted off the changed rows. */
 export interface MovedRequest {
   readonly messageId: string;
-  /** The request itself was written since the mark. */
+  /** The person looking wrote the request itself since the mark. */
   readonly asked: boolean;
   /** Messages rondo (its drafter, or the forge) wrote into the thread. */
   readonly rondoWrote: number;
   /** Messages the person wrote into the thread, the request itself aside. */
   readonly youWrote: number;
+  /** Messages somebody else wrote into it, the request itself among them. */
+  readonly othersWrote: number;
   /** Gates the person answered on this request's laps. */
   readonly youAnswered: number;
   /** Distinct laps that moved. */
@@ -55,8 +57,11 @@ export interface SinceLooked {
 
 /** What the reading needs to know about the rows it sorts. */
 export interface SinceReads {
-  /** The message's author kind, or undefined for a message this draw did not read. */
-  readonly authorOf: (messageId: string) => string | undefined;
+  /**
+   * Who wrote a message, as the person looking reads it -- themselves, another
+   * person, or rondo -- or undefined for a message this draw did not read.
+   */
+  readonly authorOf: (messageId: string) => "you" | "other" | "rondo" | undefined;
   readonly rootOf: (messageId: string) => string | null;
   /** A lap's request and whether it has ended, and when it last moved, or null. */
   readonly lapOf: (
@@ -75,6 +80,7 @@ export function sinceLooked(
       asked: boolean;
       rondoWrote: number;
       youWrote: number;
+      othersWrote: number;
       youAnswered: number;
       laps: Set<string>;
       ended: Set<string>;
@@ -87,6 +93,7 @@ export function sinceLooked(
       asked: false,
       rondoWrote: 0,
       youWrote: 0,
+      othersWrote: 0,
       youAnswered: 0,
       laps: new Set<string>(),
       ended: new Set<string>(),
@@ -109,9 +116,11 @@ export function sinceLooked(
         continue;
       }
       const entry = under(root, change.atMs);
-      if (root === change.id) {
+      if (author === "other") {
+        entry.othersWrote += 1;
+      } else if (root === change.id) {
         entry.asked = true;
-      } else if (author === "operator") {
+      } else if (author === "you") {
         entry.youWrote += 1;
       } else {
         entry.rondoWrote += 1;
@@ -142,6 +151,7 @@ export function sinceLooked(
         asked: entry.asked,
         rondoWrote: entry.rondoWrote,
         youWrote: entry.youWrote,
+        othersWrote: entry.othersWrote,
         youAnswered: entry.youAnswered,
         lapsMoved: entry.laps.size,
         lapsEnded: entry.ended.size,

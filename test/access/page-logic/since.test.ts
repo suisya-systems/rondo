@@ -14,11 +14,13 @@ import { JA } from "../../../src/access/wording/ja.js";
 import { EN } from "../../../src/access/wording.js";
 import { fresh, openRequest, operatorPage, portsOver } from "../page-world.js";
 
-const MESSAGES: Record<string, { author: string; root: string }> = {
-  "req-a": { author: "operator", root: "req-a" },
-  "a-rondo": { author: "drafter", root: "req-a" },
-  "a-you": { author: "operator", root: "req-a" },
-  "req-b": { author: "operator", root: "req-b" },
+const MESSAGES: Record<string, { author: "you" | "other" | "rondo"; root: string }> = {
+  "req-a": { author: "you", root: "req-a" },
+  "a-rondo": { author: "rondo", root: "req-a" },
+  "a-you": { author: "you", root: "req-a" },
+  "a-other": { author: "other", root: "req-a" },
+  "req-b": { author: "you", root: "req-b" },
+  "req-c": { author: "other", root: "req-c" },
 };
 const LAPS: Record<string, { requestId: string; ended: boolean; updatedAtMs: number }> = {
   "lap-1": { requestId: "req-b", ended: true, updatedAtMs: 150 },
@@ -37,6 +39,9 @@ test("each changed row lands under its request, and the rest are counted", () =>
       { kind: "conversation_message", id: "a-rondo", atMs: 110 },
       { kind: "conversation_message", id: "a-you", atMs: 120 },
       { kind: "conversation_message", id: "req-a", atMs: 105 },
+      { kind: "conversation_message", id: "a-other", atMs: 115 },
+      // Somebody else's request is theirs, not the one looking's.
+      { kind: "conversation_message", id: "req-c", atMs: 101 },
       { kind: "iteration", id: "lap-1", atMs: 150 },
       { kind: "lap_reading", id: "lap-1", atMs: 140 },
       { kind: "lap_reading", id: "lap-2", atMs: 130 },
@@ -54,6 +59,7 @@ test("each changed row lands under its request, and the rest are counted", () =>
       asked: false,
       rondoWrote: 0,
       youWrote: 0,
+      othersWrote: 0,
       youAnswered: 1,
       lapsMoved: 3,
       // lap-2 closed before the mark: a reading landing on it is not an ending.
@@ -65,10 +71,22 @@ test("each changed row lands under its request, and the rest are counted", () =>
       asked: true,
       rondoWrote: 1,
       youWrote: 1,
+      othersWrote: 1,
       youAnswered: 0,
       lapsMoved: 0,
       lapsEnded: 0,
       atMs: 120,
+    },
+    {
+      messageId: "req-c",
+      asked: false,
+      rondoWrote: 0,
+      youWrote: 0,
+      othersWrote: 1,
+      youAnswered: 0,
+      lapsMoved: 0,
+      lapsEnded: 0,
+      atMs: 101,
     },
   ]);
   expect(reading.elsewhere).toBe(3);
@@ -80,6 +98,7 @@ test("a moved request is said as one sentence, in each language", () => {
     asked: false,
     rondoWrote: 2,
     youWrote: 0,
+    othersWrote: 0,
     youAnswered: 1,
     lapsMoved: 3,
     lapsEnded: 1,
@@ -95,6 +114,16 @@ test("a moved request is said as one sentence, in each language", () => {
   expect(EN.sinceSaid({ ...moved, rondoWrote: 0, asked: true })).toBe(
     "You asked for it, you answered a gate, 3 laps moved and 1 ended.",
   );
+  expect(
+    EN.sinceSaid({
+      ...moved,
+      rondoWrote: 0,
+      youAnswered: 0,
+      lapsMoved: 0,
+      lapsEnded: 0,
+      othersWrote: 1,
+    }),
+  ).toBe("Someone else wrote a message.");
 });
 
 /** A request opened by somebody other than the person looking, so it moves no mark of theirs. */

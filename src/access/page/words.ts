@@ -812,6 +812,9 @@ export const PAGE_EN: PageWords = Object.freeze({
       ...(moved.youWrote > 0
         ? [`you wrote ${times(moved.youWrote, "a message", "messages")}`]
         : []),
+      ...(moved.othersWrote > 0
+        ? [`someone else wrote ${times(moved.othersWrote, "a message", "messages")}`]
+        : []),
       ...(moved.youAnswered > 0
         ? [`you answered ${times(moved.youAnswered, "a gate", "gates")}`]
         : []),
@@ -1485,6 +1488,7 @@ export const PAGE_JA: PageWords = Object.freeze({
       ...(moved.asked ? ["あなたが依頼しました"] : []),
       ...(moved.rondoWrote > 0 ? [`rondo が ${String(moved.rondoWrote)} 件書きました`] : []),
       ...(moved.youWrote > 0 ? [`あなたが ${String(moved.youWrote)} 件書きました`] : []),
+      ...(moved.othersWrote > 0 ? [`ほかの人が ${String(moved.othersWrote)} 件書きました`] : []),
       ...(moved.youAnswered > 0 ? [`あなたが ${String(moved.youAnswered)} 回答えました`] : []),
       ...(moved.lapsEnded > 0
         ? [

@@ -1028,12 +1028,13 @@ type ThreadBoxes = Awaited<ReturnType<typeof threadBoxes>>;
 function sinceView(
   wording: Chrome,
   nowMs: number,
+  actorId: string | null,
   inbox: PageModel["inbox"],
   threads: PageModel["threads"],
   allLapsByRequest: PageModel["allLapsByRequest"],
   placeOfRequest: (messageId: string) => string | null,
 ): SinceView | null {
-  if (inbox === null) {
+  if (inbox === null || actorId === null) {
     return null;
   }
   if (inbox.sinceMs === null) {
@@ -1055,7 +1056,18 @@ function sinceView(
     kind: "looked",
     when: wording.age(ago(inbox.sinceMs, nowMs)),
     reading: sinceLooked(inbox.changed, inbox.sinceMs, {
-      authorOf: (messageId) => threads.byId.get(messageId)?.authorKind,
+      authorOf: (messageId) => {
+        const message = threads.byId.get(messageId);
+        if (message === undefined) {
+          return undefined;
+        }
+        // Another person's message is theirs, not the one looking's (Codex).
+        return message.authorKind !== "operator"
+          ? "rondo"
+          : message.authorId === actorId
+            ? "you"
+            : "other";
+      },
       rootOf: threads.rootOf,
       lapOf: (iterationId) => laps.get(iterationId) ?? null,
     }),
@@ -1142,8 +1154,14 @@ async function threadCentre(
                 // set: nothing to read where the page is in it too.
                 reads: ports.hostLanguage === wording.lang ? null : reads,
               }),
-              since: sinceView(wording, nowMs, inbox, threads, allLapsByRequest, (messageId) =>
-                placeOf(lapUnder(messageId)?.record ?? null),
+              since: sinceView(
+                wording,
+                nowMs,
+                ports.actorId,
+                inbox,
+                threads,
+                allLapsByRequest,
+                (messageId) => placeOf(lapUnder(messageId)?.record ?? null),
               ),
             }),
           }
