@@ -106,6 +106,7 @@ export interface ThreadMessage {
       readonly policyId: string;
       readonly back: string;
       readonly said: string;
+      readonly busy: string;
     } | null;
   } | null;
 }
@@ -259,7 +260,9 @@ function Message({ message }: { readonly message: ThreadMessage }) {
                 <input type="hidden" name="token" value={message.policy.forget.token} />
                 <input type="hidden" name="policy" value={message.policy.forget.policyId} />
                 <input type="hidden" name="back" value={message.policy.forget.back} />
-                <button type="submit">{message.policy.forget.said}</button>
+                <button type="submit" data-busy={message.policy.forget.busy}>
+                  {message.policy.forget.said}
+                </button>
               </form>
             )}
           </div>

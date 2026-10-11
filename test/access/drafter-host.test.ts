@@ -861,3 +861,41 @@ test("a policy the person states is kept from their words and listed under them;
     `--- policy ${String(kept[0]?.policyId)}\nNever touch the release workflow.`,
   );
 });
+
+test("a policy taken back is not kept again from its words, even where they are due again (D-0067 rule 6.3)", async () => {
+  const w = await world();
+  await w.say("r1", "From now on, never touch the release workflow.", null, 1_000);
+  const keeping: DrafterRun = {
+    kind: "answered",
+    costUsd: 0,
+    finalMessage: JSON.stringify({
+      act: "none",
+      policies: [{ text: "Never touch the release workflow.", bases: ["r1"] }],
+    }),
+  };
+  const first = hostOver(w, async () => keeping);
+  first.host.kick();
+  await first.host.idle();
+  const [kept] = await w.record.standingPolicies();
+  expect(
+    await w.record.recordStandingPolicy({
+      policyId: "policy-back",
+      body: "",
+      authorKind: "operator",
+      authorId: "ada",
+      bases: [],
+      supersedesPolicyId: String(kept?.policyId),
+      createdAtMs: 5_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  // As when an issue read lands under it: no drafter row covers the words any more.
+  const again = hostOver(w, async () => keeping, {
+    mintId: (kind) => `${kind}-again`,
+    record: { ...w.record, draftedMessageIds: async () => new Set<string>() },
+  });
+  await w.say("r1-more", "Fix the flaky test.", "r1", 6_000);
+  again.host.kick();
+  await again.host.idle();
+  expect(again.handed).toHaveLength(1);
+  expect(await w.record.standingPolicies()).toEqual([]);
+});

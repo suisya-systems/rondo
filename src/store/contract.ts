@@ -1388,6 +1388,8 @@ export interface AdvisoryRecord {
   recordStandingPolicy(draft: StandingPolicyDraft): Promise<RecordOutcome>;
   /** Every policy in force, oldest first: no successor names it and it is not empty. */
   standingPolicies(): Promise<readonly StoredStandingPolicy[]>;
+  /** Every message a policy row rests on, in force or not: words never kept from again. */
+  policySources(): Promise<ReadonlySet<string>>;
   /**
    * Record a *not now* (D-0097 point 4.5 (a)). Refused when the proposal is
    * not a triage row, or the candidate is not one it proposed.

@@ -599,6 +599,7 @@ async function threadModel(
                             policyId,
                             back: `${viewHref({ kind: "thread", messageId: selectedRoot, to: null }, wording.lang)}#${encodeURIComponent(message.messageId)}`,
                             said: wording.policyForgetAction,
+                            busy: wording.policyForgetBusy,
                           },
                   })(notedPolicy(message)),
           basesLabel: wording.basesLabel,

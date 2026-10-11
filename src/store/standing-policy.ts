@@ -163,3 +163,21 @@ export function inForcePolicies(connection: StoreConnection): readonly StoredSta
     };
   });
 }
+
+/**
+ * Every message any policy row rests on, in force or not (D-0067 rule 6.2):
+ * words a policy was kept from, which a later run never keeps one from again.
+ */
+export function policySources(connection: StoreConnection): ReadonlySet<string> {
+  return new Set(
+    (
+      connection
+        .prepare(
+          "SELECT DISTINCT json_extract(b.value, '$.messageId') AS id FROM standing_policy p, " +
+            "json_each(CASE WHEN json_valid(p.bases) THEN p.bases ELSE '[]' END) b " +
+            "WHERE json_extract(b.value, '$.form') = 'message'",
+        )
+        .all() as SqlRow[]
+    ).flatMap((row) => (typeof row["id"] === "string" ? [row["id"]] : [])),
+  );
+}

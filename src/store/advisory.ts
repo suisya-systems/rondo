@@ -111,6 +111,7 @@ import { readScopePayload } from "./scope-payload.js";
 import {
   inForcePolicies,
   insertStandingPolicy,
+  policySources,
   recordStandingPolicy,
   type StandingPolicyDraft,
   type StoredStandingPolicy,
@@ -1495,6 +1496,10 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
 
     async standingPolicies(): Promise<readonly StoredStandingPolicy[]> {
       return inForcePolicies(connection);
+    },
+
+    async policySources(): Promise<ReadonlySet<string>> {
+      return policySources(connection);
     },
 
     async goals(): Promise<readonly StoredGoal[]> {
