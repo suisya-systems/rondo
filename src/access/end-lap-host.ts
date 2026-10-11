@@ -12,6 +12,7 @@
  * unless the stop a start that threw asked is already standing, which is then
  * this lap's stop.
  */
+import type { IterationRecord } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
 import { approvedActor, say } from "./cli.js";
@@ -49,12 +50,25 @@ export async function endLapFromPage(
     };
   }
   const reason = endedOnThePage(input.reason, actor.actorId);
-  const ports = { store, now: Date.now };
+  // The end writes from the row that passed the test, not one read again: a
+  // lap another process walked on meanwhile (to its gate, say) fails the
+  // store's from-status assertion instead of being ended where it now stands.
+  const pinned: IterationStore = Object.create(store, {
+    read: { value: async (id: string) => (id === input.iterationId ? row : await store.read(id)) },
+  });
+  const ports = { store: pinned, now: Date.now };
   const status =
     row.kind === "read"
       ? await endLost(ports, input.iterationId, reason, "ended")
       : (await abandon(ports, input.iterationId, reason)).status;
   if (status !== (row.kind === "read" ? "failed" : "abandoned")) {
+    if (row.kind === "read" && (await moved(store, row.record))) {
+      return {
+        ok: false,
+        why: "endRefusedChanged",
+        note: `lap '${input.iterationId}' moved on before the end was written`,
+      };
+    }
     return {
       ok: false,
       why: "endRefusedNotRecorded",
@@ -114,6 +128,12 @@ export async function endLapFromPage(
     }
   }
   return { ok: true, requestMessageId };
+}
+
+/** Whether the row is no longer at the status the press was tested against. */
+async function moved(store: IterationStore, tested: IterationRecord): Promise<boolean> {
+  const now = await store.read(tested.id);
+  return now.kind !== "read" || now.record.status !== tested.status;
 }
 
 async function endedWith(store: IterationStore, iterationId: string, reason: string) {

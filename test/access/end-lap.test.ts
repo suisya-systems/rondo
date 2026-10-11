@@ -82,7 +82,7 @@ test("a stalled lap ended from the page frees what it held, asks in the person's
 
   const ended = await row(w);
   expect(ended).toMatchObject({ status: "failed", failureKind: "ended" });
-  expect(ended.reason).toContain("it hung overnight (ended on the page by ada)");
+  expect(ended.reason).toContain('ended on the page by ada: "it hung overnight"');
   expect(await w.store.occupancy()).toEqual({ occupying: 0, live: 0 });
   const line = (await w.store.laneLedger()).find((one) => one.lapIds.includes("lap-1"));
   expect(line?.paths).toEqual([]);
@@ -181,7 +181,7 @@ test("an ending whose fresh ask was never written is asked about by the lost-lap
   const status = await endLost(
     { store: w.store, now: Date.now },
     "lap-1",
-    "it hung overnight (ended on the page by ada)",
+    'ended on the page by ada: "it hung overnight"',
     "ended",
   );
   expect(status).toBe("failed");
@@ -196,16 +196,12 @@ test("an ending whose fresh ask was never written is asked about by the lost-lap
 
 test("a press that loses its race to the lost-lap pass says nothing was ended by it", async () => {
   const w = await stuck("stalled");
-  let reads = 0;
   // The pass ends the lap between the press's check and its write.
   const racing = Object.create(w.store, {
-    read: {
-      value: async (id: string) => {
-        reads += 1;
-        if (reads === 2) {
-          await endLost({ store: w.store, now: Date.now }, id, "gone", "lost");
-        }
-        return await w.store.read(id);
+    transition: {
+      value: async (...args: Parameters<typeof w.store.transition>) => {
+        await endLost({ store: w.store, now: Date.now }, "lap-1", "gone", "lost");
+        return await w.store.transition(...args);
       },
     },
   });
@@ -214,6 +210,31 @@ test("a press that loses its race to the lost-lap pass says nothing was ended by
   ).toMatchObject({ ok: false, why: "endRefusedChanged" });
   expect(await row(w)).toMatchObject({ failureKind: "lost" });
   expect((await thread(w)).map((m) => m.messageId)).toEqual(["req-lap-1"]);
+});
+
+test("a lap another process walks on before the press writes is not ended where it now stands", async () => {
+  const w = await stuck("admitting");
+  await startStopped(w);
+  // Resumed elsewhere, it reaches its gate just after the press's check read it.
+  let reads = 0;
+  const racing = Object.create(w.store, {
+    read: {
+      value: async (id: string) => {
+        const read = await w.store.read(id);
+        reads += 1;
+        if (reads === 1) {
+          w.connection
+            .prepare("UPDATE iteration SET status = 'awaiting_human' WHERE id = 'lap-1'")
+            .run();
+        }
+        return read;
+      },
+    },
+  });
+  expect(
+    await endLapFromPage(ENV, racing, w.record, EN, "ada", { iterationId: "lap-1", reason: "r" }),
+  ).toMatchObject({ ok: false, why: "endRefusedChanged" });
+  expect((await row(w)).status).toBe("awaiting_human");
 });
 
 test("a row that will not decode is settled by id, frees its room, and is asked about in its request", async () => {

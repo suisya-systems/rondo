@@ -132,29 +132,25 @@ export function startsAgainOnCarryOn(lap: IterationRecord): boolean {
 }
 
 /**
- * The reason a lap ended from the page records: the person's words, then who
- * (rondo#655). {@link personsReason} reads the words back.
+ * The reason a lap ended from the page records: who, then the person's words
+ * as a JSON string ending the entry (rondo#655), so {@link personsReason} reads
+ * them back whole, whatever punctuation they hold.
  */
 export function endedOnThePage(reason: string, actorId: string): string {
-  return `${reason} ${ENDED_BY}${actorId})`;
+  return `${ENDED_BY}${actorId}: ${JSON.stringify(reason)}`;
 }
 
-const ENDED_BY = "(ended on the page by ";
+const ENDED_BY = "ended on the page by ";
 
 /**
- * The person's words of {@link endedOnThePage} out of the row's reason, which
- * may carry rondo's earlier entries before it, `; `-separated.
+ * The person's words of {@link endedOnThePage} out of the row's reason. Its
+ * entry is the last one, since the end is terminal and nothing is appended
+ * after it; a reason without one is answered as it is.
  */
 export function personsReason(lap: IterationRecord): string {
   const reason = lap.reason ?? "";
-  const by = reason.lastIndexOf(` ${ENDED_BY}`);
-  if (by < 0) {
-    return reason;
-  }
-  // ponytail: an earlier entry is cut at the last `; ` before the words, so words
-  // that themselves hold `; ` lose their head; only the ask a pass cut short
-  // writes from this, the page's own ask quotes the words it was handed.
-  return reason.slice(reason.lastIndexOf("; ", by) + 1, by).trim();
+  const words = /ended on the page by \S+: ("(?:[^"\\]|\\.)*")$/.exec(reason)?.[1];
+  return words === undefined ? reason : (JSON.parse(words) as string);
 }
 
 /**

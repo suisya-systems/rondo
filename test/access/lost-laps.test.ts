@@ -120,10 +120,13 @@ test("D-0149: carry on starts a lap again when it was lost or stopped at its bud
 test("rondo#655: the person's words are read back from the reason a page end records", () => {
   const ended = (reason: string | null) => ({ reason }) as IterationRecord;
   const said = endedOnThePage("the worker hung", "ada");
-  expect(said).toBe("the worker hung (ended on the page by ada)");
+  expect(said).toBe('ended on the page by ada: "the worker hung"');
   expect(personsReason(ended(said))).toBe("the worker hung");
   // rondo's earlier entries before it are left out.
   expect(personsReason(ended(`classify answered nothing; ${said}`))).toBe("the worker hung");
+  // The words come back whole, whatever punctuation they hold.
+  const words = 'Do not retry; it said "ended on the page by bob: x"\nand stopped';
+  expect(personsReason(ended(`a; b; ${endedOnThePage(words, "ada")}`))).toBe(words);
   expect(personsReason(ended("no page end here"))).toBe("no page end here");
   expect(personsReason(ended(null))).toBe("");
 });
