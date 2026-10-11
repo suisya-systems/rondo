@@ -4,6 +4,8 @@
  * request's thread saying what came of each part, what was left undone and
  * what it decided without asking. Not once per lap: the per-lap reports stay
  * shut under their event lines (`D-0112`), and this is the one that rolls them up.
+ * A split of one part -- a request that ended in one lap -- gets one too, its
+ * first line saying what came of it (rondo#651).
  *
  * **Deterministic, and once.** It is composed from rows by code, never by a
  * model, and its id is the split's (`request-report-<proposal>`), so a second
@@ -89,10 +91,16 @@ export function requestReportText(
     outcomes.filter((o) => o.standing === standing).length;
   const byRondo = outcomes.reduce((sum, o) => sum + o.byRondo, 0);
   const undone = outcomes.filter((o) => o.standing === "stopped").map((o) => o.part);
+  // One part is the whole request: one line says what came of it (rondo#651).
+  const only = outcomes.length === 1 ? outcomes[0] : undefined;
   return [
-    words.reportLead(count("merged"), count("stopped")),
-    ...outcomes.map((o) => `- ${words.reportPart(o)}`),
-    ...(undone.length === 0 ? [] : [words.reportUndone(undone)]),
+    ...(only !== undefined
+      ? [words.reportOne(only)]
+      : [
+          words.reportLead(count("merged"), count("stopped")),
+          ...outcomes.map((o) => `- ${words.reportPart(o)}`),
+          ...(undone.length === 0 ? [] : [words.reportUndone(undone)]),
+        ]),
     ...(byRondo === 0 ? [] : [words.reportByRondo(byRondo)]),
     ...(exits === 0 ? [] : [words.reportScopeExits(exits)]),
     words.reportAsksNothing,
@@ -132,7 +140,7 @@ export async function writeRequestReports(ports: RequestReportPorts): Promise<re
   const written: string[] = [];
   for (const root of read.messages.filter((m) => m.inReplyTo === null)) {
     try {
-      const parts = await partsOf(ports, root.messageId);
+      const parts = await partsOf(ports, root.messageId, 1);
       const proposalId = parts[0]?.proposalId;
       if (proposalId === undefined || threads.byId.has(requestReportId(proposalId))) {
         continue;

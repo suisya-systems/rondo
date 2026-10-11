@@ -29,6 +29,8 @@ export interface ReportWords {
   /** The first line: every part has ended, and how many of each. */
   readonly reportLead: (merged: number, stopped: number) => string;
   readonly reportPart: (outcome: PartOutcome) => string;
+  /** The whole report's first line where the split had one part (rondo#651): no part to name. */
+  readonly reportOne: (outcome: PartOutcome) => string;
   /** The gates rondo answered itself under the person's approval (D-0125): decided without asking. */
   readonly reportByRondo: (gates: number) => string;
   /** The times rondo stopped at the edge of the approved scope and asked (`D-0064` rule 3.3). */
@@ -40,28 +42,32 @@ export interface ReportWords {
 
 const tries = (count: number) => (count === 1 ? "1 try" : `${String(count)} tries`);
 
+/** What came of a part, after its name. */
+const outcomeEn = (o: PartOutcome) =>
+  `${
+    o.standing === "merged"
+      ? `merged (${o.pullRequest ?? "its pull request"})`
+      : "stopped before it was finished"
+  }. ${
+    o.tries === 0
+      ? "It never started"
+      : o.spent === null
+        ? `${tries(o.tries)}; ${o.tries === 1 ? "its" : "their"} cost was not reported`
+        : `${tries(o.tries)}, $${o.spent} spent${
+            o.unread === 0
+              ? ""
+              : `; the cost of ${o.unread === 1 ? "1 try was" : `${String(o.unread)} tries were`} not reported`
+          }`
+  }.`;
+
 export const REPORT_EN: ReportWords = {
   reportLead: (merged, stopped) =>
     `Every part of this request has ended: ${[
       ...(merged > 0 ? [`${String(merged)} merged`] : []),
       ...(stopped > 0 ? [`${String(stopped)} stopped`] : []),
     ].join(", ")}.`,
-  reportPart: (o) =>
-    `${o.part}: ${
-      o.standing === "merged"
-        ? `merged (${o.pullRequest ?? "its pull request"})`
-        : "stopped before it was finished"
-    }. ${
-      o.tries === 0
-        ? "It never started"
-        : o.spent === null
-          ? `${tries(o.tries)}; ${o.tries === 1 ? "its" : "their"} cost was not reported`
-          : `${tries(o.tries)}, $${o.spent} spent${
-              o.unread === 0
-                ? ""
-                : `; the cost of ${o.unread === 1 ? "1 try was" : `${String(o.unread)} tries were`} not reported`
-            }`
-    }.`,
+  reportPart: (o) => `${o.part}: ${outcomeEn(o)}`,
+  reportOne: (o) => `This request has ended: ${outcomeEn(o)}`,
   reportByRondo: (gates) =>
     `Under your approval, rondo answered ${gates === 1 ? "1 gate" : `${String(gates)} gates`} itself, without asking you.`,
   reportUndone: (parts) => `Not finished: ${parts.join(", ")}.`,
@@ -70,26 +76,29 @@ export const REPORT_EN: ReportWords = {
   reportAsksNothing: "This report asks nothing of you.",
 };
 
+const outcomeJa = (o: PartOutcome) =>
+  `${
+    o.standing === "merged"
+      ? `マージ済み（${o.pullRequest ?? "プルリクエスト"}）`
+      : "終わる前に取りやめました"
+  }。${
+    o.tries === 0
+      ? "一度も始まりませんでした"
+      : o.spent === null
+        ? `${String(o.tries)} 回試しました。費用は記録されていません`
+        : `${String(o.tries)} 回試して $${o.spent} を使いました${
+            o.unread === 0 ? "" : `。うち ${String(o.unread)} 回は費用が記録されていません`
+          }`
+  }。`;
+
 export const REPORT_JA: ReportWords = {
   reportLead: (merged, stopped) =>
     `この依頼の作業は、すべて結果が出ました（${[
       ...(merged > 0 ? [`マージ済み ${String(merged)} 件`] : []),
       ...(stopped > 0 ? [`取りやめ ${String(stopped)} 件`] : []),
     ].join("、")}）。`,
-  reportPart: (o) =>
-    `${o.part}: ${
-      o.standing === "merged"
-        ? `マージ済み（${o.pullRequest ?? "プルリクエスト"}）`
-        : "終わる前に取りやめました"
-    }。${
-      o.tries === 0
-        ? "一度も始まりませんでした"
-        : o.spent === null
-          ? `${String(o.tries)} 回試しました。費用は記録されていません`
-          : `${String(o.tries)} 回試して $${o.spent} を使いました${
-              o.unread === 0 ? "" : `。うち ${String(o.unread)} 回は費用が記録されていません`
-            }`
-    }。`,
+  reportPart: (o) => `${o.part}: ${outcomeJa(o)}`,
+  reportOne: (o) => `この依頼の結果: ${outcomeJa(o)}`,
   reportByRondo: (gates) =>
     `あなたの承認の範囲で、rondo がゲート ${String(gates)} 件に自分で答えました。あなたには尋ねていません。`,
   reportUndone: (parts) => `終わらなかった作業: ${parts.join("、")}。`,

@@ -156,6 +156,8 @@ export interface PageModel {
   readonly lapsUnder: (messageId: string) => LapUnderRequest[];
   readonly placeOf: (record: IterationRecord | null) => string | null;
   readonly partsOfRequest: (messageId: string) => readonly PartView[];
+  /** The parts a request's report speaks of: its split's, one part included (rondo#651). */
+  readonly reportPartsOf: (messageId: string) => readonly PartView[];
   readonly requestsList: RequestList;
 }
 
@@ -408,7 +410,8 @@ export async function pageModel(
       threads.messages
         .filter((message) => message.inReplyTo === null)
         .map(async (root) => {
-          const parts = await partsOf(ports, root.messageId);
+          // A one-part split is read for its report alone (rondo#651).
+          const parts = await partsOf(ports, root.messageId, 1);
           return [
             root.messageId,
             partViews(
@@ -419,7 +422,11 @@ export async function pageModel(
         }),
     ),
   );
-  const partsOfRequest = (messageId: string) => partsByRequest.get(messageId) ?? [];
+  const reportPartsOf = (messageId: string) => partsByRequest.get(messageId) ?? [];
+  const partsOfRequest = (messageId: string) => {
+    const parts = reportPartsOf(messageId);
+    return parts.length < 2 ? [] : parts;
+  };
   /*
    * **Work approved and not begun outranks a stopped lap** (rondo#512): a
    * request whose split was drafted again after its lap stopped, and approved,
@@ -521,6 +528,7 @@ export async function pageModel(
     lapsUnder,
     placeOf,
     partsOfRequest,
+    reportPartsOf,
     requestsList,
   };
 }

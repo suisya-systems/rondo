@@ -12807,20 +12807,32 @@ and the proposed `D-0059` and `D-0063`.
 > Nothing below is edited.
 
 > **Annotation (2026-10-11, from rondo#630).** Added after this entry was accepted, and additive.
-> P5 is built for a request run as a split (`partsOf`, two or more parts). Once every part is merged
-> or stopped, the resident host's minute tick writes one deterministic `drafter` message into the
-> request's thread, with `asks` unset, under the id `request-report-<split proposal>`, so it is
-> written once per approved split (`src/access/request-report.ts`). It says, per part, whether it
-> was merged and by which pull request, or stopped, with its tries and what they cost (or that the
-> cost was not reported). It names the parts left undone, the gates rondo answered itself under the
-> approval (`D-0125`, the decided-without-asking it can read from rows), and how many times the
-> scope's edge stopped the work and asked (the `scope-stop-` asks). Its bases are the request, the
-> split and each part's first lap. The host writes it in its operator's language, and the page says
-> it again in the reader's, with the written words under the fold. Three limits stand. A part
-> approved and not yet merged is not ended, because its merge may still come, so a split whose
-> pull requests nobody merges gets no report. A request run as one lap gets no roll-up, and its
-> lap reports are its report. Review findings left below the threshold (O5) are not listed yet.
-> Nothing below is edited.
+> P5 is built for a request run as a split (`partsOf`, one part too since rondo#651). Once every
+> part is merged or stopped, the resident host's minute tick writes one deterministic `drafter`
+> message into the request's thread, with `asks` unset, under the id
+> `request-report-<split proposal>`, so it is written once per approved split
+> (`src/access/request-report.ts`). It says, per part, whether it was merged and by which pull
+> request, or stopped, with its tries and what they cost (or that the cost was not reported). It
+> names the parts left undone, the gates rondo answered itself under the approval (`D-0125`, the
+> decided-without-asking it can read from rows), and how many times the scope's edge stopped the
+> work and asked (the `scope-stop-` asks). Its bases are the request, the split and each part's
+> first lap. The host writes it in its operator's language, and the page says it again in the
+> reader's, with the written words under the fold. Three limits stand. A part approved and not yet
+> merged is not ended, because its merge may still come, so a split whose pull requests nobody
+> merges gets no report. A request run as one lap gets no roll-up, and its lap reports are its
+> report (lifted by the annotation from rondo#651 below). Review findings left below the threshold
+> (O5) are not listed yet. Nothing below is edited.
+
+> **Annotation (2026-10-11, from rondo#651).** Added after this entry was accepted, and additive.
+> An approved split of one part gets its report too: a request that ended in one part, in one try
+> or several, is a request, and P5 is once per request. The writer reads the split's parts with
+> one plan allowed (`partsOf(..., 1)`), and the report is the same message under the same id,
+> once per split, with the same bases (the request, the split and the part's first lap). It is
+> short: its first line says what came of the request, merged by which pull request or stopped,
+> with its tries and their cost, and names no part; the gates rondo answered itself, the scope
+> exits and *asks nothing* follow as for a split of several parts. The page says it again in the
+> reader's language and draws no parts for such a request. A request not run from an approved
+> drafted split still gets none. Nothing below is edited.
 
 **This entry decides and does not build.** Nothing in `src/` changes with it, and **no earlier entry
 is edited by it**. Section 6 lists the entries that have to move and says how each should move; each
