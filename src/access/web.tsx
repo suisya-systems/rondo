@@ -107,7 +107,7 @@ import { answerBands, askLink, gatesOf } from "./page/ask.js";
 import { type AnswerRevise, budgetRaises, composerView } from "./page/composer.js";
 import type { MintIterationId, MintMessageId, MintScopeId, WebPorts } from "./page/contract.js";
 import { pageDocument } from "./page/document.js";
-import { EmptyCentre } from "./page/empty.js";
+import { EmptyCentre, type SinceView } from "./page/empty.js";
 import { closingShown, materialView } from "./page/gate-material.js";
 import { budgetClosing, reviseBox, shownBeforePress } from "./page/gate-shown.js";
 import { GovernanceLine } from "./page/governance.js";
@@ -148,6 +148,7 @@ import { holdsLap, partCounts, takeInFrom } from "./page-logic/parts.js";
 import { askOverLine, resultOf } from "./page-logic/result.js";
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
+import { sinceLooked } from "./page-logic/since.js";
 import { lapStory } from "./page-logic/story.js";
 import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget } from "./page-logic/threads.js";
@@ -1019,13 +1020,59 @@ async function threadBoxes(
 
 type ThreadBoxes = Awaited<ReturnType<typeof threadBoxes>>;
 
+/**
+ * *Since you last looked* for the empty centre (D-0083 rule 4, rondo#631): the
+ * inbox's own `changed` rows, sorted under their requests. Null with no actor,
+ * since there is then no mark to have looked from.
+ */
+function sinceView(
+  wording: Chrome,
+  nowMs: number,
+  inbox: PageModel["inbox"],
+  threads: PageModel["threads"],
+  allLapsByRequest: PageModel["allLapsByRequest"],
+  placeOfRequest: (messageId: string) => string | null,
+): SinceView | null {
+  if (inbox === null) {
+    return null;
+  }
+  if (inbox.sinceMs === null) {
+    return { kind: "never" };
+  }
+  const laps = new Map(
+    [...allLapsByRequest].flatMap(([requestId, under]) =>
+      under.map((lap) => [
+        lap.record.id,
+        {
+          requestId,
+          ended: isTerminal(lap.record.status),
+          updatedAtMs: lap.record.updatedAtMs,
+        },
+      ]),
+    ),
+  );
+  return {
+    kind: "looked",
+    when: wording.age(ago(inbox.sinceMs, nowMs)),
+    reading: sinceLooked(inbox.changed, inbox.sinceMs, {
+      authorOf: (messageId) => threads.byId.get(messageId)?.authorKind,
+      rootOf: threads.rootOf,
+      lapOf: (iterationId) => laps.get(iterationId) ?? null,
+    }),
+    titleOf: (messageId) => firstLine(threads.byId.get(messageId)?.body ?? ""),
+    placeOf: placeOfRequest,
+    hrefOf: (messageId) => viewHref({ kind: "thread", messageId, to: null }, wording.lang),
+    ageOf: (atMs) => wording.age(ago(atMs, nowMs)),
+  };
+}
+
 /** **The centre face** (D-0083 rules 4 and 5), drawn off the thread view's model (rondo#341). */
 async function threadCentre(
   ports: WebPorts,
   view: PageView,
   wording: Chrome,
   token: string | null,
-  { nowMs, reads, threads, requestsList }: PageModel,
+  { nowMs, reads, threads, requestsList, inbox, allLapsByRequest, lapUnder, placeOf }: PageModel,
   triage: TriageReads,
   {
     noSuchThread,
@@ -1095,6 +1142,9 @@ async function threadCentre(
                 // set: nothing to read where the page is in it too.
                 reads: ports.hostLanguage === wording.lang ? null : reads,
               }),
+              since: sinceView(wording, nowMs, inbox, threads, allLapsByRequest, (messageId) =>
+                placeOf(lapUnder(messageId)?.record ?? null),
+              ),
             }),
           }
         : {

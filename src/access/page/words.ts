@@ -22,6 +22,7 @@ import type { SkipReason } from "../../advisory/flow.js";
 import type { FlowStop } from "../flow-stop.js";
 import type { PartCounts } from "../page-logic/parts.js";
 import type { ChecksState, LapResult } from "../page-logic/result.js";
+import type { MovedRequest } from "../page-logic/since.js";
 
 /** Where a request sits on the time axis, said as a heading (D-0083 rule 2). */
 export interface DayWords {
@@ -226,6 +227,16 @@ export interface PageWords extends DayWords {
   /** The empty centre, where nothing waits (rule 4). */
   readonly emptyAsk: string;
   readonly emptyLead: string;
+  /**
+   * *Since you last looked*, under the request box (rule 4, rondo#631): the
+   * heading takes when, already said; each moved request is one sentence.
+   */
+  readonly sinceHeading: (when: string) => string;
+  readonly sinceNothing: (when: string) => string;
+  readonly sinceNever: string;
+  readonly sinceSaid: (moved: MovedRequest) => string;
+  readonly sinceMore: (count: number) => string;
+  readonly sinceElsewhere: (count: number) => string;
   /**
    * What rondo would ask for next (D-0097 point 4), under the request box, and
    * the goal it is ranked against (point 2). No amber in any of it: nothing
@@ -786,6 +797,44 @@ export const PAGE_EN: PageWords = Object.freeze({
   saidByRondo: "rondo",
   emptyAsk: "What would you like to ask for?",
   emptyLead: "Write it in your own words. If anything is unclear, rondo asks before it starts.",
+  sinceHeading: (when) => `What moved since you last looked, ${when} ago`,
+  sinceNothing: (when) => `Nothing has moved since you last looked, ${when} ago.`,
+  sinceNever:
+    "Nothing is marked as moved yet: you have not looked before. rondo inbox, in a terminal, sets the mark.",
+  sinceSaid: (moved) => {
+    const times = (count: number, one: string, many: string) =>
+      count === 1 ? one : `${String(count)} ${many}`;
+    const parts = [
+      ...(moved.asked ? ["you asked for it"] : []),
+      ...(moved.rondoWrote > 0
+        ? [`rondo wrote ${times(moved.rondoWrote, "a message", "messages")}`]
+        : []),
+      ...(moved.youWrote > 0
+        ? [`you wrote ${times(moved.youWrote, "a message", "messages")}`]
+        : []),
+      ...(moved.youAnswered > 0
+        ? [`you answered ${times(moved.youAnswered, "a gate", "gates")}`]
+        : []),
+      ...(moved.lapsEnded > 0
+        ? [
+            moved.lapsEnded === moved.lapsMoved
+              ? `${times(moved.lapsEnded, "a lap", "laps")} ended`
+              : `${times(moved.lapsMoved, "a lap", "laps")} moved and ${String(moved.lapsEnded)} ended`,
+          ]
+        : moved.lapsMoved > 0
+          ? [`${times(moved.lapsMoved, "a lap", "laps")} moved`]
+          : []),
+    ];
+    const sentence = parts.join(", ");
+    // rondo's name keeps its lower case at the head of a sentence too.
+    return sentence.startsWith("rondo")
+      ? `${sentence}.`
+      : `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`;
+  },
+  sinceMore: (count) =>
+    count === 1 ? "One more request moved." : `${String(count)} more requests moved.`,
+  sinceElsewhere: (count) =>
+    `${count === 1 ? "One more record" : `${String(count)} more records`} changed under no request; rondo inbox lists each.`,
   triageHeading: "What rondo would ask for next",
   triageGoesAgainst: "Goes against",
   triageWhy: "Why",
@@ -1427,6 +1476,31 @@ export const PAGE_JA: PageWords = Object.freeze({
   saidByRondo: "rondo",
   emptyAsk: "何を頼みますか",
   emptyLead: "ふだんの言葉で書いてください。はっきりしないところがあれば、始める前に聞き返します。",
+  sinceHeading: (when) => `前回見てから（${when}前）動いたこと`,
+  sinceNothing: (when) => `前回見てから（${when}前）動いたものはありません。`,
+  sinceNever:
+    "まだ一度も見ていないので、動いたものの印はありません。端末で rondo inbox を開くと印がつきます。",
+  sinceSaid: (moved) => {
+    const parts = [
+      ...(moved.asked ? ["あなたが依頼しました"] : []),
+      ...(moved.rondoWrote > 0 ? [`rondo が ${String(moved.rondoWrote)} 件書きました`] : []),
+      ...(moved.youWrote > 0 ? [`あなたが ${String(moved.youWrote)} 件書きました`] : []),
+      ...(moved.youAnswered > 0 ? [`あなたが ${String(moved.youAnswered)} 回答えました`] : []),
+      ...(moved.lapsEnded > 0
+        ? [
+            moved.lapsEnded === moved.lapsMoved
+              ? `${String(moved.lapsEnded)} 周が終わりました`
+              : `${String(moved.lapsMoved)} 周が動き、うち ${String(moved.lapsEnded)} 周が終わりました`,
+          ]
+        : moved.lapsMoved > 0
+          ? [`${String(moved.lapsMoved)} 周が動きました`]
+          : []),
+    ];
+    return `${parts.join("。")}。`;
+  },
+  sinceMore: (count) => `ほかに ${String(count)} 件の依頼が動きました。`,
+  sinceElsewhere: (count) =>
+    `どの依頼にも属さない記録が ${String(count)} 件変わりました。rondo inbox で一つずつ見られます。`,
   triageHeading: "rondo が次に勧める依頼",
   triageGoesAgainst: "反している目標",
   triageWhy: "理由",
