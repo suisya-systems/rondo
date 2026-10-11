@@ -30,6 +30,7 @@
  */
 import {
   type IterationRecord,
+  isQuestion,
   isTerminal,
   type NonTerminalStatus,
   WAIT_SIDE,
@@ -117,10 +118,27 @@ export function waitsOnYou(threads: Threads, laps: readonly IterationRecord[]): 
  * the same thread is the request's own, and the row says so as before.
  */
 export function flowStopOnly(waits: readonly Wait[]): ReadonlySet<string> {
-  const own = new Set(
-    waits.filter((wait) => !wait.episode.startsWith(`ask:${FLOW_STOP}`)).map((wait) => wait.root),
+  return onlyWaiting(waits, `ask:${FLOW_STOP}`);
+}
+
+/** The episode prefix of a request waiting on {@link scopesAwaitingYou}'s press. */
+export const PRESS = "press:";
+
+/**
+ * **The requests whose only wait is a press before anything is drafted**
+ * (rondo#643): a repository to add, or setup's plan to record. The row says
+ * so, since *waiting on your answer* names a box this request does not have.
+ */
+export function pressOnly(waits: readonly Wait[]): ReadonlySet<string> {
+  return onlyWaiting(waits, PRESS);
+}
+
+/** The requests every wait of which has an episode under `prefix`. */
+function onlyWaiting(waits: readonly Wait[], prefix: string): ReadonlySet<string> {
+  const other = new Set(
+    waits.filter((wait) => !wait.episode.startsWith(prefix)).map((wait) => wait.root),
   );
-  return new Set(waits.map((wait) => wait.root).filter((root) => !own.has(root)));
+  return new Set(waits.map((wait) => wait.root).filter((root) => !other.has(root)));
 }
 
 /**
@@ -156,6 +174,15 @@ export async function draftsOwedNow(ports: {
  *
  * The episode is the draft's scope, so a redraft over a newer message is a new
  * wait and a person already told about the old one is told again.
+ *
+ * **And a request whose next step is a press before any draft** (rondo#643):
+ * the thread's *next step* card, by its own conditions -- a request a person
+ * wrote (not a question, `D-0189`) whose repository is to be added (`D-0090`,
+ * `D-0191` rule 3) or whose store holds no plan (`D-0191` rule 2), with no
+ * question standing in its thread. Nothing is drafted until the person acts,
+ * so it is their turn at the strength of a question waiting on them. Its
+ * episode is {@link PRESS} and the request: once the press is made the request
+ * is drafted, and the draft is a new wait.
  */
 export async function scopesAwaitingYou(
   ports: {
@@ -163,7 +190,10 @@ export async function scopesAwaitingYou(
       AdvisoryRecord,
       "scopesFor" | "scopeDecisionOf" | "readProposal" | "scopeSupersededByApproved"
     >;
-    /** Whether the request's work is in a repository rondo does not hold (`D-0090`). */
+    /**
+     * Whether the request waits on a press before it is drafted: its work is in
+     * a repository rondo does not hold (`D-0090`), or rondo holds no plan (`D-0191`).
+     */
     readonly unheld: (requestMessageId: string) => Promise<boolean>;
   },
   threads: Threads,
@@ -179,9 +209,10 @@ export async function scopesAwaitingYou(
         (message) =>
           message.inReplyTo === null && !owes(message.messageId) && !asked.has(message.messageId),
       )
-      .map(async ({ messageId: root }): Promise<Wait[]> => {
+      .map(async (message): Promise<Wait[]> => {
+        const root = message.messageId;
         if (await ports.unheld(root)) {
-          return [];
+          return isQuestion(message) ? [] : [{ root, episode: `${PRESS}${root}` }];
         }
         const draft = draftAwaiting(await draftedStanding(ports, root), lapped.has(root));
         return draft === null ? [] : [{ root, episode: `scope:${draft.scope.scopeId}` }];

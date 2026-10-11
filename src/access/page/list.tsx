@@ -45,6 +45,10 @@ function stateFor(wording: Chrome, row: RequestRow): string {
   if (row.flowStop === true) {
     return wording.rowFlowStopped;
   }
+  // A press, not an answer, is what waits (rondo#643).
+  if (row.press === true) {
+    return wording.rowPressWaits;
+  }
   // One row for a request run as several lines, its sentence counting them
   // (D-0098 rule 8.1); the amber is still the row's *your turn* alone.
   if (row.parts != null) {

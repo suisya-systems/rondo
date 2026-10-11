@@ -127,9 +127,10 @@ export interface ReachPorts {
     | "scopeSupersededByApproved"
   >;
   /**
-   * The drafts rondo still owes and the requests waiting on a repository, as
-   * the page reads them, so a drafted scope is a turn here exactly when the
-   * thread offers it (rondo#534). Absent: nothing owed, nothing unheld.
+   * The drafts rondo still owes and the requests waiting on a press before any
+   * draft (a repository to add, or setup's plan), as the page reads them, so a
+   * drafted scope is a turn here exactly when the thread offers it (rondo#534),
+   * and so is that press (rondo#643). Absent: nothing owed, nothing unheld.
    */
   readonly draftsOwed?: () => Promise<ReadonlySet<string>>;
   readonly unheld?: (requestMessageId: string) => Promise<boolean>;

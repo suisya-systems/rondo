@@ -20745,6 +20745,26 @@ list is amber, and a finished request's line may be cut to one line.
 >
 > - Amends: D-0083 rule 2
 
+> **Annotation (2026-10-11, from rondo#643).** Not additive: **a request whose next step is a press
+> before anything is drafted** waits on the person, and stands under *your turn* with the requests
+> that wait on an answer, drawn the same. The press adds the repository the request names or rondo
+> proposed (`D-0090`, `D-0191` rule 3), or records the plan setup wrote beside a store that holds
+> none (`D-0191` rule 2). Where setup has not run, the step is running it, and that is the
+> person's too. The reading is the thread's *next step* card's (`requestRepository`, `unheld` or
+> `planless`), on a request a person wrote with no question standing in its thread. A reckoning
+> that will not read draws no card and lifts no row. The row says *Waiting on your next step before
+> rondo can start* where the press is all that waits, since there is no box to answer in.
+>
+> **It is counted, unlike the rows of `D-0186` and `D-0192`.** Those rows have no thread, and the
+> walk opens threads. This row is a request: its thread is where the press is, at the top. So the
+> walk (*your turn 1 / 3, next*), the request opened on arrival, the waiting count in the title and
+> the icon, the tab's ring, the host's notification (episode `press:<request>`) and the answer
+> across every request (`D-0189` rule 5) all count it, as `D-0154` counts a drafted scope. Leaving
+> it out of the walk would make the walk skip a row drawn above the ones it visits. Nothing above is
+> edited.
+>
+> - Amends: D-0083 rule 2
+
 **3. The summary and the gate are one screen.** There is no separate decision screen. Arriving from a
 notification and opening the page land on the same screen: from a notification the request it names
 is selected; opened by hand, the oldest request waiting on the person is selected; with nothing
@@ -28092,6 +28112,13 @@ and the tab pin, and the scope reading needs the record; the two are concatenate
 
 - **A notification or a *your turn* row for a request whose thread shows no approve card**: then
   the conditions in rule 1 have drifted from `threadActs`.
+
+> **Annotation (2026-10-11, from rondo#643).** Added after this entry was accepted, and additive.
+> Rule 1's *no repository to add first* still keeps the drafted-scope wait off such a request. That
+> request is now a wait of its own: `scopesAwaitingYou` returns `press:<request>` for it, by the
+> thread's next-step card (`D-0083` rule 2, its annotation from rondo#643). The option not taken,
+> *counting a request with no draft*, still stands where nothing rondo holds waits on the person. A
+> press the card offers is not that case.
 
 ## D-0155 — A merge waits only on the questions that hold its line: a question over another line the person answered with a stop no longer withholds the merge, on the page or on green
 

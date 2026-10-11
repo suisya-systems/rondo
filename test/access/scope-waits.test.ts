@@ -208,7 +208,7 @@ test("while rondo still owes a newer draft, the scope waiting on it is not the p
   expect(html).toContain('data-waits="[]"');
 });
 
-test("the host reaches the person once for a drafted scope, and not while a draft is owed or a repository is to add", async () => {
+test("the host reaches the person once for a drafted scope, not while a draft is owed, and for the press while a repository is to add", async () => {
   const w = await drafted();
   const sent: string[] = [];
   const tick = (over: {
@@ -228,17 +228,19 @@ test("the host reaches the person once for a drafted scope, and not while a draf
       ...over,
     });
   await tick({ draftsOwed: async () => new Set(["r1"]) });
-  await tick({ unheld: async () => true });
   expect(sent).toEqual([]);
-  await tick({});
-  await tick({});
+  // A repository to add first is the person's press, and their turn (rondo#643).
+  await tick({ unheld: async () => true });
   expect(sent).toEqual([EN.reachYourTurn]);
+  await tick({});
+  await tick({});
+  expect(sent).toEqual([EN.reachYourTurn, EN.reachYourTurn]);
   expect(
     w.connection
       .prepare("SELECT subject_id FROM operator_attention WHERE subject_kind = ?")
       .all(REACH_SUBJECT)
       .map((row) => (row as { subject_id: string }).subject_id),
-  ).toEqual([`scope:${w.scopeId}`]);
+  ).toEqual(["press:r1", `scope:${w.scopeId}`]);
 });
 
 test("a follow-up drafted after a merged lap is the person's turn, and its draft leads the scope page (rondo#621)", async () => {

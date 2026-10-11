@@ -55,6 +55,8 @@ export interface ExplainWords {
   readonly explainWaitsAsk: string;
   readonly explainWaitsDecide: string;
   readonly explainWaitsScope: string;
+  /** A repository to add or setup's plan to record before anything is drafted (rondo#643). */
+  readonly explainWaitsPress: string;
   readonly explainOverdue: string;
   /** A wait's reason and how long it has held, already said (`age`). */
   readonly explainHeldFor: (reason: string, held: string) => string;
@@ -126,6 +128,7 @@ export const EXPLAIN_EN: ExplainWords = Object.freeze({
   explainWaitsAsk: "on your answer to a question",
   explainWaitsDecide: "on your decision, with no gate to answer",
   explainWaitsScope: "on your approval of the drafted scope",
+  explainWaitsPress: "on your next step before rondo can start",
   explainOverdue: "past the time its plan allowed",
   explainHeldFor: (reason, held) => `${reason}, for ${held}`,
   explainInFlight: (held, left) =>
@@ -183,6 +186,7 @@ export const EXPLAIN_JA: ExplainWords = Object.freeze({
   explainWaitsAsk: "質問へのあなたの回答",
   explainWaitsDecide: "答えるゲートのない、あなたの判断",
   explainWaitsScope: "下書きスコープへのあなたの承認",
+  explainWaitsPress: "rondo が始めるための、あなたの次の一手",
   explainOverdue: "計画の想定時間を過ぎています",
   explainHeldFor: (reason, held) => `${reason}（${held}前から）`,
   explainInFlight: (held, left) =>
