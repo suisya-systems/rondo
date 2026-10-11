@@ -267,7 +267,8 @@ export async function gatherDrafterMaterial(
   // groups it), from the 20 most recent rows, the setup rows and the plans
   // pasted into this thread.
   const templates = new Map<string, DraftTemplate>();
-  for (const template of await heldTemplates(ports, records, read.messages, inThread)) {
+  const ungrouped = await heldTemplates(ports, records, read.messages, inThread);
+  for (const template of ungrouped) {
     // `delete` first, so a later occurrence also takes the later place: on a
     // tie in time, the one the store wrote later is the newer.
     const choice = choiceOf(template.plan);
@@ -398,7 +399,9 @@ export async function gatherDrafterMaterial(
     work.kind === "open" &&
     everyChoice.length > 0 &&
     everyChoice.every((t) => forgeRepositoryOf(t.plan) !== null) &&
-    everyChoice.some((t) => t.from.kind === "setup");
+    // Before grouping: a choice a later lap ran keeps the lap's provenance,
+    // and setup's row under it is still what the press builds on.
+    ungrouped.some((t) => t.from.kind === "setup");
 
   return {
     requestMessageId,
