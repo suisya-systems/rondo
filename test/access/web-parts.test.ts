@@ -972,3 +972,34 @@ test("across every request, a lap in flight and a part held by order are lines w
   expect(ja).toContain("試行が 1分前から動いています（計画の上限まであと最大");
   expect(ja).toContain("作業 2: 作業 1 がマージされるのを待っています");
 });
+
+test("a part started between the lap read and the parts read is not reported as stopped (Codex)", async () => {
+  const w = await split([undefined, undefined]);
+  await mergedByRondo(w);
+  await w.start(1, "lap-two");
+  // The writer's own first reads of the laps miss lap-two, as if it started after them.
+  let first = 2;
+  const without = <T extends { kind: string }>(read: readonly T[]) =>
+    first-- > 0
+      ? read.filter(
+          (o) =>
+            !(
+              o.kind === "read" &&
+              (o as never as { record: { id: string } }).record.id === "lap-two"
+            ),
+        )
+      : read;
+  const store = {
+    ...w.world.store,
+    readLive: async () => without(await w.world.store.readLive()),
+    terminalIterations: async () => without(await w.world.store.terminalIterations()),
+  } as typeof w.world.store;
+  const written = await writeRequestReports({
+    store,
+    record: w.world.record,
+    words: EN,
+    now: () => 9_000,
+    log: () => undefined,
+  });
+  expect(written).toEqual([]);
+});

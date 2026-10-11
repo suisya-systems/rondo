@@ -137,6 +137,20 @@ export async function writeRequestReports(ports: RequestReportPorts): Promise<re
       if (proposalId === undefined || threads.byId.has(requestReportId(proposalId))) {
         continue;
       }
+      // The laps were read before the parts: a part started in between, or a
+      // lap its line gained since, is not in the snapshot, and would read as
+      // stopped. Wait for the next pass rather than report work still running.
+      const unread = parts.some(
+        (part) =>
+          part.lineageId !== null &&
+          [
+            part.lineageId,
+            ...(ledger.find((line) => line.lineageId === part.lineageId)?.lapIds ?? []),
+          ].some((id) => !lapById.has(id)),
+      );
+      if (unread) {
+        continue;
+      }
       const views = partViews(
         parts,
         partReadsOver(threads, ledger, lapById, root.messageId, parts, () => null),
