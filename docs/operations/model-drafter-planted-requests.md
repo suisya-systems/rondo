@@ -25,10 +25,9 @@ header). This file is that record (rondo#635).
 ## 2. The requests, as sent
 
 - **R1** (`planted-r1`): `Make the request page easier to read.`
-- **R2** (`planted-r2`): the secretary's text for two separate things: one sentence added to
-  `docs/operations/rondo-cli.md` about running `request` with no lap started, and a one-line note in
-  `docs/operations/ci-timing.md` that the timings were measured on WSL2. The exact bytes were not
-  handed back with the results.
+- **R2** (`planted-r2`), passed to `--body` as written:
+
+  > Two separate things. First, add one sentence to docs/operations/rondo-cli.md saying that the request verb can be run with no lap started. Second, add a one-line note to docs/operations/ci-timing.md saying that the timings there were measured on WSL2.
 
 ## 3. What came back
 
@@ -59,6 +58,6 @@ them has any other effect on the store was not checked.
 
 ## 5. Not recorded
 
-- R2's request text as sent, byte for byte.
+- R2's request text is the secretary's relayed copy of what was passed to `--body`, not read from the store.
 - The raw `sqlite3` / `rondo explain` output; only the values in section 3 were handed over.
 - A separate drafter cost for the lead-in message of R1 (the log gives one figure per run).
