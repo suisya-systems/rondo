@@ -1295,7 +1295,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   partWaiting: (after, place, pullRequest) =>
     `waiting until ${
       pullRequest === null
-        ? `part ${String(after + 1)}`
+        ? `Part ${String(after + 1)}`
         : place === null
           ? pullRequest
           : `${place} ${pullRequest}`

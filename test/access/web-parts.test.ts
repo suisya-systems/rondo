@@ -209,7 +209,7 @@ test("each part's wait is one step of what remains, and starts by itself (D-0098
   const html = await page(w.world);
   expect(partSteps(html)).toEqual([
     "Part 1under way",
-    "Part 2waiting until part 1 is merged; then it starts by itself",
+    "Part 2waiting until Part 1 is merged; then it starts by itself",
   ]);
   // rondo#401: a part with a try carries the "?" about that try; one with none does not.
   const parts = /<ol class="side-parts">([\s\S]*?)<\/ol>/.exec(html)?.[1] ?? "";
@@ -280,7 +280,7 @@ test("the scope screen says what an ordered part waits on, and draws no press fo
     EN,
     mint,
   );
-  expect(html).toContain("waiting until part 1 is merged; then it starts by itself");
+  expect(html).toContain("waiting until Part 1 is merged; then it starts by itself");
   expect(html).not.toContain('name="plan_index" value="1"');
 });
 
@@ -703,7 +703,7 @@ test("an approved split with nothing started still shows each part's wait on the
   const w = await split([undefined, 0]);
   expect(partSteps(await page(w.world))).toEqual([
     "Part 1not started yet",
-    "Part 2waiting until part 1 is merged; then it starts by itself",
+    "Part 2waiting until Part 1 is merged; then it starts by itself",
   ]);
 });
 
@@ -964,7 +964,7 @@ test("across every request, a lap in flight and a part held by order are lines w
   expect(claims).toHaveLength(1);
   expect(claims[0]?.label).toBe(`"Change the library, then move the pin"`);
   expect(claims[0]?.value).toMatch(
-    /^a try has run for 1m, with up to \d+m more under its plan \/ Part 2: waiting until part 1 is merged; then it starts by itself$/,
+    /^a try has run for 1m, with up to \d+m more under its plan \/ Part 2: waiting until Part 1 is merged; then it starts by itself$/,
   );
   expect(material.locators).toContain("iteration:lap-one");
 
