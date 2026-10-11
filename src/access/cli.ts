@@ -128,7 +128,7 @@ import {
   takenInCommit,
 } from "./conductor.js";
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
-import { commandDecisions } from "./decisions-cli.js";
+import { commandDecisionReads } from "./decisions-cli.js";
 import { allowedBashIn } from "./delegation.js";
 import { type ClosingFinding, closingLapSection, definitionOfDone } from "./done.js";
 import {
@@ -263,8 +263,7 @@ export const USAGE = `rondo - the operator surface for delegated work
                           --closing-fix makes it the one closing lap a scope
                           with below_threshold fix_unread allows after the
                           review exit: it fixes the findings left below the
-                          threshold, with a test for each, and is not read
-                          again
+                          threshold, with a test for each, and is not read again
   rondo publish --actor-id ID --iteration-id ID [--repo OWNER/NAME]
                 [--remote NAME] [--dry-run] [--allow-remote-mismatch]
                 [--despite-review]
@@ -372,6 +371,8 @@ export const USAGE = `rondo - the operator surface for delegated work
                           outcome, the option index pressed, the row it is
                           about. Writes nothing. --since is ISO 8601, inclusive;
                           --attention adds what was presented or withheld
+  rondo asks              per request, the drafter's asks back and how many
+                          presses took its recommendation. --since as above
   rondo show --proposal-id ID
                           read one proposal back: its options in the order the
                           record holds them, which one is recommended, what each
@@ -402,9 +403,8 @@ export const USAGE = `rondo - the operator surface for delegated work
                           rondo publish; one host serves several repositories,
                           each named by the plan a lap ran on, so without it the
                           page still publishes every lap whose plan names one.
-                          There is no authentication
-                          because there is no route in from anywhere but this
-                          machine
+                          There is no authentication because there is no route
+                          in from anywhere but this machine
   rondo explain --iteration-id ID
                           say what the store holds about one iteration, with
                           what each claim rests on. Reads rondo's own rows and
@@ -1422,9 +1422,9 @@ export async function main(
   if (parsed.command === "show") {
     return await commandShow(parsed, store, opened.path);
   }
-  // `decisions` reads rondo's own rows and writes none (D-0190 rule 10.4).
-  if (parsed.command === "decisions") {
-    return await commandDecisions(opened.path, parsed.sinceMs, parsed.attention);
+  // `decisions` and `asks` read rondo's own rows and write none (D-0190 rule 10.4, rondo#637).
+  if (parsed.command === "decisions" || parsed.command === "asks") {
+    return await commandDecisionReads(opened.path, parsed);
   }
 
   const startup = await startContinuo(environment);

@@ -1466,6 +1466,30 @@ $ node bin/rondo.mjs decisions --since 2026-10-11T00:00:00Z
 - **It prints the option's index and never its text, nor any message body.** The words stay on the
   request's page.
 
+### 8.2 Asks -- how often the drafter asks back, and how often its recommendation is taken
+
+`asks` counts, from the same rows, how often the drafter asked back in each request and how often
+the person pressed the option it recommended (rondo#637, `D-0189`'s A2). Read-only, like
+`decisions`, and it prints ids and counts only.
+
+```console
+$ node bin/rondo.mjs asks --since 2026-10-11
+2026-10-11T09:00:12.000Z request=m-0040 asks=2 unanswered=0 pressed=2 recommended=1
+2026-10-11T11:30:05.000Z request=m-0050 asks=0 unanswered=0 pressed=0 recommended=0
+requests=2 asked_in=1 asks=2 asks_per_request=1.00 pressed=2 recommended=1 recommended_share=0.50
+```
+
+- **One line per request the drafter wrote in**, oldest first, so a request drafted without an ask
+  counts as zero asks. `asks` is the drafter's asks anywhere in the request's thread; `unanswered`
+  is those with no *carry on* or *stop* press yet; `pressed` is the answers that pressed one of an
+  ask's options, and `recommended` the ones that pressed the recommended option.
+- **The last line is over every request listed**: `asked_in` is how many had an ask,
+  `asks_per_request` is asks over requests, and `recommended_share` is `recommended` over `pressed`
+  (`-` when nothing was pressed).
+- **`--since` is `decisions`' `--since`**, and bounds when a request was opened.
+- **An ask from before `D-0190` has no options**, so it counts as an ask and never as a press. Only
+  the drafter's asks count: a worker's question or a scope stop is not the drafter asking back.
+
 ---
 
 ## 9. What has and has not been walked on real infrastructure

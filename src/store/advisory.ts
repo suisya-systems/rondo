@@ -6,6 +6,7 @@
  * opens the connection this is handed.
  */
 
+import { type AskFrequencyRow, readAskFrequency } from "./ask-frequency.js";
 import { askOptionsJson } from "./ask-options.js";
 import {
   type AdvisoryRecord,
@@ -1006,6 +1007,13 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
 
     async decisions(sinceMs: number | null, attention: boolean): Promise<readonly DecisionRow[]> {
       return readDecisions(connection, sinceMs, attention);
+    },
+
+    async askFrequency(
+      sinceMs: number | null,
+      drafterPrefix: string,
+    ): Promise<readonly AskFrequencyRow[]> {
+      return readAskFrequency(connection, sinceMs, drafterPrefix);
     },
 
     async recordScope(draft: ScopeDraft): Promise<RecordOutcome> {
