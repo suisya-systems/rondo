@@ -183,7 +183,7 @@ test(
     expect(run.claim).toEqual({
       paths: ["src/access/web.tsx", "test/access/"],
       authorKind: "drafter",
-      authorId: expect.stringMatching(/^rondo\/drafter\/11\//),
+      authorId: expect.stringMatching(/^rondo\/drafter\/12\//),
       bases: [
         { form: "proposal", proposalId: w.proposalId },
         { form: "message", messageId: "r1" },
@@ -454,7 +454,7 @@ test(
       expect(claim).toEqual({
         paths: ["src/access/scope.ts"],
         authorKind: "drafter",
-        authorId: expect.stringMatching(/^rondo\/drafter\/11\//),
+        authorId: expect.stringMatching(/^rondo\/drafter\/12\//),
         bases: [
           { form: "proposal", proposalId: w.proposalId },
           { form: "message", messageId: "r1" },
@@ -669,7 +669,7 @@ async function earlierLap(
         ? {
             paths: [`src/${id}.ts`],
             authorKind: "drafter",
-            authorId: "rondo/drafter/11/m",
+            authorId: "rondo/drafter/12/m",
             bases: [],
           }
         : null,

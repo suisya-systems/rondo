@@ -814,3 +814,88 @@ test("a request refused before the model is not drafted once more: it would come
   expect(said[0]?.authorId).not.toBe(REDRAFT_AUTHOR);
   expect(said[0]?.body).toContain("rondo's drafter wrote no draft for this: ");
 });
+
+test("a policy the person states is kept from their words and listed under them; a later run does not keep it again (D-0067 rule 6.2)", async () => {
+  const { w, templateDigest, typeDigest } = await requestWithPlan();
+  const keeping = (bases: readonly string[]): DrafterRun => ({
+    kind: "answered",
+    costUsd: 0.05,
+    finalMessage: JSON.stringify({
+      act: "none",
+      policies: [{ text: "Never touch the release workflow.", bases }],
+    }),
+  });
+  const runs: DrafterRun[] = [
+    split(templateDigest, typeDigest),
+    keeping(["r1", "r1-more"]),
+    keeping(["r1-again"]),
+    { kind: "answered", costUsd: 0, finalMessage: '{"act":"none"}' },
+  ];
+  const { host, handed } = hostOver(w, async (_document, n) => runs[n - 1] as DrafterRun);
+  const scan = async (id: string, body: string, atMs: number) => {
+    if (id !== "") await w.say(id, body, "r1", atMs);
+    host.kick();
+    await host.idle();
+  };
+  await scan("", "", 0);
+  await scan("r1-more", "From now on, never touch the release workflow.", 20_000);
+  // `r1` was drafted by the first run, so a policy resting on it is not kept.
+  expect(await w.record.standingPolicies()).toEqual([]);
+
+  await scan("r1-again", "And never touch the release workflow, really.", 30_000);
+  const kept = await w.record.standingPolicies();
+  expect(kept.map((p) => [p.body, p.authorKind, p.bases])).toEqual([
+    ["Never touch the release workflow.", "drafter", [{ form: "message", messageId: "r1-again" }]],
+  ]);
+  const note = (await drafterMessages(w)).at(-1);
+  expect(note?.authorId).toBe("rondo/policy-note/1");
+  expect(note?.body).toBe("Never touch the release workflow.");
+  expect(note?.bases).toEqual([
+    { form: "message", messageId: "r1-again" },
+    { form: "policy", policyId: kept[0]?.policyId },
+  ]);
+  // The next run is handed it, whole and by id.
+  await scan("r1-last", "Fix the other test too.", 40_000);
+  expect(handed).toHaveLength(4);
+  expect(handed[3]).toContain(
+    `--- policy ${String(kept[0]?.policyId)}\nNever touch the release workflow.`,
+  );
+});
+
+test("a policy taken back is not kept again from its words, even where they are due again (D-0067 rule 6.3)", async () => {
+  const w = await world();
+  await w.say("r1", "From now on, never touch the release workflow.", null, 1_000);
+  const keeping: DrafterRun = {
+    kind: "answered",
+    costUsd: 0,
+    finalMessage: JSON.stringify({
+      act: "none",
+      policies: [{ text: "Never touch the release workflow.", bases: ["r1"] }],
+    }),
+  };
+  const first = hostOver(w, async () => keeping);
+  first.host.kick();
+  await first.host.idle();
+  const [kept] = await w.record.standingPolicies();
+  expect(
+    await w.record.recordStandingPolicy({
+      policyId: "policy-back",
+      body: "",
+      authorKind: "operator",
+      authorId: "ada",
+      bases: [],
+      supersedesPolicyId: String(kept?.policyId),
+      createdAtMs: 5_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  // As when an issue read lands under it: no drafter row covers the words any more.
+  const again = hostOver(w, async () => keeping, {
+    mintId: (kind) => `${kind}-again`,
+    record: { ...w.record, draftedMessageIds: async () => new Set<string>() },
+  });
+  await w.say("r1-more", "Fix the flaky test.", "r1", 6_000);
+  again.host.kick();
+  await again.host.idle();
+  expect(again.handed).toHaveLength(1);
+  expect(await w.record.standingPolicies()).toEqual([]);
+});

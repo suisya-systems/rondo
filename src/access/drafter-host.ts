@@ -32,12 +32,15 @@ import {
   type ThreadMessageDraft,
   WORKER_QUESTION_AUTHOR,
 } from "../store/records.js";
-import type { AdvisoryRecord } from "../store/sqlite.js";
+import type { AdvisoryRecord, StandingPolicyDraft } from "../store/sqlite.js";
 import { hostFailure } from "./host-failure.js";
 import type { DrafterPorts, DrafterRunResult } from "./model-draft/host.js";
 import { draftRequest } from "./model-draft/host.js";
 import {
+  type DraftedMessage,
+  type DraftedPolicy,
   MODEL_DRAFTER_PREFIX,
+  POLICY_NOTE_AUTHOR,
   REDRAFT_AUTHOR,
   REPOSITORY_PROPOSAL_AUTHOR,
 } from "./model-draft/judgement.js";
@@ -62,9 +65,13 @@ export interface DrafterHostPorts extends DrafterPorts {
       | "releaseDraft"
       | "messagesBeforeDrafter"
       | "scopesFor"
+      | "standingPolicies"
+      | "policySources"
     >;
   /** A fresh row id with a readable prefix, as the page mints its own. */
-  readonly mintId: (kind: "draft" | "drafted-scope" | "drafter" | "drafter-host") => string;
+  readonly mintId: (
+    kind: "draft" | "drafted-scope" | "drafter" | "drafter-host" | "policy",
+  ) => string;
   /** The language the host's operator reads, or null (`RONDO_OPERATOR_LANGUAGE`). */
   readonly language: string | null;
   /** One line for the host's terminal. */
@@ -474,7 +481,14 @@ async function write(
   }
   const drafted = result.outcome;
   if (drafted.repository !== undefined) {
-    return await proposeRepository(ports, material, drafted, drafted.repository, cost);
+    return await proposeRepository(
+      ports,
+      result.drafter,
+      material,
+      drafted,
+      drafted.repository,
+      cost,
+    );
   }
   // **A request a goal scope covers is drafted a split and no scope of its own**
   // (rondo#469): the goal scope is its approval, and D-0127's tick starts it.
@@ -532,16 +546,23 @@ async function write(
     authorId: result.drafter,
     inReplyTo: latestOperatorMessageId,
     atMs: nowMs,
-    bases: [...message.bases.map((messageId) => ({ form: "message", messageId })), onProposal],
+    bases: [
+      ...message.bases.map((messageId) => ({ form: "message", messageId })),
+      ...(message.policies ?? []).map((policyId) => ({ form: "policy", policyId })),
+      onProposal,
+    ],
     asks: message.asks,
     // D-0190 rule 4: the question's options ride beside its body to the write.
     ...(message.askOptions === undefined ? {} : { askOptions: message.askOptions }),
   }));
+  const kept = await keptPolicies(ports, result.drafter, drafted, latestOperatorMessageId, nowMs);
+  messages.push(...kept.notes);
   const outcome = await ports.record.recordDraft({
     requestMessageId: material.requestMessageId,
     operatorMessageIds: operatorIds,
     drafterPrefix: DRAFTER_PREFIX,
     proposal,
+    policies: kept.policies,
     scope:
       draftedScope === null
         ? null
@@ -590,20 +611,25 @@ async function write(
  */
 async function proposeRepository(
   ports: DrafterHostPorts,
+  drafter: string,
   material: NonNullable<DrafterRunResult["material"]>,
-  drafted: { readonly messages: readonly { body: string; bases: readonly string[] }[] },
+  drafted: DraftedPolicies & { readonly messages: readonly DraftedMessage[] },
   repository: string,
   cost: string,
 ): Promise<"written" | "stale" | "failed" | "held"> {
   const operatorIds = material.thread.filter(asksForWork).map((m) => m.messageId);
   const latest = operatorIds[operatorIds.length - 1] as string;
   const summary = drafted.messages[0];
+  const nowMs = ports.now();
+  // A policy the person stated beside it is kept now, not after the press.
+  const kept = await keptPolicies(ports, drafter, drafted, latest, nowMs);
   const outcome = await ports.record.recordDraft({
     requestMessageId: material.requestMessageId,
     operatorMessageIds: operatorIds,
     drafterPrefix: DRAFTER_PREFIX,
     proposal: null,
     scope: null,
+    policies: kept.policies,
     messages: [
       {
         messageId: ports.mintId("drafter"),
@@ -611,10 +637,14 @@ async function proposeRepository(
         authorKind: "drafter",
         authorId: REPOSITORY_PROPOSAL_AUTHOR,
         inReplyTo: latest,
-        atMs: ports.now(),
-        bases: (summary?.bases ?? [latest]).map((messageId) => ({ form: "message", messageId })),
+        atMs: nowMs,
+        bases: [
+          ...(summary?.bases ?? [latest]).map((messageId) => ({ form: "message", messageId })),
+          ...(summary?.policies ?? []).map((policyId) => ({ form: "policy", policyId })),
+        ],
         asks: false,
       },
+      ...kept.notes,
     ],
   });
   if (outcome.kind === "stale" || outcome.kind === "covered") {
@@ -626,6 +656,57 @@ async function proposeRepository(
   }
   ports.log(`drafter  ${material.requestMessageId}: proposed ${repository} (${cost})`);
   return "written";
+}
+
+type DraftedPolicies = { readonly policies?: readonly DraftedPolicy[] };
+
+/**
+ * The standing policies one run keeps from the person's words, and the note
+ * listing each under them (D-0067 rule 6.2 and its gate's point 2 (a)).
+ *
+ * **Only from words no earlier run drafted and no policy row rests on**: a
+ * message is drafted once, and a policy the person took back stays taken back
+ * even where an issue read makes its words due again (Codex on rondo#632).
+ */
+async function keptPolicies(
+  ports: DrafterHostPorts,
+  drafter: string,
+  drafted: DraftedPolicies,
+  inReplyTo: string,
+  nowMs: number,
+): Promise<{ policies: StandingPolicyDraft[]; notes: ThreadMessageDraft[] }> {
+  if ((drafted.policies ?? []).length === 0) {
+    return { policies: [], notes: [] };
+  }
+  const covered = await ports.record.draftedMessageIds(DRAFTER_PREFIX);
+  const sources = await ports.record.policySources();
+  const policies = (drafted.policies ?? [])
+    .filter((policy) => policy.bases.every((id) => !covered.has(id) && !sources.has(id)))
+    .map(
+      (policy): StandingPolicyDraft => ({
+        policyId: ports.mintId("policy"),
+        body: policy.body,
+        authorKind: "drafter",
+        authorId: drafter,
+        bases: policy.bases.map((messageId) => ({ form: "message", messageId })),
+        supersedesPolicyId: null,
+        createdAtMs: nowMs,
+      }),
+    );
+  // Its words, under which the page offers the person a press to take it back.
+  const notes = policies.map(
+    (policy): ThreadMessageDraft => ({
+      messageId: ports.mintId("drafter"),
+      body: policy.body,
+      authorKind: "drafter",
+      authorId: POLICY_NOTE_AUTHOR,
+      inReplyTo,
+      atMs: nowMs,
+      bases: [...policy.bases, { form: "policy", policyId: policy.policyId }],
+      asks: false,
+    }),
+  );
+  return { policies, notes };
 }
 
 function describe(error: unknown): string {

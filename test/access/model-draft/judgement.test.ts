@@ -133,7 +133,7 @@ function refusal(answer: unknown, material: DrafterMaterial = MATERIAL): string 
 }
 
 test("the row name counts the drafter's instructions and names the table's model (D-0071 rule 1.4)", () => {
-  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/11/claude-opus-5");
+  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/12/claude-opus-5");
 });
 
 test("the document carries the thread, the templates, the agent types and the measurements, and never a ceiling", () => {
@@ -904,4 +904,69 @@ test.each([
 
 test("the instructions never ask the person to paste a plan (D-0191 rule 5)", () => {
   expect(drafterDocument(MATERIAL)).not.toMatch(/paste a plan/);
+});
+
+// --- standing policies (D-0067 rules 6.2 and 7.1) ----------------------------
+
+const KEPT: DrafterMaterial = {
+  ...MATERIAL,
+  policies: [{ policyId: "policy-1", body: "Never touch the release workflow." }],
+};
+
+test("the document holds every policy in force whole, by id, and asks for new ones", () => {
+  const document = drafterDocument(KEPT);
+  expect(document).toContain("--- policy policy-1\nNever touch the release workflow.");
+  expect(document).toContain('"policies": [{"text": "...", "bases": ["<message id>"]}]');
+});
+
+test("a summary and a question may cite a policy, which rides apart from their messages", () => {
+  const outcome = drafted(
+    draftOf(
+      KEPT,
+      answered({
+        act: "ask",
+        summary: { text: "This would touch the release workflow.", bases: ["r1", "policy-1"] },
+        question: {
+          text: "Touch it anyway?",
+          options: [
+            { text: "Leave it", gives_up: "the flaky test stays" },
+            { text: "Touch it", gives_up: "goes against what you asked rondo to keep" },
+          ],
+          recommended: 0,
+          recommendation: "It keeps your rule.",
+          bases: ["policy-1", "r1"],
+        },
+      }),
+    ),
+  );
+  expect(outcome.messages.map((m) => [m.bases, m.policies])).toEqual([
+    [["r1"], ["policy-1"]],
+    [["r1"], ["policy-1"]],
+  ]);
+  // A policy id that is not in force is no basis at all.
+  expect(
+    refusal({
+      act: "none",
+      summary: { text: "Noted.", bases: ["policy-9"] },
+    }),
+  ).toContain("no standing policy");
+});
+
+test("a policy is kept only from the person's own words", () => {
+  const outcome = drafted(
+    draftOf(
+      MATERIAL,
+      answered({
+        act: "none",
+        policies: [{ text: "Keep every change under $3.", bases: ["r1"] }],
+      }),
+    ),
+  );
+  expect(outcome.policies).toEqual([{ body: "Keep every change under $3.", bases: ["r1"] }]);
+  expect(refusal({ act: "none", policies: [{ text: "Keep it short.", bases: ["d1"] }] })).toContain(
+    "which the person did not write",
+  );
+  expect(refusal({ act: "none", policies: [{ text: "Keep it short.", bases: [] }] })).toContain(
+    "has no basis",
+  );
 });

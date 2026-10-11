@@ -297,8 +297,8 @@ export const USAGE = `rondo - the operator surface for delegated work
                           the observation rests: snapshot:/pointer,
                           iteration:ID, gate:ID#SEQ, run:ID,
                           repo:PATH@COMMIT#FIRST-LAST, message:ID,
-                          scope:ID, proposal:ID, setup:ID or goal:ID. Write
-                          --observation with
+                          scope:ID, proposal:ID, setup:ID, goal:ID or
+                          policy:ID. Write --observation with
                           an equals sign: an observation may begin with a dash
   rondo propose --iteration-id ID --successor-id ID
                 --kind run_plan|agent_type|contract_keys
@@ -1754,11 +1754,9 @@ function sayAdvisoryOutcome(
  * of the material. So the only thing missing was a way to type one on a command
  * line, which is this function and nothing more -- there is deliberately no
  * form meaning "the operator said so", because that is the claim with no basis
- * #39 measured an operator approving on.
- *
- * Total; never throws. An unrecognised prefix, a malformed tail and a pointer
- * that is not a pointer all read as null, and the caller says what the five
- * forms are.
+ * #39 measured an operator approving on. Total; never throws. An unrecognised
+ * prefix, a malformed tail and a non-pointer read as null, and the caller says
+ * what the forms are.
  */
 export function parseBasis(text: string): Basis | null {
   const at = text.indexOf(":");
@@ -1788,6 +1786,8 @@ export function parseBasis(text: string): Basis | null {
       return { form: "setup", setupId: rest };
     case "goal":
       return { form: "goal", goalId: rest };
+    case "policy":
+      return { form: "policy", policyId: rest };
     case "gate": {
       const hash = rest.lastIndexOf("#");
       const tail = rest.slice(hash + 1);
@@ -1826,7 +1826,7 @@ export function parseBasis(text: string): Basis | null {
 /** The one sentence that lists what a `--basis` may be, written once. */
 const BASIS_FORMS_LINE =
   "snapshot:/pointer, iteration:ID, gate:ID#SEQ, run:ID, repo:PATH@COMMIT#FIRST-LAST, message:ID, " +
-  "scope:ID, proposal:ID, setup:ID or goal:ID";
+  "scope:ID, proposal:ID, setup:ID, goal:ID or policy:ID";
 
 /**
  * Door nine: hand one observation to the advisory, and record that a person

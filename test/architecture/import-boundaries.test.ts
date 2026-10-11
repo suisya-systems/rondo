@@ -1439,6 +1439,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   // D-0190 rules 5 and 6: which answer a press on `/answer-ask` is.
   "src/access/answer-press.ts": [HUMAN],
   "src/access/web-app.ts": [HUMAN],
+  "src/access/scope-form.ts": [HUMAN],
   "src/access/web.tsx": [HUMAN],
   "src/access/wording/en.ts": [HUMAN],
   "src/access/wording/ja.ts": [HUMAN],
@@ -1471,6 +1472,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/store/contract.ts": [RECORD],
   // D-0190 rule 10: the derived decision reader.
   "src/store/decision-log.ts": [RECORD],
+  "src/store/standing-policy.ts": [RECORD],
   // rondo#637: the derived ask-back counts, the same shape.
   "src/store/ask-frequency.ts": [RECORD],
   "src/store/iteration.ts": [RECORD],

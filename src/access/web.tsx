@@ -102,6 +102,7 @@ import { NOT_RETRIED } from "./checks-host.js";
 import { flowStopAskedFacts } from "./flow-stop.js";
 import { ago } from "./inbox.js";
 import { scopedAuthority } from "./merge.js";
+import { POLICY_NOTE_AUTHOR } from "./model-draft/judgement.js";
 import { approveView, type GateStory } from "./page/approve.js";
 import { answerBands, askLink, gatesOf } from "./page/ask.js";
 import { type AnswerRevise, budgetRaises, composerView } from "./page/composer.js";
@@ -418,6 +419,15 @@ async function threadModel(
    * whoever is looking, instead of drawing the host's own (`flowStopView`).
    */
   const flowStopRows = selectedMessages.some(flowStopAsked) ? await ports.record.flowStops() : [];
+  // **A policy kept from the person's words is said where it was kept**
+  // (D-0067 rule 6.2), with a press to take it back while it is still kept.
+  const notedPolicy = (message: (typeof selectedMessages)[number]): string | null =>
+    message.authorKind !== "drafter" || message.authorId !== POLICY_NOTE_AUTHOR
+      ? null
+      : (message.bases.map((b) => b["policyId"]).find((id) => typeof id === "string") ?? null);
+  const keptPolicies = selectedMessages.some((m) => notedPolicy(m) !== null)
+    ? new Set((await ports.record.standingPolicies()).map((p) => p.policyId))
+    : new Set<string>();
   const flowStopSays = new Map(
     selectedMessages.flatMap((message) => {
       const stop = flowStopAsked(message)
@@ -573,6 +583,25 @@ async function threadModel(
             basisWord(wording, basis, threads, selectedRoot, ports.actorId, gates),
           ),
           band: bands.get(message.messageId) ?? null,
+          policy: ((policyId) =>
+            policyId === null
+              ? null
+              : !keptPolicies.has(policyId)
+                ? { said: wording.policyForgotten, forget: null }
+                : {
+                    said: wording.policyKept,
+                    forget:
+                      ports.triageWritable !== true || token === null || selectedRoot === null
+                        ? null
+                        : {
+                            action: `/forget-policy?lang=${encodeURIComponent(wording.lang)}`,
+                            token,
+                            policyId,
+                            back: `${viewHref({ kind: "thread", messageId: selectedRoot, to: null }, wording.lang)}#${encodeURIComponent(message.messageId)}`,
+                            said: wording.policyForgetAction,
+                            busy: wording.policyForgetBusy,
+                          },
+                  })(notedPolicy(message)),
           basesLabel: wording.basesLabel,
           // Said only where the reply is to neither the message above it nor
           // the request itself, which is what every reply is read as.

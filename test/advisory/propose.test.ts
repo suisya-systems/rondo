@@ -541,6 +541,7 @@ test("every basis form reads back as itself", () => {
     proposal: { form: "proposal", proposalId: "p-1" },
     setup: { form: "setup", setupId: "setup-1" },
     goal: { form: "goal", goalId: "g-1" },
+    policy: { form: "policy", policyId: "policy-1" },
   };
   for (const form of BASIS_FORMS) {
     const payload = { claims: [{ label: "a", value: "b", basis: examples[form] }] };

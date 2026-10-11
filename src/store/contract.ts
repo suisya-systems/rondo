@@ -52,6 +52,7 @@ import type {
   WithheldByRule,
   WRITABLE_SCOPE_ACT_KINDS,
 } from "./records.js";
+import type { StandingPolicyDraft, StoredStandingPolicy } from "./standing-policy.js";
 
 /**
  * Everything `reserve` needs to write the first row.
@@ -988,6 +989,11 @@ export interface DraftRunWrite {
   readonly proposal: ProposalDraft | null;
   readonly scope: ScopeDraft | null;
   readonly messages: readonly ThreadMessageDraft[];
+  /**
+   * Standing policies the run drafted from the person's words (D-0067 rule
+   * 6.2), written before the messages so a message may cite one. Absent is none.
+   */
+  readonly policies?: readonly StandingPolicyDraft[];
 }
 
 export type DraftWriteOutcome =
@@ -1374,6 +1380,16 @@ export interface AdvisoryRecord {
   recordGoal(draft: GoalDraft): Promise<RecordOutcome>;
   /** Every goal row, oldest first; the newest of a repository is its goal. */
   goals(): Promise<readonly StoredGoal[]>;
+  /**
+   * Append one standing policy (D-0067 rule 6). Refused for a drafter's row
+   * with no `message:` basis to an operator message or naming a predecessor,
+   * an empty row that retires nothing, and a successor of a policy not in force.
+   */
+  recordStandingPolicy(draft: StandingPolicyDraft): Promise<RecordOutcome>;
+  /** Every policy in force, oldest first: no successor names it and it is not empty. */
+  standingPolicies(): Promise<readonly StoredStandingPolicy[]>;
+  /** Every message a policy row rests on, in force or not: words never kept from again. */
+  policySources(): Promise<ReadonlySet<string>>;
   /**
    * Record a *not now* (D-0097 point 4.5 (a)). Refused when the proposal is
    * not a triage row, or the candidate is not one it proposed.

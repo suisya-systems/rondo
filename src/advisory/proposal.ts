@@ -90,9 +90,15 @@ export type Basis =
    * D-0128 rule 1, where a request the flow host injects names the goal it
    * was picked for, and a goal scope covers it by that name.
    */
-  | { readonly form: "goal"; readonly goalId: string };
+  | { readonly form: "goal"; readonly goalId: string }
+  /**
+   * A standing policy row, by its id: immutable, and a change is a successor.
+   * Added for D-0067 rule 6.5, where a draft names each policy it rests on or
+   * goes against.
+   */
+  | { readonly form: "policy"; readonly policyId: string };
 
-/** The ten forms of {@link Basis}, written once so a reader can check the union is closed. */
+/** The eleven forms of {@link Basis}, written once so a reader can check the union is closed. */
 export const BASIS_FORMS = Object.freeze([
   "snapshot",
   "iteration",
@@ -104,6 +110,7 @@ export const BASIS_FORMS = Object.freeze([
   "proposal",
   "setup",
   "goal",
+  "policy",
 ] as const satisfies readonly Basis["form"][]);
 
 /**
@@ -1176,6 +1183,8 @@ function readBasis(at: unknown, what: string): Basis {
       return { form, setupId: text(row, "setupId", `${what}'s basis`) };
     case "goal":
       return { form, goalId: text(row, "goalId", `${what}'s basis`) };
+    case "policy":
+      return { form, policyId: text(row, "policyId", `${what}'s basis`) };
     default:
       throw new PayloadDefect(
         `${what}'s basis is of form '${form}', which is not one of ${BASIS_FORMS.join(", ")}. ` +

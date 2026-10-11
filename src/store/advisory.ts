@@ -109,6 +109,15 @@ import {
 } from "./scope.js";
 import { readScopePayload } from "./scope-payload.js";
 import {
+  inForcePolicies,
+  insertStandingPolicy,
+  policySources,
+  recordStandingPolicy,
+  type StandingPolicyDraft,
+  type StoredStandingPolicy,
+  standingPolicyRefusal,
+} from "./standing-policy.js";
+import {
   coveredMessageIds,
   flowPoints,
   messagesBeforeEpoch,
@@ -1170,6 +1179,13 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
           if (write.scope !== null) {
             must(insertScope(write.scope), "the drafted scope was refused");
           }
+          for (const policy of write.policies ?? []) {
+            const refusal = standingPolicyRefusal(connection, policy);
+            if (refusal !== null) {
+              throw new DraftRefusal(`a drafted policy was refused: ${refusal}`);
+            }
+            insertStandingPolicy(connection, policy);
+          }
           for (const message of write.messages) {
             const refusal = threadMessageRefusal(connection, message);
             if (refusal !== null) {
@@ -1472,6 +1488,18 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
           .run(draft.goalId, draft.repository, clauses, draft.writtenBy, draft.writtenAtMs);
         return { kind: "recorded" };
       });
+    },
+
+    async recordStandingPolicy(draft: StandingPolicyDraft): Promise<RecordOutcome> {
+      return recordStandingPolicy(connection, draft);
+    },
+
+    async standingPolicies(): Promise<readonly StoredStandingPolicy[]> {
+      return inForcePolicies(connection);
+    },
+
+    async policySources(): Promise<ReadonlySet<string>> {
+      return policySources(connection);
     },
 
     async goals(): Promise<readonly StoredGoal[]> {

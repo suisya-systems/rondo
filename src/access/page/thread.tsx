@@ -93,6 +93,22 @@ export interface ThreadMessage {
     /** The answer's text without the band and cost drawn above it, or null. */
     readonly body: string | null;
   } | null;
+  /**
+   * The band over a standing policy rondo kept from the person's words, and
+   * the press that takes it back while it is kept (D-0067 rules 6.2 and 6.3).
+   * Absent on every other message.
+   */
+  readonly policy?: {
+    readonly said: string;
+    readonly forget: {
+      readonly action: string;
+      readonly token: string;
+      readonly policyId: string;
+      readonly back: string;
+      readonly said: string;
+      readonly busy: string;
+    } | null;
+  } | null;
 }
 
 export interface ThreadProps {
@@ -235,6 +251,21 @@ function Message({ message }: { readonly message: ThreadMessage }) {
             <b>{message.band.heading}</b>
             <span>{message.band.cost}</span>
           </p>
+        )}
+        {message.policy == null ? null : (
+          <div className="msg-band msg-policy" role="note">
+            <b>{message.policy.said}</b>
+            {message.policy.forget === null ? null : (
+              <form method="post" action={message.policy.forget.action}>
+                <input type="hidden" name="token" value={message.policy.forget.token} />
+                <input type="hidden" name="policy" value={message.policy.forget.policyId} />
+                <input type="hidden" name="back" value={message.policy.forget.back} />
+                <button type="submit" data-busy={message.policy.forget.busy}>
+                  {message.policy.forget.said}
+                </button>
+              </form>
+            )}
+          </div>
         )}
         {message.inReplyTo === null ? null : <Word link={message.inReplyTo} className="msg-back" />}
         {/*

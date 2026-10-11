@@ -272,9 +272,8 @@ function cited(snapshot: object, pointer: string): string {
 /**
  * One basis, as the line under the claim it supports.
  *
- * Exported because a second surface renders the same claims -- `src/access/`
- * holds the terminal today and the web page beside it -- and a second spelling
- * of a basis would be a second thing an operator has to learn to trust.
+ * Exported because the terminal and the web page render the same claims, and a
+ * second spelling of a basis would be a second thing an operator must trust.
  */
 export function basisLine(basis: Basis, snapshot: object): string {
   switch (basis.form) {
@@ -302,6 +301,8 @@ export function basisLine(basis: Basis, snapshot: object): string {
       return `setup ${basis.setupId}`;
     case "goal":
       return `goal ${basis.goalId}`;
+    case "policy":
+      return `policy ${basis.policyId}`;
     default:
       return `${basis.path}:${String(basis.firstLine)}-${String(basis.lastLine)} at ${basis.commit}`;
   }
@@ -2097,6 +2098,9 @@ function snapshotBasisFreshness(pointer: string, ctx: FreshnessContext): Freshne
   );
 }
 
+const unreadRow = (row: string) => () =>
+  undetermined(`nothing here reads the ${row} row this basis names, so it cannot confirm it`);
+
 /**
  * One basis's freshness, exhaustive over {@link Basis}'s forms
  * (`D-0038` rule 4). A form added to the union and forgotten here is a
@@ -2133,15 +2137,11 @@ const BASIS_FRESHNESS: {
   // A scope row is immutable (D-0066 rule 1.4), but nothing here reads it.
   scope: () =>
     undetermined("nothing here reads the scope row this basis names, so it cannot confirm it"),
-  // A proposal row is immutable too (D-0022 rule 4), and nothing here reads it either.
-  proposal: () =>
-    undetermined("nothing here reads the proposal row this basis names, so it cannot confirm it"),
-  // A setup row is append-only (D-0075 rule 2.2), and nothing here reads it.
-  setup: () =>
-    undetermined("nothing here reads the setup row this basis names, so it cannot confirm it"),
-  // A goal row is append-only (D-0097 point 2.1 (a)), and nothing here reads it.
-  goal: () =>
-    undetermined("nothing here reads the goal row this basis names, so it cannot confirm it"),
+  // A proposal, setup, goal or standing policy row cannot move, and nothing here reads one.
+  proposal: unreadRow("proposal"),
+  setup: unreadRow("setup"),
+  goal: unreadRow("goal"),
+  policy: unreadRow("standing policy"),
 };
 
 /** What re-gathering produced for a proposal's candidates or its readings, so bases can be compared. */

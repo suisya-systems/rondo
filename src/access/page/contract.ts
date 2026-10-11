@@ -68,6 +68,8 @@ export interface WebPorts extends InboxReadPorts {
       // setup's among them (D-0075 rule 2.3).
       | "heldAgentTypeDigests"
       | "setupPlans"
+      // D-0067 rule 6.3: whether a policy a note lists is still kept.
+      | "standingPolicies"
       // rondo#238 C2b: the drafted scope, its split, and whether a drafted
       // plan can start -- the scope's own verdict, read and never acted on.
       | "scopesFor"
@@ -186,8 +188,8 @@ export interface WebPorts extends InboxReadPorts {
    */
   readonly triageRepositories?: () => Promise<readonly string[]>;
   /**
-   * Whether the host holds the goal and *not now* presses: true exactly where
-   * their port is not null. Absent is false.
+   * Whether the host holds the goal, *not now* and take-back-a-policy presses
+   * (D-0067 rule 6.3): true exactly where their ports are not null. Absent is false.
    */
   readonly triageWritable?: boolean;
   /**

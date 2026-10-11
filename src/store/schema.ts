@@ -790,6 +790,23 @@ CREATE TABLE IF NOT EXISTS goal (
   written_at_ms               INTEGER NOT NULL
 );
 
+-- D-0067 rule 6. A standing policy the person wants kept across requests:
+-- immutable and append-only with no status column. A change is a successor and
+-- retiring one is a successor with an empty body; the in-force policies are the
+-- rows no successor names, so a policy has at most one successor. bases is
+-- JSON, the message: locators a drafter's row rests on (rule 6.2).
+CREATE TABLE IF NOT EXISTS standing_policy (
+  policy_id                   TEXT    PRIMARY KEY,
+  body                        TEXT    NOT NULL,
+  author_kind                 TEXT    NOT NULL CHECK (author_kind IN ('operator', 'drafter')),
+  author_id                   TEXT    NOT NULL,
+  bases                       TEXT    NOT NULL,
+  supersedes_policy_id        TEXT    REFERENCES standing_policy(policy_id),
+  created_at_ms               INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS standing_policy_one_successor
+  ON standing_policy(supersedes_policy_id) WHERE supersedes_policy_id IS NOT NULL;
+
 -- D-0097 point 4.5 (a). A person's *not now* on one candidate of one triage
 -- proposal: who, when, and which candidate. A row beside the proposal and not
 -- a column on it, because a proposal row is immutable (D-0022 rule 4); it is
@@ -1279,6 +1296,8 @@ export const CHANGE_SOURCES = Object.freeze([
     at: "recorded_at_ms",
   },
   { kind: "setup_plan", table: "setup_plan", id: "setup_id", at: "recorded_at_ms" },
+  // D-0067 rule 6: a policy kept or retired redraws the thread that shows it.
+  { kind: "standing_policy", table: "standing_policy", id: "policy_id", at: "created_at_ms" },
   { kind: "lane_claim", table: "lane_claim", id: "claim_id", at: "created_at_ms" },
   // rondo#284: a held start's wait, and its end, which redraws the scope
   // screen's start where the tick's attempt was refused for another reason.

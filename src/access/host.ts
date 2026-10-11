@@ -95,6 +95,7 @@ import {
   MergePort,
   newDraftId,
   newIterationId,
+  PolicyPort,
   PublishPort,
   ReadInPort,
   ReleasePort,
@@ -900,6 +901,22 @@ export async function serveWeb(
           : new ReadInPort(
               async (input) => await readIn({ record, runDrafter, now: () => Date.now() }, input),
             ),
+      // D-0067 rule 6.3: taking a policy back is the person's successor, empty.
+      policies:
+        sender === null || "refusal" in sender
+          ? null
+          : new PolicyPort(async (policyId) => {
+              const put = await record.recordStandingPolicy({
+                policyId: newDraftId("policy"),
+                body: "",
+                authorKind: "operator",
+                authorId: sender.actorId,
+                bases: [],
+                supersedesPolicyId: policyId,
+                createdAtMs: Date.now(),
+              });
+              return put.kind === "recorded" ? { ok: true } : { ok: false, note: put.reason };
+            }),
       triage:
         sender === null || "refusal" in sender
           ? null

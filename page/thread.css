@@ -1348,3 +1348,44 @@ a.ask {
 .side-ask {
   margin-top: 6px;
 }
+
+/* D-0067 rule 6.2: a policy rondo kept from the person's words, and the press
+   that takes it back while it is kept (rule 6.3). The band is blue only where
+   there is something to press (D-0082 rule 3), and quiet once taken back. */
+.msg-policy {
+  align-items: center;
+  border-left-color: var(--color-border);
+}
+
+.msg-policy:has(form) {
+  border-left-color: var(--color-link);
+}
+
+.msg-policy:not(:has(form)) b {
+  font-weight: 400;
+  color: var(--color-muted-foreground);
+}
+
+.msg-policy form {
+  margin-left: auto;
+}
+
+.msg-policy button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: none;
+  font-size: var(--text-id);
+  font-weight: 500;
+  color: var(--color-link);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.msg-policy button:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}

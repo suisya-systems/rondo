@@ -68,6 +68,17 @@ const SOURCES = [
     "proposal_id",
   ],
   ["goal", "goal_id", "written_at_ms", "written_by", "'written'", "NULL", "repository"],
+  // D-0067 rule 6: kept, changed or retired, and the policy it replaced.
+  [
+    "standing_policy",
+    "policy_id",
+    "created_at_ms",
+    "author_id",
+    "CASE WHEN body = '' THEN 'retired' WHEN supersedes_policy_id IS NULL THEN 'kept' " +
+      "ELSE 'changed' END",
+    "NULL",
+    "supersedes_policy_id",
+  ],
   // A held start's verdict is rondo's sentence when refused; the reader keeps
   // the verdict and never the sentence (rule 10.4: no body is printed).
   [
