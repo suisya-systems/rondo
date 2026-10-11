@@ -75,6 +75,8 @@ export interface PartView {
   readonly claim: readonly string[] | null;
   /** The part's repository, or null where its template is gone. */
   readonly repository: string | null;
+  /** The split the part belongs to, so a request's report is said again only from its own split. */
+  readonly proposalId: string;
 }
 
 /** What {@link partViews} reads besides the parts: the rows the page already holds. */
@@ -163,6 +165,7 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
         laps,
         claim: part.claim,
         repository: part.repository,
+        proposalId: part.proposalId,
       };
     }
     if (part.order.kind !== "waiting") {
@@ -174,6 +177,7 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
         laps,
         claim: part.claim,
         repository: part.repository,
+        proposalId: part.proposalId,
       };
     }
     const after = part.order.after;
@@ -201,6 +205,7 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
       laps,
       claim: part.claim,
       repository: part.repository,
+      proposalId: part.proposalId,
     };
   });
 }

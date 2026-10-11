@@ -261,6 +261,7 @@ test("a wait on another repository names it and its pull request", () => {
     laps: [],
     claim: null,
     repository: null,
+    proposalId: "split-1",
   });
   expect(step).toEqual({
     name: "Part 2",
@@ -522,6 +523,7 @@ test("a part whose files no merged part claimed is not told to take anything in"
     laps: [],
     claim: ["lib/"],
     repository: "/srv/cadenza",
+    proposalId: "split-1",
   };
   expect(takeInFrom([merged], "lap-two", "/srv/cadenza", ["docs/readme.md"])).toBeNull();
   expect(takeInFrom([merged], "lap-two", "/srv/cadenza", ["lib/a.ts"])).toBe(merged);
@@ -906,6 +908,23 @@ test("the page says the report in the reader's language, with the words as writt
   expect(ja).toContain("<details");
   expect(ja).toContain("Every part of this request has ended");
 
+  // A report of an earlier split of the request keeps the words it was written with.
+  const earlier = await w.world.record.recordThreadMessage({
+    messageId: requestReportId("an-earlier-split"),
+    body: "Every part of this request has ended: 2 merged.",
+    authorKind: "drafter",
+    authorId: DETERMINISTIC_DRAFTER,
+    inReplyTo: "r1",
+    atMs: 3_000,
+    bases: [{ form: "message", messageId: "r1" }],
+    asks: false,
+  });
+  expect(earlier.kind, JSON.stringify(earlier)).toBe("recorded");
+  const old = /<article id="request-report-an-earlier-split"[\s\S]*?<\/article>/.exec(
+    await page(w.world, JA),
+  )?.[0];
+  expect(old).toContain("Every part of this request has ended: 2 merged.");
+  expect(old).not.toContain("すべて結果が出ました");
   // Read in the language it was written in, it is said once.
   expect(block(await page(w.world))).not.toContain("<details");
 });
