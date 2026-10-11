@@ -662,6 +662,77 @@
   color: var(--color-muted-foreground);
 }
 
+/*
+ * *Since you last looked* (D-0083 rule 4, rondo#631): one sentence per request that moved, under
+ * the box and what rondo would ask for next. Ink, never amber -- nothing here waits on the person.
+ */
+.since {
+  margin-top: 36px;
+  max-width: 780px;
+}
+
+.since h2 {
+  font-size: var(--text-section);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.since-list {
+  margin-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.since-list > li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.since-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.since-title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-title);
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.since-at {
+  font-size: var(--text-id);
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}
+
+.since-said {
+  margin-top: 4px;
+  max-width: 45em;
+  font-size: var(--text-body);
+  line-height: 1.6;
+}
+
+.since-repo {
+  margin-right: 8px;
+  padding: 0 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: var(--text-id);
+  white-space: nowrap;
+}
+
+.since-rest,
+.since-quiet {
+  margin-top: 12px;
+  max-width: 45em;
+  font-size: var(--text-meta);
+  line-height: 1.6;
+  color: var(--color-muted-foreground);
+}
+
 /* The one candidate in full. */
 .triage-card {
   padding: 16px 16px 16px;
