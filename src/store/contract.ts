@@ -672,6 +672,13 @@ export interface IterationStore {
     | { readonly kind: "defect"; readonly reason: string }
   >;
   /**
+   * Whether the line of `iterationId` was admitted with no drafted claim
+   * (D-0160 rule 4): its first claim row carries the `unclaimed` basis, kept
+   * after the gate claimed what it changed and after its pull request opened.
+   * Its conflict fix is started by rondo (D-0194). Writes nothing.
+   */
+  startedUnclaimed(iterationId: string): Promise<boolean>;
+  /**
    * Every line the ledger has an answer about, holding or released (D-0073
    * rule 12): what the page says a line owns, what waits on it and whether its
    * work landed. Writes nothing.

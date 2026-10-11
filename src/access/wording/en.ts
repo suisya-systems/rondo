@@ -856,8 +856,9 @@ explanation you pressed on and then answers the gate.`,
   startAction: "Start the work",
   startPlain: "Starts one lap under this approval",
   startBeside:
-    "There is no plan for this, so it starts beside other work. If they collide, rondo offers " +
-    "the work that fixes it on one press.",
+    "There is no plan for this, so it starts beside other work. If they collide, rondo starts " +
+    "the work that fixes it by itself where the approval runs work by itself, and otherwise " +
+    "offers it on one press.",
   startNote:
     "The words of your request are what the work is asked to do, exactly as you wrote them. " +
     "rondo names the lap; you do not.",
@@ -1569,6 +1570,12 @@ explanation you pressed on and then answers the gate.`,
     `${pullRequest} conflicts with ${base}, so the forge runs no checks on it. rondo can bring ` +
     `${base} into the branch and settle the conflict, changing nothing else; the result comes ` +
     "back here for you to check before anything is pushed.",
+  nextStepConflictFixing: (pullRequest, base) =>
+    `${pullRequest} conflicts with ${base}. This work started with no plan beside other work, ` +
+    `so rondo is bringing ${base} into the branch and settling the conflict by itself, as the ` +
+    "approval allows, changing nothing else; there is nothing to press. The fix stops at its " +
+    "gate like any other work.",
+  conflictFixLeft: (reason) => `rondo tried to start this fix by itself. ${reason}`,
   conflictFixAction: "Have rondo resolve the conflict",
   conflictFixBusy: "Starting the fix...",
   conflictFixBack: "Back to the request",

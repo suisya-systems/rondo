@@ -16,13 +16,7 @@ import {
 import { readPlan, readRunPlan } from "../refrain/plan.js";
 import { revisionPlan, stoppedRetryPlan } from "../refrain/revision.js";
 import { claimMove, quiescent } from "../store/lanes.js";
-import {
-  approvedForPublication,
-  type IterationRecord,
-  isTerminal,
-  planField,
-  requestsGoal,
-} from "../store/records.js";
+import { type IterationRecord, isTerminal, planField, requestsGoal } from "../store/records.js";
 import {
   type AdvisoryRecord,
   asRefusal,
@@ -65,6 +59,7 @@ import {
 } from "./conductor.js";
 import { asciiEscape, consoleSeams } from "./console.js";
 import { approvedSplits } from "./drafted-view.js";
+import { conflictFixOffered } from "./fix-host.js";
 import { cloneRepository, readChangedPaths, stoppedShort } from "./forge.js";
 import {
   GATE_ACTOR,
@@ -80,7 +75,7 @@ import { modelReviewPorts, takeModelReading } from "./model-review/host.js";
 import { retakeOffered, reviewRoundsAlong } from "./model-review/judgement.js";
 import { APPROVE_BODY } from "./page/approve.js";
 import type { ClaimReach, LapMaterialRead } from "./page/contract.js";
-import { asksOverLine, conflictFixBlock, fixCauseOf, resultOf } from "./page-logic/result.js";
+import { fixCauseOf } from "./page-logic/result.js";
 import { requestWords, threadsOf } from "./page-logic/threads.js";
 import {
   cloneDirectory,
@@ -1062,29 +1057,7 @@ async function conflictFixPage(
     };
   }
   const threads = threadsOf(read.messages, new Set(), new Map());
-  const line = await store.laneLine(record.id);
-  const lineIds = line.kind === "read" ? line.line.laps.map((lap) => lap.id) : [record.id];
-  // A gate of this line only (D-0138 rule 2): another part's gate is its own.
-  const gated = (await store.readLive()).some(
-    (live) =>
-      live.kind === "read" &&
-      live.record.status === "awaiting_human" &&
-      lineIds.includes(live.record.id),
-  );
-  const fresh = resultOf(threads.byId, record.id);
-  const block = !approvedForPublication(record)
-    ? "nothingToFix"
-    : conflictFixBlock(fresh, {
-        // A gate waiting, or a question about this line (D-0105); a question
-        // about the request as a whole does not withhold the fix.
-        asksWaiting: gated || asksOverLine(threads, record.requestMessageId, lineIds),
-        holding: (await store.laneLedger()).some(
-          (one) => one.releasedBy === null && one.lapIds.includes(record.id),
-        ),
-        succeeded:
-          line.kind !== "read" ||
-          line.line.laps.some((lap) => lap.supersedesIterationId === record.id),
-      });
+  const { block, fresh } = await conflictFixOffered(store, threads, record);
   if (block !== null) {
     return {
       ok: false,

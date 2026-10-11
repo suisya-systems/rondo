@@ -33,6 +33,7 @@ import { draftedStartReadiness } from "./drafted-start.js";
 import { approvedSplits } from "./drafted-view.js";
 import { drafterHost } from "./drafter-host.js";
 import { explainerHost } from "./explainer/host.js";
+import { fixHost } from "./fix-host.js";
 import { flowHost } from "./flow-host.js";
 import {
   listOpenIssues,
@@ -482,6 +483,21 @@ export async function serveWeb(
           now: Date.now,
           log: say,
         });
+  // **And the conflict fix of a line started with no claim** (D-0194,
+  // rondo#557): the press's own path, under an approval that starts a lost
+  // lap by itself, and only where the press could be made.
+  const fixer =
+    sender === null || "refusal" in sender
+      ? null
+      : fixHost({
+          store,
+          record,
+          byItself: async (lap) => await startsByItself(record, lap),
+          fix: async (input) =>
+            await conflictFixFromPage(environment, store, storePath, sender.actorId, input),
+          mintId: newIterationId,
+          log: say,
+        });
   const gates = gateHost({
     store,
     record,
@@ -574,6 +590,7 @@ export async function serveWeb(
       order?.kick();
       gates.kick();
       publisher?.kick();
+      fixer?.kick();
       flow?.kick();
       report();
       // **Reaching starts a minute in, and not in the burst above.** The
@@ -592,6 +609,7 @@ export async function serveWeb(
         order?.kick();
         gates.kick();
         publisher?.kick();
+        fixer?.kick();
         flow?.kick();
         report();
         // **Order on the tick buys nothing, and nothing here depends on
@@ -1008,6 +1026,7 @@ export async function serveWeb(
             ),
       mergeable: sender !== null && !("refusal" in sender),
       ...(publisher === null ? {} : { publishUntried: publisher.untried }),
+      ...(fixer === null ? {} : { fixByRondo: fixer }),
       fixesConflicts: sender !== null && !("refusal" in sender),
       retakesReviews: sender !== null && !("refusal" in sender),
       merge:

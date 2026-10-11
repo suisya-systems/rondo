@@ -178,7 +178,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0131 | A drafter row covers an operator message only with the issue reads it held, so a read that lands after a draft makes its thread due again; and an issue reaches the drafter's document as its body and comments, cut from the head with the cut named | accepted |
 | D-0136 | A drafted claim is drawn from the repository's own paths: the drafter is handed each offered repository's tracked paths at its base branch, two levels deep, and claims `/` only for work that spans the whole repository; `D-0073` rule 5's gate widening is the safety valve | accepted, amended |
 | D-0137 | A bare `#N` is read in the repository its own request would publish to: `publishesTo` is the one rule both sides ask, and a reference the plans in play name two repositories for is not read at all; `D-0081` rule 3.4 is narrowed | accepted |
-| D-0138 | Over-bound review material leaves out, by name, what only read before it is refused; `D-0105` rule 3.1 is withheld only by the conflicting lap's own line; and a model reading a second run could change can be taken again, once, as one more review round | accepted |
+| D-0138 | Over-bound review material leaves out, by name, what only read before it is refused; `D-0105` rule 3.1 is withheld only by the conflicting lap's own line; and a model reading a second run could change can be taken again, once, as one more review round | accepted, amended |
 | D-0139 | A lap is lost when, on this host, the rondo process that sent it and its `lap perform` child are both gone: it ends `failed` with the kind `lost`, holds no budget, and is started again once by itself under a goal scope or an approved split, or asked about | accepted |
 | D-0140 | A person's request starts from the goal scope's outward acts, a first-lap reserve with no history of its own is read from its repository's laps or guessed at a real lap's cost, and a budget stop offers raising the budget and carrying on first, on one press | accepted, amended |
 | D-0141 | An answer is its press, a scope stop over a lap at its gate offers raising and carrying on, work approved and not begun outranks a stopped lap, and a resume keeps the paused approval's defaults | accepted, amended |
@@ -200,7 +200,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0157 | A typed `revise` spends the approval the lap it revises was admitted under: `--scope-decision-id` overrides it, nothing to draw refuses, and no `revise` runs outside every approval | accepted |
 | D-0158 | A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press | accepted, amended |
 | D-0159 | A red check on rondo's own pull request is rondo's to re-run once and the person's to have repaired on that pull request: the first red re-runs the failed Actions jobs once, a repair is a redo of the published lap pushed onto its head branch under the same approval, it is approved automatically only once its own runs showed the failure and then a pass, and a merge on green waits only on its own line, or a question over that line or over the request as a whole (not the flow host's), and says when it waits | accepted |
-| D-0160 | Claims that let two lines run: a finished line nothing will publish gives its files up, a refused draft is drafted once more, and a start with no drafted claim claims nothing until its gate claims what it changed | accepted |
+| D-0160 | Claims that let two lines run: a finished line nothing will publish gives its files up, a refused draft is drafted once more, and a start with no drafted claim claims nothing until its gate claims what it changed | accepted, amended |
 | D-0161 | A worker's question is put to the person whether or not its lap committed anything: nothing committed is said on the page, not a reason to drop the question | accepted |
 | D-0162 | The model reviewer's answer is shaped by codex's `--output-schema`, which rondo writes as a file of its own beside the reviewer's empty directory | accepted |
 | D-0163 | A person changes which files an open line keeps: a widening for work still going and never onto another open line's files, a narrowing once nothing of the line can commit and never of a file it changed | accepted |
@@ -228,6 +228,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0191 | A request with no template gets a plan rondo assembles and a person approves with one press: the drafter proposes the work and its repository, deterministic code fills every host fact from what setup recorded or wrote, and a store with no plan records the one setup wrote beside it | accepted |
 | D-0192 | An open question of the goal flow is a row under *your turn* in the list, on every view, leading to the questions' form; like a paused flow, it is a row there that is not a request | accepted |
 | D-0193 | Triage raises only the open points that are real decisions: each point says whether it is in dispute, irreversible or against a standing policy, rondo decides the rest as it recommends and writes each one where the person can change it, and the goal flow asks only the raised ones | accepted |
+| D-0194 | The conflict fix of a line started with no claim is started by rondo, once, under an approval that starts work by itself; a try that started nothing is the press again, with why | accepted |
 
 ---
 
@@ -26802,6 +26803,15 @@ the read is made to agree with it, and where it cannot agree nothing is read.
 recommended). Annotates `D-0065` rules 1.4 and 4.1 and narrows `D-0105` rule 3.1; supersedes
 nothing. Refs `D-0009`, `D-0065`, `D-0074`, `D-0079`, `D-0105`, rondo#313, rondo#417, rondo#499.
 
+> **Annotation (2026-10-11, from D-0194).** Added after this entry was accepted, and **not
+> additive**: rule 2's *the fix stays a press; rondo does not start it unattended* now holds for
+> every line but one started with no claim (`D-0160` rule 4) under an approval that starts a lost
+> lap by itself (`D-0139`). For that line rondo starts the conflict fix itself, once, through the
+> press's own path, and the attempt is the scope's `redo` as before. The rest of rule 2 stands.
+> Nothing below is edited.
+>
+> - Amends: D-0138 rule 2
+
 ### Context
 
 rondo#313's flow request ran two parts on lap 18. Part 1 was published as rondo#499 and then
@@ -28685,6 +28695,14 @@ to them the same day). Supersedes `D-0073` rule 2.5, narrows `D-0071` rule 1.5, 
 widening for a line that declared nothing, which rondo#283's answer left unwritten. Refs `D-0073`
 rules 3.3, 4.3, 6 and 7, `D-0098` rule 1.5, `D-0105`, `D-0114`, `D-0138` rule 2, `D-0146` rule 4,
 `D-0153`, `D-0158`.
+
+> **Annotation (2026-10-11, from D-0194).** Added after this entry was accepted, and **not
+> additive**: rule 4's *fixed by the conflict fix's press* and the start form's sentence change.
+> Under an approval that starts work by itself, rondo starts the fix of such a line itself
+> (`D-0194`), and the form says so. The option not taken, *start the conflict fix by itself for
+> such a line*, is taken by `D-0194` for that approval. Nothing below is edited.
+>
+> - Amends: D-0160 rule 4
 
 ### Context
 
@@ -31217,3 +31235,92 @@ it, and nothing downstream could tell a raised point from one rondo could decide
 - `D-0128`, **not additive**: the annotation from rondo#487, only raised points are asked first.
 - `D-0189`, **not additive**: rule 4's table, C4's *triage puts open points on almost every
   candidate* row closed.
+
+## D-0194 — The conflict fix of a line started with no claim is started by rondo, once, under an approval that starts work by itself; a try that started nothing is the press again, with why
+
+**Status:** accepted (2026-10-11, rondo#557; the owner's answer through the secretary, as
+recommended). Narrows `D-0138` rule 2 and `D-0160` rule 4; supersedes nothing. Refs `D-0070`,
+`D-0074` rule 4.1, `D-0079`, `D-0105` rule 3, `D-0126`, `D-0139`, `D-0160`, rondo#551, rondo#619.
+
+### Context
+
+`D-0160` rule 4 lets a start with no drafted claim run beside every other line, and leaves the
+collision to the conflict fix's press. Its options not taken named the next step and left it to
+its own issue: *start the conflict fix by itself for such a line*. rondo#557 is that issue. It asks
+what the fix spends unattended, what happens when it fails, and how a clash that git merges cleanly
+is caught.
+
+**Measured at rondo `0310d69` on 2026-10-11, by reading the code:**
+
+- **The fix is one function behind the press**, `conflictFixFromPage`. It asks the offer again over
+  fresh rows (`conflictFixBlock`), checks the approval the lap ran under, and admits a `redo` under
+  that approval through `admitUnderScope`. A budget that would refuse it refuses it, and nothing is
+  spent.
+- **An approval already starts work by itself in one place.** `startsByItself` (`D-0139`) is true
+  for a goal scope and for a split its request runs as, and a lost lap under it starts again with
+  no press. A publish inside a scope (`D-0126`, `publishHost`) runs the press's own path in the
+  approver's name, once per lap per process, and the page says it is rondo's while the try is owed
+  (rondo#619).
+- **The line's first claim row keeps its `unclaimed` basis** after its gate claims what it changed,
+  and after its pull request opens, so the line can still be told apart then.
+
+### Decision
+
+1. **rondo starts the conflict fix itself** (`fixHost`, `src/access/fix-host.ts`) for a lap that
+   meets every one of these:
+   1. its line was admitted with no drafted claim (`startedUnclaimed`: the line's first claim row
+      carries `unclaimed`, `D-0160` rule 4);
+   2. its approval starts work by itself (`startsByItself`, `D-0139`);
+   3. its pull request conflicts, and the fix is offered on it now (`conflictFixOffered`, the press's
+      own test: the line holds, no attempt follows it, and no gate or question of the line waits);
+   4. there is an approver the press would accept, since the attempt runs in their name.
+
+   A red check's repair (rondo#551) stays a press.
+2. **Through the press's path, once per lap per process.** The host passes on the minute, as the
+   publish pass does. Each try is `conflictFixFromPage` with cause `conflict`, a newly minted
+   successor and the approval the lap ran under, so every refusal of the press holds. The fix is
+   the scope's `redo` (`D-0105` rule 3.2), and a budget that would refuse it refuses it here, with
+   nothing spent. A restart of the host may try once more.
+3. **A try that started nothing is the press again, with why.** The card is drawn as before and says
+   *rondo tried to start this fix by itself*, then the press's own refusal sentence for what
+   happened. Where a budget refused it, the way to raise it is drawn in place of the press, as
+   before (`D-0074` rule 4.1). **A fix that started and then failed** is a failed lap like any
+   other, and the person retries it or resolves the conflict by hand. Nothing restarts it.
+4. **While rondo is to start it, or is starting it, the page draws no press.** The next step is
+   rondo's, in the neutral card, and says the conflict is being settled under the approval. The
+   result band says it is settling, as it does for a fix that is running.
+5. **A clash that git merges cleanly is still not caught**, as `D-0160`'s costs say. Nothing here
+   reads one.
+6. **Every sentence is in every catalogue** (`D-0079`): the card, the *tried by itself* line and
+   the start form's new sentence (*If they collide, rondo starts the work that fixes it by itself
+   where the approval runs work by itself, and otherwise offers it on one press*), in English and
+   Japanese.
+
+### What was put to the owner, and the answer
+
+1. **Whether to do it now.** (A) leave rondo#557 until repair presses are a routine chore, as the
+   issue says; (B) do it narrowly, as above. **The owner's answer (2026-10-11, through the
+   secretary):** B. Leaving everything to a person is not co-creation: rondo drafts and runs, and
+   the person approves. A fix under an approved goal scope with `redo` left is that, and it follows
+   `D-0139`'s precedent.
+
+### What it costs
+
+- **A `redo` is spent with no press.** It is the same `redo` the press would spend, under an
+  approval that already starts work by itself, and it is refused where the budget is gone.
+- **Once per process, not once for ever.** The try is remembered in memory, as a publish inside a
+  scope is, so a restart may try again a lap whose first try started nothing. A stored mark is the
+  upgrade if that is felt.
+- **The fix runs in the approver's name**, as a publish inside a scope does.
+
+### What would falsify it
+
+- **Fixes rondo starts that the person then throws away**, as a rule: the collision was not one
+  a take-in settles, and the press was the right default.
+- **A budget spent on fixes the person did not expect**: the approval did not mean this, and the
+  line should say so when it starts.
+
+### Annotations this entry adds
+
+- `D-0138`, **not additive**: rule 2, the fix stays a press except for this line.
+- `D-0160`, **not additive**: rule 4, the press and the start form's sentence.

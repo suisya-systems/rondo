@@ -908,6 +908,19 @@ export function iterationStore(connection: StoreConnection, policy: HostPolicy):
       }
     },
 
+    async startedUnclaimed(iterationId: string): Promise<boolean> {
+      const root = lineageOf(connection, iterationId)?.[0];
+      const row =
+        root === undefined
+          ? undefined
+          : (connection
+              .prepare(
+                "SELECT bases FROM lane_claim WHERE lineage_id = ? AND supersedes_claim_id IS NULL",
+              )
+              .get(root) as SqlRow | undefined);
+      return row !== undefined && isUnclaimed(JSON.parse(String(row["bases"])));
+    },
+
     async laneLedger(): Promise<readonly LedgerLine[]> {
       return ledgerLines(connection);
     },
