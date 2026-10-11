@@ -52,6 +52,7 @@ import {
   newScopeId,
   type PageEnv,
   type PlanStartInput,
+  PolicyPort,
   type Press,
   type PublishInput,
   PublishPort,
@@ -1217,6 +1218,79 @@ test("(read-in) a person's press reads the text once and lands back on it; a scr
   expect(await failing.closed).toBe(0);
 });
 
+test("(forget-policy) a person's press takes a policy back and lands on its note; a script, a bad form or no port changes nothing (D-0067 rule 6.3)", async () => {
+  const forgot: string[] = [];
+  const withPolicies = (port: PolicyPort | null) =>
+    ({ ...spyPorts([]), policies: port }) as ServedPorts;
+  const { base, stop, closed } = await served(
+    createApp(
+      withPolicies(
+        new PolicyPort(async (policyId) => {
+          forgot.push(policyId);
+          return await Promise.resolve({ ok: true });
+        }),
+      ),
+      TOKEN,
+    ),
+  );
+  const person = pressHeaders(base);
+  const form = { token: TOKEN, policy: "policy-1", back: "/?thread=req-1&lang=en#note-1" };
+  const pressed = await send(base, "/forget-policy?lang=en", "POST", person, form);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?thread=req-1&lang=en#note-1");
+  expect(forgot).toEqual(["policy-1"]);
+
+  const away = await send(base, "/forget-policy?lang=en", "POST", person, {
+    ...form,
+    back: "//evil.example/",
+  });
+  expect(away.location?.includes("evil")).toBe(false);
+  const script = await send(
+    base,
+    "/forget-policy?lang=en",
+    "POST",
+    { ...person, "sec-fetch-user": undefined },
+    form,
+  );
+  expect(script.status).toBe(403);
+  const empty = await send(base, "/forget-policy?lang=en", "POST", person, { ...form, policy: "" });
+  expect(empty.status).toBe(400);
+  expect(forgot).toEqual(["policy-1", "policy-1"]);
+  stop.abort();
+  expect(await closed).toBe(0);
+
+  const none = await served(createApp(withPolicies(null), TOKEN));
+  const refused = await send(
+    none.base,
+    "/forget-policy?lang=en",
+    "POST",
+    pressHeaders(none.base),
+    form,
+  );
+  expect(refused.status).toBe(403);
+  none.stop.abort();
+  expect(await none.closed).toBe(0);
+
+  const failing = await served(
+    createApp(
+      withPolicies(new PolicyPort(async () => await Promise.resolve({ ok: false, note: "gone" }))),
+      TOKEN,
+    ),
+  );
+  const failed = await send(
+    failing.base,
+    "/forget-policy?lang=en",
+    "POST",
+    pressHeaders(failing.base),
+    form,
+  );
+  expect(failed.status).toBe(409);
+  expect(failed.body).toContain(chromeFor("en").policyForgetRefused);
+  expect(failed.body).toContain("gone");
+  failing.stop.abort();
+  expect(await failing.closed).toBe(0);
+});
+
 test("(revise) every other shape of request to the revise route is refused and writes nothing", async () => {
   const revised: Revised = [];
   const { base, stop, closed } = await served(createApp(spyPorts([], [], [], [], revised), TOKEN));
@@ -1889,6 +1963,7 @@ const WRITE_TABLE = [
   "ALL /retake-review",
   // Reading English-held text in the page's language (rondo#490, D-0144).
   "ALL /read-in",
+  "ALL /forget-policy",
   // An open tab's report of its notice (rondo#414, D-0108).
   "ALL /notice",
   "ALL /*",
@@ -1914,6 +1989,8 @@ const WRITE_TABLE = [
   "POST /not-now",
   "POST /flow-answer",
   "POST /read-in",
+  // Taking back a standing policy rondo keeps (D-0067 rule 6.3).
+  "POST /forget-policy",
   "POST /retake-review",
   "POST /fix-conflict",
   "POST /merge",
@@ -1973,6 +2050,8 @@ const PRESS_ROUTES = [
   "/retake-review",
   // A reading of English-held text, which spends (rondo#490, D-0144).
   "/read-in",
+  // Taking back a standing policy rondo keeps (D-0067 rule 6.3).
+  "/forget-policy",
 ];
 
 /**

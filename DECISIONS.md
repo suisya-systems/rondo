@@ -15576,6 +15576,25 @@ residuals and says nothing about how `D-0068` answers them.
 > reports a held line behind a lap past its ceiling, waiting on the person, or undetermined. A `first`
 > within its ceiling still holds `then` unnoticed. The table above is not edited.
 
+> **Annotation (2026-10-11, from rondo#632).** Added after this entry was accepted, and additive: rule 6
+> is carried out as written, with `policy:ID` in the basis union (rule 6.5) and the refusals of rules
+> 6.2 and 6.3 proved by planted rows in `test/store/standing-policy.test.ts`. How it was built, where
+> the entry left the choice open:
+> - **The model drafter keeps a policy from the person's words** in the run that drafts those words,
+>   never from a message an earlier run drafted, so a policy the person took back is not kept again
+>   from the words it came from. Each kept policy is listed in the thread at once, as a note under the
+>   person's message, which is how the gate's point 2 (a) "listed in the next report" is met while P5
+>   still arrives lap by lap.
+> - **The residual "how a person retires or edits a policy on the page"** is half answered: the note
+>   carries one press that writes the operator's empty successor (rule 6.3). Editing one is not on the
+>   page.
+> - **Rule 7.1 reaches the model drafter only.** It is handed the in-force policies whole and by id,
+>   cites them in a summary's or a question's bases, and is told that a draft going against one asks
+>   (rule 7.2). Triage, the goal flow and the explainer are not handed policies yet, and nothing checks
+>   that a conflict was cited (rule 7.5).
+>
+> The text above is not edited.
+
 ### What would falsify it
 
 - **Lines routinely held behind a line that never ends**, so that R8's emptiness costs more than a
@@ -30452,6 +30471,10 @@ the one `D-0063`'s measurement read. Line numbers drift: re-measure the claim, n
    | C3 | No single reader over the decision rows | A derived reader that adds no table (`D-0032` rule 3), with no decision needed |
    | C4 | An open `flow_ask` is not a row under *your turn* | **New entry.** It amends `D-0147`, which kept the ask off the list. `D-0186` made a paused flow such a row by amending `D-0083` rule 2, and is the precedent |
    | C4 | Triage puts open points on almost every candidate | **New entry.** It amends `D-0097`'s open points with a test for which of them are real decisions |
+
+   > **Annotation (2026-10-11, from rondo#632).** Added after this entry was accepted, and additive.
+   > The C3 row *No `standing_policy`* is closed: `D-0067` rule 6 is built as decided, and that
+   > entry's annotation of the same date says how. The table above is not edited.
 
 5. **The first slice: the new request box asks rondo across every request.** This builds a
    narrower form of `D-0068` section 1 rule 2.5's second bullet.

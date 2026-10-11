@@ -342,6 +342,14 @@ export interface PageWords extends DayWords {
   readonly readInRefusedPress: string;
   readonly readInRefusedForm: string;
   readonly readInRefused: string;
+  /** Over a standing policy rondo drafted from the person's words (D-0067 rule 6.2). */
+  readonly policyKept: string;
+  readonly policyForgetAction: string;
+  /** Where that policy was taken back (rule 6.3). */
+  readonly policyForgotten: string;
+  readonly policyForgetRefusedNoApprover: string;
+  readonly policyForgetRefusedPress: string;
+  readonly policyForgetRefused: string;
   readonly goalScopeHeading: string;
   readonly goalScopeRunningHeading: string;
   readonly goalScopePausedHeading: string;
@@ -895,6 +903,14 @@ export const PAGE_EN: PageWords = Object.freeze({
   readInRefusedForm:
     "Nothing was read: the words to read were missing, or longer than a press carries.",
   readInRefused: "Nothing was read: the reading failed. The original stands as written.",
+  policyKept: "rondo will keep this in every request from now on.",
+  policyForgetAction: "Take this back",
+  policyForgotten: "You took this back, so rondo no longer keeps it.",
+  policyForgetRefusedNoApprover:
+    "Nothing was taken back: no approver is set for this rondo, so nothing is changed from the page.",
+  policyForgetRefusedPress: "Nothing was taken back: this did not come from a press on this page.",
+  policyForgetRefused:
+    "Nothing was taken back: rondo no longer keeps this, or it changed after the page was drawn.",
   goalScopeHeading: "Let rondo work toward this goal",
   goalScopeRunningHeading: "rondo is working toward this goal",
   goalScopePausedHeading: "Work toward this goal is paused",
@@ -1201,6 +1217,7 @@ export const PAGE_EN: PageWords = Object.freeze({
       scope: "the agreed scope",
       proposal: "rondo's proposal",
       setup: "the setup",
+      policy: "what you asked rondo to keep",
       snapshot: "what was recorded at the time",
     })[form] ?? null,
   stepDone: "done",
@@ -1533,6 +1550,14 @@ export const PAGE_JA: PageWords = Object.freeze({
   readInRefusedPress: "訳していません。この画面のボタンから送られたものではありません。",
   readInRefusedForm: "訳していません。訳す文がないか、ボタンで送れる長さを超えています。",
   readInRefused: "訳していません。訳す途中で失敗しました。原文はそのまま残っています。",
+  policyKept: "rondo はこれを、これからのすべての依頼で守ります。",
+  policyForgetAction: "取り消す",
+  policyForgotten: "取り消しました。rondo はもうこれを守りません。",
+  policyForgetRefusedNoApprover:
+    "取り消していません。この rondo には承認者が設定されていないので、画面からは変えられません。",
+  policyForgetRefusedPress: "取り消していません。この画面のボタンから送られたものではありません。",
+  policyForgetRefused:
+    "取り消していません。すでに取り消されているか、画面を開いたあとで変わっています。",
   goalScopeHeading: "この目標に向けて rondo に進めてもらう",
   goalScopeRunningHeading: "rondo がこの目標に向けて進めています",
   goalScopePausedHeading: "この目標に向けた作業は一時停止中です",
@@ -1820,6 +1845,7 @@ export const PAGE_JA: PageWords = Object.freeze({
       scope: "取り決めた範囲",
       proposal: "rondo の提案",
       setup: "セットアップ",
+      policy: "rondo に守ってほしいと伝えたこと",
       snapshot: "その時点の記録",
     })[form] ?? null,
   stepDone: "済み",

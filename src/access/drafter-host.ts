@@ -32,12 +32,13 @@ import {
   type ThreadMessageDraft,
   WORKER_QUESTION_AUTHOR,
 } from "../store/records.js";
-import type { AdvisoryRecord } from "../store/sqlite.js";
+import type { AdvisoryRecord, StandingPolicyDraft } from "../store/sqlite.js";
 import { hostFailure } from "./host-failure.js";
 import type { DrafterPorts, DrafterRunResult } from "./model-draft/host.js";
 import { draftRequest } from "./model-draft/host.js";
 import {
   MODEL_DRAFTER_PREFIX,
+  POLICY_NOTE_AUTHOR,
   REDRAFT_AUTHOR,
   REPOSITORY_PROPOSAL_AUTHOR,
 } from "./model-draft/judgement.js";
@@ -62,9 +63,12 @@ export interface DrafterHostPorts extends DrafterPorts {
       | "releaseDraft"
       | "messagesBeforeDrafter"
       | "scopesFor"
+      | "standingPolicies"
     >;
   /** A fresh row id with a readable prefix, as the page mints its own. */
-  readonly mintId: (kind: "draft" | "drafted-scope" | "drafter" | "drafter-host") => string;
+  readonly mintId: (
+    kind: "draft" | "drafted-scope" | "drafter" | "drafter-host" | "policy",
+  ) => string;
   /** The language the host's operator reads, or null (`RONDO_OPERATOR_LANGUAGE`). */
   readonly language: string | null;
   /** One line for the host's terminal. */
@@ -532,11 +536,46 @@ async function write(
     authorId: result.drafter,
     inReplyTo: latestOperatorMessageId,
     atMs: nowMs,
-    bases: [...message.bases.map((messageId) => ({ form: "message", messageId })), onProposal],
+    bases: [
+      ...message.bases.map((messageId) => ({ form: "message", messageId })),
+      ...(message.policies ?? []).map((policyId) => ({ form: "policy", policyId })),
+      onProposal,
+    ],
     asks: message.asks,
     // D-0190 rule 4: the question's options ride beside its body to the write.
     ...(message.askOptions === undefined ? {} : { askOptions: message.askOptions }),
   }));
+  // **A policy is drafted only from words no earlier run drafted** (D-0067
+  // rule 6.2): a message is drafted once, so a policy the person retired is
+  // never drafted again from the words it came from.
+  const covered = await ports.record.draftedMessageIds(DRAFTER_PREFIX);
+  const policies = (drafted.policies ?? [])
+    .filter((policy) => policy.bases.every((id) => !covered.has(id)))
+    .map(
+      (policy): StandingPolicyDraft => ({
+        policyId: ports.mintId("policy"),
+        body: policy.body,
+        authorKind: "drafter",
+        authorId: result.drafter,
+        bases: policy.bases.map((messageId) => ({ form: "message", messageId })),
+        supersedesPolicyId: null,
+        createdAtMs: nowMs,
+      }),
+    );
+  // Each one is listed in the thread as it is kept (D-0067 gate point 2 (a)):
+  // its words, under which the page offers the person a press to forget it.
+  for (const policy of policies) {
+    messages.push({
+      messageId: ports.mintId("drafter"),
+      body: policy.body,
+      authorKind: "drafter",
+      authorId: POLICY_NOTE_AUTHOR,
+      inReplyTo: latestOperatorMessageId,
+      atMs: nowMs,
+      bases: [...policy.bases, { form: "policy", policyId: policy.policyId }],
+      asks: false,
+    });
+  }
   const outcome = await ports.record.recordDraft({
     requestMessageId: material.requestMessageId,
     operatorMessageIds: operatorIds,
@@ -561,6 +600,7 @@ async function write(
             })),
           },
     messages,
+    policies,
   });
   if (outcome.kind === "stale") {
     return "stale";

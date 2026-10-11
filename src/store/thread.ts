@@ -80,6 +80,8 @@ const BASIS_LOCATOR_FIELDS: Readonly<Record<string, Readonly<Record<string, stri
   setup: { setupId: "string" },
   // D-0128 rule 1: a request the flow host injects names the goal it serves.
   goal: { goalId: "string" },
+  // D-0067 rule 6.5: a draft rests on, or goes against, a standing policy.
+  policy: { policyId: "string" },
 };
 
 /**
@@ -651,6 +653,17 @@ export function threadMessageRefusal(
       return (
         `a basis of '${draft.messageId}' is goal:${String(basis["goalId"])}, which is no ` +
         "goal row: a locator to nothing is a basis nobody can follow (D-0061 rule 2.6)"
+      );
+    }
+    if (
+      basis["form"] === "policy" &&
+      connection
+        .prepare("SELECT 1 FROM standing_policy WHERE policy_id = ?")
+        .get(basis["policyId"] as string) === undefined
+    ) {
+      return (
+        `a basis of '${draft.messageId}' is policy:${String(basis["policyId"])}, which is no ` +
+        "standing policy row: a locator to nothing is a basis nobody can follow (D-0061 rule 2.6)"
       );
     }
   }

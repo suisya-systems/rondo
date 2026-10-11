@@ -54,7 +54,7 @@ import { repositoryParts } from "../repository-add.js";
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
  * {@link INSTRUCTIONS} is a new version, a changed model a new table entry.
  */
-const DRAFTER_INSTRUCTIONS_VERSION = 11;
+const DRAFTER_INSTRUCTIONS_VERSION = 12;
 
 /** What every row a model drafter writes is named under (rule 1.4). */
 export const MODEL_DRAFTER_PREFIX = "rondo/drafter/";
@@ -80,6 +80,14 @@ export const REDRAFT_AUTHOR = "rondo/redraft/1";
  */
 export const REPOSITORY_PROPOSAL_AUTHOR = "rondo/repository-proposal/1";
 
+/**
+ * **Who lists a standing policy where it was kept** (D-0067 rule 6.2): rondo,
+ * under a name outside {@link MODEL_DRAFTER_PREFIX}, so the note covers no
+ * operator message and the page can find it. Its body is the policy as kept,
+ * and it cites the policy by a `policy:` basis.
+ */
+export const POLICY_NOTE_AUTHOR = "rondo/policy-note/1";
+
 /** The row name a drafter run writes under: `rondo/drafter/1/<model-id>` (rule 1.4). */
 export function modelDrafterName(row: DrafterRow): string {
   return `${MODEL_DRAFTER_PREFIX}${String(DRAFTER_INSTRUCTIONS_VERSION)}/${row.model}`;
@@ -92,6 +100,13 @@ export function modelDrafterName(row: DrafterRow): string {
  * material is `unavailable`, never truncated.
  */
 export const DRAFTER_INPUT_BOUND_BYTES = 400_000;
+
+/** One in-force standing policy, as the document carries it (D-0067 rule 6.1). */
+export interface DraftPolicy {
+  readonly policyId: string;
+  /** The policy as written. */
+  readonly body: string;
+}
 
 /** One message of the request thread, as the document carries it (rule 2.1.1). */
 export interface DraftMessage {
@@ -268,11 +283,11 @@ export interface DrafterMaterial {
   readonly templates: readonly DraftTemplate[];
   readonly agentTypes: readonly DraftAgentType[];
   /**
-   * The in-force standing policies (rule 2.1.4). Always empty today: rondo
-   * stores no standing policy yet (D-0067 is not built), so no narrowing can
-   * rest on a `policy:` basis and `outward_acts` stays empty (section 4).
+   * The in-force standing policies, whole (rule 2.1.4, D-0067 rule 7.1): what
+   * a draft rests on or goes against, by id. Absent on a snapshot written
+   * before rondo stored any, and read as none.
    */
-  readonly policies: readonly never[];
+  readonly policies?: readonly DraftPolicy[];
   readonly laps: readonly DraftLap[];
   /**
    * What each offered template's repository holds at its base branch (D-0136,
@@ -417,6 +432,16 @@ const INSTRUCTIONS = [
   '  A plan that writes new entries in it says how many by "entries" (1 or more); rondo reserves',
   "  their numbers and tells the worker which. Omit it for a plan that writes no new entry.",
   "- Every summary, question, plan and narrowing has bases: ids of messages in THREAD it rests on.",
+  "- STANDING POLICIES are what the person wants kept across all their requests. A summary or a",
+  "  question also cites, among its bases, the id of each policy it rests on or goes against.",
+  "  Where what you would propose goes against a policy, do not split: ask, name the policy's",
+  "  id among the question's bases, and have each option that goes against it say so in",
+  '  "gives_up". Only the person may set a policy aside.',
+  "- Where the person's newest messages state a lasting preference for all their future work",
+  '  ("from now on...", "always...", "never..."), and not only for this request, keep it in',
+  '  "policies": one entry per preference, its text as close to their words as one sentence',
+  "  allows, with the ids of the person's own messages it was said in. Leave out a preference",
+  "  STANDING POLICIES already holds. Most messages state none; then the list is empty.",
   "- An operator message that answers an ask says how: '(answer: carry_on)' goes on with the",
   "  work, '(answer: stop)' declines what was asked. Where the person pressed one of the ask's",
   "  options, '(chose: \"...\")' gives that option's words as a JSON string; their own words, if",
@@ -453,6 +478,7 @@ function carried(material: DrafterMaterial): string[] {
   return [
     ...material.thread.flatMap((m) => [m.messageId, m.body, m.chose ?? ""]),
     ...material.templates.map((t) => JSON.stringify(t.plan)),
+    ...(material.policies ?? []).flatMap((p) => [p.policyId, p.body]),
     ...material.repositoryPaths.flatMap((r) => r.paths ?? []),
     ...material.laps.flatMap((lap) => [
       lap.prompt ?? "",
@@ -519,9 +545,10 @@ export function drafterDocument(material: DrafterMaterial): string {
     '                                                   "entries": 1 only on one that writes',
     "                                                   new decision entries)",
     '  "holes": ["what has no template or agent type"],',
-    '  "narrowings": [{"field": "cost_usd", "value": 3, "basis": "<message id>"}]',
+    '  "narrowings": [{"field": "cost_usd", "value": 3, "basis": "<message id>"}],',
+    '  "policies": [{"text": "...", "bases": ["<message id>"]}]',
     "}",
-    '"holes" and "narrowings" may be empty lists.',
+    '"holes", "narrowings" and "policies" may be empty lists.',
     "",
     section(
       "THREAD",
@@ -579,7 +606,10 @@ export function drafterDocument(material: DrafterMaterial): string {
         )
         .join("\n"),
     ),
-    section("STANDING POLICIES", ""),
+    section(
+      "STANDING POLICIES",
+      (material.policies ?? []).map((p) => `--- policy ${p.policyId}\n${p.body}`).join("\n"),
+    ),
     section(
       "LAPS OF THIS REQUEST",
       material.laps
@@ -709,6 +739,8 @@ export interface DraftedScope {
 export interface DraftedMessage {
   readonly body: string;
   readonly bases: readonly string[];
+  /** The standing policies it rests on or goes against (D-0067 rule 7.1); absent is none. */
+  readonly policies?: readonly string[];
   readonly asks: boolean;
   /** The question's options, stored beside its body (D-0190 rule 4); absent on a summary. */
   readonly askOptions?: AskOptions;
@@ -727,7 +759,15 @@ export type DraftOutcome =
       readonly messages: readonly DraftedMessage[];
       /** `OWNER/NAME` a `repository` act proposes (D-0191 rule 3); absent on every other act. */
       readonly repository?: string;
+      /** Standing policies drafted from the person's words (D-0067 rule 6.2); absent is none. */
+      readonly policies?: readonly DraftedPolicy[];
     };
+
+/** A standing policy the drafter heard the person state, and the messages it was said in. */
+export interface DraftedPolicy {
+  readonly body: string;
+  readonly bases: readonly string[];
+}
 
 class DraftDefect extends Error {}
 
@@ -798,7 +838,7 @@ export function draftOf(material: DrafterMaterial, run: DrafterRun): DraftOutcom
 function checked(material: DrafterMaterial, answer: unknown): DraftOutcome {
   const row = only(
     answer,
-    ["act", "summary", "question", "plans", "holes", "narrowings", "repository"],
+    ["act", "summary", "question", "plans", "holes", "narrowings", "repository", "policies"],
     "the answer",
   );
   const act = row["act"];
@@ -821,13 +861,46 @@ function checked(material: DrafterMaterial, answer: unknown): DraftOutcome {
     }
     return ids;
   };
+  // A summary or question may also cite a policy (D-0067 rule 7.1).
+  const policyIds = new Set((material.policies ?? []).map((p) => p.policyId));
+  const cited: Cited = (value, what) => {
+    const ids = list(value, `${what}'s bases`).map((id, i) =>
+      words(id, `${what} basis ${String(i)}`),
+    );
+    const loose = ids.find((id) => !threadIds.has(id) && !policyIds.has(id));
+    if (ids.length === 0 || loose !== undefined) {
+      throw new DraftDefect(
+        loose === undefined
+          ? `${what} has no basis`
+          : `${what} cites '${loose}', which is no message in the thread and no standing policy`,
+      );
+    }
+    const policies = ids.filter((id) => policyIds.has(id));
+    return {
+      bases: ids.filter((id) => threadIds.has(id)),
+      ...(policies.length === 0 ? {} : { policies }),
+    };
+  };
+  const personIds = new Set(
+    material.thread.filter((m) => m.authorKind === "operator").map((m) => m.messageId),
+  );
+  const policies = list(row["policies"] ?? [], "'policies'").map((one, i): DraftedPolicy => {
+    const what = `policy ${String(i)}`;
+    const policy = only(one, ["text", "bases"], what);
+    const ids = bases(policy["bases"], what);
+    const notSaid = ids.find((id) => !personIds.has(id));
+    if (notSaid !== undefined) {
+      throw new DraftDefect(`${what} cites '${notSaid}', which the person did not write`);
+    }
+    return { body: words(policy["text"], `${what}'s text`), bases: ids };
+  });
 
   const messages: DraftedMessage[] = [];
   if (row["summary"] !== undefined) {
     const summary = only(row["summary"], ["text", "bases"], "the summary");
     messages.push({
       body: words(summary["text"], "the summary's text"),
-      bases: bases(summary["bases"], "the summary"),
+      ...cited(summary["bases"], "the summary"),
       asks: false,
     });
   } else if (act !== "none") {
@@ -840,7 +913,7 @@ function checked(material: DrafterMaterial, answer: unknown): DraftOutcome {
     );
   }
   if (act === "ask") {
-    messages.push(question(row["question"], bases));
+    messages.push(question(row["question"], cited));
   }
 
   const plans = list(row["plans"] ?? [], "'plans'").map((one, i) => plan(material, one, i, bases));
@@ -874,8 +947,15 @@ function checked(material: DrafterMaterial, answer: unknown): DraftOutcome {
     scope: plans.length === 0 ? null : draftedScope(material, plans, narrowings),
     messages,
     ...(repository === null ? {} : { repository }),
+    ...(policies.length === 0 ? {} : { policies }),
   };
 }
+
+/** A summary's or a question's bases: messages, and any standing policies among them. */
+type Cited = (
+  value: unknown,
+  what: string,
+) => { readonly bases: string[]; readonly policies?: string[] };
 
 /**
  * The repository a `repository` act proposes, checked (D-0191 rule 3.1), or
@@ -909,10 +989,7 @@ function proposedRepository(material: DrafterMaterial, act: string, value: unkno
   return repo;
 }
 
-function question(
-  value: unknown,
-  bases: (value: unknown, what: string) => string[],
-): DraftedMessage {
+function question(value: unknown, cited: Cited): DraftedMessage {
   const q = only(
     value,
     ["text", "options", "recommended", "recommendation", "bases"],
@@ -950,7 +1027,7 @@ function question(
   ].join("\n");
   return {
     body,
-    bases: bases(q["bases"], "the question"),
+    ...cited(q["bases"], "the question"),
     asks: true,
     askOptions: storedOptions(options, recommended, recommendation),
   };

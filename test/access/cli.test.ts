@@ -2283,6 +2283,7 @@ test("every form of a basis can be typed, and nothing else parses", () => {
     "proposal:draft-0001",
     "setup:setup-0001",
     "goal:goal-0001",
+    "policy:policy-0001",
   ].map((text) => parseBasis(text));
   expect(typed.map((basis) => basis?.form)).toEqual([...BASIS_FORMS]);
   expect(parseBasis("repo:src/refrain/plan.ts@c0ffee#8-12")).toEqual({

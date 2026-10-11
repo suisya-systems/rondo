@@ -63,7 +63,9 @@ export interface DrafterPorts {
   readonly record: Pick<
     AdvisoryRecord,
     "threadMessages" | "heldAgentType" | "heldAgentTypeDigests" | "setupPlans"
-  >;
+  > &
+    // Absent where only held plans are read (the page): a drafter run has it.
+    Partial<Pick<AdvisoryRecord, "standingPolicies">>;
   readonly runDrafter: typeof runDrafter;
   readonly now: () => number;
   /**
@@ -408,7 +410,11 @@ export async function gatherDrafterMaterial(
     thread,
     templates: offered,
     agentTypes: [...agentTypes.values()],
-    policies: [],
+    // D-0067 rule 7.1: whole, by id, so a draft can cite what it rests on.
+    policies: ((await ports.record.standingPolicies?.()) ?? []).map((p) => ({
+      policyId: p.policyId,
+      body: p.body,
+    })),
     laps,
     repositoryPaths,
     rows: records.map(budgetRow),

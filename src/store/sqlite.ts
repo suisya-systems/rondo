@@ -87,6 +87,7 @@ export type {
 export { asRefusal, duplicateReason } from "./contract.js";
 export { iterationStore } from "./iteration.js";
 export { StoreDefect } from "./rows.js";
+export type { StandingPolicyDraft } from "./standing-policy.js";
 
 /**
  * Open the durable store at a path.

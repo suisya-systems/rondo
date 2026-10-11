@@ -1348,3 +1348,24 @@ a.ask {
 .side-ask {
   margin-top: 6px;
 }
+
+/* D-0067 rule 6.2: a policy rondo kept from the person's words, and the press
+   that takes it back while it is kept (rule 6.3). */
+.msg-policy {
+  align-items: center;
+}
+
+.msg-policy form {
+  margin-left: auto;
+}
+
+.msg-policy button {
+  padding: 1px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: none;
+  font-size: calc(11.5px * var(--text-scale));
+  font-weight: 500;
+  color: var(--color-link);
+  cursor: pointer;
+}
