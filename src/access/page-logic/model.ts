@@ -53,7 +53,14 @@ import { type PartView, partCounts, partReadsOver, partViews } from "./parts.js"
 import { resultOf } from "./result.js";
 import type { PageView } from "./routes.js";
 import { firstLine, type Threads, threadsOf } from "./threads.js";
-import { draftsOwedNow, flowStopOnly, scopesAwaitingYou, type Wait, waitsOnYou } from "./waits.js";
+import {
+  draftsOwedNow,
+  flowStopOnly,
+  pressOnly,
+  scopesAwaitingYou,
+  type Wait,
+  waitsOnYou,
+} from "./waits.js";
 
 /** The newest approval in force over a scope the person wrote, if any. */
 async function ownApproval(
@@ -276,11 +283,16 @@ export async function pageModel(
   const scopeWaits = await scopesAwaitingYou(
     {
       record: ports.record,
-      // A reckoning that will not read draws the card, as the thread does.
-      unheld: async (id) =>
-        ports.repositoryFor === undefined
-          ? false
-          : (await ports.repositoryFor(id).catch(() => null))?.work.kind === "unheld",
+      // A reckoning that will not read draws the scope card and no next step, as
+      // the thread does; one that does wants the press the next step offers
+      // (rondo#643: a repository to add, or setup's plan to record).
+      unheld: async (id) => {
+        const where =
+          ports.repositoryFor === undefined
+            ? null
+            : await ports.repositoryFor(id).catch(() => null);
+        return where !== null && (where.work.kind === "unheld" || where.planless === true);
+      },
     },
     threads,
     [...waiting, ...running, ...terminal],
@@ -291,6 +303,8 @@ export async function pageModel(
   const turnsHere = new Set(waits.map((wait) => wait.root));
   /** Of those, the ones where only the goal flow's stop waits (rondo#611). */
   const flowStops = flowStopOnly(waits);
+  /** And the ones where only a press before any draft waits (rondo#643). */
+  const presses = pressOnly(waits);
   // **Only the ones an answer can settle** (D-0032 rule 5). `openProposals`
   // returns every proposal nobody has decided, and an explanation is
   // undecidable by construction -- `recordDecision` refuses the non-binding
@@ -308,7 +322,8 @@ export async function pageModel(
   // disagree.
   // A question answered *stop this line* is held but no longer waits on the
   // person (D-0110 rule 2), as in `waitsOnYou`.
-  // A drafted scope ready to approve is one more (rondo#534).
+  // A drafted scope ready to approve is one more (rondo#534), and so is a
+  // press before any draft (rondo#643).
   const waitingCount =
     waiting.length + threads.waiting.size - threads.stopped.size + open.length + scopeWaits.length;
 
@@ -481,6 +496,7 @@ export async function pageModel(
           return parts.length === 0 ? null : partCounts(parts);
         })(),
         flowStop: flowStops.has(root.messageId),
+        press: presses.has(root.messageId),
         atMs: Math.max(...members.map((message) => message.atMs)),
       };
     });

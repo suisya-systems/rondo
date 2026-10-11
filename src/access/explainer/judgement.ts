@@ -354,6 +354,7 @@ function waitReason(words: Chrome, wait: ExplainerMaterial["waits"][number]): st
             decide: words.explainWaitsDecide,
             overdue: words.explainOverdue,
             scope: words.explainWaitsScope,
+            press: words.explainWaitsPress,
             paused: words.triageGoalScopePaused,
           }[wait.kind];
 }

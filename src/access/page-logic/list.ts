@@ -63,6 +63,12 @@ export interface RequestRow {
    * thread (rondo#611, D-0188): the row says the flow waits, not the request.
    */
   readonly flowStop?: boolean;
+  /**
+   * Where what waits is only a press before anything is drafted -- a
+   * repository to add or setup's plan to record (rondo#643): the row says the
+   * press, not an answer, waits.
+   */
+  readonly press?: boolean;
   /** When the request last moved, which is what the day cut reads. */
   readonly atMs: number;
 }

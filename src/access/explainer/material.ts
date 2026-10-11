@@ -29,6 +29,7 @@ import { firstLine, type Threads, threadsOf } from "../page-logic/threads.js";
 import {
   draftsOwedNow,
   lapsPastTheirCeiling,
+  PRESS,
   scopesAwaitingYou,
   waitsOnYou,
 } from "../page-logic/waits.js";
@@ -124,6 +125,8 @@ export type ExplainerWait = (
       readonly firstLineageId: string | null;
     }
   | { readonly kind: "scope"; readonly scopeId: string }
+  /** A request whose next step is a press before any draft, by its opener (rondo#643). */
+  | { readonly kind: "press"; readonly messageId: string }
   /** A goal flow the person paused, by the scope that paused it (D-0186). */
   | { readonly kind: "paused"; readonly scopeId: string; readonly repository: string }
 ) & {
@@ -147,7 +150,7 @@ export const acrossRequests = (material: ExplainerMaterial): boolean =>
  * started, on its request.
  */
 export function waitLocator(wait: ExplainerWait): string {
-  return wait.kind === "ask"
+  return wait.kind === "ask" || wait.kind === "press"
     ? `message:${wait.messageId}`
     : wait.kind === "scope" || wait.kind === "paused"
       ? `scope:${wait.scopeId}`
@@ -377,7 +380,16 @@ export async function gatherExplainerMaterial(
       await draftsOwedNow(ports),
     );
     for (const w of scopes) {
-      waits.push({ kind: "scope", scopeId: w.episode.slice("scope:".length), ...titled(w.root) });
+      waits.push(
+        w.episode.startsWith(PRESS)
+          ? {
+              kind: "press",
+              messageId: w.root,
+              ...titled(w.root),
+              ...since(said.get(w.root)?.atMs),
+            }
+          : { kind: "scope", scopeId: w.episode.slice("scope:".length), ...titled(w.root) },
+      );
     }
     // A paused goal flow is a row under *your turn* too (D-0186), as `triageModel` reads it.
     if (((await ports.triageRepositories?.()) ?? []).length > 0) {
@@ -396,6 +408,9 @@ export async function gatherExplainerMaterial(
     const draft = draftAwaiting(await draftedStanding(ports, root), records.length > 0);
     if (draft !== null) {
       waits.push({ kind: "scope", scopeId: draft.scope.scopeId });
+    } else if ((await ports.unheld?.(root).catch(() => false)) === true) {
+      // The thread's next step: a repository to add or setup's plan (rondo#643).
+      waits.push({ kind: "press", messageId: root });
     }
   }
   const about = aboutOf(question.bases);
