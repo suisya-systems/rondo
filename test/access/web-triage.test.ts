@@ -50,7 +50,10 @@ async function proposed() {
               clause: 1,
               request: "Make setup in o/r finish without a shell",
               why: "Setup asks for a terminal today.",
-              openPoints: [{ point: "Windows", recommendation: "the same path as Linux" }],
+              openPoints: [
+                { point: "Windows", recommendation: "the same path as Linux", raise: "dispute" },
+                { point: "Test runner", recommendation: "vitest", raise: null },
+              ],
             },
           ],
         }),
@@ -81,6 +84,10 @@ test("under the request box: the candidate in full with both presses, and a bloc
   expect(section).toContain("1. they never open a terminal");
   expect(section).toContain("https://github.com/o/r/issues/7");
   expect(section).toContain("the same path as Linux");
+  // D-0193 rule 5: what rondo decided is drawn apart, after the open points.
+  expect(section.indexOf(EN.triageDecided)).toBeGreaterThan(section.indexOf(EN.triageOpenPoints));
+  expect(section).toContain('class="triage-points triage-decided"');
+  expect(section.indexOf("vitest")).toBeGreaterThan(section.indexOf(EN.triageDecided));
   expect(section).toContain(EN.triagePutInBox);
   expect(section).toContain('action="/not-now?lang=en"');
   expect(section).toContain('value="issue:o/r#7"');
@@ -129,7 +136,9 @@ test("put it in the box draws the box holding the drafted request, open points w
   const box = html.slice(at, html.indexOf("</textarea>", at));
   expect(box).toContain('data-draft-take="triage-1:issue:o/r#7"');
   expect(box).toContain("Make setup in o/r finish without a shell");
-  expect(box).toContain("- Windows: the same path as Linux");
+  expect(box).toContain(
+    `${EN.triageBoxPoints}\n- Windows: the same path as Linux\n\n${EN.triageBoxDecided}\n- Test runner: vitest`,
+  );
   expect(box).toContain("o/r#7");
   // A candidate the proposal does not hold fills nothing.
   const none = await operatorPage(
@@ -223,7 +232,7 @@ test("a candidate still mixing scripts is marked on the card, on a runner-up and
     clause: 1,
     request: `o/r の репозиторий ${String(number)}`,
     why: "理由",
-    openPoints: [{ point: "p", recommendation: "r" }],
+    openPoints: [{ point: "p", recommendation: "r", raise: "dispute" as const }],
     source: { form: "issue" as const, repository: "o/r", number },
     title: "t",
     labels: [],
@@ -391,7 +400,9 @@ test("the card is the candidate the flow asks about, and a candidate put aside l
     clause: 1,
     request: `ranked ${String(number)}`,
     why: "why",
-    openPoints: [{ point: `point ${String(number)}`, recommendation: "r" }],
+    openPoints: [
+      { point: `point ${String(number)}`, recommendation: "r", raise: "dispute" as const },
+    ],
     source: { form: "issue" as const, repository: "o/r", number },
     title: "t",
     labels: [],

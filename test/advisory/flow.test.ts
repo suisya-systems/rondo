@@ -17,7 +17,11 @@ const issue = (number: number, openPoints = 0): Ranked => ({
   clause: 1,
   request: `do #${String(number)}`,
   why: "why",
-  openPoints: Array.from({ length: openPoints }, () => ({ point: "p", recommendation: "r" })),
+  openPoints: Array.from({ length: openPoints }, () => ({
+    point: "p",
+    recommendation: "r",
+    raise: "dispute" as const,
+  })),
   source: { form: "issue", repository: "o/r", number },
   title: `issue ${String(number)}`,
   labels: [],
@@ -123,8 +127,8 @@ test("an answer stands when a re-ranking words its points differently, and goes 
   const reranked: Ranked = {
     ...issue(1),
     openPoints: [
-      { point: "p1", recommendation: "r" },
-      { point: "p3", recommendation: "r" },
+      { point: "p1", recommendation: "r", raise: "dispute" as const },
+      { point: "p3", recommendation: "r", raise: "dispute" as const },
     ],
   };
   const answered = [{ candidateKey: "issue:o/r#1", points: ["p1", "p2"], answers: ["a", "b"] }];

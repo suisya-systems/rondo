@@ -51,7 +51,7 @@ import {
   pickNext,
 } from "../advisory/flow.js";
 import { readSplitPayload } from "../advisory/proposal.js";
-import { type Ranked, readTriagePayload } from "../advisory/triage.js";
+import { decided, type Ranked, raised, readTriagePayload } from "../advisory/triage.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import { contentDigest } from "../store/plan.js";
 import {
@@ -400,7 +400,11 @@ async function flowOne(
       scopeDecisionId,
       proposalId: triage.proposalId,
       candidate: pick.candidate.key,
-      points: pick.candidate.openPoints,
+      // D-0193 rule 4: the ask holds only the raised points.
+      points: raised(pick.candidate.openPoints).map(({ point, recommendation }) => ({
+        point,
+        recommendation,
+      })),
       request: pick.candidate.request,
       why: pick.candidate.why,
       askedAtMs: nowMs,
@@ -408,7 +412,7 @@ async function flowOne(
     if (asked.kind === "recorded") {
       said.delete(repository);
       ports.log(
-        `flow     ${repository}: asked the person ${String(pick.candidate.openPoints.length)} ` +
+        `flow     ${repository}: asked the person ${String(raised(pick.candidate.openPoints).length)} ` +
           `open point(s) of ${pick.candidate.key} before it starts it`,
       );
     } else if (asked.kind !== "duplicate") {
@@ -624,7 +628,8 @@ async function injectionState(
 /**
  * The injected request's words: the ranked request, then rondo's report of why
  * it started it (rondo#469), citing the clause by its number and its words,
- * and the issue, then the open points as the person answered them (rondo#487).
+ * and the issue, then the open points as the person answered them (rondo#487),
+ * then the ones rondo decided as suggested, for the person to change (D-0193).
  * ASCII, as rondo's own lines are (D-0004); the answers are the person's words.
  */
 export function flowBody(
@@ -647,6 +652,13 @@ export function flowBody(
           "",
           "Open points, as the person answered them:",
           ...answers.map((one) => `- ${one.point}: ${one.answer}`),
+        ]),
+    ...(decided(candidate.openPoints).length === 0
+      ? []
+      : [
+          "",
+          "Decided by rondo, as suggested (reply in this thread to change one):",
+          ...decided(candidate.openPoints).map((one) => `- ${one.point}: ${one.recommendation}`),
         ]),
   ].join("\n");
 }

@@ -239,3 +239,28 @@ test("a candidate whose words mix in another script is read once more, and marke
   ]);
   expect(still.logged.join("\n")).toContain("1 candidate(s) mixed scripts; 0 mended");
 });
+
+test("the drafter is handed the in-force policies by id, and the test for raising a point (D-0193 rule 2)", async () => {
+  const w = world(() => listed([{ number: 7, title: "setup asks for a shell", labels: [] }]));
+  await w.record.recordGoal(goal);
+  w.host.kick();
+  await w.host.idle();
+  expect(w.handed[0]).toContain('"irreversible"');
+  expect(w.handed[0]).not.toContain("standing policies:");
+  expect(
+    await w.record.recordStandingPolicy({
+      policyId: "policy-1",
+      body: "Never touch the release workflow",
+      authorKind: "operator",
+      authorId: "ada",
+      bases: [],
+      supersedesPolicyId: null,
+      createdAtMs: 5_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  // A policy is material: the next scan reads again, with it named.
+  w.host.kick();
+  await w.host.idle();
+  expect(w.handed).toHaveLength(2);
+  expect(w.handed[1]).toContain("- policy-1: Never touch the release workflow");
+});

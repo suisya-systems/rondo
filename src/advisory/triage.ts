@@ -50,12 +50,36 @@ export interface TriageMaterial {
   readonly candidates: readonly TriageCandidate[];
   /** Candidate keys a person put aside with *not now*: withheld, and not handed to the model. */
   readonly putAside: readonly string[];
+  /** The in-force standing policies, by id, that a point may be raised against (D-0193 rule 2). */
+  readonly policies?: readonly { readonly id: string; readonly body: string }[];
 }
+
+/**
+ * Why an open point is the person's to decide (D-0193 rule 1): `D-0064` P3's
+ * test, P4's list, or an in-force standing policy it would go against.
+ */
+export type RaiseWhy = "dispute" | "irreversible" | "policy";
+
+const RAISE_WHYS: readonly RaiseWhy[] = ["dispute", "irreversible", "policy"];
 
 /** One open point and its recommendation, answerable as recommended (section 1 rule 5). */
 export interface OpenPoint {
   readonly point: string;
   readonly recommendation: string;
+  /** Why the person is asked, or null when rondo decides it as recommended (D-0193). */
+  readonly raise: RaiseWhy | null;
+  /** The policy a `"policy"` point goes against. */
+  readonly policy?: string;
+}
+
+/** The points the person is asked; the rest are rondo's, decided as recommended (D-0193). */
+export function raised(points: readonly OpenPoint[]): readonly OpenPoint[] {
+  return points.filter((point) => point.raise !== null);
+}
+
+/** The points rondo decided as recommended (D-0193 rule 1's null). */
+export function decided(points: readonly OpenPoint[]): readonly OpenPoint[] {
+  return points.filter((point) => point.raise === null);
 }
 
 /** What the model said about one candidate. */
@@ -131,6 +155,10 @@ export function materialDocument(material: TriageMaterial): JsonRecord {
       labels: [...candidate.labels],
     })),
     put_aside: [...material.putAside],
+    // Only when a policy is in force, so a store with none keeps its digest (D-0193 rule 3).
+    ...(material.policies === undefined || material.policies.length === 0
+      ? {}
+      : { policies: material.policies.map((policy) => ({ id: policy.id, body: policy.body })) }),
   };
 }
 
@@ -160,6 +188,7 @@ export function readJudgement(material: TriageMaterial, answer: string): Judgeme
     return { kind: "refused", reason: "the answer has no 'candidates' list" };
   }
   const keys = new Set(offered(material).map((candidate) => candidate.key));
+  const policies = new Set((material.policies ?? []).map((policy) => policy.id));
   const seen = new Set<string>();
   const judged: Judged[] = [];
   for (const one of list) {
@@ -221,9 +250,27 @@ export function readJudgement(material: TriageMaterial, answer: string): Judgeme
         // answerable in one word, and the proposal would still be a draft.
         return { kind: "refused", reason: `${key} has an open point without a recommendation` };
       }
+      // D-0193 rule 3: a point says whether it is raised, and a policy it
+      // is raised against is one in force, or the basis would not resolve.
+      const raise = point["raise"];
+      if (raise !== null && !RAISE_WHYS.includes(raise as RaiseWhy)) {
+        return {
+          kind: "refused",
+          reason: `${key} has an open point that says nothing of why it is raised`,
+        };
+      }
+      const policy = point["policy"];
+      if (raise === "policy" && (typeof policy !== "string" || !policies.has(policy))) {
+        return {
+          kind: "refused",
+          reason: `${key} raises a point against a policy not in force: ${text(policy)}`,
+        };
+      }
       openPoints.push({
         point: point["point"].trim(),
         recommendation: point["recommendation"].trim(),
+        raise: raise as RaiseWhy | null,
+        ...(raise === "policy" ? { policy: policy as string } : {}),
       });
     }
     judged.push({
@@ -386,6 +433,8 @@ export function triagePayloadDocument(payload: TriagePayload): JsonRecord {
       open_points: one.openPoints.map((point) => ({
         point: point.point,
         recommendation: point.recommendation,
+        raise: point.raise,
+        ...(point.policy === undefined ? {} : { policy: point.policy }),
       })),
       source: sourceDocument(one.source),
       title: one.title,
@@ -447,7 +496,21 @@ export function readTriagePayload(document: JsonRecord): TriagePayload | null {
         isRecord(point) &&
         typeof point["point"] === "string" &&
         typeof point["recommendation"] === "string"
-          ? [{ point: point["point"], recommendation: point["recommendation"] }]
+          ? [
+              {
+                point: point["point"],
+                recommendation: point["recommendation"],
+                // A ranking written before D-0193 says nothing: every point
+                // of it was asked, so it reads as raised (rule 3).
+                raise:
+                  point["raise"] === null
+                    ? null
+                    : RAISE_WHYS.includes(point["raise"] as RaiseWhy)
+                      ? (point["raise"] as RaiseWhy)
+                      : "dispute",
+                ...(typeof point["policy"] === "string" ? { policy: point["policy"] } : {}),
+              },
+            ]
           : [],
       ),
       ...(one["mixed_script"] === true ? { mixedScript: true } : {}),

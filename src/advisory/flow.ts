@@ -16,7 +16,7 @@
  */
 import type { Occupancy } from "../store/records.js";
 
-import type { Ranked, TriagePayload } from "./triage.js";
+import { type Ranked, raised, type TriagePayload } from "./triage.js";
 
 /** Where one earlier injection of this flow stands. */
 export type InjectionState =
@@ -305,7 +305,8 @@ export function pickNext(input: FlowInput): FlowPick {
   ) {
     return wait("points_asked");
   }
-  if (candidate.openPoints.length === 0) {
+  // D-0193 rule 4: only the points the person must decide are asked.
+  if (raised(candidate.openPoints).length === 0) {
     return inject();
   }
   return noSlot

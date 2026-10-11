@@ -65,7 +65,8 @@ export interface TriageHostPorts {
   readonly record: Pick<
     AdvisoryRecord,
     "threadMessages" | "goals" | "triageDeclines" | "latestTriage" | "recordProposal"
-  >;
+  > &
+    Partial<Pick<AdvisoryRecord, "standingPolicies">>;
   /** The repositories rondo works in, `OWNER/NAME` (`D-0081`). */
   readonly repositories: () => Promise<readonly string[]>;
   readonly listIssues: (request: {
@@ -139,6 +140,11 @@ async function pass(
   const latest = new Map((await ports.record.latestTriage()).map((row) => [row.repository, row]));
   const declines = await ports.record.triageDeclines();
   const stopped = await stoppedWork(ports, repositories);
+  // D-0193 rule 2: whole, by id, so a point can be raised against one.
+  const policies = ((await ports.record.standingPolicies?.()) ?? []).map((policy) => ({
+    id: policy.policyId,
+    body: policy.body,
+  }));
   for (const repository of repositories) {
     const goal = goals.get(repository);
     if (goal === undefined) {
@@ -169,6 +175,7 @@ async function pass(
           declines.filter((one) => one.repository === repository).map((one) => one.candidate),
         ),
       ],
+      policies,
     };
     const digest = materialDigest(material);
     const last = latest.get(repository);
@@ -419,10 +426,19 @@ export function triageDocument(material: TriageMaterial, language: string | null
     "- request: the request a person would send to rondo to do this work, in one line, naming the",
     `  repository ${material.repository}.`,
     "- why: one or two sentences on how it goes against that clause.",
-    "- openPoints: at most four decisions the person would have to make before the work can start,",
-    "  each with your recommendation, so that answering 'as recommended' is enough. Empty if none.",
-    "  Write the recommendation as the decision itself, the words the person would answer with",
+    "- openPoints: at most four decisions to be made before the work can start, each with your",
+    "  recommendation. Empty if none. Write the recommendation as the decision itself",
     "  ('Keep it as an open question'), not as advice ('I recommend keeping it open').",
+    "  Give each point a raise saying whether the person must decide it:",
+    '  - "dispute": the options give up different things the person owns: what a user sees,',
+    "    a decision already recorded, a permission granted, or a cost past the budget;",
+    '  - "irreversible": choosing it commits to an act rondo cannot undo: merging into the default',
+    "    branch, a release or package, deleting what rondo did not create, sending anything to",
+    "    anyone but the person and the pull request, or spending past the budget;",
+    '  - "policy": the options differ in whether they go against one of the person\'s standing',
+    '    policies below; name it in "policy" by its id;',
+    "  - null: none of these. The options differ only in how the work gets done; rondo decides it",
+    "    as you recommend and writes it down where the person can change it. Most points are null.",
     language === null
       ? ""
       : `Write request, why and openPoints in the language tagged ${language}, in its own script; ` +
@@ -431,6 +447,13 @@ export function triageDocument(material: TriageMaterial, language: string | null
     "Goal:",
     clauses,
     "",
+    ...((material.policies ?? []).length === 0
+      ? []
+      : [
+          "The person's standing policies:",
+          ...(material.policies ?? []).map((policy) => `- ${policy.id}: ${policy.body}`),
+          "",
+        ]),
     "Candidates:",
     candidates,
     material.putAside.length === 0
@@ -438,6 +461,6 @@ export function triageDocument(material: TriageMaterial, language: string | null
       : `\nThe person put these aside with "not now", which says something about the goal: ${material.putAside.join(", ")}`,
     "",
     "Answer with one JSON object and nothing else:",
-    '{"candidates":[{"key":"...","clause":1,"request":"...","why":"...","openPoints":[{"point":"...","recommendation":"..."}]}]}',
+    '{"candidates":[{"key":"...","clause":1,"request":"...","why":"...","openPoints":[{"point":"...","recommendation":"...","raise":null}]}]}',
   ].join("\n");
 }
