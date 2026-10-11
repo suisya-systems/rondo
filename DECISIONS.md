@@ -20752,8 +20752,9 @@ list is amber, and a finished request's line may be cut to one line.
 > none (`D-0191` rule 2). Where setup has not run, the step is running it, and that is the
 > person's too. The reading is the thread's *next step* card's (`requestRepository`, `unheld` or
 > `planless`), on a request a person wrote with no question standing in its thread. A reckoning
-> that will not read draws no card and lifts no row. The row says *Waiting on your next step before
-> rondo can start* where the press is all that waits, since there is no box to answer in.
+> that will not read draws no card and lifts no row. The row says *Waiting on your next step* where
+> the press is all that waits, since there is no box to answer in; its mark, ground and weight are
+> the answer row's, because the person is blocked the same way (`D-0082` rule 1).
 >
 > **It is counted, unlike the rows of `D-0186` and `D-0192`.** Those rows have no thread, and the
 > walk opens threads. This row is a request: its thread is where the press is, at the top. So the

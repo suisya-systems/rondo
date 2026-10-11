@@ -186,7 +186,7 @@ export const EXPLAIN_JA: ExplainWords = Object.freeze({
   explainWaitsAsk: "質問へのあなたの回答",
   explainWaitsDecide: "答えるゲートのない、あなたの判断",
   explainWaitsScope: "下書きスコープへのあなたの承認",
-  explainWaitsPress: "rondo が始めるための、あなたの次の一手",
+  explainWaitsPress: "rondo が始めるのに要る、あなたの次の一手",
   explainOverdue: "計画の想定時間を過ぎています",
   explainHeldFor: (reason, held) => `${reason}（${held}前から）`,
   explainInFlight: (held, left) =>

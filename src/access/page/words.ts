@@ -691,7 +691,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   weekNoAllowance: "No allowance approved yet",
   rowWaitingOnYou: "Waiting on your answer",
   rowFlowStopped: "rondo stopped working toward the goal and asks you here",
-  rowPressWaits: "Waiting on your next step before rondo can start",
+  rowPressWaits: "Waiting on your next step",
   rowFlowAsks: (points) =>
     points === 1
       ? "Answer 1 question to start the next request"
@@ -1350,7 +1350,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   weekNoAllowance: "まだ枠が決まっていません",
   rowWaitingOnYou: "あなたの返事を待っています",
   rowFlowStopped: "rondo は目標に向けた依頼を止め、ここであなたに尋ねています",
-  rowPressWaits: "rondo が始めるには、あなたの次の一手が要ります",
+  rowPressWaits: "あなたの次の一手を待っています",
   rowFlowAsks: (points) => `${String(points)} 点に答えると、rondo が次の依頼を始めます`,
   rowRunning: "作業中です",
   rowFinished: "終わりました",
