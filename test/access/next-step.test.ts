@@ -500,6 +500,47 @@ test("a request naming a repository rondo does not work in says so, and its one 
   expect(classOf(after, "scope-req-1")).toBe(NEXT);
 });
 
+test("a repository rondo proposed, and a store with no plan, are each one press (D-0191 rules 2 and 3)", async () => {
+  const world = fresh();
+  await openRequest(world, "req-1", "Fix the typo on the docs site.");
+  const over = (where: object, files: readonly string[] = []) => ({
+    ...portsOver(world),
+    addable: true,
+    setupPlanFiles: () => files,
+    repositoryFor: async () =>
+      await Promise.resolve({ work: { kind: "open" as const }, unbuilt: [], ...where }),
+  });
+  const plain = (said: string) => said.slice(0, said.indexOf("'"));
+
+  const proposed = await operatorPage(
+    over({ work: { kind: "unheld", repo: "owner/site", named: "owner/site" }, proposed: true }),
+    "t",
+    threadOf("req-1"),
+  );
+  drawnOnceOnTop(proposed, "add-repository-req-1");
+  expect(proposed).toContain(plain(EN.nextStepAddProposedRepository("owner/site")));
+  expect(proposed).toContain('name="repository" value="owner/site"');
+  expect(proposed).not.toContain('id="scope-req-1"');
+
+  // Setup left its plan beside the store: one press records it.
+  const recorded = await operatorPage(
+    over({ planless: true }, ["/srv/state/plan-owner-a.json"]),
+    "t",
+    threadOf("req-1"),
+  );
+  drawnOnceOnTop(recorded, "add-repository-req-1");
+  expect(recorded).toContain(plain(EN.nextStepRecordSetupPlan(1)));
+  expect(recorded).toContain(plain(EN.recordSetupPlanAction));
+  expect(recorded).toContain('name="setup" value="1"');
+  expect(recorded).not.toContain('id="scope-req-1"');
+
+  // Setup never ran: said, with nothing to press.
+  const none = await operatorPage(over({ planless: true }), "t", threadOf("req-1"));
+  expect(none).toContain(plain(EN.nextStepRunSetup));
+  expect(none).not.toContain('id="add-repository-req-1"');
+  expect(none).not.toContain('id="scope-req-1"');
+});
+
 test("a question waiting in the thread is the next step, and no scope is offered beside it (rondo#431)", async () => {
   // Lap 13: the drafter asked which of three options, and the band still said
   // *set the scope*; the approval that followed was refused at start on the

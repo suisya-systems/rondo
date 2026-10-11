@@ -62,6 +62,7 @@ import {
   holdsFromPage,
   lapStartedAgainAt,
   pageMaterial,
+  recordSetupPlansFromPage,
   releaseFromPage,
   restartLostFromPage,
   retakeReviewFromPage,
@@ -85,6 +86,7 @@ import { notifierAt, reachThePerson, recordTabNotice } from "./reach.js";
 import { readIn } from "./read-in.js";
 import { READING_REMOTE } from "./review.js";
 import { reviseDrafterHost } from "./revise-draft/host.js";
+import { setupPlanFiles } from "./setup-files.js";
 import { triageHost } from "./triage-host.js";
 import {
   AddRepositoryPort,
@@ -192,6 +194,13 @@ export async function serveWeb(
     // Called only after a scan, by which time `drafter` below exists.
     onRead: () => drafter.kick(),
   });
+  // **A request whose next step is the person's press before anything is
+  // drafted** (D-0090 rule 1, D-0191 rules 2 and 3): a repository to add, or a
+  // store holding no plan at all.
+  const awaitsPerson = async (id: string): Promise<boolean> => {
+    const where = await requestRepository({ store, record, now: Date.now }, id);
+    return where.work.kind === "unheld" || where.planless;
+  };
   const drafter = drafterHost({
     store,
     record,
@@ -205,8 +214,9 @@ export async function serveWeb(
     // **Nothing is drafted in a repository the work is not in** (rondo#383,
     // D-0090 rule 1): a request naming one rondo holds no plan for waits for
     // the person to add it from the page.
-    awaitsRepository: async (id) =>
-      (await requestRepository({ store, record, now: Date.now }, id)).work.kind === "unheld",
+    // **Nor anything while rondo holds no plan at all** (D-0191 rule 2): the
+    // request waits for the press that records setup's plan.
+    awaitsRepository: async (id) => await awaitsPerson(id),
     // **An answer to a stop whose lap is started again is not drafted**
     // (D-0149, D-0139): the start is its work.
     startsAgain: async (ask) => (await lapStartedAgainAt(store, record, ask)) !== null,
@@ -219,8 +229,7 @@ export async function serveWeb(
     record,
     // What the list's *your turn* reads, for a question across every request (D-0189).
     draftsOwed: () => drafter.owed(),
-    unheld: async (id) =>
-      (await requestRepository({ store, record, now: Date.now }, id)).work.kind === "unheld",
+    unheld: async (id: string) => await awaitsPerson(id),
     triageRepositories: async () => await triageRepositories(),
     runDrafter,
     now: Date.now,
@@ -524,8 +533,7 @@ export async function serveWeb(
     say,
     // A drafted scope is a turn once the page would offer it (rondo#534).
     draftsOwed: () => drafter.owed(),
-    unheld: async (id: string) =>
-      (await requestRepository({ store, record, now: Date.now }, id)).work.kind === "unheld",
+    unheld: async (id: string) => await awaitsPerson(id),
   };
   // ponytail: a fixed one-minute rescan for messages and readings written
   // outside this process; a changedSince watch when that minute is felt.
@@ -617,17 +625,29 @@ export async function serveWeb(
       // release press's condition, since the plan it records is the
       // approver's as setup's is. Added, the reader and the drafter look again.
       repositoryFor: async (id) => await requestRepository({ store, record, now: Date.now }, id),
+      setupPlanFiles: () => setupPlanFiles(storePath).map((one) => one.file),
       addable: sender !== null && !("refusal" in sender),
       addRepository:
         sender === null || "refusal" in sender
           ? null
           : new AddRepositoryPort(async (input) => {
-              const added = await addRepositoryFromPage(
-                environment,
-                { store, record },
-                sender.actorId,
-                input,
-              );
+              // **No repository named is setup's plan** (D-0191 rule 2.2): the
+              // same press, for a store that holds no plan at all.
+              const added =
+                input.repo === ""
+                  ? await recordSetupPlansFromPage(
+                      environment,
+                      { store, record },
+                      sender.actorId,
+                      storePath,
+                      input.requestMessageId,
+                    )
+                  : await addRepositoryFromPage(
+                      environment,
+                      { store, record },
+                      sender.actorId,
+                      input,
+                    );
               if (added.ok) {
                 issues.kick();
                 drafter.kick();

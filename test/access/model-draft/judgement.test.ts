@@ -133,7 +133,7 @@ function refusal(answer: unknown, material: DrafterMaterial = MATERIAL): string 
 }
 
 test("the row name counts the drafter's instructions and names the table's model (D-0071 rule 1.4)", () => {
-  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/10/claude-opus-5");
+  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/11/claude-opus-5");
 });
 
 test("the document carries the thread, the templates, the agent types and the measurements, and never a ceiling", () => {
@@ -485,7 +485,7 @@ test("the answer may come inside one code fence", () => {
 test.each([
   ["not JSON", "no draft", "one JSON object"],
   ["an unknown key", { ...SPLIT, split: [] }, "carries 'split'"],
-  ["an unknown act", { ...SPLIT, act: "run" }, "not split, ask or none"],
+  ["an unknown act", { ...SPLIT, act: "run" }, "not split, ask, repository or none"],
   ["a split with no plan", { ...SPLIT, plans: [] }, "proposes no plan"],
   ["a split with no summary", { ...SPLIT, summary: undefined }, "has no summary"],
   [
@@ -858,4 +858,50 @@ test("the drafter claims from the repository's paths, and '/' only for work acro
       repositoryPaths: [{ repository: "/srv/repo", ref: "main", paths: null }],
     }),
   ).toContain("--- /srv/repo at main\n(git would not list it)");
+});
+
+// D-0191 rule 3: the drafter proposes a repository no template is for, and
+// rondo assembles its plan on the person's press. Only where rondo allows it.
+const PROPOSABLE: DrafterMaterial = {
+  ...MATERIAL,
+  templates: MATERIAL.templates.map((t) => ({
+    ...t,
+    plan: { ...t.plan, forge_repository: "owner/held" },
+  })),
+  repositoryProposable: true,
+};
+const PROPOSAL = {
+  act: "repository",
+  summary: { text: "The scope screen lives in owner/site.", bases: ["r1"] },
+  repository: "owner/site",
+};
+
+test("a repository act names the repository and drafts nothing else (D-0191 rule 3.1)", () => {
+  const outcome = drafted(draftOf(PROPOSABLE, answered(PROPOSAL)));
+  expect(outcome.act).toBe("repository");
+  expect(outcome.repository).toBe("owner/site");
+  expect(outcome.split).toBeNull();
+  expect(outcome.scope).toBeNull();
+  expect(outcome.messages.map((m) => m.body)).toEqual(["The scope screen lives in owner/site."]);
+  expect(drafterDocument(PROPOSABLE)).toContain('"repository": "OWNER/NAME"');
+  expect(drafterDocument(MATERIAL)).toContain('"repository" is not available');
+});
+
+test.each([
+  ["where rondo did not allow it", PROPOSAL, MATERIAL, "where none may be proposed"],
+  [
+    "one a template is for",
+    { ...PROPOSAL, repository: "Owner/Held" },
+    PROPOSABLE,
+    "already has a template",
+  ],
+  ["not OWNER/NAME", { ...PROPOSAL, repository: "site" }, PROPOSABLE, "is not OWNER/NAME"],
+  ["with no repository", { ...PROPOSAL, repository: undefined }, PROPOSABLE, "names no repository"],
+  ["on another act", { ...SPLIT, repository: "owner/site" }, PROPOSABLE, "names a repository"],
+])("refused: a repository proposal %s (D-0191 rule 3.1)", (_, answer, material, says) => {
+  expect(refusal(answer, material)).toContain(says);
+});
+
+test("the instructions never ask the person to paste a plan (D-0191 rule 5)", () => {
+  expect(drafterDocument(MATERIAL)).not.toMatch(/paste a plan/);
 });

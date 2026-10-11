@@ -334,6 +334,15 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
     // no filesystem, which is why it is here and `resolve` is not.
     "node:path": ["isAbsolute"],
   },
+  // The one directory listing rondo's host makes (D-0191 rule 2.2): the
+  // store's own directory, one level, for the `plan-*.json` files setup left
+  // there unrecorded. No write and no read of its own -- each file is read
+  // through `cli.ts`'s plan reader -- and `dirname` and `join` only name the
+  // directory and a file in it.
+  "src/access/setup-files.ts": {
+    "node:fs": ["readdirSync"],
+    "node:path": ["dirname", "join"],
+  },
   // The one module that writes a run's delegation record, granted the three
   // builtins it takes to write one file (D-0040 rule 8). Keyed by module for
   // `src/access/forge.ts`'s reason, and the grant is narrower than it looks:
@@ -1412,6 +1421,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/revise-draft/host.ts": [SPLITTING],
   "src/access/revise-draft/judgement.ts": [SPLITTING],
   "src/access/scope.ts": [SPLITTING],
+  // D-0191 (rondo#636): the plan setup left beside the store, as a template.
+  "src/access/setup-files.ts": [SPLITTING],
   // D-0128 (rondo#471): a goal scope is drafted from the goal and the held
   // plans, and it is the one approval over the requests work discovery draws.
   "src/access/goal-scope.ts": [SPLITTING, WORK_DISCOVERY],

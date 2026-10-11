@@ -1309,6 +1309,22 @@ explanation you pressed on and then answers the gate.`,
     `This request names ${named}, but rondo does not work in ${repo} yet, so nothing has been ` +
     `drafted. Adding it copies ${repo} onto this computer beside rondo's other repositories, and ` +
     `its pull requests go to ${repo}.`,
+  nextStepAddProposedRepository: (repo) =>
+    `Your request does not say which repository the work is in, and rondo has no plan for ` +
+    `the one it reads as the place: ${repo}. Nothing has been drafted yet. Adding it copies ` +
+    `${repo} onto this computer beside rondo's other repositories, rondo then drafts the work ` +
+    `there for you to approve, and its pull requests go to ${repo}. If that is the wrong ` +
+    "repository, say the right one in a reply instead.",
+  nextStepRecordSetupPlan: (files) =>
+    "rondo has no plan to run this on yet, so nothing has been drafted. Its setup on this " +
+    `computer wrote ${files === 1 ? "one" : String(files)} but did not finish recording ` +
+    `${files === 1 ? "it" : "them"}. Recording ${files === 1 ? "it" : "them"} is all that is ` +
+    "left; rondo then drafts this request for you to approve.",
+  nextStepRunSetup:
+    "rondo has no plan to run this on yet, so nothing has been drafted: its setup has not run " +
+    "on this computer. Whoever installed rondo here runs it once (scripts/dogfood-env.sh in " +
+    "rondo's folder); rondo then drafts this request by itself.",
+  recordSetupPlanAction: "Record setup's plan",
   addRepositoryAction: "Add this repository",
   addRepositoryBack: "Back to the request",
   repositoryUnbuilt: (repo) =>

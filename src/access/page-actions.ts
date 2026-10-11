@@ -89,6 +89,7 @@ import {
   setupRootOf,
 } from "./repository-add.js";
 import { admitUnderScope, agentTypeRecordOf, approvalTip } from "./scope.js";
+import { setupPlanFiles } from "./setup-files.js";
 import type {
   AddedRepository,
   AddRepositoryInput,
@@ -1890,5 +1891,59 @@ export async function addRepositoryFromPage(
     return failed(written.reason);
   }
   say(`Added ${input.repo} at ${into} on a press from the page.`);
+  return { ok: true };
+}
+
+/**
+ * Record setup's plan files, on a press from the page (D-0191 rule 2.2): what
+ * `rondo setup-plan` would have recorded had setup's last step happened. Only
+ * while rondo holds no plan at all, so a stale page records nothing twice.
+ */
+export async function recordSetupPlansFromPage(
+  environment: Readonly<Record<string, string | undefined>>,
+  ports: Pick<DrafterPorts, "store"> & {
+    readonly record: DrafterPorts["record"] & Pick<AdvisoryRecord, "recordSetupPlan">;
+  },
+  approver: string,
+  storePath: string,
+  requestMessageId: string,
+): Promise<AddedRepository> {
+  const failed = (note: string): AddedRepository => ({
+    ok: false,
+    why: "addRepositoryRefusedFailed",
+    note,
+  });
+  const actor = approvedActor(approver, environment);
+  if ("refusal" in actor) {
+    return failed(actor.refusal);
+  }
+  if (!(await requestRepository({ ...ports, now: Date.now }, requestMessageId)).planless) {
+    return {
+      ok: false,
+      why: "addRepositoryRefusedChanged",
+      note: "rondo holds a plan now, so there is nothing of setup's to record",
+    };
+  }
+  const files = setupPlanFiles(storePath);
+  if (files.length === 0) {
+    return {
+      ok: false,
+      why: "addRepositoryRefusedNoSetup",
+      note: `no plan setup wrote is beside ${storePath}`,
+    };
+  }
+  for (const [index, { file, plan }] of files.entries()) {
+    const atMs = Date.now();
+    const written = await ports.record.recordSetupPlan({
+      setupId: `setup-${String(atMs)}-${String(index)}`,
+      plan,
+      recordedBy: actor.actorId,
+      recordedAtMs: atMs,
+    });
+    if (written.kind !== "recorded") {
+      return failed(`${file}: ${written.reason}`);
+    }
+    say(`Recorded setup's plan ${file} on a press from the page.`);
+  }
   return { ok: true };
 }

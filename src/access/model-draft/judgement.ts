@@ -48,12 +48,13 @@ import {
 } from "../../store/records.js";
 import { sectionFramer } from "../framing.js";
 import { optionLines, storedOptions } from "../question.js";
+import { repositoryParts } from "../repository-add.js";
 
 /**
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
  * {@link INSTRUCTIONS} is a new version, a changed model a new table entry.
  */
-const DRAFTER_INSTRUCTIONS_VERSION = 10;
+const DRAFTER_INSTRUCTIONS_VERSION = 11;
 
 /** What every row a model drafter writes is named under (rule 1.4). */
 export const MODEL_DRAFTER_PREFIX = "rondo/drafter/";
@@ -69,6 +70,15 @@ export function isModelDrafterName(id: string): boolean {
  * operator message (rule 3.2) and the request stays due for the second run.
  */
 export const REDRAFT_AUTHOR = "rondo/redraft/1";
+
+/**
+ * **Who proposes a repository for the work** (D-0191 rule 3): rondo, writing
+ * the drafter's `repository` act, under a name outside
+ * {@link MODEL_DRAFTER_PREFIX}, so the proposal covers no operator message and
+ * the request is drafted again once `D-0090`'s press has added it. Its body's
+ * last line is the repository's address and nothing else.
+ */
+export const REPOSITORY_PROPOSAL_AUTHOR = "rondo/repository-proposal/1";
 
 /** The row name a drafter run writes under: `rondo/drafter/1/<model-id>` (rule 1.4). */
 export function modelDrafterName(row: DrafterRow): string {
@@ -280,6 +290,13 @@ export interface DrafterMaterial {
    * building change; this is the reading taken.
    */
   readonly language: string | null;
+  /**
+   * Whether the drafter may propose a repository no template is for (D-0191
+   * rule 3.1): the person's words name none, every held plan names its forge
+   * repository, and setup recorded a plan for `D-0090`'s press to build on.
+   * Absent on a snapshot written before it, and read as false.
+   */
+  readonly repositoryProposable?: boolean;
 }
 
 /** The three measurements rule 4.2.1 looks up, per agent type, for the document. */
@@ -333,8 +350,9 @@ const INSTRUCTIONS = [
   "You choose and you write words. You never invent a number, a template or an agent type:",
   '- Choose ONE act. "split": propose one or more plans. "ask": put one question to the person',
   "  when the request admits readings with different visible results, or when no template or",
-  '  agent type fits some of the work. "none": draft nothing, when the latest message needs no',
-  "  new draft (for example it only acknowledges).",
+  '  agent type fits some of the work. "repository": the work belongs in a repository no template',
+  '  is for (see below). "none": draft nothing, when the latest message needs no new draft (for',
+  "  example it only acknowledges).",
   "- Never settle an ambiguity by choosing a reading inside a prompt. If two readings would give",
   "  the person different results they could see, ask which one they mean.",
   "- A summary or prompt says the person chose something only when an operator message in THREAD",
@@ -365,9 +383,9 @@ const INSTRUCTIONS = [
   "- Parts of the request that can be done, reviewed and approved independently are separate",
   "  plans, one per part, each prompt covering its part only. Work that must land together is",
   "  one plan.",
-  "- Work no template or no agent type fits is a hole: name it in holes, plan nothing, and ask.",
-  '  Holes go only with "ask", and the recommended option is that the person paste a plan for',
-  "  that kind of work into the thread.",
+  "- Work no agent type fits is a hole: name it in holes, plan nothing, and ask. Holes go only",
+  '  with "ask". Recommend the agent type nearest to the work, or leaving that part out, whichever',
+  "  gives up less. Never ask the person to write, paste or send a plan, a file or a setting.",
   "- A question has options, what each gives up, and exactly one recommended option. rondo",
   "  numbers the options and marks the recommended one: do not number or label them yourself.",
   "- The summary and the question are read by the person who wrote the request, who has not",
@@ -411,6 +429,25 @@ const INSTRUCTIONS = [
   "",
 ];
 
+/**
+ * **The `repository` act, where rondo allows it** (D-0191 rule 3): the drafter
+ * names the repository, and rondo, not the model, assembles its plan from
+ * setup's on the person's press. The model writes no fact of this machine.
+ */
+const REPOSITORY_INSTRUCTIONS = [
+  '- "repository": when the work plainly belongs in a repository that no template in TEMPLATES',
+  '  is for, name it in "repository" as OWNER/NAME, with a summary saying why in the person\'s',
+  "  words. Name only a repository the thread or an issue read in it shows the work is in; never",
+  "  guess one. rondo then offers the person one press that adds it, and drafts the work there.",
+  '  Where you cannot tell which repository it is, use "ask" instead.',
+];
+
+/** Where rondo does not allow it, the act is not offered and the instruction says so. */
+const NO_REPOSITORY = [
+  '- "repository" is not available for this request: do not use it. Where the work is in no',
+  "  template's repository, ask which piece of work is meant.",
+];
+
 /** Every string the document carries from outside rondo, for choosing a fence none holds. */
 function carried(material: DrafterMaterial): string[] {
   return [
@@ -449,6 +486,7 @@ export function drafterDocument(material: DrafterMaterial): string {
 
   return [
     ...INSTRUCTIONS,
+    ...(material.repositoryProposable === true ? REPOSITORY_INSTRUCTIONS : NO_REPOSITORY),
     ...language,
     `The draft time is ${new Date(material.draftedAtMs).toISOString()}.`,
     "",
@@ -458,7 +496,12 @@ export function drafterDocument(material: DrafterMaterial): string {
     "",
     "Answer with ONE JSON object and nothing else:",
     "{",
-    '  "act": "split" | "ask" | "none",',
+    ...(material.repositoryProposable === true
+      ? [
+          '  "act": "split" | "ask" | "repository" | "none",',
+          '  "repository": "OWNER/NAME",                            ("repository" only)',
+        ]
+      : ['  "act": "split" | "ask" | "none",']),
     '  "summary": {"text": "one sentence", "bases": ["<message id>"]},      (omit only for "none")',
     '  "question": {"text": "...", "options": [{"text": "...", "gives_up": "..."}],',
     '               "recommended": <option index from 0>, "recommendation": "why, in words",',
@@ -676,12 +719,14 @@ export type DraftOutcome =
   | { readonly kind: "unavailable"; readonly reason: string }
   | {
       readonly kind: "drafted";
-      readonly act: "split" | "ask" | "none";
+      readonly act: "split" | "ask" | "repository" | "none";
       /** The split proposal's payload; null for a run that drafted nothing. */
       readonly split: SplitPayload | null;
       readonly scope: DraftedScope | null;
       /** The summary, then the question when there is one. */
       readonly messages: readonly DraftedMessage[];
+      /** `OWNER/NAME` a `repository` act proposes (D-0191 rule 3); absent on every other act. */
+      readonly repository?: string;
     };
 
 class DraftDefect extends Error {}
@@ -753,13 +798,14 @@ export function draftOf(material: DrafterMaterial, run: DrafterRun): DraftOutcom
 function checked(material: DrafterMaterial, answer: unknown): DraftOutcome {
   const row = only(
     answer,
-    ["act", "summary", "question", "plans", "holes", "narrowings"],
+    ["act", "summary", "question", "plans", "holes", "narrowings", "repository"],
     "the answer",
   );
   const act = row["act"];
-  if (act !== "split" && act !== "ask" && act !== "none") {
-    throw new DraftDefect(`'act' is ${JSON.stringify(act)}, not split, ask or none`);
+  if (act !== "split" && act !== "ask" && act !== "repository" && act !== "none") {
+    throw new DraftDefect(`'act' is ${JSON.stringify(act)}, not split, ask, repository or none`);
   }
+  const repository = proposedRepository(material, act, row["repository"]);
   const threadIds = new Set(material.thread.map((m) => m.messageId));
   const operatorIds = new Set(material.thread.filter(asksForWork).map((m) => m.messageId));
   const bases = (value: unknown, what: string): string[] => {
@@ -827,7 +873,40 @@ function checked(material: DrafterMaterial, answer: unknown): DraftOutcome {
     split,
     scope: plans.length === 0 ? null : draftedScope(material, plans, narrowings),
     messages,
+    ...(repository === null ? {} : { repository }),
   };
+}
+
+/**
+ * The repository a `repository` act proposes, checked (D-0191 rule 3.1), or
+ * null for every other act. Only where rondo said it may be proposed, only
+ * `OWNER/NAME`, and never one a template is already for: that work has a plan.
+ */
+function proposedRepository(material: DrafterMaterial, act: string, value: unknown): string | null {
+  if ((value !== undefined) !== (act === "repository")) {
+    throw new DraftDefect(
+      act === "repository"
+        ? "a 'repository' draft names no repository"
+        : `a '${act}' draft names a repository`,
+    );
+  }
+  if (act !== "repository") {
+    return null;
+  }
+  if (material.repositoryProposable !== true) {
+    throw new DraftDefect("a 'repository' draft where none may be proposed");
+  }
+  const repo = words(value, "the repository");
+  if (repositoryParts(repo) === null) {
+    throw new DraftDefect(`the repository '${repo}' is not OWNER/NAME`);
+  }
+  const held = material.templates.some(
+    (t) => String(t.plan["forge_repository"] ?? "").toLowerCase() === repo.toLowerCase(),
+  );
+  if (held) {
+    throw new DraftDefect(`the repository '${repo}' already has a template`);
+  }
+  return repo;
 }
 
 function question(

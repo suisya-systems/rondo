@@ -51,6 +51,7 @@ import {
   isModelDrafterName,
   modelDrafterName,
   prepareDraft,
+  REPOSITORY_PROPOSAL_AUTHOR,
 } from "./judgement.js";
 
 /** The iteration rows a template is drawn from (D-0071 rule 2.1.3). */
@@ -283,7 +284,7 @@ export async function gatherDrafterMaterial(
   // plan here -- the drafter is held off it (`drafter-host.ts`) and a scope the
   // person writes themselves is their own explicit act.
   const work = workRepository(
-    thread.flatMap((m) => (asksForWork(m) ? [m.body] : [])),
+    placeBodies(read.messages, inThread).bodies,
     everyChoice.map((t) => forgeRepositoryOf(t.plan)),
   );
   const offered =
@@ -389,6 +390,16 @@ export async function gatherDrafterMaterial(
     }),
   );
 
+  // **Whether the drafter may propose a repository** (D-0191 rule 3.1): only
+  // where `D-0090`'s press could then add it (setup recorded a plan to build
+  // on) and the request would wait for that press (every plan names its forge
+  // repository, and the person's words name none).
+  const repositoryProposable =
+    work.kind === "open" &&
+    everyChoice.length > 0 &&
+    everyChoice.every((t) => forgeRepositoryOf(t.plan) !== null) &&
+    everyChoice.some((t) => t.from.kind === "setup");
+
   return {
     requestMessageId,
     thread,
@@ -400,7 +411,36 @@ export async function gatherDrafterMaterial(
     rows: records.map(budgetRow),
     draftedAtMs,
     language,
+    repositoryProposable,
   };
+}
+
+/**
+ * The bodies a request's repository is read from: each operator message's, and
+ * **a repository rondo proposed, until the person writes again** (D-0191 rules
+ * 3.2 and 3.4) -- the newest proposal, counted only when no operator message
+ * follows it, by its address line alone.
+ */
+function placeBodies(
+  messages: readonly {
+    messageId: string;
+    authorKind: string;
+    authorId: string;
+    inReplyTo: string | null;
+    body: string;
+  }[],
+  inThread: ReadonlySet<string>,
+): { readonly bodies: readonly string[]; readonly address: string | null } {
+  const asked = messages.filter((m) => asksForWork(m) && inThread.has(m.messageId));
+  const proposal = messages.findLast(
+    (m) => m.authorId === REPOSITORY_PROPOSAL_AUTHOR && inThread.has(m.messageId),
+  );
+  const address =
+    proposal !== undefined &&
+    messages.indexOf(proposal) > Math.max(...asked.map((m) => messages.indexOf(m)))
+      ? (proposal.body.split("\n").at(-1) ?? "")
+      : null;
+  return { bodies: [...asked.map((m) => m.body), ...(address === null ? [] : [address])], address };
 }
 
 /** The forge repository a held plan names, or null (D-0081 rule 3.2). */
@@ -435,7 +475,14 @@ function catalogAllowedBash(plan: JsonRecord): readonly string[] | null {
 export async function requestRepository(
   ports: Pick<DrafterPorts, "store" | "record" | "now">,
   requestMessageId: string,
-): Promise<{ readonly work: WorkRepository; readonly unbuilt: readonly string[] }> {
+): Promise<{
+  readonly work: WorkRepository;
+  readonly unbuilt: readonly string[];
+  /** Whether the unheld repository is one rondo proposed, not one the person named (D-0191 rule 3.2). */
+  readonly proposed: boolean;
+  /** Whether rondo holds no plan at all, so nothing can be drafted yet (D-0191 rule 2). */
+  readonly planless: boolean;
+}> {
   const read = await ports.record.threadMessages();
   if (read.kind !== "read") {
     throw new Error(`the thread will not read: ${read.reason}`);
@@ -448,8 +495,9 @@ export async function requestRepository(
   const held = (await heldTemplates(ports, records, read.messages, inThread)).sort(
     (a, b) => b.heldAtMs - a.heldAtMs,
   );
+  const { bodies, address } = placeBodies(read.messages, inThread);
   const work = workRepository(
-    read.messages.flatMap((m) => (asksForWork(m) && inThread.has(m.messageId) ? [m.body] : [])),
+    bodies,
     held.map((t) => forgeRepositoryOf(t.plan)),
   );
   const unbuilt =
@@ -460,7 +508,15 @@ export async function requestRepository(
           const bash = newest === undefined ? null : catalogAllowedBash(newest.plan);
           return bash?.every((subject) => COMMON_BASH.includes(subject)) === true;
         });
-  return { work, unbuilt };
+  return {
+    work,
+    unbuilt,
+    proposed:
+      address !== null &&
+      work.kind === "unheld" &&
+      address.toLowerCase().endsWith(`/${work.repo.toLowerCase()}`),
+    planless: held.length === 0,
+  };
 }
 
 /**

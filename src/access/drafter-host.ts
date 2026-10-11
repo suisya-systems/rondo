@@ -36,7 +36,11 @@ import type { AdvisoryRecord } from "../store/sqlite.js";
 import { hostFailure } from "./host-failure.js";
 import type { DrafterPorts, DrafterRunResult } from "./model-draft/host.js";
 import { draftRequest } from "./model-draft/host.js";
-import { MODEL_DRAFTER_PREFIX, REDRAFT_AUTHOR } from "./model-draft/judgement.js";
+import {
+  MODEL_DRAFTER_PREFIX,
+  REDRAFT_AUTHOR,
+  REPOSITORY_PROPOSAL_AUTHOR,
+} from "./model-draft/judgement.js";
 
 const DRAFTER_PREFIX = MODEL_DRAFTER_PREFIX;
 
@@ -469,6 +473,9 @@ async function write(
     return await unavailable(result.outcome.reason);
   }
   const drafted = result.outcome;
+  if (drafted.repository !== undefined) {
+    return await proposeRepository(ports, material, drafted, drafted.repository, cost);
+  }
   // **A request a goal scope covers is drafted a split and no scope of its own**
   // (rondo#469): the goal scope is its approval, and D-0127's tick starts it.
   const opener = material.thread.find((m) => m.messageId === material.requestMessageId);
@@ -571,6 +578,53 @@ async function write(
     `drafter  ${material.requestMessageId}: ${drafted.act} (${cost})` +
       `${draftedScope === null ? (underGoal ? ", under its goal scope" : "") : ", with a drafted scope"}`,
   );
+  return "written";
+}
+
+/**
+ * **Write a `repository` act as rondo's proposal** (D-0191 rule 3.2): the
+ * drafter's summary, then the repository's address on a line of its own, under
+ * {@link REPOSITORY_PROPOSAL_AUTHOR}. It covers no operator message, so the
+ * request is drafted again once the repository is added; until then it waits
+ * for `D-0090`'s press, as one the person named does.
+ */
+async function proposeRepository(
+  ports: DrafterHostPorts,
+  material: NonNullable<DrafterRunResult["material"]>,
+  drafted: { readonly messages: readonly { body: string; bases: readonly string[] }[] },
+  repository: string,
+  cost: string,
+): Promise<"written" | "stale" | "failed" | "held"> {
+  const operatorIds = material.thread.filter(asksForWork).map((m) => m.messageId);
+  const latest = operatorIds[operatorIds.length - 1] as string;
+  const summary = drafted.messages[0];
+  const outcome = await ports.record.recordDraft({
+    requestMessageId: material.requestMessageId,
+    operatorMessageIds: operatorIds,
+    drafterPrefix: DRAFTER_PREFIX,
+    proposal: null,
+    scope: null,
+    messages: [
+      {
+        messageId: ports.mintId("drafter"),
+        body: `${summary?.body ?? ""}\n\nhttps://github.com/${repository}`,
+        authorKind: "drafter",
+        authorId: REPOSITORY_PROPOSAL_AUTHOR,
+        inReplyTo: latest,
+        atMs: ports.now(),
+        bases: (summary?.bases ?? [latest]).map((messageId) => ({ form: "message", messageId })),
+        asks: false,
+      },
+    ],
+  });
+  if (outcome.kind === "stale" || outcome.kind === "covered") {
+    return outcome.kind === "stale" ? "stale" : "written";
+  }
+  if (outcome.kind !== "recorded") {
+    ports.log(`drafter  ${material.requestMessageId}: nothing was written: ${outcome.reason}`);
+    return "failed";
+  }
+  ports.log(`drafter  ${material.requestMessageId}: proposed ${repository} (${cost})`);
   return "written";
 }
 
