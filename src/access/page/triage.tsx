@@ -89,6 +89,8 @@ export interface PointsAsk {
   readonly why: string;
   readonly mixedScript: boolean;
   readonly points: readonly { readonly point: string; readonly recommendation: string }[];
+  /** What rondo decided in the reading it was asked from, as the flow will send it (D-0193). */
+  readonly decided: readonly OpenPoint[];
 }
 
 /** A goal scope in force over a goal, as the page reads it (rondo#488). */
@@ -304,6 +306,11 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
               why: asked.why ?? rankedAsked?.why ?? "",
               mixedScript: rankedAsked?.mixedScript === true,
               points: asked.points,
+              decided: decided(
+                reads.payloads
+                  .get(asked.proposalId)
+                  ?.ranked.find((one) => one.key === asked.candidate)?.openPoints ?? [],
+              ),
             },
     };
     // A reading against a goal the person has since changed is not drawn: its
@@ -622,14 +629,14 @@ function Block({
               )}
               {/* D-0193 rule 5: what rondo decided, drawn apart and quieter,
                 since nothing in it waits on the person. */}
-              {decided(block.first.openPoints).length === 0 ? null : (
+              {decidedOnCard(block.first, block.goalScope).length === 0 ? null : (
                 <>
                   <dt>{wording.triageDecided}</dt>
                   <dd>
                     <PointList
                       wording={wording}
                       reads={reads}
-                      points={decided(block.first.openPoints)}
+                      points={decidedOnCard(block.first, block.goalScope)}
                       quiet
                     />
                   </dd>
@@ -763,6 +770,18 @@ function GoalScopeRow({
       </a>
     </div>
   );
+}
+
+/**
+ * What rondo decided of the card's candidate: while the flow asks about it,
+ * the asked reading's, which is what the flow sends (D-0193 rule 4), else the
+ * latest ranking's.
+ */
+function decidedOnCard(
+  first: CandidateView,
+  goalScope: { readonly ask: PointsAsk | null },
+): readonly OpenPoint[] {
+  return goalScope.ask?.candidate === first.key ? goalScope.ask.decided : decided(first.openPoints);
 }
 
 /** A card's open points, each with rondo's suggestion; `quiet` for the ones rondo decided. */

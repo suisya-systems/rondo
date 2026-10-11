@@ -31143,7 +31143,8 @@ it, and nothing downstream could tell a raised point from one rondo could decide
    thread, or a change at a gate that reaches them (`D-0164`). This entry adds no press.
 5. **The page draws the two apart.** The triage card lists the raised points under *open points*
    as now, then the decided ones under *decided by rondo* with each decision, in muted ink, since
-   nothing in them waits on the person (`D-0082` rule 2). *Put it in the box* writes both into the
+   nothing in them waits on the person (`D-0082` rule 2). While the flow asks about the candidate,
+   the decided ones drawn are the asked reading's, which rule 4 sends. *Put it in the box* writes both into the
    box: the raised points under the existing line, and the decided ones under *Decided by rondo
    (edit to change)*. Before the person sends it, each one is their text to change.
 6. **Decided is recorded.** The decided points stay on the proposal row's payload, with their

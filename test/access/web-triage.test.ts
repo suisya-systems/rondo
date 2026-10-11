@@ -483,3 +483,85 @@ test("the card is the candidate the flow asks about, and a candidate put aside l
   if (other?.kind !== "ranked") throw new Error(other?.kind);
   expect(other.rest).toHaveLength(2);
 });
+
+test("beside an ask, the card shows what rondo decided in the asked reading, as the flow sends it (D-0193)", async () => {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { TriageSection, triageBlocks } = await import("../../src/access/page/triage.js");
+  const reading = (runner: string, raise: "dispute" | null) => ({
+    repository: "o/r",
+    goalId: "g-1",
+    ranked: [
+      {
+        key: "issue:o/r#7",
+        clause: 1,
+        request: "r7",
+        why: "why",
+        openPoints: [
+          { point: "Old flag", recommendation: "Keep it", raise },
+          { point: "Which runner", recommendation: runner, raise: null },
+        ],
+        source: { form: "issue" as const, repository: "o/r", number: 7 },
+        title: "t",
+        labels: [],
+      },
+    ],
+    withheld: [],
+    read: { issues: 1, stopped: 0 },
+    unavailable: null,
+  });
+  const [block] = triageBlocks(
+    EN,
+    {
+      repositories: ["o/r"],
+      goals: [
+        {
+          goalId: "g-1",
+          repository: "o/r",
+          clauses: [{ said: "s", unmetIf: "u" }],
+          writtenBy: "ada",
+          writtenAtMs: 1,
+        },
+      ],
+      latest: [
+        {
+          proposalId: "t-2",
+          drafter: "d",
+          repository: "o/r",
+          payload: {},
+          snapshot: {},
+          createdAtMs: 2,
+        },
+      ],
+      // The ask was raised from t-1; t-2 re-read the same candidate since.
+      payloads: new Map([
+        ["t-1", reading("vitest", "dispute")],
+        ["t-2", reading("jest", null)],
+      ]),
+      goalScopes: new Map([["g-1", { state: "running" as const }]]),
+      flowAsks: [
+        {
+          askId: "ask-7",
+          repository: "o/r",
+          goalId: "g-1",
+          scopeDecisionId: "sd-1",
+          proposalId: "t-1",
+          candidate: "issue:o/r#7",
+          points: [{ point: "Old flag", recommendation: "Keep it" }],
+          request: null,
+          why: null,
+          askedAtMs: 2,
+          answer: null,
+        },
+      ],
+      putAside: [],
+    },
+    3,
+  );
+  if (block?.kind !== "ranked") throw new Error(block?.kind);
+  const html = renderToStaticMarkup(TriageSection({ wording: EN, token: "t", blocks: [block] }));
+  const card = html.slice(html.indexOf(EN.triageDecided));
+  expect(card).toContain("vitest");
+  expect(html).not.toContain("jest");
+  // The asked point is the form's, not drawn as decided.
+  expect(card.slice(0, card.indexOf("</dl>"))).not.toContain("Old flag");
+});

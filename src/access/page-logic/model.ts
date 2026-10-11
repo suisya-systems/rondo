@@ -611,6 +611,14 @@ export async function triageModel(
       return payload === null ? [] : [[row.proposalId, payload]];
     }),
   );
+  // **And the readings an open ask was raised from** (D-0193 rule 4): what
+  // rondo decided beside the questions is that reading's, as the flow sends it.
+  for (const ask of flowAsks) {
+    if (ask.answer !== null || triagePayloads.has(ask.proposalId)) continue;
+    const read = await ports.record.readProposal(ask.proposalId);
+    const payload = read.kind === "read" ? readTriagePayload(read.proposal.payload) : null;
+    if (payload !== null) triagePayloads.set(ask.proposalId, payload);
+  }
   return {
     repositories: triageRepositories,
     goals,
