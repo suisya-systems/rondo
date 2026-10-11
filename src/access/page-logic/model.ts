@@ -100,6 +100,32 @@ export function draftingOver(standing: Awaited<ReturnType<typeof scopeStanding>>
   return owed && (standing.kind === "none" || standing.kind === "drafted");
 }
 
+/**
+ * **Where the person last looked, as the page reads it** (rondo#631, D-0083
+ * rules 4 and 7): the later of the terminal's mark and the person's own last
+ * press here. Only `rondo inbox` writes a mark, and a redraw may not (D-0041),
+ * so a person who works only on the page would otherwise be stuck at a mark
+ * that never moves. A press is a person at the page, which is the sure sign a
+ * redraw cannot give -- and it is read off the rows the press already wrote,
+ * so nothing new is stored. The list's line and *since you last looked* both
+ * read this one mark through the inbox, so they cannot disagree.
+ *
+ * **One past the press**, because the press's own row is what the person just
+ * did and not news to them; `D-0032` rule 11's inclusive bound is kept for
+ * the terminal's mark, whose rows at the bound may not have been shown.
+ */
+function lookedFromPage(ports: WebPorts): WebPorts {
+  const lastView = async (actorId: string): Promise<number | null> => {
+    const viewed = await ports.record.lastView(actorId);
+    const acted = await ports.record.lastActed(actorId);
+    return acted === null ? viewed : Math.max(viewed ?? acted + 1, acted + 1);
+  };
+  // Over the record rather than a copy of it: a record may keep its methods on
+  // a prototype, which a spread would leave behind.
+  const record: WebPorts["record"] = Object.assign(Object.create(ports.record), { lastView });
+  return { ...ports, record };
+}
+
 /** What every view reads, once per draw (rondo#341). */
 export interface PageModel {
   readonly nowMs: number;
@@ -161,7 +187,8 @@ export async function pageModel(
    * (#220 S1).
    */
   const onThreads = view.kind === "requests" || view.kind === "thread" || view.kind === "summary";
-  const inbox = ports.actorId === null ? null : await gatherInbox(ports, ports.actorId);
+  const inbox =
+    ports.actorId === null ? null : await gatherInbox(lookedFromPage(ports), ports.actorId);
   const live: LiveRow[] = (await ports.store.readLive()).flatMap((outcome): LiveRow[] => {
     switch (outcome.kind) {
       case "read":

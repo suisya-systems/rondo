@@ -777,6 +777,21 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
       return mark === null || mark === undefined ? null : Number(mark);
     },
 
+    async lastActed(actorId: string): Promise<number | null> {
+      const row = connection
+        .prepare(
+          "SELECT MAX(at) AS acted FROM (" +
+            "SELECT MAX(at_ms) AS at FROM conversation_message " +
+            "WHERE author_kind = 'operator' AND author_id = ? " +
+            "UNION ALL SELECT MAX(answered_at_ms) FROM gate_answer WHERE actor_id = ? " +
+            "UNION ALL SELECT MAX(decided_at_ms) FROM human_decision WHERE actor_id = ? " +
+            "UNION ALL SELECT MAX(decided_at_ms) FROM scope_decision WHERE actor_id = ?)",
+        )
+        .get(actorId, actorId, actorId, actorId) as SqlRow | undefined;
+      const acted = row === undefined ? null : row["acted"];
+      return acted === null || acted === undefined ? null : Number(acted);
+    },
+
     async recordAttention(row: OperatorAttention): Promise<RecordOutcome> {
       if (row.disposition === "withheld" && (row.ruleName ?? "").trim() === "") {
         // **D-0032 rule 10's writer refusal.** The schema's `CHECK` already

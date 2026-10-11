@@ -57,6 +57,8 @@ export interface WebPorts extends InboxReadPorts {
       AdvisoryRecord,
       | "admissionRefusals"
       | "threadMessages"
+      // rondo#631: the person's own last press, read as having looked.
+      | "lastActed"
       // rondo#233 S3: the budgets read a digest's tier back from the held
       // record (D-0069 section 1), and the scope screen's second state reads
       // the approval the press wrote and what a predecessor of it spent
