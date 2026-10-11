@@ -18,6 +18,7 @@ import {
   questionRevise,
   readWorkerQuestion,
   relayQuestion,
+  storedOptions,
 } from "../../src/access/question.js";
 import {
   askStandsOver,
@@ -298,6 +299,28 @@ test("a worker's question does not hold an unproposed start of its request; any 
   expect(
     askStandsOver({ messageId: "m", iterationIds: ["it-1"], answeredStop: false }, [], true),
   ).toBe(true);
+});
+
+test("stored options drop the writer's own numbering, since each press draws one (D-0190 rule 1)", () => {
+  expect(
+    storedOptions(
+      [
+        { text: "1. Keep it", givesUp: "a" },
+        { text: "（２）Drop it", givesUp: "b" },
+        { text: "3.5 GB is the cap", givesUp: "c" },
+      ],
+      1,
+      "2. Dropping it is smaller.",
+    ),
+  ).toEqual({
+    options: [
+      { text: "Keep it", givesUp: "a" },
+      { text: "Drop it", givesUp: "b" },
+      { text: "3.5 GB is the cap", givesUp: "c" },
+    ],
+    recommended: 1,
+    recommendation: "Dropping it is smaller.",
+  });
 });
 
 test("options are numbered once, whatever the writer numbered them with (rondo#437)", () => {

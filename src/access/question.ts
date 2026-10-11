@@ -21,6 +21,7 @@
  * recommendation.
  */
 
+import type { AskOptions } from "../store/ask-options.js";
 import type { IterationRecord, JsonRecord, ThreadMessageDraft } from "../store/records.js";
 import {
   isDeterministicReadingDrafter,
@@ -164,6 +165,23 @@ export function optionLines(
   ];
 }
 
+/**
+ * The options as the store keeps them (D-0190 rule 1), **with the same one
+ * numbering** as {@link optionLines}: each press draws its own number, so an
+ * option the writer numbered would draw *1. 1.* again (rondo#437).
+ */
+export function storedOptions(
+  options: readonly WorkerOption[],
+  recommended: number,
+  recommendation: string,
+): AskOptions {
+  return {
+    options: options.map((o, i) => ({ text: unnumbered(o.text, i + 1), givesUp: o.givesUp })),
+    recommended,
+    recommendation: unnumbered(recommendation, recommended + 1),
+  };
+}
+
 /** `text` without a leading *n.*, *n)* or *(n)* of its own, in either width. */
 function unnumbered(text: string, n: number): string {
   // Matched on the text as written, so the match's length is what to cut.
@@ -273,11 +291,11 @@ export async function relayQuestion(
     // each is a press; an unreadable block offers none and keeps today's presses.
     ...(read.kind === "question"
       ? {
-          askOptions: {
-            options: read.question.options,
-            recommended: read.question.recommended,
-            recommendation: read.question.recommendation,
-          },
+          askOptions: storedOptions(
+            read.question.options,
+            read.question.recommended,
+            read.question.recommendation,
+          ),
         }
       : {}),
   };

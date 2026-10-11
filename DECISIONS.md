@@ -30518,7 +30518,9 @@ drift: re-measure the claim, not the number.
    1. It holds one canonical JSON value:
       `{"options":[{"text":"...","gives_up":"..."}],"recommended":<0-based index>}`, with
       `"recommendation":"..."` after `"recommended"` when the writer gave one. Keys are in that
-      order, and there is at least one option.
+      order, and there is at least one option. An option's own leading number, and the
+      recommendation's, is taken off as `optionLines` takes it off, since each press draws its
+      number (rondo#437).
    2. It is written in the same row as the body. The body is unchanged: it is still `optionLines`'
       prose, so every reader of the body reads what it read before.
    3. No back-fill. An ask written before this entry reads NULL and keeps today's presses.

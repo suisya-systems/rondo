@@ -47,7 +47,7 @@ import {
   type ThreadAuthorKind,
 } from "../../store/records.js";
 import { sectionFramer } from "../framing.js";
-import { optionLines } from "../question.js";
+import { optionLines, storedOptions } from "../question.js";
 
 /**
  * The version of the drafter's own instructions (D-0071 rule 1.4): a changed
@@ -873,7 +873,7 @@ function question(
     body,
     bases: bases(q["bases"], "the question"),
     asks: true,
-    askOptions: { options, recommended, recommendation },
+    askOptions: storedOptions(options, recommended, recommendation),
   };
 }
 
