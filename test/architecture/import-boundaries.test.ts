@@ -1371,6 +1371,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page/document.tsx": [HUMAN],
   // rondo#470: publish inside a scope, through the press's own path.
   "src/access/publish-host.ts": ["Publishing"],
+  // D-0194: the conflict fix of a line started with no claim, through the press's own path.
+  "src/access/fix-host.ts": [DISPATCHER],
   "src/access/page/empty-side.tsx": [HUMAN],
   "src/access/page/empty.tsx": [HUMAN],
   "src/access/page/triage.tsx": [HUMAN, WORK_DISCOVERY],

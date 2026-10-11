@@ -1274,7 +1274,7 @@ async function threadCentre(
                       conflictFix:
                         acts?.fixOffered === true
                           ? "offered"
-                          : fixRunning
+                          : fixRunning || acts?.fixByRondo === true
                             ? "running"
                             : acts?.fixWaits === true
                               ? "waits"

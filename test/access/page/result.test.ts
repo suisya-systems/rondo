@@ -26,6 +26,7 @@ import {
 } from "../../../src/access/page-logic/result.js";
 import { lapEvents } from "../../../src/access/page-logic/thread-events.js";
 import { threadsOf } from "../../../src/access/page-logic/threads.js";
+import type { ConflictFixed } from "../../../src/access/web-app.js";
 import { chromeFor, EN } from "../../../src/access/wording.js";
 import type { IterationRecord } from "../../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../../src/store/sqlite.js";
@@ -1019,6 +1020,50 @@ test("a conflicting pull request is offered rondo's fix at the top, as a press u
   await published(green);
   await checked(green, { kind: "green", counted: 2, skipped: 0 });
   expect(await fixing(green)).not.toContain("/fix-conflict?");
+});
+
+test("a conflict rondo fixes by itself draws no press and says so; one it left is the press with why (D-0194)", async () => {
+  const world = await conflicting();
+  const page = async (starting: boolean, left: ConflictFixed | null, lang: "en" | "ja" = "ja") =>
+    await operatorPage(
+      {
+        ...portsOver(world, "ada", null, lang, "dec-1"),
+        mergeable: true,
+        fixesConflicts: true,
+        fixByRondo: { starting: async () => starting, left: () => left },
+      },
+      "t",
+      view,
+      chromeFor(lang),
+      null,
+      null,
+      () => "i-fix",
+    );
+  const japanese = await page(true, null);
+  expect(japanese).not.toContain("/fix-conflict?");
+  expect(japanese).toContain("rondo の番です");
+  expect(japanese).toContain("承認の範囲で rondo が自分で main を取り込み、競合を解消しています");
+  // The band says it is settling, as for a fix already running.
+  expect(head(japanese)).toContain("rondo が main を取り込む新しい回で、競合を解消しています。");
+  expect(await page(true, null, "en")).toContain(
+    "rondo is bringing main into the branch and settling the conflict by itself",
+  );
+  const refusal: ConflictFixed = {
+    ok: false,
+    why: "conflictFixRefusedOutside",
+    test: "redo",
+    note: "x",
+  };
+  const left = await page(false, refusal, "en");
+  expect(left).toContain('action="/fix-conflict?lang=en"');
+  expect(left).toContain(
+    "rondo tried to start this fix by itself. Nothing was started and nothing was spent: one " +
+      "more attempt is outside the scope this work ran under, at the redo test.",
+  );
+  // Not rondo's, and nothing tried: the press as before, with no such line.
+  const press = await page(false, null, "en");
+  expect(press).toContain('action="/fix-conflict?lang=en"');
+  expect(press).not.toContain("rondo tried to start this fix by itself");
 });
 
 test("a red pull request is offered the same press in its own words, and the band names the checks (rondo#551)", async () => {

@@ -267,6 +267,13 @@ test("a line with no drafted claim holds nothing and runs beside any line; its g
   expect(await store.claimChanged({ iterationId: "src", paths: ["lib/y.ts"], nowMs: 11 })).toEqual({
     kind: "unchanged",
   });
+  // Started with no claim, still so once its gate claimed (D-0194); a drafted
+  // claim, a whole-repository one and a lap not in the store were not.
+  expect(await store.startedUnclaimed("free")).toBe(true);
+  expect(await store.startedUnclaimed("free2")).toBe(true);
+  expect(await store.startedUnclaimed("src")).toBe(false);
+  expect(await store.startedUnclaimed("wide")).toBe(false);
+  expect(await store.startedUnclaimed("nowhere")).toBe(false);
 });
 
 test("a closed lap revised into a redo that failed owes nothing, so the redo's failure releases the line", async () => {

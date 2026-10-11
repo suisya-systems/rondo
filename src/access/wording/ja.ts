@@ -879,7 +879,8 @@ export const JA: Chrome = Object.freeze({
   workerProviderUnknown:
     "不明です。この周回は、rondo が提供元を記録するようになる前に始まりました。",
   startBeside:
-    "計画が無いので、ほかの作業と並べて始めます。ぶつかったら、rondo が直す作業をボタン一つで出します。",
+    "計画が無いので、ほかの作業と並べて始めます。ぶつかったら、作業を自分で進める承認なら rondo が直す作業を" +
+    "自分で始め、そうでなければボタン一つで出します。",
   startNote:
     "依頼に書いた言葉が、そのまま作業への指示になります。周回の名前は rondo が付けるので、" +
     "あなたが決める必要はありません。",
@@ -1571,6 +1572,11 @@ export const JA: Chrome = Object.freeze({
     `${pullRequest} は ${base} と競合していて、チェックが動きません。rondo が ${base} を` +
     "取り込んで競合を解消できます（ほかは変えません）。push の前に、その結果をここで確認して" +
     "もらいます。",
+  nextStepConflictFixing: (pullRequest, base) =>
+    `${pullRequest} は ${base} と競合しています。この作業は計画無しでほかの作業と並べて始めたので、` +
+    `承認の範囲で rondo が自分で ${base} を取り込み、競合を解消しています（ほかは変えません）。` +
+    "押すものはありません。解消の回も、ほかの作業と同じく確認の場で止まります。",
+  conflictFixLeft: (reason) => `rondo は自分でこの解消を始めようとしました。${reason}`,
   conflictFixAction: "rondo に競合を解消してもらう",
   conflictFixBusy: "解消を始めています…",
   conflictFixBack: "依頼に戻る",

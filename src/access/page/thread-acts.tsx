@@ -319,6 +319,16 @@ export async function threadActs(
     nextPublish !== null &&
     ports.publishUntried?.(nextPublish.record.id) === true &&
     (await rondoPublishes(ports, nextPublish.record.id).catch(() => null)) !== null;
+  // **The conflict fix rondo starts by itself** (D-0194): a line started with
+  // no claim, under an approval that starts work by itself, is said as rondo's,
+  // with no press, on the host pass's own test. One it tried and left is the
+  // press's again, with why it started nothing.
+  const rondoFixing =
+    nextFix !== null &&
+    nextFix.red === null &&
+    nextFix.closed === null &&
+    (await ports.fixByRondo?.starting(nextFix.record.id).catch(() => false)) === true;
+  const fixLeft = nextFix === null ? null : (ports.fixByRondo?.left(nextFix.record.id) ?? null);
   // The conflict fix (rondo#417, D-0105): a press, since the attempt it starts
   // is counted against the approval and nothing is between it and the act.
   // A red check's repair (rondo#551) is the same press, in its own words.
@@ -330,6 +340,15 @@ export async function threadActs(
           ? wording.nextStepConflictFix(fix.pullRequest, fix.base)
           : wording.nextStepChecksFix(fix.pullRequest, wording.checksDetail(fix.red))}
       </p>
+      {fixLeft === null ? null : (
+        <p class="mt-1 text-meta leading-5 text-muted-foreground">
+          {wording.conflictFixLeft(
+            fixLeft.why === "conflictFixRefusedOutside"
+              ? wording.conflictFixRefusedOutside(fixLeft.test ?? "")
+              : wording[fixLeft.why ?? "conflictFixRefusedNotStarted"],
+          )}
+        </p>
+      )}
       {fix.closed !== null ? (
         <div class="mt-3">
           {raiseBlock(wording, fix.closed, requestMessageId, fix.scopeDecisionId, fix.record.id)}
@@ -382,6 +401,15 @@ export async function threadActs(
       <p class="mt-1 text-body leading-6">{wording.nextStepPublishing(updating, publishMerges)}</p>
     </section>
   );
+  // The same neutral card for a conflict rondo is fixing by itself (D-0194).
+  const fixingCard = (fix: NonNullable<typeof nextFix>) => (
+    <section class="next-step mb-4 rounded-lg border border-run/35 bg-run-wash px-4 py-3">
+      <h2 class="text-meta leading-5 font-semibold text-run-ink">{wording.nextStepRondoHeading}</h2>
+      <p class="mt-1 text-body leading-6">
+        {wording.nextStepConflictFixing(fix.pullRequest, fix.base)}
+      </p>
+    </section>
+  );
   // The same neutral card for a start rondo keeps waiting (rondo#284).
   const waitsCard = (
     <section class="next-step mb-4 rounded-lg border border-run/35 bg-run-wash px-4 py-3">
@@ -407,7 +435,9 @@ export async function threadActs(
     unheld !== null
       ? unheldCard(unheld)
       : nextFix !== null
-        ? fixCard(nextFix)
+        ? rondoFixing
+          ? fixingCard(nextFix)
+          : fixCard(nextFix)
         : nextMerge !== null
           ? mergeCard(nextMerge)
           : publishCard !== null
@@ -493,7 +523,9 @@ export async function threadActs(
           : standing.kind === "decided" || standing.kind === "own"
             ? ("done" as const)
             : ("yours" as const),
-    fixOffered: nextFix !== null && nextFix.closed === null,
+    fixOffered: nextFix !== null && nextFix.closed === null && !rondoFixing,
+    // rondo is starting it (D-0194): the band says it is settling, as for a fix running.
+    fixByRondo: rondoFixing,
     // Withheld by a question of this line the person owes (rondo#500): the
     // band says so rather than leaving only "resolve it by hand".
     fixWaits: fixBlock === "asked",

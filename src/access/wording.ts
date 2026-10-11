@@ -1657,6 +1657,13 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
    * person checks it before anything is pushed.
    */
   readonly nextStepConflictFix: (pullRequest: string, base: string) => string;
+  /**
+   * D-0194: the same conflict where rondo starts the fix by itself (a line
+   * started with no claim, under an approval that runs work by itself): no
+   * press; and, where its try started nothing, why, beside the press.
+   */
+  readonly nextStepConflictFixing: (pullRequest: string, base: string) => string;
+  readonly conflictFixLeft: (reason: string) => string;
   readonly conflictFixAction: string;
   readonly conflictFixBusy: string;
   readonly conflictFixBack: string;

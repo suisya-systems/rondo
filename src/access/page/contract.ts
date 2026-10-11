@@ -21,6 +21,7 @@ import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
 import type { LapWorkInspection } from "../forge.js";
 import type { InboxReadPorts } from "../inbox.js";
 import type { NamedIssue, WorkRepository } from "../issue-read.js";
+import type { ConflictFixed } from "../web-app.js";
 import type { Chrome } from "../wording.js";
 
 /**
@@ -171,6 +172,16 @@ export interface WebPorts extends InboxReadPorts {
    * press (rondo#619). Absent where the host runs no pass: the press stays.
    */
   readonly publishUntried?: (iterationId: string) => boolean;
+  /**
+   * The host's conflict-fix pass (D-0194): whether rondo is to start, or is
+   * starting, a lap's conflict fix by itself, so the card offers no press; and
+   * what its try came to when it started nothing, said beside the press.
+   * Absent where the host runs no pass: the press stays.
+   */
+  readonly fixByRondo?: {
+    readonly starting: (iterationId: string) => Promise<boolean>;
+    readonly left: (iterationId: string) => ConflictFixed | null;
+  };
   /**
    * Whether the host holds a conflict-fix press (rondo#417, D-0105): true
    * exactly where the revise port carries one, so the card is drawn only where
