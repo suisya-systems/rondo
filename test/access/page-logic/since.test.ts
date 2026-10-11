@@ -60,7 +60,6 @@ test("each changed row lands under its request, and the rest are counted", () =>
       rondoWrote: 0,
       youWrote: 0,
       othersWrote: 0,
-      youAnswered: 1,
       lapsMoved: 3,
       // lap-2 closed before the mark: a reading landing on it is not an ending.
       lapsEnded: 1,
@@ -72,7 +71,6 @@ test("each changed row lands under its request, and the rest are counted", () =>
       rondoWrote: 1,
       youWrote: 1,
       othersWrote: 1,
-      youAnswered: 0,
       lapsMoved: 0,
       lapsEnded: 0,
       atMs: 120,
@@ -83,7 +81,6 @@ test("each changed row lands under its request, and the rest are counted", () =>
       rondoWrote: 0,
       youWrote: 0,
       othersWrote: 1,
-      youAnswered: 0,
       lapsMoved: 0,
       lapsEnded: 0,
       atMs: 101,
@@ -99,26 +96,22 @@ test("a moved request is said as one sentence, in each language", () => {
     rondoWrote: 2,
     youWrote: 0,
     othersWrote: 0,
-    youAnswered: 1,
     lapsMoved: 3,
     lapsEnded: 1,
     atMs: 0,
   };
   // rondo's name keeps its lower case at the head of the sentence.
-  expect(EN.sinceSaid(moved)).toBe(
-    "rondo wrote 2 messages, you answered a gate, 3 laps moved and 1 ended.",
-  );
+  expect(EN.sinceSaid(moved)).toBe("rondo wrote 2 messages, 3 laps moved and 1 ended.");
   expect(JA.sinceSaid(moved)).toBe(
-    "rondo が 2 件書きました。あなたが 1 回答えました。3 周が動き、うち 1 周が終わりました。",
+    "rondo が 2 件書きました。3 周が動き、うち 1 周が終わりました。",
   );
   expect(EN.sinceSaid({ ...moved, rondoWrote: 0, asked: true })).toBe(
-    "You asked for it, you answered a gate, 3 laps moved and 1 ended.",
+    "You asked for it, 3 laps moved and 1 ended.",
   );
   expect(
     EN.sinceSaid({
       ...moved,
       rondoWrote: 0,
-      youAnswered: 0,
       lapsMoved: 0,
       lapsEnded: 0,
       othersWrote: 1,

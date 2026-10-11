@@ -19,8 +19,13 @@
 import type { RecordChange } from "../../store/records.js";
 
 /** The change kinds whose id is a lap's: each says that lap moved. */
+/**
+ * A gate answer is among them as its lap moving, and not as the person's act:
+ * `changedSince` carries no actor, and rondo answers some gates itself.
+ */
 const LAP_KINDS: ReadonlySet<string> = new Set([
   "iteration",
+  "gate_answer",
   "lap_reading",
   "operator_verification_claim",
   "scope_consumption",
@@ -38,8 +43,6 @@ export interface MovedRequest {
   readonly youWrote: number;
   /** Messages somebody else wrote into it, the request itself among them. */
   readonly othersWrote: number;
-  /** Gates the person answered on this request's laps. */
-  readonly youAnswered: number;
   /** Distinct laps that moved. */
   readonly lapsMoved: number;
   /** Of those, the ones that ended since the mark. */
@@ -81,7 +84,6 @@ export function sinceLooked(
       rondoWrote: number;
       youWrote: number;
       othersWrote: number;
-      youAnswered: number;
       laps: Set<string>;
       ended: Set<string>;
       atMs: number;
@@ -94,7 +96,6 @@ export function sinceLooked(
       rondoWrote: 0,
       youWrote: 0,
       othersWrote: 0,
-      youAnswered: 0,
       laps: new Set<string>(),
       ended: new Set<string>(),
       atMs,
@@ -127,16 +128,12 @@ export function sinceLooked(
       }
       continue;
     }
-    const lap =
-      LAP_KINDS.has(change.kind) || change.kind === "gate_answer" ? reads.lapOf(change.id) : null;
+    const lap = LAP_KINDS.has(change.kind) ? reads.lapOf(change.id) : null;
     if (lap === null) {
       elsewhere += 1;
       continue;
     }
     const entry = under(lap.requestId, change.atMs);
-    if (change.kind === "gate_answer") {
-      entry.youAnswered += 1;
-    }
     entry.laps.add(change.id);
     // **Ended since the mark, not merely ended**: a reading that lands on a
     // lap closed last week moves it without ending it again.
@@ -152,7 +149,6 @@ export function sinceLooked(
         rondoWrote: entry.rondoWrote,
         youWrote: entry.youWrote,
         othersWrote: entry.othersWrote,
-        youAnswered: entry.youAnswered,
         lapsMoved: entry.laps.size,
         lapsEnded: entry.ended.size,
         atMs: entry.atMs,

@@ -39,9 +39,6 @@ export const SINCE_EN: SinceWords = {
       ...(moved.othersWrote > 0
         ? [`someone else wrote ${times(moved.othersWrote, "a message", "messages")}`]
         : []),
-      ...(moved.youAnswered > 0
-        ? [`you answered ${times(moved.youAnswered, "a gate", "gates")}`]
-        : []),
       ...(moved.lapsEnded > 0
         ? [
             moved.lapsEnded === moved.lapsMoved
@@ -75,7 +72,6 @@ export const SINCE_JA: SinceWords = {
       ...(moved.rondoWrote > 0 ? [`rondo が ${String(moved.rondoWrote)} 件書きました`] : []),
       ...(moved.youWrote > 0 ? [`あなたが ${String(moved.youWrote)} 件書きました`] : []),
       ...(moved.othersWrote > 0 ? [`ほかの人が ${String(moved.othersWrote)} 件書きました`] : []),
-      ...(moved.youAnswered > 0 ? [`あなたが ${String(moved.youAnswered)} 回答えました`] : []),
       ...(moved.lapsEnded > 0
         ? [
             moved.lapsEnded === moved.lapsMoved

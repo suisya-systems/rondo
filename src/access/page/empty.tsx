@@ -102,7 +102,7 @@ function Since({ wording, since }: { readonly wording: Chrome; readonly since: S
             const place = since.placeOf(moved.messageId);
             // The thread's event grammar: a dot, and ink where the person's own
             // hand is in what moved (`.ev-person`); the rest is rondo's.
-            const yours = moved.asked || moved.youWrote > 0 || moved.youAnswered > 0;
+            const yours = moved.asked || moved.youWrote > 0;
             return (
               <li key={moved.messageId} className={yours ? "since-yours" : undefined}>
                 <span className="since-dot" aria-hidden="true" />
