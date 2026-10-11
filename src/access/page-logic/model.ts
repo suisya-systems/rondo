@@ -28,7 +28,6 @@ import { flowStopOf } from "../flow-stop.js";
 import { goalScopeStanding } from "../goal-scope.js";
 import { gatherInbox, type LiveRow } from "../inbox.js";
 import { waitingBinding } from "../inbox-current.js";
-import { unlandedPrefix } from "../order-host.js";
 import type { MintMessageId, WebPorts } from "../page/contract.js";
 import type { HeldReads } from "../page/held.js";
 import {
@@ -50,7 +49,7 @@ import {
   requestList,
   rowStateOf,
 } from "./list.js";
-import { type PartView, partCounts, partViews } from "./parts.js";
+import { type PartView, partCounts, partReadsOver, partViews } from "./parts.js";
 import { resultOf } from "./result.js";
 import type { PageView } from "./routes.js";
 import { firstLine, type Threads, threadsOf } from "./threads.js";
@@ -389,34 +388,18 @@ export async function pageModel(
   const lapById = new Map(
     [...allLapsByRequest.values()].flat().map((lap) => [lap.record.id, lap.record] as const),
   );
-  const lapsOfLine = (lineageId: string): readonly IterationRecord[] =>
-    (ledger.find((line) => line.lineageId === lineageId)?.lapIds ?? [lineageId])
-      .flatMap((id) => lapById.get(id) ?? [])
-      .toSorted((left, right) => left.createdAtMs - right.createdAtMs);
   const partsByRequest = new Map<string, readonly PartView[]>(
     await Promise.all(
       threads.messages
         .filter((message) => message.inReplyTo === null)
         .map(async (root) => {
           const parts = await partsOf(ports, root.messageId);
-          const proposalId = parts[0]?.proposalId ?? "";
           return [
             root.messageId,
-            partViews(parts, {
-              lapsOf: lapsOfLine,
-              resultOf: (id) => resultOf(threads.byId, id),
-              placeOf: placeName,
-              // Rule 1.5's question about the part: standing, or answered *stop*.
-              askOf: (index) => {
-                const asks = [...threads.waiting].filter(
-                  (id) =>
-                    threads.rootOf(id) === root.messageId &&
-                    id.startsWith(unlandedPrefix({ proposalId }, index)),
-                );
-                const open = asks.find((id) => !threads.stopped.has(id));
-                return open !== undefined ? { open } : asks.length > 0 ? "dropped" : null;
-              },
-            }),
+            partViews(
+              parts,
+              partReadsOver(threads, ledger, lapById, root.messageId, parts, placeName),
+            ),
           ] as const;
         }),
     ),

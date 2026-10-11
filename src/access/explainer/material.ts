@@ -11,17 +11,21 @@
 import type { Basis } from "../../advisory/proposal.js";
 import {
   type IterationRecord,
+  isTerminal,
   type JsonRecord,
+  type NonTerminalStatus,
   QUESTION_ID_PREFIX,
   type ThreadMessageDraft,
+  WAIT_SIDE,
 } from "../../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
+import { partsOf } from "../drafted-start.js";
 import { draftAwaiting, draftedStanding } from "../drafted-view.js";
 import { goalScopeStanding } from "../goal-scope.js";
 import { threadOf } from "../model-draft/host.js";
 import { currentGoals } from "../page/triage.js";
 import { type LapResult, resultOf } from "../page-logic/result.js";
-import { firstLine, threadsOf } from "../page-logic/threads.js";
+import { firstLine, type Threads, threadsOf } from "../page-logic/threads.js";
 import {
   draftsOwedNow,
   lapsPastTheirCeiling,
@@ -33,19 +37,22 @@ import {
 const BODY_BOUND = 4_000;
 
 export interface ExplainerPorts {
-  readonly store: Pick<IterationStore, "readLive" | "terminalIterations">;
-  readonly record: Pick<
-    AdvisoryRecord,
-    | "threadMessages"
-    | "scopesFor"
-    | "scopeDecisionOf"
-    | "scopeSupersededByApproved"
-    | "readScope"
-    | "scopeSpent"
-    | "readProposal"
-    | "goals"
-    | "approvalsInForce"
-  >;
+  /** What `partsOf` reads too, for a part held by order across every request (rondo#630). */
+  readonly store: Pick<IterationStore, "readLive" | "terminalIterations"> &
+    Parameters<typeof partsOf>[0]["store"];
+  readonly record: Parameters<typeof partsOf>[0]["record"] &
+    Pick<
+      AdvisoryRecord,
+      | "threadMessages"
+      | "scopesFor"
+      | "scopeDecisionOf"
+      | "scopeSupersededByApproved"
+      | "readScope"
+      | "scopeSpent"
+      | "readProposal"
+      | "goals"
+      | "approvalsInForce"
+    >;
   /**
    * What the list's *your turn* also reads, for a question across every
    * request (D-0189): the drafts rondo still owes, a request's repository
@@ -88,14 +95,34 @@ export interface ExplainerLap {
  * A reason something waits, as `waits.ts` reads it: a lap at its gate
  * (`awaiting_human`), a lap held for the person's decision with no gate to
  * answer (`stalled`, `withdrawal_requested`), a question asked of the person,
- * a lap past its plan's ceiling, and a drafted scope nobody has decided. Not
- * D-0068's whole reading of a wait; the things rondo already says are waiting.
+ * a lap past its plan's ceiling, and a drafted scope nobody has decided.
+ *
+ * **Across every request, the waits that are not the person's too** (D-0068
+ * section 1 rule 2.1, rondo#630): a lap in flight inside its plan's ceiling,
+ * which says how long rondo has waited and may still wait and never that it
+ * is "progressing" (rule 2.2), and a part held until an earlier part of its
+ * split is merged (`held_by_order`, the order being D-0098 rule 1's `after`).
+ * `held_by_bound` and `undetermined` are not read here.
  */
 export type ExplainerWait = (
   | { readonly kind: "gate"; readonly iterationId: string; readonly status: string }
   | { readonly kind: "decide"; readonly iterationId: string; readonly status: string }
   | { readonly kind: "ask"; readonly messageId: string }
   | { readonly kind: "overdue"; readonly iterationId: string; readonly status: string }
+  /** `leftMs` is what its plan's ceiling still allows, or null with no ceiling rondo can read. */
+  | {
+      readonly kind: "inFlight";
+      readonly iterationId: string;
+      readonly status: string;
+      readonly leftMs: number | null;
+    }
+  /** Part `part` (from 0) waits for part `after` to be merged; `firstLineageId` once that one started. */
+  | {
+      readonly kind: "order";
+      readonly part: number;
+      readonly after: number;
+      readonly firstLineageId: string | null;
+    }
   | { readonly kind: "scope"; readonly scopeId: string }
   /** A goal flow the person paused, by the scope that paused it (D-0186). */
   | { readonly kind: "paused"; readonly scopeId: string; readonly repository: string }
@@ -106,19 +133,29 @@ export type ExplainerWait = (
    * (rondo#626, D-0189).
    */
   readonly request?: { readonly messageId: string; readonly title: string };
+  /** How long it has waited when the question was asked, where a row says since when (D-0068 rule 2.5). */
+  readonly forMs?: number;
 };
 
 /** Whether the question opened a thread of its own, and so asks across every request (D-0189). */
 export const acrossRequests = (material: ExplainerMaterial): boolean =>
   material.requestMessageId.startsWith(QUESTION_ID_PREFIX);
 
-/** A wait's own locator: the question asked, or the lap or scope that waits. */
+/**
+ * A wait's own locator: the question asked, or the lap or scope that waits.
+ * A part held by order rests on the line it waits for, or, before that line
+ * started, on its request.
+ */
 export function waitLocator(wait: ExplainerWait): string {
   return wait.kind === "ask"
     ? `message:${wait.messageId}`
     : wait.kind === "scope" || wait.kind === "paused"
       ? `scope:${wait.scopeId}`
-      : `iteration:${wait.iterationId}`;
+      : wait.kind === "order"
+        ? wait.firstLineageId === null
+          ? `message:${wait.request?.messageId ?? ""}`
+          : `iteration:${wait.firstLineageId}`
+        : `iteration:${wait.iterationId}`;
 }
 
 /** The approval in force for the request, with what is left of it. */
@@ -277,13 +314,19 @@ export async function gatherExplainerMaterial(
     across
       ? { request: { messageId: request, title: firstLine(said.get(request)?.body ?? "") } }
       : {};
+  // How long each has waited, from the row that says since when; only across
+  // every request, so the in-thread answer's material stays as it was.
+  const since = (atMs: number | undefined): Pick<ExplainerWait, "forMs"> =>
+    across && atMs !== undefined ? { forMs: Math.max(0, nowMs - atMs) } : {};
+  const lapAt = (id: string) => ownLive.find((r) => r.id === id)?.updatedAtMs;
   const waits: ExplainerWait[] = waitsOnYou(threads, ownLive).flatMap((w): ExplainerWait[] => {
     if (!across && w.root !== root) {
       return [];
     }
     const [kind = "", id = "", status = ""] = w.episode.split(":");
     if (kind === "ask") {
-      return [{ kind: "ask", messageId: w.episode.slice("ask:".length), ...titled(w.root) }];
+      const messageId = w.episode.slice("ask:".length);
+      return [{ kind: "ask", messageId, ...titled(w.root), ...since(said.get(messageId)?.atMs) }];
     }
     // Only a lap at its gate has a gate to answer; a stalled one waits on a decision.
     return [
@@ -292,14 +335,29 @@ export async function gatherExplainerMaterial(
         iterationId: id,
         status,
         ...titled(w.root),
+        ...since(lapAt(id)),
       },
     ];
   });
+  const overdue = new Set<string>();
   for (const key of lapsPastTheirCeiling(ownLive, nowMs)) {
     const at = key.lastIndexOf(":");
     const iterationId = key.slice(0, at);
+    overdue.add(iterationId);
     const request = ownLive.find((r) => r.id === iterationId)?.requestMessageId ?? root;
-    waits.push({ kind: "overdue", iterationId, status: key.slice(at + 1), ...titled(request) });
+    waits.push({
+      kind: "overdue",
+      iterationId,
+      status: key.slice(at + 1),
+      ...titled(request),
+      ...since(lapAt(iterationId)),
+    });
+  }
+  if (across) {
+    waits.push(
+      ...inFlight(ownLive, overdue, nowMs, titled),
+      ...(await heldByOrder(ports, threads, titled)),
+    );
   }
 
   const scope = across ? null : await approvalInForce(ports, root);
@@ -369,6 +427,75 @@ export async function gatherExplainerMaterial(
         : cut(asked.body),
     locators: [...locators],
   };
+}
+
+/**
+ * The laps rondo is waiting on inside their plan's ceiling (D-0068's
+ * `in_flight`): since when, and how much longer the plan allows. One past its
+ * ceiling is `overdue` and said there.
+ */
+function inFlight(
+  live: readonly IterationRecord[],
+  overdue: ReadonlySet<string>,
+  nowMs: number,
+  titled: (request: string) => Pick<ExplainerWait, "request">,
+): ExplainerWait[] {
+  return live.flatMap((lap): ExplainerWait[] => {
+    if (
+      isTerminal(lap.status) ||
+      WAIT_SIDE[lap.status as NonTerminalStatus] !== "inFlight" ||
+      overdue.has(lap.id)
+    ) {
+      return [];
+    }
+    const forMs = Math.max(0, nowMs - lap.updatedAtMs);
+    const ceiling = lap.plan["invocation_ceiling_ms"];
+    return [
+      {
+        kind: "inFlight",
+        iterationId: lap.id,
+        status: lap.status,
+        leftMs:
+          typeof ceiling === "number" && Number.isFinite(ceiling) && ceiling > 0
+            ? Math.max(0, ceiling - forMs)
+            : null,
+        ...titled(lap.requestMessageId),
+        forMs,
+      },
+    ];
+  });
+}
+
+/**
+ * The parts not started because an earlier part of their split is not merged
+ * yet (D-0068's `held_by_order`, D-0098 rule 1), as the page's *waiting* part
+ * reads it. One whose earlier part ended unmerged is not here: rondo asked the
+ * person about it (rule 1.5), and that question is already a wait.
+ */
+async function heldByOrder(
+  ports: ExplainerPorts,
+  threads: Threads,
+  titled: (request: string) => Pick<ExplainerWait, "request">,
+): Promise<ExplainerWait[]> {
+  const held: ExplainerWait[] = [];
+  for (const root of threads.messages.filter((m) => m.inReplyTo === null)) {
+    for (const part of await partsOf(ports, root.messageId)) {
+      if (
+        part.lineageId === null &&
+        part.order.kind === "waiting" &&
+        part.order.first?.state !== "endedUnlanded"
+      ) {
+        held.push({
+          kind: "order",
+          part: part.index,
+          after: part.order.after,
+          firstLineageId: part.order.first?.lineageId ?? null,
+          ...titled(root.messageId),
+        });
+      }
+    }
+  }
+  return held;
 }
 
 /**

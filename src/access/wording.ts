@@ -47,6 +47,7 @@ import type { ReadingReach } from "../store/records.js";
 import type { GateAuto } from "./gate-auto.js";
 import type { IssueReadFailure } from "./issue-read.js";
 import type { ExplainWords } from "./page/explain-words.js";
+import type { ReportWords } from "./page/report-words.js";
 import type { SinceWords } from "./page/since-words.js";
 import type { PageWords } from "./page/words.js";
 import { EN } from "./wording/en.js";
@@ -72,7 +73,7 @@ export type AgentTypeSource = "iteration" | "scope" | "plan";
  * declares what it wrote and never what was asked for, so a well-formed tag
  * this file ships no set for yields the `en` set and the tag `en`.
  */
-export interface Chrome extends PageWords, ExplainWords, SinceWords {
+export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords {
   /** The tag this set is written in, which is what the document declares. */
   readonly lang: string;
 

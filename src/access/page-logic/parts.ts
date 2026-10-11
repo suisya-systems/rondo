@@ -14,10 +14,13 @@
  * asked in the thread what becomes of this one.
  */
 
+import type { LedgerLine } from "../../store/contract.js";
 import { pathsOverlap, repositoryKey, WHOLE_REPOSITORY } from "../../store/lanes.js";
 import { approvedForPublication, type IterationRecord, isTerminal } from "../../store/records.js";
 import type { PartRead } from "../drafted-start.js";
-import type { LapResult } from "./result.js";
+import { unlandedPrefix } from "../order-host.js";
+import { type LapResult, resultOf } from "./result.js";
+import type { Threads } from "./threads.js";
 
 /** A pull request as the page links it: its address and its number, either possibly unread. */
 export interface PullRequestLink {
@@ -72,6 +75,8 @@ export interface PartView {
   readonly claim: readonly string[] | null;
   /** The part's repository, or null where its template is gone. */
   readonly repository: string | null;
+  /** The split the part belongs to, so a request's report is said again only from its own split. */
+  readonly proposalId: string;
 }
 
 /** What {@link partViews} reads besides the parts: the rows the page already holds. */
@@ -87,6 +92,39 @@ export interface PartReads {
    * *carry on*, when the earlier part is tried again).
    */
   readonly askOf: (index: number) => { readonly open: string } | "dropped" | null;
+}
+
+/**
+ * {@link PartReads} over rows a reader already holds: the thread, the lane
+ * ledger and the laps by id. The page's model and the request report's host
+ * (rondo#630) read a request's parts through this one, so the report says of
+ * each part what its row on the page says.
+ */
+export function partReadsOver(
+  threads: Threads,
+  ledger: readonly Pick<LedgerLine, "lineageId" | "lapIds">[],
+  lapById: ReadonlyMap<string, IterationRecord>,
+  root: string,
+  parts: readonly PartRead[],
+  placeOf: (repository: string) => string | null,
+): PartReads {
+  const proposalId = parts[0]?.proposalId ?? "";
+  return {
+    lapsOf: (lineageId) =>
+      (ledger.find((line) => line.lineageId === lineageId)?.lapIds ?? [lineageId])
+        .flatMap((id) => lapById.get(id) ?? [])
+        .toSorted((left, right) => left.createdAtMs - right.createdAtMs),
+    resultOf: (id) => resultOf(threads.byId, id),
+    placeOf,
+    // Rule 1.5's question about the part: standing, or answered *stop*.
+    askOf: (index) => {
+      const asks = [...threads.waiting].filter(
+        (id) => threads.rootOf(id) === root && id.startsWith(unlandedPrefix({ proposalId }, index)),
+      );
+      const open = asks.find((id) => !threads.stopped.has(id));
+      return open !== undefined ? { open } : asks.length > 0 ? "dropped" : null;
+    },
+  };
 }
 
 function linkOf(result: LapResult | null): PullRequestLink | null {
@@ -127,6 +165,7 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
         laps,
         claim: part.claim,
         repository: part.repository,
+        proposalId: part.proposalId,
       };
     }
     if (part.order.kind !== "waiting") {
@@ -138,6 +177,7 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
         laps,
         claim: part.claim,
         repository: part.repository,
+        proposalId: part.proposalId,
       };
     }
     const after = part.order.after;
@@ -165,6 +205,7 @@ export function partViews(parts: readonly PartRead[], reads: PartReads): readonl
       laps,
       claim: part.claim,
       repository: part.repository,
+      proposalId: part.proposalId,
     };
   });
 }

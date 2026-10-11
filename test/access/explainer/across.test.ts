@@ -77,6 +77,8 @@ test("the material is every request's waits, each named by its request, with no 
       iterationId: LAP,
       status: "awaiting_human",
       request: { messageId: REQUEST, title: "Fix the flaky test." },
+      // How long it has waited, from the lap's row (D-0068 rule 2.5, rondo#630).
+      forMs: 3_000,
     },
   ]);
   expect(material.locators).toContain(`iteration:${LAP}`);
@@ -259,7 +261,10 @@ test("one request's waits are one line, and the answer still rests on every wait
   await askAcross(w);
   const { answer } = await answerAll(w);
   const lines = (answer?.body ?? "").split("\n").filter((line) => line.startsWith("- "));
-  expect(lines).toEqual([`- "Fix the flaky test": ${EN.explainWaitsAsk} / ${EN.explainWaitsGate}`]);
+  // Two questions are one reason, said once with the longer wait.
+  expect(lines).toEqual([
+    `- "Fix the flaky test": ${EN.explainHeldFor(EN.explainWaitsAsk, "2s")} / ${EN.explainHeldFor(EN.explainWaitsGate, "3s")}`,
+  ]);
   expect(answer?.bases).toEqual(
     expect.arrayContaining([
       { form: "message", messageId: "ask-1" },
