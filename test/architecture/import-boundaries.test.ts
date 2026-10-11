@@ -1458,6 +1458,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/store/contract.ts": [RECORD],
   // D-0190 rule 10: the derived decision reader.
   "src/store/decision-log.ts": [RECORD],
+  // rondo#637: the derived ask-back counts, the same shape.
+  "src/store/ask-frequency.ts": [RECORD],
   "src/store/iteration.ts": [RECORD],
   "src/store/lanes.ts": [RECORD],
   "src/store/plan.ts": [RECORD],

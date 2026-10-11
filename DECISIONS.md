@@ -30245,6 +30245,20 @@ rules 2, 3, 4 and 5 (its annotation from this entry). Supersedes nothing. Refs `
 >
 > - Amends: D-0189 rule 4
 
+> **Annotation (2026-10-11, from rondo#637).** Added after this entry was accepted, and **not
+> additive**: row **A2** of rule 4's table is closed. `rondo asks [--since TIME]` reads, per request
+> the drafter (`rondo/drafter/`) wrote in, how many times it asked back (`asks = 1` anywhere in the
+> thread), how many of those asks the person has not answered, how many answers pressed an option
+> (`answer_option`) and how many of those pressed the recommended one (`ask_options.recommended`),
+> then one line over all of them with the asks per request and the recommended share. It is derived
+> from `conversation_message` and keeps nothing (`D-0032` rule 3), a CLI beside `rondo decisions`
+> for `D-0190` rule 10's reason, and prints ids and counts, never a body. It measures and does not
+> judge: no threshold for *too often* is set here, and an ask written before `D-0190` counts as an
+> ask but never as a press. The known limit `D-0190` carried for A2 is answered by this. Nothing
+> below is edited.
+>
+> - Amends: D-0189 rule 4
+
 ### Context
 
 rondo#626 asks for a role that works like claude-org's secretary. A person gives it a request in

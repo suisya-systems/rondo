@@ -1,3 +1,4 @@
+import type { AskFrequencyRow } from "./ask-frequency.js";
 import type { DecisionRow } from "./decision-log.js";
 import type {
   AdmissionRefusal,
@@ -1295,6 +1296,12 @@ export interface AdvisoryRecord {
    * apart from {@link AdvisoryRecord.changedSince}'s sources.
    */
   decisions(sinceMs: number | null, attention: boolean): Promise<readonly DecisionRow[]>;
+  /**
+   * How often a drafter under `drafterPrefix` asked back in each request opened
+   * at or after `sinceMs`, and how often the person pressed its recommended
+   * option (rondo#637). Derived, like {@link AdvisoryRecord.decisions}.
+   */
+  askFrequency(sinceMs: number | null, drafterPrefix: string): Promise<readonly AskFrequencyRow[]>;
   /**
    * Append one scope row -- **or refuse it** (D-0066 section 1).
    *

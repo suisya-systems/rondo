@@ -41,6 +41,7 @@ export interface ParsedCommand {
     | "show"
     | "web"
     | "decisions"
+    | "asks"
     | "help";
   readonly planFile: string | null;
   /** Every `--plan`, in order: more than one only for `scope` (D-0069 section 1). */
@@ -77,7 +78,7 @@ export interface ParsedCommand {
    */
   readonly workerProvider: string | null;
   readonly port: number | null;
-  /** `decisions --since`, as epoch ms (D-0190 rule 10.4); null when absent. */
+  /** `decisions --since` / `asks --since`, as epoch ms (D-0190 rule 10.4); null when absent. */
   readonly sinceMs: number | null;
   /** `decisions --attention`: add `operator_attention` (rule 10.2). */
   readonly attention: boolean;
@@ -152,6 +153,7 @@ export const COMMANDS = [
   "show",
   "web",
   "decisions",
+  "asks",
 ] as const;
 
 /**
@@ -290,6 +292,8 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   // D-0190 rule 10.4: read-only, so no `--actor-id`. `--since` is a filter on
   // a list and not `inbox`'s cursor -- it moves and compares to no mark.
   decisions: ["since", "attention"],
+  // rondo#637: the same read-only shape, `--since` bounding when a request opened.
+  asks: ["since"],
 };
 
 /**
