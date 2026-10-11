@@ -109,7 +109,7 @@ import {
 } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
 import { issuesClosedNow } from "./issue-read.js";
-import { thisDriver } from "./lost-laps.js";
+import { driveResumed, thisDriver } from "./lost-laps.js";
 import { modelReadingLines } from "./model-review/judgement.js";
 import { refusalSaid } from "./page-logic/laps.js";
 import { relayQuestion } from "./question.js";
@@ -304,8 +304,7 @@ export function conductorPorts(
 ): ReportingPorts {
   const port: StorePort = {
     ...store,
-    // D-0139, rondo#655: the driver is named from reservation on, so a restart
-    // can tell a row nothing drives at any status before its gate.
+    // D-0139, rondo#655: driven from reservation on, so a restart can tell a row nothing drives.
     reserve: async (input) => {
       const reserved = await store.reserve(input);
       if (reserved.kind === "reserved") {
@@ -1236,6 +1235,7 @@ async function proposeLine(advisory: UnpromptedPorts, iterationId: string): Prom
  */
 export async function resume(ports: ReportingPorts, iterationId: string): Promise<ConductorReport> {
   const before = await ports.store.read(iterationId);
+  await driveResumed(ports.store, before);
   const report = await resumeIteration(ports, iterationId);
   // Only a lap that ended in this look: one already failed was told when it did.
   if (

@@ -13,6 +13,7 @@ import { expect, test } from "vitest";
 import { endLost } from "../../src/access/conductor.js";
 import {
   againId,
+  driveResumed,
   endedOnThePage,
   type LostLapPorts,
   lapLost,
@@ -435,6 +436,30 @@ test("rondo#655: a lap before its gate whose driver lives, or that names none an
   await pass(portsOf(w, { alive: (pid) => pid === 999_001, now: () => 11 + CEILING }));
   expect((await row(w, "lap-3")).failureKind).toBe("lost");
   expect((await row(w, "lap-2")).status).toBe("admitting");
+});
+
+test("rondo#655: a lap another process resumes before its gate is driven by that process", async () => {
+  const w = await world(true);
+  w.lap("lap-2", null, "planned");
+  w.lap("lap-3", null, "performing");
+  // The process that reserved lap-2 died; this one resumes it.
+  await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
+  await w.store.markLapProcess("lap-3", { driverHost: HOST, driverPid: 999_001 });
+  await w.store.markLapProcess("lap-3", { lapPid: 999_002 });
+  for (const id of ["lap-2", "lap-3"]) {
+    await driveResumed(w.store, await w.store.read(id));
+  }
+  const driven = await w.store.drivenLaps();
+  expect(driven.find((lap) => lap.iterationId === "lap-2")).toMatchObject({
+    driverPid: process.pid,
+  });
+  // A performing lap is only reported by resume(): its pids stay as they were.
+  expect(driven.find((lap) => lap.iterationId === "lap-3")).toMatchObject({
+    driverPid: 999_001,
+    lapPid: 999_002,
+  });
+  await pass(portsOf(w, { alive: (pid) => pid === process.pid }));
+  expect((await row(w, "lap-2")).status).toBe("planned");
 });
 
 test("rondo#655: a lap ended from the page is never started again by itself, and carry on starts it", async () => {

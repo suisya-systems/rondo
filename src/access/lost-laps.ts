@@ -28,6 +28,7 @@
  */
 
 import { hostname } from "node:os";
+import type { ReadOutcome, StorePort } from "../refrain/ports.js";
 import type { DrivenLap } from "../store/contract.js";
 import type { IterationRecord } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
@@ -38,6 +39,26 @@ import type { Chrome } from "./wording.js";
 /** Who drives a lap sent from this process (D-0139). */
 export function thisDriver(): { readonly driverHost: string; readonly driverPid: number } {
   return { driverHost: hostname(), driverPid: process.pid };
+}
+
+/** The statuses `resume()` walks on from; `admitting` and `performing` it only reports. */
+const RESUMED: ReadonlySet<string> = new Set(["planned", "classified", "admitted"]);
+
+/**
+ * Names this process the driver of a row `resume()` is about to walk from
+ * before its gate (rondo#655), so the sweep does not take a lap another process
+ * picked up after its first driver died for one nothing drives. A failed write
+ * is ignored: the row then keeps its old driver, as it did before.
+ */
+export async function driveResumed(
+  // Optional: the loop's store port does not name it, and the store behind it
+  // (`conductorPorts`) does; a port without it marks nothing.
+  store: Pick<StorePort, "read"> & Partial<Pick<IterationStore, "markLapProcess">>,
+  row: ReadOutcome,
+): Promise<void> {
+  if (row.kind === "read" && RESUMED.has(row.record.status)) {
+    await store.markLapProcess?.(row.record.id, thisDriver()).catch(() => undefined);
+  }
 }
 
 /** Whether a process with this pid exists: a signal-0 probe, and EPERM is alive. */
@@ -361,25 +382,33 @@ function restartedReport(lap: IterationRecord): string {
  * The stops standing for a lost lap: its own ask, a scope's stop over its start
  * again, which names it as the redo's predecessor (`stopTheLine`), and the stop
  * of a start that threw (rondo#655) -- for a lap a person ended, whose ending
- * that stop offered; one lost while held is asked about afresh, since that stop
- * still says the lap holds its room.
+ * that stop offered, unless a person answered it while the lap was held (the
+ * end then asked afresh, as `endLapFromPage` does); one lost while held is
+ * asked about afresh, since that stop still says the lap holds its room.
  */
 function stopsOf(
   messages: readonly {
     readonly messageId: string;
     readonly asks: boolean;
     readonly atMs: number;
+    readonly inReplyTo: string | null;
+    readonly authorKind: string;
     readonly bases: readonly Readonly<Record<string, unknown>>[];
   }[],
   lap: IterationRecord,
 ): readonly string[] {
   const lapId = lap.id;
+  const startStopped = `${START_STOPPED}${lapId}`;
+  const answeredWhileHeld = messages.some(
+    (m) => m.inReplyTo === startStopped && m.authorKind === "operator" && m.atMs <= lap.updatedAtMs,
+  );
   return messages
     .filter(
       (message) =>
         message.messageId === lostAskId(lapId) ||
-        (message.messageId === `${START_STOPPED}${lapId}` &&
-          (lap.failureKind === "ended" || message.atMs > lap.updatedAtMs)) ||
+        (message.messageId === startStopped &&
+          ((lap.failureKind === "ended" && !answeredWhileHeld) ||
+            message.atMs > lap.updatedAtMs)) ||
         (message.asks &&
           message.messageId.startsWith("scope-stop-") &&
           message.bases.some(

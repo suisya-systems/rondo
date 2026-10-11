@@ -173,6 +173,27 @@ test("a carry on given while the start was held is not one for the ending: the e
   expect(restarted).toEqual(["lap-1"]);
 });
 
+test("an ending whose fresh ask was never written is asked about by the lost-lap pass", async () => {
+  const w = await stuck("admitting");
+  await startStopped(w);
+  await carryOn(w, "start-stopped-lap-1", 2_500, "m-early");
+  // The press ended the row, and the host stopped before the fresh ask.
+  const status = await endLost(
+    { store: w.store, now: Date.now },
+    "lap-1",
+    "it hung overnight (ended on the page by ada)",
+    "ended",
+  );
+  expect(status).toBe("failed");
+  const restarted: string[] = [];
+  await pass(w, restarted);
+  expect(restarted).toEqual([]);
+  expect((await thread(w)).map((m) => m.messageId)).toContain(lostAskId("lap-1"));
+  await carryOn(w, lostAskId("lap-1"));
+  await pass(w, restarted);
+  expect(restarted).toEqual(["lap-1"]);
+});
+
 test("a press that loses its race to the lost-lap pass says nothing was ended by it", async () => {
   const w = await stuck("stalled");
   let reads = 0;

@@ -31353,7 +31353,8 @@ so a restart while a lap was `admitting` left it holding the lock for ever.
 ### Decision
 
 1. **The sweep covers every status before the gate.** The driver is written when the row is
-   reserved (`conductorPorts` wraps `reserve`), and the sweep reads `planned` through `performing`
+   reserved (`conductorPorts` wraps `reserve`) and again when a process resumes it at `planned`,
+   `classified` or `admitted` (`driveResumed`), and the sweep reads `planned` through `performing`
    (`drivenLaps`). Before `performing` no child exists, so a gone driver makes the lap lost at once;
    a row with no driver recorded keeps the plan-ceiling rule.
 2. **Which laps a person may end** (`endable`, `src/access/page-logic/end-lap.ts`): `stalled`; a lap
