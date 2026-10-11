@@ -59,22 +59,46 @@ export async function threadActs(
     ports.repositoryFor === undefined
       ? null
       : await ports.repositoryFor(requestMessageId).catch(() => null);
-  const unheld = where?.work.kind === "unheld" ? where.work : null;
-  const unheldCard = (work: { readonly repo: string; readonly named: string }) => (
+  // **And a store holding no plan at all** (D-0191 rule 2): its next step is
+  // the press that records the plan setup wrote beside it, or, where setup
+  // wrote none, running setup. Drawn in the same card, as the same kind of wait.
+  const setupFiles = where?.planless === true ? (ports.setupPlanFiles?.() ?? []) : [];
+  const unheld =
+    where?.work.kind === "unheld"
+      ? { ...where.work, proposed: where.proposed === true }
+      : where?.planless === true
+        ? { repo: "", named: "", proposed: false }
+        : null;
+  const unheldCard = (work: {
+    readonly repo: string;
+    readonly named: string;
+    readonly proposed: boolean;
+  }) => (
     <section class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3">
       <h2 class="text-meta leading-5 font-semibold text-wait-ink">{wording.nextStepHeading}</h2>
-      <p class="mt-1 text-body leading-6">{wording.nextStepAddRepository(work.named, work.repo)}</p>
-      {token === null || ports.addable !== true ? null : (
+      <p class="mt-1 text-body leading-6">
+        {work.repo === ""
+          ? setupFiles.length > 0
+            ? wording.nextStepRecordSetupPlan(setupFiles.length)
+            : wording.nextStepRunSetup
+          : work.proposed
+            ? wording.nextStepAddProposedRepository(work.repo)
+            : wording.nextStepAddRepository(work.named, work.repo)}
+      </p>
+      {token === null ||
+      ports.addable !== true ||
+      (work.repo === "" && setupFiles.length === 0) ? null : (
         <form method="post" action={`/add-repository?lang=${encodeURIComponent(wording.lang)}`}>
           <input type="hidden" name="token" value={token} />
           <input type="hidden" name="request" value={requestMessageId} />
           <input type="hidden" name="repository" value={work.repo} />
+          {work.repo === "" ? <input type="hidden" name="setup" value="1" /> : null}
           <button
             type="submit"
             id={`add-repository-${requestMessageId}`}
             class={`${PRIMARY} mt-3 h-10 justify-center px-6 text-sm`}
           >
-            {wording.addRepositoryAction}
+            {work.repo === "" ? wording.recordSetupPlanAction : wording.addRepositoryAction}
           </button>
         </form>
       )}

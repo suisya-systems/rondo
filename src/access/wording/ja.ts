@@ -1312,6 +1312,20 @@ export const JA: Chrome = Object.freeze({
     `この依頼は ${named} を名指ししていますが、rondo はまだ ${repo} で作業していないので、` +
     `何も下書きしていません。追加すると、${repo} を rondo のほかのリポジトリと同じ場所に` +
     `このコンピュータへコピーし、プルリクエストは ${repo} に出します。`,
+  nextStepAddProposedRepository: (repo) =>
+    `この依頼はどのリポジトリでの作業かを書いていません。rondo は作業場所を ${repo} と読みましたが、` +
+    `${repo} の計画をまだ持っていないので、何も下書きしていません。追加すると、${repo} を rondo の` +
+    "ほかのリポジトリと同じ場所にこのコンピュータへコピーし、そこで作業を下書きしてあなたの承認を待ち、" +
+    `プルリクエストは ${repo} に出します。違うリポジトリなら、追加せずに返信で正しいものを伝えてください。`,
+  nextStepRecordSetupPlan: (files) =>
+    "rondo はまだこれを動かす計画を持っていないので、何も下書きしていません。このコンピュータでの" +
+    `セットアップが計画を ${String(files)} 件書きましたが、記録までは終わっていません。残っているのは` +
+    "記録だけです。記録すると、rondo がこの依頼を下書きしてあなたの承認を待ちます。",
+  nextStepRunSetup:
+    "rondo はまだこれを動かす計画を持っていないので、何も下書きしていません。このコンピュータで" +
+    "セットアップがまだ実行されていません。rondo をここに入れた人が一度だけ実行すると" +
+    "（rondo のフォルダの scripts/dogfood-env.sh）、rondo がこの依頼を自分で下書きします。",
+  recordSetupPlanAction: "セットアップの計画を記録する",
   addRepositoryAction: "このリポジトリを追加する",
   addRepositoryBack: "依頼に戻る",
   repositoryUnbuilt: (repo) =>

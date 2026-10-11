@@ -7,7 +7,11 @@
  * plans a request is offered is a claim about rows. The clone is replaced by
  * the port; `gh` and the network are not CI's.
  */
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, test } from "vitest";
+import { drafterHost } from "../../src/access/drafter-host.js";
 import {
   type CommandOutcome,
   type RepositoryClone,
@@ -15,12 +19,14 @@ import {
 } from "../../src/access/forge.js";
 import { workRepository } from "../../src/access/issue-read.js";
 import { heldPlans, requestRepository } from "../../src/access/model-draft/host.js";
-import { addRepositoryFromPage } from "../../src/access/page-actions.js";
+import { REPOSITORY_PROPOSAL_AUTHOR } from "../../src/access/model-draft/judgement.js";
+import { addRepositoryFromPage, recordSetupPlansFromPage } from "../../src/access/page-actions.js";
 import { projectNameOf, repositoryParts } from "../../src/access/repository-add.js";
 import { allowedCommandsFor, COMMON_BASH } from "../../src/cadenza/facade.js";
 import { readRunPlan } from "../../src/refrain/plan.js";
+import { planDigest } from "../../src/store/plan.js";
 import type { JsonRecord } from "../../src/store/records.js";
-import { planDocument, world } from "./fixtures/drafter.js";
+import { agentTypeDigestOf, planDocument, world } from "./fixtures/drafter.js";
 
 /** The added plan's catalog project's `allowed_bash` (D-0094). */
 function catalogAllowedBash(plan: JsonRecord): unknown {
@@ -279,6 +285,8 @@ test("a repository whose build rondo cannot tell is added with the common comman
   expect(await requestRepository(ports, "r1")).toEqual({
     work: { kind: "held", repos: ["owner/docs"] },
     unbuilt: ["owner/docs"],
+    proposed: false,
+    planless: false,
   });
 });
 
@@ -342,4 +350,166 @@ test("a clone that fails records nothing and says which of three things went wro
     ok: false,
   });
   expect(await w.record.setupPlans()).toHaveLength(1);
+});
+
+test("work in a repository no plan is for: the drafter proposes it, the press adds it, and the request is drafted there (D-0191 rule 3)", async () => {
+  const w = await world();
+  await w.record.recordSetupPlan({
+    setupId: "setup-1",
+    plan: setupDocument("owner/a"),
+    recordedBy: "ada",
+    recordedAtMs: 500,
+  });
+  await w.say("r1", "Fix the typo on the docs site.", null, 1_000);
+  const ports = { store: w.store, record: w.record, now: () => 5_000 };
+  const awaits = async (id: string) => {
+    const where = await requestRepository(ports, id);
+    return where.work.kind === "unheld" || where.planless;
+  };
+  const handed: string[] = [];
+  let n = 0;
+  const host = drafterHost({
+    store: w.store,
+    record: w.record,
+    now: () => 10_000,
+    language: null,
+    log: () => undefined,
+    mintId: (kind) => {
+      n += 1;
+      return `${kind}-${String(n)}`;
+    },
+    awaitsRepository: awaits,
+    runDrafter: async (_row, document) => {
+      handed.push(document);
+      if (handed.length === 1) {
+        return {
+          kind: "answered",
+          costUsd: 0.01,
+          finalMessage: JSON.stringify({
+            act: "repository",
+            summary: { text: "The docs site is owner/site.", bases: ["r1"] },
+            repository: "owner/site",
+          }),
+        };
+      }
+      const added = (await w.record.setupPlans())[1]?.plan ?? {};
+      return {
+        kind: "answered",
+        costUsd: 0.02,
+        finalMessage: JSON.stringify({
+          act: "split",
+          summary: { text: "One plan: fix the typo.", bases: ["r1"] },
+          plans: [
+            {
+              template_plan_digest: planDigest(added),
+              agent_type_digest: agentTypeDigestOf(added),
+              prompt: "Fix the typo.",
+              bases: ["r1"],
+              claim: ["/"],
+            },
+          ],
+        }),
+      };
+    },
+  });
+
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+  // The model wrote no fact of this machine: only the name, in rondo's proposal.
+  const read = await w.record.threadMessages();
+  if (read.kind !== "read") throw new Error(read.reason);
+  const proposal = read.messages.find((m) => m.authorId === REPOSITORY_PROPOSAL_AUTHOR);
+  expect(proposal?.body).toBe("The docs site is owner/site.\n\nhttps://github.com/owner/site");
+  expect(await requestRepository(ports, "r1")).toMatchObject({
+    work: { kind: "unheld", repo: "owner/site" },
+    proposed: true,
+    planless: false,
+  });
+  // Waiting for the person's press: nothing more is drafted or paid for.
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(1);
+
+  // The press: setup's plan with owner/site's own facts, assembled by rondo.
+  expect(
+    await addRepositoryFromPage(
+      ENV,
+      w,
+      "ada",
+      { requestMessageId: "r1", repo: "owner/site" },
+      cloned("README.md\n"),
+    ),
+  ).toEqual({ ok: true });
+  host.kick();
+  await host.idle();
+  expect(handed).toHaveLength(2);
+  const after = await w.record.threadMessages();
+  if (after.kind !== "read") throw new Error(after.reason);
+  // Drafted over the added repository's plan: a split, with its summary.
+  expect(after.messages.at(-1)?.body).toBe("One plan: fix the typo.");
+  expect(after.messages.at(-1)?.bases).toContainEqual(
+    expect.objectContaining({ form: "proposal" }),
+  );
+  expect((await requestRepository(ports, "r1")).work).toEqual({
+    kind: "held",
+    repos: ["owner/site"],
+  });
+});
+
+test("a reply after rondo's proposal ends it: the request is drafted again over the reply (D-0191 rule 3.4)", async () => {
+  const w = await world();
+  await w.record.recordSetupPlan({
+    setupId: "setup-1",
+    plan: setupDocument("owner/a"),
+    recordedBy: "ada",
+    recordedAtMs: 500,
+  });
+  await w.say("r1", "Fix the typo on the docs site.", null, 1_000);
+  await w.record.recordThreadMessage({
+    messageId: "p1",
+    body: "The docs site is owner/site.\n\nhttps://github.com/owner/site",
+    authorKind: "drafter",
+    authorId: REPOSITORY_PROPOSAL_AUTHOR,
+    inReplyTo: "r1",
+    atMs: 2_000,
+    bases: [{ form: "message", messageId: "r1" }],
+    asks: false,
+  });
+  const ports = { store: w.store, record: w.record, now: () => 5_000 };
+  expect((await requestRepository(ports, "r1")).proposed).toBe(true);
+  await w.say("r2", "No, it is in this repository.", "r1", 3_000);
+  expect(await requestRepository(ports, "r1")).toMatchObject({
+    work: { kind: "open" },
+    proposed: false,
+  });
+});
+
+test("a store with no plan records the one setup left beside it, on one press, and only then (D-0191 rule 2)", async () => {
+  const w = await world();
+  await w.say("r1", "Fix the flaky test.", null, 1_000);
+  const ports = { store: w.store, record: w.record, now: () => 5_000 };
+  expect((await requestRepository(ports, "r1")).planless).toBe(true);
+
+  const directory = mkdtempSync(join(tmpdir(), "rondo-setup-files-"));
+  const storePath = join(directory, "rondo-iterations.sqlite3");
+  // Nothing beside the store: setup has not run, and the press records nothing.
+  expect(await recordSetupPlansFromPage(ENV, w, "ada", storePath, "r1")).toMatchObject({
+    ok: false,
+    why: "addRepositoryRefusedNoSetup",
+  });
+  writeFileSync(join(directory, "plan-owner-a.json"), JSON.stringify(setupDocument("owner/a")));
+  // Not setup's name, and not a plan: neither is offered.
+  writeFileSync(join(directory, "notes.json"), JSON.stringify(setupDocument("owner/b")));
+  writeFileSync(join(directory, "plan-broken.json"), "{");
+  expect(await recordSetupPlansFromPage(ENV, w, "ada", storePath, "r1")).toEqual({ ok: true });
+  const rows = await w.record.setupPlans();
+  expect(rows.map((r) => r.plan["forge_repository"])).toEqual(["owner/a"]);
+  expect(rows[0]?.recordedBy).toBe("ada");
+  expect((await requestRepository(ports, "r1")).planless).toBe(false);
+  // A stale page records nothing twice.
+  expect(await recordSetupPlansFromPage(ENV, w, "ada", storePath, "r1")).toMatchObject({
+    ok: false,
+    why: "addRepositoryRefusedChanged",
+  });
 });

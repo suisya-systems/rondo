@@ -108,7 +108,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0060 | Work left uncommitted is a fact rondo reads and names: `git status` joins the reading as a finding, `publish` refuses a workspace that still holds any, `--despite-review` does not reach it, and rondo commits nothing on a lap's behalf | accepted |
 | D-0061 | Where a request enters rondo: the organisation's five steps mapped onto parts that mostly exist, a request thread in the conversation as the first thing built, and the drafter that reads a request cleared by the human gate, with its split into plans waiting on `D-0062` | accepted, amended |
 | D-0062 | A proposal may name an agent type, and only a split proposal from a request may: a record rondo already holds chosen by its digest, approved on route S with the tier bound by the option it came from, and the kind-to-tier judgment kept whole while the request-to-kind judgment moves to the gate | superseded by D-0066 |
-| D-0063 | The advisory is the secretary's drafting half: it reads, asks back, drafts a split, brings points in dispute with a recommendation and reports to a person, and proposes what comes next, while handing over and approving stay elsewhere; `D-0022` rules 1, 3, 4 and 7 widen for a model drafter and a split, and only two lines are kept | accepted |
+| D-0063 | The advisory is the secretary's drafting half: it reads, asks back, drafts a split, brings points in dispute with a recommendation and reports to a person, and proposes what comes next, while handing over and approving stay elsewhere; `D-0022` rules 1, 3, 4 and 7 widen for a model drafter and a split, and only two lines are kept | accepted, amended |
 | D-0064 | rondo is run the way a product manager runs an organisation: a person approves a scope once, the organisation decides everything inside it, and what reaches the person is a question with a recommendation, an irreversible act, a scope exit or a report | accepted |
 | D-0065 | The model reviewer: a reader of another model family that rondo runs outside the lap over bytes it hands over and digests, graded findings with bases on the reading record, a round budget and a threshold that are the scope's, and the three defects a person caught sorted into caught, half caught and not caught | accepted, amended |
 | D-0066 | The scope record: one immutable row with a digest, approved by a row of its own and never by `human_decision`, spent once per act inside the act's own transaction, refused at one point that stops one line, and `D-0062` rule 3 and `D-0022` rule 9 restated for it | accepted, amended |
@@ -225,6 +225,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0188 | A request whose only wait is the goal flow's stop says the flow waits, not the request, though it stays under *your turn* | accepted |
 | D-0189 | The secretary-like role rondo#626 asks for is the one `D-0063`, `D-0064`, `D-0067`, `D-0068` and `D-0177` already split across parts: no new role and no wider advisory, the gaps between the parts listed with where each is closed, and a question asked from the new request box answered across every request | accepted, amended |
 | D-0190 | An ask-back's options are stored beside its words and each one is a press, the option pressed is kept on the answer, a stop on the drafter's own ask is not drafted again, and one reader lists every decision the store holds | accepted |
+| D-0191 | A request with no template gets a plan rondo assembles and a person approves with one press: the drafter proposes the work and its repository, deterministic code fills every host fact from what setup recorded or wrote, and a store with no plan records the one setup wrote beside it | accepted |
 | D-0192 | An open question of the goal flow is a row under *your turn* in the list, on every view, leading to the questions' form; like a paused flow, it is a row there that is not a request | accepted |
 
 ---
@@ -13370,6 +13371,15 @@ the same, and only the thing that authorises its admission differs.
    > rows**, quoting each issue read byte for byte (`D-0078` section 3.4). The drafter does not write
    > that section, and rule 4.2's "only two fields may differ" is unchanged. The rule above is unedited.
 
+   > **Annotation (2026-10-11, from D-0191).** Added after this entry was accepted, and **not
+   > additive**, by the owner's direction on rondo#636. **Rule 4.4 is restated by `D-0191` rule 6**:
+   > a store with no plan is not drafted until the plan setup wrote beside it is recorded on one
+   > press, and where plans are held and none is in the work's repository the drafter proposes that
+   > repository, whose plan `D-0090`'s press assembles. The drafter still writes no host fact. The
+   > rule above is unedited.
+   >
+   > - Amends: D-0063 rule 4.4
+
 5. **`D-0022` rule 4, restated for a model draft: re-readable, and no longer re-derivable.** The
    row keeps its snapshot verbatim, as now. For a deterministic draft, running `propose` over those
    bytes gives the same proposal. **For a model draft it does not**, and rule 4's "re-derivable"
@@ -16580,6 +16590,10 @@ The points are kept as put, and the answer follows them.
 
 **Status:** superseded by D-0075 (2026-09-19). Accepted 2026-09-14 (rondo's human gate).
 
+> **Annotation (2026-10-11, from D-0191).** Added after this entry was accepted, and additive. The
+> paste path (point 1(a)) still works, since a pasted plan is still a template, but no screen, ask or
+> drafter instruction recommends it any more (`D-0191` rule 5).
+
 > **Annotation (2026-10-08, from D-0169).** Not additive, and written only to carry the
 > lines below, which the entries that changed this one left out: `D-0140`'s Status line amends
 > `D-0071` rule 4.2.1 (a third level) and rule 4.2.2 (the cold start). Those entries say what
@@ -18181,6 +18195,13 @@ number.
    > plane, the workspace root, the fence roots, the worker CLI, `node` -- is setup's newest row's
    > byte for byte; only the repository's own facts are read off the clone. The host still reads
    > nothing from its environment to compose it. Nothing below is edited.
+   >
+   > - Amends: D-0075 rule 3.1
+   > **Annotation (2026-10-11, from D-0191).** Added after this entry was accepted, and **not
+   > additive**, by the owner's direction on rondo#636. **The host reads one more thing: setup's own
+   > plan files** (`plan-*.json`) in the directory of the store setup exported, when the store holds
+   > no plan, and records them only on the person's press, with `rondo setup-plan`'s checks. It
+   > composes nothing from them and reads nothing else from its environment. Nothing below is edited.
    >
    > - Amends: D-0075 rule 3.1
 2. **Setup discovers what it discovers today** (`claude` on `PATH`, `node`'s real path, the target's
@@ -30224,6 +30245,13 @@ rules 2, 3, 4 and 5 (its annotation from this entry). Supersedes nothing. Refs `
 `D-0061`, `D-0062`, `D-0063`, `D-0064`, `D-0066`, `D-0067`, `D-0068`, `D-0071`, `D-0072`,
 `D-0083`, `D-0097`, `D-0112`, `D-0128`, `D-0147`, `D-0168`.
 
+> **Annotation (2026-10-11, from D-0191).** Added after this entry was accepted, and **not
+> additive**: rule 4's table changes. C1's row *a store with no template gets back only a list of
+> holes* is closed by `D-0191`: deterministic code assembles the plan (setup's file beside the
+> store, or `D-0090`'s press on a repository the drafter proposes) and the person approves it once.
+>
+> - Amends: D-0189 rule 4
+
 > **Annotation (2026-10-11, from D-0190).** Added after this entry was accepted, and **not
 > additive**: rule 4's table changes. Two rows are closed by `D-0190`: C1's *an ask-back's options
 > are prose, and no single press chooses one* (its rules 1 to 7), and C3's *no single reader over
@@ -30768,3 +30796,137 @@ a request and leads to the screen that resumes it. This entry takes the same pat
 - **A row whose link lands where no form is drawn**: then `D-0147` rule 1 and rule 1 here read the
   ask differently.
 - **A person who reads the amber row as a request they wrote.**
+
+## D-0191 — A request with no template gets a plan rondo assembles and a person approves with one press: the drafter proposes the work and its repository, deterministic code fills every host fact from what setup recorded or wrote, and a store with no plan records the one setup wrote beside it
+
+**Status:** accepted (2026-10-11, rondo#636, on the owner's direction through the secretary). A
+first draft recommended that rondo wait for setup and only stop asking for a paste; the owner
+answered that leaving everything to the person is not how a model and a person should work
+together, and set the direction this entry follows: the model drafts the work, deterministic code
+writes the host facts, and the person approves once. Amends `D-0063` rule 4.4, `D-0075` rule 3.1 and
+`D-0189` rule 4 (their annotations from this entry). Supersedes nothing. Refs `D-0019`, `D-0063`,
+`D-0064`, `D-0071`, `D-0075`, `D-0080`, `D-0090`, `D-0189`, `D-0190`.
+
+### Context
+
+`D-0189` rule 4 lists the gaps that keep rondo#626 open. One of C1's rows reads: *a store with no
+template gets back only a list of holes*, and the person is then asked to paste a plan (`D-0071`'s
+path), which goes against *nobody writes a plan by hand*. rondo#636 asks for an entry that widens
+`D-0063` rule 4 so that a plan is written when no template exists, stating what is lost as well as
+gained.
+
+**The line that is kept**: no model writes a fact of this machine (`D-0075` rule 3.1, `D-0019`
+rule 3). It is kept by *deterministic code writes it and a person approves it*, not by *rondo does
+nothing*.
+
+### What was measured, and how
+
+At rondo `3e65034` on **2026-10-11**, by reading `DECISIONS.md`, `src/`, `test/` and
+`scripts/dogfood-env.sh`. Line numbers drift: re-measure the claim, not the number.
+
+- **A plan is host facts and two words.** `RunPlan` (`src/refrain/plan.ts`) holds the control
+  plane's database, the workspace root, the repository's absolute path, the artifact, state and
+  interlock roots, the claude-org path, the endpoint directory, the worker CLI as absolute tokens,
+  and the catalog, among others. Only `prompt` and the agent type are the drafter's (`D-0063`
+  rule 4.2). Every other field is a path setup made or resolved (`D-0075`'s measurement).
+- **A template comes from three places**: the 20 newest iteration rows, every setup row, and a plan
+  pasted into the request's thread (`heldTemplates` in `src/access/model-draft/host.ts`).
+- **rondo already assembles one plan deterministically.** `D-0090`'s press clones a repository and
+  records setup's newest plan with the repository's own facts swapped in (`addRepositoryFromPage` in
+  `src/access/page-actions.ts`, `planForRepository` in `src/access/repository-add.ts`). It runs only
+  for a repository the person's own words name (`workRepository` in `src/access/issue-read.ts`).
+- **Case E, a store holding no plan at all.** `workRepository` returns `open`, so the drafter runs
+  over an empty `TEMPLATES` and can only name holes, and its instructions recommend that the person
+  paste a plan (`src/access/model-draft/judgement.ts`).
+  - **Setup writes its plan beside the store before recording it.** Its *Plan* step writes
+    `$root/plan-<project>.json`, its *Store* step records it in `$root/rondo-iterations.sqlite3`
+    (which it exports as `RONDO_STORE`), and a failed *Store* step ends setup by printing the
+    command to run by hand. So a store with no plan beside a setup's plan file is a setup whose
+    last step did not happen, and the file is the plan that step would have recorded.
+  - **The host cannot run setup itself.** Setup runs `npm ci` in the checkout the host is running
+    from, rebuilds continuo, installs the start command, and runs `systemctl --user try-restart
+    rondo.service` before its *Store* step. Run from the host, it would replace the host's modules
+    under it and restart the service it runs in, killing itself before the plan is recorded. With no
+    setup output at all, rondo can only name the command.
+- **Case F, a store holding plans, none of them in the work's repository.** A repository the person
+  names already waits for `D-0090`'s press, and the drafter is not run. Work whose repository the
+  person did not name can only come back as holes, with the same *paste a plan* recommendation.
+- **The drafter host rescans on a timer** (`rescan` in `src/access/host.ts`), so a request that
+  becomes due because something other than a message changed is picked up without a message.
+
+### Decision
+
+1. **The drafter still writes no host fact, and every plan it proposes names a template.**
+   `D-0063` rules 4.1 and 4.2 stand. What widens is where a template may come from: deterministic
+   code may assemble one when none is held (rules 2 and 3), and the person approves it with one
+   press.
+2. **Case E: a store with no plan records the one setup wrote beside it, on one press.**
+   1. A request is not drafted while rondo holds no plan at all, so no paid run produces only holes.
+   2. The request's page shows what rondo found. Where setup's plan files lie beside the store
+      (`plan-*.json` in the directory of `RONDO_STORE`), each that `rondo setup-plan` would accept
+      is offered, and one press records them as that command does. That command is the one setup's
+      failed last step prints, and it is the same check: the plan reads, is no revise lap's, and its
+      agent type builds a record. The host reads only that directory, only those names, and only on
+      the page's render and the press.
+   3. Where there are none, setup has not run on this machine, and the page shows the one command
+      that runs it. rondo does not run it itself (measurement).
+   4. Once a plan is held, the timer's rescan finds the request due and drafts it.
+3. **Case F: the drafter proposes the repository, and `D-0090`'s press assembles the plan.**
+   1. A drafter answer may be `"act": "repository"` with `"repository": "OWNER/NAME"`, when no
+      template it was handed is for the repository the work belongs in. It is accepted only when
+      the person's words name no repository, every held plan names its forge repository, and the
+      repository named is not one of theirs. Otherwise the answer is refused like any other bad
+      draft.
+   2. rondo writes it as one drafter message, in rondo's words, that names the repository by its
+      address and covers no operator message. The request's repository is then that repository, and
+      the request waits for `D-0090`'s press as if the person had named it. The page's card says
+      rondo proposed it.
+   3. The press is unchanged: it clones the repository and records setup's newest plan with that
+      repository's facts. The request is then due again, and the drafter splits it over that plan.
+      The person approves the drafted scope as for any request.
+   4. A reply from the person after the proposal ends it: the request is drafted again over the
+      reply, so a wrong proposal is answered in words, not by a press that adds a repository.
+4. **Work no held agent type fits is still asked about**, and the recommended option is the held
+   agent type nearest to it or leaving that part out, never a paste.
+5. **`D-0071`'s paste stays readable and is never recommended.** A plan pasted into a thread is
+   still a template (`heldTemplates`). No screen, ask or instruction points a person to it.
+6. **`D-0063` rule 4.4, restated**: with no persisted plan to use as a template, the split proposes
+   no plan. In a store with no plan, nothing is drafted until one is recorded (rule 2). Where plans
+   are held and none is in the work's repository, the drafter proposes the repository (rule 3).
+
+### Options considered
+
+| Option | Taken? | What it loses |
+|---|---|---|
+| Wait for setup and only stop recommending a paste (this entry's first draft) | No | Leaves everything to the person, and an empty store's request is silent |
+| The model writes the whole plan, host facts included (rondo#636's literal ask) | No | A model writes the fence's geometry and the paths a lap runs under; `D-0075` rule 3.1 and `D-0019` rule 3 fall |
+| The drafter's repository is added without a press | No | Drops `D-0090`'s press, the person's approval of a new repository that laps may touch |
+| The host runs setup on a press | No | Setup rebuilds the host's checkout and restarts its service before recording the plan (measurement) |
+| Deterministic code assembles, the person approves once (rules 2 and 3) | Yes | See "What it costs" |
+
+### What it costs
+
+- **The host reads files again**, which rondo#266 removed. It reads only setup's own output, from
+  the directory of the store setup exported, under the name setup gives it, and records nothing
+  without a press. `D-0075` rule 3.1's annotation says so.
+- **A model's guess about where the work belongs reaches the page as a proposal.** A wrong guess
+  costs one reply; a repository is only added by the person's press.
+- **A machine where setup never ran still needs the setup command run once.** The page shows it,
+  but rondo does not run it.
+
+### What would falsify it
+
+- **A store with no plan and no setup file beside it, on a machine where setup ran**: setup's root
+  is not the store's directory, and rule 2.2 finds nothing.
+- **A drafter that proposes a repository the person's words already settled**, or proposes one
+  where a held plan fits.
+- **A request that stays waiting after its plan is recorded**: the rescan does not find it.
+- **A held plan that fits no work because a field other than `prompt` and the agent type must
+  differ** (`D-0063`'s own first falsifier). That is rule 4.2's limit, and not this entry's.
+
+### Annotations this entry adds
+
+- `D-0063`, **not additive**: rule 4.4, restated by rule 6.
+- `D-0075`, **not additive**: rule 3.1, the host reads setup's plan files beside its store on a press.
+- `D-0189`, **not additive**: rule 4's table, C1's *no template* row closed.
+- `D-0071`, additive: the paste path stands and is no longer recommended anywhere.

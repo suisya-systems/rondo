@@ -214,9 +214,19 @@ export interface WebPorts extends InboxReadPorts {
    * held ones whose worker can run no build or test (`requestRepository`), or
    * absent where nothing reckons it, and then the thread says nothing of it.
    */
-  readonly repositoryFor?: (
-    requestMessageId: string,
-  ) => Promise<{ readonly work: WorkRepository; readonly unbuilt: readonly string[] }>;
+  readonly repositoryFor?: (requestMessageId: string) => Promise<{
+    readonly work: WorkRepository;
+    readonly unbuilt: readonly string[];
+    /** The unheld repository is one rondo proposed (D-0191 rule 3.2). Absent is false. */
+    readonly proposed?: boolean;
+    /** rondo holds no plan at all (D-0191 rule 2). Absent is false. */
+    readonly planless?: boolean;
+  }>;
+  /**
+   * Setup's plan files beside the store that one press would record (D-0191
+   * rule 2.2), by path. Absent where nothing looks, and then none are offered.
+   */
+  readonly setupPlanFiles?: () => readonly string[];
   /**
    * Whether the host holds the add-repository press: true exactly where its
    * port is not null, as {@link releasable} is. Absent is false.

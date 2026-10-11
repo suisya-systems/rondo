@@ -1487,6 +1487,17 @@ export interface Chrome extends PageWords, ExplainWords {
    * D-0090): what was named, that nothing was drafted, and what adding does.
    */
   readonly nextStepAddRepository: (named: string, repo: string) => string;
+  /**
+   * A repository rondo proposed for a request whose words name none (D-0191
+   * rule 3): that rondo proposed it, that nothing was drafted, and what adding does.
+   */
+  readonly nextStepAddProposedRepository: (repo: string) => string;
+  /** A store holding no plan, beside which setup left this many plan files (D-0191 rule 2.2). */
+  readonly nextStepRecordSetupPlan: (files: number) => string;
+  /** A store holding no plan, and no setup output beside it (D-0191 rule 2.3). */
+  readonly nextStepRunSetup: string;
+  /** The one press that records setup's plan files. */
+  readonly recordSetupPlanAction: string;
   /** The one confirmation adding a repository takes. */
   readonly addRepositoryAction: string;
   readonly addRepositoryBack: string;

@@ -3114,7 +3114,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (!("press" in minting)) {
       return addRepositoryRefused(c, minting.status, "addRepositoryRefusedPress", request);
     }
-    if (request === "" || repo === "") {
+    if (request === "" || (repo === "" && form["setup"] !== "1")) {
       return addRepositoryRefused(c, 400, "addRepositoryRefusedForm", request);
     }
     const added = await addRepository.add(minting.press, { requestMessageId: request, repo });

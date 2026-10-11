@@ -1047,7 +1047,7 @@ function loadPlan(parsed: ParsedCommand): { plan: RunPlan } | { refusal: string 
 }
 
 /** A plan file's JSON object, or why it is not one. */
-function readPlanDocument(file: string): { document: JsonRecord } | { refusal: string } {
+export function readPlanDocument(file: string): { document: JsonRecord } | { refusal: string } {
   let raw: string;
   try {
     raw = readFileSync(file, "utf8");
