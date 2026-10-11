@@ -187,7 +187,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0144 | The record's language is not what the reader sees: English-held text is read in the person's language on a press, stored by the original's digest beside it and never in its place, and drawn in place with the original one fold away | accepted |
 | D-0145 | Under a goal scope, rondo sends the drafted change itself when only plain review findings withhold the gate: every standing finding quoted, none marked a judgment call, a round and the budget left, no question on the lap | accepted, amended |
 | D-0146 | A part of a split request is told it is a part, and its model review judges that part; a later split starts from the request's earlier line that has not landed, or says why it does not | accepted |
-| D-0147 | The goal flow's open question is in the person's turn: its block stays on the empty centre while another request waits on them | accepted |
+| D-0147 | The goal flow's open question is in the person's turn: its block stays on the empty centre while another request waits on them | accepted, amended |
 | D-0148 | A budget stop under a paused goal scope offers no raise; its box says the work is paused and links to resuming it | accepted |
 | D-0149 | Carrying on at a lap's stop starts that lap again: a lap stopped at its budget or its time limit runs again from its branch on the answer's own press, with the person's words, and an answer to a stop rondo starts again is not drafted | accepted |
 | D-0150 | The gate says what happened on the way to it: the laps of its line, what each was asked and committed, and the request's other parts; the execution limits say what was stopped and that its impact is unknown; and a failing test run the latest clean whole-suite run supersedes does not withhold automatic approval | accepted |
@@ -220,11 +220,12 @@ C-NN`, so the spaces can never be read as one.
 | D-0184 | The page offers light, dark and the system's palette, kept in this browser as the text size is; the system's is the default, and each colour token holds both values in one declaration | accepted |
 | D-0177 | A person asks rondo on the page what something means or what happened, and a model explainer answers in the thread: an explanation with bases that binds nothing, counted against the approval in force, capped per answer | accepted, amended |
 | D-0185 | The page is designed for the half screen beside an editor as well as for 2560: about 760px and about 1280px are widths of their own, and above a phone the list and the thread scroll on their own | accepted |
-| D-0186 | A paused goal flow is a row under *your turn* in the list, on every view, leading to the screen that resumes it; it is the one row there that is not a request | accepted |
+| D-0186 | A paused goal flow is a row under *your turn* in the list, on every view, leading to the screen that resumes it; it is the one row there that is not a request | accepted, amended |
 | D-0187 | A person's approval at the gate carries the lap to its pull request under a scope that allows it, without a second press, and the page's publish sentences say whether rondo then merges on green | accepted, amended |
 | D-0188 | A request whose only wait is the goal flow's stop says the flow waits, not the request, though it stays under *your turn* | accepted |
 | D-0189 | The secretary-like role rondo#626 asks for is the one `D-0063`, `D-0064`, `D-0067`, `D-0068` and `D-0177` already split across parts: no new role and no wider advisory, the gaps between the parts listed with where each is closed, and a question asked from the new request box answered across every request | accepted, amended |
 | D-0190 | An ask-back's options are stored beside its words and each one is a press, the option pressed is kept on the answer, a stop on the drafter's own ask is not drafted again, and one reader lists every decision the store holds | accepted |
+| D-0192 | An open question of the goal flow is a row under *your turn* in the list, on every view, leading to the questions' form; like a paused flow, it is a row there that is not a request | accepted |
 
 ---
 
@@ -20669,6 +20670,12 @@ list is amber, and a finished request's line may be cut to one line.
 >
 > - Amends: D-0083 rule 2
 
+> **Annotation (2026-10-11, from D-0192).** Not additive (rondo#633): **a goal flow that waits on
+> an open ask** is also a row that is not a request. It stands under *your turn* and leads to the
+> ask's form on the front (`D-0192` rules 1 and 4). Nothing above is edited.
+>
+> - Amends: D-0083 rule 2
+
 **3. The summary and the gate are one screen.** There is no separate decision screen. Arriving from a
 notification and opening the page land on the same screen: from a notification the request it names
 is selected; opened by hand, the oldest request waiting on the person is selected; with nothing
@@ -27553,6 +27560,14 @@ somewhere else: the question's form is only drawn in the triage block.
 - **A person answering the flow's ask before the gate they came for** and saying they were pulled
   away from it: then the block should follow the gate in the walk, not stand beside it.
 
+> **Annotation (2026-10-11, from D-0192).** Not additive (rondo#633): the option not taken,
+> *counting a flow ask as a row of the person's turn in the list*, is taken. Its reason was that
+> the ask has no thread to open. The row opens no thread: it leads to the ask's form in the triage
+> block, which rule 1 keeps drawn, and the walk still reads requests alone (`D-0192` rules 1, 4 and
+> 5). Nothing above is edited.
+>
+> - Amends: D-0147 "Counting a flow ask as a row of the person's turn in the list"
+
 ## D-0148 — A budget stop under a paused goal scope offers no raise; its box says the work is paused and links to resuming it
 
 **Status:** accepted (2026-09-28, rondo#524; found while fixing #522 on the lap 19 store). Amends
@@ -30053,6 +30068,13 @@ something the person has to remember (`D-0173 K3`).
 - A person who paused a flow on purpose and reads the amber row as noise they learn to skip.
 - A paused flow whose screen a person still reaches by typing its address.
 
+> **Annotation (2026-10-11, from D-0192).** Not additive (rondo#633): a paused flow is no longer
+> *the one row there that is not a request*. A goal flow that waits on an open ask is a second such
+> row, drawn after the paused rows and read the same way by rule 4 (`D-0192`). Nothing above is
+> edited.
+>
+> - Amends: D-0186 "it is the one row there that is not a request"
+
 ## D-0187 — A person's approval at the gate carries the lap to its pull request under a scope that allows it, without a second press, and the page's publish sentences say whether rondo then merges on green
 
 **Status:** accepted (2026-10-09, rondo#609). Amends `D-0066` rule 4.2 and `D-0126`'s rondo#470
@@ -30214,6 +30236,12 @@ rules 2, 3, 4 and 5 (its annotation from this entry). Supersedes nothing. Refs `
 >   restart drafts and pays for it again. A known limit, carried with the explainer's unwritten
 >   answer; it loses money, not a decision.
 > The other rows stand. Nothing below is edited.
+>
+> - Amends: D-0189 rule 4
+
+> **Annotation (2026-10-11, from D-0192).** Added after this entry was accepted, and **not
+> additive**: rule 4's table changes. C4's row *an open `flow_ask` is not a row under* your turn is
+> closed by `D-0192`. The other rows stand. Nothing below is edited.
 >
 > - Amends: D-0189 rule 4
 
@@ -30643,3 +30671,86 @@ drift: re-measure the claim, not the number.
 - `D-0189`, **not additive**: rule 4's table, two rows closed and three rows added.
 - `D-0142`, additive: an option press on a worker's question revises.
 - `D-0059`, additive: section 5a's answering press gains option values.
+
+## D-0192 — An open question of the goal flow is a row under *your turn* in the list, on every view, leading to the questions' form; like a paused flow, it is a row there that is not a request
+
+**Status:** accepted (2026-10-11, rondo#633; put to the owner through the secretary before any code,
+and the recommended option was taken). Amends `D-0147` "Options not taken" (counting a flow ask as
+a row of the person's turn), `D-0083` rule 2, `D-0186`'s heading (*the one row there that is not a
+request*) and `D-0189` rule 4's table (their annotations from this entry). Supersedes nothing. Refs `D-0082` rules 1 and 2, `D-0097` point 4.1 (d), `D-0128`, `D-0166`, `D-0168`,
+`D-0173 K3`, `D-0188`.
+
+### Context
+
+A goal flow that waits on the person's answers to a candidate's open points (`flow_ask`, rondo#487)
+does nothing until they answer. The questions' form is drawn in one place: the repository's triage
+block on the front (`requests`) view. `D-0147` keeps that block drawn while another request waits,
+and did not put the ask in the list, because *it has no thread to open, and the list's walk is over
+threads*. So with a thread open, or on any other screen, nothing on the page says rondo is waiting
+for an answer. The goal scope screen says so only once a person is on it. That is something the
+person has to remember (`D-0173 K3`), and `D-0189` rule 4 listed it as gap C4.
+
+`D-0186` closed the same gap for a paused flow. It made the flow a row under *your turn* that is not
+a request and leads to the screen that resumes it. This entry takes the same path for an open ask.
+
+### Decision
+
+1. **A goal flow that waits on an open ask is a row under *your turn* in the list**, one per
+   repository, on every view, after the paused rows and above the requests that wait. The reading is the
+   one the goal scope screen already uses for *rondo is waiting for your answers*: the newest goal's
+   flow is running, it has not stopped, and `waitingPointsAsk` finds the ask it waits on. A paused
+   flow keeps its own row (`D-0186`), and a stopped flow asks in a request's thread (`D-0188`), so a
+   repository has at most one such row.
+2. **It is drawn at the weight of a request waiting on the person**: bold, not cut short, on the
+   amber ground and edge, with the *your turn* mark (a ring round a dot). The flow does nothing
+   until the person answers, so this is the person's turn in `D-0082` rule 1's sense. The mark is
+   the one a waiting request carries, because the row waits on an answer just as that request does.
+3. **The row says what it asks of the person and what it starts**: *Answer 3 questions and rondo
+   starts the next request* as its title, then the repository and the request the flow would send,
+   in the ask's words, and when it asked. The title is rondo's sentence, not the candidate's
+   request. That request is rondo's suggestion, and drawn as a bold title it would read as a request
+   the person wrote (`D-0083` rule 2), so it stands in the row's plain line.
+4. **The row is a link to the questions' form on the front** (the `requests` view, at
+   `#flow-ask-<repository>`), never the press, so one press reaches the answer. `D-0147` rule 1
+   keeps that form drawn whatever else waits. The answer is made point by point in the form, so
+   there is no answer to press from the list.
+5. **It is not a request.** As in `D-0186` rule 4, the walk (*your turn 1 / 3, next*), the waiting
+   count in the title and the icon, and which request opens on arrival still read requests alone.
+6. It lives in `src/access/page-logic/model.ts` (beside `paused` in `triageModel`),
+   `src/access/page-logic/list.ts` and `src/access/page/list.tsx`, with one changed line in
+   `web.tsx` and none added (`D-0168`).
+
+### Options not taken
+
+- **Ask in a request's thread, as the flow's stop does (`D-0188`).** The ask would then be a request
+  row like any other, and the walk and the count would read it. But an ask comes before any request
+  of the candidate exists. A thread for it would be a request the person never wrote, and the flow
+  reads its ask from the `flow_ask` rows, not from threads (`ownOpenAsk`). That changes how the flow
+  waits, which is more than this gap asks.
+- **Count the row in the walk and the waiting count.** The walk opens threads one after another, and
+  this row has none. Counting it in the title but not in the walk would make the two disagree.
+- **Link to the goal scope screen.** That screen only says the questions are on the front, so the
+  person would make one more press to reach them.
+- **The candidate's request as the title.** See rule 3.
+
+### What it gains
+
+- **An open ask is on the page wherever the person is**, at the weight of anything else that waits
+  on them, and one press from its form.
+- **The goal flow's three waits have one place in the list**: paused (`D-0186`), stopped in a thread
+  (`D-0188`) and asking (this entry).
+
+### What it costs
+
+- **A second row in the list that is not a request.** The list's rule is now *requests, except what
+  the goal flow waits on*.
+- **The tab's count and icon still miss the ask.** A person who reads only the tab does not see it,
+  as with a paused flow.
+- **The press leaves the open thread** for the front, where the form is.
+
+### What would falsify it
+
+- **A person who still finds an open ask late** and says nothing showed them it was waiting.
+- **A row whose link lands where no form is drawn**: then `D-0147` rule 1 and rule 1 here read the
+  ask differently.
+- **A person who reads the amber row as a request they wrote.**

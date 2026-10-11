@@ -149,3 +149,31 @@ test("a row where only the goal flow's stop waits says so, under your turn (rond
   expect(html).toContain(EN.rowFlowStopped);
   expect(html).not.toContain(EN.rowWaitingOnYou);
 });
+
+test("a goal flow waiting on answers stands with your turn and leads to its questions (rondo#633)", () => {
+  const html = renderToStaticMarkup(
+    RequestsFace({
+      wording: EN,
+      list: {
+        yourTurn: [],
+        days: [],
+        lastLookedAbove: null,
+        paused: ["org/paused"],
+        asking: [{ repository: "org/repo", request: "Fix the setup", points: 3, askedAtMs: 1 }],
+      },
+      hrefOf: (id) => `/?thread=${id}`,
+      agoOf: () => "now",
+      allowance: null,
+      newRequestHref: null,
+      lastLookedSaid: "",
+      openId: null,
+    }),
+  );
+  expect(html).toContain(`<h6 class="list-heading list-heading-mine">${EN.yourTurn}</h6>`);
+  expect(html).toMatch(/<a class="list-row list-row-mine" href="\/\?[^"#]*#flow-ask-org-repo"/);
+  expect(html).toContain('data-mark="wait"');
+  expect(html).toContain(`<b>${EN.rowFlowAsks(3)}</b>`);
+  expect(html).toContain("Fix the setup");
+  // After the paused rows.
+  expect(html.indexOf("data-paused")).toBeLessThan(html.indexOf("data-asking"));
+});

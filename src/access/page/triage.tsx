@@ -22,7 +22,7 @@ import { type Ranked, readTriagePayload, type TriagePayload } from "../../adviso
 import type { GoalClause, StoredFlowAsk, StoredGoal, StoredTriage } from "../../store/records.js";
 import type { FlowStopRead } from "../flow-stop.js";
 import { ago } from "../inbox.js";
-import { viewHref } from "../page-logic/routes.js";
+import { flowAskAnchor, viewHref } from "../page-logic/routes.js";
 import type { Chrome } from "../wording.js";
 import { Held, type HeldReads } from "./held.js";
 import { localTime, money, PRIMARY, SECONDARY } from "./vocabulary.js";
@@ -292,7 +292,7 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
               askId: asked.askId,
               goalId: asked.goalId,
               candidate: asked.candidate,
-              anchor: `flow-ask-${repository.replace(/[^A-Za-z0-9_-]/g, "-")}`,
+              anchor: flowAskAnchor(repository),
               request: asked.request ?? rankedAsked?.request ?? asked.candidate,
               why: asked.why ?? rankedAsked?.why ?? "",
               mixedScript: rankedAsked?.mixedScript === true,

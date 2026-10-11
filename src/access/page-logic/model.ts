@@ -31,12 +31,18 @@ import { waitingBinding } from "../inbox-current.js";
 import { unlandedPrefix } from "../order-host.js";
 import type { MintMessageId, WebPorts } from "../page/contract.js";
 import type { HeldReads } from "../page/held.js";
-import { currentGoals, type GoalScopeState, type TriageReads } from "../page/triage.js";
+import {
+  currentGoals,
+  type GoalScopeState,
+  type TriageReads,
+  waitingPointsAsk,
+} from "../page/triage.js";
 import { readingsByDigest } from "../read-in.js";
 import { approvalTip } from "../scope.js";
 import type { Chrome } from "../wording.js";
 import { endedRecently, type LapUnderRequest, saysMore } from "./laps.js";
 import {
+  type FlowAskRow,
   placeName,
   placeSaid,
   type RequestList,
@@ -534,7 +540,12 @@ export async function approvalOf(
 export async function triageModel(
   ports: WebPorts,
   threads: Threads,
-): Promise<Required<TriageReads> & { readonly paused: readonly string[] }> {
+): Promise<
+  Required<TriageReads> & {
+    readonly paused: readonly string[];
+    readonly asking: readonly FlowAskRow[];
+  }
+> {
   const triageRepositories = (await ports.triageRepositories?.()) ?? [];
   const goals = triageRepositories.length === 0 ? [] : await ports.record.goals();
   /*
@@ -586,5 +597,29 @@ export async function triageModel(
     paused: [...currentGoals(goals).values()]
       .filter((goal) => goalScopes.get(goal.goalId)?.state === "paused")
       .map((goal) => goal.repository),
+    /*
+     * **The flow waits on the person's answers** (rondo#633, D-0192): running
+     * and not stopped, the goal scope screen's own reading, so a paused flow
+     * (D-0186) and a stopped one (D-0188) keep their own row.
+     */
+    asking: [...currentGoals(goals).values()].flatMap((goal): FlowAskRow[] => {
+      if (goalScopes.get(goal.goalId)?.state !== "running") return [];
+      const row = latestTriage.find((one) => one.repository === goal.repository);
+      const payload = row === undefined ? undefined : triagePayloads.get(row.proposalId);
+      const ask =
+        payload === undefined
+          ? undefined
+          : waitingPointsAsk(flowAsks, goal.goalId, payload, putAside);
+      if (ask === undefined) return [];
+      const ranked = payload?.ranked.find((one) => one.key === ask.candidate);
+      return [
+        {
+          repository: goal.repository,
+          request: ask.request ?? ranked?.request ?? ask.candidate,
+          points: ask.points.length,
+          askedAtMs: ask.askedAtMs,
+        },
+      ];
+    }),
   };
 }

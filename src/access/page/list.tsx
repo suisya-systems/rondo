@@ -19,8 +19,8 @@
  */
 
 import type { DayCut } from "../page-logic/days.js";
-import type { RequestList, RequestRow, RowState } from "../page-logic/list.js";
-import { viewHref } from "../page-logic/routes.js";
+import type { FlowAskRow, RequestList, RequestRow, RowState } from "../page-logic/list.js";
+import { flowAskAnchor, viewHref } from "../page-logic/routes.js";
 import type { Chrome } from "../wording.js";
 
 /** Each day cut's heading, from the set in force. */
@@ -310,6 +310,54 @@ function PausedRow({
   );
 }
 
+/**
+ * **A goal flow waiting on the person's answers is their turn** (rondo#633,
+ * D-0192): it starts nothing until they answer, and the questions are drawn
+ * only in the triage block on the front. So it stands with the requests that
+ * wait, at their weight and with their mark, says what it asks of the person
+ * and what it would start, and leads straight to the questions' form -- a
+ * link, never the press (the answer is made point by point there).
+ */
+function AskingRow({
+  wording,
+  row,
+  agoOf,
+}: {
+  readonly wording: Chrome;
+  readonly row: FlowAskRow;
+  readonly agoOf: (atMs: number) => string;
+}) {
+  return (
+    <a
+      className="list-row list-row-mine"
+      href={`${viewHref({ kind: "requests" }, wording.lang)}#${flowAskAnchor(row.repository)}`}
+      data-row=""
+      data-asking=""
+    >
+      <svg
+        className="list-dot list-dot-wait"
+        data-mark="wait"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        aria-hidden="true"
+      >
+        <MarkShape mark="wait" />
+      </svg>
+      <div className="list-row-body">
+        <b>{wording.rowFlowAsks(row.points)}</b>
+        <p>
+          <span className="list-repo">{row.repository}</span>
+          {/* The request in the ranking's words, which rondo does not know the language of. */}
+          <span lang="">{row.request}</span>
+        </p>
+      </div>
+      <time>{agoOf(row.askedAtMs)}</time>
+    </a>
+  );
+}
+
 export function RequestsFace({
   wording,
   list,
@@ -321,6 +369,7 @@ export function RequestsFace({
   openId,
 }: ListProps) {
   const paused = list.paused ?? [];
+  const asking = list.asking ?? [];
   const empty = list.yourTurn.length === 0 && list.days.length === 0;
   return (
     <div className="list">
@@ -329,11 +378,14 @@ export function RequestsFace({
           {wording.writeNewRequest}
         </a>
       )}
-      {list.yourTurn.length === 0 && paused.length === 0 ? null : (
+      {list.yourTurn.length === 0 && paused.length === 0 && asking.length === 0 ? null : (
         <>
           <h6 className="list-heading list-heading-mine">{wording.yourTurn}</h6>
           {paused.map((repository) => (
             <PausedRow key={repository} wording={wording} repository={repository} />
+          ))}
+          {asking.map((row) => (
+            <AskingRow key={row.repository} wording={wording} row={row} agoOf={agoOf} />
           ))}
           {list.yourTurn.map((row) => (
             <Row

@@ -684,8 +684,10 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
   const askId = `flow-ask-${standing.scopeDecisionId}-issue:o/r#7-1`;
   const blockOf = (html: string) => html.slice(html.indexOf('class="triage"'));
   // Nothing is drawn until the flow asks, and the card lists the points.
+  const listOf = (html: string) => html.slice(html.indexOf('class="list"'));
   const before = blockOf(await w.page({ kind: "requests" }));
   expect(before).not.toContain("/flow-answer");
+  expect(listOf(await w.page({ kind: "requests" }))).not.toContain('data-asking=""');
   expect(before).toContain(EN.triageOpenPoints);
   expect(
     await w.record.recordFlowAsk({
@@ -707,6 +709,17 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
   ).toEqual({ kind: "recorded" });
   const block = blockOf(await w.page({ kind: "requests" }));
   expect(block).toContain('action="/flow-answer?lang=en"');
+  // **And a row under *your turn*, on every view** (rondo#633, D-0192): what it
+  // asks and what it would start, one press from the form above.
+  for (const view of [{ kind: "requests" }, { kind: "goal", repository: "o/r" }] as const) {
+    const listed = listOf(await w.page(view));
+    expect(listed).toContain(EN.yourTurn);
+    expect(listed).toMatch(
+      /<a class="list-row list-row-mine" href="\/\?requests=open&amp;lang=en#flow-ask-o-r" data-row="" data-asking="">/,
+    );
+    expect(listed).toContain(EN.rowFlowAsks(2));
+    expect(listed).toContain("Make setup in o/r finish without a shell");
+  }
   expect(hidden(block, "ask")).toBe(askId);
   expect(block).toContain(EN.flowAskLead);
   // The ask lap 18 saw replaced under a person mid-answer is washed when a
@@ -771,6 +784,10 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
   }
   const turn = await w.page({ kind: "requests" });
   expect(turn).toContain('id="triage-heading"');
+  // Beside the request that waits, and before it: the walk is still requests'.
+  const turnList = listOf(await w.page({ kind: "thread", messageId: "other-request", to: null }));
+  expect(turnList.indexOf('data-asking=""')).toBeGreaterThan(-1);
+  expect(turnList.indexOf('data-asking=""')).toBeLessThan(turnList.indexOf("other-request"));
   expect(hidden(blockOf(turn), "ask")).toBe(askId);
   expect(await w.page({ kind: "goalScope", repository: "o/r" })).toContain(EN.goalScopeAskingLink);
   expect(
@@ -811,6 +828,7 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
     }),
   ).toEqual({ kind: "recorded" });
   expect(blockOf(await w.page({ kind: "requests" }))).not.toContain("/flow-answer");
+  expect(listOf(await w.page({ kind: "requests" }))).not.toContain('data-asking=""');
   // Answered, it is gone: the flow sends the request with the answers.
   expect(
     await w.record.recordFlowAnswer({
