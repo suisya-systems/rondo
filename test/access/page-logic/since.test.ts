@@ -21,6 +21,7 @@ const MESSAGES: Record<string, { author: "you" | "other" | "rondo"; root: string
   "a-other": { author: "other", root: "req-a" },
   "req-b": { author: "you", root: "req-b" },
   "req-c": { author: "other", root: "req-c" },
+  "req-flow": { author: "rondo", root: "req-flow" },
 };
 const LAPS: Record<string, { requestId: string; ended: boolean; updatedAtMs: number }> = {
   "lap-1": { requestId: "req-b", ended: true, updatedAtMs: 150 },
@@ -42,6 +43,8 @@ test("each changed row lands under its request, and the rest are counted", () =>
       { kind: "conversation_message", id: "a-other", atMs: 115 },
       // Somebody else's request is theirs, not the one looking's.
       { kind: "conversation_message", id: "req-c", atMs: 101 },
+      // A request rondo opened itself is rondo's message, not the person's ask.
+      { kind: "conversation_message", id: "req-flow", atMs: 100 },
       { kind: "iteration", id: "lap-1", atMs: 150 },
       { kind: "lap_reading", id: "lap-1", atMs: 140 },
       { kind: "lap_reading", id: "lap-2", atMs: 130 },
@@ -84,6 +87,16 @@ test("each changed row lands under its request, and the rest are counted", () =>
       lapsMoved: 0,
       lapsEnded: 0,
       atMs: 101,
+    },
+    {
+      messageId: "req-flow",
+      asked: false,
+      rondoWrote: 1,
+      youWrote: 0,
+      othersWrote: 0,
+      lapsMoved: 0,
+      lapsEnded: 0,
+      atMs: 100,
     },
   ]);
   expect(reading.elsewhere).toBe(3);

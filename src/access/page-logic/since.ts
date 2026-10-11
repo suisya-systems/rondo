@@ -119,7 +119,8 @@ export function sinceLooked(
       const entry = under(root, change.atMs);
       if (author === "other") {
         entry.othersWrote += 1;
-      } else if (root === change.id) {
+      } else if (root === change.id && author === "you") {
+        // A request rondo opened itself (a goal flow's) is rondo's message.
         entry.asked = true;
       } else if (author === "you") {
         entry.youWrote += 1;
