@@ -72,11 +72,8 @@ export interface JsonRecord {
  * `admitting`, `admitted` and `performing` each answer that question.
  */
 /**
- * Whose failure ended an iteration at `failed` (rondo#348).
- *
- * Two values and not three: `noAnswer` never reaches a terminal status at all
- * (it holds the single-flight lock and stalls), so the only failures that
- * become a row are the two a person reads differently.
+ * Whose failure ended an iteration at `failed` (rondo#348). `noAnswer` is not
+ * one: it never reaches a terminal status (it holds the lock and stalls).
  */
 export type FailureKind =
   /** Something upstream said no. The person has a next move, and it is theirs. */
@@ -94,7 +91,9 @@ export type FailureKind =
    * perform` child are both gone, so nothing answered and nothing will. It
    * holds no budget, and what it spent before it died is not counted.
    */
-  | "lost";
+  | "lost"
+  /** A person ended it from the page (rondo#655): `lost`'s money and restart, not auto-started. */
+  | "ended";
 
 /** A `performing` lap, with the processes that drive it where they were recorded (D-0139). */
 export interface PerformingLap {
@@ -207,10 +206,10 @@ export function isTerminal(status: IterationStatus): status is TerminalStatus {
  * D-0023: the table was already right, and was already answering both.
  */
 export const RELEASED_BY: Readonly<Record<NonTerminalStatus, readonly string[]>> = Object.freeze({
-  planned: ["the interpreter, immediately"],
-  classified: ["the interpreter, immediately"],
-  admitting: ["run admit answering", "an operator's abandon() when nothing answered"],
-  admitted: ["the interpreter, immediately"],
+  planned: ["the interpreter, immediately", "the host finding its driver gone (D-0139)"],
+  classified: ["the interpreter, immediately", "the host finding its driver gone (D-0139)"],
+  admitting: ["run admit answering", "abandon(), or the host finding its driver gone (D-0139)"],
+  admitted: ["the interpreter, immediately", "the host finding its driver gone (D-0139)"],
   performing: [
     "lap perform answering",
     "an operator's abandon() when nothing answered",
@@ -218,7 +217,7 @@ export const RELEASED_BY: Readonly<Record<NonTerminalStatus, readonly string[]>>
   ],
   awaiting_human: ["resume() observing a non-null gate outcome", "the abort edge"],
   withdrawal_requested: ["resume() observing a non-null gate outcome"],
-  stalled: ["an operator's abandon()"],
+  stalled: ["an operator's abandon()", "a person's end press on the page (rondo#655)"],
 });
 
 /**

@@ -32,6 +32,7 @@ import { endLost, issuesClosedOver, readHolder } from "./conductor.js";
 import { draftedStartReadiness } from "./drafted-start.js";
 import { approvedSplits } from "./drafted-view.js";
 import { drafterHost } from "./drafter-host.js";
+import { endLapFromPage } from "./end-lap-host.js";
 import { explainerHost } from "./explainer/host.js";
 import { fixHost } from "./fix-host.js";
 import { flowHost } from "./flow-host.js";
@@ -49,6 +50,7 @@ import {
 import { forgeHost } from "./forge-preflight.js";
 import { gateHost } from "./gate-host.js";
 import { bareIssueRepository, issueReader } from "./issue-read.js";
+import { EndPort, HoldsPort, ReleasePort } from "./line-ports.js";
 import { lostLapHost, pidAlive, thisDriver } from "./lost-laps.js";
 import { continuoWorkspaceRemover, mergeOnGreen, mergePress, scopedAuthority } from "./merge.js";
 import { heldPlans, requestRepository } from "./model-draft/host.js";
@@ -93,14 +95,12 @@ import { triageHost } from "./triage-host.js";
 import {
   AddRepositoryPort,
   AnswerPort,
-  HoldsPort,
   MergePort,
   newDraftId,
   newIterationId,
   PolicyPort,
   PublishPort,
   ReadInPort,
-  ReleasePort,
   RevisePort,
   SayPort,
   ScopePort,
@@ -912,6 +912,7 @@ export async function serveWeb(
       // rondo#288), null on `revise`'s condition: a release is recorded as
       // the person's judgement, so it needs an actor the allowlist accepts.
       releasable: sender !== null && !("refusal" in sender),
+      endsLaps: sender !== null && !("refusal" in sender),
       // **The workers this host is equipped for** (rondo#462): read here,
       // where the host's other settings are read, and handed to the page as
       // names so the start form can offer the choice and say which worker
@@ -1055,6 +1056,25 @@ export async function serveWeb(
               // Files a narrowing gave up may be what a held start waits on.
               order?.kick();
               return moved;
+            }),
+      // **The end press** (rondo#655), on `release`'s condition: a person's
+      // decision with their reason. The lost-lap pass then reads the ended lap
+      // (its stop, and a *carry on* to it), and a held start may now have room.
+      end:
+        sender === null || "refusal" in sender
+          ? null
+          : new EndPort(async (input) => {
+              const ended = await endLapFromPage(
+                environment,
+                store,
+                record,
+                chromeFor(selected.tag),
+                sender.actorId,
+                input,
+              );
+              lost.kick();
+              order?.kick();
+              return ended;
             }),
       publishing:
         sender === null || "refusal" in sender

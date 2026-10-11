@@ -158,6 +158,7 @@ import { stepsBeforeLap, stepsOf } from "./page-logic/week.js";
 import { answeredQuestion, readWorkerQuestion } from "./question.js";
 import { isRequestReport } from "./request-report.js";
 import { approvalTip } from "./scope.js";
+import { endLapView } from "./screens/end-lap.js";
 import { goalScopeView } from "./screens/goal-scope.js";
 import { mergeView } from "./screens/merge.js";
 import { publishView } from "./screens/publish.js";
@@ -764,7 +765,7 @@ async function threadBoxes(
   token: string | null,
   newId: MintMessageId | null,
   newIterationId: MintIterationId | null,
-  { nowMs, ledger, threads, owes, partsOfRequest }: PageModel,
+  { nowMs, ledger, threads, owes, partsOfRequest, unreadable }: PageModel,
   { goals }: TriageReads,
   {
     selectedRoot,
@@ -1042,6 +1043,7 @@ async function threadBoxes(
           threads,
           owes,
           newIterationId,
+          unreadable,
         );
   const actsMarkup = acts?.acts == null ? null : ((await acts.acts.toString()) ?? null);
   const nextMarkup = acts?.next == null ? null : ((await acts.next.toString()) ?? null);
@@ -1518,6 +1520,7 @@ export async function operatorPage(
     waits,
     waitingCount,
     requestsList,
+    unreadable,
   } = model;
   // **A way to the release press only where there is a port behind it**, which
   // is narrower than the token: an approver the allowlist refuses still gets a
@@ -1565,7 +1568,8 @@ export async function operatorPage(
     view.kind === "goalScope" ||
     view.kind === "publish" ||
     view.kind === "merge" ||
-    view.kind === "release";
+    view.kind === "release" ||
+    view.kind === "end";
   /*
    * **The right face** (D-0083 rule 4): the week where the centre is empty,
    * and otherwise the request's own.
@@ -1577,7 +1581,12 @@ export async function operatorPage(
   const listContent = {
     react: RequestsFace({
       wording,
-      list: { ...requestsList, paused: triage.paused, asking: triage.asking },
+      list: {
+        ...requestsList,
+        paused: triage.paused,
+        asking: triage.asking,
+        unreadable: unreadable.map((row) => row.id),
+      },
       hrefOf: (messageId) => viewHref({ kind: "thread", messageId, to: null }, wording.lang),
       agoOf: (atMs) => wording.age(ago(atMs, nowMs)),
       allowance: null,
@@ -1598,6 +1607,11 @@ export async function operatorPage(
   const releasing =
     view.kind === "release"
       ? await releaseView(ports, wording, view, releaseToken, ledger, threads, nowMs)
+      : null;
+  // The end press on `release`'s terms (rondo#655): no port, no press.
+  const ending =
+    view.kind === "end"
+      ? await endLapView(ports, wording, view, ports.endsLaps === true ? token : null, threads)
       : null;
   /**
    * **Whether a person may be writing on this view.** With script off a reload
@@ -1643,7 +1657,9 @@ export async function operatorPage(
                     ? publishing
                     : view.kind === "merge"
                       ? merging
-                      : releasing}
+                      : view.kind === "end"
+                        ? ending
+                        : releasing}
               </div>
             ).toString(),
           }

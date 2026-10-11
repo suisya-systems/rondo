@@ -5,8 +5,9 @@
  */
 import { approvedForPublication, isTerminal } from "../../store/records.js";
 import { scopedAuthority } from "../merge.js";
+import { endable } from "../page-logic/end-lap.js";
 import type { LapUnderRequest } from "../page-logic/laps.js";
-import { draftingOver, scopeStanding } from "../page-logic/model.js";
+import { draftingOver, type PageModel, scopeStanding } from "../page-logic/model.js";
 import {
   askHoldsMerge,
   asksOverLine,
@@ -48,6 +49,8 @@ export async function threadActs(
   /** Whether rondo still owes this request a draft ({@link draftsOwedNow}). */
   owes: (requestMessageId: string) => boolean,
   newIterationId: MintIterationId | null = null,
+  /** The live rows that will not decode (`PageModel.unreadable`, rondo#655). */
+  unreadable: PageModel["unreadable"] = [],
 ) {
   // **Where the work would run, before a scope is drafted** (rondo#383,
   // D-0090 rule 1): a request naming a repository rondo does not work in is
@@ -104,8 +107,47 @@ export async function threadActs(
       )}
     </section>
   );
+  // `data-can-act`: a card that appears, or says something else, on a redraw is
+  // washed (rondo#494 item 1) -- the scope card arriving once rondo's draft
+  // lands is exactly that change (rondo#495 item 4).
+  const card = (id: string, href: string, said: string, label: string) => (
+    <section
+      class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3"
+      data-can-act="next"
+    >
+      <h2 class="text-meta leading-5 font-semibold text-wait-ink">{wording.nextStepHeading}</h2>
+      <p class="mt-1 text-body leading-6">{said}</p>
+      <a
+        id={id}
+        href={href}
+        data-open=""
+        class={`${PRIMARY} mt-3 h-10 justify-center px-6 text-sm`}
+      >
+        {label}
+      </a>
+    </section>
+  );
+  // **A lap only a person can end** (rondo#655): stalled, held by a start that
+  // threw, or a row of this request that will not decode. Drawn while the
+  // request waits on the person, since nothing in the thread answers it, and
+  // with no writer too: its screen says why there is no press.
+  const messageIds = new Set(threads.byId.keys());
+  const endId =
+    laps.find((lap) => endable(lap.record, messageIds))?.record.id ??
+    unreadable.find((row) => row.requestMessageId === requestMessageId)?.id ??
+    null;
+  const endCard =
+    endId === null
+      ? null
+      : card(
+          `end-${endId}`,
+          viewHref({ kind: "end", iterationId: endId }, wording.lang),
+          wording.nextStepEnd,
+          wording.endAction,
+        );
   if (token === null) {
-    return unheld === null ? null : { next: unheldCard(unheld), acts: <span /> };
+    const first = unheld === null ? endCard : unheldCard(unheld);
+    return first === null ? null : { next: first, acts: <span /> };
   }
   // **Every lap that could still be published, and not the first of them**
   // (Codex): `approvedForPublication` reads a closed row with an approved
@@ -261,26 +303,6 @@ export async function threadActs(
    * Not on the right face: that face holds no press (D-0083 rule 5) and drops
    * below the thread at 1280.
    */
-  // `data-can-act`: a card that appears, or says something else, on a redraw is
-  // washed (rondo#494 item 1) -- the scope card arriving once rondo's draft
-  // lands is exactly that change (rondo#495 item 4).
-  const card = (id: string, href: string, said: string, label: string) => (
-    <section
-      class="next-step mb-4 rounded-lg border border-wait bg-wait-wash px-4 py-3"
-      data-can-act="next"
-    >
-      <h2 class="text-meta leading-5 font-semibold text-wait-ink">{wording.nextStepHeading}</h2>
-      <p class="mt-1 text-body leading-6">{said}</p>
-      <a
-        id={id}
-        href={href}
-        data-open=""
-        class={`${PRIMARY} mt-3 h-10 justify-center px-6 text-sm`}
-      >
-        {label}
-      </a>
-    </section>
-  );
   // The way to the merge (D-0091 rule 1, rondo#437 item 6): a link to the
   // screen that says what merging does and holds the press, as publish's is
   // (D-0112 rule 7). The merge could not be taken back and was one press.
@@ -434,54 +456,56 @@ export async function threadActs(
   const next =
     unheld !== null
       ? unheldCard(unheld)
-      : nextFix !== null
-        ? rondoFixing
-          ? fixingCard(nextFix)
-          : fixCard(nextFix)
-        : nextMerge !== null
-          ? mergeCard(nextMerge)
-          : publishCard !== null
-            ? publishCard
-            : asked !== null && !gated
-              ? // **A question waiting in the thread is the next step** (rondo#431):
-                // on lap 13 the band sent the person to a scope while the
-                // drafter's question stood, and the start then failed on it.
-                card(
-                  `answer-${requestMessageId}`,
-                  viewHref(
-                    { kind: "thread", messageId: requestMessageId, to: asked },
-                    wording.lang,
-                  ),
-                  wording.nextStepAnswer,
-                  wording.answerAskAction,
-                )
-              : standing === null
-                ? null
-                : drafting
-                  ? draftingCard
-                  : waitsHeld
-                    ? waitsCard
-                    : standing.kind === "decided" || standing.kind === "own"
-                      ? card(
-                          `scope-${requestMessageId}`,
-                          // A drafted approval's screen is reached without its decision,
-                          // which is how that screen also offers a newer draft beside it
-                          // (Codex); the person's own approval is named, since that
-                          // screen finds only rondo's drafts by itself.
-                          scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
-                          wording.nextStepStart,
-                          wording.nextStepStartAction,
-                        )
-                      : card(
-                          `scope-${requestMessageId}`,
-                          scopeHref(null),
-                          standing.kind === "drafted"
-                            ? wording.nextStepDrafted
-                            : draftedNothing(threads, requestMessageId)
-                              ? wording.nextStepNoDraft
-                              : wording.nextStepScope,
-                          wording.scopeAction,
-                        );
+      : endCard !== null
+        ? endCard
+        : nextFix !== null
+          ? rondoFixing
+            ? fixingCard(nextFix)
+            : fixCard(nextFix)
+          : nextMerge !== null
+            ? mergeCard(nextMerge)
+            : publishCard !== null
+              ? publishCard
+              : asked !== null && !gated
+                ? // **A question waiting in the thread is the next step** (rondo#431):
+                  // on lap 13 the band sent the person to a scope while the
+                  // drafter's question stood, and the start then failed on it.
+                  card(
+                    `answer-${requestMessageId}`,
+                    viewHref(
+                      { kind: "thread", messageId: requestMessageId, to: asked },
+                      wording.lang,
+                    ),
+                    wording.nextStepAnswer,
+                    wording.answerAskAction,
+                  )
+                : standing === null
+                  ? null
+                  : drafting
+                    ? draftingCard
+                    : waitsHeld
+                      ? waitsCard
+                      : standing.kind === "decided" || standing.kind === "own"
+                        ? card(
+                            `scope-${requestMessageId}`,
+                            // A drafted approval's screen is reached without its decision,
+                            // which is how that screen also offers a newer draft beside it
+                            // (Codex); the person's own approval is named, since that
+                            // screen finds only rondo's drafts by itself.
+                            scopeHref(standing.kind === "own" ? standing.scopeDecisionId : null),
+                            wording.nextStepStart,
+                            wording.nextStepStartAction,
+                          )
+                        : card(
+                            `scope-${requestMessageId}`,
+                            scopeHref(null),
+                            standing.kind === "drafted"
+                              ? wording.nextStepDrafted
+                              : draftedNothing(threads, requestMessageId)
+                                ? wording.nextStepNoDraft
+                                : wording.nextStepScope,
+                            wording.scopeAction,
+                          );
   const others = publishable.filter((lap) => lap !== nextPublish);
   // **The request's work is still under way** (rondo#437): a lap running or at
   // its gate, or any approved try whose pull request is not yet merged

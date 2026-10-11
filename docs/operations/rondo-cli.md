@@ -925,8 +925,12 @@ status a run reached is a fact, and a wrong one is corrected by opening a new ru
 
 ## 7. When something is stuck
 
-`abandon` is the only way out of a row holding the single-flight lock with nothing able to release
-it -- a lap that never answered, or a row a restart found mid-effect.
+`abandon` is the terminal's way out of a row holding the single-flight lock with nothing able to
+release it -- a lap that never answered, or a row a restart found mid-effect. The page has its own:
+a stalled lap and a start rondo could not end each lead to *End this work* from their request, and
+a row that will not decode is always a *your turn* row on the list, and in its request too when that
+request reads. The end screen asks for your reason as `abandon` does (D-0195). A row a restart left before its gate, with its driver gone, is ended by
+the host itself as a lost lap (D-0139).
 
 ```console
 $ node bin/rondo.mjs abandon --iteration-id cli-lap-001 --reason "the host was killed mid-lap"

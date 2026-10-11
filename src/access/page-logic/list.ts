@@ -96,6 +96,11 @@ export interface RequestList {
    * D-0192): drawn with *your turn* and leading to the questions' form.
    */
   readonly asking?: readonly FlowAskRow[];
+  /**
+   * The live laps that will not decode (rondo#655): only a person can end one,
+   * so each is drawn with *your turn* and leads to the screen that does.
+   */
+  readonly unreadable?: readonly string[];
 }
 
 /** A goal flow waiting on an open ask, as its row in the list says it (D-0192). */

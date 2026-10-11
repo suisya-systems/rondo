@@ -164,6 +164,13 @@ export function scopeDecisionWhere(
   }
 }
 
+/**
+ * A lap that holds no reserve and was never read (D-0139): lost, or ended by a
+ * person (rondo#655). COALESCE, so a row with no kind -- or none at all, under
+ * the LEFT JOIN -- is kept, as `IS NOT 'lost'` kept it.
+ */
+const NOT_LOST = "COALESCE(i.failure_kind, '') NOT IN ('lost', 'ended')";
+
 const SELECT_SCOPE_DECISION =
   "SELECT scope_decision_id, scope_id, scope_digest, outcome, actor_id, recorded_by, " +
   "decided_at_ms FROM scope_decision";
@@ -313,9 +320,7 @@ export function lapBudgetCapFor(
       "SELECT i.lap_cost_usd AS cost, i.lap_budget_cap_usd AS cap, i.status AS status, " +
         "i.failure_kind AS failure_kind " +
         "FROM scope_consumption c LEFT JOIN iteration i ON i.id = c.subject_id " +
-        "WHERE c.scope_decision_id = ? AND c.act_kind = 'admission' AND c.subject_id <> ? " +
-        // D-0139: a lost lap holds nothing; what it spent was never read.
-        "AND i.failure_kind IS NOT 'lost'",
+        "WHERE c.scope_decision_id = ? AND c.act_kind = 'admission' AND c.subject_id <> ?",
     )
     .all(decisionId, iterationId) as SqlRow[];
   const basis = { readCostUsd: 0, heldCapsUsd: 0, unreadUncappedLaps: 0, runningLaps: 0 };
@@ -324,6 +329,10 @@ export function lapBudgetCapFor(
     const cap = row["cap"];
     if (typeof cost === "number") {
       basis.readCostUsd += cost;
+    } else if (row["failure_kind"] === "lost" || row["failure_kind"] === "ended") {
+      // D-0139: a lost lap holds nothing; what it spent was never read. One a
+      // person ended from the page is the same (rondo#655), though a stall may
+      // have read its cost first -- counted above, as `spentUnder` counts it.
     } else if (
       typeof cap === "number" &&
       // D-0152: continuo stops a session it owns before it answers a refusal
@@ -347,8 +356,8 @@ export function spentUnder(connection: StoreConnection, scopeDecisionId: string)
   const row = connection
     .prepare(
       "SELECT COUNT(*) AS admissions, COALESCE(SUM(i.lap_cost_usd), 0) AS read_cost, " +
-        // D-0139: a lost lap is not unread; it holds no reserve.
-        "COALESCE(SUM(CASE WHEN i.lap_cost_usd IS NULL AND i.failure_kind IS NOT 'lost' " +
+        // D-0139: a lost (or ended, rondo#655) lap is not unread; it holds no reserve.
+        `COALESCE(SUM(CASE WHEN i.lap_cost_usd IS NULL AND ${NOT_LOST} ` +
         "THEN 1 ELSE 0 END), 0) AS unread " +
         "FROM scope_consumption c LEFT JOIN iteration i ON i.id = c.subject_id " +
         "WHERE c.scope_decision_id = ? AND c.act_kind = 'admission'",

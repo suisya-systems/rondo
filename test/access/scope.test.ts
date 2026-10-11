@@ -687,6 +687,7 @@ interface Link {
   readonly supersedes: string | null;
   readonly readings: readonly LapReading[];
   readonly contractDigest?: string | null;
+  readonly failureKind?: string;
 }
 
 function gatherPorts(links: Record<string, Link>): ScopeReadPorts {
@@ -702,6 +703,9 @@ function gatherPorts(links: Record<string, Link>): ScopeReadPorts {
           record: {
             id,
             supersedesIterationId: link.supersedes,
+            ...(link.failureKind === undefined
+              ? {}
+              : { status: "failed", failureKind: link.failureKind, reason: "" }),
             plan: payload,
             contractDigest:
               link.contractDigest === undefined ? contractDigest : link.contractDigest,
@@ -734,6 +738,19 @@ async function gatheredRedo(links: Record<string, Link>): Promise<ScopeSnapshot>
   if (gathered.kind !== "gathered") throw new Error(gathered.reason);
   return gathered.snapshot;
 }
+
+test("rondo#655: a predecessor a person ended from the page reads as lost, so it is started again", async () => {
+  // A lost predecessor's start again is inside (the D-0139 verdict test above).
+  for (const failureKind of ["lost", "ended"]) {
+    const snap = await gatheredRedo({ "i-1": { supersedes: null, readings: [], failureKind } });
+    expect(snap.predecessor?.lost).toBe(true);
+  }
+  // Control: a lap that failed any other way is not.
+  const failed = await gatheredRedo({
+    "i-1": { supersedes: null, readings: [], failureKind: "defect" },
+  });
+  expect(failed.predecessor?.lost).toBe(false);
+});
 
 test("the gatherer walks the chain newest first and reads the predecessor's latest model reading", async () => {
   const snap = await gatheredRedo({

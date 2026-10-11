@@ -74,7 +74,8 @@ export interface ThreadEvent {
    * and nothing of it inline.** It is drawn only where the row says the
    * failure was rondo's own: an upstream refusal is the person's to act on and
    * is said in the line itself (rule 4.4). The person is never asked to open
-   * this, and what is in it is the reason as rondo received it.
+   * this, and what is in it is the reason as rondo received it. The one other
+   * use is a person's own end of a lap (rondo#655), whose fold holds their words.
    */
   readonly aside?: {
     readonly said: string;

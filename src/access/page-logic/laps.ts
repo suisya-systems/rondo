@@ -96,11 +96,13 @@ export function endedWhy(wording: Chrome, record: IterationRecord): string {
     ? wording.gateAnswered(record.gateOutcome)
     : record.failureKind === "lost"
       ? wording.evLost
-      : record.failureKind === "defect"
-        ? wording.evBroke
-        : record.reason === null
-          ? wording.noReasonRecorded
-          : (refusalSaid(wording, record, record.reason) ?? record.reason);
+      : record.failureKind === "ended"
+        ? wording.evEnded
+        : record.failureKind === "defect"
+          ? wording.evBroke
+          : record.reason === null
+            ? wording.noReasonRecorded
+            : (refusalSaid(wording, record, record.reason) ?? record.reason);
 }
 
 /**

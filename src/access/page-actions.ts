@@ -69,12 +69,14 @@ import {
 } from "./gate-host.js";
 import { hostFailure } from "./host-failure.js";
 import { commandFailure as forgeCommandFailure } from "./issue-read.js";
+import type { HoldsInput, HoldsMoved, Released, ReleaseInput } from "./line-ports.js";
 import { againId, startsAgainOnCarryOn, stoppedLapOf } from "./lost-laps.js";
 import { type DrafterPorts, requestRepository } from "./model-draft/host.js";
 import { modelReviewPorts, takeModelReading } from "./model-review/host.js";
 import { retakeOffered, reviewRoundsAlong } from "./model-review/judgement.js";
 import { APPROVE_BODY } from "./page/approve.js";
 import type { ClaimReach, LapMaterialRead } from "./page/contract.js";
+import { BEFORE_THE_GATE } from "./page-logic/end-lap.js";
 import { fixCauseOf } from "./page-logic/result.js";
 import { requestWords, threadsOf } from "./page-logic/threads.js";
 import {
@@ -91,10 +93,6 @@ import type {
   ClaimRefusal,
   ConflictFixed,
   ConflictFixInput,
-  HoldsInput,
-  HoldsMoved,
-  Released,
-  ReleaseInput,
   Retaken,
   Revised,
   ReviseInput,
@@ -661,15 +659,6 @@ export async function answerOnceReserved(
   return late;
 }
 
-/** The statuses a lap passes through before its gate opens (`IterationStatus`). */
-const BEFORE_THE_GATE: ReadonlySet<string> = new Set([
-  "planned",
-  "classified",
-  "admitting",
-  "admitted",
-  "performing",
-]);
-
 /**
  * D-0109 rule 3: a lap left behind by a start that threw -- ended at `failed`,
  * and, when the press has already answered, one ask in the request's thread in
@@ -682,7 +671,8 @@ const BEFORE_THE_GATE: ReadonlySet<string> = new Set([
  * the row will not decode, when this process is still driving it, or when the
  * store refused the write, and inviting somebody to start again over a lap that
  * is still holding everything would be the page lying about its own state. That
- * case says so instead, in the person's words, and asks them to look.
+ * case says so instead, in the person's words, and points at the page's end
+ * press (rondo#655), whose *carry on* this ask then answers.
  *
  * rondo's own sentence for what went wrong goes on that row and on this
  * console, and never in front of the person (D-0076 rule 4.2).
@@ -715,8 +705,10 @@ async function stopTheLeftLap(
     for (const line of ended.lines) {
       onConsole(line);
     }
-    if (!answered) {
-      // The press is still holding the refusal screen, which says it all.
+    if (!answered && ended.status === "failed") {
+      // The press is still holding the refusal screen, which says it all. A
+      // row still held is asked about anyway: the ask is what the page's end
+      // press reads it as one only a person can end by (rondo#655).
       return;
     }
     const outcome = asRefusal(

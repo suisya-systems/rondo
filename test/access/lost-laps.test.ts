@@ -1,7 +1,9 @@
 /**
- * D-0139 (rondo#506): a lap whose rondo process died while it performed is
- * found, ended `failed` with `lost`, and started again by itself once or asked
- * about -- a restart of the host while a lap performs, over a real store file.
+ * D-0139 (rondo#506, rondo#655): a lap whose rondo process died before its gate
+ * is found, ended `failed` with `lost`, and started again by itself once or
+ * asked about -- a restart of the host while a lap performs or is admitted,
+ * over a real store file. A lap a person ended from the page is only asked
+ * about, and started again on *carry on*.
  */
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,17 +13,21 @@ import { expect, test } from "vitest";
 import { endLost } from "../../src/access/conductor.js";
 import {
   againId,
+  driveResumed,
+  endedOnThePage,
   type LostLapPorts,
   lapLost,
   lostAskId,
   lostLapHost,
+  personsReason,
   pidAlive,
   startsAgainOnCarryOn,
   stoppedLapOf,
 } from "../../src/access/lost-laps.js";
 import { EN } from "../../src/access/wording.js";
+import type { DrivenLap } from "../../src/store/contract.js";
 import { planDigest } from "../../src/store/plan.js";
-import type { IterationRecord, PerformingLap } from "../../src/store/records.js";
+import type { IterationRecord, IterationStatus } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 
 const HOST = "this-host";
@@ -29,8 +35,9 @@ const CEILING = 60_000;
 const PLAN = { invocation_ceiling_ms: CEILING };
 
 test("a lap is lost only when, on this host, its driver and its child are both gone", () => {
-  const lap = (over: Partial<PerformingLap>): PerformingLap => ({
+  const lap = (over: Partial<DrivenLap>): DrivenLap => ({
     iterationId: "i",
+    status: "performing",
     driverHost: HOST,
     driverPid: 10,
     lapPid: 11,
@@ -54,6 +61,15 @@ test("a lap is lost only when, on this host, its driver and its child are both g
   expect(lapLost(unmarked, CEILING, CEILING, HOST, dead)).toBe(false);
   expect(lapLost(unmarked, CEILING, CEILING + 1, HOST, dead)).toBe(true);
   expect(lapLost(unmarked, null, 10 * CEILING, HOST, dead)).toBe(false);
+  // rondo#655: before its lap is sent no child exists, so a gone driver is all of it.
+  for (const status of ["planned", "classified", "admitting", "admitted"] as const) {
+    expect(lapLost(lap({ status, lapPid: null }), CEILING, 1, HOST, dead)).toBe(true);
+    expect(lapLost(lap({ status, lapPid: null }), CEILING, 1, HOST, only(10))).toBe(false);
+    expect(lapLost(lap({ status, driverHost: "elsewhere" }), CEILING, 1, HOST, dead)).toBe(false);
+    // Reserved before the driver was written: its ceiling decides, as for a lap sent.
+    expect(lapLost({ ...unmarked, status }, CEILING, CEILING, HOST, dead)).toBe(false);
+    expect(lapLost({ ...unmarked, status }, CEILING, CEILING + 1, HOST, dead)).toBe(true);
+  }
 });
 
 test("D-0149: carry on starts a lap again when it was lost or stopped at its budget or its time limit", () => {
@@ -70,6 +86,7 @@ test("D-0149: carry on starts a lap again when it was lost or stopped at its bud
     "session s did not finish its turn within 1800000 ms. The workspace and the fence are left " +
     "exactly as they are -- the refusal is about the turn";
   expect(startsAgainOnCarryOn(row({ failureKind: "lost" }))).toBe(true);
+  expect(startsAgainOnCarryOn(row({ failureKind: "ended" }))).toBe(true);
   expect(startsAgainOnCarryOn(row({ failureKind: "budget" }))).toBe(true);
   expect(startsAgainOnCarryOn(row({ reason: timedOut }))).toBe(true);
   // Any other refusal, a defect, or a lap not ended failed is the person's to start.
@@ -83,6 +100,8 @@ test("D-0149: carry on starts a lap again when it was lost or stopped at its bud
     bases,
   });
   expect(stoppedLapOf(ask("lap-stopped-lap-1"))).toBe("lap-1");
+  // rondo#655: a start that threw asks its stop under its own id.
+  expect(stoppedLapOf(ask("start-stopped-lap-1"))).toBe("lap-1");
   // A scope's stop over a redo names the lap it redoes.
   expect(
     stoppedLapOf(
@@ -98,11 +117,25 @@ test("D-0149: carry on starts a lap again when it was lost or stopped at its bud
   );
 });
 
+test("rondo#655: the person's words are read back from the reason a page end records", () => {
+  const ended = (reason: string | null) => ({ reason }) as IterationRecord;
+  const said = endedOnThePage("the worker hung", "ada");
+  expect(said).toBe('ended on the page by ada: "the worker hung"');
+  expect(personsReason(ended(said))).toBe("the worker hung");
+  // rondo's earlier entries before it are left out.
+  expect(personsReason(ended(`classify answered nothing; ${said}`))).toBe("the worker hung");
+  // The words come back whole, whatever punctuation they hold.
+  const words = 'Do not retry; it said "ended on the page by bob: x"\nand stopped';
+  expect(personsReason(ended(`a; b; ${endedOnThePage(words, "ada")}`))).toBe(words);
+  expect(personsReason(ended("no page end here"))).toBe("no page end here");
+  expect(personsReason(ended(null))).toBe("");
+});
+
 test("pidAlive: this process lives", () => {
   expect(pidAlive(process.pid)).toBe(true);
 });
 
-/** A store with one request and lap `id` performing, sent by a driver now gone. */
+/** A store with one request and lap `id` at `status` (performing by default). */
 async function world(marked: boolean) {
   const connection = new DatabaseSync(join(mkdtempSync(join(tmpdir(), "rondo-lost-")), "s.db"));
   const record = advisoryRecord(connection);
@@ -119,15 +152,15 @@ async function world(marked: boolean) {
     asks: false,
   });
   expect(said.kind).toBe("recorded");
-  const lap = (id: string, supersedes: string | null) => {
+  const lap = (id: string, supersedes: string | null, status: IterationStatus = "performing") => {
     connection
       .prepare(
         "INSERT INTO iteration (id, status, request, plan, plan_digest, attempts, " +
           "identifiers_spent, request_message_id, supersedes_iteration_id, lap_budget_cap_usd, " +
-          "created_at_ms, updated_at_ms) VALUES (?, 'performing', 'r', ?, ?, 1, 0, 'req-1', ?, " +
+          "created_at_ms, updated_at_ms) VALUES (?, ?, 'r', ?, ?, 1, 0, 'req-1', ?, " +
           "2.5, 10, 10)",
       )
-      .run(id, JSON.stringify(PLAN), planDigest(PLAN), supersedes);
+      .run(id, status, JSON.stringify(PLAN), planDigest(PLAN), supersedes);
   };
   return { connection, record, store, lap, marked };
 }
@@ -184,7 +217,7 @@ test("a restart while a lap performs: the lap is lost, holds nothing, and the st
   const ended = await row(w, "lap-2");
   expect(ended.status).toBe("failed");
   expect(ended.failureKind).toBe("lost");
-  expect(await w.store.performingLaps()).toEqual([]);
+  expect(await w.store.drivenLaps()).toEqual([]);
   const ask = (await messages(w)).find((m) => m.messageId === lostAskId("lap-2"));
   expect(ask).toMatchObject({ asks: true, inReplyTo: "req-1", body: EN.lapLostAsk });
   expect(EN.lapLostAsk).toContain("Starting this part again");
@@ -374,4 +407,161 @@ test("a start again whose report was never written is reported on the next pass"
   const ids = (await messages(w)).map((m) => m.messageId);
   expect(ids).toContain("report-lost-lap-2");
   expect(ids).not.toContain(lostAskId("lap-2"));
+});
+
+test("rondo#655: a restart while a lap is admitted ends it lost, frees its room, and asks the stop", async () => {
+  const w = await world(true);
+  w.lap("lap-2", null, "admitting");
+  // Its driver, written at reservation, is gone; no child was ever sent.
+  await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
+  expect(await w.store.drivenLaps()).toMatchObject([{ iterationId: "lap-2", status: "admitting" }]);
+  expect((await w.store.occupancy()).occupying).toBe(1);
+  const ports = portsOf(w);
+  await pass(ports);
+  const ended = await row(w, "lap-2");
+  expect(ended).toMatchObject({ status: "failed", failureKind: "lost" });
+  expect(ended.reason).toContain("'admitting'");
+  expect(await w.store.drivenLaps()).toEqual([]);
+  expect(await w.store.occupancy()).toEqual({ occupying: 0, live: 0 });
+  const ask = (await messages(w)).find((m) => m.messageId === lostAskId("lap-2"));
+  expect(ask).toMatchObject({ asks: true, inReplyTo: "req-1", body: EN.lapLostAsk });
+});
+
+test("rondo#655: a lap before its gate whose driver lives, or that names none and is young, is left", async () => {
+  const w = await world(true);
+  w.lap("lap-2", null, "admitting");
+  w.lap("lap-3", null, "planned");
+  await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
+  await pass(portsOf(w, { alive: (pid) => pid === 999_001 }));
+  expect((await row(w, "lap-2")).status).toBe("admitting");
+  // Reserved before the driver was written: lost only past its ceiling.
+  expect((await row(w, "lap-3")).status).toBe("planned");
+  await pass(portsOf(w, { alive: (pid) => pid === 999_001, now: () => 11 + CEILING }));
+  expect((await row(w, "lap-3")).failureKind).toBe("lost");
+  expect((await row(w, "lap-2")).status).toBe("admitting");
+});
+
+test("rondo#655: a lap another process resumes before its gate is driven by that process", async () => {
+  const w = await world(true);
+  w.lap("lap-2", null, "planned");
+  w.lap("lap-3", null, "performing");
+  // The process that reserved lap-2 died; this one resumes it.
+  await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
+  await w.store.markLapProcess("lap-3", { driverHost: HOST, driverPid: 999_001 });
+  await w.store.markLapProcess("lap-3", { lapPid: 999_002 });
+  for (const id of ["lap-2", "lap-3"]) {
+    await driveResumed(w.store, await w.store.read(id));
+  }
+  const driven = await w.store.drivenLaps();
+  expect(driven.find((lap) => lap.iterationId === "lap-2")).toMatchObject({
+    driverPid: process.pid,
+  });
+  // A performing lap is only reported by resume(): its pids stay as they were.
+  expect(driven.find((lap) => lap.iterationId === "lap-3")).toMatchObject({
+    driverPid: 999_001,
+    lapPid: 999_002,
+  });
+  await pass(portsOf(w, { alive: (pid) => pid === process.pid }));
+  expect((await row(w, "lap-2")).status).toBe("planned");
+});
+
+test("rondo#655: a lap another process resumes after the pass read the list is not ended", async () => {
+  const w = await world(true);
+  w.lap("lap-2", null, "planned");
+  await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
+  let lists = 0;
+  const store = Object.create(w.store, {
+    drivenLaps: {
+      value: async () => {
+        const laps = await w.store.drivenLaps();
+        lists += 1;
+        if (lists === 1) {
+          // Resumed elsewhere just after this pass read its dead driver.
+          await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_005 });
+        }
+        return laps;
+      },
+    },
+  });
+  await pass(portsOf(w, { store }));
+  expect((await row(w, "lap-2")).status).toBe("planned");
+});
+
+test("rondo#655: a lap ended from the page is never started again by itself, and carry on starts it", async () => {
+  const w = await world(true);
+  w.lap("lap-2", null, "stalled");
+  const reason = endedOnThePage("the worker hung", "ada");
+  expect(await endLost({ store: w.store, now: () => 20 }, "lap-2", reason, "ended")).toBe("failed");
+  expect(await w.store.occupancy()).toEqual({ occupying: 0, live: 0 });
+  const restarted: string[] = [];
+  const ports = portsOf(w, {
+    byItself: async () => true,
+    restart: async (lap) => {
+      restarted.push(lap.id);
+      return { ok: true, note: "admitted" };
+    },
+  });
+  // The page's ask was never written (a pass cut short): this writes it, in the person's words.
+  await pass(ports);
+  expect(restarted).toEqual([]);
+  const asked = (await messages(w)).filter((m) => m.messageId === lostAskId("lap-2"));
+  expect(asked).toHaveLength(1);
+  expect(asked[0]).toMatchObject({ asks: true, body: EN.lapEndedAsk("the worker hung") });
+  await pass(ports);
+  expect(restarted).toEqual([]);
+  expect((await messages(w)).filter((m) => m.messageId === lostAskId("lap-2"))).toHaveLength(1);
+  const answered = await w.record.recordThreadMessage({
+    messageId: "m-carry",
+    body: "Go on.",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: lostAskId("lap-2"),
+    atMs: 30,
+    bases: [],
+    asks: false,
+    answerOutcome: "carry_on",
+  });
+  expect(answered.kind).toBe("recorded");
+  await pass(ports);
+  expect(restarted).toEqual(["lap-2"]);
+});
+
+test("rondo#655: a lap lost while its start's stop stood is asked afresh, and an earlier carry on is not read", async () => {
+  const w = await world(true);
+  w.lap("lap-2", null, "admitting");
+  await w.store.markLapProcess("lap-2", { driverHost: HOST, driverPid: 999_001 });
+  // What `stopTheLeftLap` writes when it could not end the lap, answered while still held.
+  for (const [messageId, authorKind, inReplyTo, atMs, asks, answerOutcome] of [
+    ["start-stopped-lap-2", "drafter", "req-1", 15, true, undefined],
+    ["m-early", "operator", "start-stopped-lap-2", 16, false, "carry_on"],
+  ] as const) {
+    await w.record.recordThreadMessage({
+      messageId,
+      body: messageId === "m-early" ? "Go on." : EN.startStoppedHeldSaid,
+      authorKind,
+      authorId: authorKind === "operator" ? "ada" : "rondo/advisory/deterministic",
+      inReplyTo,
+      atMs,
+      bases: [
+        { form: "message", messageId: "req-1" },
+        { form: "iteration", iterationId: "lap-2" },
+      ],
+      asks,
+      ...(answerOutcome === undefined ? {} : { answerOutcome }),
+    });
+  }
+  const restarted: string[] = [];
+  const ports = portsOf(w, {
+    restart: async (lap) => {
+      restarted.push(lap.id);
+      return { ok: true, note: "admitted" };
+    },
+  });
+  await pass(ports);
+  expect((await row(w, "lap-2")).failureKind).toBe("lost");
+  // The start's stop still says the lap holds its room: the loss is asked on its own.
+  const ask = (await messages(w)).find((m) => m.messageId === lostAskId("lap-2"));
+  expect(ask).toMatchObject({ asks: true, body: EN.lapLostAsk });
+  await pass(ports);
+  expect(restarted).toEqual([]);
 });
