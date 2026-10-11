@@ -332,3 +332,11 @@ export function viewOf(query: URLSearchParams): PageView {
   // of them is the page a person arrives on.
   return { kind: "summary" };
 }
+
+/**
+ * The id of a repository's flow-ask form in the triage block (rondo#487), which
+ * the list's asking row leads to (D-0192): one spelling for both.
+ */
+export function flowAskAnchor(repository: string): string {
+  return `flow-ask-${repository.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+}

@@ -85,6 +85,21 @@ export interface RequestList {
    * that does.
    */
   readonly paused?: readonly string[];
+  /**
+   * The goal flows that wait on the person's answers to open points (rondo#633,
+   * D-0192): drawn with *your turn* and leading to the questions' form.
+   */
+  readonly asking?: readonly FlowAskRow[];
+}
+
+/** A goal flow waiting on an open ask, as its row in the list says it (D-0192). */
+export interface FlowAskRow {
+  readonly repository: string;
+  /** The request the flow would send once answered, in the ask's words. */
+  readonly request: string;
+  /** How many points it asks. */
+  readonly points: number;
+  readonly askedAtMs: number;
 }
 
 /** The repository a lap's plan names (D-0081), or null where it names none. */

@@ -1469,7 +1469,7 @@ export async function operatorPage(
   const listContent = {
     react: RequestsFace({
       wording,
-      list: { ...requestsList, paused: triage.paused },
+      list: { ...requestsList, paused: triage.paused, asking: triage.asking },
       hrefOf: (messageId) => viewHref({ kind: "thread", messageId, to: null }, wording.lang),
       agoOf: (atMs) => wording.age(ago(atMs, nowMs)),
       allowance: null,
