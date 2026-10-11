@@ -105,7 +105,7 @@ test("a candidate with open points is asked first, then injected with the answer
   );
   expect(pickNext(input({ triage: triage([issue(1, 2)]), asks: asked(["a", "b"]) }))).toEqual({
     kind: "inject",
-    candidate: issue(1, 2),
+    candidate: { ...issue(1, 2), openPoints: [] },
     messageId: "flow-sd-1-issue:o/r#1",
     answers: [
       { point: "p", answer: "a" },
@@ -134,7 +134,7 @@ test("an answer stands when a re-ranking words its points differently, and goes 
   const answered = [{ candidateKey: "issue:o/r#1", points: ["p1", "p2"], answers: ["a", "b"] }];
   expect(pickNext(input({ triage: triage([reranked]), asks: answered }))).toEqual({
     kind: "inject",
-    candidate: reranked,
+    candidate: { ...reranked, openPoints: [] },
     messageId: "flow-sd-1-issue:o/r#1",
     answers: [
       { point: "p1", answer: "a" },
@@ -163,7 +163,7 @@ test("ask, re-rank, answer: the answered candidate injects before the ranking's 
   const answered = [{ candidateKey: "issue:o/r#1", points: ["p", "p"], answers: ["a", "b"] }];
   expect(pickNext(input({ triage: triage([issue(2, 1), issue(1, 2)]), asks: answered }))).toEqual({
     kind: "inject",
-    candidate: issue(1, 2),
+    candidate: { ...issue(1, 2), openPoints: [] },
     messageId: "flow-sd-1-issue:o/r#1",
     answers: [
       { point: "p", answer: "a" },

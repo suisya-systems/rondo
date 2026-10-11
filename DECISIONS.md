@@ -31137,7 +31137,9 @@ it, and nothing downstream could tell a raised point from one rondo could decide
 4. **The goal flow asks only the raised points.** A candidate with none is started without an ask.
    The ask row holds only the raised points. The request the flow sends carries the person's
    answers, as now, then *Decided by rondo, as suggested* with each null point and its decision.
-   The person changes one the way they change anything else in a running request: a reply in its
+   Beside answers, those are the null points of the reading the ask was raised from, never a later
+   reading's: a re-ranking may turn an answered point into one rondo decides otherwise, and its
+   decision would then contradict the answer. The person changes one the way they change anything else in a running request: a reply in its
    thread, or a change at a gate that reaches them (`D-0164`). This entry adds no press.
 5. **The page draws the two apart.** The triage card lists the raised points under *open points*
    as now, then the decided ones under *decided by rondo* with each decision, in muted ink, since

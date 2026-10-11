@@ -51,7 +51,13 @@ import {
   pickNext,
 } from "../advisory/flow.js";
 import { readSplitPayload } from "../advisory/proposal.js";
-import { decided, type Ranked, raised, readTriagePayload } from "../advisory/triage.js";
+import {
+  decided,
+  type OpenPoint,
+  type Ranked,
+  raised,
+  readTriagePayload,
+} from "../advisory/triage.js";
 import type { HostPolicy } from "../refrain/policy.js";
 import { contentDigest } from "../store/plan.js";
 import {
@@ -362,13 +368,16 @@ async function flowOne(
     occupancy: await ports.store.occupancy(),
     bounds: ports.policy,
     ownOpenAsk,
-    asks: asks.map((ask) => ({
-      candidateKey: ask.candidate,
-      points: ask.points.map((one) => one.point),
-      answers: ask.answer?.answers ?? null,
-      request: ask.answer?.request ?? null,
-      why: ask.answer?.why ?? null,
-    })),
+    asks: await Promise.all(
+      asks.map(async (ask) => ({
+        candidateKey: ask.candidate,
+        points: ask.points.map((one) => one.point),
+        answers: ask.answer?.answers ?? null,
+        request: ask.answer?.request ?? null,
+        why: ask.answer?.why ?? null,
+        ...(ask.answer === null ? {} : { decided: await decidedWhenAsked(ports, ask) }),
+      })),
+    ),
   });
   if (pick.kind === "wait") {
     if (pick.reason === "failed_twice") {
@@ -623,6 +632,20 @@ async function injectionState(
     return "lost";
   }
   return latest?.status as "closed" | "failed" | "abandoned";
+}
+
+/**
+ * What rondo decided of an ask's candidate in the reading the ask was raised
+ * from (D-0193): the ones the person saw beside the questions they answered.
+ */
+async function decidedWhenAsked(
+  ports: FlowHostPorts,
+  ask: { readonly proposalId: string; readonly candidate: string },
+): Promise<readonly OpenPoint[]> {
+  const read = await ports.record.readProposal(ask.proposalId);
+  const payload = read.kind === "read" ? readTriagePayload(read.proposal.payload) : null;
+  const candidate = payload?.ranked.find((one) => one.key === ask.candidate);
+  return candidate === undefined ? [] : decided(candidate.openPoints);
 }
 
 /**
