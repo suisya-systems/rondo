@@ -929,6 +929,57 @@ test("the page says the report in the reader's language, with the words as writt
   expect(block(await page(w.world))).not.toContain("<details");
 });
 
+test("a request whose split was one part gets its report too, in one line, and the page says it in the reader's language (rondo#651)", async () => {
+  const w = await split([undefined]);
+  await w.start(0, "lap-one");
+  // Its one lap still runs: nothing to report yet.
+  expect(await writeReports(w)).toEqual([]);
+  expect((await w.world.store.transition("lap-one", "planned", "abandoned", {}, 3_700)).kind).toBe(
+    "transitioned",
+  );
+  expect(await writeReports(w)).toEqual([requestReportId(w.proposalId)]);
+  expect(await writeReports(w)).toEqual([]);
+
+  const read = await w.world.record.threadMessages();
+  if (read.kind !== "read") throw new Error(read.reason);
+  const message = read.messages.find((m) => m.messageId === requestReportId(w.proposalId));
+  expect(message?.body).toBe(
+    [
+      "This request has ended: stopped before it was finished. 1 try; its cost was not reported.",
+      "This report asks nothing of you.",
+    ].join("\n"),
+  );
+  expect(message?.bases).toEqual([
+    { form: "message", messageId: "r1" },
+    { form: "proposal", proposalId: w.proposalId },
+    { form: "iteration", iterationId: "lap-one" },
+  ]);
+
+  const html = await page(w.world, JA);
+  const block = /<div class="space-y-2" data-report="">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
+  expect(block).toContain(
+    "この依頼の結果: 終わる前に取りやめました。1 回試しました。費用は記録されていません。",
+  );
+  expect(block).toContain("This request has ended");
+  // Still one request on one line: no parts are drawn for it.
+  expect(partSteps(html)).toEqual([]);
+});
+
+test("a one-part request merged by rondo's own gate answer says so under its one line", async () => {
+  const w = await split([undefined]);
+  await mergedByRondo(w);
+  expect(await writeReports(w)).toEqual([requestReportId(w.proposalId)]);
+  const read = await w.world.record.threadMessages();
+  if (read.kind !== "read") throw new Error(read.reason);
+  expect(read.messages.find((m) => m.messageId === requestReportId(w.proposalId))?.body).toBe(
+    [
+      "This request has ended: merged (#7). 1 try; its cost was not reported.",
+      "Under your approval, rondo answered 1 gate itself, without asking you.",
+      "This report asks nothing of you.",
+    ].join("\n"),
+  );
+});
+
 test("across every request, a lap in flight and a part held by order are lines with their reason (D-0068 rule 2.1)", async () => {
   const w = await split([undefined, 0]);
   await w.start(0, "lap-one");

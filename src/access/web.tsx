@@ -195,6 +195,7 @@ async function threadModel(
     lapsUnder,
     placeOf,
     partsOfRequest,
+    reportPartsOf,
   } = model;
   const latestTriage = triage.latest;
   const triagePayloads = triage.payloads;
@@ -469,7 +470,12 @@ async function threadModel(
               : lapReport(message)
                 ? lapReportView(wording, message, reads)
                 : isRequestReport(message)
-                  ? requestReportView(wording, message, selectedParts, selectedMessages)
+                  ? requestReportView(
+                      wording,
+                      message,
+                      selectedRoot === null ? [] : reportPartsOf(selectedRoot),
+                      selectedMessages,
+                    )
                   : scopeStop(message)
                     ? scopeStopView(wording, message, reads)
                     : stop !== undefined

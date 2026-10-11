@@ -574,7 +574,9 @@ export interface PartRead {
 
 /**
  * The parts of `requestMessageId`, or none where it is not run as several
- * lines: its scope is not an approved drafted one, or its split has one plan.
+ * lines: its scope is not an approved drafted one, or its split has fewer
+ * than `least` plans. A request's report (rondo#651) reads a one-plan split's
+ * one part too, with `least` 1.
  *
  * ponytail: `startedFrom` scans every lap once per part, on every redraw; a
  * store with thousands of laps wants the plan's line recorded on the lap.
@@ -585,6 +587,7 @@ export async function partsOf(
       Pick<AdvisoryRecord, "scopesFor" | "scopeDecisionOf" | "readScopeDecision" | "readScope">;
   },
   requestMessageId: string,
+  least = 2,
 ): Promise<readonly PartRead[]> {
   const standing = await draftedStanding(ports, requestMessageId);
   if (standing.kind !== "decided") {
@@ -594,7 +597,7 @@ export async function partsOf(
   const scope =
     decided.kind === "read" ? await ports.record.readScope(decided.decision.scopeId) : null;
   const drafted = scope?.kind === "read" ? await draftedPlansUnder(ports, scope.scope) : null;
-  if (drafted === null || drafted.plans.length < 2) {
+  if (drafted === null || drafted.plans.length < least) {
     return [];
   }
   return await Promise.all(
