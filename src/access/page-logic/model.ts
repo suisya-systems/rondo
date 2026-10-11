@@ -159,6 +159,8 @@ export interface PageModel {
   /** The parts a request's report speaks of: its split's, one part included (rondo#651). */
   readonly reportPartsOf: (messageId: string) => readonly PartView[];
   readonly requestsList: RequestList;
+  /** The live rows that will not decode, and the request each answers where that reads (rondo#655). */
+  readonly unreadable: readonly { readonly id: string; readonly requestMessageId: string | null }[];
 }
 
 /** The rows every view is drawn off, read once per draw. */
@@ -197,7 +199,8 @@ export async function pageModel(
   const onThreads = view.kind === "requests" || view.kind === "thread" || view.kind === "summary";
   const inbox =
     ports.actorId === null ? null : await gatherInbox(lookedFromPage(ports), ports.actorId);
-  const live: LiveRow[] = (await ports.store.readLive()).flatMap((outcome): LiveRow[] => {
+  const liveRows = await ports.store.readLive();
+  const live: LiveRow[] = liveRows.flatMap((outcome): LiveRow[] => {
     switch (outcome.kind) {
       case "read":
         return [{ kind: "read", record: outcome.record }];
@@ -251,7 +254,13 @@ export async function pageModel(
       : WAIT_SIDE[row.record.status as NonTerminalStatus];
     (side === "waitingOnYou" ? waiting : running).push(row.record);
   }
-  const unreadable = live.filter((row) => row.kind === "unreadable");
+  // **Rows that will not decode** (rondo#655): drawn on the list, and in their
+  // request's thread where that reads, with the way to end them.
+  const unreadable = liveRows.flatMap((outcome) =>
+    outcome.kind === "unreadable"
+      ? [{ id: outcome.id, requestMessageId: outcome.requestMessageId }]
+      : [],
+  );
   const threadRows = threadRead.kind === "read" ? threadRead.messages : [];
   const threads = threadsOf(
     threadRows,
@@ -326,8 +335,15 @@ export async function pageModel(
   // person (D-0110 rule 2), as in `waitsOnYou`.
   // A drafted scope ready to approve is one more (rondo#534), and so is a
   // press before any draft (rondo#643).
+  // A live row that will not read is one too: only a person can end it
+  // (rondo#655), and the list draws it under the same heading.
   const waitingCount =
-    waiting.length + threads.waiting.size - threads.stopped.size + open.length + scopeWaits.length;
+    waiting.length +
+    threads.waiting.size -
+    threads.stopped.size +
+    open.length +
+    scopeWaits.length +
+    unreadable.length;
 
   /** The link onto the scope screen, drawn on a request wherever one is listed. */
   // **Which request each lap is under** (rondo#244), off the rows already
@@ -530,6 +546,7 @@ export async function pageModel(
     partsOfRequest,
     reportPartsOf,
     requestsList,
+    unreadable,
   };
 }
 

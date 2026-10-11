@@ -302,7 +302,18 @@ export function conductorPorts(
   /** The person's words for a stopped lap's ask (D-0110 rule 2); null writes none. */
   words: Chrome | null = null,
 ): ReportingPorts {
-  const port: StorePort = store;
+  const port: StorePort = {
+    ...store,
+    // D-0139, rondo#655: the driver is named from reservation on, so a restart
+    // can tell a row nothing drives at any status before its gate.
+    reserve: async (input) => {
+      const reserved = await store.reserve(input);
+      if (reserved.kind === "reserved") {
+        await store.markLapProcess(input.id, thisDriver()).catch(() => undefined);
+      }
+      return reserved;
+    },
+  };
   const threadMessages = record?.threadMessages?.bind(record);
   return {
     store: port,
@@ -2190,31 +2201,19 @@ export async function requestWithdrawal(
 }
 
 /**
- * Settle an iteration whose outcome rondo cannot establish.
- *
- * The last row of D-0019 rule 11's table, and the only way out of a row that is
- * holding the single-flight lock with nothing automatic able to release it -- a
- * `performing` row whose lap never answered, an `admitting` row that may or may
- * not have created a run, a `stalled` row, or a row that will not decode at all.
- * It writes a terminal record and **drives no continuo verb**, because there is
- * no verb here that is rondo's to drive: if a gate is open, closing it is
- * D-0013's ask, and if a run is open, closing it is D-0010's operator.
+ * Settle an iteration whose outcome rondo cannot establish (D-0019 rule 11's
+ * last row), including a row that will not decode. It drives no continuo verb:
+ * an open gate is D-0013's ask, an open run D-0010's operator.
  */
 export async function abandon(
-  ports: ConductorPorts,
+  ports: Pick<ConductorPorts, "store" | "now">,
   iterationId: string,
   reason: string,
 ): Promise<ConductorReport> {
   return await abandonIteration(ports, iterationId, reason);
 }
 
-/**
- * End a lap whose driver threw, at `failed` with `defect` (D-0109 rule 3).
- *
- * Re-exported beside {@link abandon} because it is the same kind of act -- a
- * row ended by something other than its own arc -- and takes only the two
- * ports a write needs, since it drives no continuo verb either.
- */
+/** End a lap whose driver threw, at `failed` with `defect` (D-0109 rule 3); no verb is driven. */
 export async function endFaulted(
   ports: {
     readonly store: Pick<ConductorPorts["store"], "read" | "transition">;
@@ -2228,7 +2227,8 @@ export async function endFaulted(
 
 /**
  * End a lost lap at `failed` with `lost` (D-0139): its driver and its `lap
- * perform` child are gone. Answers the status the row is at afterwards.
+ * perform` child are gone. `ended` is one a person ended from the page
+ * (rondo#655). Answers the status the row is at afterwards.
  */
 export async function endLost(
   ports: {
@@ -2237,17 +2237,14 @@ export async function endLost(
   },
   iterationId: string,
   reason: string,
+  kind: "lost" | "ended" = "lost",
 ): Promise<string | null> {
-  return (await faultedIteration(ports, iterationId, reason, "lost")).status;
+  return (await faultedIteration(ports, iterationId, reason, kind)).status;
 }
 
 /**
- * The verb-driving escape hatch, re-exported unchanged.
- *
- * `gate list` is the verb a person needs when a lap answered nothing and rondo
- * cannot say whether a gate exists (D-0019 rule 11's `performing`-with-no-answer
- * row says so in as many words). It is re-exported here rather than reached for
- * through the barrel so that the surface has one import for everything it
- * drives.
+ * The verb-driving escape hatch, re-exported unchanged so the surface has one
+ * import for everything it drives (`gate list`, for D-0019 rule 11's lap that
+ * answered nothing).
  */
 export { runContinuo };

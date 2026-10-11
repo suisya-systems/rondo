@@ -160,6 +160,8 @@ export interface WebPorts extends InboxReadPorts {
    * press would be refused. Absent is false.
    */
   readonly releasable?: boolean;
+  /** Whether the host holds an end press (rondo#655), on {@link releasable}'s terms. Absent is false. */
+  readonly endsLaps?: boolean;
   /**
    * Whether the host holds a merge press (rondo#380, `D-0091`): true exactly
    * where the merge port is not null, so no merge button is drawn where every

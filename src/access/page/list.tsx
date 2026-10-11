@@ -362,6 +362,38 @@ function AskingRow({
   );
 }
 
+/**
+ * **A lap rondo can no longer read is the person's turn** (rondo#655): it
+ * keeps its room until somebody ends it, and nothing else on the page can name
+ * it. A link to the screen that ends it, as {@link PausedRow} is.
+ */
+function UnreadableRow({ wording, id }: { readonly wording: Chrome; readonly id: string }) {
+  return (
+    <a
+      className="list-row list-row-mine"
+      href={viewHref({ kind: "end", iterationId: id }, wording.lang)}
+      data-row=""
+      data-unreadable=""
+    >
+      <svg
+        className="list-dot list-dot-wait"
+        data-mark="wait"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        aria-hidden="true"
+      >
+        <MarkShape mark="wait" />
+      </svg>
+      <div className="list-row-body">
+        <b>{wording.endUnnamed}</b>
+        <p>{wording.unreadableHolds}</p>
+      </div>
+    </a>
+  );
+}
+
 export function RequestsFace({
   wording,
   list,
@@ -374,6 +406,7 @@ export function RequestsFace({
 }: ListProps) {
   const paused = list.paused ?? [];
   const asking = list.asking ?? [];
+  const unreadable = list.unreadable ?? [];
   const empty = list.yourTurn.length === 0 && list.days.length === 0;
   return (
     <div className="list">
@@ -382,7 +415,10 @@ export function RequestsFace({
           {wording.writeNewRequest}
         </a>
       )}
-      {list.yourTurn.length === 0 && paused.length === 0 && asking.length === 0 ? null : (
+      {list.yourTurn.length === 0 &&
+      paused.length === 0 &&
+      asking.length === 0 &&
+      unreadable.length === 0 ? null : (
         <>
           <h6 className="list-heading list-heading-mine">{wording.yourTurn}</h6>
           {paused.map((repository) => (
@@ -390,6 +426,9 @@ export function RequestsFace({
           ))}
           {asking.map((row) => (
             <AskingRow key={row.repository} wording={wording} row={row} agoOf={agoOf} />
+          ))}
+          {unreadable.map((id) => (
+            <UnreadableRow key={id} wording={wording} id={id} />
           ))}
           {list.yourTurn.map((row) => (
             <Row

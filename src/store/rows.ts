@@ -375,7 +375,15 @@ export function decode(row: SqlRow, id: string): ReadOutcome {
     return { kind: "read", record: toRecord(row) };
   } catch (error) {
     if (error instanceof StoreDefect) {
-      return { kind: "unreadable", id, reason: error.message };
+      // rondo#655: the request it answers, where that column still reads, so the
+      // page can end it from its thread and post the ask there.
+      const request = row["request_message_id"];
+      return {
+        kind: "unreadable",
+        id,
+        reason: error.message,
+        requestMessageId: typeof request === "string" ? request : null,
+      };
     }
     throw error;
   }
@@ -811,7 +819,11 @@ export function optionalText(row: SqlRow, column: string, subject = "iteration")
  */
 function optionalFailureKind(row: SqlRow): FailureKind | null {
   const value = optionalText(row, "failure_kind");
-  return value === "refusal" || value === "defect" || value === "budget" || value === "lost"
+  return value === "refusal" ||
+    value === "defect" ||
+    value === "budget" ||
+    value === "lost" ||
+    value === "ended"
     ? value
     : null;
 }

@@ -66,8 +66,17 @@ import {
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
 import { pressedAnswer } from "./answer-press.js";
 import { basisOf } from "./explainer/material.js";
+import type {
+  EndPort,
+  EndRefusal,
+  HoldsPort,
+  HoldsRefusal,
+  ReleasePort,
+  ReleaseRefusal,
+} from "./line-ports.js";
 import type { WebPorts } from "./page/contract.js";
 import { postedAnswers, postedClauses } from "./page/triage.js";
+import { MAX_END_REASON_CHARS } from "./page-logic/end-lap.js";
 import {
   isSwitch,
   LANG_COOKIE,
@@ -293,6 +302,11 @@ export function mintPress(
   const press = Object.freeze({}) as Press;
   minted.add(press);
   return { press };
+}
+
+/** Spend a press a port outside this module took (`line-ports.ts`): true once per minted press. */
+export function spendPress(press: Press): boolean {
+  return minted.delete(press);
 }
 
 /**
@@ -1236,113 +1250,6 @@ export class PublishPort {
   }
 }
 
-/**
- * What one release press names (D-0073 rule 4.3): a lap of the line, and the
- * claim and laps the screen was drawn over, so a press over a line that moved
- * since -- released, retried, or taken back -- releases nothing. The person
- * typed none of it.
- */
-export interface ReleaseInput {
-  readonly iterationId: string;
-  readonly claimId: string;
-  readonly lapIds: readonly string[];
-}
-
-/** Why a release press released nothing, as the wording key the page says it in. */
-export type ReleaseRefusal = "releaseRefusedChanged" | "releaseRefusedNotRecorded";
-
-export interface Released {
-  readonly ok: boolean;
-  readonly note: string;
-  readonly why?: ReleaseRefusal;
-}
-
-/** Release one line's files, as the person's judgement that its work is done. */
-export type ReleaseFromWeb = (input: ReleaseInput) => Promise<Released>;
-
-/**
- * The sixth thing this surface may write (D-0073 rule 4.3, rondo#288): a
- * line's files released by a person, which the ledger records as theirs.
- *
- * **The check is inside this capability**, as it is in every port above: whoever
- * holds this object releases nothing without a press {@link mintPress} minted
- * and nobody has spent. Its own class, because ending a claim is not answering
- * a gate or publishing, and a holder of those must not be able to do it.
- */
-export class ReleasePort {
-  readonly #release: ReleaseFromWeb;
-
-  constructor(release: ReleaseFromWeb) {
-    this.#release = release;
-  }
-
-  /** Release one line's files, on one press. */
-  async release(press: Press, input: ReleaseInput): Promise<Released> {
-    if (!minted.has(press)) {
-      return { ok: false, note: "nothing was released: this was not a person's press" };
-    }
-    minted.delete(press);
-    return await this.#release(input);
-  }
-}
-
-/**
- * What one press that changes a line's files names (D-0163): a lap of the
- * line, the claim and laps the screen was drawn over, and the files the
- * person wrote it is to keep now.
- */
-export interface HoldsInput {
-  readonly iterationId: string;
-  readonly claimId: string;
-  readonly lapIds: readonly string[];
-  readonly paths: readonly string[];
-}
-
-/** Why a press that changes a line's files changed nothing, as the wording key the page says it in. */
-export type HoldsRefusal =
-  | "holdsRefusedChanged"
-  | "holdsRefusedHeld"
-  | "holdsRefusedBusy"
-  | "holdsRefusedKept"
-  | "holdsRefusedUnread"
-  | "holdsRefusedPaths"
-  | "holdsRefusedNotRecorded";
-
-export interface HoldsMoved {
-  readonly ok: boolean;
-  readonly note: string;
-  readonly why?: HoldsRefusal;
-  /** On `holdsRefusedKept`: the files the work changed, which it keeps. */
-  readonly paths?: readonly string[];
-  /** On `holdsRefusedHeld`: the lines keeping the files it asked for. */
-  readonly holders?: Started["holders"];
-}
-
-/** Change which files one open line keeps, as the person wrote them. */
-export type HoldsFromWeb = (input: HoldsInput) => Promise<HoldsMoved>;
-
-/**
- * What a line keeps, changed by a person while it is open (D-0073 rules 4.1
- * and 4.2, D-0163): its own class for {@link ReleasePort}'s reason, and the
- * check is inside it as it is there.
- */
-export class HoldsPort {
-  readonly #move: HoldsFromWeb;
-
-  constructor(move: HoldsFromWeb) {
-    this.#move = move;
-  }
-
-  /** Change one line's files, on one press. */
-  async move(press: Press, input: HoldsInput): Promise<HoldsMoved> {
-    if (!minted.has(press)) {
-      return { ok: false, note: "nothing was changed: this was not a person's press" };
-    }
-    minted.delete(press);
-    return await this.#move(input);
-  }
-}
-
 /** What one add-repository press names (rondo#383): the request, and the repository it named. */
 export interface AddRepositoryInput {
   readonly requestMessageId: string;
@@ -1626,6 +1533,8 @@ export interface ServedPorts extends WebPorts {
   readonly release: ReleasePort | null;
   /** Null on {@link release}'s condition: what a line keeps is changed as the person (D-0163). Absent is null. */
   readonly holds?: HoldsPort | null;
+  /** Null on {@link release}'s condition: a lap is ended as the person (rondo#655). Absent is null. */
+  readonly end?: EndPort | null;
   /** Null on {@link release}'s condition: the recorded plan is the approver's, as setup's is. */
   readonly addRepository?: AddRepositoryPort | null;
   /**
@@ -1759,6 +1668,8 @@ const PUBLISH_ROUTE = "/publish";
  */
 const RELEASE_ROUTE = "/release";
 const HOLDS_ROUTE = "/holds";
+/** The end of a lap only a person can end (rondo#655), pressed from its own screen. */
+const END_LAP_ROUTE = "/end-lap";
 
 /**
  * The route that adds a repository a request named and rondo does not work in
@@ -1826,6 +1737,7 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   PUBLISH_ROUTE,
   RELEASE_ROUTE,
   HOLDS_ROUTE,
+  END_LAP_ROUTE,
   ADD_REPOSITORY_ROUTE,
   MERGE_ROUTE,
   NOT_NOW_ROUTE,
@@ -1959,7 +1871,7 @@ function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 5
  * scope screen's two presses, `POST /scope` and `POST /start`, the gate's
  * other answer, `POST /revise`, the one write that leaves this machine,
  * `POST /publish`, the release of a finished line's files, `POST /release`,
- * and the merge of a lap's pull request, `POST /merge` (`D-0091`).
+ * the end of a stuck lap, `POST /end-lap` (rondo#655), and the merge of a lap's pull request, `POST /merge` (`D-0091`).
  * `test/access/web-app.test.ts` enumerates `app.routes` and
  * fails on any other non-`GET` entry.
  */
@@ -1974,6 +1886,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     publish,
     release,
     holds = null,
+    end = null,
     addRepository,
     merge = null,
     triage = null,
@@ -3003,6 +2916,40 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     return c.redirect(viewHref({ kind: "release", iterationId }, tagOf(c)), 303);
   });
 
+  // **The end press** (rondo#655): a lap only a person can end, with their
+  // reason (the form's `maxlength` holds its length). Back
+  // to the request's thread, where rondo asks whether to carry on.
+  app.post(END_LAP_ROUTE, async (c) => {
+    if (end === null) {
+      return endRefused(c, 403, "endRefusedNoApprover", null);
+    }
+    const form = await c.req.parseBody();
+    const iterationId = typeof form["iteration"] === "string" ? form["iteration"] : "";
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return endRefused(c, minting.status, "endRefusedPress", iterationId);
+    }
+    const reason = typeof form["reason"] === "string" ? form["reason"].trim() : null;
+    if (iterationId === "" || reason === null || reason.length > MAX_END_REASON_CHARS) {
+      return endRefused(c, 400, "endRefusedForm", iterationId);
+    }
+    if (reason === "") {
+      return endRefused(c, 400, "endRefusedNoReason", iterationId);
+    }
+    const ended = await end.end(minting.press, { iterationId, reason });
+    if (!ended.ok) {
+      return endRefused(c, 409, ended.why, iterationId);
+    }
+    const back = ended.requestMessageId;
+    return c.redirect(
+      viewHref(
+        back === null ? { kind: "summary" } : { kind: "thread", messageId: back, to: null },
+        tagOf(c),
+      ),
+      303,
+    );
+  });
+
   // **The add-repository press** (rondo#383, D-0090): the one confirmation a
   // person gives for a repository their request named. Back to the request's
   // thread, whose draft now waits on nothing; refused, a page that says why in
@@ -3723,6 +3670,33 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       wording.releaseBack,
       note,
       holders,
+    );
+  }
+
+  function endRefused(
+    c: Context<PageEnv>,
+    status: 400 | 403 | 409,
+    why:
+      | "endRefusedNoApprover"
+      | "endRefusedPress"
+      | "endRefusedForm"
+      | "endRefusedNoReason"
+      | EndRefusal,
+    iterationId: string | null,
+  ) {
+    const wording = wordingOf(c);
+    return pressRefused(
+      c,
+      status,
+      wording.endAction,
+      wording[why],
+      viewHref(
+        iterationId === null || iterationId === ""
+          ? { kind: "summary" }
+          : { kind: "end", iterationId },
+        wording.lang,
+      ),
+      wording.endBack,
     );
   }
 

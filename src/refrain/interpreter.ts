@@ -586,7 +586,7 @@ export async function requestWithdrawal(
  * it exists.
  */
 export async function abandon(
-  ports: ConductorPorts,
+  ports: Pick<ConductorPorts, "store" | "now">,
   iterationId: string,
   reason: string,
 ): Promise<ConductorReport> {
@@ -675,7 +675,7 @@ export async function abandon(
  * afterwards should be able to see why it was used.
  */
 async function settleUnreadable(
-  ports: ConductorPorts,
+  ports: Pick<ConductorPorts, "store" | "now">,
   lines: string[],
   id: string,
   decodeReason: string,
@@ -781,8 +781,8 @@ export async function faulted(
   ports: WritingPorts,
   iterationId: string,
   reason: string,
-  /** `lost` for a lap whose driver and child are both gone (D-0139). */
-  kind: "defect" | "lost" = "defect",
+  /** `lost`: driver and child both gone (D-0139); `ended`: by a person (rondo#655). */
+  kind: "defect" | "lost" | "ended" = "defect",
 ): Promise<ConductorReport> {
   const lines: string[] = [];
   const found = await ports.store.read(iterationId);

@@ -26,28 +26,30 @@ import {
   releaseIfEnded,
   releaseReservations,
 } from "./claims.js";
-import type {
-  AppendReadingOutcome,
-  BoundName,
-  ClosingLap,
-  HeldStart,
-  HostPolicy,
-  IterationStore,
-  LaneCompareInput,
-  LaneCompareOutcome,
-  LaneLineReadOutcome,
-  LaneMoveInput,
-  LaneMoveOutcome,
-  LaneReleaseInput,
-  LaneReleaseOutcome,
-  LedgerLine,
-  LineLanding,
-  NumberReservation,
-  ReadOutcome,
-  ReserveInput,
-  ReserveOutcome,
-  SettleOutcome,
-  TransitionOutcome,
+import {
+  type AppendReadingOutcome,
+  type BoundName,
+  type ClosingLap,
+  DRIVEN_STATUSES,
+  type DrivenLap,
+  type HeldStart,
+  type HostPolicy,
+  type IterationStore,
+  type LaneCompareInput,
+  type LaneCompareOutcome,
+  type LaneLineReadOutcome,
+  type LaneMoveInput,
+  type LaneMoveOutcome,
+  type LaneReleaseInput,
+  type LaneReleaseOutcome,
+  type LedgerLine,
+  type LineLanding,
+  type NumberReservation,
+  type ReadOutcome,
+  type ReserveInput,
+  type ReserveOutcome,
+  type SettleOutcome,
+  type TransitionOutcome,
 } from "./contract.js";
 import {
   changedDropped,
@@ -71,7 +73,6 @@ import {
   MODEL_READING_DRAFTER_PREFIX,
   type Occupancy,
   type OperatorVerificationClaim,
-  type PerformingLap,
 } from "./records.js";
 import {
   assignmentsFor,
@@ -100,6 +101,9 @@ import { lapBudgetCapFor, requestRefusal, spendDecision, spendScope } from "./sc
 
 /** A `held_start` outcome naming the wait a form joined (`joinHeldStart`). */
 const JOINED = "joined:";
+
+/** {@link DRIVEN_STATUSES} as an SQL list; the names are fixed, so nothing is bound. */
+const DRIVEN_IN = DRIVEN_STATUSES.map((status) => `'${status}'`).join(", ");
 
 /**
  * The two bounds, in the order `reserve()` checks them.
@@ -947,21 +951,22 @@ export function iterationStore(connection: StoreConnection, policy: HostPolicy):
       connection
         .prepare(
           "UPDATE iteration SET driver_host = ?, driver_pid = ?, lap_pid = NULL " +
-            "WHERE id = ? AND status = 'performing'",
+            `WHERE id = ? AND status IN (${DRIVEN_IN})`,
         )
         .run(mark.driverHost, mark.driverPid, iterationId);
     },
 
-    async performingLaps(): Promise<readonly PerformingLap[]> {
+    async drivenLaps(): Promise<readonly DrivenLap[]> {
       return (
         connection
           .prepare(
-            "SELECT id, driver_host, driver_pid, lap_pid, updated_at_ms FROM iteration " +
-              "WHERE status = 'performing' ORDER BY created_at_ms, id",
+            "SELECT id, status, driver_host, driver_pid, lap_pid, updated_at_ms FROM iteration " +
+              `WHERE status IN (${DRIVEN_IN}) ORDER BY created_at_ms, id`,
           )
           .all() as SqlRow[]
       ).map((row) => ({
         iterationId: String(row["id"]),
+        status: row["status"] as DrivenLap["status"],
         driverHost: optionalText(row, "driver_host"),
         driverPid: optionalNumber(row, "driver_pid"),
         lapPid: optionalNumber(row, "lap_pid"),

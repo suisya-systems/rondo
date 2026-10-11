@@ -325,8 +325,6 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
   readonly signedInAs: (actorId: string) => string;
   /** Lets go of a reply target chosen by hand. */
   readonly replyDefault: string;
-  /** A live row that will not decode, as a person reads it. */
-  /** The link from an unreadable row to its section of the reading. */
 
   // -- The gate reading on the answer view, page only (#220 S2). The console's
   // entries above stay as they are; these say the same facts in plain words,
@@ -531,7 +529,6 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
   readonly recordsFold: (count: number) => string;
   /** A refused call whose shape rondo cannot read, on the fence card. */
   readonly denialUnreadable: string;
-  /** The plain sentence above an unreadable row's reason in the reading. */
   /** An ended row's echo of the verification claim its press carried. */
   readonly modelRaisedLink: string;
   readonly modelMayArrive: string;
@@ -1343,6 +1340,44 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
   /** The files another piece of work keeps, after a refused widening. */
   readonly othersHold: (paths: readonly string[]) => string;
   readonly holdsAction: string;
+  /**
+   * **Ending a lap only a person can end** (rondo#655): stalled, held by a
+   * start that threw, or a row rondo can no longer read. The next-step card,
+   * the list's row for an unreadable one, the screen, and why a press ended
+   * nothing. No sentence sends the person to a log or a command.
+   */
+  readonly nextStepEnd: string;
+  readonly endHeading: string;
+  /** The work's name where rondo cannot read the person's words for it. */
+  readonly endUnnamed: string;
+  /** The list's row for a lap rondo can no longer read. */
+  readonly unreadableHolds: string;
+  readonly endLeadStalled: string;
+  /** A lap held before its gate by a start that threw. */
+  readonly endLeadStarting: string;
+  readonly endLeadUnreadable: string;
+  readonly endEffectHeading: string;
+  readonly endEffect: readonly string[];
+  /** Stands for the last two of `endEffect` where rondo cannot read which request the work answered. */
+  readonly endEffectUnnamed: string;
+  readonly endReasonLabel: string;
+  readonly endReasonHint: string;
+  readonly endAction: string;
+  readonly endPlain: string;
+  readonly endBack: string;
+  /** The fold under the work: the whole brief rondo gave it. */
+  readonly endBrief: string;
+  /** In place of the form, where rondo does not know who the person is. */
+  readonly endNoApprover: string;
+  /** The screen over a lap that has ended or moved on since. */
+  readonly endNothingToEnd: string;
+  readonly endRefusedNoApprover: string;
+  /** Names no button (rondo#648). */
+  readonly endRefusedPress: string;
+  readonly endRefusedForm: string;
+  readonly endRefusedNoReason: string;
+  readonly endRefusedChanged: string;
+  readonly endRefusedNotRecorded: string;
   readonly holdsPlain: string;
   readonly holdsRefusedNoApprover: string;
   readonly holdsRefusedPress: string;
@@ -1559,6 +1594,17 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
    */
   readonly lapLostAsk: string;
   /**
+   * The stop rondo asks after a person ended a lap from the page (rondo#655):
+   * nothing of it runs and what it held is back; `reason` is the person's own
+   * words, quoted, never reworded. *carry on* starts it again, as for a lost lap.
+   */
+  readonly lapEndedAsk: (reason: string) => string;
+  /**
+   * The same, for a lap whose row rondo could no longer read: nothing can be
+   * started again from it, so *carry on* has rondo plan the request again.
+   */
+  readonly lapEndedUnreadableAsk: (reason: string) => string;
+  /**
    * What the goal flow leaves in an injected request's thread when the drafter
    * wrote no split for it (rondo#549): rondo could not draft the request's
    * plan, nothing of its work has started, and it does not draft it again by
@@ -1576,7 +1622,8 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
   /**
    * The same stop, when rondo could not end the lap either (D-0109 rule 3):
    * said as itself, because inviting somebody to start again over work that is
-   * still holding its place would be the page lying about its own state.
+   * still holding its place would be the page lying about its own state. It
+   * points at the end press (rondo#655), and this ask is then the lap's stop.
    */
   readonly startStoppedHeldSaid: string;
   readonly publishBusyNote: string;

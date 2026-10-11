@@ -65,6 +65,7 @@ import {
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
 import { stoppedShort } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
+import { endedLost } from "./lost-laps.js";
 import {
   type ReviewScope,
   reviewPolicyOf,
@@ -737,10 +738,10 @@ function classifyAs(plan: RunPlan, iterationId: string): ScopeSnapshot["classifi
  * (rule 4.2's "recomposed through the facade", D-0047 rule 4's seam), and whether
  * that recomposition is the contract its row carries.
  */
-/** Whether the predecessor ended `failed` with the kind `lost` (D-0139). */
+/** Whether the predecessor was lost (D-0139) or ended by a person from the page (rondo#655). */
 async function predecessorLost(ports: ScopeReadPorts, predecessorId: string): Promise<boolean> {
   const row = await ports.store.read(predecessorId);
-  return row.kind === "read" && row.record.failureKind === "lost";
+  return row.kind === "read" && endedLost(row.record);
 }
 
 /** Whether the predecessor was stopped at its time limit (D-0143) or its budget (D-0149). */

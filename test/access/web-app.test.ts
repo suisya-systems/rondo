@@ -25,6 +25,16 @@ import { request as httpRequest } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { type Context, Hono } from "hono";
 import { expect, test } from "vitest";
+import {
+  type Ended,
+  type EndInput,
+  EndPort,
+  type HoldsInput,
+  type HoldsMoved,
+  HoldsPort,
+  type ReleaseInput,
+  ReleasePort,
+} from "../../src/access/line-ports.js";
 import { recordTabNotice } from "../../src/access/reach.js";
 import { heldAnchor, heldDigest } from "../../src/access/read-in.js";
 import {
@@ -37,9 +47,6 @@ import {
   type DraftedScopeFormDraft,
   type FlowAnswerInput,
   type GoalInput,
-  type HoldsInput,
-  type HoldsMoved,
-  HoldsPort,
   MAX_CLAIM_CHARS,
   type Merged,
   type MergeInput,
@@ -59,8 +66,6 @@ import {
   type RaiseInput,
   type ReadInInput,
   ReadInPort,
-  type ReleaseInput,
-  ReleasePort,
   type RetakeReviewFromWeb,
   type ReviseInput,
   RevisePort,
@@ -1949,6 +1954,7 @@ const WRITE_TABLE = [
   "ALL /release",
   // Changing what an open line keeps (D-0163).
   "ALL /holds",
+  "ALL /end-lap",
   // Adding a repository a request named (rondo#383, D-0090).
   "ALL /add-repository",
   // The merge press (rondo#380, D-0091).
@@ -1983,6 +1989,7 @@ const WRITE_TABLE = [
   "POST /publish",
   "POST /release",
   "POST /holds",
+  "POST /end-lap",
   "POST /add-repository",
   "POST /goal",
   "POST /notice",
@@ -2035,6 +2042,8 @@ const PRESS_ROUTES = [
   "/release",
   // Changing what an open line keeps (D-0163).
   "/holds",
+  // Ending a lap only a person can end (rondo#655).
+  "/end-lap",
   // Cloning and recording a repository a request named (rondo#383, D-0090).
   "/add-repository",
   // The one irreversible act on the page, per act (D-0064 rule 3.4, D-0091).
@@ -3788,6 +3797,98 @@ test("(release) the port refuses anything but a minted, unspent press", async ()
       .ok,
   ).toBe(false);
   expect(released).toEqual([]);
+});
+
+/** Ports whose end press is a spy, answering `answer` to every press it lets through. */
+function endPorts(ended: EndInput[], answer: Ended = { ok: true, requestMessageId: "req-1" }) {
+  return {
+    ...spyPorts([]),
+    end: new EndPort(async (input) => {
+      ended.push(input);
+      return await Promise.resolve(answer);
+    }),
+  };
+}
+
+const END_FORM = { token: TOKEN, iteration: "i-0002", reason: "  it hung overnight  " };
+
+test("(end-lap) a person's press ends the lap with their reason, once, and lands on the request's thread", async () => {
+  const ended: EndInput[] = [];
+  const { base, stop, closed } = await served(createApp(endPorts(ended), TOKEN));
+  const pressed = await send(base, "/end-lap", "POST", pressHeaders(base), END_FORM);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
+  expect(ended).toEqual([{ iterationId: "i-0002", reason: "it hung overnight" }]);
+  stop.abort();
+  expect(await closed).toBe(0);
+
+  // A row with no request to go back to lands on the front.
+  const lone = await served(createApp(endPorts([], { ok: true, requestMessageId: null }), TOKEN));
+  const landed = await send(lone.base, "/end-lap", "POST", pressHeaders(lone.base), END_FORM);
+  expect(landed.location).toBe("/?lang=en");
+  lone.stop.abort();
+  expect(await lone.closed).toBe(0);
+});
+
+test("(end-lap) no press, no form, no reason or no approver ends nothing; a lap that moved is said in words", async () => {
+  const ended: EndInput[] = [];
+  const { base, stop, closed } = await served(createApp(endPorts(ended), TOKEN));
+  const person = pressHeaders(base);
+  for (const headers of [
+    { ...person, "sec-fetch-user": undefined },
+    { ...person, "sec-fetch-mode": "cors", "sec-fetch-user": undefined },
+  ]) {
+    expect((await send(base, "/end-lap", "POST", headers, END_FORM)).status).toBe(403);
+  }
+  const bad = await send(base, "/end-lap", "POST", person, { ...END_FORM, token: "x" });
+  expect(bad.status).toBe(403);
+  // #648: the refusal names no button.
+  expect(bad.body).toContain(EN.endRefusedPress.slice(0, 40));
+  expect(
+    (await send(base, "/end-lap", "POST", person, { ...END_FORM, iteration: "" })).status,
+  ).toBe(400);
+  expect(
+    (await send(base, "/end-lap", "POST", person, { ...END_FORM, reason: "x".repeat(1001) }))
+      .status,
+  ).toBe(400);
+  const empty = await send(base, "/end-lap", "POST", person, { ...END_FORM, reason: "   " });
+  expect(empty.status).toBe(400);
+  expect(empty.body).toContain(EN.endRefusedNoReason.slice(0, 40));
+  expect(empty.body).toContain("/?end=i-0002&amp;lang=en");
+  expect(ended).toEqual([]);
+  stop.abort();
+  expect(await closed).toBe(0);
+
+  const none = await served(createApp({ ...spyPorts([]), end: null }, TOKEN));
+  const refused = await send(none.base, "/end-lap", "POST", pressHeaders(none.base), END_FORM);
+  expect(refused.status).toBe(403);
+  expect(refused.body).toContain(EN.endRefusedNoApprover.slice(0, 40));
+  none.stop.abort();
+  expect(await none.closed).toBe(0);
+
+  const stale = await served(
+    createApp(
+      endPorts([], { ok: false, why: "endRefusedChanged", note: "rondo's own words" }),
+      TOKEN,
+    ),
+  );
+  const answered = await send(stale.base, "/end-lap", "POST", pressHeaders(stale.base), END_FORM);
+  expect(answered.status).toBe(409);
+  expect(answered.body).toContain(EN.endRefusedChanged.slice(0, 40));
+  expect(answered.body).not.toContain("rondo's own words");
+  stale.stop.abort();
+  expect(await stale.closed).toBe(0);
+});
+
+test("(end-lap) the port refuses anything but a minted, unspent press", async () => {
+  const ended: EndInput[] = [];
+  const port = new EndPort(async (input) => {
+    ended.push(input);
+    return await Promise.resolve({ ok: true, requestMessageId: null });
+  });
+  const forged = Object.freeze({}) as unknown as Parameters<EndPort["end"]>[0];
+  expect((await port.end(forged, { iterationId: "i-0001", reason: "r" })).ok).toBe(false);
+  expect(ended).toEqual([]);
 });
 
 /** Ports whose holds press is a spy, answering `answer` to every press it lets through. */

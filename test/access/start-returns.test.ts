@@ -140,6 +140,29 @@ describe("answerOnceReserved", () => {
     stderr.mockRestore();
   });
 
+  it("rondo#655: asks about a lap it could not end even when the press has not answered", async () => {
+    // Without the ask nothing on the page could end the held row.
+    const w = world();
+    const stderr = quietConsole();
+    w.refuseTransition();
+    const answer = await answerOnceReserved(
+      w.store,
+      w.record as never,
+      EN,
+      input,
+      (async () => {
+        w.reserve();
+        throw new Error("continuo went away");
+      })(),
+      50,
+    );
+    expect(answer.ok).toBe(false);
+    expect(w.written.map((m) => [m.messageId, m.body])).toEqual([
+      ["start-stopped-lap-1", EN.startStoppedHeldSaid],
+    ]);
+    stderr.mockRestore();
+  });
+
   it("does not invite a restart when the lap could not be ended", async () => {
     const w = world();
     const stderr = quietConsole();

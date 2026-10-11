@@ -1132,6 +1132,59 @@ explanation you pressed on and then answers the gate.`,
     "released yet. You can change which files it keeps below.",
   othersHold: (paths) => `Files other work keeps: ${filesEn(paths)}`,
   holdsAction: "Keep these files",
+  nextStepEnd:
+    "This work has stopped and cannot go on by itself. Only a person can end it; until then it " +
+    "keeps its room on this host, the money held for it and the files it claimed, so the same " +
+    "work cannot be started again.",
+  endHeading: "End this work",
+  endUnnamed: "Work rondo can no longer read",
+  unreadableHolds:
+    "It still keeps room on this host, so other work may be waiting on it. Only you can end it.",
+  endLeadStalled:
+    "This work stopped partway and has no way forward on its own: nothing of it is running, and " +
+    "there is no question to answer. Ending it is your decision, with your reason recorded.",
+  endLeadStarting:
+    "This work was being started when it stopped, and nothing of it is running now. Ending it is " +
+    "your decision, with your reason recorded.",
+  endLeadUnreadable:
+    "rondo can no longer read this piece of work, so it cannot show what it was or end it by " +
+    "itself. It still keeps room on this host. Ending it is your decision, with your reason recorded.",
+  endEffectHeading: "What ending does",
+  endEffect: [
+    "Nothing of this work runs afterwards; it is marked as ended, not as finished.",
+    "Its room on this host, the money held for it and the files it claimed are given back at once.",
+    "Your reason is recorded on the work and shown in the request's thread.",
+    "The request is not stopped: the thread then asks whether to carry on, change the work or stop.",
+  ],
+  endEffectUnnamed:
+    "Your reason is recorded on the work; since rondo cannot read which request it answered, " +
+    "nothing is asked in a thread.",
+  endReasonLabel: "Why you are ending it",
+  endReasonHint: "In your own words, for whoever reads this request later. One line is enough.",
+  endAction: "End this work",
+  endPlain: "Ends this work as your decision, with your reason, and frees what it was holding",
+  endBack: "Back to the work to end",
+  endBrief: "What rondo asked the work to do, in full",
+  endNoApprover:
+    "This work can be ended only by a person rondo knows, and rondo on this machine does not yet " +
+    "know who you are.",
+  endNothingToEnd:
+    "There is nothing here to end: this work has ended already, or has moved on by itself.",
+  endRefusedNoApprover:
+    "Nothing was ended: rondo on this machine does not yet know who you are, so nothing here can " +
+    "be decided as you.",
+  endRefusedPress:
+    "Nothing was ended: this is done by a person pressing on this page, and a script cannot. " +
+    "Reload the page and press again.",
+  endRefusedForm:
+    "Nothing was ended: that form did not come from this page. Reload it and press again.",
+  endRefusedNoReason: "Nothing was ended: write why you are ending it first. One line is enough.",
+  endRefusedChanged:
+    "Nothing was ended: this work had already ended or moved on when you pressed. Go back to see " +
+    "where it stands now.",
+  endRefusedNotRecorded:
+    "Nothing was ended: rondo is still driving this work, or could not record your decision. The " +
+    "work stays as it was; if it is stuck again later, pressing again is safe.",
   holdsPlain: "Records which files this work keeps, as your decision",
   holdsRefusedNoApprover:
     "Nothing was changed: rondo on this machine does not yet know who you are, so nothing " +
@@ -1363,14 +1416,15 @@ explanation you pressed on and then answers the gate.`,
   reviseBusy: "Asking for the change...",
   publishBusy: "Opening the pull request...",
   startStoppedHeldSaid: [
-    "Stopped: the work you started could not be kept running, and rondo could not end it either.",
-    "It may still be holding its room on this host, the money held for it and the files it " +
-      "claimed, so starting the same work again may not be possible yet. What went wrong is on " +
-      "the work's own record and in rondo's own log.",
+    "Stopped: the work you started could not be kept running, and rondo could not end it by itself.",
+    "It still keeps its room on this host, the money held for it and the files it claimed, so the " +
+      "same work cannot be started again until it is ended. What went wrong is on the work's own " +
+      "record.",
     "Options:",
-    "- Stopping. Gives up: this request's work.",
-    "- Leaving it for now, and looking at rondo's log first.",
-    "Recommended: looking at the log, since this is a fault in rondo itself.",
+    '- Ending the work, from "Your next step" at the top of this request. You write why; rondo ' +
+      "frees what it was holding, and carrying on here then starts the work again.",
+    "- Stopping this line. Gives up: this request's work; what the work holds stays held.",
+    "Recommended: ending the work.",
     "This line stays stopped until this message is answered.",
   ].join("\n"),
   lapStoppedSaid: (said) =>
@@ -1405,6 +1459,31 @@ explanation you pressed on and then answers the gate.`,
     "Recommended: starting this part again.",
     "This line stays stopped until this message is answered.",
   ].join("\n"),
+  lapEndedAsk: (reason) =>
+    [
+      "You ended this work. Nothing of it is running, and its room on this host, the money held " +
+        "for it and the files it claimed are back.",
+      `Your reason: ${reason}`,
+      "Options:",
+      "- Starting this part again (answer carry on). Gives up: what the ended try changed and " +
+        "did not commit.",
+      "- Changing the work (answer stop, then ask again with the change). Gives up: this try's line.",
+      "- Stopping (answer stop). Gives up: this part's work.",
+      "Recommended: starting this part again, unless your reason says the work itself should change.",
+      "This line stays stopped until this message is answered.",
+    ].join("\n"),
+  lapEndedUnreadableAsk: (reason) =>
+    [
+      "You ended a piece of this request's work that rondo could no longer read. Its room on this " +
+        "host is back; whatever it changed and did not commit is gone.",
+      `Your reason: ${reason}`,
+      "Options:",
+      "- Carrying on (answer carry on): rondo plans the work again from your request.",
+      "- Changing the work (answer stop, then ask again with the change). Gives up: this line.",
+      "- Stopping (answer stop). Gives up: this request's work.",
+      "Recommended: carrying on.",
+      "This line stays stopped until this message is answered.",
+    ].join("\n"),
   flowStopWithdrawn: [
     "This stop no longer stands: the last two requests rondo started are no longer both read " +
       "as failed. A draft rondo refused, or a lap a restart lost and that was started again, is " +

@@ -197,6 +197,9 @@ export interface PageWords extends DayWords {
   readonly evBroke: string;
   /** A lap lost to a restart of rondo (D-0139); what came next is in the thread. */
   readonly evLost: string;
+  /** A lap a person ended from the page (rondo#655); their reason is in the thread's ask. */
+  readonly evEnded: string;
+  readonly evEndedReason: string;
   readonly evBrokeReason: string;
   /**
    * The one line a report of rondo's on a lap shows over its shut record
@@ -767,6 +770,8 @@ export const PAGE_EN: PageWords = Object.freeze({
   evBroke: "Stopped by a fault in rondo itself. Nothing you asked for was wrong.",
   evLost:
     "Lost when rondo was restarted. Nothing of it is running, and the money held for it is back.",
+  evEnded: "Ended by you. Nothing of it is running, and what it held is back.",
+  evEndedReason: "Your reason",
   evBrokeReason: "What rondo recorded, for whoever looks after it",
   lapReportSaid: (kind) =>
     ({
@@ -1423,6 +1428,8 @@ export const PAGE_JA: PageWords = Object.freeze({
     }続けるには、下の質問から予算を増やしてください。`,
   evBroke: "rondo 自身の不具合で止まりました。依頼のしかたに問題があったわけではありません。",
   evLost: "rondo の再起動で失われました。動いているものはなく、取り置いていた金額は戻しました。",
+  evEnded: "あなたが終わらせました。動いているものはなく、押さえていたものは戻しました。",
+  evEndedReason: "あなたの理由",
   evBrokeReason: "rondo が記録した内容（rondo を保守する人向け）",
   lapReportSaid: (kind) =>
     ({

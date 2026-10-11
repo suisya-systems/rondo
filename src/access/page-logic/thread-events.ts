@@ -25,6 +25,7 @@ import {
   type IterationRecord,
   planField,
 } from "../../store/records.js";
+import { personsReason } from "../lost-laps.js";
 import type { ThreadEvent } from "../page/events.js";
 import { TAKE_IN_FINDING } from "../review.js";
 import type { MergeRefusal } from "../web-app.js";
@@ -181,6 +182,14 @@ function endedLine(
     case "lost":
       // D-0139: nothing of it runs; its restart, or the stop, is in the thread.
       return { said: wording.evLost };
+    case "ended":
+      // rondo#655: the person's own end, with their words (a held start's end
+      // writes no ask of its own to carry them).
+      return {
+        said: wording.evEnded,
+        yours: true,
+        aside: { said: wording.evEndedReason, text: personsReason(record) },
+      };
     case "defect":
       return {
         said: wording.evBroke,

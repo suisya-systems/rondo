@@ -376,7 +376,13 @@ export type TransitionOutcome =
 export type ReadOutcome =
   | { readonly kind: "read"; readonly record: IterationRecord }
   | { readonly kind: "absent" }
-  | { readonly kind: "unreadable"; readonly id: string; readonly reason: string };
+  | {
+      readonly kind: "unreadable";
+      readonly id: string;
+      readonly reason: string;
+      /** The request it answers where that column reads, else null (rondo#655). */
+      readonly requestMessageId: string | null;
+    };
 
 /**
  * One proposal read back, absent, or a row that will not decode (#39).
@@ -698,16 +704,21 @@ export interface IterationStore {
    */
   sendLapBudget(iterationId: string, nowMs: number): Promise<number | null>;
   /**
-   * Record which processes drive a `performing` lap (D-0139): the host and pid
-   * of the rondo process that sends it, then the pid of its `lap perform`
-   * child. Written only while the row is `performing`; it moves no status.
+   * Record which processes drive a lap (D-0139): the host and pid of the rondo
+   * process that drives it, written from its reservation on (rondo#655) and
+   * again when its lap is sent, then the pid of its `lap perform` child. The
+   * driver is written only while the row is before its gate ({@link DRIVEN_STATUSES}),
+   * the child only while it is `performing`; it moves no status.
    */
   markLapProcess(
     iterationId: string,
     mark: { readonly driverHost: string; readonly driverPid: number } | { readonly lapPid: number },
   ): Promise<void>;
-  /** Every `performing` lap with the processes {@link markLapProcess} wrote (D-0139). */
-  performingLaps(): Promise<readonly PerformingLap[]>;
+  /**
+   * Every lap before its gate ({@link DRIVEN_STATUSES}) with its status and the
+   * processes {@link markLapProcess} wrote (D-0139, rondo#655).
+   */
+  drivenLaps(): Promise<readonly DrivenLap[]>;
   /**
    * Record which remote `publish` pushed this lap's branch to (rondo#286,
    * D-0153 rule 1), written at the push and read by the landing reading.
@@ -980,6 +991,22 @@ export function duplicateReason(messageId: string): string {
     "reference that has already been elevated come to mean something else"
   );
 }
+
+/**
+ * The statuses a lap has a driving rondo process in (D-0139, rondo#655): from
+ * its reservation until its gate. A restart that finds one whose driver is gone
+ * ends it as lost, since nothing else will ever move it.
+ */
+export const DRIVEN_STATUSES = Object.freeze([
+  "planned",
+  "classified",
+  "admitting",
+  "admitted",
+  "performing",
+] as const satisfies readonly IterationStatus[]);
+
+/** A lap before its gate, with its status and the processes that drive it (D-0139). */
+export type DrivenLap = PerformingLap & { readonly status: (typeof DRIVEN_STATUSES)[number] };
 
 /** What one drafter run hands the store to write (D-0071 rule 7.3). */
 export interface DraftRunWrite {

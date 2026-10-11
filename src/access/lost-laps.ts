@@ -1,8 +1,9 @@
 /**
- * Lost laps (D-0139, rondo#506): a lap whose rondo process died while it
- * performed stays `performing` for ever, since nothing is left to record its
+ * Lost laps (D-0139, rondo#506): a lap whose rondo process died before its gate
+ * stays where it was for ever, since nothing is left to move it or record its
  * answer. The resident host -- today the `rondo web` process -- reads for them
- * when it starts and on the minute it already rescans on.
+ * when it starts and on the minute it already rescans on: every lap from
+ * `planned` to `performing` (rondo#655; `performing` alone before).
  *
  * **A lap is lost only when nothing of it can still be running.** Its row names
  * the host and pid of the rondo process that sent it and the pid of its `lap
@@ -10,19 +11,25 @@
  * host is this one and both pids are gone. A row that names another host, or
  * either pid still alive, is left as it is: that is D-0019 rule 12's hold, kept.
  * A row with no child pid (none spawned, or its write failed) or none at all
- * (sent before the pids were written) is lost only once its driver is gone and
- * it has performed past its plan's `invocation_ceiling_ms`, which is as long as
- * any rondo process would have waited for it.
+ * (reserved before the pids were written) is lost only once its driver is gone
+ * and it has stood past its plan's `invocation_ceiling_ms`, which is as long as
+ * any rondo process would have waited for it. A row before `performing` has no
+ * child to wait for, so its driver being gone is all of it.
  *
  * A lost lap ends `failed` with the kind `lost`: it holds no budget and is not
  * counted as unread (what it spent before it died was never read). Then it is
  * started again once, by itself, under a goal scope or an approved split, and
  * the thread says so; otherwise, or when that start is refused, the stop is
  * asked in the thread, and a person's *carry on* starts it again.
+ *
+ * A lap a person ended from the page ends `failed` with the kind `ended`
+ * (rondo#655): the same as lost for money and for *carry on*, but never started
+ * again by itself, since a person decided it should stop.
  */
 
 import { hostname } from "node:os";
-import type { IterationRecord, PerformingLap } from "../store/records.js";
+import type { DrivenLap } from "../store/contract.js";
+import type { IterationRecord } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
 import { stoppedShort } from "./forge.js";
@@ -49,7 +56,7 @@ export function pidAlive(pid: number): boolean {
  * no pids is never called lost.
  */
 export function lapLost(
-  lap: PerformingLap,
+  lap: DrivenLap,
   ceilingMs: number | null,
   nowMs: number,
   host: string,
@@ -60,6 +67,10 @@ export function lapLost(
   }
   if (lap.driverHost !== host || alive(lap.driverPid)) {
     return false;
+  }
+  // rondo#655: no child exists before the lap is sent, so the driver is all of it.
+  if (lap.status !== "performing") {
+    return true;
   }
   // No child recorded: none was spawned, or its pid was never written. Which
   // one cannot be told, so the ceiling decides, as for a row with no pids.
@@ -84,27 +95,62 @@ export function lostAskId(iterationId: string): string {
   return `lap-stopped-${iterationId}`;
 }
 
+/** Whether the lap ended lost (D-0139) or ended by a person from the page (rondo#655). */
+export function endedLost(lap: IterationRecord): boolean {
+  return lap.status === "failed" && (lap.failureKind === "lost" || lap.failureKind === "ended");
+}
+
 /**
  * Whether a person's *carry on* at this lap's stop starts it again (D-0139,
- * D-0149): it was lost, or stopped at its budget or its time limit. A lost lap
- * is started again by this host; the others by the answer's own press.
+ * D-0149, rondo#655): it was lost or ended from the page, or stopped at its
+ * budget or its time limit. A lost or ended lap is started again by this host;
+ * the others by the answer's own press.
  */
 export function startsAgainOnCarryOn(lap: IterationRecord): boolean {
-  return (lap.status === "failed" && lap.failureKind === "lost") || stoppedShort(lap);
+  return endedLost(lap) || stoppedShort(lap);
+}
+
+/**
+ * The reason a lap ended from the page records: the person's words, then who
+ * (rondo#655). {@link personsReason} reads the words back.
+ */
+export function endedOnThePage(reason: string, actorId: string): string {
+  return `${reason} ${ENDED_BY}${actorId})`;
+}
+
+const ENDED_BY = "(ended on the page by ";
+
+/**
+ * The person's words of {@link endedOnThePage} out of the row's reason, which
+ * may carry rondo's earlier entries before it, `; `-separated.
+ */
+export function personsReason(lap: IterationRecord): string {
+  const reason = lap.reason ?? "";
+  const by = reason.lastIndexOf(` ${ENDED_BY}`);
+  if (by < 0) {
+    return reason;
+  }
+  // ponytail: an earlier entry is cut at the last `; ` before the words, so words
+  // that themselves hold `; ` lose their head; only the ask a pass cut short
+  // writes from this, the page's own ask quotes the words it was handed.
+  return reason.slice(reason.lastIndexOf("; ", by) + 1, by).trim();
 }
 
 /**
  * The lap a stop is about, or null for any other ask: its own stop
- * (`lap-stopped-<lap>`), or a scope's stop over a redo of it, which names it as
- * the redo's predecessor (`stopTheLine`).
+ * (`lap-stopped-<lap>`), the stop of a start that threw (`start-stopped-<lap>`,
+ * rondo#655), or a scope's stop over a redo of it, which names it as the redo's
+ * predecessor (`stopTheLine`).
  */
 export function stoppedLapOf(ask: {
   readonly messageId: string;
   readonly asks: boolean;
   readonly bases: readonly Readonly<Record<string, unknown>>[];
 }): string | null {
-  if (ask.messageId.startsWith("lap-stopped-")) {
-    return ask.messageId.slice("lap-stopped-".length);
+  for (const prefix of ["lap-stopped-", START_STOPPED]) {
+    if (ask.messageId.startsWith(prefix)) {
+      return ask.messageId.slice(prefix.length);
+    }
   }
   if (!ask.asks || !ask.messageId.startsWith("scope-stop-")) {
     return null;
@@ -113,8 +159,11 @@ export function stoppedLapOf(ask: {
   return typeof basis?.["iterationId"] === "string" ? basis["iterationId"] : null;
 }
 
+/** The prefix of the stop a start that threw asks under (`stopTheLeftLap`). */
+const START_STOPPED = "start-stopped-";
+
 export interface LostLapPorts {
-  readonly store: Pick<IterationStore, "performingLaps" | "read" | "terminalIterations">;
+  readonly store: Pick<IterationStore, "drivenLaps" | "read" | "terminalIterations">;
   readonly record: Pick<AdvisoryRecord, "recordThreadMessage" | "threadMessages">;
   /** Ends the row at `failed` with the kind `lost` (`endLost`); answers the status it ended at. */
   readonly end: (iterationId: string, reason: string) => Promise<string | null>;
@@ -180,7 +229,7 @@ export function lostLapHost(ports: LostLapPorts): LostLapHost {
 }
 
 async function endTheLost(ports: LostLapPorts): Promise<void> {
-  for (const lap of await ports.store.performingLaps()) {
+  for (const lap of await ports.store.drivenLaps()) {
     const row = await ports.store.read(lap.iterationId);
     if (row.kind !== "read") {
       continue;
@@ -194,12 +243,16 @@ async function endTheLost(ports: LostLapPorts): Promise<void> {
     }
     const reason =
       lap.driverPid === null
-        ? `the lap was still performing ${String(nowMs - lap.updatedAtMs)} ms after it was sent, ` +
-          "past its plan's invocation ceiling, and no process of it was recorded (D-0139)"
-        : `the rondo process that sent the lap (pid ${String(lap.driverPid)} on ` +
-          `${String(lap.driverHost)}) and its lap perform child ` +
-          `(${lap.lapPid === null ? "never recorded, and past its ceiling" : `pid ${String(lap.lapPid)}`}) are both ` +
-          "gone, so nothing will record its answer (D-0139)";
+        ? `the lap was still '${lap.status}' ${String(nowMs - lap.updatedAtMs)} ms after it was ` +
+          "last written, past its plan's invocation ceiling, and no process of it was recorded (D-0139)"
+        : lap.status !== "performing"
+          ? `the rondo process that drove the lap (pid ${String(lap.driverPid)} on ` +
+            `${String(lap.driverHost)}) is gone while it was '${lap.status}', before any lap was ` +
+            "sent, so nothing will move it on (D-0139, rondo#655)"
+          : `the rondo process that sent the lap (pid ${String(lap.driverPid)} on ` +
+            `${String(lap.driverHost)}) and its lap perform child ` +
+            `(${lap.lapPid === null ? "never recorded, and past its ceiling" : `pid ${String(lap.lapPid)}`}) are both ` +
+            "gone, so nothing will record its answer (D-0139)";
     const status = await ports.end(lap.iterationId, reason);
     ports.log(`lost     lap '${lap.iterationId}' was lost: ${reason}`);
     if (status !== "failed") {
@@ -222,11 +275,13 @@ async function firstLoss(ports: LostLapPorts, lap: IterationRecord): Promise<boo
  * rather than remembered, so a pass cut short -- the host stopped between the
  * end and the ask -- is finished by the next: started again by itself where it
  * may be and has not been asked about, else asked, and on the person's *carry
- * on* started again.
+ * on* started again. A lap ended from the page (rondo#655) is only ever asked
+ * about -- the page asks, this writes the ask a pass cut short did not -- and
+ * started again on *carry on*.
  */
 async function settleTheLost(ports: LostLapPorts, said: Set<string>): Promise<void> {
   const lost = (await ports.store.terminalIterations()).flatMap((one) =>
-    one.kind === "read" && one.record.failureKind === "lost" ? [one.record] : [],
+    one.kind === "read" && endedLost(one.record) ? [one.record] : [],
   );
   if (lost.length === 0) {
     return;
@@ -237,13 +292,17 @@ async function settleTheLost(ports: LostLapPorts, said: Set<string>): Promise<vo
     return;
   }
   for (const lap of lost) {
-    const asked = stopsOf(read.messages, lap.id);
+    const asked = stopsOf(read.messages, lap);
     const reported = `report-lost-${lap.id}`;
     if ((await ports.store.read(againId(lap.id))).kind === "read") {
       // Started again by itself, and the host stopped before the thread was told.
       if (asked.length === 0 && !read.messages.some((m) => m.messageId === reported)) {
         await tell(ports, lap, reported, false, restartedReport(lap));
       }
+      continue;
+    }
+    if (asked.length === 0 && lap.failureKind === "ended") {
+      await tell(ports, lap, lostAskId(lap.id), true, ports.words.lapEndedAsk(personsReason(lap)));
       continue;
     }
     if (asked.length === 0) {
@@ -261,7 +320,7 @@ async function settleTheLost(ports: LostLapPorts, said: Set<string>): Promise<vo
         // A scope that refused it has asked already, and one stop is enough:
         // its *carry on* starts the lap again as the lost ask's would.
         const now = await ports.record.threadMessages();
-        if (now.kind === "read" && stopsOf(now.messages, lap.id).length > 0) {
+        if (now.kind === "read" && stopsOf(now.messages, lap).length > 0) {
           continue;
         }
       }
@@ -273,7 +332,10 @@ async function settleTheLost(ports: LostLapPorts, said: Set<string>): Promise<vo
         message.inReplyTo !== null &&
         asked.includes(message.inReplyTo) &&
         message.authorKind === "operator" &&
-        message.answerOutcome === "carry_on",
+        message.answerOutcome === "carry_on" &&
+        // rondo#655: a *carry on* given to a start that threw while it was held
+        // is not one given to the ending that came after it.
+        (!message.inReplyTo.startsWith(START_STOPPED) || message.atMs > lap.updatedAtMs),
     );
     if (!carriedOn || ports.restart === null) {
       continue;
@@ -296,21 +358,28 @@ function restartedReport(lap: IterationRecord): string {
 }
 
 /**
- * The stops standing for a lost lap: its own ask, and a scope's stop over its
- * start again, which names it as the redo's predecessor (`stopTheLine`).
+ * The stops standing for a lost lap: its own ask, a scope's stop over its start
+ * again, which names it as the redo's predecessor (`stopTheLine`), and the stop
+ * of a start that threw (rondo#655) -- for a lap a person ended, whose ending
+ * that stop offered; one lost while held is asked about afresh, since that stop
+ * still says the lap holds its room.
  */
 function stopsOf(
   messages: readonly {
     readonly messageId: string;
     readonly asks: boolean;
+    readonly atMs: number;
     readonly bases: readonly Readonly<Record<string, unknown>>[];
   }[],
-  lapId: string,
+  lap: IterationRecord,
 ): readonly string[] {
+  const lapId = lap.id;
   return messages
     .filter(
       (message) =>
         message.messageId === lostAskId(lapId) ||
+        (message.messageId === `${START_STOPPED}${lapId}` &&
+          (lap.failureKind === "ended" || message.atMs > lap.updatedAtMs)) ||
         (message.asks &&
           message.messageId.startsWith("scope-stop-") &&
           message.bases.some(

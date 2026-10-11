@@ -470,9 +470,13 @@ test("a plan column that is not JSON is unreadable through both reads", async ()
   connection.prepare("UPDATE iteration SET plan = ? WHERE id = ?").run("{not json", "i-0001");
 
   const read = await store.read("i-0001");
-  expect(read).toMatchObject({ kind: "unreadable", id: "i-0001" });
+  // rondo#655: the request it answers still reads, so the page can end it from its thread.
+  expect(read).toMatchObject({ kind: "unreadable", id: "i-0001", requestMessageId: REQUEST });
   expect(read.kind === "unreadable" && read.reason).toMatch(/not JSON/);
   expect(await store.readLive()).toMatchObject([{ kind: "unreadable", id: "i-0001" }]);
+  // And where that column is not text either, it is null, not a guess.
+  connection.prepare("UPDATE iteration SET request_message_id = X'07' WHERE id = ?").run("i-0001");
+  expect(await store.read("i-0001")).toMatchObject({ kind: "unreadable", requestMessageId: null });
 });
 
 test("settle ends a row that will not decode, and the lock is then free", async () => {

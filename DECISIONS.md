@@ -179,7 +179,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0136 | A drafted claim is drawn from the repository's own paths: the drafter is handed each offered repository's tracked paths at its base branch, two levels deep, and claims `/` only for work that spans the whole repository; `D-0073` rule 5's gate widening is the safety valve | accepted, amended |
 | D-0137 | A bare `#N` is read in the repository its own request would publish to: `publishesTo` is the one rule both sides ask, and a reference the plans in play name two repositories for is not read at all; `D-0081` rule 3.4 is narrowed | accepted |
 | D-0138 | Over-bound review material leaves out, by name, what only read before it is refused; `D-0105` rule 3.1 is withheld only by the conflicting lap's own line; and a model reading a second run could change can be taken again, once, as one more review round | accepted, amended |
-| D-0139 | A lap is lost when, on this host, the rondo process that sent it and its `lap perform` child are both gone: it ends `failed` with the kind `lost`, holds no budget, and is started again once by itself under a goal scope or an approved split, or asked about | accepted |
+| D-0139 | A lap is lost when, on this host, the rondo process that sent it and its `lap perform` child are both gone: it ends `failed` with the kind `lost`, holds no budget, and is started again once by itself under a goal scope or an approved split, or asked about | accepted, amended |
 | D-0140 | A person's request starts from the goal scope's outward acts, a first-lap reserve with no history of its own is read from its repository's laps or guessed at a real lap's cost, and a budget stop offers raising the budget and carrying on first, on one press | accepted, amended |
 | D-0141 | An answer is its press, a scope stop over a lap at its gate offers raising and carrying on, work approved and not begun outranks a stopped lap, and a resume keeps the paused approval's defaults | accepted, amended |
 | D-0142 | Carrying on at a worker's question is the gate's revise, on the same press; its answer is not drafted again, and a lap that asked is never approved by rondo | accepted |
@@ -229,6 +229,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0192 | An open question of the goal flow is a row under *your turn* in the list, on every view, leading to the questions' form; like a paused flow, it is a row there that is not a request | accepted |
 | D-0193 | Triage raises only the open points that are real decisions: each point says whether it is in dispute, irreversible or against a standing policy, rondo decides the rest as it recommends and writes each one where the person can change it, and the goal flow asks only the raised ones | accepted |
 | D-0194 | The conflict fix of a line started with no claim is started by rondo, once, under an approval that starts work by itself; a try that started nothing is the press again, with why | accepted |
+| D-0195 | A lap only a person can end -- stalled, held by a start that threw, or a row that will not decode -- is ended from the page with their reason, gives back what it held and asks whether to carry on; a lap before its gate whose driver is gone is lost | accepted |
 
 ---
 
@@ -26934,6 +26935,16 @@ two; amends `D-0130` rule 2 for that kind. Supersedes nothing. Refs `D-0019` rul
 `D-0036` rule 5, `D-0048` rule 3, `D-0066`, `D-0073` rule 4.3, `D-0110` rule 2, `D-0121`, `D-0127`,
 `D-0128`, `D-0130`.
 
+> **Annotation (2026-10-11, from D-0195).** Added after this entry was accepted, and **not
+> additive**: a lap is lost at any status from `planned` to `performing`. Its driver is recorded
+> from reservation on, and before `performing` no child exists, so a gone driver is all of it. A
+> lap a person ended from the page ends `failed` with the kind `ended`, which holds no budget and
+> starts again on *carry on* like a lost lap, but never by itself. Nothing below is edited.
+>
+> - Amends: D-0139 rule 1
+> - Amends: D-0139 rule 2
+> - Amends: D-0139 rule 3
+
 ### Context
 
 **Measured on 2026-09-27 from the lap 18 stores, read only.** #494's second part
@@ -31324,3 +31335,69 @@ is caught.
 
 - `D-0138`, **not additive**: rule 2, the fix stays a press except for this line.
 - `D-0160`, **not additive**: rule 4, the press and the start form's sentence.
+
+## D-0195 — A lap only a person can end -- stalled, held by a start that threw, or a row that will not decode -- is ended from the page with their reason, gives back what it held and asks whether to carry on; a lap before its gate whose driver is gone is lost
+
+**Status:** accepted (2026-10-11, rondo#655). Widens `D-0139`; adds a failure kind to its two.
+Supersedes nothing. Refs `D-0019` rule 11, `D-0073` rule 4.3, `D-0076` rule 4.2, `D-0079`,
+`D-0109` rule 3, `D-0110` rule 2, rondo#648.
+
+### Context
+
+Three kinds of lap could neither go on nor be answered, and kept their slot, held money and files
+until somebody ran `rondo abandon` in a terminal: a `stalled` lap, a start that threw and that
+`endFaulted` could not end (its stop told the person to read rondo's log), and a live row that will
+not decode, which the page did not draw at all. And the lost-lap sweep read `performing` rows only,
+so a restart while a lap was `admitting` left it holding the lock for ever.
+
+### Decision
+
+1. **The sweep covers every status before the gate.** The driver is written when the row is
+   reserved (`conductorPorts` wraps `reserve`), and the sweep reads `planned` through `performing`
+   (`drivenLaps`). Before `performing` no child exists, so a gone driver makes the lap lost at once;
+   a row with no driver recorded keeps the plan-ceiling rule.
+2. **Which laps a person may end** (`endable`, `src/access/page-logic/end-lap.ts`): `stalled`; a lap
+   before its gate whose `start-stopped-<lap>` stop was written (the start threw and rondo could
+   not end it); and a live row that will not decode. The page draws the way to it and the press
+   asks the same test again over fresh rows, so a screen gone stale ends nothing.
+3. **Where it is drawn.** The request's *Your next step* card leads to a screen of its own
+   (`?end=<lap>`), which says what ending does and takes the person's reason; a row that will not
+   decode is also a *your turn* row on the list. No approver, no press: the screen says why.
+4. **What the press does** (`endLapFromPage`, `POST /end-lap`): the approver is checked as for every
+   press, and the reason is recorded with who pressed, as `rondo abandon` records it. A row that
+   decodes ends `failed` with the new kind `ended`: like `lost` it holds no cap and is not unread (a
+   cost read before it stalled still counts), and *carry on* at its stop starts it again through the lost-lap pass; unlike `lost` it is never
+   started again by itself, since a person decided. A row that will not decode is settled by id
+   (`abandon`), and its *carry on* has rondo plan the request again.
+5. **The thread asks once.** The press writes `lap-stopped-<lap>` with the person's words quoted,
+   unless the start's own stop stands unanswered, which is then this lap's stop; a *carry on* given
+   before the lap was ended is not one for the ending. A pass cut short is finished
+   by the lost-lap pass, which writes the missing ask over an `ended` lap. This widens the stop of
+   `D-0139` rule 3.2 beyond `lap-stopped-<lap>` for an `ended` lap only; a lap *lost* while its
+   start's stop stood is asked afresh, since that stop says the lap still holds its room.
+6. **No page sentence sends the person to a log or a command.** The held start's stop now offers
+   ending the work. Every sentence is in both catalogues (`D-0079`); the refusal of a press that is
+   not a person's names no button (rondo#648).
+
+### What it costs
+
+- **A row that will not decode still counts its lap budget cap as held** once settled to
+  `abandoned`: `settle` writes no failure kind, by its single-purpose licence.
+- **A host that restarts under the same pid** (a container's PID 1) reads its old rows' driver as
+  alive and sweeps none of them, as `D-0139` already could not for `performing`; a per-process
+  instance id beside `driver_pid` would close it.
+- **A row held at `admitting` after `run admit` answered nothing** is neither endable nor swept
+  while the host that holds it lives: a run may exist under it, and only `rondo abandon` ends it.
+- **A step cut by a restart before the gate is redone, not resumed**: the lap starts again under a
+  new id, and a run continuo admitted for the old one is the operator's to close (`D-0019`).
+
+### What would falsify it
+
+- **Laps ended from the page that rondo could have finished by itself**: the test of who is stuck
+  is too wide.
+- **A restart that ends a lap whose driver was alive** on another pid namespace or host: the driver
+  test is wrong for that host.
+
+### Annotations this entry adds
+
+- `D-0139`, **not additive**: the statuses a lap is lost at, and the `ended` kind.

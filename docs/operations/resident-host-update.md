@@ -97,15 +97,15 @@ command; laps take tens of minutes. In particular:
 | What the in-flight section shows | What it means | What to do |
 |---|---|---|
 | a row whose status word is `performing` | `lap perform` is in flight: a worker is running, and it is spending money | Wait. A restart now kills it, and the paragraph at the top of this page is what that costs |
-| a row whose status is `planned`, `classified`, `admitting` or `admitted` | a short step on the way to `performing` | Wait. These are not covered by the lost-lap sweep, which reads `performing` rows only: a restart in `admitting` leaves a row that holds the single-flight lock with nothing able to release it but `rondo abandon` (`RELEASED_BY` in [`../../src/store/records.ts`](../../src/store/records.ts)) |
-| a row reading `will not decode` / `読み取れません` | a live row rondo cannot read. It still holds a slot, and it is counted in the heading | Not a wait: it will not clear by itself. `rondo abandon --iteration-id ID --reason ...` ([`rondo-cli.md`](rondo-cli.md) section 7) |
+| a row whose status is `planned`, `classified`, `admitting` or `admitted` | a short step on the way to `performing` | Wait. A restart now is not fatal: the restarted host finds the row's driver gone and ends it as a lost lap, which frees its slot and asks in its request whether to start it again (D-0139, D-0195; `RELEASED_BY` in [`../../src/store/records.ts`](../../src/store/records.ts)). The step it was taking is lost all the same |
+| a row reading `will not decode` / `読み取れません` | a live row rondo cannot read. It still holds a slot, and it is counted in the heading | Not a wait: it will not clear by itself. End it on the page: its row on the list (and its request, when that reads) leads to the *End this work* screen. Or use `rondo abandon --iteration-id ID --reason ...` ([`rondo-cli.md`](rondo-cli.md) section 7) |
 
 **Rows under *waiting on you* do not block the swap.** `awaiting_human` and `withdrawal_requested`
 are durable state in front of a person: the `lap perform` process has exited, continuo's delivery
 lease went with it, and no fenced child survives it (`SUSPENDED_STATUSES` in
 [`../../src/store/records.ts`](../../src/store/records.ts)). The restarted host finds them exactly
 where they were. `stalled` is on that side of the wait too (`WAIT_SIDE`, same file), and a restart
-neither helps nor harms it -- nothing drives a stalled row and only `rondo abandon` releases it --
+neither helps nor harms it -- nothing drives a stalled row; a person ends it from the page or with `rondo abandon` --
 but it is deliberately **not** suspended: "a person must decide" includes rondo being unable to say
 that nothing is running, so it holds its execution slot fail-closed. It is a row to settle, not
 evidence that the host is idle.

@@ -622,11 +622,12 @@ async function injectionState(
   const latest = laps.at(-1);
   // D-0139: a lost lap ends `failed`, and that row is the restart's record and
   // not an answer. It reads as `lost` only while no successor stands for it --
-  // once one is reserved the successor is the latest lap, and says the end.
+  // once one is reserved the successor is the latest lap, and says the end. A
+  // lap a person ended from the page reads the same (rondo#655).
   if (
     latest !== undefined &&
     latest.status === "failed" &&
-    latest.failureKind === "lost" &&
+    (latest.failureKind === "lost" || latest.failureKind === "ended") &&
     !laps.some((lap) => lap.supersedesIterationId === latest.id)
   ) {
     return "lost";

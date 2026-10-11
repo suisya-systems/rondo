@@ -542,6 +542,19 @@ test("rondo#549: a lap lost to a restart is not a failure; its start again says 
   expect((await w.messages()).filter((m) => m.asks)).toEqual([]);
 });
 
+test("rondo#655: a lap a person ended from the page reads as one owed a start again, not a failure", async () => {
+  const w = await world({}, [ranked(7), ranked(8), ranked(9)]);
+  await w.pass();
+  await w.drafted("split-1", first, 1);
+  w.lap("lap-1", first, "failed", 1);
+  await w.pass();
+  await w.drafted("split-2", second, 1);
+  w.lap("lap-2", second, "failed", 2, { failureKind: "ended" });
+  await w.pass();
+  expect((await w.messages()).filter((m) => m.asks)).toEqual([]);
+  expect(w.log).toContain("flow     o/r: waiting (injection_pending)");
+});
+
 /**
  * The lap-19 store (rondo#549): a `failed_twice` stop asked by a build that
  * counted a lap lost to a restart as a failure. The ask is written as that

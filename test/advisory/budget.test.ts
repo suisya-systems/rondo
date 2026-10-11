@@ -193,7 +193,7 @@ test("the store reader reads live and terminal rows, skips an unreadable one, an
         readLive: async () => [{ kind: "read", record: live as never }],
         terminalIterations: async () => [
           { kind: "read", record: ended as never },
-          { kind: "unreadable", id: "i-bad", reason: "corrupt" },
+          { kind: "unreadable", id: "i-bad", reason: "corrupt", requestMessageId: null },
         ],
       },
       record: { heldAgentType: async () => ({ kind: "absent" }) },

@@ -138,7 +138,12 @@ export type PageView =
    * doing and why rondo has not released them itself, so that screen is the
    * press's precondition and not a fold inside another.
    */
-  | { readonly kind: "release"; readonly iterationId: string };
+  | { readonly kind: "release"; readonly iterationId: string }
+  /**
+   * The end of a lap only a person can end (rondo#655): what ending does, the
+   * reason they write and the press. A view of its own for `publish`'s reason.
+   */
+  | { readonly kind: "end"; readonly iterationId: string };
 
 /**
  * The most review rounds this screen will draft for.
@@ -197,6 +202,7 @@ export function isLive(view: PageView): boolean {
     view.kind !== "publish" &&
     view.kind !== "merge" &&
     view.kind !== "release" &&
+    view.kind !== "end" &&
     view.kind !== "goal" &&
     view.kind !== "goalScope"
   );
@@ -227,6 +233,8 @@ export function viewHref(view: PageView, tag: string): string {
       return `/?merge=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "release":
       return `/?release=${encodeURIComponent(view.iterationId)}&${lang}`;
+    case "end":
+      return `/?end=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "requests":
       return view.take === undefined
         ? `/?requests=open&${lang}`
@@ -326,6 +334,10 @@ export function viewOf(query: URLSearchParams): PageView {
   const releasing = query.get("release");
   if (releasing !== null && releasing !== "") {
     return { kind: "release", iterationId: releasing };
+  }
+  const ending = query.get("end");
+  if (ending !== null && ending !== "") {
+    return { kind: "end", iterationId: ending };
   }
   // `?answer=` and `?reading=open` are not read and have no redirect: D-0083
   // rules 3 and 4 replaced both screens, and an address that once meant one

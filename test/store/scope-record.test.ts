@@ -1342,9 +1342,19 @@ test("D-0139: a lost lap holds no cap and is not unread, so its room comes back"
   // Lost: it holds nothing, and it is not an unread lap holding a reserve.
   expect(await store.sendLapBudget("i-b", 12)).toBe(45);
   expect((await record.scopeSpent("sd-0001")).unreadLaps).toBe(1);
+  // rondo#655: one a person ended from the page is the same.
+  connection.prepare("UPDATE iteration SET failure_kind = 'ended' WHERE id = 'i-lost'").run();
+  expect(await store.sendLapBudget("i-b", 12)).toBe(45);
+  expect((await record.scopeSpent("sd-0001")).unreadLaps).toBe(1);
+  // A stalled lap may have read its cost before it was ended: that money was spent.
+  connection.prepare("UPDATE iteration SET lap_cost_usd = 5 WHERE id = 'i-lost'").run();
+  expect(await store.sendLapBudget("i-b", 12)).toBe(40);
+  expect((await record.scopeSpent("sd-0001")).readCostUsd).toBe(5);
+  connection.prepare("UPDATE iteration SET lap_cost_usd = NULL WHERE id = 'i-lost'").run();
   // Control: a lap that failed any other way still holds its cap.
   connection.prepare("UPDATE iteration SET failure_kind = 'defect' WHERE id = 'i-lost'").run();
   expect(await store.sendLapBudget("i-b", 13)).toBe(5);
+  expect((await record.scopeSpent("sd-0001")).unreadLaps).toBe(2);
 });
 
 test("D-0152: a lap continuo refused unread holds its reserve, as the page counts it, and not its cap", async () => {
@@ -1380,21 +1390,50 @@ test("D-0152: a lap continuo refused unread holds its reserve, as the page count
   expect(await store.sendLapBudget("i-b", 13)).toBe(5);
 });
 
-test("D-0139: which processes drive a lap are written only while it performs, and listed", async () => {
+test("D-0139, rondo#655: a lap's driver is written before its gate, its child only while it performs", async () => {
   const seed = await seeded();
   const { connection, store } = seed;
   admitted(connection, "i-a", null);
-  await store.markLapProcess("i-a", { driverHost: "h", driverPid: 11 });
-  expect(await store.performingLaps()).toEqual([]);
+  // A terminal row is driven by nothing.
+  await store.markLapProcess("i-a", { driverHost: "h", driverPid: 9 });
+  expect(await store.drivenLaps()).toEqual([]);
+  connection.prepare("UPDATE iteration SET status = 'admitted' WHERE id = 'i-a'").run();
+  await store.markLapProcess("i-a", { driverHost: "h", driverPid: 10 });
+  // No child before the lap is sent.
+  await store.markLapProcess("i-a", { lapPid: 9 });
+  expect(await store.drivenLaps()).toEqual([
+    {
+      iterationId: "i-a",
+      status: "admitted",
+      driverHost: "h",
+      driverPid: 10,
+      lapPid: null,
+      updatedAtMs: 1,
+    },
+  ]);
   connection.prepare("UPDATE iteration SET status = 'performing' WHERE id = 'i-a'").run();
   await store.markLapProcess("i-a", { driverHost: "h", driverPid: 11 });
   await store.markLapProcess("i-a", { lapPid: 12 });
-  expect(await store.performingLaps()).toEqual([
-    { iterationId: "i-a", driverHost: "h", driverPid: 11, lapPid: 12, updatedAtMs: 1 },
+  expect(await store.drivenLaps()).toEqual([
+    {
+      iterationId: "i-a",
+      status: "performing",
+      driverHost: "h",
+      driverPid: 11,
+      lapPid: 12,
+      updatedAtMs: 1,
+    },
   ]);
   // A lap sent again names its new driver and no child yet.
   await store.markLapProcess("i-a", { driverHost: "h", driverPid: 13 });
-  expect((await store.performingLaps())[0]).toMatchObject({ driverPid: 13, lapPid: null });
+  expect((await store.drivenLaps())[0]).toMatchObject({ driverPid: 13, lapPid: null });
+  // At its gate nothing drives it: not written, not listed.
+  connection.prepare("UPDATE iteration SET status = 'awaiting_human' WHERE id = 'i-a'").run();
+  await store.markLapProcess("i-a", { driverHost: "h", driverPid: 14 });
+  expect(await store.drivenLaps()).toEqual([]);
+  expect(connection.prepare("SELECT driver_pid FROM iteration WHERE id = 'i-a'").get()).toEqual({
+    driver_pid: 13,
+  });
 });
 
 test("D-0128: a goal scope covers the flow's openers naming its goal, and a newer goal is approved again", async () => {
