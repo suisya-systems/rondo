@@ -800,7 +800,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   sinceHeading: (when) => `What moved since you last looked, ${when} ago`,
   sinceNothing: (when) => `Nothing has moved since you last looked, ${when} ago.`,
   sinceNever:
-    "Nothing is marked as moved yet: you have not looked before. rondo inbox, in a terminal, sets the mark.",
+    "Nothing is marked as moved yet. Once you send or answer something here, what moves after it is shown here.",
   sinceSaid: (moved) => {
     const times = (count: number, one: string, many: string) =>
       count === 1 ? one : `${String(count)} ${many}`;
@@ -834,7 +834,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   sinceMore: (count) =>
     count === 1 ? "One more request moved." : `${String(count)} more requests moved.`,
   sinceElsewhere: (count) =>
-    `${count === 1 ? "One more record" : `${String(count)} more records`} changed under no request; rondo inbox lists each.`,
+    `${count === 1 ? "One more record" : `${String(count)} more records`} changed under no request.`,
   triageHeading: "What rondo would ask for next",
   triageGoesAgainst: "Goes against",
   triageWhy: "Why",
@@ -1479,7 +1479,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   sinceHeading: (when) => `前回見てから（${when}前）動いたこと`,
   sinceNothing: (when) => `前回見てから（${when}前）動いたものはありません。`,
   sinceNever:
-    "まだ一度も見ていないので、動いたものの印はありません。端末で rondo inbox を開くと印がつきます。",
+    "まだ印がありません。ここで何かを送るか答えると、それより後に動いたものをここに示します。",
   sinceSaid: (moved) => {
     const parts = [
       ...(moved.asked ? ["あなたが依頼しました"] : []),
@@ -1499,8 +1499,7 @@ export const PAGE_JA: PageWords = Object.freeze({
     return `${parts.join("。")}。`;
   },
   sinceMore: (count) => `ほかに ${String(count)} 件の依頼が動きました。`,
-  sinceElsewhere: (count) =>
-    `どの依頼にも属さない記録が ${String(count)} 件変わりました。rondo inbox で一つずつ見られます。`,
+  sinceElsewhere: (count) => `どの依頼にも属さない記録も ${String(count)} 件変わりました。`,
   triageHeading: "rondo が次に勧める依頼",
   triageGoesAgainst: "反している目標",
   triageWhy: "理由",

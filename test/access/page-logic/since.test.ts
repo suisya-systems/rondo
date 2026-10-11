@@ -97,40 +97,67 @@ test("a moved request is said as one sentence, in each language", () => {
   );
 });
 
+/** A request opened by somebody other than the person looking, so it moves no mark of theirs. */
+async function openedBy(
+  world: ReturnType<typeof fresh>,
+  authorId: string,
+  messageId: string,
+  body: string,
+  atMs: number,
+) {
+  const outcome = await world.record.recordThreadMessage({
+    messageId,
+    body,
+    authorKind: "operator",
+    authorId,
+    inReplyTo: null,
+    atMs,
+    bases: [],
+    asks: false,
+  });
+  expect(outcome.kind).toBe("recorded");
+}
+
 test("the empty centre says what moved since the mark, under the box", async () => {
   const world = fresh();
   await openRequest(world, "req-old", "Tidy the README", 500);
   await world.record.recordView("ada", 1_000);
-  await openRequest(world, "req-new", "Add a dark theme", 2_000);
+  await openedBy(world, "bo", "req-new", "Add a dark theme", 2_000);
   const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
   const centre = html.slice(html.indexOf('class="empty-centre"'));
   expect(centre).toContain(EN.sinceHeading(EN.age("4s")));
   expect(centre).toContain("Add a dark theme");
-  expect(centre).toContain(
-    EN.sinceSaid({
-      messageId: "req-new",
-      asked: true,
-      rondoWrote: 0,
-      youWrote: 0,
-      youAnswered: 0,
-      lapsMoved: 0,
-      lapsEnded: 0,
-      atMs: 2_000,
-    }),
-  );
   // What was there before the mark is not news.
   expect(centre).not.toContain("Tidy the README");
+  // Nothing on it sends the person to a terminal (D-0173 K3).
+  expect(centre).not.toContain("rondo inbox");
 });
 
-test("with nothing since the mark, and with no mark, the centre says which", async () => {
+test("a press on the page moves the mark, with no terminal and no write of its own", async () => {
   const world = fresh();
-  await openRequest(world, "req-old", "Tidy the README", 500);
+  // Never looked and never pressed: nothing is marked yet.
   const never = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
   expect(never).toContain(EN.sinceNever);
-  await world.record.recordView("ada", 1_000);
+  expect(never).not.toContain("rondo inbox");
+  // Somebody else's request is news; the person's own request, written later, is
+  // the press that says they were here -- so the earlier one is not news any more.
+  await openedBy(world, "bo", "req-bo", "Add a dark theme", 1_000);
+  await openRequest(world, "req-ada", "Tidy the README", 3_000);
+  expect(await world.record.lastActed("ada")).toBe(3_000);
+  expect(await world.record.lastView("ada")).toBeNull();
   const quiet = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
-  expect(quiet).toContain(EN.sinceNothing(EN.age("4s")));
-  // No actor, no mark to have looked from: the section is not drawn at all.
+  expect(quiet).toContain(EN.sinceNothing(EN.age("2s")));
+  // The list's line reads the same mark: both requests sit above it as seen.
+  expect(quiet).not.toContain(EN.lastLookedNever);
+  // Moved past the press by a later one of somebody else's, the centre says so.
+  await openedBy(world, "bo", "req-bo-2", "Name the release", 4_000);
+  const moved = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
+  expect(moved.slice(moved.indexOf('class="empty-centre"'))).toContain("Name the release");
+});
+
+test("with no actor there is no mark to have looked from, and no section", async () => {
+  const world = fresh();
+  await openRequest(world, "req-old", "Tidy the README", 500);
   const nobody = await operatorPage(portsOver(world, null, []), "t", { kind: "summary" });
   expect(nobody).not.toContain('class="since"');
 });

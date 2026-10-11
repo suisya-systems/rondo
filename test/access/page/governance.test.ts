@@ -93,7 +93,12 @@ test("the line where the reading stopped is drawn once, above the first thing th
   await openRequest(world, "m-new", "and one more thing", 4_000);
   const connection = world.connection;
   connection
-    .prepare("UPDATE conversation_message SET in_reply_to = 'req-old' WHERE message_id = 'm-new'")
+    // Somebody else's, since the person's own message would be their press and
+    // move their mark past it (rondo#631).
+    .prepare(
+      "UPDATE conversation_message SET in_reply_to = 'req-old', author_id = 'bo' " +
+        "WHERE message_id = 'm-new'",
+    )
     .run();
   expect(await world.record.recordView("ada", 2_000)).toEqual({ kind: "recorded" });
 
@@ -117,7 +122,9 @@ test("the line where the reading stopped is drawn once, above the first thing th
 test("a person who has never looked gets no line, because nothing is below it", async () => {
   const world = fresh();
   await gateWithChecks(world);
-  const html = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
+  // Somebody who has neither looked nor pressed anything: the fixture's
+  // request is ada's, and her own press would count as having looked (rondo#631).
+  const html = await operatorPage(portsOver(world, "bo", []), "t", { kind: "summary" });
   expect(html).not.toContain('class="thread-since"');
 });
 

@@ -20771,6 +20771,17 @@ and once in the thread**, and no row carries a *new* mark of its own.
 > have seen", which is what its words already say. Still drawn once in the list and once in the
 > thread. Nothing above is edited.
 
+> **Annotation (2026-10-11, from rondo#631).** Added after this entry was accepted, and additive.
+> Only `rondo inbox` writes the last-look mark, and a redraw writes nothing (`D-0041`), so a person
+> who works only on the page had a mark that never moved: rule 4's *since you last looked* and this
+> rule's line could not hold for them, and a sentence pointing them to the terminal would be the
+> step off the line `D-0173` K3 refuses. **The page now reads "last looked" as the later of that
+> mark and the person's own last press** -- a message they wrote, a gate they answered, a proposal
+> or a scope they decided -- read off the rows those presses already wrote, one past the press so
+> that the person's own act is not news to them. No row is added and nothing is written on a draw.
+> The list's line and *since you last looked* read this one mark, so they still agree. The terminal's
+> `inbox` keeps its own mark unchanged. Nothing above is edited.
+
 **8. The folds.**
 
 | Width | Faces | What folds |

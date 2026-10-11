@@ -13,7 +13,8 @@
  * **A row with no request is counted, not dropped.** A proposal, a decision,
  * an attention row and the like belong to no one request's thread, and a
  * digest that left them out would read as *nothing else happened*. They are
- * one number, and the terminal lists each.
+ * one number, said on the page and pointing nowhere else (`D-0173` K3: a step to
+ * a terminal is off the line).
  */
 import type { RecordChange } from "../../store/records.js";
 
