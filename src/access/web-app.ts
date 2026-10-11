@@ -66,6 +66,7 @@ import {
   type ThreadMessageDraft,
 } from "../store/records.js";
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
+import { pressedAnswer } from "./answer-press.js";
 import { basisOf } from "./explainer/material.js";
 import type { WebPorts } from "./page/contract.js";
 import { postedAnswers, postedClauses } from "./page/triage.js";
@@ -485,6 +486,8 @@ export type SayFromWeb = (
    * a press is then the type's, not a reviewer's.
    */
   answerOutcome: AskAnswer | null,
+  /** The 0-based option a `carry_on` press chose (D-0190 rule 5.1), only from `answerAsk`. */
+  answerOption?: number | null,
 ) => Promise<{ readonly ok: boolean; readonly note: string }>;
 
 /** What {@link SayPort.say} answers: `waitingAsk` marks the one refusal the port makes itself. */
@@ -571,12 +574,13 @@ export class SayPort {
      * press whose whole content is which answer it is.
      */
     answerOutcome: AskAnswer,
+    answerOption: number | null = null,
   ): Promise<Said> {
     if (!minted.has(press)) {
       return { ok: false, note: "nothing was answered: this was not a person's press" };
     }
     minted.delete(press);
-    return await this.#say(message, answerOutcome);
+    return await this.#say(message, answerOutcome, answerOption);
   }
 
   /**
@@ -2358,28 +2362,19 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       return refused(c, 400, "sendRefusedForm", back);
     }
     // **Which answer the press is, read off the form and never defaulted**
-    // (D-0072 rule 4). The screen draws one button per answer, both carrying
-    // this field; a press naming neither is the form refusal the rest of this
-    // route uses, because rondo guessing here would put a word in the person's
-    // mouth on the one press whose content is that word.
-    const posted = form["outcome"];
-    if (posted !== "carry_on" && posted !== "stop" && posted !== "raise_carry_on") {
-      return refused(c, 400, "sendRefusedForm", back);
-    }
-    const outcome = posted === "stop" ? "stop" : "carry_on";
-    // **An answer needs no words** (rondo#512): the press is the answer, so a
-    // box left empty records the pressed button's own label. The box was
-    // `required`, and a browser refused to send a bare *carry on* at all.
+    // (D-0072 rule 4), and the words it records (rondo#512): `pressedAnswer`.
+    // An option press names an option the ask offers (D-0190 rule 5), so the
+    // ask is read first; its row never changes, so the read serves the
+    // revise and the start again below too.
     const typed = typeof form["body"] === "string" ? form["body"] : "";
-    const wording = wordingOf(c);
-    const body =
-      typed.trim() !== ""
-        ? typed
-        : posted === "stop"
-          ? wording.answerStopAction
-          : posted === "raise_carry_on"
-            ? wording.answerRaiseAction
-            : wording.answerCarryOnAction;
+    const thread = await reading.record.threadMessages();
+    const asked =
+      thread.kind === "read" ? thread.messages.find((m) => m.messageId === back) : undefined;
+    const pressed = pressedAnswer(form["outcome"], typed, asked, wordingOf(c));
+    if (typeof pressed === "string") {
+      return refused(c, 400, pressed, back);
+    }
+    const { posted, outcome, option, body } = pressed;
     let press = minting.press;
     // **Raise the budget and carry on** (D-0140 rule 3): a budget stop's first
     // option is two answers on one press -- a budgets-only successor of the
@@ -2415,8 +2410,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       minted.add(press);
     }
     const message = { messageId, body, inReplyTo: back };
-    const answered = await say.answerAsk(press, message, outcome);
-    if (!answered.ok && !(await alreadyThere(message, outcome))) {
+    const answered = await say.answerAsk(press, message, outcome, option);
+    if (!answered.ok && !(await alreadyThere(message, outcome, option))) {
       return refused(c, 409, "sendRefusedNotTaken", back);
     }
     // **A worker's question answered *carry on* is the gate's revise, on the
@@ -2427,18 +2422,17 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     // revise box held. A second submit of the form names the same successor,
     // and finding it started is the press already done.
     const reviseLap = typeof form["revise_iteration"] === "string" ? form["revise_iteration"] : "";
+    // On the outcome recorded and not the value posted (D-0190 rule 7): an
+    // option press is a `carry_on` too.
     if (
       revise !== null &&
-      posted === "carry_on" &&
+      outcome === "carry_on" &&
       reviseLap !== "" &&
       back === `question-${reviseLap}`
     ) {
       const decision = typeof form["revise_decision"] === "string" ? form["revise_decision"] : "";
       const successorId = form["revise_successor"];
       const draft = typeof form["revise_draft"] === "string" ? form["revise_draft"] : "";
-      const thread = await reading.record.threadMessages();
-      const asked =
-        thread.kind === "read" ? thread.messages.find((m) => m.messageId === back) : undefined;
       const request = asked?.inReplyTo ?? "";
       if (
         asked === undefined ||
@@ -2448,7 +2442,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       ) {
         return reviseRefused(c, 400, "reviseRefusedForm", request);
       }
-      const quoted = questionRevise({ question: asked.body, answer: body });
+      const chose = option === null ? undefined : asked.askOptions?.options[option]?.text;
+      const quoted = questionRevise({ question: asked.body, answer: body, chose });
       const revisePress = Object.freeze({}) as Press;
       minted.add(revisePress);
       const revised = await revise.revise(revisePress, {
@@ -2475,28 +2470,23 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     // (`startsAgain` in the drafter host), so this is the one start it makes. A
     // second submit finds the lap already started, and a refusal leaves the
     // answer recorded, as a revise's does.
-    if (revise !== null && outcome === "carry_on") {
-      const thread = await reading.record.threadMessages();
-      const asked =
-        thread.kind === "read" ? thread.messages.find((m) => m.messageId === back) : undefined;
-      if (asked !== undefined) {
-        const againPress = Object.freeze({}) as Press;
-        minted.add(againPress);
-        const started = await revise.startAgain(
-          againPress,
-          asked,
-          typed.trim() === "" ? null : typed,
+    if (revise !== null && outcome === "carry_on" && asked !== undefined) {
+      const againPress = Object.freeze({}) as Press;
+      minted.add(againPress);
+      const started = await revise.startAgain(
+        againPress,
+        asked,
+        typed.trim() === "" ? null : typed,
+      );
+      if (started !== null && !started.ok) {
+        return reviseRefused(
+          c,
+          409,
+          "reviseRefusedNotStarted",
+          asked.inReplyTo,
+          null,
+          started.note,
         );
-        if (started !== null && !started.ok) {
-          return reviseRefused(
-            c,
-            409,
-            "reviseRefusedNotStarted",
-            asked.inReplyTo,
-            null,
-            started.note,
-          );
-        }
       }
     }
     return c.redirect(
@@ -3411,11 +3401,13 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
    * a form resubmitted with the *other* answer -- same id, same words, same
    * parent -- would be refused by the store's uniqueness and then reported to
    * the person as the answer they just pressed, while the line kept whatever the
-   * first press did to it. Only an exact replay is the send it repeats.
+   * first press did to it. Only an exact replay is the send it repeats -- the
+   * option pressed included (D-0190 rule 5.3).
    */
   async function alreadyThere(
     message: SentMessage,
     answerOutcome: AskAnswer | null = null,
+    answerOption: number | null = null,
   ): Promise<boolean> {
     const read = await reading.record.threadMessages();
     return (
@@ -3426,7 +3418,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
           held.authorKind === "operator" &&
           held.body === message.body &&
           held.inReplyTo === message.inReplyTo &&
-          (held.answerOutcome ?? null) === answerOutcome,
+          (held.answerOutcome ?? null) === answerOutcome &&
+          (held.answerOption ?? null) === answerOption,
       )
     );
   }
@@ -3451,7 +3444,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       | "sendRefusedAsk"
       | "sendRefusedTooLong"
       | "answerRefusedPress"
-      | "answerRefusedRaise",
+      | "answerRefusedRaise"
+      | "answerRefusedNoWords",
     back: string | null,
   ) {
     const wording = wordingOf(c);

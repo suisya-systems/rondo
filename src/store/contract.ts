@@ -1,3 +1,4 @@
+import type { DecisionRow } from "./decision-log.js";
 import type {
   AdmissionRefusal,
   AttentionClaim,
@@ -1287,6 +1288,13 @@ export interface AdvisoryRecord {
    * something for ever.
    */
   changedSince(tMs: number): Promise<readonly RecordChange[]>;
+  /**
+   * Every decision the store holds at or after `sinceMs` (inclusive; null for
+   * all), oldest first, with `operator_attention` only when `attention` asks
+   * for it (D-0190 rule 10). Derived from the rows the writers wrote, and kept
+   * apart from {@link AdvisoryRecord.changedSince}'s sources.
+   */
+  decisions(sinceMs: number | null, attention: boolean): Promise<readonly DecisionRow[]>;
   /**
    * Append one scope row -- **or refuse it** (D-0066 section 1).
    *

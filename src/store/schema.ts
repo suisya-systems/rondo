@@ -365,7 +365,13 @@ CREATE TABLE IF NOT EXISTS conversation_message (
   -- from one written after it, which is the defect (#206) rather than a gap to
   -- back-fill -- and the writer refuses a value anywhere but on an operator's
   -- reply to an ask.
-  answer_outcome              TEXT
+  answer_outcome              TEXT,
+  -- D-0190 rules 1 and 2: an ask's options as canonical JSON beside its body,
+  -- and the 0-based option an operator's carry_on reply pressed. NULL on every
+  -- other row and on every row written before them; the writer refuses either
+  -- where it does not belong.
+  ask_options                 TEXT,
+  answer_option               INTEGER
 );
 
 -- D-0022 rule 4, extended by D-0032 rules 1, 2, 3, 7 and 8.
@@ -1061,6 +1067,9 @@ export const CONVERSATION_ADDED_COLUMNS = Object.freeze({
   bases: "TEXT",
   asks: "INTEGER",
   answer_outcome: "TEXT",
+  // D-0190: no back-fill either. An old ask reads NULL and keeps today's presses.
+  ask_options: "TEXT",
+  answer_option: "INTEGER",
 });
 
 /**

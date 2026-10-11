@@ -128,6 +128,7 @@ import {
   takenInCommit,
 } from "./conductor.js";
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
+import { commandDecisions } from "./decisions-cli.js";
 import { allowedBashIn } from "./delegation.js";
 import { type ClosingFinding, closingLapSection, definitionOfDone } from "./done.js";
 import {
@@ -193,9 +194,8 @@ import { type Chrome, chromeFor, EN } from "./wording.js";
 /**
  * Where the read-only page listens when nobody says.
  *
- * Above 1024 so it needs no privilege, and outside the ranges a browser
- * refuses outright. Nothing depends on the number: it is printed on the line
- * that starts the server.
+ * Above 1024 so it needs no privilege, and outside the ranges a browser refuses outright. Nothing
+ * depends on the number: it is printed on the line that starts the server.
  */
 export const DEFAULT_WEB_PORT = 7333;
 
@@ -367,6 +367,11 @@ export const USAGE = `rondo - the operator surface for delegated work
                           continuo. Looking is recorded: it counts what it
                           showed you (once per thing, however often it is
                           drawn) and moves your last-look mark
+  rondo decisions [--since TIME] [--attention]
+                          every decision held, oldest first: who took it, its
+                          outcome, the option index pressed, the row it is
+                          about. Writes nothing. --since is ISO 8601, inclusive;
+                          --attention adds what was presented or withheld
   rondo show --proposal-id ID
                           read one proposal back: its options in the order the
                           record holds them, which one is recommended, what each
@@ -621,11 +626,10 @@ export function hostFallbackWorker(continuo: { readonly workers?: WorkerHosts })
 /** The remote a push goes to when the operator does not name one. */
 export const DEFAULT_REMOTE = "origin";
 
-// The parser moved to `./cli-parse.js` (rondo#341 step 2), and the command
-// list is re-exported by name because `test/architecture/docs-claims.test.ts`
-// reads it from here -- it checks the reference against the verbs *this*
-// module dispatches. Named rather than `export *`, which the boundary scan
-// reduces to a whole-module sentinel and refuses.
+// The parser moved to `./cli-parse.js` (rondo#341 step 2), and the command list is re-exported by
+// name because `test/architecture/docs-claims.test.ts` reads it from here -- it checks the
+// reference against the verbs *this* module dispatches. Named rather than `export *`, which the
+// boundary scan reduces to a whole-module sentinel and refuses.
 export { COMMANDS } from "./cli-parse.js";
 
 /** Write one line of rondo's own words, escaped like every other line. */
@@ -636,11 +640,10 @@ export function say(line: string): void {
 /**
  * Write one value of continuo's own words, keeping its paragraphs legible.
  *
- * Only for a value that is the whole of what a line shows -- today that is
- * the gate's `rationale` -- and never for a value folded alongside others on a
- * line rondo composes, where an embedded newline must stay `\uXXXX` (see
- * `pickWaiting`'s comment on the ambiguous-iteration list, further down this
- * file). rondo#68.
+ * Only for a value that is the whole of what a line shows -- today that is the gate's `rationale`
+ * -- and never for a value folded alongside others on a line rondo composes, where an embedded
+ * newline must stay `\uXXXX` (see `pickWaiting`'s comment on the ambiguous-iteration list, further
+ * down this file). rondo#68.
  */
 function sayLegible(line: string): void {
   consoleSeams.write(`${legibleAsciiEscape(line)}\n`);
@@ -1295,13 +1298,12 @@ export function hostPolicyOf(
 /**
  * The entry point.
  *
- * Returns an exit status and **never calls `process.exit`**, so that the whole
- * of the surface is reachable from a test: a function that exits cannot be
- * asserted against, and the launcher in `bin/rondo.mjs` is what turns this
- * number into one.
+ * Returns an exit status and **never calls `process.exit`**, so that the whole of the surface is
+ * reachable from a test: a function that exits cannot be asserted against, and the launcher in
+ * `bin/rondo.mjs` is what turns this number into one.
  *
- * The statuses are the three continuo itself uses, for the reason it uses them:
- * 0 succeeded, 2 something declined, 1 something broke.
+ * The statuses are the three continuo itself uses, for the reason it uses them: 0 succeeded, 2
+ * something declined, 1 something broke.
  */
 export async function main(
   argv: readonly string[],
@@ -1325,37 +1327,34 @@ export async function main(
   }
   const store = opened.store;
 
-  // **`abandon` is dispatched before continuo is started, and that ordering is
-  // the whole of its usefulness.** It is the way out of a row that is holding
-  // the single-flight lock with nothing able to release it, and one of the
-  // states that produces such a row is a continuo that will not start or no
-  // longer matches the pin. Requiring a working continuo to recover from a
-  // broken one would make the escape hatch unreachable exactly when it is
-  // needed. It drives no continuo verb -- that is D-0019 rule 11's design, not
-  // an accident here -- so there is nothing for it to need.
+  // **`abandon` is dispatched before continuo is started, and that ordering is the whole of its
+  // usefulness.** It is the way out of a row that is holding the single-flight lock with nothing
+  // able to release it, and one of the states that produces such a row is a continuo that will not
+  // start or no longer matches the pin. Requiring a working continuo to recover from a broken one
+  // would make the escape hatch unreachable exactly when it is needed. It drives no continuo verb
+  // -- that is D-0019 rule 11's design, not an accident here -- so there is nothing for it to need.
   if (parsed.command === "abandon") {
     return await commandAbandon(parsed, conductorPorts(unverifiedContinuo(), store, null));
   }
 
-  // **`release` is dispatched here for `abandon`'s reason**: it writes one row
-  // of rondo's own and drives no continuo verb (D-0073 rule 4.3).
+  // **`release` is dispatched here for `abandon`'s reason**: it writes one row of rondo's own and
+  // drives no continuo verb (D-0073 rule 4.3).
   if (parsed.command === "release") {
     return await commandRelease(parsed, store, environment);
   }
 
-  // **`explain` is dispatched before continuo is started, for `abandon`'s
-  // reason and one of its own.** It reads rondo's rows and drives no verb, so a
-  // continuo that will not start is not a reason to withhold an account of the
-  // row that is stuck behind it -- and the iteration this command most exists to
-  // explain has already ended, which is exactly when nothing is worth spawning.
+  // **`explain` is dispatched before continuo is started, for `abandon`'s reason and one of its
+  // own.** It reads rondo's rows and drives no verb, so a continuo that will not start is not a
+  // reason to withhold an account of the row that is stuck behind it -- and the iteration this
+  // command most exists to explain has already ended, which is exactly when nothing is worth
+  // spawning.
   if (parsed.command === "explain") {
     return await commandExplain(parsed, store, opened.path);
   }
 
-  // **`between` is dispatched here for `explain`'s reason.** It reads rondo's
-  // own rows across every live lap and drives no continuo verb, and the moment
-  // an operator most wants to know what spans the laps is the moment one of
-  // them is stuck behind something that will not start.
+  // **`between` is dispatched here for `explain`'s reason.** It reads rondo's own rows across every
+  // live lap and drives no continuo verb, and the moment an operator most wants to know what spans
+  // the laps is the moment one of them is stuck behind something that will not start.
   if (parsed.command === "between") {
     const bounds = hostPolicyOf(environment);
     if ("refusal" in bounds) {
@@ -1370,10 +1369,9 @@ export async function main(
     );
   }
 
-  // **`elevate` is dispatched here for `explain`'s reason exactly.** It reads
-  // rondo's own rows and writes rondo's own rows; nothing about handing an
-  // observation to the advisory needs a worker, and the observation most worth
-  // elevating is often about a lap that has already ended.
+  // **`elevate` is dispatched here for `explain`'s reason exactly.** It reads rondo's own rows and
+  // writes rondo's own rows; nothing about handing an observation to the advisory needs a worker,
+  // and the observation most worth elevating is often about a lap that has already ended.
   if (parsed.command === "elevate") {
     return await commandElevate(parsed, environment, store, opened.path);
   }
@@ -1382,27 +1380,25 @@ export async function main(
     return await commandThreadMessage(parsed, environment, opened.path);
   }
 
-  // **`inbox` is dispatched here for `explain`'s reason, and most of all.** The
-  // screen that says what is stuck has to be reachable when something is stuck,
-  // and a continuo that will not start is one of the things it exists to show.
+  // **`inbox` is dispatched here for `explain`'s reason, and most of all.** The screen that says
+  // what is stuck has to be reachable when something is stuck, and a continuo that will not start
+  // is one of the things it exists to show.
   if (parsed.command === "inbox") {
     return await commandInbox(parsed, environment, store, opened.path);
   }
 
-  // **`web` is dispatched here for `inbox`'s reason, and it writes even less.**
-  // The page is a second view of `inbox`, `between` and `explain`, all three of
-  // which read rondo's own rows and drive no continuo verb -- so requiring a
-  // working continuo to *look* at what is stuck would withhold the screen in
-  // exactly the state it exists for.
+  // **`web` is dispatched here for `inbox`'s reason, and it writes even less.** The page is a
+  // second view of `inbox`, `between` and `explain`, all three of which read rondo's own rows and
+  // drive no continuo verb -- so requiring a working continuo to *look* at what is stuck would
+  // withhold the screen in exactly the state it exists for.
   if (parsed.command === "web") {
     return await serveWeb(parsed, environment, store, opened.path);
   }
 
-  // **`propose` and `decide` are dispatched here for `explain`'s reason.** Both
-  // read and write rondo's own rows and drive no continuo verb: the iteration a
-  // retry is proposed for has already ended, and an answer to a proposal is a
-  // row in rondo's ledger. Requiring a working continuo to record either would
-  // make them unreachable exactly where they are for.
+  // **`propose` and `decide` are dispatched here for `explain`'s reason.** Both read and write
+  // rondo's own rows and drive no continuo verb: the iteration a retry is proposed for has already
+  // ended, and an answer to a proposal is a row in rondo's ledger. Requiring a working continuo to
+  // record either would make them unreachable exactly where they are for.
   if (parsed.command === "propose") {
     return await commandPropose(parsed, store, opened.path);
   }
@@ -1420,11 +1416,15 @@ export async function main(
     return await commandSetupPlan(parsed, environment, opened.path);
   }
 
-  // **`show` is dispatched here for `explain`'s reason.** It reads one of
-  // rondo's own rows and drives no continuo verb, and the proposal most worth
-  // reading back is often about a lap that has already ended.
+  // **`show` is dispatched here for `explain`'s reason.** It reads one of rondo's own rows and
+  // drives no continuo verb, and the proposal most worth reading back is often about a lap that has
+  // already ended.
   if (parsed.command === "show") {
     return await commandShow(parsed, store, opened.path);
+  }
+  // `decisions` reads rondo's own rows and writes none (D-0190 rule 10.4).
+  if (parsed.command === "decisions") {
+    return await commandDecisions(opened.path, parsed.sinceMs, parsed.attention);
   }
 
   const startup = await startContinuo(environment);

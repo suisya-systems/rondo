@@ -18,6 +18,7 @@ import {
   questionRevise,
   readWorkerQuestion,
   relayQuestion,
+  storedOptions,
 } from "../../src/access/question.js";
 import {
   askStandsOver,
@@ -135,6 +136,15 @@ test("a question is put as an ask on its lap, holds that line only, and is relea
       { form: "continuoRun", runId: "rondo-it-1" },
     ],
   });
+  // D-0190 rule 4: the options stored beside the body, so each is a press.
+  expect(asked?.askOptions).toEqual({
+    options: [
+      { text: "Memory", givesUp: "Lost on restart." },
+      { text: "Disk", givesUp: "Slower." },
+    ],
+    recommended: 1,
+    recommendation: "Disk keeps it across restarts.",
+  });
   // The worker's words, rondo's numbering, and the commit rondo measured.
   expect(asked?.body).toBe(
     [
@@ -183,6 +193,28 @@ test("a question is put as an ask on its lap, holds that line only, and is relea
   // Both byte for byte.
   expect(box).toContain(`---\n${asked?.body ?? ""}\n---`);
   expect(box).toContain(`---\n${answer}\n---`);
+  expect(box).not.toContain("They chose:");
+
+  // An option pressed later is the answer, and the box says which (D-0190 rule 7).
+  const chosen = await record.recordThreadMessage({
+    messageId: "m-chose",
+    body: "Disk",
+    authorKind: "operator",
+    authorId: "oidc|op",
+    inReplyTo: "question-it-1",
+    atMs: 30,
+    bases: [],
+    asks: false,
+    answerOutcome: "carry_on",
+    answerOption: 1,
+  });
+  expect(chosen.kind).toBe("recorded");
+  const later = await record.threadMessages();
+  const picked = answeredQuestion(later.kind === "read" ? later.messages : [], "it-1");
+  expect(picked).toEqual({ question: asked?.body, answer: "Disk", chose: "Disk" });
+  expect(questionRevise(picked ?? { question: "", answer: "" })).toContain(
+    "---\nDisk\n---\nThey chose: Disk\nContinue",
+  );
 });
 
 test("nothing asked or nothing read: no ask is written", async () => {
@@ -217,6 +249,8 @@ test("an unreadable block is put in the thread, not dropped, and holds its line 
     read.kind === "read" ? read.messages.find((m) => m.messageId === "question-it-1") : null;
   expect(note?.asks).toBe(true);
   expect(note?.body).toContain("could not read");
+  // Nothing was read, so nothing is offered: the ask keeps today's presses.
+  expect(note).not.toHaveProperty("askOptions");
   const open = await record.openAsksIn("m-request");
   expect(open.kind === "read" && open.asks.map((ask) => ask.messageId)).toEqual(["question-it-1"]);
 });
@@ -265,6 +299,28 @@ test("a worker's question does not hold an unproposed start of its request; any 
   expect(
     askStandsOver({ messageId: "m", iterationIds: ["it-1"], answeredStop: false }, [], true),
   ).toBe(true);
+});
+
+test("stored options drop the writer's own numbering, since each press draws one (D-0190 rule 1)", () => {
+  expect(
+    storedOptions(
+      [
+        { text: "1. Keep it", givesUp: "a" },
+        { text: "（２）Drop it", givesUp: "b" },
+        { text: "3.5 GB is the cap", givesUp: "c" },
+      ],
+      1,
+      "2. Dropping it is smaller.",
+    ),
+  ).toEqual({
+    options: [
+      { text: "Keep it", givesUp: "a" },
+      { text: "Drop it", givesUp: "b" },
+      { text: "3.5 GB is the cap", givesUp: "c" },
+    ],
+    recommended: 1,
+    recommendation: "Dropping it is smaller.",
+  });
 });
 
 test("options are numbered once, whatever the writer numbered them with (rondo#437)", () => {

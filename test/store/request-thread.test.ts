@@ -114,6 +114,8 @@ test("a request and its reply are stored column by column, the body byte for byt
       bases: "[]",
       asks: 0,
       answer_outcome: null,
+      ask_options: null,
+      answer_option: null,
     },
     {
       message_id: "m-question",
@@ -125,6 +127,8 @@ test("a request and its reply are stored column by column, the body byte for byt
       bases: '[{"form":"message","messageId":"m-request"}]',
       asks: 1,
       answer_outcome: null,
+      ask_options: null,
+      answer_option: null,
     },
   ]);
 });
@@ -214,7 +218,112 @@ test("rule 3: the thread has no column for a gate answer, a decision, a status, 
     // column for anything rule 3 refuses -- an answer is not a decision, a
     // status or a gate answer, it is which of the two words the person pressed.
     "answer_outcome",
+    // D-0190 rules 1 and 2: an ask's options and the option an answer pressed.
+    // Both are what the person was offered and chose, not a decision row.
+    "ask_options",
+    "answer_option",
   ]);
+});
+
+test("D-0190 rule 3: options are an ask's, stored canonical, and an answer chooses only one it offered", async () => {
+  const connection = new DatabaseSync(":memory:");
+  const record = advisoryRecord(connection);
+  const refusal = async (draft: ThreadMessageDraft): Promise<string> => {
+    const outcome = await record.recordThreadMessage(draft);
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("refused");
+    return outcome.kind === "refused" ? outcome.reason : "";
+  };
+  const offered = {
+    options: [
+      { text: "The terminal one", givesUp: "the page stays as it is" },
+      { text: "The page", givesUp: "the terminal stays as it is" },
+    ],
+    recommended: 1,
+    recommendation: "The page is where people look.",
+  };
+  expect(await record.recordThreadMessage(operator())).toEqual({ kind: "recorded" });
+  // An ask without options, which no answer may choose an option of.
+  expect(await record.recordThreadMessage(drafter())).toEqual({ kind: "recorded" });
+
+  // 3.1: options on a message that asks nothing.
+  expect(await refusal(drafter({ messageId: "m-x", asks: false, askOptions: offered }))).toContain(
+    "asks nothing",
+  );
+  // 3.2: no options, a blank option, an index out of range, a blank recommendation.
+  for (const bad of [
+    { ...offered, options: [] },
+    { ...offered, options: [{ text: " ", givesUp: "x" }] },
+    { ...offered, recommended: 2 },
+    { ...offered, recommended: 0.5 },
+    { ...offered, recommendation: "" },
+  ]) {
+    expect(await refusal(drafter({ messageId: "m-x", askOptions: bad }))).toContain(
+      "D-0190 rule 3.2",
+    );
+  }
+  expect(
+    await record.recordThreadMessage(
+      drafter({ messageId: "m-options", atMs: 3_000, askOptions: offered }),
+    ),
+  ).toEqual({ kind: "recorded" });
+  // Stored as rule 1.1's canonical JSON, keys in the entry's order.
+  expect(
+    connection
+      .prepare("SELECT ask_options FROM conversation_message WHERE message_id = 'm-options'")
+      .get(),
+  ).toEqual({
+    ask_options:
+      '{"options":[{"text":"The terminal one","gives_up":"the page stays as it is"},' +
+      '{"text":"The page","gives_up":"the terminal stays as it is"}],"recommended":1,' +
+      '"recommendation":"The page is where people look."}',
+  });
+
+  const answer = (parts: Partial<ThreadMessageDraft>): ThreadMessageDraft =>
+    operator({
+      messageId: "m-x",
+      inReplyTo: "m-options",
+      atMs: 4_000,
+      answerOutcome: "carry_on",
+      answerOption: 1,
+      ...parts,
+    });
+  // 3.3: not with a stop, not without an outcome, not rondo's, not to an ask
+  // with no options, not out of range.
+  expect(await refusal(answer({ answerOutcome: "stop" }))).toContain("'carry_on' answer");
+  const { answerOutcome: _dropped, ...noOutcome } = answer({});
+  expect(await refusal(noOutcome)).toContain("'carry_on' answer");
+  expect(await refusal(answer({ inReplyTo: "m-question" }))).toContain("offers no options");
+  expect(await refusal(answer({ answerOption: 2 }))).toContain("offers 2 option(s)");
+  expect(await refusal(answer({ answerOption: -1 }))).toContain("offers 2 option(s)");
+  expect(
+    await refusal(
+      answer({
+        authorKind: "drafter",
+        authorId: "rondo/deterministic/1",
+        bases: [{ form: "message", messageId: "m-options" }],
+        answerOutcome: undefined as unknown as AnswerOutcome,
+      }),
+    ),
+  ).toContain("D-0190 rule 3.3");
+
+  expect(await record.recordThreadMessage(answer({ messageId: "m-answer" }))).toEqual({
+    kind: "recorded",
+  });
+  // Both read back on the messages they were written on.
+  const read = await record.threadMessages();
+  expect(read.kind).toBe("read");
+  const byId = new Map(read.kind === "read" ? read.messages.map((m) => [m.messageId, m]) : []);
+  expect(byId.get("m-options")?.askOptions).toEqual(offered);
+  expect(byId.get("m-answer")).toMatchObject({ answerOutcome: "carry_on", answerOption: 1 });
+  expect(byId.get("m-question")).not.toHaveProperty("askOptions");
+  expect(byId.get("m-request")).not.toHaveProperty("answerOption");
+
+  // A stored value that is not the canonical form fails the read closed.
+  connection.exec(
+    'UPDATE conversation_message SET ask_options = \'{"recommended":0,"options":[]}\' ' +
+      "WHERE message_id = 'm-options'",
+  );
+  expect((await record.threadMessages()).kind).toBe("unreadable");
 });
 
 test("rule 3: nothing in src edits or deletes a message", () => {
@@ -361,6 +470,8 @@ test("a database whose conversation is one column gains the thread's columns on 
   ).map((column) => column["name"]);
   expect(columns).toContain("asks");
   expect(columns).toContain("at_ms");
+  expect(columns).toContain("ask_options");
+  expect(columns).toContain("answer_option");
   expect(count(connection)).toBe(1);
 });
 

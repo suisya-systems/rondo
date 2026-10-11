@@ -5,6 +5,7 @@
  * Split out of `src/store/sqlite.ts` (D-0171), which still owns the driver.
  */
 
+import { askOptionsFault, readAskOptions } from "./ask-options.js";
 import type {
   OpenAsksReadOutcome,
   StoredReviseDraft,
@@ -578,7 +579,8 @@ export function threadMessageRefusal(
       "message: a read is only ever of an issue a person's message named (D-0078 section 3.1)"
     );
   }
-  const outcomeRefusal = answerOutcomeRefusal(connection, draft);
+  const outcomeRefusal =
+    answerOutcomeRefusal(connection, draft) ?? askOptionsRefusal(connection, draft);
   if (outcomeRefusal !== null) {
     return outcomeRefusal;
   }
@@ -706,6 +708,53 @@ function answerOutcomeRefusal(
 }
 
 /**
+ * Why a message may not carry the options or the chosen option it carries, or
+ * null (D-0190 rule 3). Beside {@link answerOutcomeRefusal} and for its reason:
+ * a page draws a press per stored option and records the index it posts, so a
+ * value no ask offered is refused where the write happens.
+ */
+function askOptionsRefusal(connection: StoreConnection, draft: ThreadMessageDraft): string | null {
+  if (draft.askOptions !== undefined) {
+    if (!draft.asks) {
+      return (
+        `'${draft.messageId}' carries options and asks nothing: only an ask offers options ` +
+        "(D-0190 rule 3.1)"
+      );
+    }
+    const fault = askOptionsFault(draft.askOptions);
+    if (fault !== null) {
+      return `the options of '${draft.messageId}' will not store: ${fault} (D-0190 rule 3.2)`;
+    }
+  }
+  const chosen = draft.answerOption;
+  if (chosen === undefined) {
+    return null;
+  }
+  const refused = (why: string): string =>
+    `'${draft.messageId}' carries the option ${JSON.stringify(chosen)}, and ${why} (D-0190 rule 3.3)`;
+  if (draft.authorKind !== "operator" || draft.answerOutcome !== "carry_on") {
+    return refused("only a person's 'carry_on' answer chooses an option");
+  }
+  const row =
+    draft.inReplyTo === null
+      ? undefined
+      : (connection
+          .prepare(
+            "SELECT ask_options FROM conversation_message WHERE message_id = ? AND asks = 1 " +
+              "AND ask_options IS NOT NULL",
+          )
+          .get(draft.inReplyTo) as SqlRow | undefined);
+  const offered = row === undefined ? null : readAskOptions(String(row["ask_options"]));
+  if (offered === null) {
+    return refused("the message it answers offers no options");
+  }
+  if (!Number.isSafeInteger(chosen) || chosen < 0 || chosen >= offered.options.length) {
+    return refused(`the ask it answers offers ${String(offered.options.length)} option(s)`);
+  }
+  return null;
+}
+
+/**
  * The open asks in the thread `requestMessageId` opens (D-0061 rule 2.7, D-0066
  * rule 4.2): messages whose `in_reply_to` chain reaches the root, the root
  * included, with `asks = 1` that **no operator's `carry_on` answer has carried
@@ -807,7 +856,8 @@ export function threadMessages(connection: StoreConnection): ThreadMessagesReadO
   const rows = connection
     .prepare(
       "SELECT message_id, body, author_kind, author_id, in_reply_to, at_ms, bases, asks, " +
-        "answer_outcome FROM conversation_message WHERE author_kind IS NOT NULL " +
+        "answer_outcome, ask_options, answer_option FROM conversation_message " +
+        "WHERE author_kind IS NOT NULL " +
         "ORDER BY at_ms, rowid",
     )
     .all() as SqlRow[];
@@ -829,6 +879,14 @@ export function threadMessages(connection: StoreConnection): ThreadMessagesReadO
         reason: `the bases of message '${messageId}' are not a list of locators`,
       };
     }
+    const storedOptions = row["ask_options"] ?? null;
+    const askOptions = storedOptions === null ? null : readAskOptions(String(storedOptions));
+    if (storedOptions !== null && askOptions === null) {
+      return {
+        kind: "unreadable",
+        reason: `the options of message '${messageId}' are not D-0190 rule 1.1's form`,
+      };
+    }
     messages.push(
       Object.freeze({
         messageId,
@@ -848,6 +906,10 @@ export function threadMessages(connection: StoreConnection): ThreadMessagesReadO
         ...(row["answer_outcome"] === null || row["answer_outcome"] === undefined
           ? {}
           : { answerOutcome: String(row["answer_outcome"]) as AnswerOutcome }),
+        ...(askOptions === null ? {} : { askOptions }),
+        ...((row["answer_option"] ?? null) === null
+          ? {}
+          : { answerOption: Number(row["answer_option"]) }),
       }),
     );
   }

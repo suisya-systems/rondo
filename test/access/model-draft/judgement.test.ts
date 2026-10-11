@@ -133,7 +133,7 @@ function refusal(answer: unknown, material: DrafterMaterial = MATERIAL): string 
 }
 
 test("the row name counts the drafter's instructions and names the table's model (D-0071 rule 1.4)", () => {
-  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/9/claude-opus-5");
+  expect(modelDrafterName(drafterRow())).toBe("rondo/drafter/10/claude-opus-5");
 });
 
 test("the document carries the thread, the templates, the agent types and the measurements, and never a ceiling", () => {
@@ -185,6 +185,27 @@ test("a brief says the person chose only on their words, and names the choice as
   expect(document).toContain("as your question numbered it");
   expect(document).toContain("Never by a label from an issue's body");
   expect(document).toContain("Never write rondo's own words into one");
+});
+
+test("a chosen option stays on the THREAD header line, quoted, even with a newline in it (D-0190 rule 9)", () => {
+  const document = drafterDocument({
+    ...MATERIAL,
+    thread: [
+      ...MATERIAL.thread,
+      {
+        messageId: "a1",
+        authorKind: "operator",
+        inReplyTo: "d1",
+        asks: false,
+        body: "go",
+        answerOutcome: "carry_on",
+        chose: "Use the gate test\nkeep the other one",
+      },
+    ],
+  });
+  expect(document).toContain(
+    '(answer: carry_on) (chose: "Use the gate test\\nkeep the other one")\ngo\n',
+  );
 });
 
 test("a request that names no repository is asked back about, as a question about the work (D-0081 rule 2.4)", () => {
@@ -397,6 +418,15 @@ test("an ask: the question in the drafter's words, numbered, with its recommenda
     ].join("\n"),
     bases: ["r1"],
     asks: true,
+    // D-0190 rule 4: the same options, kept beside the body for the store.
+    askOptions: {
+      options: [
+        { text: "The scope screen test.", givesUp: "The gate test stays flaky." },
+        { text: "The gate test.", givesUp: "The scope test stays flaky." },
+      ],
+      recommended: 0,
+      recommendation: "The request names the scope screen.",
+    },
   });
 });
 

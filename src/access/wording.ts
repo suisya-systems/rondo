@@ -137,6 +137,8 @@ export interface Chrome extends PageWords, ExplainWords {
   readonly askStoppedPill: string;
   readonly answerStoppedPill: string;
   readonly answerCarriedOnPill: string;
+  /** The same, where the press was one of the ask's options, numbered from 1 (D-0190 rule 5). */
+  readonly answerChosePill: (option: number) => string;
   /** The mark on the words a change was asked with, read back into the thread (rondo#448). */
   readonly askedChangePill: string;
   /**
@@ -211,11 +213,21 @@ export interface Chrome extends PageWords, ExplainWords {
   /** What each of the two presses does, said where the words are typed. */
   readonly answerOutcomeNote: string;
   /**
+   * On an ask that stores its options (D-0190 rules 5 and 6): one press per
+   * option, the recommended one marked, and the free press beside them, which
+   * then needs words. `answerOptionsNote` stands for `answerOutcomeNote` there.
+   */
+  readonly answerInMyWordsAction: string;
+  readonly answerRecommended: string;
+  readonly answerOptionsNote: string;
+  /**
    * A worker's question at its gate (D-0142): *carry on* starts the next
    * attempt with the answer, on the one press. `answerReviseDraftLead` heads
    * the change the reading drafted, which goes with it as shown.
    */
   readonly answerReviseNote: string;
+  /** {@link answerReviseNote} where the ask stores options: no press says Carry on. */
+  readonly answerReviseOptionsNote: string;
   readonly answerReviseDraftLead: string;
   /**
    * A budget stop's first answer (D-0140 rule 3): a budgets-only successor of
@@ -288,6 +300,8 @@ export interface Chrome extends PageWords, ExplainWords {
   readonly answerRefusedPress: string;
   /** A budget stop's *raise and carry on* whose raise recorded nothing (D-0140 rule 3). */
   readonly answerRefusedRaise: string;
+  /** "Answer in my words" pressed with the box empty (D-0190 rule 6). */
+  readonly answerRefusedNoWords: string;
   /** Said in the reply box while its thread holds a question still waiting: the box does not answer it. */
   readonly replyNotAnswer: string;
   /** Script off, a refused send lands on its own page: the way back, and where the words are. */

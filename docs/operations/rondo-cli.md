@@ -1437,6 +1437,35 @@ Five things about that screen are the point rather than the formatting:
 | `will not decode` in *in flight* | A live row whose columns rondo cannot read. It still holds a slot. | `rondo abandon --iteration-id ID --reason ...`; `explain` will refuse it for the same reason. |
 | `This look was not fully recorded` (exit 1) | You read the screen; what failed was the count of what was shown, or the mark. | The screen stands. If the mark did not move, the next inbox repeats this diff. |
 
+### 8.1 Decisions -- every decision the store holds, and who took it
+
+`inbox` says what is waiting; `decisions` says what was decided, by a person or by rondo, oldest
+first (`D-0190` rule 10). It reads rows the writers already wrote and writes none: no mark moves,
+nothing is counted as presented, and no continuo is started.
+
+```console
+$ node bin/rondo.mjs decisions --since 2026-10-11T00:00:00Z
+2026-10-11T09:02:11.000Z scope_decision sd-0003 by=person actor=operator-1 outcome=approved locator=scope-0003
+2026-10-11T09:02:40.000Z scope_consumption i-0021 by=rondo actor=- outcome=admission locator=sd-0003
+2026-10-11T10:15:03.000Z conversation_message m-0042 by=person actor=operator-1 outcome=carry_on option=1 locator=m-0041
+2026-10-11T10:40:57.000Z gate_answer i-0021 by=person actor=operator-1 outcome=approve locator=g-0021
+```
+
+- **Each line is one row of one table**: when, the table, the row's id, `by=person` or `by=rondo`,
+  who the row names, its outcome, the option an answer pressed (0-based, only when one was), and
+  the row it is about (`-` when it names none). `by=rondo` is an actor under `rondo/` or a row
+  that names nobody, such as a scope consumption or a held start.
+- **The tables**: answers to an ask (`conversation_message` rows with an answer), `human_decision`,
+  `scope_decision`, `gate_answer`, `flow_ask`, `flow_answer`, `triage_decline`, `goal`,
+  `held_start` and `scope_consumption`. `--attention` adds `operator_attention`, what was presented
+  or withheld, which a busy host writes many of.
+- **`--since` takes an ISO 8601 instant and is inclusive.** The instant names its zone (`Z` or
+  `+09:00`), or is a bare date read as UTC; a time with no zone, a day the month lacks or any other
+  form is refused rather than guessed at. It is a filter on this list and not `inbox`'s last-look
+  mark; nothing is stored.
+- **It prints the option's index and never its text, nor any message body.** The words stay on the
+  request's page.
+
 ---
 
 ## 9. What has and has not been walked on real infrastructure

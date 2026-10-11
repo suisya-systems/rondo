@@ -187,13 +187,15 @@ export interface AnswerRevise {
 }
 
 /** The answer box's revise fields, and the drafted change it carries, where there is one. */
-function answerReviseFields(wording: Chrome, revise: AnswerRevise) {
+function answerReviseFields(wording: Chrome, revise: AnswerRevise, options: boolean) {
   return (
     <div class="mx-4 mt-2 space-y-1">
       <input type="hidden" name="revise_iteration" value={revise.iterationId} />
       <input type="hidden" name="revise_decision" value={revise.scopeDecisionId} />
       <input type="hidden" name="revise_successor" value={revise.successor} />
-      <p class="text-meta leading-5 text-muted-foreground">{wording.answerReviseNote}</p>
+      <p class="text-meta leading-5 text-muted-foreground">
+        {options ? wording.answerReviseOptionsNote : wording.answerReviseNote}
+      </p>
       {revise.draft === "" ? null : (
         <>
           <input type="hidden" name="revise_draft" value={revise.draft} />
@@ -284,6 +286,8 @@ export function composerView(
   const offered =
     answers && replying !== null ? (raises.get(replying.target.messageId) ?? null) : null;
   const raise = offered !== null && "budgets" in offered ? offered : null;
+  // An ask that stores its options answers on one press per option (D-0190 rule 5).
+  const choices = answers ? (replying?.target.askOptions ?? null) : null;
   const paused = offered !== null && "pausedRepository" in offered ? offered : null;
   const revising =
     answers &&
@@ -422,7 +426,7 @@ export function composerView(
                 )}
               </p>
             )}
-            {revising === null ? null : answerReviseFields(wording, revising)}
+            {revising === null ? null : answerReviseFields(wording, revising, choices !== null)}
           </>
         )}
         {/* Where htmx puts a refusal (the page's `responseHandling`); the draft stays. */}
@@ -464,11 +468,40 @@ export function composerView(
       >
         {replying === null && taken !== null ? taken.text : asking ? asked : ""}
       </textarea>
+      {
+        // **One press per option, in order, the recommended one filled** (D-0190
+        // rule 5): a column, so a long option wraps inside its own button at a
+        // phone's width. Each carries `outcome`, so the chord still sends none.
+        choices === null ? null : (
+          <div class="flex flex-col gap-1.5 px-3 pt-1">
+            {choices.options.map((choice, index) => (
+              <button
+                type="submit"
+                name="outcome"
+                value={`option:${String(index)}`}
+                class={`${index === choices.recommended ? PRIMARY : SECONDARY} min-h-9 w-full px-3 py-1.5 text-left text-sm leading-5`}
+              >
+                <span class="shrink-0 tabular-nums opacity-70">{`${String(index + 1)}.`}</span>
+                <span class="min-w-0 flex-1 break-words">{choice.text}</span>
+                {index === choices.recommended ? (
+                  <span class="shrink-0 text-meta font-medium opacity-80">
+                    {wording.answerRecommended}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        )
+      }
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pt-1 pb-2.5">
         <span class="note px-1 text-meta leading-5 text-faint">
-          {answers ? wording.answerOutcomeNote : wording.sendNote}
+          {answers
+            ? choices === null
+              ? wording.answerOutcomeNote
+              : wording.answerOptionsNote
+            : wording.sendNote}
         </span>
-        <span class="ml-auto flex items-center gap-3">
+        <span class="ml-auto flex flex-wrap items-center justify-end gap-3">
           {
             // **Not advertised where it does not work** (#206, Codex): the
             // chord submits without naming a button, and an answer *is* which
@@ -512,9 +545,10 @@ export function composerView(
                   type="submit"
                   name="outcome"
                   value="carry_on"
-                  class={`${raise === null ? PRIMARY : SECONDARY} h-9 px-4 text-sm`}
+                  class={`${raise === null && choices === null ? PRIMARY : SECONDARY} h-9 px-4 text-sm`}
                 >
-                  {wording.answerCarryOnAction}
+                  {/* With options, the free press is the person's own words (rule 6). */}
+                  {choices === null ? wording.answerCarryOnAction : wording.answerInMyWordsAction}
                 </button>
                 {/* A budget stop's recommended answer (D-0140 rule 3): the
                     same cap again only stops again. */}

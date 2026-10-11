@@ -563,7 +563,9 @@ async function threadModel(
               ? null
               : message.answerOutcome === "stop"
                 ? wording.answerStoppedPill
-                : wording.answerCarriedOnPill,
+                : message.answerOption === undefined
+                  ? wording.answerCarriedOnPill
+                  : wording.answerChosePill(message.answerOption + 1),
           pending: (threads.unread.get(message.messageId) ?? []).map((ref) => ref.named),
           pendingSaid: wording.issuePending,
           bases: message.bases.map((basis) =>

@@ -1419,6 +1419,47 @@ test("the answer box at a worker's question carries the gate's revise, with the 
   expect(bare).not.toContain("revise_iteration");
 });
 
+test("a worker's question with options names no Carry on press in its revise note (D-0190 rule 6)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  const asked = await world.record.recordThreadMessage({
+    messageId: "question-i-0001",
+    body: "Which file should hold the retry budget?",
+    authorKind: "drafter",
+    authorId: "rondo/worker-question/1",
+    inReplyTo: "req-1",
+    atMs: 3_500,
+    bases: [
+      { form: "message", messageId: "req-1" },
+      { form: "iteration", iterationId: "i-0001" },
+    ],
+    asks: true,
+    askOptions: {
+      options: [
+        { text: "config.ts", givesUp: "a separate file" },
+        { text: "budget.ts", givesUp: "one place" },
+      ],
+      recommended: 0,
+    },
+  });
+  expect(asked.kind).toBe("recorded");
+  const html = await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "thread", messageId: "req-1", to: null },
+    EN,
+    (kind) => `${kind}-00000000-0000-4000-8000-000000000009`,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000001",
+  );
+  const box = html.slice(html.indexOf('id="composer"'));
+  expect(box).toContain('name="revise_iteration" value="i-0001"');
+  expect(box).toContain(EN.answerInMyWordsAction);
+  expect(box).toContain(EN.answerReviseOptionsNote);
+  expect(box).not.toContain(EN.answerReviseNote);
+  expect(box).not.toContain(`>${EN.answerCarryOnAction}<`);
+});
+
 test("with two laps at their gates, carry on revises the lap whose question the box answers (D-0142)", async () => {
   const world = fresh();
   await gateWithChecks(world);

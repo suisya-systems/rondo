@@ -570,3 +570,90 @@ test("rondo's report on a lap is kept shut under its line, so no id of rondo's i
     expect(readableWithoutOpening(html, wording.evChecksFailed)).toBe(true);
   }
 });
+
+test("an ask with options is answered by one press per option, the recommended one filled, and the answer says which (D-0190)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const at = { authorId: "rondo/drafter/1", bases: [] } as const;
+  for (const draft of [
+    {
+      ...at,
+      messageId: "request-a",
+      body: "r",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: null,
+      atMs: 1_000,
+      asks: false,
+    },
+    {
+      ...at,
+      messageId: "ask-b",
+      body: "Which parser?",
+      bases: [{ form: "message", messageId: "request-a" }],
+      authorKind: "drafter",
+      inReplyTo: "request-a",
+      atMs: 2_000,
+      asks: true,
+      askOptions: {
+        options: [
+          { text: "Keep the old parser", givesUp: "the speedup" },
+          {
+            text: "Rewrite it, with a long reason that has to wrap at a phone's width",
+            givesUp: "a week",
+          },
+        ],
+        recommended: 1,
+      },
+    },
+  ] as const) {
+    const outcome = await world.record.recordThreadMessage(draft);
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("recorded");
+  }
+  const view = { kind: "thread", messageId: "request-a", to: null } as const;
+  const html = await operatorPage(portsOver(world, "ada", []), "t", view, EN, mint);
+  // One press per option, in order, each naming its index; only the recommended one is filled.
+  const option = (n: number) =>
+    html.match(
+      new RegExp(
+        `<button type="submit" name="outcome" value="option:${String(n)}" class="([^"]*)">(.*?)</button>`,
+      ),
+    );
+  expect(option(0)?.[2]).toContain("Keep the old parser");
+  expect(option(0)?.[1]).not.toContain("bg-foreground");
+  expect(option(1)?.[2]).toContain("Rewrite it, with a long reason");
+  expect(option(1)?.[2]).toContain("Recommended");
+  expect(option(1)?.[1]).toContain("bg-foreground");
+  expect(option(1)?.[2]).toContain("break-words");
+  expect(option(2)).toBeNull();
+  expect(html.indexOf('value="option:0"')).toBeLessThan(html.indexOf('value="option:1"'));
+  // The free press is the person's words, not filled; stop and ask rondo stay.
+  expect(html).toMatch(
+    /<button type="submit" name="outcome" value="carry_on" class="[^"]*border-border[^"]*">Answer in my words<\/button>/,
+  );
+  expect(html).toContain('value="stop"');
+  expect(html).toContain('formaction="/question?lang=en"');
+  expect(html).toContain(EN.answerOptionsNote);
+  expect(html).not.toContain(">Carry on</button>");
+  const ja = await operatorPage(portsOver(world, "ada", []), "t", view, chromeFor("ja"), mint);
+  expect(ja).toContain(">自分の言葉で答える</button>");
+  expect(ja).toContain("おすすめ");
+
+  // Answered with the second option: the answer is marked with which one, numbered from 1.
+  const answered = await world.record.recordThreadMessage({
+    messageId: "reply-c",
+    body: "Rewrite it",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: "ask-b",
+    atMs: 3_000,
+    bases: [],
+    asks: false,
+    answerOutcome: "carry_on",
+    answerOption: 1,
+  });
+  expect(answered.kind).toBe("recorded");
+  const after = await operatorPage(portsOver(world, "ada", []), "t", view, EN, mint);
+  expect(messageIn(after, "reply-c")).toContain("Chose 2");
+  expect(messageIn(after, "reply-c")).not.toContain("Carried on");
+});

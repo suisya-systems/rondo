@@ -1301,6 +1301,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/checks-host.ts": ["Publishing"],
   "src/access/cli-parse.ts": [HUMAN],
   "src/access/cli.ts": [HUMAN],
+  // D-0190 rule 10.4: `rondo decisions`, lifted beside `cli.ts` for its line cap.
+  "src/access/decisions-cli.ts": [HUMAN],
   // rondo#570: lifted out of `cli.ts` unchanged, so they play its role.
   "src/access/host.ts": [HUMAN],
   "src/access/page-actions.ts": [HUMAN],
@@ -1421,6 +1423,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/screens/tier.tsx": [HUMAN],
   "src/access/screens/week.ts": [HUMAN],
   "src/access/screens/goal-scope.tsx": [HUMAN],
+  // D-0190 rules 5 and 6: which answer a press on `/answer-ask` is.
+  "src/access/answer-press.ts": [HUMAN],
   "src/access/web-app.ts": [HUMAN],
   "src/access/web.tsx": [HUMAN],
   "src/access/wording/en.ts": [HUMAN],
@@ -1449,8 +1453,11 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/refrain/revision.ts": [DISPATCHER],
   // D-0171: the store split by concern behind the one driver owner.
   "src/store/advisory.ts": [RECORD],
+  "src/store/ask-options.ts": [RECORD],
   "src/store/claims.ts": [RECORD],
   "src/store/contract.ts": [RECORD],
+  // D-0190 rule 10: the derived decision reader.
+  "src/store/decision-log.ts": [RECORD],
   "src/store/iteration.ts": [RECORD],
   "src/store/lanes.ts": [RECORD],
   "src/store/plan.ts": [RECORD],

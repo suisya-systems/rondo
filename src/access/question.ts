@@ -21,6 +21,7 @@
  * recommendation.
  */
 
+import type { AskOptions } from "../store/ask-options.js";
 import type { IterationRecord, JsonRecord, ThreadMessageDraft } from "../store/records.js";
 import {
   isDeterministicReadingDrafter,
@@ -164,6 +165,23 @@ export function optionLines(
   ];
 }
 
+/**
+ * The options as the store keeps them (D-0190 rule 1), **with the same one
+ * numbering** as {@link optionLines}: each press draws its own number, so an
+ * option the writer numbered would draw *1. 1.* again (rondo#437).
+ */
+export function storedOptions(
+  options: readonly WorkerOption[],
+  recommended: number,
+  recommendation: string,
+): AskOptions {
+  return {
+    options: options.map((o, i) => ({ text: unnumbered(o.text, i + 1), givesUp: o.givesUp })),
+    recommended,
+    recommendation: unnumbered(recommendation, recommended + 1),
+  };
+}
+
 /** `text` without a leading *n.*, *n)* or *(n)* of its own, in either width. */
 function unnumbered(text: string, n: number): string {
   // Matched on the text as written, so the match's length is what to cut.
@@ -269,6 +287,17 @@ export async function relayQuestion(
     atMs: nowMs,
     bases,
     asks: true,
+    // D-0190 rule 4: a read question's options are stored beside its body, so
+    // each is a press; an unreadable block offers none and keeps today's presses.
+    ...(read.kind === "question"
+      ? {
+          askOptions: storedOptions(
+            read.question.options,
+            read.question.recommended,
+            read.question.recommendation,
+          ),
+        }
+      : {}),
   };
   // `asRefusal`: this writer says the same thing about an id already spoken
   // for as it did before the store told the two apart.
@@ -282,6 +311,8 @@ export async function relayQuestion(
 export interface AnsweredQuestion {
   readonly question: string;
   readonly answer: string;
+  /** The option's text, when the answer was an option's press (D-0190 rule 7). */
+  readonly chose?: string | undefined;
 }
 
 /**
@@ -302,7 +333,9 @@ export function answeredQuestion(
         m.inReplyTo === messageId && m.authorKind === "operator" && m.answerOutcome === "carry_on",
     )
     .reduce<ThreadMessageDraft | null>((l, m) => (l === null || m.atMs >= l.atMs ? m : l), null);
-  return answer === null ? null : { question: asked.body, answer: answer.body };
+  const chose =
+    answer?.answerOption === undefined ? undefined : asked.askOptions?.options[answer.answerOption];
+  return answer === null ? null : { question: asked.body, answer: answer.body, chose: chose?.text };
 }
 
 /**
@@ -322,6 +355,7 @@ export function questionRevise(answered: AnsweredQuestion): string {
     "---",
     answered.answer,
     "---",
+    ...(answered.chose === undefined ? [] : [`They chose: ${answered.chose}`]),
     "Continue the work that waited on this answer.",
   ].join("\n");
 }
