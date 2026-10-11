@@ -237,6 +237,8 @@ export interface PageWords extends DayWords {
   readonly triageGoesAgainst: string;
   readonly triageWhy: string;
   readonly triageOpenPoints: string;
+  /** The points rondo decided as suggested, nothing in them waiting on the person (D-0193). */
+  readonly triageDecided: string;
   readonly triageFrom: string;
   readonly triageIssue: (repository: string, number: number) => string;
   readonly triageStopped: string;
@@ -256,6 +258,7 @@ export interface PageWords extends DayWords {
   /** The drafted request's lines under the request itself (point 4.4). */
   readonly triageBoxAgainst: (clause: string) => string;
   readonly triageBoxPoints: string;
+  readonly triageBoxDecided: string;
   readonly triageBoxRepository: (repository: string) => string;
   /** The issue a taken request came from, as the issue reader reads it (`D-0078`). */
   readonly triageBoxFrom: (issue: string) => string;
@@ -802,6 +805,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   triageGoesAgainst: "Goes against",
   triageWhy: "Why",
   triageOpenPoints: "Open points, with rondo's suggestion after each",
+  triageDecided: "Decided by rondo as suggested, yours to change",
   triageFrom: "From",
   triageIssue: (repository, number) => `${repository}#${String(number)}`,
   triageStopped: "the request whose work stopped",
@@ -824,6 +828,7 @@ export const PAGE_EN: PageWords = Object.freeze({
     "rondo could not rank this time. It tries again within the hour, or sooner if what it reads changes.",
   triageBoxAgainst: (clause) => `This goes against the goal: ${clause}`,
   triageBoxPoints: "Open points, as rondo suggested:",
+  triageBoxDecided: "Decided by rondo (edit to change):",
   triageBoxRepository: (repository) => `In ${repository}.`,
   triageBoxFrom: (issue) => `From ${issue}.`,
   goalHeading: (repository) => `The goal for ${repository}`,
@@ -1454,6 +1459,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageGoesAgainst: "反している目標",
   triageWhy: "理由",
   triageOpenPoints: "決めること（あとに rondo の案）",
+  triageDecided: "rondo が案のとおり決めたこと（変えられます）",
   triageFrom: "もとにしたもの",
   triageIssue: (repository, number) => `${repository}#${String(number)}`,
   triageStopped: "作業が止まった依頼",
@@ -1474,6 +1480,7 @@ export const PAGE_JA: PageWords = Object.freeze({
     "今回は順位をつけられませんでした。1 時間以内に、または読む対象が変わったら、もう一度読みます。",
   triageBoxAgainst: (clause) => `目標のこの項目に反しています: ${clause}`,
   triageBoxPoints: "決めること（rondo の案のとおり）:",
+  triageBoxDecided: "rondo が決めたこと（書き換えれば変わります）:",
   triageBoxRepository: (repository) => `対象は ${repository}。`,
   triageBoxFrom: (issue) => `もとにした課題: ${issue}`,
   goalHeading: (repository) => `${repository} の目標`,

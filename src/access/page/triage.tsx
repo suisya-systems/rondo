@@ -18,7 +18,14 @@
  * sentence and the line of what was read and when, which is what tells a quiet
  * triage from one that is not running.
  */
-import { type Ranked, readTriagePayload, type TriagePayload } from "../../advisory/triage.js";
+import {
+  decided,
+  type OpenPoint,
+  type Ranked,
+  raised,
+  readTriagePayload,
+  type TriagePayload,
+} from "../../advisory/triage.js";
 import type { GoalClause, StoredFlowAsk, StoredGoal, StoredTriage } from "../../store/records.js";
 import type { FlowStopRead } from "../flow-stop.js";
 import { ago } from "../inbox.js";
@@ -43,7 +50,7 @@ export interface CandidateView {
   readonly clauseHref: string;
   readonly why: string;
   readonly from: { readonly said: string; readonly href: string };
-  readonly openPoints: readonly { readonly point: string; readonly recommendation: string }[];
+  readonly openPoints: readonly OpenPoint[];
   readonly takeHref: string;
   /**
    * The thread of the request the flow already started from this candidate
@@ -82,6 +89,8 @@ export interface PointsAsk {
   readonly why: string;
   readonly mixedScript: boolean;
   readonly points: readonly { readonly point: string; readonly recommendation: string }[];
+  /** What rondo decided in the reading it was asked from, as the flow will send it (D-0193). */
+  readonly decided: readonly OpenPoint[];
 }
 
 /** A goal scope in force over a goal, as the page reads it (rondo#488). */
@@ -297,6 +306,11 @@ export function triageBlocks(wording: Chrome, reads: TriageReads, nowMs: number)
               why: asked.why ?? rankedAsked?.why ?? "",
               mixedScript: rankedAsked?.mixedScript === true,
               points: asked.points,
+              decided: decided(
+                reads.payloads
+                  .get(asked.proposalId)
+                  ?.ranked.find((one) => one.key === asked.candidate)?.openPoints ?? [],
+              ),
             },
     };
     // A reading against a goal the person has since changed is not drawn: its
@@ -458,13 +472,15 @@ export function takenRequest(
     "",
     wording.triageBoxRepository(payload.repository),
     wording.triageBoxAgainst(clauseSaid(wording, clauses, ranked.clause)),
-    ...(ranked.openPoints.length === 0
-      ? []
-      : [
-          "",
-          wording.triageBoxPoints,
-          ...ranked.openPoints.map((point) => `- ${point.point}: ${point.recommendation}`),
-        ]),
+    // D-0193 rule 5: the raised points, then what rondo decided, all the person's to edit.
+    ...[
+      [wording.triageBoxPoints, raised(ranked.openPoints)] as const,
+      [wording.triageBoxDecided, decided(ranked.openPoints)] as const,
+    ].flatMap(([lead, points]) =>
+      points.length === 0
+        ? []
+        : ["", lead, ...points.map((point) => `- ${point.point}: ${point.recommendation}`)],
+    ),
     // The issue by its full name, so the issue reader reads it into the
     // thread (`D-0078`) and the drafter has what the proposal was made from.
     ...(ranked.source.form === "issue"
@@ -598,25 +614,31 @@ function Block({
                   </a>
                 </p>
               </dd>
-              {block.first.openPoints.length === 0 ||
+              {raised(block.first.openPoints).length === 0 ||
               block.goalScope.ask?.candidate === block.first.key ? null : (
                 <>
                   <dt>{wording.triageOpenPoints}</dt>
                   <dd>
-                    <ul className="triage-points">
-                      {block.first.openPoints.map((point) =>
-                        reads === null ? (
-                          <li key={point.point} lang="">
-                            <b>{point.point}</b>
-                            <span>{point.recommendation}</span>
-                          </li>
-                        ) : (
-                          <li key={point.point}>
-                            <Held wording={wording} reads={reads} text={pointHeld(point)} />
-                          </li>
-                        ),
-                      )}
-                    </ul>
+                    <PointList
+                      wording={wording}
+                      reads={reads}
+                      points={raised(block.first.openPoints)}
+                    />
+                  </dd>
+                </>
+              )}
+              {/* D-0193 rule 5: what rondo decided, drawn apart and quieter,
+                since nothing in it waits on the person. */}
+              {decidedOnCard(block.first, block.goalScope).length === 0 ? null : (
+                <>
+                  <dt>{wording.triageDecided}</dt>
+                  <dd>
+                    <PointList
+                      wording={wording}
+                      reads={reads}
+                      points={decidedOnCard(block.first, block.goalScope)}
+                      quiet
+                    />
                   </dd>
                 </>
               )}
@@ -747,6 +769,48 @@ function GoalScopeRow({
         {line.state === "running" ? wording.triageGoalScopePause : wording.triageGoalScopeResume}
       </a>
     </div>
+  );
+}
+
+/**
+ * What rondo decided of the card's candidate: while the flow asks about it,
+ * the asked reading's, which is what the flow sends (D-0193 rule 4), else the
+ * latest ranking's.
+ */
+function decidedOnCard(
+  first: CandidateView,
+  goalScope: { readonly ask: PointsAsk | null },
+): readonly OpenPoint[] {
+  return goalScope.ask?.candidate === first.key ? goalScope.ask.decided : decided(first.openPoints);
+}
+
+/** A card's open points, each with rondo's suggestion; `quiet` for the ones rondo decided. */
+function PointList({
+  wording,
+  reads,
+  points,
+  quiet = false,
+}: {
+  readonly wording: Chrome;
+  readonly reads: HeldReads | null;
+  readonly points: readonly OpenPoint[];
+  readonly quiet?: boolean;
+}) {
+  return (
+    <ul className={quiet ? "triage-points triage-decided" : "triage-points"}>
+      {points.map((point) =>
+        reads === null ? (
+          <li key={point.point} lang="">
+            <b>{point.point}</b>
+            <span>{point.recommendation}</span>
+          </li>
+        ) : (
+          <li key={point.point}>
+            <Held wording={wording} reads={reads} text={pointHeld(point)} />
+          </li>
+        ),
+      )}
+    </ul>
   );
 }
 

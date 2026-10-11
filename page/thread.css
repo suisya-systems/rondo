@@ -870,6 +870,12 @@
   color: var(--color-foreground);
 }
 
+/* D-0193: what rondo decided waits on nobody, so its points are not in ink. */
+.triage-decided b {
+  font-weight: 400;
+  color: inherit;
+}
+
 /* The dash is drawn, not typed: the words file carries no punctuation. */
 .triage-points span::before {
   content: "-";

@@ -16,7 +16,7 @@
  */
 import type { Occupancy } from "../store/records.js";
 
-import type { Ranked, TriagePayload } from "./triage.js";
+import { type OpenPoint, type Ranked, raised, type TriagePayload } from "./triage.js";
 
 /** Where one earlier injection of this flow stands. */
 export type InjectionState =
@@ -84,6 +84,11 @@ export interface FlowAsked {
   /** The request line and why as the person answered them (rondo#492), or null: the ranking's. */
   readonly request?: string | null;
   readonly why?: string | null;
+  /**
+   * The points rondo decided in the reading the ask was raised from (D-0193):
+   * a re-ranking's may contradict an answer, so they are never taken instead.
+   */
+  readonly decided?: readonly OpenPoint[];
 }
 
 /** One open point as the person answered it. */
@@ -278,6 +283,7 @@ export function pickNext(input: FlowInput): FlowPick {
             ...candidate,
             request: answered?.request ?? candidate.request,
             why: answered?.why ?? candidate.why,
+            ...(answered === undefined ? {} : { openPoints: answered.decided ?? [] }),
           },
           messageId: flowMessageId(input.scopeDecisionId, candidate.key),
           answers:
@@ -305,7 +311,8 @@ export function pickNext(input: FlowInput): FlowPick {
   ) {
     return wait("points_asked");
   }
-  if (candidate.openPoints.length === 0) {
+  // D-0193 rule 4: only the points the person must decide are asked.
+  if (raised(candidate.openPoints).length === 0) {
     return inject();
   }
   return noSlot

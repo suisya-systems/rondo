@@ -57,7 +57,11 @@ const ranked = (number: number, openPoints = 0): TriagePayload["ranked"][number]
   clause: 1,
   request: `Fix issue ${String(number)} in ${REPO}`,
   why: "the person has to open a terminal for it",
-  openPoints: Array.from({ length: openPoints }, () => ({ point: "p", recommendation: "r" })),
+  openPoints: Array.from({ length: openPoints }, () => ({
+    point: "p",
+    recommendation: "r",
+    raise: "dispute" as const,
+  })),
   source: { form: "issue", repository: REPO, number },
   title: `issue ${String(number)}`,
   labels: [],
@@ -1123,8 +1127,8 @@ test("ask, re-rank with the points worded afresh, answer: it injects with the po
   const reworded = {
     ...ranked(7),
     openPoints: [
-      { point: "p, said again", recommendation: "r" },
-      { point: "q", recommendation: "rq" },
+      { point: "p, said again", recommendation: "r", raise: "dispute" as const },
+      { point: "q", recommendation: "rq", raise: "dispute" as const },
     ],
   };
   await w.triage("t-2", 0.5, [ranked(8), reworded]);
@@ -1145,4 +1149,88 @@ test("ask, re-rank with the points worded afresh, answer: it injects with the po
   expect(openers[0]?.body).toContain("- p: yes\n- p: no");
   expect(openers[0]?.body).not.toContain("said again");
   expect(await w.record.flowAsks()).toHaveLength(1);
+});
+
+test("only the points the person decides are asked; rondo's are written into the request (D-0193)", async () => {
+  const mixed = {
+    ...ranked(7),
+    openPoints: [
+      { point: "Who sees it", recommendation: "Everyone", raise: "dispute" as const },
+      { point: "Which runner", recommendation: "vitest", raise: null },
+    ],
+  };
+  const w = await world({}, [mixed, ranked(8)]);
+  await w.pass();
+  const asks = await w.record.flowAsks();
+  expect(asks[0]?.points).toEqual([{ point: "Who sees it", recommendation: "Everyone" }]);
+  expect(w.log.join("\n")).toContain("asked the person 1 open point(s)");
+  expect(
+    await w.record.recordFlowAnswer({
+      askId: `flow-ask-sd-goal-issue:${REPO}#7-1`,
+      answers: ["Only me"],
+      request: null,
+      why: null,
+      answeredBy: "oidc|operator-1",
+      answeredAtMs: 11_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  await w.pass();
+  const opener = (await w.messages()).find((m) => m.inReplyTo === null);
+  expect(opener?.body).toContain(
+    "Open points, as the person answered them:\n- Who sees it: Only me\n\n" +
+      "Decided by rondo, as suggested (reply in this thread to change one):\n- Which runner: vitest",
+  );
+});
+
+test("a candidate whose points are all rondo's starts with no ask (D-0193)", async () => {
+  const w = await world({}, [
+    {
+      ...ranked(7),
+      openPoints: [{ point: "Which runner", recommendation: "vitest", raise: null }],
+    },
+  ]);
+  await w.pass();
+  expect(await w.record.flowAsks()).toEqual([]);
+  expect(w.injectedCount()).toBe(1);
+  const opener = (await w.messages()).find((m) => m.inReplyTo === null);
+  expect(opener?.body).not.toContain("as the person answered them");
+  expect(opener?.body).toContain("- Which runner: vitest");
+});
+
+test("a re-ranking's decisions never go in beside an answer: the asked reading's do (D-0193)", async () => {
+  const asked = {
+    ...ranked(7),
+    openPoints: [
+      { point: "Old flag", recommendation: "Keep it", raise: "dispute" as const },
+      { point: "Which runner", recommendation: "vitest", raise: null },
+    ],
+  };
+  const w = await world({}, [asked]);
+  await w.pass();
+  // Read again before the answer: the asked point comes back as rondo's own.
+  await w.triage("t-2", 0.5, [
+    {
+      ...ranked(7),
+      openPoints: [
+        { point: "Old flag", recommendation: "Remove it", raise: null },
+        { point: "Which runner", recommendation: "jest", raise: null },
+      ],
+    },
+  ]);
+  expect(
+    await w.record.recordFlowAnswer({
+      askId: `flow-ask-sd-goal-issue:${REPO}#7-1`,
+      answers: ["Keep it"],
+      request: null,
+      why: null,
+      answeredBy: "oidc|operator-1",
+      answeredAtMs: 11_000,
+    }),
+  ).toEqual({ kind: "recorded" });
+  await w.pass();
+  const opener = (await w.messages()).find((m) => m.inReplyTo === null);
+  expect(opener?.body).toContain("- Old flag: Keep it");
+  expect(opener?.body).toContain("- Which runner: vitest");
+  expect(opener?.body).not.toContain("Remove it");
+  expect(opener?.body).not.toContain("jest");
 });

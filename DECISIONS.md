@@ -227,6 +227,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0190 | An ask-back's options are stored beside its words and each one is a press, the option pressed is kept on the answer, a stop on the drafter's own ask is not drafted again, and one reader lists every decision the store holds | accepted |
 | D-0191 | A request with no template gets a plan rondo assembles and a person approves with one press: the drafter proposes the work and its repository, deterministic code fills every host fact from what setup recorded or wrote, and a store with no plan records the one setup wrote beside it | accepted |
 | D-0192 | An open question of the goal flow is a row under *your turn* in the list, on every view, leading to the questions' form; like a paused flow, it is a row there that is not a request | accepted |
+| D-0193 | Triage raises only the open points that are real decisions: each point says whether it is in dispute, irreversible or against a standing policy, rondo decides the rest as it recommends and writes each one where the person can change it, and the goal flow asks only the raised ones | accepted |
 
 ---
 
@@ -22551,6 +22552,16 @@ points to the owner, each with options, what each gives up and one recommendatio
 answer". Supersedes nothing. `D-0083` rule 4 gains an annotation (listed at the end). Refs `D-0032`, `D-0061` rule 6, `D-0063`, `D-0064`, `D-0075`, `D-0081`,
 `D-0082`, `D-0083`, `D-0093`, rondo#250, rondo#298, rondo#319, rondo#320.
 
+> **Annotation (2026-10-11, from D-0193).** Added after this entry was accepted, and **not
+> additive**. Section 1 rule 5 and point 4.3 change: every open point now says whether it is raised
+> to the person (`D-0064` P3 in dispute, P4 irreversible, or against an in-force standing policy) or
+> decided by rondo as recommended. Only the raised points are the person's to answer. The decided
+> ones are drawn and written into the box as rondo's decisions, for the person to change. Nothing
+> above is edited.
+>
+> - Amends: D-0097 section 1 rule 5
+> - Amends: D-0097 point 4.3
+
 > **Annotation (2026-10-08, from D-0169).** Not additive, and written only to carry the
 > lines below, which the entries that changed this one left out: `D-0147`'s Status line says it
 > narrows `D-0097` point 4.1 (d) without superseding it. Those entries say what changed. Nothing
@@ -26248,6 +26259,15 @@ the newest goal: an edit would widen an approval nobody re-read.
 > out of `ownOpenAsk` (the person would still be asked a question nobody is waiting on). Known
 > limit: only `failed_twice` is weighed again; the other stops are about budgets, time and the
 > ranking, which the person changes by answering. Nothing above is edited.
+> **Annotation (2026-10-11, from D-0193).** Added after this entry was accepted, and **not
+> additive**. The rondo#487 annotation's "a candidate's open points are asked first" now reads
+> *its raised points*: a point triage marks as decided by rondo (`raise: null`) is not asked, and
+> a candidate with no raised point is injected with no ask. The injected body lists the decided
+> points after the person's answers, under *Decided by rondo, as suggested*. Nothing above is
+> edited.
+>
+> - Amends: D-0128 the annotation from rondo#487 "a candidate's open points are asked first"
+
 
 ## D-0129 — How D-0098 rule 8 is built on the page: a request's parts are its approved split's plans, counted on its row and given one step each; a worker's question, a take-in and a closing fix are said where their press is; and `D-0127` rule 5's guard is removed
 
@@ -30387,6 +30407,13 @@ rules 2, 3, 4 and 5 (its annotation from this entry). Supersedes nothing. Refs `
 > - Amends: D-0189 rule 4
 > - Amends: D-0189 rule 5
 
+> **Annotation (2026-10-11, from D-0193).** Added after this entry was accepted, and **not
+> additive**: rule 4's table changes. C4's row *triage puts open points on almost every candidate*
+> is closed by `D-0193`: each point says whether it is a real decision, and the goal flow asks only
+> those. The other rows stand. Nothing below is edited.
+>
+> - Amends: D-0189 rule 4
+
 ### Context
 
 rondo#626 asks for a role that works like claude-org's secretary. A person gives it a request in
@@ -31034,3 +31061,145 @@ At rondo `3e65034` on **2026-10-11**, by reading `DECISIONS.md`, `src/`, `test/`
 - `D-0075`, **not additive**: rule 3.1, the host reads setup's plan files beside its store on a press.
 - `D-0189`, **not additive**: rule 4's table, C1's *no template* row closed.
 - `D-0071`, additive: the paste path stands and is no longer recommended anywhere.
+
+## D-0193 — Triage raises only the open points that are real decisions: each point says whether it is in dispute, irreversible or against a standing policy, rondo decides the rest as it recommends and writes each one where the person can change it, and the goal flow asks only the raised ones
+
+**Status:** accepted (2026-10-11, rondo#634; the owner's direction through the secretary, "rondo
+does not hand everything to the person: it drafts and decides, and the person approves", with the
+recommended option below taken within that direction). Amends `D-0097` section 1 rule 5 and point
+4.3, `D-0128`'s annotation from rondo#487 ("a candidate's open points are asked first") and
+`D-0189` rule 4's table (their annotations from this entry). Supersedes nothing. Refs `D-0032`
+rule 10, `D-0063` rule 2.2, `D-0064` P2-P5, O8 and rule 4.1, `D-0067` rule 6, `D-0082` rule 2,
+`D-0125`, `D-0164`, `D-0168`, rondo#487, rondo#504, rondo#645.
+
+### Context
+
+`D-0097` section 1 rule 5 makes every candidate carry its open points, each with a recommendation,
+so "as recommended" is a complete answer. It does not say which points are worth putting to the
+person. The triage drafter is asked for "decisions the person would have to make before the work
+can start", and it writes some on almost every candidate (measured in rondo#487). Under a goal
+scope the flow then asks before almost every request (`D-0128`'s annotation from rondo#487), and
+on the front the card lists them as the person's to decide. `D-0189` rule 4 listed this as C4's
+last open gap: *Triage puts open points on almost every candidate*, to be closed by a new entry
+amending `D-0097`'s open points "with a test for which of them are real decisions".
+
+That test already exists. `D-0064` section 1 says what reaches the person: P2 (a question back),
+P3 (a point in dispute: the options give up different things the person owns -- behaviour a user
+sees, a ratified entry, a grant, a cost past the scope's budget) and P4 (an irreversible act). Its
+annotation from `D-0067` adds that a choice whose options differ in whether they go against an
+in-force `standing_policy` is P3, and rondo#645 built those rows. A choice whose options differ only
+in how the organisation gets there "is not in dispute", and `D-0064` O8 says rondo decides it,
+records it, and does not ask. Triage's open points never met that test: the drafter was not asked
+it, and nothing downstream could tell a raised point from one rondo could decide.
+
+### Options
+
+- **(a) Each point carries why it is raised, or that it is not; rondo decides the rest and writes
+  them down** (recommended). The drafter marks each point `dispute` (P3, and P2's "different
+  results the person would see"), `irreversible` (P4) or `policy` (against an in-force standing
+  policy, which it names), or `null`. A null point is decided as recommended. The flow asks only
+  the raised ones, and the card, the request box and the request the flow sends carry the decided
+  ones as decided. *Gains*: the owner's direction, with `D-0064`'s own test and nothing new to
+  learn; a candidate whose points are all rondo's starts with no ask. *Gives up*: a point the
+  drafter mismarks as null is decided without the person being asked first. The person still sees
+  it and can change it, but only after the flow has sent it, not before.
+- **(b) Ask nothing; rondo decides every open point.** *Gains*: no ask at all. *Gives up*: P3 and
+  P4 under a goal scope, which `D-0064` keeps for the person, and a standing policy's conflict.
+- **(c) Keep asking every point (today).** *Gains*: nothing is decided without the person.
+  *Gives up*: the owner's direction, and what `D-0189` C4 measured. A person who presses "as
+  recommended" on every ask is not deciding; they are a delay.
+- **(d) A deterministic filter over the point's words** (keywords like *delete*, *public*,
+  *merge*). *Gains*: no model judgement. *Gives up*: the reading that P3 needs. Whether a choice
+  gives up something the person owns is a reading of prose, as `D-0097` point 5 found for the
+  clause.
+
+### Decision
+
+1. **Every open point says whether it is raised, and why.** A point is `{point, recommendation,
+   raise}`, where `raise` is one of:
+   - `"dispute"`: `D-0064` P3's test, the options give up different things the person owns (a
+     user sees something different, a ratified entry or a grant changes, a cost passes the scope's
+     budget), including P2's "readings that lead to different results the person would see";
+   - `"irreversible"`: choosing it commits to an act on `D-0064` rule 3.4's list;
+   - `"policy"`: the options differ in whether they go against an in-force standing policy, named
+     by its id (`policy`);
+   - `null`: none of these. The options differ only in how the work gets done, and rondo decides
+     it as recommended (`D-0064` O8).
+2. **The drafter is handed the test and the in-force policies.** The triage document states the
+   three reasons and the null case in `D-0064`'s words, and lists each in-force `standing_policy`
+   by id with its body, as the request drafter is handed them (rondo#645).
+3. **The answer is checked for form** (`D-0063` rule 2.2), as the recommendation already is. The
+   whole reading is refused when a point has no `raise`, a `raise` outside the list, or a
+   `"policy"` that names no in-force policy, because that basis would not resolve. When no policy
+   is in force, the material is read and digested as before, so a store with none is not read
+   again on upgrade. A stored ranking written before this entry has no `raise`. Each of its points
+   reads as raised (`"dispute"`), which is what the flow did with it.
+4. **The goal flow asks only the raised points.** A candidate with none is started without an ask.
+   The ask row holds only the raised points. The request the flow sends carries the person's
+   answers, as now, then *Decided by rondo, as suggested* with each null point and its decision.
+   Beside answers, those are the null points of the reading the ask was raised from, never a later
+   reading's: a re-ranking may turn an answered point into one rondo decides otherwise, and its
+   decision would then contradict the answer. The person changes one the way they change anything else in a running request: a reply in its
+   thread, or a change at a gate that reaches them (`D-0164`). This entry adds no press.
+5. **The page draws the two apart.** The triage card lists the raised points under *open points*
+   as now, then the decided ones under *decided by rondo* with each decision, in muted ink, since
+   nothing in them waits on the person (`D-0082` rule 2). While the flow asks about the candidate,
+   the decided ones drawn are the asked reading's, which rule 4 sends. *Put it in the box* writes both into the
+   box: the raised points under the existing line, and the decided ones under *Decided by rondo
+   (edit to change)*. Before the person sends it, each one is their text to change.
+6. **Decided is recorded.** The decided points stay on the proposal row's payload, with their
+   `raise: null`, and in the sent request's body, which is the request thread's first message.
+   This is what `D-0064` O8 asks of a decision taken without asking, and why this does not repeat
+   what rondo#487 refused, "design choices made where the person cannot see them". Rondo still
+   decides them, but now where the person can read them.
+7. It lives in `src/advisory/triage.ts` (the point's form and the check), `src/advisory/flow.ts` and
+   `src/access/flow-host.ts` (what is asked and what is sent), `src/access/triage-host.ts` (the
+   document and the policies) and `src/access/page/triage.tsx` with its words (`D-0168`).
+
+### What it gains
+
+- **The person is asked what is theirs to decide**, by `D-0064`'s test and nothing new. A candidate
+  whose points are all rondo's starts under a goal scope with no ask.
+- **A standing policy reaches triage.** A candidate whose choice would go against one is raised and
+  names it, which `D-0189` rule 4 listed as missing ("a conflict with a standing policy cannot
+  become P3 while no policy record exists").
+- **Every decision rondo took is written where the person reads the request**, and can be taken
+  back there.
+
+### What it gives up
+
+- **A mismarked point is decided first and changed later.** `null` is the drafter's reading, and
+  nothing deterministic checks it. The person sees it on the card and in the sent request, and
+  changes it by a reply in that thread. For a candidate whose points are all null, that is after
+  the flow has sent it (`D-0128`'s annotation from rondo#504 already names this for a candidate
+  with no points), and a gate rondo approves itself (`D-0125`) may carry the lap on before the
+  person reads it.
+- **A reading refused for one bad point.** A missing or unknown `raise` costs the whole reading, as
+  a missing recommendation already does. A partial reading would draw points whose standing is
+  unknown.
+- **Two lists on the card** where there was one.
+
+### What this does not do
+
+- It does not change which acts are irreversible (`D-0064` rule 3.4), and it does not approve any:
+  a point marked `"irreversible"` is asked, and the act itself is still approved per act.
+- It does not keep a policy from a triage reading. Only the request drafter keeps policies, from
+  the person's own words (`D-0067` rule 6.2).
+- It does not let a person mark a point raised or decided themselves. They change the decision,
+  not its label.
+
+### What would falsify it
+
+- **A person who changes a decided point after the fact as a rule**, not an exception: the drafter is
+  marking real decisions as null, and the test is not being read the way `D-0064` meant it.
+- **Asks that still arrive on almost every candidate**: the drafter is raising what it should
+  decide, and rondo#487's measurement stands.
+- **A raised point the person always answers as recommended**: it was not theirs to decide.
+
+### Annotations this entry adds
+
+- `D-0097`, **not additive**: section 1 rule 5 and point 4.3, the open points are split into
+  raised and decided.
+- `D-0128`, **not additive**: the annotation from rondo#487, only raised points are asked first.
+- `D-0189`, **not additive**: rule 4's table, C4's *triage puts open points on almost every
+  candidate* row closed.

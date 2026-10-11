@@ -664,8 +664,16 @@ test("the flow's ask over open points is drawn beside the goal scope, each field
               request: "Make setup in o/r finish without a shell",
               why: "Setup asks for a terminal today.",
               openPoints: [
-                { point: "Where the token is read from", recommendation: "The keychain" },
-                { point: "Whether to keep the old flag", recommendation: "Keep it one release" },
+                {
+                  point: "Where the token is read from",
+                  recommendation: "The keychain",
+                  raise: "dispute",
+                },
+                {
+                  point: "Whether to keep the old flag",
+                  recommendation: "Keep it one release",
+                  raise: "dispute",
+                },
               ],
             },
           ],

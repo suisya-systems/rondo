@@ -6,9 +6,13 @@
 import { expect, test } from "vitest";
 
 import {
+  decided,
   labelRank,
+  materialDigest,
+  materialDocument,
   mixesScripts,
   RUNNERS_UP,
+  raised,
   rankTriage,
   readJudgement,
   readTriagePayload,
@@ -40,7 +44,7 @@ const judged = (key: string, clause: number | null) => ({
   clause,
   request: `do ${key} in o/r`,
   why: "because",
-  openPoints: [{ point: "scope", recommendation: "the page only" }],
+  openPoints: [{ point: "scope", recommendation: "the page only", raise: "dispute" as const }],
 });
 
 test("the order is the clause, then an explicit label, then the order found; the model's order is ignored", () => {
@@ -140,4 +144,63 @@ test("mixed scripts are letters of a script neither the operator's language nor 
   const payload = rankTriage(material([issue(1, [])]), [{ ...one("x"), mixedScript: true }]);
   const document = JSON.parse(JSON.stringify(triagePayloadDocument(payload)));
   expect(readTriagePayload(document)?.ranked[0]?.mixedScript).toBe(true);
+});
+
+test("a point says whether the person decides it, and rondo decides the rest (D-0193)", () => {
+  const found: TriageMaterial = {
+    ...material([issue(1)]),
+    policies: [{ id: "policy-1", body: "Never touch the release workflow" }],
+  };
+  const answer = (openPoints: unknown) =>
+    JSON.stringify({ candidates: [{ ...judged("issue:o/r#1", 1), openPoints }] });
+  const read = readJudgement(
+    found,
+    answer([
+      { point: "Which test runner", recommendation: "vitest", raise: null },
+      { point: "Ship it to users", recommendation: "Behind a flag", raise: "dispute" },
+      {
+        point: "Edit release.yml",
+        recommendation: "Leave it",
+        raise: "policy",
+        policy: "policy-1",
+      },
+    ]),
+  );
+  if (read.kind !== "judged") throw new Error(read.reason);
+  const points = read.judged[0]?.openPoints ?? [];
+  expect(raised(points).map((one) => one.raise)).toEqual(["dispute", "policy"]);
+  expect(raised(points)[1]?.policy).toBe("policy-1");
+  expect(decided(points).map((one) => one.point)).toEqual(["Which test runner"]);
+  // Rule 3: refused whole when a point says nothing, says something else, or
+  // names a policy that is not in force.
+  for (const [bad, reason] of [
+    [{ point: "p", recommendation: "r" }, "says nothing of why"],
+    [{ point: "p", recommendation: "r", raise: "maybe" }, "says nothing of why"],
+    [{ point: "p", recommendation: "r", raise: "policy", policy: "policy-9" }, "not in force"],
+    [{ point: "p", recommendation: "r", raise: "policy" }, "not in force"],
+  ] as const) {
+    const refused = readJudgement(found, answer([bad]));
+    expect(refused.kind === "refused" ? refused.reason : "").toContain(reason);
+  }
+  // The decided points read back as decided.
+  const payload = rankTriage(found, read.judged);
+  const document = JSON.parse(JSON.stringify(triagePayloadDocument(payload)));
+  expect(readTriagePayload(document)).toEqual(payload);
+  // A ranking written before D-0193 says nothing: every point of it was asked.
+  const old = JSON.parse(JSON.stringify(document));
+  for (const point of old.ranked[0].open_points) delete point.raise;
+  expect(readTriagePayload(old)?.ranked[0]?.openPoints.map((one) => one.raise)).toEqual([
+    "dispute",
+    "dispute",
+    "dispute",
+  ]);
+});
+
+test("a store with no policy in force keeps its material's digest (D-0193 rule 3)", () => {
+  const plain = material([issue(1)]);
+  expect(materialDocument({ ...plain, policies: [] })).toEqual(materialDocument(plain));
+  expect(materialDigest({ ...plain, policies: [] })).toBe(materialDigest(plain));
+  expect(materialDigest({ ...plain, policies: [{ id: "p", body: "b" }] })).not.toBe(
+    materialDigest(plain),
+  );
 });
