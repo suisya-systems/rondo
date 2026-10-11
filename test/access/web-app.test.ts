@@ -3111,7 +3111,10 @@ test("(answer) every shape that is not a person's press is refused, and the ques
     answer,
   );
   expect(refused.body).toContain('href="/?thread=ask&amp;lang=en"');
-  expect(refused.body).toContain("Answer button");
+  expect(refused.body).toContain(EN.answerRefusedPress);
+  // #629: no button the page does not draw (it draws one per answer).
+  expect(EN.answerRefusedPress).not.toContain(EN.answerAskAction);
+  expect(chromeFor("ja").answerRefusedPress).not.toContain(chromeFor("ja").answerAskAction);
   expect((await send(base, "/answer-ask", "GET", person)).status).toBe(404);
   await send(base, "/planted/send-as-press", "POST", htmxHeaders(base), { token: TOKEN });
   await send(base, "/planted/get", "GET", person);
