@@ -14,7 +14,9 @@ import { DETERMINISTIC_DRAFTER } from "../advisory.js";
 import { type FlowStopFacts, flowStopBody } from "../flow-stop.js";
 import { type IssueComment, parseForgeRead } from "../issue-read.js";
 import { isModelDrafterName, REDRAFT_AUTHOR } from "../model-draft/judgement.js";
+import type { PartView } from "../page-logic/parts.js";
 import type { Threads } from "../page-logic/threads.js";
+import { everyPartEnded, requestReportText, scopeExits } from "../request-report.js";
 import { stopRaises } from "../scope.js";
 import type { Chrome } from "../wording.js";
 import { held } from "./gate-material.js";
@@ -371,4 +373,44 @@ export function draftedNothing(threads: Threads, requestMessageId: string): bool
   );
   const latest = runs.at(-1);
   return latest !== undefined && noDraft(latest);
+}
+
+/**
+ * **A request's report, said again to whoever is reading it** (D-0064 P5,
+ * rondo#630): composed from the request's parts as they read now, by the one
+ * composer the host wrote it with, in the reader's language. Where the parts
+ * no longer read as all ended -- a part tried again after the report -- the
+ * words as written are drawn instead. The report as written stays under the
+ * fold where it says something else, as a flow's stop does.
+ */
+export function requestReportView(
+  wording: Chrome,
+  message: ThreadMessageDraft,
+  views: readonly PartView[],
+  thread: readonly ThreadMessageDraft[],
+) {
+  const said = everyPartEnded(views)
+    ? requestReportText(wording, views, scopeExits(thread))
+    : message.body;
+  return (
+    <div class="space-y-2" data-report="">
+      <p class="body text-body leading-6 wrap-anywhere whitespace-pre-wrap" lang={wording.lang}>
+        {said}
+      </p>
+      {said === message.body ? null : (
+        <details class="group">
+          <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+            {chevron()}
+            {wording.evBrokeReason}
+          </summary>
+          <p
+            class="body mt-1 text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground"
+            lang=""
+          >
+            {message.body}
+          </p>
+        </details>
+      )}
+    </div>
+  );
 }

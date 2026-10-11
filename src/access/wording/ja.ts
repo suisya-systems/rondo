@@ -6,6 +6,7 @@
 import { APPROVED_OUTCOME } from "../../store/records.js";
 import type { GateAuto, GateAutoReason } from "../gate-auto.js";
 import { EXPLAIN_JA } from "../page/explain-words.js";
+import { REPORT_JA } from "../page/report-words.js";
 import { SINCE_JA } from "../page/since-words.js";
 import { PAGE_JA } from "../page/words.js";
 import type { AgentTypeSource, Chrome } from "../wording.js";
@@ -152,6 +153,7 @@ export const JA: Chrome = Object.freeze({
   ...PAGE_JA,
   ...EXPLAIN_JA,
   ...SINCE_JA,
+  ...REPORT_JA,
   lang: "ja",
 
   liveNote: (seconds) =>

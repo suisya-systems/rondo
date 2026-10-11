@@ -56,6 +56,14 @@ export interface ExplainWords {
   readonly explainWaitsDecide: string;
   readonly explainWaitsScope: string;
   readonly explainOverdue: string;
+  /** A wait's reason and how long it has held, already said (`age`). */
+  readonly explainHeldFor: (reason: string, held: string) => string;
+  /**
+   * A lap rondo is waiting on inside its plan's ceiling, and how much longer
+   * the plan allows (null: no ceiling rondo can read). Never "progressing"
+   * (D-0068 rule 2.2): rondo waits for an answer, it does not watch the work.
+   */
+  readonly explainInFlight: (held: string, left: string | null) => string;
   readonly explainApproval: string;
   readonly explainSpent: (spent: string, approved: string, left: string) => string;
 
@@ -91,7 +99,8 @@ export const EXPLAIN_EN: ExplainWords = Object.freeze({
     "No model was asked: this request has no approval in force to count the cost against.",
   explainAcrossRequests:
     "No model was asked: a question about every request is answered from rondo's records alone.",
-  explainAcrossLead: "Here is what waits on you, request by request.",
+  explainAcrossLead:
+    "Here is what waits on you, and what rondo is still waiting on, request by request.",
   explainRequestQuoted: (title) => `"${title}"`,
   explainNothingWaits: "nothing waits on you now",
   explainExpired: "No model was asked: the approval for this request has expired.",
@@ -118,6 +127,11 @@ export const EXPLAIN_EN: ExplainWords = Object.freeze({
   explainWaitsDecide: "on your decision, with no gate to answer",
   explainWaitsScope: "on your approval of the drafted scope",
   explainOverdue: "past the time its plan allowed",
+  explainHeldFor: (reason, held) => `${reason}, for ${held}`,
+  explainInFlight: (held, left) =>
+    left === null
+      ? `a try has run for ${held}; its plan sets no time limit`
+      : `a try has run for ${held}, with up to ${left} more under its plan`,
   explainApproval: "Approval",
   explainSpent: (spent, approved, left) =>
     `$${spent} spent of $${approved} approved, $${left} left`,
@@ -145,7 +159,8 @@ export const EXPLAIN_JA: ExplainWords = Object.freeze({
   explainNoApproval: "モデルには尋ねていません。この依頼には費用を数える承認がまだありません。",
   explainAcrossRequests:
     "モデルには尋ねていません。すべての依頼にまたがる質問には、rondo の記録だけから答えます。",
-  explainAcrossLead: "あなたを待っているものを、依頼ごとにまとめます。",
+  explainAcrossLead:
+    "あなたを待っているものと、rondo がまだ待っているものを、依頼ごとにまとめます。",
   explainRequestQuoted: (title) => `「${title}」`,
   explainNothingWaits: "いまあなたを待っているものはありません",
   explainExpired: "モデルには尋ねていません。この依頼の承認は期限が切れています。",
@@ -169,6 +184,11 @@ export const EXPLAIN_JA: ExplainWords = Object.freeze({
   explainWaitsDecide: "答えるゲートのない、あなたの判断",
   explainWaitsScope: "下書きスコープへのあなたの承認",
   explainOverdue: "計画の想定時間を過ぎています",
+  explainHeldFor: (reason, held) => `${reason}（${held}前から）`,
+  explainInFlight: (held, left) =>
+    left === null
+      ? `試行が ${held}前から動いています（計画に時間の上限はありません）`
+      : `試行が ${held}前から動いています（計画の上限まであと最大 ${left}）`,
   explainApproval: "承認",
   explainSpent: (spent, approved, left) =>
     `承認 $${approved} のうち $${spent} を使用、残り $${left}`,

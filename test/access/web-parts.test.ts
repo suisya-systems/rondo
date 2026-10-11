@@ -11,7 +11,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
+import { DETERMINISTIC_DRAFTER } from "../../src/access/advisory.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
+import { deterministicAnswer } from "../../src/access/explainer/judgement.js";
+import { gatherExplainerMaterial } from "../../src/access/explainer/material.js";
+import { GATE_ACTOR } from "../../src/access/gate-host.js";
 import { draftedPlanRun } from "../../src/access/model-draft/host.js";
 import { unlandedBody, unlandedPrefix } from "../../src/access/order-host.js";
 import { partStepOf } from "../../src/access/page/thread-side.js";
@@ -19,6 +23,7 @@ import { takeInFrom } from "../../src/access/page-logic/parts.js";
 import { lapEvents } from "../../src/access/page-logic/thread-events.js";
 import { recordDraftedScopeFromPage } from "../../src/access/page-scope-actions.js";
 import { relayQuestion } from "../../src/access/question.js";
+import { requestReportId, writeRequestReports } from "../../src/access/request-report.js";
 import { TAKE_IN_FINDING } from "../../src/access/review.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import { allocate } from "../../src/refrain/allocator.js";
@@ -781,4 +786,170 @@ test("the gate's story names which part it is and where the other part stands, w
   expect(story).toContain(EN.partName(2));
   expect(story).toContain(EN.partYours);
   expect(story).toContain(`href="/?thread=r1&amp;gate=lap-two&amp;lang=en"`);
+});
+
+/** Part 1 approved by rondo's own gate answer, published as #7 and merged. */
+async function mergedByRondo(w: Awaited<ReturnType<typeof split>>) {
+  await w.start(0, "lap-one");
+  await openGate(w.world as never, "lap-one");
+  await w.world.store.recordGateAnswer("lap-one", "gate-lap-one", "approve", GATE_ACTOR, 4_000);
+  expect(
+    (
+      await w.world.store.transition(
+        "lap-one",
+        "awaiting_human",
+        "closed",
+        { gateOutcome: "answered_and_forwarded" },
+        3_650,
+      )
+    ).kind,
+  ).toBe("transitioned");
+  await report(
+    w,
+    "report-published-lap-one",
+    "Lap 'lap-one' was published: https://github.com/o/r/pull/7",
+  );
+  await report(w, "report-merged-lap-one", "Lap 'lap-one' went into 'main' by squash.");
+}
+
+const writeReports = async (w: Awaited<ReturnType<typeof split>>, words = EN) =>
+  await writeRequestReports({
+    store: w.world.store,
+    record: w.world.record,
+    words,
+    now: () => 9_000,
+    log: () => undefined,
+  });
+
+test("one report per request: written once every part has ended, not before, and only once (D-0064 P5)", async () => {
+  const w = await split([undefined, undefined]);
+  await mergedByRondo(w);
+  await w.start(1, "lap-two");
+  // Part 2 is still to run: nothing to report yet.
+  expect(await writeReports(w)).toEqual([]);
+  expect((await w.world.store.transition("lap-two", "planned", "abandoned", {}, 3_700)).kind).toBe(
+    "transitioned",
+  );
+  // A stop at the edge of the approval is a scope exit the report counts.
+  const stopped = await w.world.record.recordThreadMessage({
+    messageId: "scope-stop-lap-two",
+    body: "Stopped: the approved scope does not cover this.",
+    authorKind: "drafter",
+    authorId: DETERMINISTIC_DRAFTER,
+    inReplyTo: "r1",
+    atMs: 3_650,
+    bases: [{ form: "message", messageId: "r1" }],
+    asks: true,
+  });
+  expect(stopped.kind, JSON.stringify(stopped)).toBe("recorded");
+  expect(await writeReports(w)).toEqual([requestReportId(w.proposalId)]);
+  // A second pass, or another process, finds it spoken for.
+  expect(await writeReports(w)).toEqual([]);
+
+  const read = await w.world.record.threadMessages();
+  if (read.kind !== "read") throw new Error(read.reason);
+  const written = read.messages.filter((m) => m.messageId === requestReportId(w.proposalId));
+  expect(written).toHaveLength(1);
+  const message = written[0];
+  expect(message?.inReplyTo).toBe("r1");
+  expect(message?.asks).toBe(false);
+  expect(message?.body).toBe(
+    [
+      "Every part of this request has ended: 1 merged, 1 stopped.",
+      "- Part 1: merged (#7). 1 try; its cost was not reported.",
+      "- Part 2: stopped before it was finished. 1 try; its cost was not reported.",
+      "Not finished: Part 2.",
+      "Under your approval, rondo answered 1 gate itself, without asking you.",
+      "rondo reached the edge of your approval and stopped to ask you once.",
+      "This report asks nothing of you.",
+    ].join("\n"),
+  );
+  // Its bases: the request, the split, and each part's line.
+  expect(message?.bases).toEqual([
+    { form: "message", messageId: "r1" },
+    { form: "proposal", proposalId: w.proposalId },
+    { form: "iteration", iterationId: "lap-one" },
+    { form: "iteration", iterationId: "lap-two" },
+  ]);
+});
+
+test("a part approved and not yet merged is not ended: its merge may still come", async () => {
+  const w = await split([undefined, undefined]);
+  await mergedByRondo(w);
+  await w.start(1, "lap-two");
+  await approve(w, "lap-two");
+  await report(
+    w,
+    "report-published-lap-two",
+    "Lap 'lap-two' was published: https://github.com/o/r/pull/8",
+  );
+  expect(await writeReports(w)).toEqual([]);
+});
+
+test("the page says the report in the reader's language, with the words as written under the fold", async () => {
+  const w = await split([undefined, undefined]);
+  await mergedByRondo(w);
+  await w.start(1, "lap-two");
+  expect((await w.world.store.transition("lap-two", "planned", "abandoned", {}, 3_700)).kind).toBe(
+    "transitioned",
+  );
+  await writeReports(w);
+  const block = (html: string) =>
+    /<div class="space-y-2" data-report="">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
+  const ja = block(await page(w.world, JA));
+  expect(ja).toContain(
+    "この依頼の作業は、すべて結果が出ました（マージ済み 1 件、取りやめ 1 件）。",
+  );
+  expect(ja).toContain("作業 1: マージ済み（#7）");
+  expect(ja).toContain("終わらなかった作業: 作業 2。");
+  // The host wrote it in English; that is kept, folded, byte for byte.
+  expect(ja).toContain("<details");
+  expect(ja).toContain("Every part of this request has ended");
+
+  // Read in the language it was written in, it is said once.
+  expect(block(await page(w.world))).not.toContain("<details");
+});
+
+test("across every request, a lap in flight and a part held by order are lines with their reason (D-0068 rule 2.1)", async () => {
+  const w = await split([undefined, 0]);
+  await w.start(0, "lap-one");
+  const asked = await w.world.record.recordThreadMessage({
+    messageId: "question-across",
+    body: "What is going on?",
+    authorKind: "operator",
+    authorId: "ada",
+    inReplyTo: null,
+    atMs: 4_000,
+    bases: [],
+    asks: false,
+  });
+  expect(asked.kind, JSON.stringify(asked)).toBe("recorded");
+  const material = await gatherExplainerMaterial(w.world, "question-across", 63_500);
+  const title = { messageId: "r1", title: "Change the library, then move the pin." };
+  expect(material.waits).toContainEqual(
+    expect.objectContaining({
+      kind: "inFlight",
+      iterationId: "lap-one",
+      request: title,
+      forMs: 60_000,
+    }),
+  );
+  expect(material.waits).toContainEqual({
+    kind: "order",
+    part: 1,
+    after: 0,
+    firstLineageId: "lap-one",
+    request: title,
+  });
+  const { claims } = deterministicAnswer(material, EN, { kind: "acrossRequests" });
+  expect(claims).toHaveLength(1);
+  expect(claims[0]?.label).toBe(`"Change the library, then move the pin"`);
+  expect(claims[0]?.value).toMatch(
+    /^a try has run for 1m, with up to \d+m more under its plan \/ Part 2: waiting until part 1 is merged; then it starts by itself$/,
+  );
+  expect(material.locators).toContain("iteration:lap-one");
+
+  const ja = deterministicAnswer(material, JA, { kind: "acrossRequests" }).claims[0]?.value;
+  expect(ja).toContain("試行が 1分前から動いています（計画の上限まであと最大");
+  expect(ja).toContain("作業 2: 作業 1 がマージされるのを待っています");
 });

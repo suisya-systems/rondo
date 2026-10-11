@@ -1356,6 +1356,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/model-draft/host.ts": [SPLITTING],
   // D-0098 rule 1.4: the tick that admits a `then` on its `first`'s landing.
   "src/access/order-host.ts": [DISPATCHER],
+  // D-0064 P5: one report per request, the secretary's dialogue (rondo#630).
+  "src/access/request-report.ts": [DIALOGUE],
   // D-0139: a lap whose rondo process died is ended, and started again or asked about.
   "src/access/lost-laps.ts": [DISPATCHER],
   "src/access/model-draft/judgement.ts": [SPLITTING],
@@ -1401,6 +1403,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page/result.tsx": [HUMAN],
   "src/access/page/shell.tsx": [HUMAN],
   "src/access/page/since-words.ts": [HUMAN],
+  "src/access/page/report-words.ts": [HUMAN],
   "src/access/page/steps.tsx": [HUMAN],
   "src/access/page/thread-acts.tsx": [HUMAN],
   "src/access/page/thread-side.tsx": [HUMAN],

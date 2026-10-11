@@ -12805,6 +12805,22 @@ and the proposed `D-0059` and `D-0063`.
 > the flow host starts the next request). `D-0063` rule 1 is kept: the advisory still only proposes.
 > Nothing below is edited.
 
+> **Annotation (2026-10-11, from rondo#630).** Added after this entry was accepted, and additive.
+> P5 is built for a request run as a split (`partsOf`, two or more parts). Once every part is merged
+> or stopped, the resident host's minute tick writes one deterministic `drafter` message into the
+> request's thread, with `asks` unset, under the id `request-report-<split proposal>`, so it is
+> written once per approved split (`src/access/request-report.ts`). It says, per part, whether it
+> was merged and by which pull request, or stopped, with its tries and what they cost (or that the
+> cost was not reported). It names the parts left undone, the gates rondo answered itself under the
+> approval (`D-0125`, the decided-without-asking it can read from rows), and how many times the
+> scope's edge stopped the work and asked (the `scope-stop-` asks). Its bases are the request, the
+> split and each part's first lap. The host writes it in its operator's language, and the page says
+> it again in the reader's, with the written words under the fold. Three limits stand. A part
+> approved and not yet merged is not ended, because its merge may still come, so a split whose
+> pull requests nobody merges gets no report. A request run as one lap gets no roll-up, and its
+> lap reports are its report. Review findings left below the threshold (O5) are not listed yet.
+> Nothing below is edited.
+
 **This entry decides and does not build.** Nothing in `src/` changes with it, and **no earlier entry
 is edited by it**. Section 6 lists the entries that have to move and says how each should move; each
 move is its own later change.
@@ -15620,6 +15636,19 @@ residuals and says nothing about how `D-0068` answers them.
 the recommended option on both; the answers are recorded in section "What was put to the human gate,
 and its answer". Refs `D-0019`, `D-0023`, `D-0032`, `D-0033`, `D-0034`, `D-0036`, `D-0038`, `D-0046`, `D-0048`,
 `D-0054`, `D-0061`, `D-0063`, `D-0064`, `D-0065`, `D-0066`, `D-0067`.
+
+> **Annotation (2026-10-11, from rondo#630).** Added after this entry was accepted, and additive.
+> Section 1 rule 2.1's wait reading is built in a narrower form, inside the answer to a question
+> across every request (`D-0189` rule 5). Each wait now says its reason and how long it has held,
+> from the row that says since when. Two more kinds of line are read:
+> - **`in_flight`**: a lap inside its plan's ceiling, said as how long it has run and how much
+>   longer the plan lets rondo wait. It never says the lap is progressing (rule 2.2).
+> - **`held_by_order`**: a part not started because an earlier part of its split is not merged yet
+>   (`D-0098` rule 1's `after`), resting on that part's line.
+> These sit under the person's own waits on the same request's line. `held_by_bound` and
+> `undetermined` are not read. `first` is not followed into another request, since a split's parts
+> share one. The inbox and the page do not draw the reading beside each line yet (rule 2.6), and
+> nothing is stored (rule 2.4). Nothing below is edited.
 
 > **Annotation (2026-10-10, from D-0189).** Added after this entry was accepted, and additive.
 > Section 1 rule 2.5's second bullet, a question in a message that opens a thread, is built in a
@@ -30316,6 +30345,19 @@ rules 2, 3, 4 and 5 (its annotation from this entry). Supersedes nothing. Refs `
 > below is edited.
 >
 > - Amends: D-0189 rule 4
+
+> **Annotation (2026-10-11, from rondo#630).** Added after this entry was accepted, and **not
+> additive**: rule 4's table changes. Two rows are closed. C2's *no reason per wait, and no* in
+> flight *or* held by order *line in an answer* is closed: the cross-request answer gives each
+> wait its reason and how long it has held, and reads laps in flight and parts held by order
+> (`D-0068`'s annotation from rondo#630). C2 and C4's *P5 arrives lap by lap, not once per request*
+> is closed for split requests: one deterministic report is written once every part has ended
+> (`D-0064`'s annotation from rondo#630). The answer's lead now says what rondo is still waiting
+> on as well, so rule 5.4's *one line per request that waits on the person* also covers a request
+> only rondo waits on. The other rows stand. Nothing below is edited.
+>
+> - Amends: D-0189 rule 4
+> - Amends: D-0189 rule 5
 
 ### Context
 

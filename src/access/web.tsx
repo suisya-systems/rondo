@@ -129,6 +129,7 @@ import {
   noDraft,
   noDraftView,
   redraftNote,
+  requestReportView,
   scopeStop,
   scopeStopView,
 } from "./page/thread-stops.js";
@@ -155,6 +156,7 @@ import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget } from "./page-logic/threads.js";
 import { stepsBeforeLap, stepsOf } from "./page-logic/week.js";
 import { answeredQuestion, readWorkerQuestion } from "./question.js";
+import { isRequestReport } from "./request-report.js";
 import { approvalTip } from "./scope.js";
 import { goalScopeView } from "./screens/goal-scope.js";
 import { mergeView } from "./screens/merge.js";
@@ -453,6 +455,7 @@ async function threadModel(
             noDraft(message) ||
             redraftNote(message) ||
             lapReport(message) ||
+            isRequestReport(message) ||
             scopeStop(message) ||
             flowStopSays.has(message.messageId) ||
             (reads !== null && heldMessage(message)),
@@ -465,13 +468,15 @@ async function threadModel(
               ? forgeView(wording, message)
               : lapReport(message)
                 ? lapReportView(wording, message, reads)
-                : scopeStop(message)
-                  ? scopeStopView(wording, message, reads)
-                  : stop !== undefined
-                    ? flowStopView(wording, message, stop)
-                    : noDraft(message) || redraftNote(message) || reads === null
-                      ? noDraftView(wording, message, reads)
-                      : raw(heldMarkup({ wording, reads, text: message.body, className: "" }))
+                : isRequestReport(message)
+                  ? requestReportView(wording, message, selectedParts, selectedMessages)
+                  : scopeStop(message)
+                    ? scopeStopView(wording, message, reads)
+                    : stop !== undefined
+                      ? flowStopView(wording, message, stop)
+                      : noDraft(message) || redraftNote(message) || reads === null
+                        ? noDraftView(wording, message, reads)
+                        : raw(heldMarkup({ wording, reads, text: message.body, className: "" }))
             ).toString(),
           ] as const;
         }),

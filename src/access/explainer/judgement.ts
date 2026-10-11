@@ -13,6 +13,7 @@ import type { DrafterRow } from "../../continuo/roles.js";
 import { EXPLAINER_PREFIX } from "../../store/records.js";
 import { FLOW_STOP } from "../flow-stop.js";
 import { sectionFramer } from "../framing.js";
+import { ago } from "../inbox.js";
 import { answerJson } from "../model-draft/judgement.js";
 import { firstLine } from "../page-logic/threads.js";
 import type { Chrome } from "../wording.js";
@@ -297,29 +298,10 @@ export function deterministicAnswer(
     }
   }
   for (const wait of material.waits) {
-    claims.push(
-      wait.kind === "ask"
-        ? {
-            label: words.explainWaiting,
-            value: words.explainWaitsAsk,
-            basis: { form: "message", messageId: wait.messageId },
-          }
-        : wait.kind === "scope" || wait.kind === "paused"
-          ? {
-              label: words.explainWaiting,
-              value: wait.kind === "scope" ? words.explainWaitsScope : words.triageGoalScopePaused,
-              basis: { form: "scope", scopeId: wait.scopeId },
-            }
-          : {
-              label: words.explainWaiting,
-              value: {
-                gate: words.explainWaitsGate,
-                decide: words.explainWaitsDecide,
-                overdue: words.explainOverdue,
-              }[wait.kind],
-              basis: { form: "iteration", iterationId: wait.iterationId },
-            },
-    );
+    const basis = basisOf(waitLocator(wait));
+    if (basis !== null) {
+      claims.push({ label: words.explainWaiting, value: waitSaid(words, wait), basis });
+    }
   }
   const scope = material.scope;
   if (scope !== null) {
@@ -340,34 +322,69 @@ export function deterministicAnswer(
 }
 
 /**
+ * One wait in plain words: its reason, and how long it has held where a row
+ * says since when (D-0068 section 1 rule 2.5's line). The goal flow's stop is
+ * the flow's, not the request's it is asked in (D-0188).
+ */
+function waitSaid(words: Chrome, wait: ExplainerMaterial["waits"][number]): string {
+  return heldFor(words, waitReason(words, wait), heldApart(wait));
+}
+
+/** How long a wait has held, said after its reason; a lap in flight says it in its own sentence. */
+const heldApart = (wait: ExplainerMaterial["waits"][number]): number | undefined =>
+  wait.kind === "inFlight" ? undefined : wait.forMs;
+
+const heldFor = (words: Chrome, reason: string, forMs: number | undefined): string =>
+  forMs === undefined ? reason : words.explainHeldFor(reason, words.age(ago(0, forMs)));
+
+function waitReason(words: Chrome, wait: ExplainerMaterial["waits"][number]): string {
+  return wait.kind === "ask"
+    ? wait.messageId.startsWith(FLOW_STOP)
+      ? words.rowFlowStopped
+      : words.explainWaitsAsk
+    : wait.kind === "inFlight"
+      ? words.explainInFlight(
+          words.age(ago(0, wait.forMs ?? 0)),
+          wait.leftMs === null ? null : words.age(ago(0, wait.leftMs)),
+        )
+      : wait.kind === "order"
+        ? `${words.partName(wait.part + 1)}: ${words.partWaiting(wait.after, null, null)}`
+        : {
+            gate: words.explainWaitsGate,
+            decide: words.explainWaitsDecide,
+            overdue: words.explainOverdue,
+            scope: words.explainWaitsScope,
+            paused: words.triageGoalScopePaused,
+          }[wait.kind];
+}
+
+/**
  * The answer to a question that opened its own thread (rondo#626, D-0189): one
- * line per request that waits on the person, named by the request, saying in
- * plain words what it waits on, and resting on a row that waits (the answer's
- * bases carry every one). Never empty: with nothing waiting that is said,
- * resting on the question.
+ * line per request, named by the request, saying in plain words what it waits
+ * on and for how long, and resting on a row that waits (the answer's bases
+ * carry every one). Under the person's own waits it says what rondo is still
+ * waiting on -- a lap in flight, a part held by order (D-0068 rule 2.1,
+ * rondo#630) -- so a request with nothing for the person still has its line.
+ * Never empty: with nothing waiting that is said, resting on the question.
  */
 function acrossAnswer(
   material: ExplainerMaterial,
   words: Chrome,
   why: Unexplained,
 ): { readonly answer: string; readonly claims: readonly Claim[] } {
-  const waitWord = {
-    ask: words.explainWaitsAsk,
-    gate: words.explainWaitsGate,
-    decide: words.explainWaitsDecide,
-    overdue: words.explainOverdue,
-    scope: words.explainWaitsScope,
-    paused: words.triageGoalScopePaused,
-  };
-  const byRequest = new Map<string, { label: string; values: string[]; basis: Claim["basis"] }>();
-  for (const wait of material.waits) {
+  // Per request, each reason once with the longest it has held (two stops of
+  // one flow, or two questions, are one wait said once).
+  const byRequest = new Map<
+    string,
+    { label: string; values: Map<string, number | undefined>; basis: Claim["basis"] }
+  >();
+  // The person's waits first, so a request's line leads with what is theirs.
+  const rondos = (wait: ExplainerMaterial["waits"][number]) =>
+    wait.kind === "inFlight" || wait.kind === "order";
+  for (const wait of material.waits.toSorted((a, b) => Number(rondos(a)) - Number(rondos(b)))) {
     const basis = basisOf(waitLocator(wait));
     if (basis === null) continue;
-    // The goal flow's stop is the flow's, not the request's it is asked in (D-0188).
-    const value =
-      wait.kind === "ask" && wait.messageId.startsWith(FLOW_STOP)
-        ? words.rowFlowStopped
-        : waitWord[wait.kind];
+    const reason = waitReason(words, wait);
     const key = wait.request?.messageId ?? waitLocator(wait);
     const line = byRequest.get(key) ?? {
       label:
@@ -376,15 +393,17 @@ function acrossAnswer(
           : wait.request?.title
             ? words.explainRequestQuoted(wait.request.title.replace(/[.!?。！？]+$/u, ""))
             : words.explainRequest,
-      values: [],
+      values: new Map(),
       basis,
     };
-    if (!line.values.includes(value)) line.values.push(value);
+    const held = line.values.get(reason);
+    const forMs = heldApart(wait);
+    line.values.set(reason, forMs === undefined ? held : Math.max(held ?? forMs, forMs));
     byRequest.set(key, line);
   }
   const claims: Claim[] = [...byRequest.values()].map((line) => ({
     label: line.label,
-    value: line.values.join(" / "),
+    value: [...line.values].map(([reason, forMs]) => heldFor(words, reason, forMs)).join(" / "),
     basis: line.basis,
   }));
   if (claims.length === 0) {

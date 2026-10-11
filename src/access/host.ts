@@ -84,6 +84,7 @@ import {
 import { publishHost } from "./publish-host.js";
 import { notifierAt, reachThePerson, recordTabNotice } from "./reach.js";
 import { readIn } from "./read-in.js";
+import { writeRequestReports } from "./request-report.js";
 import { READING_REMOTE } from "./review.js";
 import { reviseDrafterHost } from "./revise-draft/host.js";
 import { setupPlanFiles } from "./setup-files.js";
@@ -536,6 +537,25 @@ export async function serveWeb(
     draftsOwed: () => drafter.owed(),
     unheld: async (id: string) => await awaitsPerson(id),
   };
+  /**
+   * **One report per request** (D-0064 P5, rondo#630): a split request whose
+   * parts have all ended gets its report in its thread, on the same minute.
+   * Written once by its id, so a pass that overlaps another writes nothing twice.
+   */
+  const report = (): void => {
+    void writeRequestReports({
+      store,
+      record,
+      words: chromeFor(selected.tag),
+      now: Date.now,
+      log: say,
+    }).catch((error: unknown) => {
+      say(
+        "rondo could not look for requests to report on: " +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    });
+  };
   // ponytail: a fixed one-minute rescan for messages and readings written
   // outside this process; a changedSince watch when that minute is felt.
   let rescan: ReturnType<typeof setInterval> | null = null;
@@ -555,6 +575,7 @@ export async function serveWeb(
       gates.kick();
       publisher?.kick();
       flow?.kick();
+      report();
       // **Reaching starts a minute in, and not in the burst above.** The
       // person who has just started rondo is looking at it this second, and
       // what was already waiting when the host was last stopped is on the
@@ -572,6 +593,7 @@ export async function serveWeb(
         gates.kick();
         publisher?.kick();
         flow?.kick();
+        report();
         // **Order on the tick buys nothing, and nothing here depends on
         // it**: every kick above returns before its own pass finishes, so
         // this reads what is committed when it runs and not what the same
