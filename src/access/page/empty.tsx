@@ -100,15 +100,17 @@ function Since({ wording, since }: { readonly wording: Chrome; readonly since: S
         <ol className="since-list">
           {shown.map((moved) => {
             const place = since.placeOf(moved.messageId);
+            // The thread's event grammar: a dot, and ink where the person's own
+            // hand is in what moved (`.ev-person`); the rest is rondo's.
+            const yours = moved.asked || moved.youWrote > 0 || moved.youAnswered > 0;
             return (
-              <li key={moved.messageId}>
-                <div className="since-head">
-                  {/* The person's own words: `lang=""` (D-0055 rule 8). */}
-                  <a className="since-title" href={since.hrefOf(moved.messageId)} lang="">
-                    {since.titleOf(moved.messageId)}
-                  </a>
-                  <span className="since-at">{since.ageOf(moved.atMs)}</span>
-                </div>
+              <li key={moved.messageId} className={yours ? "since-yours" : undefined}>
+                <span className="since-dot" aria-hidden="true" />
+                {/* The person's own words: `lang=""` (D-0055 rule 8). */}
+                <a className="since-title" href={since.hrefOf(moved.messageId)} lang="">
+                  {since.titleOf(moved.messageId)}
+                </a>
+                <span className="since-at">{since.ageOf(moved.atMs)}</span>
                 <p className="since-said">
                   {place === null ? null : <span className="since-repo">{place}</span>}
                   {wording.sinceSaid(moved)}

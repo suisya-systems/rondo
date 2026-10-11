@@ -665,6 +665,13 @@
 /*
  * *Since you last looked* (D-0083 rule 4, rondo#631): one sentence per request that moved, under
  * the box and what rondo would ask for next. Ink, never amber -- nothing here waits on the person.
+ *
+ * **Drawn in the thread's event grammar, not the list's.** Each request that moved is a line
+ * like rule 7's: the dot's column, the request's own words, how long ago at the right edge, and
+ * under the words the one sentence of what moved. Rows cut by hairlines read as a second inbox;
+ * dots on one rail read as *this happened, and then this*, which is what the section says. The
+ * dot is ink where the person's own hand is in what moved -- they asked, wrote, or answered --
+ * and the border's colour where only rondo did (`.ev-person`, in the same words).
  */
 .since {
   margin-top: 36px;
@@ -678,23 +685,61 @@
 }
 
 .since-list {
-  margin-top: 12px;
-  border-top: 1px solid var(--color-border);
+  margin-top: 16px;
 }
 
 .since-list > li {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--color-border);
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 0 16px;
+  align-items: start;
+  padding: 10px 0;
 }
 
-.since-head {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
+/* The rail: each row draws its own length of the line down the dot's column,
+   and the first and last stop at their dot, so it runs from dot to dot. */
+.since-list > li::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 14px;
+  border-left: 1px solid var(--color-border);
 }
 
+.since-list > li:first-child::before {
+  top: 23px;
+}
+
+.since-list > li:last-child::before {
+  bottom: calc(100% - 23px);
+}
+
+/* The event line's dot, cut out of the rail by a ring of the page's own ground. */
+.since-dot {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: center;
+  width: 7px;
+  height: 7px;
+  margin-top: 9px;
+  border-radius: 50%;
+  /* Faint, not the border's colour: on the page's ground a border-coloured dot
+     is lost beside its own rail, and a row with no visible dot reads as no row. */
+  background: var(--color-faint);
+  box-shadow: 0 0 0 4px var(--color-background);
+}
+
+.since-yours .since-dot {
+  background: var(--color-foreground);
+}
+
+/* The request's own words are the line to read, and the way to its thread. */
 .since-title {
-  flex: 1;
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   font-size: var(--text-title);
   font-weight: 600;
@@ -702,17 +747,30 @@
   overflow-wrap: anywhere;
 }
 
+.since-title:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .since-at {
+  grid-column: 3;
+  grid-row: 1;
+  padding-top: 4px;
   font-size: var(--text-id);
   color: var(--color-muted-foreground);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+/* What moved, in the ink an event line is read in; the words above carry the weight. */
 .since-said {
-  margin-top: 4px;
+  grid-column: 2;
+  grid-row: 2;
+  margin-top: 2px;
   max-width: 45em;
   font-size: var(--text-body);
   line-height: 1.6;
+  color: var(--color-muted-foreground);
 }
 
 .since-repo {
@@ -721,15 +779,25 @@
   border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: var(--text-id);
+  color: var(--color-foreground);
   white-space: nowrap;
 }
 
-.since-rest,
-.since-quiet {
-  margin-top: 12px;
+/* The count of what is not named: the list's last line, at the words' column. */
+.since-rest {
+  margin-top: 8px;
+  padding-left: 44px;
   max-width: 45em;
   font-size: var(--text-meta);
   line-height: 1.6;
+  color: var(--color-muted-foreground);
+}
+
+/* Nothing moved, or no mark yet: one sentence, at the size of the lead above the box. */
+.since-quiet {
+  max-width: 45em;
+  font-size: var(--text-body);
+  line-height: 1.7;
   color: var(--color-muted-foreground);
 }
 
