@@ -682,8 +682,8 @@ export const PAGE_EN: PageWords = Object.freeze({
   rowFlowStopped: "rondo stopped working toward the goal and asks you here",
   rowFlowAsks: (points) =>
     points === 1
-      ? "Answer 1 question and rondo starts the next request"
-      : `Answer ${String(points)} questions and rondo starts the next request`,
+      ? "Answer 1 question to start the next request"
+      : `Answer ${String(points)} questions to start the next request`,
   rowRunning: "Working on it",
   rowFinished: "Finished",
   rowStopped: "Stopped",

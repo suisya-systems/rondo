@@ -30705,8 +30705,8 @@ a request and leads to the screen that resumes it. This entry takes the same pat
    amber ground and edge, with the *your turn* mark (a ring round a dot). The flow does nothing
    until the person answers, so this is the person's turn in `D-0082` rule 1's sense. The mark is
    the one a waiting request carries, because the row waits on an answer just as that request does.
-3. **The row says what it asks of the person and what it starts**: *Answer 3 questions and rondo
-   starts the next request* as its title, then the repository and the request the flow would send,
+3. **The row says what it asks of the person and what it starts**: *Answer 3 questions to start
+   the next request* as its title, then the repository and the request the flow would send,
    in the ask's words, and when it asked. The title is rondo's sentence, not the candidate's
    request. That request is rondo's suggestion, and drawn as a bold title it would read as a request
    the person wrote (`D-0083` rule 2), so it stands in the row's plain line.
