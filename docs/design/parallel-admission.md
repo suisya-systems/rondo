@@ -194,7 +194,7 @@ needs continuo at all.
 - **The suspend happens after the process is gone.** rondo's own record:
   *"The conductor is suspending here. There is no timer and no poll loop, and the
   process may exit"*, followed by *"The process did exit, and the gate stayed
-  open"* (`../operations/lap-1-dogfood.md:901`, `:905-906`).
+  open"* (`../operations/earlier-laps/lap-1-dogfood.md:901`, `:905-906`).
 - **So an iteration at `awaiting_human` holds no continuo lease, no process and no
   fenced child.** continuo's own document states the same fact from its side
   (`parallel-laps-delivery-lease.md` §1.9) and draws the throughput consequence in
@@ -258,7 +258,7 @@ document does not propose but does not forbid either.
 (`src/refrain/interpreter.ts:176-186`). That is right under N = 1 and for
 `D-0019` rule 9's reason: a refusal that costs no row and takes no lock is the
 cheap kind. F-13 measured the cost at **1 ms**
-(`../operations/lap-1-dogfood.md:1201-1207`).
+(`../operations/earlier-laps/lap-1-dogfood.md:1201-1207`).
 
 The same property makes the thing `D-0012` asks for unmeasurable. Its falsifier
 list ends with *"**Measured throughput making single-flight the binding
@@ -274,7 +274,7 @@ Demand is exactly what a refusal record would count, and nothing counts it.
 
 | Tree | Revision | What was read |
 |---|---|---|
-| rondo (this worktree) | `3d2a39b` | `src/store/sqlite.ts`, `src/store/records.ts`, `src/refrain/{loop,plan,policy,interpreter}.ts`, `src/access/conductor.ts`, `src/continuo/protocol.ts`, `DECISIONS.md`, `docs/design/advisory.md`, `docs/operations/lap-1-dogfood.md`, `scripts/dogfood-lap.md`, `test/` |
+| rondo (this worktree) | `3d2a39b` | `src/store/sqlite.ts`, `src/store/records.ts`, `src/refrain/{loop,plan,policy,interpreter}.ts`, `src/access/conductor.ts`, `src/continuo/protocol.ts`, `DECISIONS.md`, `docs/design/advisory.md`, `docs/operations/earlier-laps/lap-1-dogfood.md`, `scripts/dogfood-lap.md`, `test/` |
 | continuo | `38c667b` — the pinned revision (`continuo.pin.json`) | `src/control_plane/{run_admission,migrations/0001_initial.sql}`, `src/workspace/materializer.ts`, `src/lap/{root,endpoint_lease}.ts`, `src/session/claude_cli_provider.ts`, `src/fencing/renderer.ts` |
 | continuo | `8a0ebab` — `origin/main`, PR #187 | `docs/design/parallel-laps-delivery-lease.md` (`P-13`, `P-14`, §1.9, §10.1-10.3, §13) |
 | cadenza | `5d5d9f4` (`cadenza.pin.json`) | not read directly; reached through `advisory.md`'s measurement of `A-17` |
@@ -320,7 +320,7 @@ the two that hold **83% of the measured lifetime**. The disagreement is not a bu
 A suspended iteration owns things that outlive its process: a worktree, a topic
 branch, an open continuo run at `created`, and an open gate. F-11 records that
 the lap *"leaves a worktree, a branch and an open run behind"*
-(`../operations/lap-1-dogfood.md:546-575`). Releasing its capacity slot therefore
+(`../operations/earlier-laps/lap-1-dogfood.md:546-575`). Releasing its capacity slot therefore
 does **not** release those, and a second iteration admitted into the freed slot
 must not be handed any of them.
 
@@ -858,7 +858,7 @@ above.
   iterations *waiting on a person*.
 - **It does not shorten any human wait.** F-13's 104.5 s was one operator reading
   `--help` between commands and is *"not a floor"*
-  (`../operations/lap-1-dogfood.md:1215-1221`). Nothing here makes an answer
+  (`../operations/earlier-laps/lap-1-dogfood.md:1215-1221`). Nothing here makes an answer
   arrive sooner; it stops one unanswered question from blocking unrelated work.
 - **It does not widen `R-10` into a wider index.** It removes the index and puts
   the invariant in a transaction, and §4.1 records what that costs.

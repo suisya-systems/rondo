@@ -30,6 +30,14 @@ C-NN`, so the spaces can never be read as one.
   a claim, a measurement or a date already recorded, and the original text stays readable
   underneath. Changing what an entry is *for*, or so much of it that its live rules can no longer
   be read off its text and its `Amends:` lines, is a supersession and takes a new ID.
+- **A citation's path follows the file it points at.** When a document cited here is moved, the
+  move may rewrite the path string in every citation of it and nothing else: no claim, measurement,
+  date or word of the surrounding sentence changes, so a path-following rewrite is not a removal or
+  a rewrite under the rule above and takes no annotation and no ID. What it does need is a record of
+  the move a reader can follow -- for the laps 1 to 9 records, now under
+  `docs/operations/earlier-laps/`, that record is `docs/operations/earlier-laps.md`. This does not
+  reach a name: the modules renamed in rondo#364 are still cited by the names they had, because a
+  name a sentence says is part of the sentence, while a path is a pointer at a file.
 - **The index's status column is the live-rule index.** An accepted entry with an `Amends:` line is
   indexed `accepted, amended` and read with those lines; `superseded by D-NNNN` is read in its
   replacement. `test/architecture/docs-claims.test.ts` holds the index and the `Amends:` lines.
@@ -2666,9 +2674,9 @@ test, which is where the question "should this layer reach cadenza?" is asked.
 >   It rests further on "the same action a human reading the gate would take", and what a human
 >   reading the gate is given was since measured: the gate's `rationale`, which is the worker's own
 >   account of its own work, with no workspace path and no topic branch beside it
->   (`docs/operations/lap-1-dogfood.md:964-1000`). **The rule's conclusion for the arc is kept** — no
->   verify inside the state machine, and no untested branch on the path to the one human contact —
->   and `D-0029` puts nothing on that path.
+>   (`docs/operations/earlier-laps/lap-1-dogfood.md:964-1000`). **The rule's conclusion for the arc
+>   is kept** — no verify inside the state machine, and no untested branch on the path to the one
+>   human contact — and `D-0029` puts nothing on that path.
 > - **Rule 7 (`R-7`)'s third reason has expired.** It gave three grounds for refusing a model-judged
 >   evaluator, of which the third was "its most valuable output is the retry the lap-1 arc cannot
 >   perform". `D-0023` supplied the allocator this entry's own falsifier list names as the trigger
@@ -3154,14 +3162,15 @@ to take, and rule 4's sixth fact is written conditionally for exactly that reaso
 > `src/continuo/roles.ts`; only the tier *names* are transcribed into the loop, the way
 > `SERVED_RECIPIENTS` already is.
 
-The lap-1 dogfood ([`docs/operations/lap-1-dogfood.md`](docs/operations/lap-1-dogfood.md)) stopped
-on two facts about continuo rather than about rondo, and recorded both. `F-1` was blocking: the
-post-spawn identity read-back was two hard-coded constants worth **2.5 seconds**, and four measured
-starts of a real worker took **3.5 s, 7.9 s, 9.7 s and 11.3 s** to emit the event that names the
-session — every one over the window, the fastest by 40%. `F-2` was not blocking and is the more
-expensive of the two: nothing anywhere selected the worker's model, so a lap ran on whatever the
-worker CLI defaults to, and cadenza's `executorPolicy.modelTier` was carried, digested, persisted
-and **read by nobody**.
+The lap-1 dogfood
+([`docs/operations/earlier-laps/lap-1-dogfood.md`](docs/operations/earlier-laps/lap-1-dogfood.md))
+stopped on two facts about continuo rather than about rondo, and recorded both. `F-1` was blocking:
+the post-spawn identity read-back was two hard-coded constants worth **2.5 seconds**, and four
+measured starts of a real worker took **3.5 s, 7.9 s, 9.7 s and 11.3 s** to emit the event that
+names the session — every one over the window, the fastest by 40%. `F-2` was not blocking and is the
+more expensive of the two: nothing anywhere selected the worker's model, so a lap ran on whatever
+the worker CLI defaults to, and cadenza's `executorPolicy.modelTier` was carried, digested,
+persisted and **read by nobody**.
 
 continuo answered both — `continuo D-0098` makes the read-back window a caller-supplied budget
 defaulting to 30 s, and `continuo D-0099` adds `lap perform --model` over the provider's
@@ -3406,10 +3415,11 @@ type-checked against.
 
 Everything rondo needed to walk one request existed and nothing could reach it. `D-0019` built the
 conductor; `D-0021` moved the pin so a lap completes; the lap-1 dogfood
-([`docs/operations/lap-1-dogfood.md`](docs/operations/lap-1-dogfood.md)) walked one end to end — by
-writing a throwaway `tsconfig`, compiling by hand, driving the composition root from a thirty-line
-`drive.mjs`, and typing six continuo verbs in order with ids copied between them. This entry is the
-surface that replaces all of that, and it is deliberately the smallest one that closes the loop.
+([`docs/operations/earlier-laps/lap-1-dogfood.md`](docs/operations/earlier-laps/lap-1-dogfood.md))
+walked one end to end — by writing a throwaway `tsconfig`, compiling by hand, driving the
+composition root from a thirty-line `drive.mjs`, and typing six continuo verbs in order with ids
+copied between them. This entry is the surface that replaces all of that, and it is deliberately the
+smallest one that closes the loop.
 
 ### Decision
 
@@ -7415,12 +7425,12 @@ escalate to continuo about the fence — is both the narrower route and the one 
       `tool_input` of a call that did not happen. **The property therefore does not hold for that
       class at the pin `fcf86eb`**: the fact reached rondo only inside the worker's prose, which is
       precisely what 4b exists to rule out, and it reached rondo at all only because that worker
-      chose to write the paragraph (N-16, `docs/operations/lap-6-dogfood.md`). D-0050 rule 7 is
-      rondo's half of the second escalation, and it asks for a report and not a control: that such a
-      failure become part of what `lap perform` answers with, in a field whose *absence* means "the
-      backend declined to say" and never "nothing happened" (`continuo D-1110`'s three states).
-      **Nothing in this rule is corrected**, and rondo records nothing about the worker's sandbox
-      until that field exists (D-0050 rule 1).
+      chose to write the paragraph (N-16, `docs/operations/earlier-laps/lap-6-dogfood.md`). D-0050
+      rule 7 is rondo's half of the second escalation, and it asks for a report and not a control:
+      that such a failure become part of what `lap perform` answers with, in a field whose *absence*
+      means "the backend declined to say" and never "nothing happened" (`continuo D-1110`'s three
+      states). **Nothing in this rule is corrected**, and rondo records nothing about the worker's
+      sandbox until that field exists (D-0050 rule 1).
 
 5. **What rondo records is `continuo_role`, and no column is added.** The iteration row already
    carries it (`src/store/sqlite.ts:538`, written from `AdmitRunOutcome.continuoRole`), and under
@@ -8392,12 +8402,12 @@ The spread the issue points at is real and is **not** a spread in difficulty:
 | duration | 121.8 s | **724.4 s** | 253.6 s | 203.3 s |
 | refused Bash calls | 4 / 29 | 10 / 69 | **18 / 36** | 5 / 29 |
 
-[`lap-3-dogfood.md`](docs/operations/lap-3-dogfood.md) section 5 separates the 6.8x itself, and
-neither half is judgment: the work was bigger (`+355 -7` against lap 2's `+16 -4`), and **the fence
-charged for itself** -- seven refused calls spent trying to see one screen, bought in the end at the
-price of five full suite runs. Lap 4's cost is half lap 3's on half the refusal count and a seventh
-of the diff. What the four laps vary in is **volume and friction**, and cost tracks turns, not the
-density of the decisions inside them.
+[`lap-3-dogfood.md`](docs/operations/earlier-laps/lap-3-dogfood.md) section 5 separates the 6.8x
+itself, and neither half is judgment: the work was bigger (`+355 -7` against lap 2's `+16 -4`), and
+**the fence charged for itself** -- seven refused calls spent trying to see one screen, bought in
+the end at the price of five full suite runs. Lap 4's cost is half lap 3's on half the refusal count
+and a seventh of the diff. What the four laps vary in is **volume and friction**, and cost tracks
+turns, not the density of the decisions inside them.
 
 That matters for this entry in one direction and it is the uncomfortable one: **turns are the
 dominant term, and a cheaper model buys turns back only if it does not spend more of them.** A lap
@@ -8523,8 +8533,8 @@ shape of the answer, not to ratify a model id.**
   would be a policy for a plan shape that never happened.
 - The four cost figures failing to reproduce. They are `total_cost_usd` / `num_turns` /
   `duration_ms` from each lap's terminal `result` event, dated 2026-09-06 through 2026-09-12, and
-  recorded in [`lap-2`](docs/operations/lap-2-dogfood.md) through
-  [`lap-5`](docs/operations/lap-5-dogfood.md) section 5.
+  recorded in [`lap-2`](docs/operations/earlier-laps/lap-2-dogfood.md) through
+  [`lap-5`](docs/operations/earlier-laps/lap-5-dogfood.md) section 5.
 
 ### Annotations this entry adds to earlier entries
 
@@ -8709,11 +8719,11 @@ seam (`D-0015`: `--json` is the wire protocol), because nothing measured here is
 > - Amends: D-0046 rule 4
 
 Every lap's terminal `result` event carries `total_cost_usd`, `num_turns` and `duration_ms`. rondo
-kept none of them, so five dogfood records ([`lap-1`](docs/operations/lap-1-dogfood.md) through
-[`lap-5`](docs/operations/lap-5-dogfood.md), each section 5 or 11) parsed them out of
-`events-000.jsonl` by hand to write their cost sections, and `D-0044` rule 5 made this issue the gate
-on a second model tier: *"adding the row first would mean choosing a model id against numbers nobody
-can read back"*. This entry is how the numbers get read back.
+kept none of them, so five dogfood records ([`lap-1`](docs/operations/earlier-laps/lap-1-dogfood.md)
+through [`lap-5`](docs/operations/earlier-laps/lap-5-dogfood.md), each section 5 or 11) parsed them
+out of `events-000.jsonl` by hand to write their cost sections, and `D-0044` rule 5 made this issue
+the gate on a second model tier: *"adding the row first would mean choosing a model id against
+numbers nobody can read back"*. This entry is how the numbers get read back.
 
 ### What had to be decided, and it is not "add a column"
 
@@ -9157,11 +9167,11 @@ field other than `session_id` and `bound_at_ms`.
 
 rondo#133 records that `rondo decide --contract-digest` accepts a digest no option of its proposal
 carries, and that the refusal arrives one command later at `rondo retry`, fail closed and costing
-nothing (`docs/operations/lap-6-dogfood.md` N-20). The issue files it as an observation rather than
-as a defect and asks a narrower question than "should `decide` refuse": **whether `D-0022` rule 19's
-*approved and never spent* query should be able to tell "waiting to be spent" from "cannot ever be
-spent".** This entry answers it, and the answer moves the refusal to the door — but for a reason
-that is not the one the question suggests.
+nothing (`docs/operations/earlier-laps/lap-6-dogfood.md` N-20). The issue files it as an observation
+rather than as a defect and asks a narrower question than "should `decide` refuse": **whether
+`D-0022` rule 19's *approved and never spent* query should be able to tell "waiting to be spent"
+from "cannot ever be spent".** This entry answers it, and the answer moves the refusal to the door —
+but for a reason that is not the one the question suggests.
 
 ### What was measured, and where
 
@@ -9329,7 +9339,7 @@ carries one entry and it is the `xxd` one, so the fence block reports one refusa
 allowance it prints is a declaration, which the block already says it is. What is missing is a third
 thing: **the worker's own sandbox is a second containment, it can fail open, and it fails open
 without producing a refusal.** Measured as N-16 in
-[`docs/operations/lap-6-dogfood.md`](docs/operations/lap-6-dogfood.md).
+[`docs/operations/earlier-laps/lap-6-dogfood.md`](docs/operations/earlier-laps/lap-6-dogfood.md).
 
 **The point is where the knowledge lives.** A worker that had not volunteered that paragraph would
 have left a record indistinguishable from a clean run.
@@ -11440,14 +11450,15 @@ commits later at `18db9fe` (`D-0024`, `D-0025`). So the step was never a descrip
 doing something on a surface: it was an instruction to whoever was writing the JavaScript that drove
 the library that day.
 
-Whoever that was, they did it, once. `docs/operations/lap-1-dogfood.md` section 10.6 is the record --
-*"The script's step 5, in the order it asks for"* -- with three reports pasted in: 109 ms before the
-answer (`awaiting_human`, *"Nothing was written"*), 125 ms closing the iteration, and **1 ms for the
-second call**, annotated in the record as `# the second call`. The vehicle was
+Whoever that was, they did it, once. `docs/operations/earlier-laps/lap-1-dogfood.md` section 10.6 is
+the record -- *"The script's step 5, in the order it asks for"* -- with three reports pasted in: 109
+ms before the answer (`awaiting_human`, *"Nothing was written"*), 125 ms closing the iteration, and
+**1 ms for the second call**, annotated in the record as `# the second call`. The vehicle was
 `.worker-scratch/drive.mjs`, thirty lines reproduced in full in section 8 of that record and
-deliberately never committed; `scripts/dogfood-lap.md` says in its own step 3 that the driver and its
-throwaway `tsconfig` **are gone** and *"the commands below are the surface"*. Step 5 was not updated
-when that happened, and step 2's *"Call the composition root's `admit(...)`"* was not either.
+deliberately never committed; `scripts/dogfood-lap.md` says in its own step 3 that the driver and
+its throwaway `tsconfig` **are gone** and *"the commands below are the surface"*. Step 5 was not
+updated when that happened, and step 2's *"Call the composition root's `admit(...)`"* was not
+either.
 
 So the honest description of step 5 today is: **a walked, recorded, one-off check, written for a
 driver that was deleted, asking for an operation the surface has never offered.** Not a check somebody
@@ -11545,8 +11556,9 @@ One pull request, one file:
   about step 5 and this entry answers that.
 - **It does not add, remove or rename a verb**, and it does not touch the terminal-row refusals that
   make a second press impossible.
-- **It does not delete `docs/operations/lap-1-dogfood.md` section 10.6.** The one walk that happened is
-  a measurement, and measurements are not edited when the procedure that produced them changes.
+- **It does not delete `docs/operations/earlier-laps/lap-1-dogfood.md` section 10.6.** The one walk
+  that happened is a measurement, and measurements are not edited when the procedure that produced
+  them changes.
 
 ### Residuals
 
@@ -11560,8 +11572,9 @@ One pull request, one file:
 
 At `f869657`, in this worktree:
 
-- **The three reports of the one walk** are in `docs/operations/lap-1-dogfood.md:1018-1040`, with the
-  timings in the table at `:929-931`, and the driver that produced them in section 8 at `:630-700`.
+- **The three reports of the one walk** are in
+  `docs/operations/earlier-laps/lap-1-dogfood.md:1018-1040`, with the timings in the table at
+  `:929-931`, and the driver that produced them in section 8 at `:630-700`.
 - **The step's origin**: `git log -S'Call it *twice*' -- scripts/dogfood-lap.md` returns exactly one
   commit, `9c76756` (2026-09-06), whose text reads `resume(iterationId)` with no `ports`. The CLI
   arrives at `18db9fe`.
@@ -12120,7 +12133,8 @@ it becomes"*. `docs/design/lap-review-stage.md` section 9.2 says the same thing 
 side: *"there is no `git status` anywhere in `src/`"*. Lap 4 is the case that happened -- the lap's
 work sat uncommitted in its workspace, the reading said, correctly, *"the topic branch is at the same
 commit as `refs/remotes/origin/main`, so this lap left nothing"*, and the only way to keep the work
-was an operator's hand commit onto a different branch (`docs/operations/lap-4-dogfood.md` section 6).
+was an operator's hand commit onto a different branch
+(`docs/operations/earlier-laps/lap-4-dogfood.md` section 6).
 
 What was known before this entry was half a fact and half a guess. The half that was a fact: when
 **everything** is uncommitted, the reader raises `concerns` and `publish` refuses unless
@@ -12894,13 +12908,14 @@ claim, not the number.
   the consequence in section 1: "rondo puts every handover to a person first, because kept line 2
   does not bend for small requests".
 - **What the per-lap gate has actually caught.** Lap 4's worker could not run the documented
-  preflight and left nothing committed (`docs/operations/lap-4-dogfood.md`, N-10). Lap 5 went green
-  on the operator's `node_modules` without installing (`docs/operations/lap-5-dogfood.md`, N-14).
-  Lap 6's worker ran with its own sandbox failed, reported only in its prose
-  (`docs/operations/lap-6-dogfood.md`, N-16), and lap 7 reproduced it
-  (`docs/operations/lap-7-dogfood.md`). An operator approved a wrong summary three times in one day
-  (rondo#39, as `D-0032` rule 2 and `D-0034` rule 3 cite it). **Only the first has a mechanical
-  check today** (`D-0060`); the other three were caught by a person reading.
+  preflight and left nothing committed (`docs/operations/earlier-laps/lap-4-dogfood.md`, N-10). Lap
+  5 went green on the operator's `node_modules` without installing
+  (`docs/operations/earlier-laps/lap-5-dogfood.md`, N-14). Lap 6's worker ran with its own sandbox
+  failed, reported only in its prose (`docs/operations/earlier-laps/lap-6-dogfood.md`, N-16), and
+  lap 7 reproduced it (`docs/operations/earlier-laps/lap-7-dogfood.md`). An operator approved a
+  wrong summary three times in one day (rondo#39, as `D-0032` rule 2 and `D-0034` rule 3 cite it).
+  **Only the first has a mechanical check today** (`D-0060`); the other three were caught by a
+  person reading.
 - **What the organisation's other roles have in rondo today.** The survey's G3 (no model reviewer;
   "the only substantive review is a person at the gate"), G4 (no CI observation), G5 (no merge
   observation or cleanup), G6 (no work-discovery), G7 (no stall detection), G8 (one lap at a time,
@@ -13586,12 +13601,12 @@ same date, read only (`JA/`), and the survey `JA/notes/lap-gap-survey-2026-09-13
   and a clean text prove nothing.
 - **The three defects, where their evidence sat.** N-14: the worker never ran `npm ci`, `verify` went
   green off an ancestor's `node_modules`, and the commit message states a wrong cause; the only
-  dissent was `knip`'s output (`docs/operations/lap-5-dogfood.md` N-14). N-16 / N-21: the first Bash
-  call's output reads `Sandbox is enabled but failed to initialize: EPERM ...`, and the worker said so
-  in its prose (`lap-6-dogfood.md` N-16, `lap-7-dogfood.md` N-21). rondo#39: a proposed candidate that
-  had already merged, a corruption that existed only in a summary's prose, and an instruction that
-  contradicted a repository convention (`D-0032` rule 3); all three were in summaries put to a person,
-  not in a lap's diff.
+  dissent was `knip`'s output (`docs/operations/earlier-laps/lap-5-dogfood.md` N-14). N-16 / N-21:
+  the first Bash call's output reads `Sandbox is enabled but failed to initialize: EPERM ...`, and
+  the worker said so in its prose (`lap-6-dogfood.md` N-16, `lap-7-dogfood.md` N-21). rondo#39: a
+  proposed candidate that had already merged, a corruption that existed only in a summary's prose,
+  and an instruction that contradicted a repository convention (`D-0032` rule 3); all three were in
+  summaries put to a person, not in a lap's diff.
 
 ### 1. What the reviewer reads, and what it does not
 
@@ -16135,13 +16150,14 @@ recorded in section "What was put to the human gate, and its answer". Refs `D-00
 edited by it. The annotations it would add on acceptance are listed in "Annotations this entry adds".
 
 `D-0064` has the person approve a scope once and the organisation do the rest (rule 3.1, P1).
-`D-0066` built that scope. Lap 8 walked it for the first time (`docs/operations/lap-8-dogfood.md`,
-rondo#207) and found that **the order the model assumes, request -> scope -> P1 -> admit under it,
-cannot be walked** (N-25): the first lap of a request is always admitted unscoped, its cost is on no
-budget, and the person's P1 comes after money is spent. This entry decides two things that close
-N-25, how an agent type becomes "a record rondo holds" without a paid lap and which verb spends a
-scope on a first admission, and it shows that neither opens a way around `D-0066` section 4. It keeps
-`D-0064`'s two lines (bases; an irreversible act is approved by a person) and **adds no third**.
+`D-0066` built that scope. Lap 8 walked it for the first time
+(`docs/operations/earlier-laps/lap-8-dogfood.md`, rondo#207) and found that **the order the model
+assumes, request -> scope -> P1 -> admit under it, cannot be walked** (N-25): the first lap of a
+request is always admitted unscoped, its cost is on no budget, and the person's P1 comes after money
+is spent. This entry decides two things that close N-25, how an agent type becomes "a record rondo
+holds" without a paid lap and which verb spends a scope on a first admission, and it shows that
+neither opens a way around `D-0066` section 4. It keeps `D-0064`'s two lines (bases; an irreversible
+act is approved by a person) and **adds no third**.
 
 ### What was measured, and how
 
@@ -16356,7 +16372,7 @@ The points are kept as put, and the answer follows them.
   falsifier.
 - **`D-0066` rules 1.2.3, 3.3, 4.2 and 4.4** gain dated annotations: section 3 rules 2 to 5, as the
   gate answered them.
-- **`docs/operations/lap-8-dogfood.md` N-25** is answered by this entry once built.
+- **`docs/operations/earlier-laps/lap-8-dogfood.md` N-25** is answered by this entry once built.
 
 ### What would falsify it
 
@@ -16386,14 +16402,14 @@ and its answer". Refs `D-0009`, `D-0027`, `D-0030`, `D-0047`, `D-0061`, `D-0064`
 **This entry decides and does not build.** Nothing in `src/` changes with it, and no earlier entry is
 edited by it. The annotations it would add on acceptance are listed in "Annotations this entry adds".
 
-Lap 9 (`docs/operations/lap-9-dogfood.md`, N-33) walked a scope approved before the first lap
-(`D-0069`) and found that **a review finding can be fixed only by leaving the scope**. The in-scope
-redo, `retry --scope-decision-id`, re-admits the predecessor's stored plan and carries no words; the
-redo that carries words, `revise`, takes no scope. So the lap `D-0065` rule 5.3 calls the correction
-of a finding ran on no budget, and the round the scope's `review_rounds` exists to count was not
-counted. This entry decides how a `revise` spends a scope without opening O6, and what the verdict
-tests about the text `revise` adds. It keeps `D-0064`'s two lines (bases; an irreversible act is
-approved by a person) and **adds no third**.
+Lap 9 (`docs/operations/earlier-laps/lap-9-dogfood.md`, N-33) walked a scope approved before the
+first lap (`D-0069`) and found that **a review finding can be fixed only by leaving the scope**. The
+in-scope redo, `retry --scope-decision-id`, re-admits the predecessor's stored plan and carries no
+words; the redo that carries words, `revise`, takes no scope. So the lap `D-0065` rule 5.3 calls the
+correction of a finding ran on no budget, and the round the scope's `review_rounds` exists to count
+was not counted. This entry decides how a `revise` spends a scope without opening O6, and what the
+verdict tests about the text `revise` adds. It keeps `D-0064`'s two lines (bases; an irreversible
+act is approved by a person) and **adds no third**.
 
 **Why this is an entry and not an implementation.** Three accepted texts say, as written, that a
 `revise` is not counted by a scope today: `D-0064`'s answer to its first gate point ("a scope covers
@@ -16634,7 +16650,7 @@ The points are kept as put, and the answer follows them.
   4.1** gains one: for `revise`, the gate walk runs between the verdict and the admission (section 2).
 - **`D-0065` rule 4.5** gains a dated annotation: a `revise` that names a scope decision is inside
   that scope and its round is counted (section 1.3).
-- **`docs/operations/lap-9-dogfood.md` N-33** is answered by this entry once built.
+- **`docs/operations/earlier-laps/lap-9-dogfood.md` N-33** is answered by this entry once built.
 
 ### What would falsify it
 
@@ -16792,9 +16808,9 @@ number.
   only agent types came through `D-0069` holds no template.
 - **What recorded laps cost, and the reserves people chose.** Code-change laps cost 1.032, 7.062,
   2.055, 1.542, 0.891 (laps 2-5, 7), 1.040 (lap 8) and 1.884 with a `revise` successor at 0.456
-  (lap 9) USD (`docs/operations/lap-8-dogfood.md`, `lap-9-dogfood.md`). Lap 8 and lap 9 both approved
-  `cost_reserve_usd` 2.50 and `cost_usd` 5.00 by hand; the reserve was 1.46 and 0.62 above the lap it
-  covered. Lap 9's person spent 10 min 26 s of a 16 min 11 s walk between commands.
+  (lap 9) USD (`docs/operations/earlier-laps/lap-8-dogfood.md`, `lap-9-dogfood.md`). Lap 8 and lap 9
+  both approved `cost_reserve_usd` 2.50 and `cost_usd` 5.00 by hand; the reserve was 1.46 and 0.62
+  above the lap it covered. Lap 9's person spent 10 min 26 s of a 16 min 11 s walk between commands.
 - **The model tables.** `MODEL_TIER_TABLE` has one row, `standard` -> `claude-opus-5`, family `claude`;
   `REVIEWER_TABLE` has one row, `gpt-6-astra`, family `gpt`, executable `codex`; a changed row is a new
   entry (`src/continuo/roles.ts:184-186`, `:283-285`).
@@ -16942,7 +16958,7 @@ what is re-readable and not re-derivable (`D-0063` rule 5) to the parts no funct
    6. **`expires_at_ms`** is the draft time (the document's assembly time, held in the snapshot) plus
       `laps x` the longest lap duration found, plus **24 h for the person's replies**. **Cold start for
       the duration: 30 min**, above every recorded lap duration (the longest is lap 3's 724.4 s,
-      `docs/operations/lap-8-dogfood.md`). The 24 h
+      `docs/operations/earlier-laps/lap-8-dogfood.md`). The 24 h
       allowance is not a measurement: rondo holds no row saying when a person answered a lap's end gate
       (the gate is continuo's). Residual.
    6. **Every computed value carries its bases**: the iteration rows it was read from, or the words
@@ -17140,7 +17156,7 @@ message with `asks` set, "**that message is what keeps the line stopped** ... an
 is what ends it". `openAsksIn` implemented that sentence exactly -- an ask is open while no message
 replies to it -- and lap 8 walked it. The person wrote *"Stop this line"*, the thread then held no
 open ask, and the next in-scope admission would have been tested from the top as if they had said
-"carry on" (`docs/operations/lap-8-dogfood.md` N-31, rondo#206).
+"carry on" (`docs/operations/earlier-laps/lap-8-dogfood.md` N-31, rondo#206).
 
 **So the defect is not that rondo failed to read the reply. It is that the stop offers the person
 three options and only two of them could be recorded.** A successor scope and a change to the work
@@ -24923,8 +24939,8 @@ three). Refs `D-0009`, `D-0045`, `D-0064`, `D-0066`, `D-0076`, `D-0083`, rondo#2
 
 **Numbering.** `D-0118` is taken by this lane; `D-0117` is reserved for a parallel lane.
 
-**Why an entry is needed.** In lap 8 (2026-09-13, `docs/operations/lap-8-dogfood.md` N-28) the
-person gave P1 and the gate answer through the claude-org secretary, and a worker typed
+**Why an entry is needed.** In lap 8 (2026-09-13, `docs/operations/earlier-laps/lap-8-dogfood.md`
+N-28) the person gave P1 and the gate answer through the claude-org secretary, and a worker typed
 `decide-scope` and `answer`. `scope_decision` recorded `actor_id happy_ryo` and `recorded_by
 rondo/cli`, and `gate_answer` recorded `actor_id happy_ryo`. These rows look exactly like the rows
 of an approval the person typed themselves. The only trace of the relay was the free text the worker
@@ -28291,7 +28307,7 @@ answers to disputed points) was not met.
 **Status:** accepted (2026-09-28, rondo#228; the issue's proposal, with its three open points
 answered at rondo's human gate). Amends `D-0070` section 1.4. Refs `D-0065` rules 4.1-4.3 and 4.5,
 `D-0066` rule 4.4, `D-0074` section 2, `D-0098` rule 5.2, rondo#233 S4,
-`docs/operations/lap-9-dogfood.md` N-33.
+`docs/operations/earlier-laps/lap-9-dogfood.md` N-33.
 
 ### Context
 
@@ -28387,8 +28403,8 @@ none. So what was left, and what this entry decides, is the terminal.
 
 - **`D-0070` section 1.4** gains a dated annotation: the flag is an override rather than the way in,
   and a `revise` that omits it spends the approval the lap it revises was admitted under, or refuses.
-- **`docs/operations/lap-9-dogfood.md` N-33's remaining half** -- the unscoped `revise` -- is
-  answered by this entry once built.
+- **`docs/operations/earlier-laps/lap-9-dogfood.md` N-33's remaining half** -- the unscoped `revise`
+  -- is answered by this entry once built.
 
 ## D-0158 — A start held by another line's files waits and starts by itself: the resident host's tick attempts it again once no line holding them is in flight, a person's own start's wait is a row, and the page offers no second press
 

@@ -46,13 +46,21 @@ found. What it found is in the page.
   [`model-drafter-planted-requests.md`](model-drafter-planted-requests.md) and
   [`model-reviewer-planted-lap.md`](model-reviewer-planted-lap.md).
 
-## Citations that still name the old path
+## Citations of a moved record
 
 Every page, comment and `.gitignore` line that pointed into a moved record was repointed with the
-move, with one exception that is deliberate: **`DECISIONS.md` and the design documents under
-`docs/design/` were left as they were written.** `DECISIONS.md` is append-only (`AGENTS.md`
-section 3), and each design document is kept as it was written so that a later reader can see what
-was measured and when ([`../README.md`](../README.md)). Their citations of
-`docs/operations/lap-N-dogfood.md` therefore still name the path the record had when the entry was
-taken; this table is how that path is followed. It is the same treatment `DECISIONS.md` already
-gives the modules renamed in #364, whose old names it still cites.
+move, and so were the citations in `DECISIONS.md` and in the design documents under `docs/design/`:
+`DECISIONS.md` cited these records at 33 places and
+[`../design/lap-review-stage.md`](../design/lap-review-stage.md) and
+[`../design/parallel-admission.md`](../design/parallel-admission.md) at 7, and all 40 now name
+`earlier-laps/`. **Only the path string moved.** No claim, measurement, date or word of a sentence
+around one changed, which is why this is not a rewrite of an append-only file and carries no
+annotation and no `D-` entry; the rule that says so is the path-following bullet in `DECISIONS.md`'s
+own "How to use this file". A citation that names a record by file name alone -- `lap-5-dogfood.md`,
+with no directory in front of it -- was left as it stands, because that name is still the record's
+name and this table is where the name is resolved.
+
+The records themselves are the one place an old path is still written down: a dogfood record that
+cites its own findings as `docs/operations/lap-N-dogfood.md` says where it sat on the day of the
+walk, and the records are kept exactly as they were written. None of those is a link, so none of
+them is broken; this table is how they are followed.

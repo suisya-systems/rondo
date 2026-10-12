@@ -97,7 +97,7 @@ verbatim and never interpreted (`D-0015` rule 7). It prints **no workspace path
 and no topic branch**.
 
 What that looks like in practice was recorded when a lap was walked end to end
-([`../operations/lap-1-dogfood.md:964-1000`](../operations/lap-1-dogfood.md)).
+([`../operations/earlier-laps/lap-1-dogfood.md:964-1000`](../operations/earlier-laps/lap-1-dogfood.md)).
 The gate's rationale was:
 
 > `Done. Appended the line to README.md:5 and committed as e075b60 on dogfood/lap1-dogfood-003.`
