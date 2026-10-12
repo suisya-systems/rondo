@@ -85,8 +85,8 @@ const outcomeJa = (o: PartOutcome) =>
     o.tries === 0
       ? "一度も始まりませんでした"
       : o.spent === null
-        ? `${String(o.tries)} 回試しましたが、費用は記録されていません`
-        : `${String(o.tries)} 回試して $${o.spent} 使いました${
+        ? `${String(o.tries)} 回実施しましたが、費用は記録されていません`
+        : `${String(o.tries)} 回実施して $${o.spent} 使いました${
             o.unread === 0 ? "" : `。うち ${String(o.unread)} 回は費用が記録されていません`
           }`
   }。`;
@@ -100,9 +100,9 @@ export const REPORT_JA: ReportWords = {
   reportPart: (o) => `${o.part}: ${outcomeJa(o)}`,
   reportOne: (o) => `この依頼は${outcomeJa(o)}`,
   reportByRondo: (gates) =>
-    `承認した範囲の内側だったため、確認 ${String(gates)} 件には rondo が自分で答え、あなたには尋ねませんでした。`,
-  reportUndone: (parts) => `終わらなかったのは${parts.join("、")} です。`,
+    `承認した範囲内だったため、確認 ${String(gates)} 件は rondo が回答しました。`,
+  reportUndone: (parts) => `終わらなかった作業: ${parts.join("、")}。`,
   reportScopeExits: (count) =>
-    `承認した範囲の限度に達して rondo が止まり、あなたに尋ねたことが ${String(count)} 度ありました。`,
+    `承認した範囲の上限に達して rondo が止まり、あなたに尋ねたことが ${String(count)} 回ありました。`,
   reportAsksNothing: "この報告について、あなたがすることはありません。",
 };

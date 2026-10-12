@@ -94,7 +94,6 @@ test("a ja host reads in Japanese and leaves every token in its own bytes", asyn
   // Prose, on the screens the operator actually reads.
   expect(summary).toContain("あなたの番");
   expect(summary).toContain("あなたの返事を待っています");
-  expect(summary).toContain("更新では何も記録しません");
   expect(requests).toContain("何を頼みますか");
 
   // **Tokens, verbatim and in the middle of the translated sentences** (rule 2
@@ -112,7 +111,7 @@ test("a ja host reads in Japanese and leaves every token in its own bytes", asyn
 
   // **What the ledger records stays English even here** (rule 4): the claim
   // labels beside the button are the bytes a press stores.
-  expect(summary).toContain("「承認する」を押したときに");
+  expect(summary).toContain("「承認する」を押すと、承認と一緒に次の内容が記録されます。");
   expect(summary).toMatch(/<dt class="label[^"]*">request<\/dt>/);
 });
 
@@ -385,9 +384,9 @@ test("the Japanese approve button says 承認する, and the press still answers
   // **The face is the page's language**: the one English word left on the
   // Japanese gate was the button a person presses (#369 missed it).
   expect(button?.[1]).toBe("承認する");
-  // The token is still in front of the person where it is a token: the note
-  // saying what the gate is answered with.
-  expect(summary).toContain("&#39;approve&#39;");
+  // The Japanese page no longer carries the note naming the terminal command
+  // and its 'approve' token (rondo#663); the press below still answers it.
+  expect(summary).not.toContain("rondo answer");
 
   // **And what is posted is not the face**: the answer is read from the
   // constant on the way in, so the ledger's word does not move with the page.

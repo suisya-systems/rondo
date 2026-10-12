@@ -1357,11 +1357,11 @@ export const PAGE_JA: PageWords = Object.freeze({
   lastLookedNever: "ここから下はこれまでのすべて",
   weekAllowance: "今週の予算",
   weekSpent: (spent, approved, left) => `${spent} ／ ${approved}　残り ${left}`,
-  weekNoAllowance: "まだ予算を承認していません",
+  weekNoAllowance: "予算はまだ承認されていません",
   rowWaitingOnYou: "あなたの返事を待っています",
-  rowFlowStopped: "目標に向けた依頼を止めて、ここで rondo が聞いています",
+  rowFlowStopped: "目標に向けた依頼を止めて、rondo がこのスレッドで聞いています",
   rowPressWaits: "あなたの次の一手を待っています",
-  rowFlowAsks: (points) => `質問 ${String(points)} 件に答えると、次の依頼が始まります`,
+  rowFlowAsks: (points) => `質問 ${String(points)} 件に回答すると、次の依頼が始まります`,
   rowRunning: "作業中です",
   rowFinished: "終わりました",
   rowStopped: "取りやめました",
@@ -1377,7 +1377,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   evAskedChange: "変更を頼みました。次の回でやり直します。",
   evAskedChangeNoNextTry: "変更を頼みました。次の回は始まっていません。",
   evAnswerUnrecorded:
-    "確認には答えていますが、承認したのか変更を頼んだのか記録に残っていません。このままではプルリクエストを出せません。",
+    "確認には回答済みですが、承認か変更依頼かの記録がありません。プルリクエストは作りません。",
   evClosedUnapproved: "承認されないまま、確認が閉じました。",
   evPublished: "公開しました。プルリクエストを開きました:",
   evPushedOnto: "公開しました。開いているプルリクエストに push しました:",
@@ -1388,20 +1388,20 @@ export const PAGE_JA: PageWords = Object.freeze({
         return (
           `${pullRequest} のチェックは通っていますが、rondo はマージしませんでした。` +
           (gateLapId !== null
-            ? `この作業の回（${gateLapId}）が確認待ちです。`
+            ? `この作業の回 ${gateLapId} が確認を待っています。`
             : askId !== null
-              ? `この作業についての質問（${askId}）があなたの答えを待っています。`
-              : "この作業についての質問か確認が、あなたの答えを待っています。") +
-          "答えれば rondo が自分でマージします。先にマージのボタンを押してもかまいません。"
+              ? `この作業の質問 ${askId} が、あなたの回答を待っています。`
+              : "この作業の質問か確認が、あなたの回答を待っています。") +
+          "回答すると rondo がマージします。マージのボタンを押してもかまいません。"
         );
       case "notInScope":
-        return `いまの承認にはマージが含まれていないので、rondo は ${pullRequest} を自分ではマージしませんでした。${press}`;
+        return `いまの承認にマージが含まれていないため、rondo は ${pullRequest} をマージしていません。${press}`;
       case "expired":
-        return `いまの承認の期限が切れているので、rondo は ${pullRequest} を自分ではマージしませんでした。${press}`;
+        return `承認の期限が切れているため、rondo は ${pullRequest} をマージしていません。${press}`;
       case "claim":
-        return `マージの途中で承認が変わったか、すでに使われていたため、rondo は ${pullRequest} をマージしませんでした。${press}`;
+        return `マージの途中で承認が変わったため、rondo は ${pullRequest} をマージしていません。${press}`;
       case "scopeChanged":
-        return `マージの途中で承認の期限が切れたか、承認が置き換えられたため、rondo は ${pullRequest} をマージしませんでした。${press}`;
+        return `マージの途中で承認の期限が切れたか置き換わったため、rondo は ${pullRequest} をマージしていません。${press}`;
       default:
         return (
           `${pullRequest} のチェックは通っていますが、rondo はマージしませんでした。` +
@@ -1427,8 +1427,8 @@ export const PAGE_JA: PageWords = Object.freeze({
           : `承認した予算の上限で止まりました。この回に残っていた $${left} のうち $${spent} を使いました。`
     }続けるには、下の質問から予算を増やしてください。`,
   evBroke: "rondo 自身の不具合で止まりました。依頼のしかたに問題があったわけではありません。",
-  evLost: "rondo の再起動で失われました。動いているものはなく、確保していた金額は戻しています。",
-  evEnded: "あなたが終わらせました。動いているものはなく、確保していた金額は戻しています。",
+  evLost: "rondo の再起動で失われました。動いているものはなく、取り置いていた費用は戻しました。",
+  evEnded: "あなたが終わらせました。動いているものはなく、取り置いていた費用は戻しました。",
   evEndedReason: "あなたの理由",
   evBrokeReason: "rondo が記録した内容（rondo を保守する人向け）",
   lapReportSaid: (kind) =>
@@ -1451,11 +1451,12 @@ export const PAGE_JA: PageWords = Object.freeze({
     })[kind],
   evChecksPassed: "自動チェックはすべて通りました。",
   evChecksFailed: "自動チェックが通りませんでした。",
-  evReadingClear: "モデルレビューでは指摘はありませんでした。",
-  evReadingRaised: (findings) => `モデルレビューで指摘が ${String(findings)} 件出ました。`,
-  evReadingUnavailable: "モデルレビューは変更を読めませんでした。",
+  evReadingClear: "レビュワーによるレビューで指摘はありませんでした。",
+  evReadingRaised: (findings) =>
+    `レビュワーによるレビューで指摘が ${String(findings)} 件出ました。`,
+  evReadingUnavailable: "レビュワーは変更を読めませんでした。",
   foldTry: (said, lines) => `${said}（${String(lines)} 行）`,
-  foldSeen: (lines) => `すでに読んだ ${String(lines)} 行`,
+  foldSeen: (lines) => `既読 ${String(lines)} 行`,
   foldOpen: "ひらく",
   saidByYou: "あなた",
   saidByRondo: "rondo",
@@ -1464,7 +1465,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageHeading: "rondo が次に勧める依頼",
   triageGoesAgainst: "反している目標",
   triageWhy: "理由",
-  triageOpenPoints: "決めること（それぞれに rondo の案つき）",
+  triageOpenPoints: "決めること（rondo の案つき）",
   triageDecided: "rondo が案のとおり決めたこと（変えられます）",
   triageFrom: "もとにしたもの",
   triageIssue: (repository, number) => `${repository}#${String(number)}`,
@@ -1481,9 +1482,9 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageWriteGoal: "目標を書く",
   triageEditGoal: "目標を見る",
   triageNothingAgainst: "読んだ範囲では、目標に反するものはありませんでした。",
-  triageNotReadYet: "目標は書かれていますが、rondo はまだ候補を照らし合わせていません。",
+  triageNotReadYet: "目標は書かれています。rondo はまだ候補を選んでいません。",
   triageUnavailable:
-    "今回は順位をつけられませんでした。1 時間以内か、読む対象が変わったときに、もう一度試します。",
+    "今回は候補を選べませんでした。1 時間以内か、イシューや目標が変わったときに、もう一度試します。",
   triageBoxAgainst: (clause) => `目標のこの項目に反しています: ${clause}`,
   triageBoxPoints: "決めること（rondo の案のとおり）:",
   triageBoxDecided: "rondo が決めたこと（書き換えれば変わります）:",
@@ -1491,8 +1492,8 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageBoxFrom: (issue) => `もとにしたイシュー: ${issue}`,
   goalHeading: (repository) => `${repository} の目標`,
   goalLead:
-    "ふだんの言葉で、番号つきの項目を書いてください。それぞれに「どうなったら満たしていないか」を添えておくと、" +
-    "依頼がどの項目に反するかを rondo が示せます。",
+    "番号つきの項目を、ふだんの言葉で書いてください。それぞれに「どうなったら満たしていないか」を添えると、" +
+    "依頼がどの項目に反するかを rondo が示します。",
   goalNumber: (count) => `${String(count)}.`,
   goalClauseLabel: "項目",
   goalUnmetLabel: "満たしていない条件",
@@ -1500,8 +1501,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   goalUnmetPlaceholder: "例: 一度でもターミナルが必要になったとき",
   goalKeep: "この目標を保存する",
   goalKeptAt: (when) => `${when}前に保存しました。`,
-  goalDraft:
-    "まだ保存していません。rondo が書いた下書きなので、直したいところを直してから保存してください。",
+  goalDraft: "まだ保存していません。rondo の下書きです。直してから保存してください。",
   goalNotKept: "まだ保存していません。項目を書いてから保存してください。",
   goalBack: "最初の画面へ戻る",
   goalDraftClauses: [
@@ -1520,17 +1520,17 @@ export const PAGE_JA: PageWords = Object.freeze({
   goalRefusedNoApprover:
     "保存していません。この rondo には承認者が設定されていないので、画面からは何も書き込みません。",
   goalRefusedPress: "保存していません。この画面のボタンから送られたものではありません。",
-  goalRowIncomplete: "各項目には、項目そのものと「満たしていない条件」の両方が要ります。",
+  goalRowIncomplete:
+    "保存していません。各項目には、項目と「満たしていない条件」の両方を書いてください。",
   goalRefusedEmpty: "目標には項目が 1 つ以上要ります。",
-  goalRefused: "保存していません。rondo の記録が目標を受け付けませんでした。",
+  goalRefused: "目標を保存できませんでした。",
   triageNotNowAction: "今はやらない",
   triageNotNowRefusedNoApprover:
     "見送っていません。この rondo には承認者が設定されていないので、画面からは何も書き込みません。",
   triageNotNowRefusedPress: "見送っていません。この画面のボタンから送られたものではありません。",
   triageNotNowRefused: "見送っていません。画面を開いたあとで、提案が新しくなっています。",
   triageBack: "最初の画面へ戻る",
-  triageGoalScopeOffer:
-    "一度承認しておけば、目標に向けた依頼を rondo が 1 件ずつ自分で送ることもできます。",
+  triageGoalScopeOffer: "一度承認しておくと、目標に向けた依頼を rondo が 1 件ずつ送ります。",
   triageGoalScopeAction: "この目標に向けて rondo に進めてもらう",
   triageGoalScopeRunning: "rondo がこの目標に向けて自分で進めています。",
   triageGoalScopePaused: "この目標に向けた作業は一時停止中です。",
@@ -1539,19 +1539,20 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageStarted: "開始済み",
   triageStartedLink: "依頼を見る",
   flowAskLead:
-    "始める前に rondo から質問があります。依頼の文は必要なら直してください。決めることには一つずつ答えるか、入っている答えのままで構いません。",
+    "始める前に rondo から質問があります。必要なら依頼の文を直し、決めることに一つずつ回答するか、入っている回答のままにしてください。",
   flowAskRequestLabel: "依頼",
   flowAskWhyLabel: "理由",
   flowAskAction: "この答えで始める",
   triageAnswerAsk: "下の質問に答える",
-  triageMixedScript:
-    "この文には別の言語の文字が混じっています。読み直しても直らなかったので、送る前に確かめてください。",
+  triageMixedScript: "この文には別の言語の文字が混じっています。送る前に確認してください。",
   flowAskRefusedNoApprover:
-    "答えていません。この rondo には承認者が設定されていないので、画面からは何も書き込みません。",
-  flowAskRefusedPress: "答えていません。この画面のボタンから送られたものではありません。",
-  flowAskRefused: "答えていません。画面を開いたあとで、この質問は新しくなっています。",
+    "回答は記録されませんでした。RONDO_APPROVER が設定されていないため、このページからは回答できません。",
+  flowAskRefusedPress:
+    "回答は記録されませんでした。ホーム画面に戻って、もう一度ボタンを押してください。",
+  flowAskRefused:
+    "回答は記録されませんでした。質問が新しくなっています。ホーム画面に戻って、いまの質問に回答してください。",
   roundChangedAsk:
-    "答えている間に rondo が候補を読み直し、聞く内容が変わりました。書いた内容はここに残してあります。",
+    "回答している間に rondo の質問が変わりました。書いた内容はここに残してあります。",
   roundChangedStep:
     "書いている間にこの段階が終わり、rondo は次の段階に進んでいます。書いた内容はここに残してあります。",
   roundGone: "聞かなくなったこと：",
@@ -1610,29 +1611,29 @@ export const PAGE_JA: PageWords = Object.freeze({
     "一時停止すると、この承認は終わります。もう一度承認するまで、rondo はこの目標に向けた依頼を送りません。",
   goalScopePauseAction: "一時停止する",
   goalScopePausedLead:
-    "この目標に向けた新しい依頼は送りません。再開するには、下でもう一度承認してください。上限はそこから新しく始まります。",
+    "この目標に向けた新しい依頼は送りません。再開するには、下でもう一度承認してください。上限は新しい承認で決め直します。",
   goalScopeRefusedGoalChanged:
     "承認していません。画面を開いたあとで目標が書き換えられました。いまの目標を読んでから、もう一度承認してください。",
   goalScopeRefusedMoved:
     "何も記録していません。画面を開いたあとで、この目標の承認が変わりました（承認・一時停止・再開のいずれかが先に行われています）。",
   scopeStopLead:
-    "このまま進めると承認した範囲の外に出るため、rondo はこの作業を止めました。あなたの判断を待っています。",
+    "このまま進めると承認した範囲を超えるため、rondo はこの作業を止めました。あなたの回答を待っています。",
   scopeStopOptions: "選べること",
   goalScopeSampleHeading:
-    "どの依頼もこれまでの回と同じくらいの大きさだとみなして、予算を下書きしています",
+    "どの依頼もこれまでの回と同じくらいの大きさとみなして、予算を下書きしています",
   scopeStopWider: "範囲を広げて承認する",
   scopeStopWiderDoes:
-    "下の「予算を増やして続ける」を押すと、増やした予算で承認が記録され、この質問は閉じます。そのあと、確認待ちの回でもう一度頼んでください。前の承認は使われなくなります。",
+    "下の「予算を増やして続ける」を押すと、増やした予算で承認が記録され、この質問は閉じます。そのあと、確認待ちの回でもう一度変更を依頼してください。",
   scopeStopWiderAtGate:
-    "確認待ちの回で「予算を引き上げる」を押してから「続ける」を押します。増やした予算の承認が通ると、前の承認は使われなくなります。",
+    "確認待ちの回で「この承認の予算を引き上げる」を開いて「予算を引き上げる」を押し、そのあと「続ける」を押してください。",
   scopeStopWiderNoLap:
-    "まだ 1 回目が始まっていないので、ここで引き上げる予算はありません。この作業を止めて、新しい依頼として頼み直してください。範囲はあらためて下書きされます。",
+    "まだ 1 回目が始まっていないため、ここで引き上げる予算はありません。この作業を止めて、新しい依頼として出し直してください。範囲は改めて下書きされます。",
   scopeStopChange: "作業を変える",
   scopeStopChangeDoes:
-    "下に変えてほしいことを書いてから「続ける」を押します。予定していた作業の代わりに、変えた作業が始まります。",
+    "下に変えてほしいことを書いて「続ける」を押すと、予定していた作業の代わりに、変えた内容で作業が始まります。",
   scopeStopStop: "この作業を止める",
   scopeStopStopDoes:
-    "「この作業を止める」を押します。この作業はここで終わり、依頼のほかの作業は続きます。あとから続けることもできます。",
+    "「この作業を止める」を押すと、この作業はここで終わります。依頼のほかの作業は続きます。あとから続けることもできます。",
   triageGoalScopeStopped: "rondo はこの目標に向けた作業を止めています。",
   triageGoalScopeAsking: "rondo は、上の質問への答えを待ってから次の依頼を送ります。",
   goalScopeAskingLead:
@@ -1660,7 +1661,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   flowStopLapsUsed: (admissions, laps) =>
     `承認した ${String(laps)} 回のうち ${String(admissions)} 回を使いました。`,
   flowStopCostOver: (spent, committed, budget) =>
-    `これまでに ${spent} を使っています。次の依頼のために確保する分を足すと ${committed} になり、承認した ${budget} を超えます。`,
+    `これまでに ${spent} を使いました。次の依頼の分を足すと ${committed} になり、承認した ${budget} を超えます。`,
   flowStopSkippedHeading: "見送った候補",
   flowStopSkipped: (why) => {
     switch (why) {
@@ -1669,7 +1670,7 @@ export const PAGE_JA: PageWords = Object.freeze({
       case "put_aside":
         return "あなたが「今はやらない」で見送りました。";
       case "not_issue":
-        return "止まった依頼の続きなので、送るかどうかはあなたが決めます。";
+        return "止まった依頼の続きです。送るかどうかはあなたが決めてください。";
     }
   },
   flowStopRankingEmpty: "最新の順位付けには、候補が 1 件もありません。",
@@ -1682,8 +1683,8 @@ export const PAGE_JA: PageWords = Object.freeze({
       case "laps":
       case "cost":
         return (
-          "続けるなら、承認をいったん一時停止してから「承認して再開する」を押します。上限はあらためて下書きされ、そこから新しく始まります。" +
-          "やめるなら、一時停止するだけで構いません。"
+          "続けるには、承認をいったん一時停止してから「承認して再開する」を押してください。上限は新しい承認で決め直します。" +
+          "やめるには、一時停止するだけで構いません。"
         );
       case "failed_twice":
         return "失敗した 2 件の理由を、それぞれの依頼のスレッドで確かめてください。そのうえで一時停止するか、もう一度承認して続けさせます。";
@@ -1702,10 +1703,10 @@ export const PAGE_JA: PageWords = Object.freeze({
       `${repository} の目標に向けて、rondo はこれ以上の依頼を送りません。`,
       why,
       "選べること:",
-      "- 上限を広げて承認する（承認をいったん一時停止し、残りの作業に要る予算や期限であらためて承認する）。" +
+      "- 上限を増やして承認する（承認をいったん一時停止し、残りの作業に必要な予算や期限で承認し直す）。" +
         "あきらめるもの: ありません。あなたが承認するまで rondo は待ちます。",
-      "- 目標をあらためて承認する。あきらめるもの: いまの承認。rondo は、いまの目標に向けて別の予算で動きます。",
-      "- 止める（「この作業を止める」と答える）。あきらめるもの: 目標の残りの作業。すでに送った依頼は最後まで進みます。",
+      "- 目標を承認し直す。いまの承認は使わなくなり、rondo は新しい承認のもとで目標に向けて動きます。",
+      "- 止める（「この作業を止める」ボタンを押す）。あきらめるもの: 目標の残りの作業。すでに送った依頼は最後まで進みます。",
       `おすすめ: ${recommended}`,
       "このメッセージに答えるまで、目標に向けた依頼はもう送りません。",
     ].join("\n"),
@@ -1716,7 +1717,7 @@ export const PAGE_JA: PageWords = Object.freeze({
       case "expiry":
       case "laps":
       case "cost":
-        return "上限を広げて承認する。尽きたのは承認であって、目標の作業ではありません。";
+        return "上限を増やして承認する。尽きたのは承認であって、目標の作業ではありません。";
       case "failed_twice":
         return "直前の 2 件がどう終わったのかを、それぞれのスレッドで先に確かめる。";
       case "nothing_eligible":
@@ -1736,7 +1737,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   weekTimes: (count) => `${String(count)} 回`,
   runningHeading: "進んでいる作業",
   runningNone: "いま進んでいる作業はありません。",
-  runningNote: "どれもあなたの返事を待たずに進みます。rondo が聞くのは必要なときだけです。",
+  runningNote: "どれも、あなたの返事を待たずに進みます。必要なときだけお知らせします。",
   stepScope: "計画と範囲",
   stepWork: "作業",
   stepChecks: "自動チェック",
@@ -1749,7 +1750,7 @@ export const PAGE_JA: PageWords = Object.freeze({
     ({
       running: "実行中",
       green: "通過",
-      red: "通らず",
+      red: "失敗",
       none: "報告なし",
       conflict: "未実行",
       rerunning: "再実行中",
@@ -1796,7 +1797,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   resultChecks: "チェック",
   resultNotMerged: "マージはあなたが行います。チェックが通れば、このページからマージできます。",
   resultMergesOnGreen:
-    "チェックが通れば、承認した範囲のとおりに rondo が既定ブランチへマージします。",
+    "チェックが通れば、承認した範囲で rondo がデフォルトブランチにマージします。",
   resultMerged: (into, method) =>
     `${into} にマージしました${
       (
@@ -1814,7 +1815,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   resultConflictDoOffered: (base) =>
     `すぐ下の「次にやること」のボタンで rondo に解消させるか、プルリクエストのブランチ側で自分で解消して（${base} を取り込むか、リベースする）push してください。どちらでも、チェックが動けば rondo が読み直します。`,
   resultConflictFixing: (base) =>
-    `rondo が新しい回で ${base} を取り込み、競合を解消しています。push する前に、その結果をここで確認してもらいます。`,
+    `rondo が新しい回で ${base} を取り込み、競合を解消しています。結果は、プルリクエストを更新する前にここで確認できます。`,
   resultRed: (pullRequest, names) =>
     names.length === 0
       ? `${pullRequest} のチェックが通りませんでした。`
@@ -1824,7 +1825,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   resultRedDoOffered:
     "すぐ下の「次にやること」のボタンで rondo に失敗を再現して同じプルリクエストの上で直させるか、プルリクエストのブランチ側で自分で直して push してください。どちらでも、チェックが動けば rondo が読み直します。",
   resultRedFixing:
-    "rondo が同じプルリクエストの上で新しい回を始め、失敗を再現して直しています。push する前に、その結果をここで確認してもらいます。",
+    "rondo が新しい回で、チェックの失敗を再現して直しています。結果は、プルリクエストを更新する前にここで確認できます。",
   resultRedWaits:
     "rondo はまだ直し始めていません。この作業についての質問が、あなたの答えを待っているためです。それに答えれば、rondo がここで直せます。自分で直す場合は、プルリクエストのブランチ側で直して push してください。",
   resultConflictWaits: (base) =>
@@ -1832,7 +1833,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   resultMoved: (from, to, count) =>
     `rondo が読んだあとにブランチが進みました。${from} → ${to} で、この作業のものではないコミットが ${String(count)} 件:`,
   resultMovedNone: (from, to) =>
-    `rondo が読んだあとにブランチが変わりました。${from} → ${to} ですが、その間に増えたコミットを GitHub は挙げていません。以前のコミットへ戻されたか、履歴が書き換えられたようです。`,
+    `rondo が読んだあとにブランチが変わりました（${from} → ${to}）。増えたコミットはなく、以前のコミットに戻されたか、履歴が書き換えられています。`,
   resultMovedMore: (count) => `ほか ${String(count)} 件`,
   resultMergedOutside: (into, by) =>
     by === null
@@ -1882,7 +1883,7 @@ export const PAGE_JA: PageWords = Object.freeze({
     inProgress
       ? `${pair} ・ 実行中の${tries === 1 ? "回" : ` ${String(tries)} 回`}のために $${held} を確保`
       : `${pair} ・ 費用の報告がない ${String(tries)} 回分として $${held} を確保`,
-  govByTryLabel: "各回の合計",
+  govByTryLabel: "費用の合計",
   govByTry: (total, tries) => `$${total}（${tries.join(" ・ ")}）`,
   govTryCost: (at, cost, running) =>
     `${String(at)} 回目 ${cost === null ? (running ? "実行中" : "費用の報告なし") : `$${cost}`}`,
@@ -1890,9 +1891,9 @@ export const PAGE_JA: PageWords = Object.freeze({
   govAtCap: (cost, cap) =>
     `この回は $${cost} を使い、始めた時点で承認した予算に残っていた $${cap} をすべて使い切りました`,
   govTouchLabel: "触れてよい範囲",
-  govStepsLabel: "終わるまでに残っていること",
+  govStepsLabel: "終わるまでの手順",
   govAct: (act) => (act === "open_pull_request" ? "プルリクエストを開く" : "ブランチを送る"),
-  govActs: (acts) => `rondo がしてよいのは、${acts.join("・")}ことです`,
+  govActs: (acts) => `rondo は${acts.join("・")}ことができます`,
   govActsNone: "rondo はこの機械の外へ何も出しません。",
   govDecided: (count) => `聞かずに決めたこと ${String(count)} 件`,
   govDecidedNone: "この依頼について、聞かずに決めたことはありません。",
@@ -1949,26 +1950,26 @@ export const PAGE_JA: PageWords = Object.freeze({
     "ほかの作業がこのファイルを変更してマージされました。次の回は、まずその変更を取り込んでから始めます。",
   evQuestionBuilt: (commit, waits) =>
     (commit === null
-      ? "作業者は何もコミットせずに質問しました。"
-      : `作業者は質問の前に、ここまでの変更を ${commit} としてコミットしました。`) +
+      ? "ワーカーは何もコミットせずに質問しました。"
+      : `ワーカーは質問の前に、ここまでの変更を ${commit} にコミットしました。`) +
     (waits === null ? "" : `返事を待っている部分: ${waits}`),
   evQuestionBuiltLink: "変更内容",
   reviseAnswerStarts: (part) =>
     part === null
-      ? "質問に答えてからこのボタンを押すと、あなたの返事を踏まえて次の回が始まります。"
-      : `質問に答えてからこのボタンを押すと、あなたの返事を踏まえて作業 ${String(part)} の次の回が始まります。`,
+      ? "質問に回答してからこのボタンを押すと、回答を渡して次の回を始めます。"
+      : `質問に回答してからこのボタンを押すと、回答を渡して作業 ${String(part)} の次の回を始めます。`,
   reviseAnswerReleases: (parts) =>
     `返事をすると、この作業のマージを待っている${parts.map((n) => `作業 ${String(n)}`).join("・")} も先へ進みます。`,
   questionWaited: (age) => `この質問は ${age} 待っています。`,
   reviseAnswerDrafted:
-    "作業者の質問とあなたの返事を、そのまま入力欄に入れてあります。自由に書き足してください。送る内容はあなたが決めます。",
+    "ワーカーの質問とあなたの回答を、そのまま入力欄に入れました。自由に書き換えて構いません。",
   evTookIn: "この回は、ほかの作業がマージした変更をまず取り込みました。",
   evTakeInMissed: "この回は、ほかの作業がマージした変更を取り込みませんでした。",
   closingHeading: "仕上げの修正",
   closingSaid: (findings, readCommit, rounds) =>
     `しきい値より軽い指摘 ${String(findings)} 件を、テストつきで 1 回の作業で直しました。` +
-    `モデルレビューが最後に読んだのはコミット ${readCommit} で、この修正は読んでいません` +
+    `レビュワーが最後に読んだのはコミット ${readCommit} で、この修正は読んでいません` +
     (rounds === null ? "。" : `（レビュー回数の上限は ${String(rounds)} 回でした）。`),
   mergeNotReread: (readCommit) =>
-    `最後のコミットは仕上げの修正で、モデルレビューは読んでいません。最後に読んだのは ${readCommit} です。`,
+    `最後のコミットは仕上げの修正で、レビュワーは読んでいません。最後に読んだのはコミット ${readCommit} です。`,
 } satisfies PageWords);

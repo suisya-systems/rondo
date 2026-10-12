@@ -62,10 +62,10 @@ export const SINCE_EN: SinceWords = {
 };
 
 export const SINCE_JA: SinceWords = {
-  sinceHeading: (when) => `${when}前に見てから動いたもの`,
-  sinceNothing: (when) => `${when}前に見てから、動いたものはありません。`,
+  sinceHeading: (when) => `${when}前に見てから動いた依頼`,
+  sinceNothing: (when) => `${when}前に見てから、動いた依頼はありません。`,
   sinceNever:
-    "前回見た記録はまだありません。ここで何かを送るか答えると、その後に動いたものをここに示します。",
+    "前回見た記録はまだありません。ここで送信か回答をすると、その後に動いた依頼がここに出ます。",
   sinceSaid: (moved) => {
     const parts = [
       ...(moved.asked ? ["あなたが依頼しました"] : []),
@@ -76,10 +76,10 @@ export const SINCE_JA: SinceWords = {
         ? [
             moved.lapsEnded === moved.lapsMoved
               ? `${String(moved.lapsEnded)} 回が終わりました`
-              : `${String(moved.lapsMoved)} 回に動きがあり、うち ${String(moved.lapsEnded)} 回が終わりました`,
+              : `${String(moved.lapsMoved)} 回が進み、うち ${String(moved.lapsEnded)} 回が終わりました`,
           ]
         : moved.lapsMoved > 0
-          ? [`${String(moved.lapsMoved)} 回に動きがありました`]
+          ? [`${String(moved.lapsMoved)} 回が進みました`]
           : []),
     ];
     return `${parts.join("。")}。`;

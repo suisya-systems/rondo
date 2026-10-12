@@ -185,7 +185,7 @@ test("red names what failed, and a later green is what the state says", async ()
   await checked(world, { kind: "red", failed: ["build", "lint"], cancelled: [], timedOut: [] });
   const red = await ja(world);
   expect(head(red)).toContain('class="result-checks result-checks-red"');
-  expect(head(red)).toContain("<b>通らず</b>");
+  expect(head(red)).toContain("<b>失敗</b>");
   expect(head(red)).toContain("失敗: build、lint");
 
   await checked(world, { kind: "green", counted: 2, skipped: 0 }, 8_000);
@@ -204,7 +204,7 @@ test("red names what failed, and a later green is what the state says", async ()
     },
     9_000,
   );
-  expect(head(await ja(world))).toContain("<b>通らず</b>");
+  expect(head(await ja(world))).toContain("<b>失敗</b>");
 });
 
 test("a cancelled or timed-out check is said as what it came to, and is not green (continuo D-1113)", async () => {
@@ -240,7 +240,7 @@ test("a change asked for whose next try never started is not said to be approved
 test("a lap answered before the record existed says rondo does not know, and claims no approval", async () => {
   const world = await approved(null);
   const japanese = await ja(world);
-  expect(japanese).toContain("承認したのか変更を頼んだのか記録に残っていません");
+  expect(japanese).toContain("確認には回答済みですが、承認か変更依頼かの記録がありません。");
   expect(japanese).not.toContain("承認しました");
   expect(head(japanese)).not.toContain("承認済み");
   const english = await en(world);
@@ -602,7 +602,7 @@ test("a merge on green rondo withheld is on the thread in the person's words, th
   // The question that holds it is named, in both languages.
   const asked = { why: "asked", askId: "ask-1", gateLapId: null };
   expect(japanese).toContain(chromeFor("ja").evMergeWithheld("#372", asked, null));
-  expect(chromeFor("ja").evMergeWithheld("#372", asked, null)).toContain("質問（ask-1）");
+  expect(chromeFor("ja").evMergeWithheld("#372", asked, null)).toContain("質問 ask-1");
   expect(japanese).toContain(chromeFor("ja").lapReportSaid("withheld"));
   expect(await merging(world, "en")).toContain(
     "rondo did not merge #372, though its checks are green: the question ask-1 about this work " +
@@ -613,7 +613,7 @@ test("a merge on green rondo withheld is on the thread in the person's words, th
     "the try i-next of this work is waiting at its confirmation.",
   );
   expect(chromeFor("ja").evMergeWithheld("#372", gate, null)).toContain(
-    "この作業の回（i-next）が確認待ちです。",
+    "この作業の回 i-next が確認を待っています。",
   );
   // The newest reason is the one said; a refusal's own words are relayed.
   await withhold("mergeRefusedQueue", 9_000);
@@ -1042,9 +1042,7 @@ test("a conflict rondo fixes by itself draws no press and says so; one it left i
   const japanese = await page(true, null);
   expect(japanese).not.toContain("/fix-conflict?");
   expect(japanese).toContain("rondo の番です");
-  expect(japanese).toContain(
-    "承認された範囲で rondo が自分から main を取り込み、競合を解消しています",
-  );
+  expect(japanese).toContain("承認した範囲で、rondo が main を取り込んで競合を解消しています");
   // The band says it is settling, as for a fix already running.
   expect(head(japanese)).toContain("rondo が新しい回で main を取り込み、競合を解消しています。");
   expect(await page(true, null, "en")).toContain(
@@ -1138,7 +1136,7 @@ test("a red check with no names says so without empty brackets (rondo#551)", asy
   await checked(world, { kind: "red", failed: [], cancelled: [], timedOut: [] });
   const japanese = await fixing(world);
   expect(japanese).toContain('name="cause" value="red"');
-  expect(japanese).toContain("#372 のチェックが通りませんでした。rondo に");
+  expect(japanese).toContain("#372 のチェックが通りませんでした。rondo が");
   expect(japanese).not.toContain("（）");
   const english = await fixing(world, "en");
   expect(english).toContain("The checks on #372 did not pass. rondo can");

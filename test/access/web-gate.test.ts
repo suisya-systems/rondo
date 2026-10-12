@@ -621,12 +621,12 @@ test("the change is offered in the page's language, and the findings stay the re
   );
   const bar = barOf(html);
   // The change is a press in Japanese too, and not a fold (rondo#351).
-  expect(bar).toContain(">変更を頼む</button>");
+  expect(bar).toContain(">変更を依頼する</button>");
   expect(bar.slice(bar.indexOf('id="revise"'))).not.toContain("<details");
   // Before a draft lands, the box is empty and the view says one is coming,
   // in the page's language (D-0077 rule 4.3).
   expect(bar).toMatch(/<textarea name="body"[^>]*><\/textarea>/);
-  expect(bar).toContain("変更内容の下書きを作っています");
+  expect(bar).toContain("変更依頼の下書きを作っています");
 
   await draftRevise(world, REVISE_ANSWER);
   const drafted = await operatorPage(
@@ -915,8 +915,9 @@ test("the qualified approve is in the page's language too (#237)", async () => {
   const bar = barOf(html);
   expect(bar).toContain(">指摘を残したまま承認する</button>");
   expect(bar).toContain("モデルレビューが挙げた点に答えないまま、この作業をこのまま受け入れます。");
-  // The answer carried to the gate is a token and stays ASCII (D-0055 rule 3).
-  expect(bar).toContain("'approve'");
+  // The Japanese page no longer carries the tooltip naming the terminal
+  // command and its 'approve' token (rondo#663).
+  expect(bar).not.toContain("rondo answer");
 });
 
 test("a lap nobody approved says nothing about what was raised (#237)", async () => {

@@ -693,7 +693,7 @@ test("a stopped lap's ask is answered first too: the band points to it, not back
   const ja = await operatorPage(portsOver(world), "t", threadOf("req-1"), chromeFor("ja"), mint);
   expect(ja).not.toContain(DETERMINISTIC_DRAFTER);
   expect(ja).toContain('<span class="msg-who">rondo</span>');
-  expect(ja).toContain("rondo の質問に答える · ");
+  expect(ja).toContain("rondo の質問に回答 · ");
 });
 
 test("a start refused at a scope test says the test in words, never its name (rondo#431)", () => {

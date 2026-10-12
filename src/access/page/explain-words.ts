@@ -152,41 +152,41 @@ export const EXPLAIN_EN: ExplainWords = Object.freeze({
 } satisfies ExplainWords);
 
 export const EXPLAIN_JA: ExplainWords = Object.freeze({
-  explainBand: "説明であって、承認でも決定でもありません。",
+  explainBand: "この回答は説明です。承認や決定ではありません。",
   explainCost: (cost, request) =>
-    `この回答の費用は $${cost} で、「${request}」で承認した予算から差し引いています。`,
+    `この回答の費用は $${cost} で、「${request}」で承認した予算から差し引きました。`,
   explainCostUnread: (cap, request) =>
-    `この回答の費用は報告されなかったため、回答 1 件あたりの上限 $${cap} を「${request}」で承認した予算から差し引いています。`,
-  explainOverCap: (cap) => `回答 1 件あたりの上限 $${cap} を超えています。`,
-  explainFree: "モデルに尋ねていないので、この回答に費用はかかっていません。",
-  explainNoApproval: "この依頼には費用を差し引ける承認がまだないため、モデルには尋ねていません。",
-  explainAcrossRequests:
-    "すべての依頼にまたがる質問には rondo の記録だけから答えるため、モデルには尋ねていません。",
+    `この回答の費用は報告されなかったため、1 回答あたりの上限 $${cap} を「${request}」で承認した予算から差し引きました。`,
+  explainOverCap: (cap) => `1 回答あたりの上限 $${cap} を超えています。`,
+  explainFree: "この回答に費用はかかっていません。",
+  explainNoApproval:
+    "モデルには尋ねず、rondo の記録から回答しています。この依頼の範囲はまだ承認されていません。範囲を承認すると、次の質問からモデルが回答します。",
+  explainAcrossRequests: "モデルには尋ねず、rondo の記録から回答しています。",
   explainAcrossLead:
-    "あなたの対応を待っているものと、rondo が待っているものを、依頼ごとにまとめます。",
+    "依頼ごとに、あなたの対応を待っているものと、rondo 側で進行中のものをまとめます。",
   explainRequestQuoted: (title) => `「${title}」`,
-  explainNothingWaits: "いまあなたがすることはありません",
-  explainExpired: "この依頼の承認は期限が切れているため、モデルには尋ねていません。",
+  explainNothingWaits: "あなたの対応を待っているものはありません",
+  explainExpired:
+    "モデルには尋ねず、rondo の記録から回答しています。この依頼の承認は期限が切れています。承認し直すと、次の質問からモデルが回答します。",
   explainTooLittleLeft: (left, cap) =>
-    `承認した予算の残りが $${left} で、回答 1 件あたりの上限 $${cap} に足りないため、モデルには尋ねていません。`,
-  explainCouldNot:
-    "モデルの答えを rondo の記録と突き合わせて確かめられなかったため、記録だけからまとめました。",
+    `モデルには尋ねず、rondo の記録から回答しています。承認した予算の残りが $${left} で、1 回答あたりの上限 $${cap} に足りません。予算を引き上げると、次の質問からモデルが回答します。`,
+  explainCouldNot: "モデルの回答を使えなかったため、rondo の記録から回答しています。",
   explainFallbackLead: "rondo の記録にあることをまとめます。",
   explainWhereToAnswer:
-    "このスレッドには確認待ちの回があります。確認にはそちらで答えてください。ここに返信しても、確認の答えにはなりません。",
+    "確認待ちの回には、その回の確認の画面で回答してください。ここに返信しても確認の回答にはなりません。",
   explainWhereToApprove:
-    "この依頼には、承認待ちの範囲の下書きがあります。承認や変更は範囲の画面で行ってください。ここに返信しても、承認にはなりません。",
+    "承認待ちの範囲は、範囲の画面で承認するか変更してください。ここに返信しても承認にはなりません。",
   explainAskedAbout: "質問の対象",
   explainRequest: "依頼",
-  explainLap: "試した回",
+  explainLap: "作業の回",
   explainPublished: "プルリクエスト",
   explainChecks: "チェック",
   explainWaiting: "待っていること",
-  explainWaitsGate: "確認へのあなたの答え",
-  explainWaitsAsk: "質問へのあなたの答え",
-  explainWaitsDecide: "あなたの判断（答える確認はありません）",
+  explainWaitsGate: "確認へのあなたの回答",
+  explainWaitsAsk: "質問へのあなたの回答",
+  explainWaitsDecide: "あなたの判断（依頼の画面で決めます）",
   explainWaitsScope: "範囲の下書きへのあなたの承認",
-  explainWaitsPress: "rondo が始めるために必要な、あなたの次の操作",
+  explainWaitsPress: "依頼の画面でのあなたの次の操作",
   explainOverdue: "計画で見込んだ時間を過ぎています",
   explainHeldFor: (reason, held) => `${reason}（${held}前から）`,
   explainInFlight: (held, left) =>
@@ -195,7 +195,7 @@ export const EXPLAIN_JA: ExplainWords = Object.freeze({
       : `いまの回は ${held}前から続いています（計画の上限まであと ${left}）`,
   explainApproval: "承認",
   explainSpent: (spent, approved, left) =>
-    `承認した $${approved} のうち $${spent} を使い、残り $${left}`,
+    `承認した $${approved} のうち $${spent} を使用、残り $${left}`,
 
   askButton: "？ これはどういう意味",
   askButtonTitle: "rondo に意味を尋ねます。答えは説明だけで、承認も決定もしません。",
@@ -205,6 +205,6 @@ export const EXPLAIN_JA: ExplainWords = Object.freeze({
   answerBandHeading: "説明であって、承認や決定ではありません",
   answerCost: (cost) => `この回答の費用は $${cost} です。`,
   answerCostUnread: (cap) =>
-    `この回答の費用は報告されなかったため、上限の $${cap} を差し引いています。`,
+    `この回答の費用は報告されなかったため、上限の $${cap} を差し引きました。`,
   answerFree: "この回答に費用はかかっていません。",
 } satisfies ExplainWords);
