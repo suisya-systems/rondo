@@ -1427,8 +1427,8 @@ export const PAGE_JA: PageWords = Object.freeze({
           : `承認した予算の上限で止まりました。この回に残っていた $${left} のうち $${spent} を使いました。`
     }続けるには、下の質問から予算を増やしてください。`,
   evBroke: "rondo 自身の不具合で止まりました。依頼のしかたに問題があったわけではありません。",
-  evLost: "rondo の再起動で失われました。動いているものはなく、取り置いていた費用は戻しました。",
-  evEnded: "あなたが終わらせました。動いているものはなく、取り置いていた費用は戻しました。",
+  evLost: "rondo の再起動で失われました。動いているものはなく、費用もかかっていません。",
+  evEnded: "あなたが終わらせました。動いているものはなく、費用もかかっていません。",
   evEndedReason: "あなたの理由",
   evBrokeReason: "rondo が記録した内容（rondo を保守する人向け）",
   lapReportSaid: (kind) =>
@@ -1492,7 +1492,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageBoxFrom: (issue) => `もとにしたイシュー: ${issue}`,
   goalHeading: (repository) => `${repository} の目標`,
   goalLead:
-    "番号つきの項目を、ふだんの言葉で書いてください。それぞれに「どうなったら満たしていないか」を添えると、" +
+    "目標を書いてください。それぞれに「どうなったら満たしていないか」を添えると、" +
     "依頼がどの項目に反するかを rondo が示します。",
   goalNumber: (count) => `${String(count)}.`,
   goalClauseLabel: "項目",

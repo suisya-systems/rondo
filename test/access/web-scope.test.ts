@@ -265,7 +265,7 @@ test("with no lap recorded, the scope screen says in Japanese that the reserve w
     () => "MINT-LAP-1",
   );
   expect(html).toContain("依頼の大きさが過去の回と同じくらいだとして、予算を出しています");
-  expect(html).toContain("取っておく額は、rondo の見込みの 10.00 USD です。");
+  expect(html).toContain("取っておく額 10.00 USD は、rondo の見込みです。");
   // **And next to each value that rests on it, not only in its formula**
   // (rondo#378): lap 11's owner read $7.50 as a measured figure. The cost, the
   // reserve and the expiry each say so; the laps and rounds are given, not
@@ -278,7 +278,7 @@ test("with no lap recorded, the scope screen says in Japanese that the reserve w
     "3 recorded first laps of other agent types on tier standard, as none of this one's is recorded, which cost 0.22 to 1.88 USD",
   );
   expect(chromeFor("ja").scopeSampleRows(1, "model_tier", "standard", "1.04", "1.04")).toContain(
-    "同じモデルの段階 standard の別のワーカーの種類の 1 回目 1 件をもとに下書きしました。費用は 1.04 USD",
+    "このワーカーの種類には記録がないので、近い種類のワーカーの 1 回目 1 件をもとに下書きしました。費用は 1.04 USD",
   );
   // A repository-level sample says so too (D-0140 rule 2).
   expect(EN.scopeSampleRows(2, "repository", "standard", "7.21", "8.12")).toContain(

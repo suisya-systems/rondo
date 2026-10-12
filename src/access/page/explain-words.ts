@@ -160,17 +160,17 @@ export const EXPLAIN_JA: ExplainWords = Object.freeze({
   explainOverCap: (cap) => `1 回答あたりの上限 $${cap} を超えています。`,
   explainFree: "この回答に費用はかかっていません。",
   explainNoApproval:
-    "モデルには尋ねず、rondo の記録から回答しています。この依頼の範囲はまだ承認されていません。範囲を承認すると、次の質問からモデルが回答します。",
-  explainAcrossRequests: "モデルには尋ねず、rondo の記録から回答しています。",
+    "この依頼の範囲はまだ承認されていないため、rondo の記録にあることだけを回答しています。範囲を承認すると、次の質問から詳しく回答します。",
+  explainAcrossRequests: "rondo の記録にあることだけを回答しています。",
   explainAcrossLead:
     "依頼ごとに、あなたの対応を待っているものと、rondo 側で進行中のものをまとめます。",
   explainRequestQuoted: (title) => `「${title}」`,
   explainNothingWaits: "あなたの対応を待っているものはありません",
   explainExpired:
-    "モデルには尋ねず、rondo の記録から回答しています。この依頼の承認は期限が切れています。承認し直すと、次の質問からモデルが回答します。",
+    "この依頼の承認は期限が切れているため、rondo の記録にあることだけを回答しています。承認し直すと、次の質問から詳しく回答します。",
   explainTooLittleLeft: (left, cap) =>
-    `モデルには尋ねず、rondo の記録から回答しています。承認した予算の残りが $${left} で、1 回答あたりの上限 $${cap} に足りません。予算を引き上げると、次の質問からモデルが回答します。`,
-  explainCouldNot: "モデルの回答を使えなかったため、rondo の記録から回答しています。",
+    `承認した予算の残りが $${left} で、1 回答あたりの上限 $${cap} に足りないため、rondo の記録にあることだけを回答しています。予算を引き上げると、次の質問から詳しく回答します。`,
+  explainCouldNot: "詳しい回答を用意できなかったため、rondo の記録にあることだけを回答しています。",
   explainFallbackLead: "rondo の記録にあることをまとめます。",
   explainWhereToAnswer:
     "確認待ちの回には、その回の確認の画面で回答してください。ここに返信しても確認の回答にはなりません。",

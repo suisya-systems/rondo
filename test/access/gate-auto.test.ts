@@ -175,7 +175,7 @@ describe("gateAuto (D-0125)", () => {
       "Not approved automatically: every test in the last run was skipped, so it shows nothing.",
     );
     expect(JA.gateAuto(auto)).toBe(
-      "自動では承認しない理由: 最後の実行ではテストがすべてスキップされました、何も確認できていません。",
+      "自動では承認しない理由: 最後の実行ではテストがすべてスキップされ、何も確認できていません。",
     );
     expect(EN.gateAuto(gateAuto(input({ repair: "notReproduced" })))).toBe(
       "Not approved automatically: the repair did not show the failing checks fail and then a run that passed.",

@@ -638,7 +638,7 @@ test("an ask with options is answered by one press per option, the recommended o
   expect(html).toContain(EN.answerOptionsNote);
   expect(html).not.toContain(">Carry on</button>");
   const ja = await operatorPage(portsOver(world, "ada", []), "t", view, chromeFor("ja"), mint);
-  expect(ja).toContain(">自分の言葉で答える</button>");
+  expect(ja).toContain(">自分の言葉で回答する</button>");
   expect(ja).toContain("おすすめ");
 
   // Answered with the second option: the answer is marked with which one, numbered from 1.
