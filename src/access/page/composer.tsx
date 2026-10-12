@@ -215,7 +215,14 @@ function answerReviseFields(wording: Chrome, revise: AnswerRevise, options: bool
         <>
           <input type="hidden" name="revise_calls" value={revise.calls} />
           <label class="flex items-start gap-2 text-meta leading-5 text-muted-foreground">
-            <input type="checkbox" name="revise_calls_send" value="1" class="mt-1" />
+            {/* Kept across the redraw while it is this lap's same draft (`page/composer.js`). */}
+            <input
+              type="checkbox"
+              name="revise_calls_send"
+              value="1"
+              data-keep={`calls:${revise.iterationId}:${revise.calls}`}
+              class="mt-1"
+            />
             <span>{wording.answerReviseCallsSend}</span>
           </label>
           <pre
