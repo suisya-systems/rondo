@@ -12,6 +12,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 import { DETERMINISTIC_DRAFTER } from "../../src/access/advisory.js";
+import { draftedStartReadiness } from "../../src/access/drafted-start.js";
+import { approvedSplits } from "../../src/access/drafted-view.js";
 import { drafterHost } from "../../src/access/drafter-host.js";
 import { deterministicAnswer } from "../../src/access/explainer/judgement.js";
 import { gatherExplainerMaterial } from "../../src/access/explainer/material.js";
@@ -47,8 +49,14 @@ import {
 const ENV = { RONDO_APPROVER: "ada" };
 const JA = chromeFor("ja");
 
-/** A split of `after.length` plans, drafted and approved; `after[i]` orders plan `i`. */
-async function split(after: readonly (number | undefined)[]) {
+/**
+ * A split of `after.length` plans, drafted and approved; `after[i]` orders plan
+ * `i`, and plan `i` claims `claim(i)`.
+ */
+async function split(
+  after: readonly (number | undefined)[],
+  claim = (i: number) => `part${String(i)}/`,
+) {
   const dir = mkdtempSync(join(tmpdir(), "rondo-parts-"));
   const storePath = join(dir, "store.db");
   const connection = new DatabaseSync(storePath);
@@ -94,7 +102,7 @@ async function split(after: readonly (number | undefined)[]) {
           agent_type_digest: typeDigest,
           prompt: `Part ${String(i + 1)} of the work.`,
           bases: ["r1"],
-          claim: [`part${String(i)}/`],
+          claim: [claim(i)],
           ...(one === undefined ? {} : { after: one }),
         })),
       }),
@@ -1022,6 +1030,90 @@ test("across every request, a lap in flight and a part held by order are lines w
   const ja = deterministicAnswer(material, JA, { kind: "acrossRequests" }).claims[0]?.value;
   expect(ja).toContain("試行が 1分前から動いています（計画の上限まであと最大");
   expect(ja).toContain("作業 2: 作業 1 がマージされるのを待っています");
+});
+
+test("across every request, an approved part waiting for a slot or for files says so, and what starts it (rondo#665)", async () => {
+  const title = { messageId: "r1", title: "Change the library, then move the pin." };
+  const across = async (
+    w: Awaited<ReturnType<typeof split>>,
+    policy: { maxOccupying: number; maxLive: number },
+  ) => {
+    const asked = await w.world.record.recordThreadMessage({
+      messageId: "question-across",
+      body: "How is everything?",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: null,
+      atMs: 4_000,
+      bases: [],
+      asks: false,
+    });
+    expect(asked.kind, JSON.stringify(asked)).toBe("recorded");
+    return await gatherExplainerMaterial(
+      {
+        ...w.world,
+        starts: {
+          splits: async () => await approvedSplits(w.world),
+          readiness: async (one, index) =>
+            await draftedStartReadiness(
+              { ...w.world, policy, nowMs: 63_500 },
+              one.requestMessageId,
+              one.scopeDecisionId,
+              one.proposalId,
+              index,
+            ),
+        },
+      },
+      "question-across",
+      63_500,
+    );
+  };
+
+  // Every slot is taken: the second part waits for one, and says when it comes.
+  const busy = await split([undefined, undefined]);
+  await busy.start(0, "lap-one");
+  const room = await across(busy, { maxOccupying: 1, maxLive: 6 });
+  expect(room.waits).toContainEqual({
+    kind: "room",
+    requestMessageId: "r1",
+    part: 1,
+    parts: 2,
+    full: false,
+    count: 1,
+    limit: 1,
+    request: title,
+  });
+  expect(room.locators).toContain("message:r1");
+  const said = deterministicAnswer(room, EN, { kind: "acrossRequests" }).claims;
+  expect(said).toHaveLength(1);
+  expect(said[0]?.value).toContain(`Part 2: ${EN.planBusy(1)}`);
+  expect(deterministicAnswer(room, JA, { kind: "acrossRequests" }).claims[0]?.value).toContain(
+    `作業 2: ${JA.planBusy(1)}`,
+  );
+  // As many laps open as the host allows reads as that limit instead.
+  const full = await across(await split([undefined, undefined]), { maxOccupying: 4, maxLive: 0 });
+  expect(full.waits.filter((wait) => wait.kind === "room")).toEqual([
+    expect.objectContaining({ part: 0, full: true, count: 0, limit: 0 }),
+    expect.objectContaining({ part: 1, full: true, count: 0, limit: 0 }),
+  ]);
+
+  // Room enough, but the first part's line holds the file the second asks for.
+  const held = await split([undefined, undefined], () => "lib/");
+  await held.start(0, "lap-one");
+  const files = await across(held, { maxOccupying: 4, maxLive: 6 });
+  expect(files.waits).toContainEqual({
+    kind: "files",
+    requestMessageId: "r1",
+    part: 1,
+    parts: 2,
+    paths: ["lib/"],
+    finished: false,
+    holders: [title.title],
+    request: title,
+  });
+  expect(deterministicAnswer(files, EN, { kind: "acrossRequests" }).claims[0]?.value).toContain(
+    `Part 2: ${EN.planHeld(["lib/"])} ${EN.planHeldBy}: ${title.title}`,
+  );
 });
 
 test("a part started between the lap read and the parts read is not reported as stopped (Codex)", async () => {

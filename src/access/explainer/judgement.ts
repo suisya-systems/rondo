@@ -349,14 +349,33 @@ function waitReason(words: Chrome, wait: ExplainerMaterial["waits"][number]): st
         )
       : wait.kind === "order"
         ? `${words.partName(wait.part + 1)}: ${words.partWaiting(wait.after, null, null)}`
-        : {
-            gate: words.explainWaitsGate,
-            decide: words.explainWaitsDecide,
-            overdue: words.explainOverdue,
-            scope: words.explainWaitsScope,
-            press: words.explainWaitsPress,
-            paused: words.triageGoalScopePaused,
-          }[wait.kind];
+        : wait.kind === "room" || wait.kind === "files"
+          ? partSaid(words, wait)
+          : {
+              gate: words.explainWaitsGate,
+              decide: words.explainWaitsDecide,
+              overdue: words.explainOverdue,
+              scope: words.explainWaitsScope,
+              press: words.explainWaitsPress,
+              paused: words.triageGoalScopePaused,
+            }[wait.kind];
+}
+
+/** An approved plan held by room or files, as the scope view says it beside its press (rondo#665). */
+function partSaid(
+  words: Chrome,
+  wait: Extract<ExplainerMaterial["waits"][number], { kind: "room" | "files" }>,
+): string {
+  const reason =
+    wait.kind === "room"
+      ? wait.full
+        ? words.planFull(wait.count, wait.limit)
+        : words.planBusy(wait.limit)
+      : [
+          wait.finished ? words.planHeldFinished(wait.paths) : words.planHeld(wait.paths),
+          ...(wait.holders.length === 0 ? [] : [`${words.planHeldBy}: ${wait.holders.join(", ")}`]),
+        ].join(" ");
+  return wait.parts > 1 ? `${words.partName(wait.part + 1)}: ${reason}` : reason;
 }
 
 /**
@@ -365,7 +384,7 @@ function waitReason(words: Chrome, wait: ExplainerMaterial["waits"][number]): st
  * on and for how long, and resting on a row that waits (the answer's bases
  * carry every one). Under the person's own waits it says what rondo is still
  * waiting on -- a lap in flight, a part held by order (D-0068 rule 2.1,
- * rondo#630) -- so a request with nothing for the person still has its line.
+ * rondo#630), an approved plan held by room or files (rondo#665) -- so a request with nothing for the person still has its line.
  * Never empty: with nothing waiting that is said, resting on the question.
  */
 function acrossAnswer(
@@ -381,7 +400,10 @@ function acrossAnswer(
   >();
   // The person's waits first, so a request's line leads with what is theirs.
   const rondos = (wait: ExplainerMaterial["waits"][number]) =>
-    wait.kind === "inFlight" || wait.kind === "order";
+    wait.kind === "inFlight" ||
+    wait.kind === "order" ||
+    wait.kind === "room" ||
+    wait.kind === "files";
   for (const wait of material.waits.toSorted((a, b) => Number(rondos(a)) - Number(rondos(b)))) {
     const basis = basisOf(waitLocator(wait));
     if (basis === null) continue;

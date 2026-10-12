@@ -8,7 +8,7 @@
  * result is JSON, so the explanation's snapshot holds exactly what was read.
  */
 
-import type { Basis } from "../../advisory/proposal.js";
+import { type Basis, readSplitPayload } from "../../advisory/proposal.js";
 import {
   type IterationRecord,
   isTerminal,
@@ -18,8 +18,8 @@ import {
   type ThreadMessageDraft,
   WAIT_SIDE,
 } from "../../store/records.js";
-import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
-import { partsOf } from "../drafted-start.js";
+import type { AdvisoryRecord, ApprovedSplit, IterationStore } from "../../store/sqlite.js";
+import { type DraftedStartReadiness, partsOf } from "../drafted-start.js";
 import { draftAwaiting, draftedStanding } from "../drafted-view.js";
 import { goalScopeStanding } from "../goal-scope.js";
 import { threadOf } from "../model-draft/host.js";
@@ -63,6 +63,16 @@ export interface ExplainerPorts {
   readonly draftsOwed?: () => Promise<ReadonlySet<string>>;
   readonly unheld?: (requestMessageId: string) => Promise<boolean>;
   readonly triageRepositories?: () => Promise<readonly string[]>;
+  /**
+   * The approved splits, and whether one plan of one can start now under this
+   * host's policy (`draftedStartReadiness`), as the order tick reads them: for
+   * an approved plan held by room or by files across every request
+   * (rondo#665). Absent, none is read.
+   */
+  readonly starts?: {
+    readonly splits: () => Promise<readonly ApprovedSplit[]>;
+    readonly readiness: (split: ApprovedSplit, planIndex: number) => Promise<DraftedStartReadiness>;
+  };
 }
 
 export interface ExplainerMessage {
@@ -104,6 +114,10 @@ export interface ExplainerLap {
  * is "progressing" (rule 2.2), and a part held until an earlier part of its
  * split is merged (`held_by_order`, the order being D-0098 rule 1's `after`).
  * `held_by_bound` and `undetermined` are not read here.
+ *
+ * **And an approved plan not started for want of room or files** (rondo#665):
+ * every slot this host allows is taken (`busy`, `full`), or open lines hold
+ * files it would claim (`held`), as the scope view says it beside its press.
  */
 export type ExplainerWait = (
   | { readonly kind: "gate"; readonly iterationId: string; readonly status: string }
@@ -127,6 +141,30 @@ export type ExplainerWait = (
   | { readonly kind: "scope"; readonly scopeId: string }
   /** A request whose next step is a press before any draft, by its opener (rondo#643). */
   | { readonly kind: "press"; readonly messageId: string }
+  /**
+   * Plan `part` (from 0) of `parts` waits for a slot: `count` of `limit` laps
+   * run (`busy`) or are open (`full`).
+   */
+  | {
+      readonly kind: "room";
+      readonly requestMessageId: string;
+      readonly part: number;
+      readonly parts: number;
+      readonly full: boolean;
+      readonly count: number;
+      readonly limit: number;
+    }
+  /** Plan `part` waits for `paths`, held by work of the requests `holders` (their first lines). */
+  | {
+      readonly kind: "files";
+      readonly requestMessageId: string;
+      readonly part: number;
+      readonly parts: number;
+      readonly paths: readonly string[];
+      /** Every holder has finished: it waits for their pull requests, not their laps. */
+      readonly finished: boolean;
+      readonly holders: readonly string[];
+    }
   /** A goal flow the person paused, by the scope that paused it (D-0186). */
   | { readonly kind: "paused"; readonly scopeId: string; readonly repository: string }
 ) & {
@@ -154,11 +192,13 @@ export function waitLocator(wait: ExplainerWait): string {
     ? `message:${wait.messageId}`
     : wait.kind === "scope" || wait.kind === "paused"
       ? `scope:${wait.scopeId}`
-      : wait.kind === "order"
-        ? wait.firstLineageId === null
-          ? `message:${wait.request?.messageId ?? ""}`
-          : `iteration:${wait.firstLineageId}`
-        : `iteration:${wait.iterationId}`;
+      : wait.kind === "room" || wait.kind === "files"
+        ? `message:${wait.requestMessageId}`
+        : wait.kind === "order"
+          ? wait.firstLineageId === null
+            ? `message:${wait.request?.messageId ?? ""}`
+            : `iteration:${wait.firstLineageId}`
+          : `iteration:${wait.iterationId}`;
 }
 
 /** The approval in force for the request, with what is left of it. */
@@ -360,6 +400,7 @@ export async function gatherExplainerMaterial(
     waits.push(
       ...inFlight(ownLive, overdue, nowMs, titled),
       ...(await heldByOrder(ports, threads, titled)),
+      ...(await heldByRoom(ports, said, titled)),
     );
   }
 
@@ -506,6 +547,71 @@ async function heldByOrder(
           after: part.order.after,
           firstLineageId: part.order.first?.lineageId ?? null,
           ...titled(root.messageId),
+        });
+      }
+    }
+  }
+  return held;
+}
+
+/**
+ * The approved plans not started because the host has no slot or open lines
+ * hold their files (rondo#665), each read as the scope view reads it. A plan
+ * started, held by order, or refused by its scope is not here: it is said
+ * elsewhere or not a wait.
+ */
+async function heldByRoom(
+  ports: ExplainerPorts,
+  said: ReadonlyMap<string, { readonly body: string }>,
+  titled: (request: string) => Pick<ExplainerWait, "request">,
+): Promise<ExplainerWait[]> {
+  const starts = ports.starts;
+  if (starts === undefined) {
+    return [];
+  }
+  const held: ExplainerWait[] = [];
+  for (const split of await starts.splits()) {
+    const read = await ports.record.readProposal(split.proposalId);
+    const payload =
+      read.kind === "read" && read.proposal.kind === "split"
+        ? readSplitPayload(read.proposal.payload)
+        : null;
+    if (payload?.kind !== "split") {
+      continue;
+    }
+    const parts = payload.payload.plans.length;
+    const request = split.requestMessageId;
+    for (let part = 0; part < parts; part++) {
+      const ready = await starts.readiness(split, part);
+      if (ready.kind === "busy" || ready.kind === "full") {
+        held.push({
+          kind: "room",
+          requestMessageId: request,
+          part,
+          parts,
+          full: ready.kind === "full",
+          count: ready.kind === "full" ? ready.live : ready.occupying,
+          limit: ready.limit,
+          ...titled(request),
+        });
+      } else if (ready.kind === "held") {
+        const holders = await Promise.all(
+          ready.holders.map(async ({ line }) => {
+            const root = await ports.store.read(line.lineageId);
+            return root.kind === "read"
+              ? firstLine(said.get(root.record.requestMessageId)?.body ?? "")
+              : "";
+          }),
+        );
+        held.push({
+          kind: "files",
+          requestMessageId: request,
+          part,
+          parts,
+          paths: [...new Set(ready.holders.flatMap(({ paths }) => paths))],
+          finished: ready.holders.every(({ line }) => !line.inFlight),
+          holders: [...new Set(holders.filter((title) => title !== ""))],
+          ...titled(request),
         });
       }
     }
