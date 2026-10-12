@@ -25,9 +25,9 @@ planner beside an async interpreter that drives one lap through injected ports,
 `src/store/` holds a real schema whose partial unique indexes make the
 allocator's claims — one holder of each run id, topic branch and workspace —
 the database's invariant rather than a promise (D-0023 rule 7), and the arc
-runs: classify
-against a cadenza contract, admit a run, walk one lap, and **suspend at the gate
-a human has yet to answer**, resuming through `resume(iterationId)` when the
+runs: classify against a cadenza contract, admit a run, walk one lap, and
+**suspend at the gate a human has yet to answer**, resuming through
+`resume(iterationId)` when the
 operating surface says they have. It never composes the answer (D-0009), never
 publishes (D-0010) and never closes a gate (D-0013). Single-flight was a lap-1
 reduction (D-0012). Parallel lines are built on a lane ledger (D-0073): the
@@ -56,9 +56,9 @@ thread, answer a question the organisation asked back, approve a drafted scope
 approve a lap or ask for a change (D-0070, with the revise instruction drafted
 by the organisation, D-0077), open the pull request, merge it where continuo's
 verdict on the checks rondo fetched is green on the head (D-0091, D-0095, the
-merge itself through the operator's own
-`gh`), have a worker resolve a pull request that conflicts with its base
-(D-0105), release the paths a finished line holds (D-0073), add a repository
+merge itself through the operator's own `gh`), have a worker resolve a pull
+request that conflicts with its base (D-0105), release the paths a finished
+line holds (D-0073), add a repository
 rondo does not yet work in with one press (D-0090), and put what rondo proposes
 to ask for next into the request box (D-0097). Every press is a real form
 checked again on the port's side; the page's text follows the person's language
