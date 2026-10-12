@@ -234,6 +234,18 @@ export async function serveWeb(
     draftsOwed: () => drafter.owed(),
     unheld: async (id: string) => await awaitsPerson(id),
     triageRepositories: async () => await triageRepositories(),
+    // And an approved plan held by room or files, as the scope view reads it (rondo#665).
+    starts: {
+      splits: async () => await approvedSplits({ record }),
+      readiness: async (split, planIndex) =>
+        await draftedStartReadiness(
+          { store, record, policy: bounds.policy, nowMs: Date.now() },
+          split.requestMessageId,
+          split.scopeDecisionId,
+          split.proposalId,
+          planIndex,
+        ),
+    },
     runDrafter,
     now: Date.now,
     mintId: newDraftId,
