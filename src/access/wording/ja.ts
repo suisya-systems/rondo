@@ -436,7 +436,7 @@ export const JA: Chrome = Object.freeze({
     `確かめた内容が長すぎます。${String(max)} 文字までにしてから、もう一度「承認する」を押してください。`,
   claimGateUnread:
     "承認が記録されませんでした、確認の画面に戻って、もう一度「承認する」を押してください。",
-  claimGateClosed: "既に承認済みです。",
+  claimGateClosed: "この確認にはすでに回答済みです。",
   claimNotRecorded: "確認の画面に戻って、もう一度「承認する」を押してください。",
   claimHostSetup:
     "確かめた内容を記録できないため、承認は送っておらず、費用もかかっていません。このコンピュータの rondo のセットアップが終わっていないか、動かなくなっています。",
@@ -508,9 +508,9 @@ export const JA: Chrome = Object.freeze({
   storyNow: "あなたの回答を待っています。",
   storyEnded: (answer, otherwise) =>
     answer === "revise"
-      ? "あなたが変更を依頼し、次の回でやり直しました。"
+      ? "変更依頼を受けて、次の回でやり直しました。"
       : answer === "approve"
-        ? "あなたが承認しました。"
+        ? "承認されました。"
         : `終わりました (${otherwise})。`,
   storyIntended: "この依頼で変えようとしたこと:",
   storyOthers: "ほかの作業:",
@@ -1287,7 +1287,7 @@ export const JA: Chrome = Object.freeze({
   nextStepAddProposedRepository: (repo) =>
     `この依頼にはリポジトリが書かれていません。rondo は ${repo} と読みましたが、` +
     `まだ ${repo} で作業したことがないため、下書きはありません。追加すると、${repo} をこのコンピュータにコピーし、` +
-    "作業を下書きしてあなたの承認を待ちます。プルリクエストは ${repo} に出します。" +
+    `作業を下書きしてあなたの承認を待ちます。プルリクエストは ${repo} に出します。` +
     `違うリポジトリなら、追加せずに返信で正しいリポジトリを伝えてください。`,
   nextStepRecordSetupPlan: (files) =>
     "セットアップの計画がまだ記録されていないため、この依頼の下書きはありません。" +
@@ -1510,8 +1510,8 @@ export const JA: Chrome = Object.freeze({
     "マージしていません。この作業がもう読めません。ページを読み込み直してください。",
   mergeRefusedNotPublished: "マージしていません。この作業のプルリクエストがまだありません。",
   mergeRefusedNotGreen:
-    "マージしていません。プルリクエストの最新のコミットのチェックがまだ終わっていません。" +
-    "チェックが終わってから、もう一度押してください。",
+    "マージしていません。プルリクエストの最新のコミットで、チェックが通ったことを確認できていません。" +
+    "チェックの結果を確かめてから、もう一度押してください。",
   mergeRefusedAsked:
     "マージしていません。この作業には、あなたの回答を待っている質問や確認が残っています。" +
     "先に答えてください。",
