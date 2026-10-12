@@ -339,6 +339,30 @@ export function answeredQuestion(
 }
 
 /**
+ * Said between an answer and a drafted change sent with it (rondo#670): the
+ * draft was written before the person answered, so the answer wins.
+ */
+export const ANSWER_WINS =
+  "Where a change asked below conflicts with the answer above, follow the answer.";
+
+/**
+ * What an answer box's press sends the next lap (D-0142, rondo#670): the
+ * question and answer `quoted`, then the drafted change the box showed, and
+ * the drafted judgment calls only where the person ticked them. **The answer
+ * wins**: a draft sent with it is said to stand under it.
+ */
+export function answeredRevise(quoted: string, form: Readonly<Record<string, unknown>>): string {
+  const text = (name: string) => (typeof form[name] === "string" ? (form[name] as string) : "");
+  const draft = [
+    text("revise_draft"),
+    form["revise_calls_send"] === "1" ? text("revise_calls") : "",
+  ]
+    .filter((part) => part.trim() !== "")
+    .join("\n\n");
+  return draft === "" ? quoted : `${quoted}\n\n${ANSWER_WINS}\n\n${draft}`;
+}
+
+/**
  * The `revise` box's text for an answered question (rule 4.5): the question
  * and the answer, **each byte for byte** (`D-0009`) between rondo's own
  * ASCII lines. The question carries the commit the lap ended at, so the next

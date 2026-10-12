@@ -4,7 +4,7 @@
   "src/access/conductor.ts": 2250,
   "src/access/forge.ts": 2859,
   "src/access/screens/scope.tsx": 2047,
-  "src/access/web-app.ts": 3998,
+  "src/access/web-app.ts": 3997,
   "src/refrain/interpreter.ts": 2220,
   "src/store/records.ts": 2471
 }

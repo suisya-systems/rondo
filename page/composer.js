@@ -326,7 +326,9 @@ document.addEventListener("htmx:afterSwap", redrawn);
 // a typed amount stays across the redraw on the same terms, until its key
 // changes. The mark lasts the whole of the node's morph and not one call
 // (Codex, round 2): idiomorph asks about an input's `value` twice, once for
-// the attribute and once for the live value a person typed into.
+// the attribute and once for the live value a person typed into. A tick is
+// kept the same way (rondo#670): the box that sends the drafted judgment calls
+// with an answer is an `input[data-keep]` too, and its `checked` is the person's.
 const renamed = new WeakSet();
 const personsValue = (element) =>
   (element instanceof HTMLTextAreaElement && element.dataset.draft !== undefined) ||
@@ -346,7 +348,7 @@ if (typeof Idiomorph !== "undefined") {
   Idiomorph.defaults.callbacks.beforeAttributeUpdated = (name, element) =>
     !(
       (name === "open" && element instanceof HTMLDetailsElement) ||
-      (name === "value" && personsValue(element) && !renamed.has(element))
+      ((name === "value" || name === "checked") && personsValue(element) && !renamed.has(element))
     );
   Idiomorph.defaults.callbacks.afterNodeMorphed = (old) => {
     renamed.delete(old);

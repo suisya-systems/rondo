@@ -25,7 +25,13 @@ import { workerRuns } from "../page-logic/laps.js";
 import type { PullRequestLink } from "../page-logic/parts.js";
 import { viewHref } from "../page-logic/routes.js";
 import { type AnsweredQuestion, questionRevise } from "../question.js";
-import { type ReviseBox, reviseBoxOf, reviseLabels } from "../revise-draft/judgement.js";
+import {
+  judgmentOf,
+  type ReviseBox,
+  reviseBoxOf,
+  reviseLabels,
+  reviseText,
+} from "../revise-draft/judgement.js";
 import { approvalTip, budgetRefusal, reviewScopeOf } from "../scope.js";
 import type { Chrome } from "../wording.js";
 import type { LapMaterialRead, WebPorts } from "./contract.js";
@@ -59,6 +65,35 @@ export async function reviseBox(
   const model = latestReading(readings, isModelReadingDrafter);
   const row = model === null ? null : await ports.record.reviseDraftFor(iterationId, model);
   return reviseBoxOf(readings, row, reviseLabels(wording));
+}
+
+/**
+ * The drafted change a worker's question's answer box carries (rondo#670):
+ * **the person's answer is not overridden by a change they did not choose**.
+ * `draft` is the box with the findings the drafter marked as judgment calls
+ * left out, and its lead with them; `calls` is those findings and the lead,
+ * which go with the answer only where the person ticks them.
+ */
+export async function answerDraft(
+  ports: WebPorts,
+  wording: Chrome,
+  iterationId: string,
+  readings: readonly LapReading[],
+): Promise<{ readonly draft: string; readonly calls: string }> {
+  const model = latestReading(readings, isModelReadingDrafter);
+  const row = model === null ? null : await ports.record.reviseDraftFor(iterationId, model);
+  const labels = reviseLabels(wording);
+  const judgment = row === null ? [] : judgmentOf(row.payload);
+  if (model === null || row === null || judgment.length === 0) {
+    const box = reviseBoxOf(readings, row, labels);
+    return { draft: box.kind === "drafted" ? box.text : "", calls: "" };
+  }
+  const box = reviseBoxOf(readings, { payload: { ...row.payload, lead: null } }, labels, judgment);
+  const plain = model.findings.flatMap((_, i) => (judgment.includes(i) ? [] : [i]));
+  return {
+    draft: box.kind === "drafted" ? box.text : "",
+    calls: reviseText(model, row.payload, labels, plain) ?? "",
+  };
 }
 
 /** Whether a row carries a question this page can put a button under. */

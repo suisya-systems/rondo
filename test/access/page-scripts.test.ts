@@ -433,6 +433,12 @@ test("the morph is told to leave a fold's open and a draft's words to the person
   expect(leaves("value", amount)).not.toBe(false);
   Idiomorph.defaults.callbacks.afterNodeMorphed?.(amount);
   expect(leaves("value", amount)).toBe(false);
+  // **A tick that sends the drafted judgment calls is the person's** (rondo#670):
+  // a redraw every five seconds must not untick it before the press.
+  const tick = new HTMLInputElement();
+  tick.dataset = { keep: "calls:i-0001:the calls" };
+  expect(leaves("checked", tick)).toBe(false);
+  expect(leaves("checked", new HTMLInputElement())).not.toBe(false);
 });
 
 test("a draft that landed under the person's words is said after a merged redraw", () => {
