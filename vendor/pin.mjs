@@ -30,8 +30,9 @@
 // A passing check says which digests it verified, on stdout. The exit code is
 // what CI reads and it is unchanged; the lines are for a person running the
 // script by hand, to whom a silent exit 0 was indistinguishable from a no-op
-// (docs/operations/lap-1-dogfood.md, F-10). The one fact worth printing is the
-// digest that was checked, because it is the one fact the check established.
+// (docs/operations/earlier-laps/lap-1-dogfood.md, F-10). The one fact worth
+// printing is the digest that was checked, because it is the one fact the check
+// established.
 //
 // **Nothing is printed to stdout unless every artifact passed.** A list makes
 // partial success possible, and a run that printed "is the pinned artifact"

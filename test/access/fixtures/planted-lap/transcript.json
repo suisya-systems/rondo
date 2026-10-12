@@ -1,6 +1,6 @@
 {
   "note": [
-    "RECONSTRUCTED, not recorded: lap dogfood-200 (docs/operations/lap-5-dogfood.md) kept no events file in this repository.",
+    "RECONSTRUCTED, not recorded: lap dogfood-200 (docs/operations/earlier-laps/lap-5-dogfood.md) kept no events file in this repository.",
     "Commands are the ones the lap-5 doc quotes verbatim (sections 3 and 4, N-14/N-15). Outputs are verbatim where the doc",
     "quotes them (EXIT=0 after the tail pipe, the four knip findings, 815 passed / 1 skipped) and otherwise reconstructed in",
     "the tool's own format. Indices are stand-in transcript line numbers, fixed per command so a basis names the same event",

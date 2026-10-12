@@ -248,7 +248,8 @@ test("terminal laps are not gathered, and the occupancies come from the store", 
 });
 
 /**
- * rondo#91, measured as finding N-6 of `docs/operations/lap-2-dogfood.md`.
+ * rondo#91, measured as finding N-6 of
+ * `docs/operations/earlier-laps/lap-2-dogfood.md`.
  *
  * Three families rest on `/laps` -- `live laps` and the two that report having
  * found nothing -- and each of them printed the whole snapshot of the live laps

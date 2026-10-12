@@ -391,7 +391,8 @@ function successfulAnswers(): Answers {
         elapsedDeadlineAtMs: null,
         model: MODEL,
         requestedModel: MODEL,
-        // Lap 5 of the dogfood, measured: `docs/operations/lap-5-dogfood.md`
+        // Lap 5 of the dogfood, measured:
+        // `docs/operations/earlier-laps/lap-5-dogfood.md`
         // section 5. Real figures rather than round ones, so a case that
         // asserted on a suspiciously tidy number would stand out.
         costUsd: LAP_COST_USD,
@@ -520,8 +521,9 @@ const AGENT_TYPE_INPUT: AgentTypeInput = {
 const MODEL = "claude-opus-5";
 
 /**
- * What lap 5 of the dogfood actually spent (`docs/operations/lap-5-dogfood.md`
- * section 5), as the three numbers `D-0046` records.
+ * What lap 5 of the dogfood actually spent
+ * (`docs/operations/earlier-laps/lap-5-dogfood.md` section 5), as the three
+ * numbers `D-0046` records.
  *
  * Measured figures rather than round ones on purpose: these are the values a
  * person read out of `events-000.jsonl` by hand before rondo kept any of them,

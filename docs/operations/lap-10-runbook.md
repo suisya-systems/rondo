@@ -1,7 +1,8 @@
 # lap 10 runbook -- walking a whole lap on the operator page, with your hands on the buttons only
 
 lap 9 was the first lap the owner walked in person, and every step of it was a command typed into
-a terminal ([`lap-9-runbook.md`](lap-9-runbook.md), [`lap-9-dogfood.md`](lap-9-dogfood.md)). Since
+a terminal ([`lap-9-runbook.md`](earlier-laps/lap-9-runbook.md),
+[`lap-9-dogfood.md`](earlier-laps/lap-9-dogfood.md)). Since
 then S0-S5 (#230, #231, #232, #234, #235, #236) have put the whole walk on one page: the request,
 the scope and its approval, the start, the gate, the change, the publish. lap 10 walks that page.
 

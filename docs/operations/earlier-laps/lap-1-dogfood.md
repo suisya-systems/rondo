@@ -1,6 +1,6 @@
 # lap 1 dogfood -- what one real request cost, and where it stopped
 
-A record of driving [`../../scripts/dogfood-lap.md`](../../scripts/dogfood-lap.md) end to end against
+A record of driving [`../../../scripts/dogfood-lap.md`](../../../scripts/dogfood-lap.md) end to end against
 the pinned continuo and the vendored cadenza, with a real worker. What is written here is **the
 commands that were actually run and the output that actually came back**, not what the design
 expects.

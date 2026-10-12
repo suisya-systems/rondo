@@ -19,7 +19,8 @@ the commands that were actually run, and the output that actually came back.
 
 ## 1. The lap, and what was planted
 
-The lap is lap 5 (`dogfood-200`, [`lap-5-dogfood.md`](lap-5-dogfood.md) N-14). Its real commit
+The lap is lap 5 (`dogfood-200`, [`lap-5-dogfood.md`](earlier-laps/lap-5-dogfood.md) N-14). Its real
+commit
 `1b5f607` (parent `91e6fc3`) supplies the diff, the full message, and `AGENTS.md` as it stood at the
 base. They are in `test/access/fixtures/planted-lap/`. **The transcript is reconstructed, not
 recorded**: lap 5 kept no events file in this repository. Its commands are the ones the lap-5 record

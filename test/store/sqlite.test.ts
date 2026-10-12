@@ -565,10 +565,10 @@ test("reserving the same iteration id twice is a defect, not an occupied conduct
     throw new Error("unreachable: asserted above");
   }
   // In rondo's vocabulary -- the id and the rule -- and not the driver's. The
-  // lap-1 dogfood (docs/operations/lap-1-dogfood.md, F-8) saw the SQLite text
-  // reach an operator, and the two negative matches are what keep it from
-  // coming back: a constraint name and a column name are facts about the
-  // schema, not answers to "what happened".
+  // lap-1 dogfood (docs/operations/earlier-laps/lap-1-dogfood.md, F-8) saw the
+  // SQLite text reach an operator, and the two negative matches are what keep
+  // it from coming back: a constraint name and a column name are facts about
+  // the schema, not answers to "what happened".
   expect(outcome.reason).toContain("'i-0001'");
   expect(outcome.reason).toContain("already exists");
   expect(outcome.reason).not.toMatch(/UNIQUE constraint/);

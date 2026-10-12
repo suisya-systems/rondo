@@ -155,7 +155,7 @@ at the only tier `MODEL_TIER_TABLE` prices (#89).
 
 `f6a0edd` on `rondo/dogfood-090`, four files, `+355 -7`: rondo#90 and rondo#91 repaired in
 `src/access/advisory.ts`, two regression tests, and a paragraph each in sections 7.1 and 7.5 of
-[`rondo-cli.md`](rondo-cli.md). `npm run verify` exit 0, 32 test files, 802 passed, 1 skipped. It is
+[`rondo-cli.md`](../rondo-cli.md). `npm run verify` exit 0, 32 test files, 802 passed, 1 skipped. It is
 the commit this branch carries.
 
 **#90, before and after**, on the same row (`rondo explain --iteration-id dogfood-090`):

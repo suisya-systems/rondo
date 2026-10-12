@@ -22,7 +22,7 @@ the suite and have not been walked on real infrastructure, which section 9 says 
 
 Before this existed, the same walk meant writing a throwaway `tsconfig`, compiling the tree by hand,
 driving the composition root from a hand-written `drive.mjs`, and typing six continuo verbs in order
-with ids copied between them (`lap-1-dogfood.md`). That is what these commands replace.
+with ids copied between them (`earlier-laps/lap-1-dogfood.md`). That is what these commands replace.
 
 ---
 
@@ -755,8 +755,8 @@ spending approval 'scope-decision-scope-1789270620294-1789270953820', the approv
 That line is the whole of the report: there is no flag that keeps a correction off the approval's
 budget, and the gate is still your answer, walked under your `--actor-id`. A correction of a lap that
 ran on a budget belongs to that budget, which is what lap 9 got wrong
-(`docs/operations/lap-9-dogfood.md` N-33): `revise` took no scope there, so the fix of a review
-finding ran on none and the round the scope exists to count was not counted.
+(`docs/operations/earlier-laps/lap-9-dogfood.md` N-33): `revise` took no scope there, so the fix of
+a review finding ran on none and the round the scope exists to count was not counted.
 
 **A lap with no approval to draw is refused, and nothing is sent.** A lap admitted under no scope
 records no admission to read one off; that refuses before the gate is touched, naming the reason and
@@ -1537,13 +1537,13 @@ Recorded so that "it works" is not read more broadly than it was tested.
   nowhere else, which is why sections 3.1, 7.6 and 7.7 show command forms and no transcripts.
 - **`propose`, `decide` and `retry`: walked on real infrastructure for `contract_keys` only.** On
   2026-09-12 the whole chain was driven by an operator against the pinned continuo
-  ([`lap-6-dogfood.md`](lap-6-dogfood.md)): a lap stopped at `abandoned` and left a proposal of its
-  own accord (`D-0043`), the proposal was read, approved and spent by `rondo retry`, the retry's lap
-  ran and reached its gate, a second `retry` was refused as already spent, and a `retry` whose
-  approved digest no option composes was refused with nothing admitted and nothing spent. **The
-  other two kinds -- `run_plan` and `agent_type` -- are still unwalked**, as is a proposal made by
-  `rondo propose` rather than by the automatic trigger; all three remain exercised end to end
-  against a real SQLite store (`test/access/advisory.test.ts`,
+  ([`lap-6-dogfood.md`](earlier-laps/lap-6-dogfood.md)): a lap stopped at `abandoned` and left a
+  proposal of its own accord (`D-0043`), the proposal was read, approved and spent by `rondo retry`,
+  the retry's lap ran and reached its gate, a second `retry` was refused as already spent, and a
+  `retry` whose approved digest no option composes was refused with nothing admitted and nothing
+  spent. **The other two kinds -- `run_plan` and `agent_type` -- are still unwalked**, as is a
+  proposal made by `rondo propose` rather than by the automatic trigger; all three remain exercised
+  end to end against a real SQLite store (`test/access/advisory.test.ts`,
   `test/access/decision-consumption.test.ts`) and nowhere else.
 
 ### The second walk: from nothing, through `scripts/dogfood-env.sh`
