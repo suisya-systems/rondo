@@ -269,7 +269,8 @@ sits outside an annotation of the entry it names.
 
 Read its status from an unpiped run -- `npm run verify; echo "EXIT=$?"`, never
 `npm run verify 2>&1 | tail -40; echo "EXIT=$?"`, whose `EXIT=0` is `tail`'s and
-not the verification's (rondo#113, `docs/operations/lap-5-dogfood.md` N-15).
+not the verification's (rondo#113,
+`docs/operations/earlier-laps/lap-5-dogfood.md` N-15).
 
 Five things about it are not obvious:
 

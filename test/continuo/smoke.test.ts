@@ -16,9 +16,9 @@
  * fakes only. What is checked here is the one argument of that walk whose fake
  * and whose original disagree -- `gate deliver`'s delivery resource -- because
  * that disagreement is what let rondo ship a walk that could not close a gate
- * (`docs/operations/lap-2-dogfood.md` N-1). The rule this file is written under
- * is not "drive everything for real"; it is **drive the seams whose two sides
- * are known to answer differently**.
+ * (`docs/operations/earlier-laps/lap-2-dogfood.md` N-1). The rule this file is
+ * written under is not "drive everything for real"; it is **drive the seams
+ * whose two sides are known to answer differently**.
  *
  * **Mandatory in CI, capability-gated locally.** The build the smoke needs is
  * provisioned by the workflow in every double-green cell, so under CI a missing
@@ -275,11 +275,11 @@ test.skipIf(!available)(
     // fake in `test/access/cli.test.ts` hands back a delivered message id
     // whatever it is asked, so a rondo that drained the wrong queue passed it,
     // and passed it for a whole lap of dogfooding
-    // (`docs/operations/lap-2-dogfood.md` N-1). What distinguishes the two
-    // queues without a lap to fill them is the epoch: continuo advances one per
-    // *resource*, so two passes on the run's resource number themselves 1 and 2
-    // while the global resource -- the one a `--run-id`-less rondo would have
-    // drained -- stays at 1.
+    // (`docs/operations/earlier-laps/lap-2-dogfood.md` N-1). What distinguishes
+    // the two queues without a lap to fill them is the epoch: continuo advances
+    // one per *resource*, so two passes on the run's resource number themselves
+    // 1 and 2 while the global resource -- the one a `--run-id`-less rondo
+    // would have drained -- stays at 1.
     const dropbox = scratch();
     const firstPass = await deliverGate(continuo, {
       db: database,

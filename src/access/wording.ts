@@ -708,9 +708,10 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
    * every entry carrying a `tool_name` and the `tool_input` of a call that did
    * not happen -- and it is not in the declaration either, because the
    * declaration is a list of subjects and this is not about a subject. N-16
-   * (`docs/operations/lap-6-dogfood.md`) measured the consequence: a lap whose
-   * first Bash call left the sandbox disabled for four more, printing there as
-   * a clean run. Only the worker's own paragraph at the gate said otherwise.
+   * (`docs/operations/earlier-laps/lap-6-dogfood.md`) measured the consequence:
+   * a lap whose first Bash call left the sandbox disabled for four more,
+   * printing there as a clean run. Only the worker's own paragraph at the gate
+   * said otherwise.
    *
    * **Why a constant and not a line of `provenance`.** The caveat beside it --
    * {@link declarationCaveat} -- is composed on the paths where the delegation

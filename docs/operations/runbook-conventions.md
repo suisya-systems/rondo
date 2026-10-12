@@ -12,7 +12,8 @@ enforced by fixing the next runbook, never by rewriting a past dogfood note.
 
 ## 1. A paste block must not depend on the shell's interactive options
 
-lap 9 hit `zsh: correct ... [nyae]?` on every step ([`lap-9-dogfood.md`](lap-9-dogfood.md)
+lap 9 hit `zsh: correct ... [nyae]?` on every step
+([`lap-9-dogfood.md`](earlier-laps/lap-9-dogfood.md)
 N-37): the person's interactive zsh has spelling correction on, and a paste
 block that trips it stalls mid-paste waiting on a prompt the block never
 shows you is coming.

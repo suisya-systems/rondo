@@ -2796,7 +2796,7 @@ export function setAfterGateReading(kick: () => void): void {
  * What the operator is shown about the work itself, on every path that answers.
  *
  * **This is the half of D-0029 the entry says is worth more than the rest**, and
- * the measurement it answers is in `docs/operations/lap-1-dogfood.md`: the gate
+ * the measurement it answers is in `docs/operations/earlier-laps/lap-1-dogfood.md`: the gate
  * carries `rationale`, which is the worker's own account of its own work, and
  * this command used to print that and no workspace path, no branch and nothing
  * a person could go and look at. An operator was recorded approving on it.
@@ -4282,7 +4282,7 @@ export type ReviseApproval =
  * **Nothing to draw refuses, and never falls back to a lap outside every
  * approval.** A lap with no admission row leaves rondo with no approval it was
  * given and no licence to pick one. An unscoped correction of a scoped lap is
- * lap 9's N-33 (`docs/operations/lap-9-dogfood.md`), and this is the path it
+ * lap 9's N-33 (`docs/operations/earlier-laps/lap-9-dogfood.md`), and this is the path it
  * took, so the refusal names the flag a person answers it with instead.
  *
  * **An approval drawn but no longer usable stops the command, and this function

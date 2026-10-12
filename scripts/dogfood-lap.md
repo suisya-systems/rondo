@@ -190,9 +190,10 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
    and that is rondo#103.** `npm run:*` is in the catalog project's `allowed_bash` and
    `node -e` is deliberately not, so the one-liner was a step this handbook
    documented that a lap running inside this repository was refused ten times
-   (`../docs/operations/lap-4-dogfood.md` N-10). Naming the check makes it one
-   command for the operator and a command a lap may run; declaring `node -e:*`
-   instead would have widened the fence from a vocabulary to anything.
+   (`../docs/operations/earlier-laps/lap-4-dogfood.md` N-10). Naming the check
+   makes it one command for the operator and a command a lap may run; declaring
+   `node -e:*` instead would have widened the fence from a vocabulary to
+   anything.
 
    **Give the plan a review criterion** (`review_criterion`, D-0065 section
    1.2.6): what `blocker`, `major`, `minor` and `nit` mean, and which rule files
@@ -265,7 +266,7 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
       anything. The block says so itself on every lap, and it means what it
       says: **a lap that ran with that sandbox disabled prints here exactly like
       one that did not** (D-0050 rules 3 and 4, N-16 in
-      `docs/operations/lap-6-dogfood.md`).
+      `docs/operations/earlier-laps/lap-6-dogfood.md`).
 
    b. **The gate's `rationale`, verbatim** — printed as `why ...` by the same
       command. This is the only channel that fact has ever travelled, and it is
@@ -366,8 +367,8 @@ costs on this machine, and that `resume` sees the outcome after a human answers.
 
 ## What one run of this actually did
 
-[`../docs/operations/lap-1-dogfood.md`](../docs/operations/lap-1-dogfood.md) is
-the record. It now holds two runs, both on 2026-09-06.
+[`../docs/operations/earlier-laps/lap-1-dogfood.md`](../docs/operations/earlier-laps/lap-1-dogfood.md)
+is the record. It now holds two runs, both on 2026-09-06.
 
 **The first did not get past step 2**, and the reason was a hard-coded 2.5 second
 window in continuo's post-spawn identity read-back against a worker CLI that

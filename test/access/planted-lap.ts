@@ -2,7 +2,8 @@
  * D-0065 5.6.2's planted lap: a recorded lap with a readable defect planted in
  * it, and the same lap with the defect taken out.
  *
- * The base is rondo's own lap 5 (`docs/operations/lap-5-dogfood.md`): the real
+ * The base is rondo's own lap 5
+ * (`docs/operations/earlier-laps/lap-5-dogfood.md`): the real
  * diff of `1b5f607` against its parent `91e6fc3`, that commit's real full
  * message, and `AGENTS.md` as it stood at `91e6fc3`. The transcript is
  * RECONSTRUCTED from the doc's tables, because no events file was kept (see

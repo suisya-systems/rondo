@@ -72,7 +72,7 @@ export const SERVED_RECIPIENTS = Object.freeze(["external-notify", "human-gated-
  *
  * **Two things a caller meets beside the plan, which {@link runPlan} cannot
  * refuse for them.** Both were found by filling a first plan
- * (`docs/operations/lap-1-dogfood.md`, F-5 and F-7).
+ * (`docs/operations/earlier-laps/lap-1-dogfood.md`, F-5 and F-7).
  *
  * - **The policy handed to `admit()` next to the plan must not be
  *   `CONSERVATIVE_POLICY`.** Its `ask_every_iteration` is refused by `nextStep`
@@ -191,7 +191,8 @@ export interface RunPlan {
    * constants worth 2.5 seconds in total, and the lap-1 dogfood is where the
    * loop stopped: a real worker took 3.5 to 11.3 seconds to emit the event that
    * names its session, so every measured start exceeded the window and the
-   * fastest exceeded it by 40% (`docs/operations/lap-1-dogfood.md`, F-1).
+   * fastest exceeded it by 40%
+   * (`docs/operations/earlier-laps/lap-1-dogfood.md`, F-1).
    * continuo now takes the number and defaults it to thirty seconds. rondo
    * states it anyway, for the reason the other two budgets are stated: a
    * default rondo never saw is a number rondo cannot reason about, and this one

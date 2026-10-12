@@ -143,7 +143,8 @@ test("it explains a row it can read, and records what it said", async () => {
 });
 
 /**
- * rondo#90, measured as finding N-5 of `docs/operations/lap-2-dogfood.md`.
+ * rondo#90, measured as finding N-5 of
+ * `docs/operations/earlier-laps/lap-2-dogfood.md`.
  *
  * `--prompt-file` (#72) exists so that a request can be more than one
  * paragraph, and this line rendered all 2154 characters of one through

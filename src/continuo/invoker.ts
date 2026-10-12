@@ -1380,8 +1380,9 @@ export interface DeliverGateRequest {
    * resource, so a caller that omitted this for a gate that has a run drains an
    * empty queue, reports success, and is then refused by `gate ack` -- which is
    * what cost a whole lap of dogfooding two hand-typed deliveries and three
-   * `rondo answer` invocations (`docs/operations/lap-2-dogfood.md` N-1). Null
-   * is for the gates continuo itself calls runless, whose rows do live there.
+   * `rondo answer` invocations
+   * (`docs/operations/earlier-laps/lap-2-dogfood.md` N-1). Null is for the
+   * gates continuo itself calls runless, whose rows do live there.
    */
   readonly runId: string | null;
 }
