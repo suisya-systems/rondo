@@ -110,7 +110,7 @@ import type { MintIterationId, MintMessageId, MintScopeId, WebPorts } from "./pa
 import { pageDocument } from "./page/document.js";
 import { EmptyCentre, type SinceView } from "./page/empty.js";
 import { closingShown, materialView } from "./page/gate-material.js";
-import { budgetClosing, reviseBox, shownBeforePress } from "./page/gate-shown.js";
+import { answerDraft, budgetClosing, shownBeforePress } from "./page/gate-shown.js";
 import { GovernanceLine } from "./page/governance.js";
 import { RequestsFace } from "./page/list.js";
 import { facesMarkup, heldMarkup } from "./page/render.js";
@@ -865,12 +865,11 @@ async function threadBoxes(
     ) {
       return null;
     }
-    const box = await reviseBox(ports, wording, lapId, await ports.store.readingsFor(lapId));
     return {
       iterationId: lapId,
       scopeDecisionId: tip.scopeDecisionId,
       successor: newIterationId(),
-      draft: box.kind === "drafted" ? box.text : "",
+      ...(await answerDraft(ports, wording, lapId, await ports.store.readingsFor(lapId))),
     };
   })();
   const addBox =

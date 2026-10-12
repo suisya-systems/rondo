@@ -35,6 +35,9 @@ import {
   type ReleaseInput,
   ReleasePort,
 } from "../../src/access/line-ports.js";
+import type { WebPorts } from "../../src/access/page/contract.js";
+import { answerDraft } from "../../src/access/page/gate-shown.js";
+import { ANSWER_WINS } from "../../src/access/question.js";
 import { recordTabNotice } from "../../src/access/reach.js";
 import { heldAnchor, heldDigest } from "../../src/access/read-in.js";
 import {
@@ -4556,4 +4559,103 @@ test("(answer) an option pressed at a worker's question is the gate's revise too
   expect(pressed.status).toBe(303);
   expect(revised).toHaveLength(1);
   expect(revised[0]?.body).toContain("---\nb.ts\n---\nThey chose: b.ts\nContinue");
+});
+
+test("(answer) an option pressed at a worker's question is not overridden by a drafted judgment call that picks another option (rondo#670)", async () => {
+  const { record, ports } = await askWaiting();
+  const asked = await record.recordThreadMessage({
+    messageId: "question-lap-1",
+    body: "Keep the old citations, or repoint them?",
+    authorKind: "drafter",
+    authorId: "rondo/worker-question/1",
+    inReplyTo: "req",
+    atMs: 1,
+    bases: [{ form: "iteration", iterationId: "lap-1" }],
+    asks: true,
+    askOptions: {
+      options: [
+        { text: "Keep them", givesUp: "stale paths" },
+        { text: "Repoint them", givesUp: "the append-only record" },
+      ],
+      recommended: 0,
+    },
+  });
+  expect(asked.kind).toBe("recorded");
+  // The gate's reading and its draft, written before the person answered: a
+  // plain defect, and a judgment call that amounts to the other option.
+  const reading = {
+    iterationId: "lap-1",
+    readAtMs: 1,
+    drafter: "rondo/model/1/gpt-6-astra",
+    verdict: "concerns" as const,
+    findings: ["a test fails", "the citations point at old paths"],
+    evidence: null,
+    unavailableReason: null,
+  };
+  const drafted = await answerDraft(
+    {
+      record: {
+        reviseDraftFor: async () => ({
+          proposalId: "p-1",
+          drafter: "rondo/revise-drafter/2/m",
+          createdAtMs: 1,
+          payload: {
+            kind: "drafted",
+            lead: "Answer the question with option 2.",
+            changes: ["Fix the failing test.", "Go with option 2: repoint the citations."],
+            judgment: [1],
+          },
+        }),
+      },
+    } as unknown as WebPorts,
+    EN,
+    "lap-1",
+    [reading],
+  );
+  expect(drafted.draft).toContain("Fix the failing test.");
+  expect(drafted.draft).not.toContain("option 2");
+  expect(drafted.calls).toContain("Go with option 2");
+
+  const pressWith = async (tick: boolean) => {
+    const revised: ReviseInput[] = [];
+    const withRevise = {
+      ...ports,
+      store: { read: async () => ({ kind: "read" }) },
+      revise: new RevisePort(async (input) => {
+        revised.push(input);
+        return await Promise.resolve({ ok: true, note: "" });
+      }),
+    } as unknown as ServedPorts;
+    const { base, stop, closed } = await served(createApp(withRevise, TOKEN));
+    const pressed = await send(base, "/answer-ask", "POST", pressHeaders(base), {
+      token: TOKEN,
+      message_id: newMessageId("reply"),
+      in_reply_to: "question-lap-1",
+      body: "",
+      outcome: "option:0",
+      revise_iteration: "lap-1",
+      revise_decision: "decision-1",
+      revise_successor: "lap-00000000-0000-4000-8000-000000000002",
+      revise_draft: drafted.draft,
+      revise_calls: drafted.calls,
+      ...(tick ? { revise_calls_send: "1" } : {}),
+    });
+    stop.abort();
+    expect(await closed).toBe(0);
+    expect(pressed.status).toBe(303);
+    expect(revised).toHaveLength(1);
+    return revised[0]?.body ?? "";
+  };
+
+  // Unticked: the answer, the plain fix, and nothing that names the other option.
+  const sent = await pressWith(false);
+  expect(sent).toContain("They chose: Keep them");
+  expect(sent).toContain(`${ANSWER_WINS}\n\n`);
+  expect(sent).toContain("Fix the failing test.");
+  expect(sent).not.toContain("option 2");
+  expect(sent).not.toContain("Repoint");
+  // Ticked: the person chose to send the judgment call too, under the answer.
+  const both = await pressWith(true);
+  expect(both).toContain("Go with option 2");
+  expect(both.indexOf(ANSWER_WINS)).toBeLessThan(both.indexOf("Go with option 2"));
 });

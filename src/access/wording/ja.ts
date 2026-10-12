@@ -288,6 +288,7 @@ export const JA: Chrome = Object.freeze({
   answerReviseOptionsNote:
     "選択肢のどれか、または「自分の言葉で答える」を押すと、この回答を持たせて次の試行をすぐに始めます。",
   answerReviseDraftLead: "次の試行には、次の変更依頼も一緒に渡します:",
+  answerReviseCallsSend: "判断が要る次の点も一緒に送る（回答と食い違う点は回答に従います）:",
   answerRaiseLabel: "これからの予算（USD）",
   answerRaiseRoundsLabel: "この線のレビュー回数",
   answerRaiseLeft: (left, reserve, enough) =>

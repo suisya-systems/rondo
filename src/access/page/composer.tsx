@@ -184,6 +184,8 @@ export interface AnswerRevise {
   readonly scopeDecisionId: string;
   readonly successor: string;
   readonly draft: string;
+  /** The drafted judgment calls, sent only where the person ticks them (rondo#670). */
+  readonly calls: string;
 }
 
 /** The answer box's revise fields, and the drafted change it carries, where there is one. */
@@ -206,6 +208,21 @@ function answerReviseFields(wording: Chrome, revise: AnswerRevise, options: bool
             class="max-h-48 overflow-auto rounded-md border border-border bg-muted/60 px-3 py-2 text-meta leading-5 whitespace-pre-wrap"
           >
             {revise.draft}
+          </pre>
+        </>
+      )}
+      {revise.calls === "" ? null : (
+        <>
+          <input type="hidden" name="revise_calls" value={revise.calls} />
+          <label class="flex items-start gap-2 text-meta leading-5 text-muted-foreground">
+            <input type="checkbox" name="revise_calls_send" value="1" class="mt-1" />
+            <span>{wording.answerReviseCallsSend}</span>
+          </label>
+          <pre
+            lang=""
+            class="max-h-48 overflow-auto rounded-md border border-border bg-muted/60 px-3 py-2 text-meta leading-5 whitespace-pre-wrap"
+          >
+            {revise.calls}
           </pre>
         </>
       )}

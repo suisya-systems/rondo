@@ -232,6 +232,11 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
   readonly answerReviseOptionsNote: string;
   readonly answerReviseDraftLead: string;
   /**
+   * The tick that sends the drafted judgment calls with the answer
+   * (rondo#670); unticked, the answer goes without them.
+   */
+  readonly answerReviseCallsSend: string;
+  /**
    * A budget stop's first answer (D-0140 rule 3): a budgets-only successor of
    * the lap's approval, then *carry on*, on one press. `answerRaiseLabel` is
    * its amount's box; `answerRaiseLeft` what the rest of the approval allows,

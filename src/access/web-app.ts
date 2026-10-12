@@ -85,7 +85,7 @@ import {
   resolveLanguage,
 } from "./page-logic/language.js";
 import { viewHref, viewOf } from "./page-logic/routes.js";
-import { questionRevise } from "./question.js";
+import { answeredRevise, questionRevise } from "./question.js";
 import { TAB_OUTCOMES, type TabOutcome } from "./reach.js";
 import { heldAnchor, pressable } from "./read-in.js";
 import { budgetsOf, scopeDraftOf, scopeValuesOf, wholeNumber } from "./scope-form.js";
@@ -2249,7 +2249,6 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     ) {
       const decision = typeof form["revise_decision"] === "string" ? form["revise_decision"] : "";
       const successorId = form["revise_successor"];
-      const draft = typeof form["revise_draft"] === "string" ? form["revise_draft"] : "";
       const request = asked?.inReplyTo ?? "";
       if (
         asked === undefined ||
@@ -2267,7 +2266,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         iterationId: reviseLap,
         successorId,
         scopeDecisionId: decision,
-        body: draft.trim() === "" ? quoted : `${quoted}\n\n${draft}`,
+        body: answeredRevise(quoted, form),
       });
       if (!revised.ok && (await reading.store.read(successorId)).kind !== "read") {
         return reviseRefused(
