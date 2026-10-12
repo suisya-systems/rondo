@@ -1546,7 +1546,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageAnswerAsk: "下の質問に答える",
   triageMixedScript: "この文には別の言語の文字が混じっています。送る前に確認してください。",
   flowAskRefusedNoApprover:
-    "回答は記録されませんでした。RONDO_APPROVER が設定されていないため、このページからは回答できません。",
+    "回答は記録されませんでした。RONDO_APPROVER が正しく設定されていないため、このページからは回答できません。",
   flowAskRefusedPress:
     "回答は記録されませんでした。ホーム画面に戻って、もう一度ボタンを押してください。",
   flowAskRefused:
