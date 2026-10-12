@@ -22,8 +22,10 @@ exercised in every CI cell with in-memory fixtures.
 
 **As of D-0019 there is a conductor.** `src/refrain/` holds a pure `nextStep`
 planner beside an async interpreter that drives one lap through injected ports,
-`src/store/` holds a real schema whose partial unique index makes single-flight
-the database's invariant rather than a promise, and the arc runs: classify
+`src/store/` holds a real schema whose partial unique indexes make the
+allocator's claims — one holder of each run id, topic branch and workspace —
+the database's invariant rather than a promise (D-0023 rule 7), and the arc
+runs: classify
 against a cadenza contract, admit a run, walk one lap, and **suspend at the gate
 a human has yet to answer**, resuming through `resume(iterationId)` when the
 operating surface says they have. It never composes the answer (D-0009), never
@@ -52,8 +54,9 @@ request's thread (D-0083). From it a person can send a request and reply in its
 thread, answer a question the organisation asked back, approve a drafted scope
 (D-0066, D-0071) and raise a running lap's budget (D-0074), start the work,
 approve a lap or ask for a change (D-0070, with the revise instruction drafted
-by the organisation, D-0077), open the pull request, merge it where rondo's own
-reading of its checks is green on the head (D-0091, through the operator's own
+by the organisation, D-0077), open the pull request, merge it where continuo's
+verdict on the checks rondo fetched is green on the head (D-0091, D-0095, the
+merge itself through the operator's own
 `gh`), have a worker resolve a pull request that conflicts with its base
 (D-0105), release the paths a finished line holds (D-0073), add a repository
 rondo does not yet work in with one press (D-0090), and put what rondo proposes
