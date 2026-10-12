@@ -954,8 +954,8 @@ export const JA: Chrome = Object.freeze({
   raiseNeeded: (why) =>
     `${why}ため、ここでは変更を依頼できません。予算を引き上げると、変更を依頼できるようになります。今の作業をそのまま承認することもできます。`,
   raiseWhyLaps: (laps) => `承認した ${String(laps)} 回をすべて使っている`,
-  raiseWhyCost: (spent, _reserve, cost) =>
-    `これまでに $${spent} を使っていて、もう 1 回やり直すと承認した $${cost} を超える`,
+  raiseWhyCost: (spent, reserve, cost) =>
+    `使った分と確保中の分（$${spent}）に、やり直しに確保する $${reserve} を足すと、承認した $${cost} を超える`,
   raiseWhyExpiry: (at) => `承認した期限 ${at} (UTC) を過ぎている`,
   raiseLink: "この承認の予算を引き上げる",
   raiseLead:
@@ -1464,7 +1464,7 @@ export const JA: Chrome = Object.freeze({
     "このコンピュータで rondo を管理する人に確かめてもらってください。",
   nextStepMerge:
     "プルリクエストのチェックが通り、回答待ちのものもありません。" +
-    "マージすると、デフォルトブランチに取り込みます。" +
+    "マージすると、プルリクエストのマージ先のブランチに取り込みます。" +
     "マージはこのページからは取り消せません。",
   mergeAction: "プルリクエストをマージする",
   mergeConfirmHeading: "この作業のプルリクエストをマージする",
