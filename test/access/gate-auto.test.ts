@@ -159,7 +159,7 @@ describe("gateAuto (D-0125)", () => {
         "no test run rondo can read; a question is open.",
     );
     expect(JA.gateAuto(auto)).toBe(
-      "自動では承認しません: 阻害 1 件と重大 2 件の指摘、rondo が読み取れるテスト実行がありません、質問が開いています。",
+      "自動では承認しません: 致命的 1 件と重大 2 件の指摘、rondo が読み取れるテスト実行がありません、答えていない質問があります。",
     );
   });
 
@@ -175,7 +175,7 @@ describe("gateAuto (D-0125)", () => {
       "Not approved automatically: every test in the last run was skipped, so it shows nothing.",
     );
     expect(JA.gateAuto(auto)).toBe(
-      "自動では承認しません: 最後の実行ではテストがすべてスキップされ、何も確かめていません。",
+      "自動では承認しません: 最後の実行ではテストがすべてスキップされていて、何も確かめられていません。",
     );
     expect(EN.gateAuto(gateAuto(input({ repair: "notReproduced" })))).toBe(
       "Not approved automatically: the repair did not show the failing checks fail and then a run that passed.",

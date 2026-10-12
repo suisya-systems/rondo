@@ -460,10 +460,10 @@ test("the threads speak Japanese where the page does, tokens and words untouched
   // the old thread drew (D-0083 rule 5).
   expect(html).toContain(">あなた</span>");
   expect(html).toContain("あなたの回答待ち");
-  expect(html).toContain("rondo の質問に回答 · ");
+  expect(html).toContain("rondo の質問に答える · ");
   expect(html).not.toContain("rondo-drafter");
   expect(html).toContain(">続ける</button>");
-  expect(html).toContain(">この線を止める</button>");
+  expect(html).toContain(">この作業を止める</button>");
   expect(html).toContain('action="/answer-ask?lang=ja"');
   expect(bodiesIn(html)).toEqual([LATER_BODY, ASK_BODY, ROOT_BODY]);
 });

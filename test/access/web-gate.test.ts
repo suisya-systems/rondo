@@ -621,12 +621,12 @@ test("the change is offered in the page's language, and the findings stay the re
   );
   const bar = barOf(html);
   // The change is a press in Japanese too, and not a fold (rondo#351).
-  expect(bar).toContain(">変更を依頼する</button>");
+  expect(bar).toContain(">変更を頼む</button>");
   expect(bar.slice(bar.indexOf('id="revise"'))).not.toContain("<details");
   // Before a draft lands, the box is empty and the view says one is coming,
   // in the page's language (D-0077 rule 4.3).
   expect(bar).toMatch(/<textarea name="body"[^>]*><\/textarea>/);
-  expect(bar).toContain("変更内容の下書きを作成中です");
+  expect(bar).toContain("変更内容の下書きを作っています");
 
   await draftRevise(world, REVISE_ANSWER);
   const drafted = await operatorPage(
@@ -640,7 +640,7 @@ test("the change is offered in the page's language, and the findings stay the re
   );
   const box = drafted.slice(drafted.indexOf('id="answer-bar"'));
   // Quoted, not translated (D-0055 rule 4): the finding and its basis as given.
-  expect(box).toContain("- 阻害: the loop never stops");
+  expect(box).toContain("- 致命的: the loop never stops");
   expect(box).toContain("場所: src/notifier.ts:41");
   expect(box).toContain("直すこと: Cap the backoff at 30 seconds.");
   expect(box).not.toContain("モデルレビューが挙げた点を直してください");
@@ -1547,7 +1547,7 @@ test("the gate opens on what happened: each lap, what it was asked, what it comm
   );
   expect(story).toContain(EN.storyLaps(2));
   expect(EN.storyLaps(2)).toContain("within this work");
-  expect(JA.storyLaps(2)).toContain("この作業の中での数");
+  expect(JA.storyLaps(2)).toContain("この作業の中での回数");
   expect(story).toContain(EN.storyToldRequest);
   expect(story).toContain(EN.modelRaised(1, 1));
   expect(story).toContain(EN.storyEnded("revise", ""));

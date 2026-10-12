@@ -264,9 +264,9 @@ test("with no lap recorded, the scope screen says in Japanese that the reserve w
     () => "MINT-SCOPE-1",
     () => "MINT-LAP-1",
   );
-  expect(html).toContain("依頼の大きさが過去の周回と同じくらいだと見て、予算を出しています");
+  expect(html).toContain("この予算は、依頼の大きさが過去の回と同じくらいだと見て出しています");
   expect(html).toContain(
-    "rondo の見込み 10.00 USD で、rondo が測れた場所での初回周回の費用に合わせた値です",
+    "rondo の見込みの 10.00 USD で、rondo が計測できた別の場所での 1 回目の費用に合わせた値です",
   );
   // **And next to each value that rests on it, not only in its formula**
   // (rondo#378): lap 11's owner read $7.50 as a measured figure. The cost, the
@@ -280,14 +280,14 @@ test("with no lap recorded, the scope screen says in Japanese that the reserve w
     "3 recorded first laps of other agent types on tier standard, as none of this one's is recorded, which cost 0.22 to 1.88 USD",
   );
   expect(chromeFor("ja").scopeSampleRows(1, "model_tier", "standard", "1.04", "1.04")).toContain(
-    "同じ tier standard の別のエージェント種別の初回周回 1 件をもとに下書きしました。費用は 1.04 USD",
+    "同じ段階 standard の別のエージェント種別の 1 回目 1 件をもとに下書きしました。費用は 1.04 USD",
   );
   // A repository-level sample says so too (D-0140 rule 2).
   expect(EN.scopeSampleRows(2, "repository", "standard", "7.21", "8.12")).toContain(
     "of other agent types in this repository",
   );
   expect(chromeFor("ja").scopeSampleRows(2, "repository", null, "7.21", "8.12")).toContain(
-    "このリポジトリの別のエージェント種別の初回周回 2 件",
+    "このリポジトリの別のエージェント種別の 1 回目 2 件",
   );
 });
 
@@ -539,22 +539,22 @@ test("the scope screen speaks Japanese, and every id, digest and 'rondo' token s
   expect(html).toContain("この依頼の範囲");
   expect(html).toContain("範囲を決める");
   expect(html).toContain(
-    "範囲を決めるのはあなたです。プランは rondo が持っているものから選び、数値はこのストアに記録された周回から出しています。",
+    "この範囲はあなたが決めます。計画は rondo が持っているものから選び、数値は rondo の記録にあるこれまでの回から出しています。",
   );
-  expect(html).toContain("既定値で、依頼から導いたものではありません。");
+  expect(html).toContain("rondo の既定値です。依頼の内容から出したものではありません。");
   expect(html).toContain(`エージェント種別 ${agentTypeDigest}`);
-  expect(html).toContain(`プラン ${planDigest}`);
+  expect(html).toContain(`計画 ${planDigest}`);
 
   // **The evidence layer is in Japanese too** (rondo#233 S3 screen review).
   // The formulas, the bases and the agent type's bounds are the whole reason
   // the fold exists, and every one of them rendered English inside this page
   // while `computeScopeBudgets` composed the sentence itself. The numbers,
   // digests and capability keys they frame stay their own bytes (rule 3).
-  expect(html).toContain("計算: プラン数 x レビュー回数 = 1 x 3");
+  expect(html).toContain("計算: 作業数 x レビュー回数 = 1 x 3");
   expect(html).toContain("この数の出どころ");
   expect(html).toContain("レビュー回数: 3（誰も選ばなかったときに rondo が使う数）");
-  expect(html).toContain("初回周回の費用が最も高かったもの");
-  expect(html).toContain("あなたの返信のための 1 日");
+  expect(html).toContain("1 回目の費用が最も高かったもの");
+  expect(html).toContain("あなたが返信するための 1 日");
   expect(html).toContain("モデルの規模は standard、許可はcommand.run");
   expect(html).toContain("ブランチを push する");
   expect(html).toContain("重大 (major)");
@@ -1102,7 +1102,7 @@ test("the first scope in a store shows what its agent type is allowed, read from
     () => "x",
     () => "y",
   );
-  expect(ja).toContain("この範囲が記録するプラン");
+  expect(ja).toContain("この範囲に記録された計画");
 });
 
 test("with no plan held, the scope screen says how one comes to be held, on the page, and draws no form (rondo#238)", async () => {

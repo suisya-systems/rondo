@@ -94,7 +94,7 @@ test("a ja host reads in Japanese and leaves every token in its own bytes", asyn
   // Prose, on the screens the operator actually reads.
   expect(summary).toContain("あなたの番");
   expect(summary).toContain("あなたの返事を待っています");
-  expect(summary).toContain("描き直しは何も書き込みません");
+  expect(summary).toContain("更新では何も記録しません");
   expect(requests).toContain("何を頼みますか");
 
   // **Tokens, verbatim and in the middle of the translated sentences** (rule 2
@@ -112,7 +112,7 @@ test("a ja host reads in Japanese and leaves every token in its own bytes", asyn
 
   // **What the ledger records stays English even here** (rule 4): the claim
   // labels beside the button are the bytes a press stores.
-  expect(summary).toContain("「承認する」を押すと");
+  expect(summary).toContain("「承認する」を押したときに");
   expect(summary).toMatch(/<dt class="label[^"]*">request<\/dt>/);
 });
 
