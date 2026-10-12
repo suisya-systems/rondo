@@ -1253,7 +1253,7 @@ export const JA: Chrome = Object.freeze({
     "まだ何もこのコンピュータの外に出ていません。この作業は、いまのままでは公開できません。",
   publishReviewLead:
     "まだ何もこのコンピュータの外に出ていません。公開すると何が起きるかを、いま読み取って示します。" +
-    "ただし、この作業のモデルレビューが作業の内容と合っていないため、ここで押せるのは、それを承知で進めるボタンだけです。",
+    "ただし、rondo のチェックがこの作業の内容と合っていないため、ここで押せるのは、それを承知で進めるボタンだけです。",
   publishNotYetHeading: "公開できない理由",
   publishTargetHeading: "押すと起きること",
   publishPushes: (branch, remote) => `ブランチ ${branch} を ${remote} へ push します。`,
@@ -1317,28 +1317,28 @@ export const JA: Chrome = Object.freeze({
     `作業する場所で git status が読めません (${reason})。push がコミットされていない変更を` +
     "残したままにするかどうかが分からず、ここのボタンでは変えられません。git status が" +
     "答えるように作業する場所を直してから、もう一度来てください。",
-  publishReviewHeading: "モデルレビューがこの作業と合っていません",
+  publishReviewHeading: "rondo のチェックがこの作業と合っていません",
   publishReviewNoReading:
-    "この作業のモデルレビューがありません。「読んでいない」と「読んだが指摘なし」を" +
+    "この作業を rondo がチェックした記録がありません。「読んでいない」と「読んだが指摘なし」を" +
     "同じに見せないため、公開はここで止めるのが既定です。",
   publishReviewNotClear: (verdict, findings) =>
-    `この作業のモデルレビューの結果は '${verdict}' です${findings === "" ? "" : `: ${findings}`}。` +
+    `この作業を rondo がチェックした結果は '${verdict}' です${findings === "" ? "" : `: ${findings}`}。` +
     "これで何かが決まるわけでも、公開を禁じるものでもありません。あなたがまだ答えていない指摘です。",
   publishReviewNoEvidence:
-    "モデルレビューは問題なしとしていますが、何を読んだかの計測が記録されていないため、" +
+    "rondo のチェックは問題なしとしていますが、何を読んだかの計測が記録されていないため、" +
     "突き合わせて確かめられません。",
   publishReviewUnreadable: (reason) =>
-    `いま作業する場所を読めないため (${reason})、モデルレビューの結果と push する内容を` +
+    `いま作業する場所を読めないため (${reason})、rondo のチェックの結果と push する内容を` +
     "突き合わせられません。",
   publishReviewMoved: (readTip, nowTip) =>
-    `モデルレビューは ${readTip} の時点のもので、いま push するのは ${nowTip} です。レビューが` +
+    `rondo のチェックは ${readTip} の時点のもので、いま push するのは ${nowTip} です。チェックが` +
     "この作業の内容と合わなくなっています。",
-  publishDespiteFold: "モデルレビューと合わないままプルリクエストを作る",
+  publishDespiteFold: "rondo のチェックと合わないままプルリクエストを作る",
   publishDespiteAction: "それでもプルリクエストを作る",
   publishDespiteNote:
     "決めるのはあなたです。そのための専用のボタンを、もう 1 回押す必要があります。あなたが" +
-    "決めたことを rondo が記録します。モデルレビューの結果はそのまま残ります。",
-  publishDespitePlain: "上のモデルレビューがこの作業と合わないまま公開します。",
+    "決めたことを rondo が記録します。rondo のチェックの結果はそのまま残ります。",
+  publishDespitePlain: "上の rondo のチェックがこの作業と合わないまま公開します。",
   scopeBusy: "範囲を記録しています…",
   nextStepHeading: "次にやること",
   nextStepScope:
@@ -1549,10 +1549,10 @@ export const JA: Chrome = Object.freeze({
     "何も公開していません。git status が読めず、コミットされていない変更が残っているか" +
     `分かりません (${detail})。`,
   publishRefusedNotRead:
-    "何も公開していません。この作業のモデルレビューが、push する内容と合っていません。" +
-    "画面を読み込み直してください。レビューと合わないまま公開するには、そのための別のボタンを押します。",
+    "何も公開していません。rondo のチェックが、push する内容と合っていません。" +
+    "画面を読み込み直してください。チェックと合わないまま公開するには、そのための別のボタンを押します。",
   publishRefusedNothingOverruled:
-    "何も公開していません。モデルレビューはこの作業と合っているので、押し切るものがありません。" +
+    "何も公開していません。rondo のチェックはこの作業と合っているので、押し切るものがありません。" +
     "画面を読み込み直して、ふつうの公開ボタンを押してください。",
   publishRefusedChanged:
     "何も公開していません。画面に出ていた内容と、いま公開したら起きることが食い違っています。" +
