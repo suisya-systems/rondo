@@ -86,7 +86,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0038 | Whether the premise under a proposal has moved, decided per basis and at render time: the record and not the field as the unit, re-gathered rather than remembered, and `undetermined` as a value the screen may never round to unchanged | accepted |
 | D-0039 | A lap cannot verify what it wrote, and `--allowedTools` is not the way out: `D-0011`'s first falsifier fires, the fence input rondo asks continuo for, and what `granted` maps to once it exists | accepted |
 | D-0040 | Where a run's authorisation is written down now that continuo owns a table for it: `D-0020` rule 4's falsifier fires in substance, the durable home does not move, and the envelope carries only facts that exist today | accepted |
-| D-0041 | The one write the operator's page may do: an unattended redraw and a person's click are told apart at runtime and never by type, the approver is the only actor, and the write is a single function rather than a store | accepted |
+| D-0041 | The one write the operator's page may do: an unattended redraw and a person's click are told apart at runtime and never by type, the approver is the only actor, and the write is a single function rather than a store | accepted, amended |
 | D-0042 | What counts as a presentation on a page that redraws itself: the press and not the render, recorded before the gate is answered, and the reader who does not press left uncounted | accepted |
 | D-0043 | The trigger a stopped lap pulls: one proposal at the abandon the conductor's own arc reaches, `contract_keys` because it is the only option set that is a choice, and a successor identity rondo mints and nobody has yet adopted | accepted, amended |
 | D-0044 | The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs | superseded by D-0062 |
@@ -7799,12 +7799,15 @@ rondo `09830d6`, on **2026-09-12**, by running as well as by reading.
 > writing vocabulary is one sentence long": the vocabulary is a closed table of write kinds, each
 > write port refuses a call without a value minted from the live request (a press for approvals, a
 > send for a thread message), and a test enumerates the running app's routes against that table.
-
-> **Annotation (2026-10-14, from D-0196).** Added after this entry was accepted, and additive.
-> **Rule 5** keeps its actor and its refusal, and gains a second way to name them: where
-> `RONDO_APPROVER` is unset, the page draws one form that names the approver, and the host builds
-> its write ports for that name without a restart. Nothing below is edited.
 > **Rule 1 stands**; rule 7 is `D-0064`'s to move. Nothing below is edited.
+
+> **Annotation (2026-10-14, from D-0196).** Added after this entry was accepted, and **not
+> additive**: rule 5's "no button on the page at all" while `RONDO_APPROVER` is unset is narrowed.
+> The page then draws one form that names the approver, and the host builds its write ports for
+> that name without a restart; every other press is still refused until someone is named. Nothing
+> below is edited.
+>
+> - Amends: D-0041 rule 5
 
 > **Annotation (2026-09-12, from D-0054).** Added after this entry was accepted, and additive:
 > nothing below is removed or rewritten. **Rule 3(a) is repealed in half.** Its client-side claim --
@@ -31411,7 +31414,7 @@ so a restart while a lap was `admitting` left it holding the lock for ever.
 
 ## D-0196 — A host started with nobody named as the approver lets the page name them, once, and builds its write ports for that name without a restart
 
-**Status:** accepted (2026-10-14, rondo#675). Annotates `D-0041` rule 5. Supersedes nothing.
+**Status:** accepted (2026-10-14, rondo#675). Amends `D-0041` rule 5. Supersedes nothing.
 Refs `D-0020` rule 2, `D-0055` rule 5, `D-0059` section 5a, `D-0079`, `D-0191` rule 2.2, rondo#663.
 
 ### Context
