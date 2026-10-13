@@ -689,8 +689,12 @@ function reviseForm(
   if (framing.forked || framing.scopeDecisionId === null) {
     // **A lap started under no scope has a way on** (rondo#673): no approval
     // can join its line, so the way is the request's scope screen, where an
-    // approval starts the request again from its own words.
-    const toScope = !framing.forked && record.requestMessageId !== null;
+    // approval starts the request again from its own words. Not while a
+    // question in the thread waits: that screen holds until it is answered.
+    const toScope =
+      !framing.forked &&
+      framing.questionOpen === null &&
+      (framing.workerQuestion?.waitedSaid ?? null) === null;
     return (
       <div id="revise-none" class="space-y-2">
         <p class="note text-meta leading-5 text-faint">
