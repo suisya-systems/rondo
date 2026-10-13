@@ -30,6 +30,7 @@ import type {
   ProposalDraft,
   RecordChange,
   RequestOpener,
+  ScopeActKind,
   ScopeDecisionDraft,
   ScopeDraft,
   ScopeRefusal,
@@ -1568,6 +1569,13 @@ export interface AdvisoryRecord {
    * reader has no business choosing between.
    */
   scopeDecisionAdmitting(iterationId: string): Promise<string | null>;
+  /**
+   * The approval one act was claimed under, read off its `scope_consumption`
+   * row, or null on none or more than one ({@link scopeDecisionAdmitting}'s
+   * rule): for a `gate_answer`, the approval rondo answered that gate under
+   * (D-0125 rule 5), which its pull request names (rondo#667).
+   */
+  scopeDecisionClaiming(actKind: ScopeActKind, subjectId: string): Promise<string | null>;
   /**
    * Every approval still in force, oldest first: `approved`, and no successor of
    * its scope at any depth approved (D-0066 rule 1.4). Where the order tick

@@ -21,6 +21,7 @@ import {
   lapBudgetCap,
   type RequestOpener,
   requestsGoal,
+  type ScopeActKind,
   type ScopePayload,
   type ScopeRefusal,
   type ScopeSpent,
@@ -266,12 +267,21 @@ function toScopeDecision(row: SqlRow): StoredScopeDecision {
  * none at all rather than whichever the database listed first.
  */
 export function admittedUnder(connection: StoreConnection, iterationId: string): string | null {
+  return claimedUnder(connection, "admission", iterationId);
+}
+
+/** {@link admittedUnder} for any act kind: the one approval a subject's row names, or null. */
+export function claimedUnder(
+  connection: StoreConnection,
+  actKind: ScopeActKind,
+  subjectId: string,
+): string | null {
   const rows = connection
     .prepare(
       "SELECT scope_decision_id FROM scope_consumption " +
-        "WHERE subject_id = ? AND act_kind = 'admission' LIMIT 2",
+        "WHERE subject_id = ? AND act_kind = ? LIMIT 2",
     )
-    .all(iterationId) as SqlRow[];
+    .all(subjectId, actKind) as SqlRow[];
   const only = rows.length === 1 ? rows[0] : undefined;
   const decision = only === undefined ? undefined : only["scope_decision_id"];
   return typeof decision === "string" && decision !== "" ? decision : null;

@@ -52,6 +52,7 @@ import {
   publishPreflight,
   repositoryFromRemoteUrl,
 } from "../../src/access/forge-preflight.js";
+import { GATE_ACTOR } from "../../src/access/gate-host.js";
 import { bareIssueRepository } from "../../src/access/issue-read.js";
 import { claimThenWalk, lapStartedAgainAt } from "../../src/access/page-actions.js";
 import { type PullRequestTextInput, pullRequestText } from "../../src/access/pull-request.js";
@@ -1601,6 +1602,33 @@ test("the title is the lap's own commit subject, never the request cut short", (
     expect(title).not.toContain("...");
     expect(title).not.toContain("Do not");
   }
+});
+
+test("rondo#667: a gate rondo approved by itself is said so, under the approval it named", () => {
+  const byRondo = { ...published(), gateAnswer: "approve" as const, gateAnswerActor: GATE_ACTOR };
+  const body = text({
+    record: byRondo,
+    scopeApproval: { approver: "happy_ryo", costUsd: 20 },
+  }).body;
+  expect(body).toContain(
+    "- Gate `g-1` closed `answered_and_forwarded`: rondo approved it by itself under the scope " +
+      "approval happy_ryo gave (up to $20.00), and no person answered it.",
+  );
+  expect(body).not.toContain("a person answered it");
+  // An approval that will not read is said so, never guessed and never a person.
+  const unread = text({ record: byRondo, scopeApproval: null }).body;
+  expect(unread).toContain(
+    "rondo approved it by itself under a scope approval it could not read back",
+  );
+  expect(unread).not.toContain("a person answered it");
+  // A person's answer keeps its sentence, whatever approval is handed in.
+  const byPerson = { ...published(), gateAnswer: "approve" as const, gateAnswerActor: "ada" };
+  expect(
+    text({ record: byPerson, scopeApproval: { approver: "happy_ryo", costUsd: 20 } }).body,
+  ).toContain(
+    "- Gate `g-1` closed `answered_and_forwarded`: a person answered it, and the answer was " +
+      "carried through.",
+  );
 });
 
 test("the body describes the change, and the request is quoted rather than presented", () => {
