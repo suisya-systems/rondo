@@ -14,6 +14,7 @@ import { commandPublishBody, lapReport, main, publishPlanFor } from "../../src/a
 import { reportToRequest } from "../../src/access/conductor.js";
 import { consoleSeams } from "../../src/access/console.js";
 import { inspectLapWork } from "../../src/access/forge.js";
+import { GATE_ACTOR } from "../../src/access/gate-host.js";
 import type {} from "../../src/access/inbox.js";
 import { holdsFromPage, releaseFromPage } from "../../src/access/page-actions.js";
 import { resultOf } from "../../src/access/page-logic/result.js";
@@ -36,7 +37,11 @@ import type { ContinuoResult, GateDetail } from "../../src/continuo/protocol.js"
 import { drafterRow } from "../../src/continuo/roles.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, runPlan } from "../../src/refrain/plan.js";
-import { APPROVED_OUTCOME } from "../../src/store/records.js";
+import {
+  APPROVED_OUTCOME,
+  type StoredScope,
+  type StoredScopeDecision,
+} from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
 import { openRequest, REQUEST } from "../request-fixture.js";
@@ -1020,6 +1025,49 @@ test(
     expect(left.block).toEqual({ why: "uncommitted", paths: ["left-behind.txt"], elsewhere: null });
     expect(left.reason).toContain("left-behind.txt");
     expect(left.reason).toContain("--despite-review does not change that");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "rondo#667: a gate rondo answered itself names the approval its gate_answer claim was made under",
+  async () => {
+    const world = await publishableWorld("clear");
+    const read = await world.store.read(world.iterationId);
+    if (read.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const record = { ...read.record, gateAnswer: "approve" as const, gateAnswerActor: GATE_ACTOR };
+    const claims: string[] = [];
+    const thread: Parameters<typeof publishPlanFor>[4] = {
+      ...advisoryRecord(new DatabaseSync(world.storePath)),
+      scopeDecisionClaiming: async (actKind: string, subjectId: string) => {
+        claims.push(`${actKind} ${subjectId}`);
+        return "sd-gate";
+      },
+      readScopeDecision: async (id) =>
+        id === "sd-gate"
+          ? {
+              kind: "read",
+              decision: { scopeId: "scope-1", actorId: "happy_ryo" } as StoredScopeDecision,
+            }
+          : { kind: "absent" },
+      readScope: async (id) =>
+        id === "scope-1"
+          ? {
+              kind: "read",
+              scope: { payload: { budgets: { cost_usd: 20 } } } as unknown as StoredScope,
+            }
+          : { kind: "absent" },
+    };
+    const planned = await publishPlanFor(record, world.asked, {}, world.store, thread);
+    expect(planned.kind).toBe("ready");
+    if (planned.kind !== "ready") return;
+    expect(claims).toEqual([`gate_answer ${record.gateId ?? ""}`]);
+    expect(planned.plan.pullRequest.body).toContain(
+      "rondo approved it by itself under the scope approval happy_ryo gave (up to $20.00), " +
+        "and no person answered it.",
+    );
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );

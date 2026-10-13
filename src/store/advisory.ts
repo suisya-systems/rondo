@@ -96,6 +96,7 @@ import {
 } from "./schema.js";
 import {
   admittedUnder,
+  claimedUnder,
   forkedBy,
   requestOpenerOf,
   requestStanding,
@@ -1931,6 +1932,10 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
 
     async scopeDecisionAdmitting(iterationId: string): Promise<string | null> {
       return admittedUnder(connection, iterationId);
+    },
+
+    async scopeDecisionClaiming(actKind, subjectId): Promise<string | null> {
+      return claimedUnder(connection, actKind, subjectId);
     },
 
     async approvalsInForce() {

@@ -20,13 +20,17 @@
  * take back.
  */
 
+import { readSplitPayload } from "../advisory/proposal.js";
 import {
   APPROVED_OUTCOME,
   type IterationRecord,
+  type JsonRecord,
   type OperatorVerificationClaim,
   planField,
 } from "../store/records.js";
+import type { AdvisoryRecord } from "../store/sqlite.js";
 import { type CommandOutcome, fileCounts, type LapWorkInspection, runCommand } from "./forge.js";
+import { GATE_ACTOR } from "./gate-host.js";
 import { type NamedIssue, namedIssues } from "./issue-read.js";
 import { COMPOSED_SECTIONS, type ComposedBodyOutcome } from "./publish-body.js";
 import { LIST_LIMIT } from "./review.js";
@@ -152,6 +156,19 @@ export interface PullRequestTextInput {
    * there is no path here that quotes the report's own words.
    */
   readonly composedBody?: ComposedBodyOutcome | null;
+  /**
+   * The approval rondo answered this lap's gate under, by itself (D-0125,
+   * rondo#667): who approved it and its cost ceiling, off the gate's
+   * `gate_answer` claim. Null where the gate is not rondo's or the approval
+   * will not read; the body then names none rather than guess one.
+   */
+  readonly scopeApproval?: ScopeApproval | null;
+}
+
+/** A scope approval as a pull request names it: who approved it, and up to what. */
+export interface ScopeApproval {
+  readonly approver: string;
+  readonly costUsd: number;
 }
 
 export interface PullRequestText {
@@ -405,7 +422,7 @@ function composeBody(input: PullRequestTextInput, withRequest: boolean): string 
     // this" is about the last lap and this is about all of them.
     lines.push(`- ${lineageSentence(record, input.predecessor)}`);
   }
-  lines.push(`- ${gateSentence(record)}`);
+  lines.push(`- ${gateSentence(record, input.scopeApproval ?? null)}`);
   lines.push(...verificationLines(input.verificationClaims));
   lines.push(
     `- Against continuo \`${listed(record.continuoRevision ?? "an unrecorded revision", "revision")}\`` +
@@ -748,12 +765,22 @@ function claimBullet(claim: OperatorVerificationClaim): readonly string[] {
 }
 
 /** What the gate says about who approved this, in a reviewer's terms. */
-function gateSentence(record: IterationRecord): string {
+function gateSentence(record: IterationRecord, approval: ScopeApproval | null): string {
   const gate =
     record.gateId === null || record.gateId === ""
       ? "The gate"
       : `Gate \`${listed(record.gateId, "gate id")}\``;
   const outcome = listed(record.gateOutcome ?? "unknown", "outcome");
+  // **Who answered is the row's, not the outcome's** (rondo#667): rondo's own
+  // approval under a scope (D-0125) closes the gate with the same outcome.
+  if (outcome === APPROVED_OUTCOME && record.gateAnswerActor === GATE_ACTOR) {
+    const under =
+      approval === null
+        ? "a scope approval it could not read back"
+        : `the scope approval ${listed(approval.approver, "approver")} gave ` +
+          `(up to $${approval.costUsd.toFixed(2)})`;
+    return `${gate} closed \`${outcome}\`: rondo approved it by itself under ${under}, and no person answered it.`;
+  }
   if (outcome === APPROVED_OUTCOME) {
     return `${gate} closed \`${outcome}\`: a person answered it, and the answer was carried through.`;
   }
@@ -898,4 +925,101 @@ export function alreadyOpen(stderr: string): string | null {
       stderr,
     )?.[1] ?? null
   );
+}
+
+/** What a publish reads off the advisory record for its body. */
+export type PullRequestReads = Pick<
+  AdvisoryRecord,
+  | "threadMessages"
+  | "scopesFor"
+  | "readProposal"
+  | "scopeDecisionClaiming"
+  | "readScopeDecision"
+  | "readScope"
+>;
+
+/** The body's inputs read off the advisory record: each says what it does with no record. */
+export async function recordReads(
+  record: IterationRecord,
+  thread: PullRequestReads | null,
+): Promise<Pick<PullRequestTextInput, "requestWords" | "plansDrafted" | "scopeApproval">> {
+  return {
+    requestWords: await requestWordsOf(thread, record.requestMessageId),
+    plansDrafted: await plansDraftedFor(thread, record.requestMessageId),
+    scopeApproval: await scopeApprovalOf(record, thread),
+  };
+}
+
+/**
+ * The approval rondo answered this lap's gate under by itself, off the gate's
+ * `gate_answer` claim (D-0125 rule 5, rondo#667), or null where the answer is
+ * not rondo's or the approval will not read.
+ */
+async function scopeApprovalOf(
+  record: IterationRecord,
+  thread: Pick<AdvisoryRecord, "scopeDecisionClaiming" | "readScopeDecision" | "readScope"> | null,
+): Promise<ScopeApproval | null> {
+  if (thread === null || record.gateAnswerActor !== GATE_ACTOR || record.gateId === null) {
+    return null;
+  }
+  const claimed = await thread.scopeDecisionClaiming("gate_answer", record.gateId);
+  const decided = claimed === null ? null : await thread.readScopeDecision(claimed);
+  if (decided?.kind !== "read") {
+    return null;
+  }
+  const stored = await thread.readScope(decided.decision.scopeId);
+  return stored.kind === "read"
+    ? { approver: decided.decision.actorId, costUsd: stored.scope.payload.budgets.cost_usd }
+    : null;
+}
+
+/**
+ * The message a lap was asked for in, as the person wrote it (rondo#376), or
+ * null where there is no thread to read or it would not read.
+ */
+async function requestWordsOf(
+  thread: Pick<AdvisoryRecord, "threadMessages"> | null,
+  messageId: string,
+): Promise<string | null> {
+  if (thread === null) {
+    return null;
+  }
+  const read = await thread.threadMessages();
+  return read.kind === "read"
+    ? (read.messages.find((message) => message.messageId === messageId)?.body ?? null)
+    : null;
+}
+
+/**
+ * How many plans the request was split into, as its approved scopes' drafted
+ * proposals say (rondo#376, Codex round 2): more than one, and no single lap's
+ * pull request is the whole of what the request asked for. One where nothing
+ * says otherwise -- a lap started by hand, or a proposal that will not read.
+ */
+async function plansDraftedFor(
+  thread: Pick<AdvisoryRecord, "scopesFor" | "readProposal"> | null,
+  requestMessageId: string,
+): Promise<number> {
+  if (thread === null) {
+    return 1;
+  }
+  let most = 1;
+  for (const scope of await thread.scopesFor(requestMessageId)) {
+    for (const basis of scope.bases) {
+      const cited =
+        typeof basis === "object" && basis !== null && !Array.isArray(basis)
+          ? (basis as JsonRecord)
+          : null;
+      const proposalId = cited?.["form"] === "proposal" ? cited["proposalId"] : undefined;
+      if (typeof proposalId !== "string") {
+        continue;
+      }
+      const read = await thread.readProposal(proposalId);
+      const split = read.kind === "read" ? readSplitPayload(read.proposal.payload) : null;
+      if (split?.kind === "split") {
+        most = Math.max(most, split.payload.plans.length);
+      }
+    }
+  }
+  return most;
 }

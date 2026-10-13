@@ -36,7 +36,7 @@ import { redactRemoteUrl } from "./forge-preflight.js";
 import { reasonOf, releasePublished } from "./merge.js";
 import type { PublishBlock, PublishShown } from "./page/contract.js";
 import { recordedPublishBody } from "./publish-body.js";
-import { openPullRequest } from "./pull-request.js";
+import { openPullRequest, type PullRequestReads } from "./pull-request.js";
 import type { Published, PublishInput, PublishRefusal } from "./web-app.js";
 
 /**
@@ -156,7 +156,7 @@ export async function publishingForPage(
   store: Pick<IterationStore, "read" | "readingsFor" | "verificationClaimsFor" | "closingLapOf">,
   asked: PublishAsked,
   record: IterationRecord,
-  thread: Pick<AdvisoryRecord, "threadMessages" | "scopesFor" | "readProposal"> | null = null,
+  thread: PullRequestReads | null = null,
   /**
    * Where the body's English is composed and recorded (rondo#290): the one run
    * of it, because this is the screen the press is pressed from. Null composes

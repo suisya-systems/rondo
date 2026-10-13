@@ -25,7 +25,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
-import { type Basis, readSplitPayload } from "../advisory/proposal.js";
+import type { Basis } from "../advisory/proposal.js";
 import {
   ackGate,
   answerGate,
@@ -173,7 +173,13 @@ import {
   type PublishBodyPorts,
   publishBodyOnce,
 } from "./publish-body.js";
-import { openPullRequest, type PullRequestText, pullRequestText } from "./pull-request.js";
+import {
+  openPullRequest,
+  type PullRequestReads,
+  type PullRequestText,
+  pullRequestText,
+  recordReads,
+} from "./pull-request.js";
 import { nextNumbers, numbersSection } from "./record-numbers.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
 import {
@@ -4845,7 +4851,7 @@ export async function publishPlanFor(
    * presses passes the same one**, or the preview's digest would differ from
    * the press's.
    */
-  thread: Pick<AdvisoryRecord, "threadMessages" | "scopesFor" | "readProposal"> | null = null,
+  thread: PullRequestReads | null = null,
   /**
    * How the body's English is composed from the lap's report (`D-0079` section
    * 4, rondo#290). Null composes nothing, and the body's three sections then say
@@ -5062,8 +5068,7 @@ export async function publishPlanFor(
     predecessor:
       predecessorRead !== null && predecessorRead.kind === "read" ? predecessorRead.record : null,
     verificationClaims: await store.verificationClaimsFor(record.id),
-    requestWords: await requestWordsOf(thread, record.requestMessageId),
-    plansDrafted: await plansDraftedFor(thread, record.requestMessageId),
+    ...(await recordReads(record, thread)),
     forge: { host, repo },
     composedBody: await composedBodyFor(record, composing),
   });
@@ -5193,57 +5198,6 @@ export async function notOpenNow(url: string): Promise<string | null> {
 
 /** How far up a line {@link pullRequestUpdated} walks: a lineage is never this long. */
 const LINEAGE_HOPS = 64;
-
-/**
- * The message a lap was asked for in, as the person wrote it (rondo#376), or
- * null where there is no thread to read or it would not read.
- */
-async function requestWordsOf(
-  thread: Pick<AdvisoryRecord, "threadMessages"> | null,
-  messageId: string,
-): Promise<string | null> {
-  if (thread === null) {
-    return null;
-  }
-  const read = await thread.threadMessages();
-  return read.kind === "read"
-    ? (read.messages.find((message) => message.messageId === messageId)?.body ?? null)
-    : null;
-}
-
-/**
- * How many plans the request was split into, as its approved scopes' drafted
- * proposals say (rondo#376, Codex round 2): more than one, and no single lap's
- * pull request is the whole of what the request asked for. One where nothing
- * says otherwise -- a lap started by hand, or a proposal that will not read.
- */
-async function plansDraftedFor(
-  thread: Pick<AdvisoryRecord, "scopesFor" | "readProposal"> | null,
-  requestMessageId: string,
-): Promise<number> {
-  if (thread === null) {
-    return 1;
-  }
-  let most = 1;
-  for (const scope of await thread.scopesFor(requestMessageId)) {
-    for (const basis of scope.bases) {
-      const cited =
-        typeof basis === "object" && basis !== null && !Array.isArray(basis)
-          ? (basis as JsonRecord)
-          : null;
-      const proposalId = cited?.["form"] === "proposal" ? cited["proposalId"] : undefined;
-      if (typeof proposalId !== "string") {
-        continue;
-      }
-      const read = await thread.readProposal(proposalId);
-      const split = read.kind === "read" ? readSplitPayload(read.proposal.payload) : null;
-      if (split?.kind === "split") {
-        most = Math.max(most, split.payload.plans.length);
-      }
-    }
-  }
-  return most;
-}
 
 /**
  * Door three: push the branch, open the pull request, close the run.

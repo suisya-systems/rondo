@@ -801,6 +801,10 @@ test("D-0125 rule 5: a gate answer is claimed once per gate, and spends no lap",
   expect((await record.claimScopedAct({ ...claim, scopeDecisionId: "sd-0002" })).kind).toBe(
     "refused",
   );
+  // The approval the gate was answered under reads back off the claim (rondo#667).
+  expect(await record.scopeDecisionClaiming("gate_answer", "g-1")).toBe("sd-0001");
+  expect(await record.scopeDecisionClaiming("gate_answer", "g-2")).toBe(null);
+  expect(await record.scopeDecisionClaiming("merge_default_branch", "g-1")).toBe(null);
   // A merge claim on the same subject id is its own act.
   expect((await record.claimScopedAct({ ...claim, actKind: "merge_default_branch" })).kind).toBe(
     "recorded",
