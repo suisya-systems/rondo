@@ -25,10 +25,12 @@ import { openRequest, REQUEST } from "../request-fixture.js";
 import {
   fresh,
   mint,
+  openGate,
   operatorPage,
   PLAN,
   planFor,
   portsOver,
+  reserve,
   rows,
   seedScopeRequest,
   WINDOWS_HEAVY_TIMEOUT_MS,
@@ -287,6 +289,32 @@ test("with no lap recorded, the scope screen says in Japanese that the reserve w
   expect(chromeFor("ja").scopeSampleRows(2, "repository", null, "7.21", "8.12")).toContain(
     "このリポジトリの別のワーカーの種類の 1 回目 2 件",
   );
+});
+
+test("the scope screen's right side is the scoped request's, not the one first under your turn (rondo#664)", async () => {
+  const world = fresh();
+  // Older, and waiting at a gate: what the page selects when nothing is named.
+  await reserve(world, "lap-elsewhere", "Somebody else's older work");
+  await openGate(world, "lap-elsewhere");
+  await seedScopeRequest(world, "request-scope-side", "Fix the flaky test, please.");
+  await seedScopePlan(world.record, "request-scope-side");
+  const html = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    { kind: "scope", messageId: "request-scope-side", rounds: null, decisionId: null, plan: null },
+    EN,
+    mint,
+    () => "MINT-SCOPE-1",
+    () => "MINT-LAP-1",
+  );
+  // The list still names the waiting request; the side must not draw its lap.
+  expect(html).toContain('href="/?thread=req-lap-elsewhere&amp;lang=en"');
+  const side = html.slice(html.indexOf('<aside class="face face-side"'));
+  const own = side.slice(0, side.indexOf("</aside>"));
+  expect(own).not.toContain("lap-elsewhere");
+  // And it is the scoped request's own steps, with nothing run yet.
+  expect(own).toContain("What remains before this ends");
+  expect(own).toContain("Plan and scope");
 });
 
 test("a goal scope in force over the plan's repository checks its outward acts on a person's request, and says why (D-0140)", async () => {
