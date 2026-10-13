@@ -175,7 +175,8 @@ function portsOf(
   return {
     store: w.store,
     record: w.record,
-    end: async (id, reason) => await endLost({ store: w.store, now: () => 20 }, id, reason),
+    end: async (lap, reason) =>
+      await endLost({ store: w.store, now: () => 20 }, lap.iterationId, reason, "lost", lap),
     byItself: async () => false,
     restart: null,
     words: EN,
@@ -325,7 +326,7 @@ test("a pass cut short after the end is finished by the next: the lost row is as
   const w = await world(true);
   w.lap("lap-2", null);
   // Ended by an earlier pass that stopped before it asked anything.
-  expect(await endLost({ store: w.store, now: () => 20 }, "lap-2", "gone")).toBe("failed");
+  expect((await endLost({ store: w.store, now: () => 20 }, "lap-2", "gone")).ending).toBe("ended");
   expect((await messages(w)).map((m) => m.messageId)).not.toContain(lostAskId("lap-2"));
   await pass(portsOf(w));
   expect((await messages(w)).map((m) => m.messageId)).toContain(lostAskId("lap-2"));
@@ -400,7 +401,7 @@ test("a start again's id stays one the allocator accepts, however often a line i
 test("a start again whose report was never written is reported on the next pass", async () => {
   const w = await world(true);
   w.lap("lap-2", null);
-  expect(await endLost({ store: w.store, now: () => 20 }, "lap-2", "gone")).toBe("failed");
+  expect((await endLost({ store: w.store, now: () => 20 }, "lap-2", "gone")).ending).toBe("ended");
   // Its start again was reserved; the host stopped before the thread was told.
   w.lap(againId("lap-2"), "lap-2");
   await pass(portsOf(w));
@@ -491,7 +492,9 @@ test("rondo#655: a lap ended from the page is never started again by itself, and
   const w = await world(true);
   w.lap("lap-2", null, "stalled");
   const reason = endedOnThePage("the worker hung", "ada");
-  expect(await endLost({ store: w.store, now: () => 20 }, "lap-2", reason, "ended")).toBe("failed");
+  expect((await endLost({ store: w.store, now: () => 20 }, "lap-2", reason, "ended")).ending).toBe(
+    "ended",
+  );
   expect(await w.store.occupancy()).toEqual({ occupying: 0, live: 0 });
   const restarted: string[] = [];
   const ports = portsOf(w, {

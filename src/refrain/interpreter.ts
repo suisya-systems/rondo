@@ -68,6 +68,7 @@ import {
 } from "./plan.js";
 import type { LoopPolicy } from "./policy.js";
 import type {
+  AssertedRow,
   BoundName,
   ClassificationRecord,
   ConductorPorts,
@@ -77,6 +78,7 @@ import type {
   LapPerformance,
   ScopeSpend,
 } from "./ports.js";
+import { settleUnreadable } from "./settle.js";
 
 /**
  * What one call of the conductor did, in a form an operating surface can render
@@ -659,63 +661,6 @@ export async function abandon(
   return finish(committed.record, lines);
 }
 
-/**
- * End a row that will not decode, by id alone.
- *
- * The only call of `store.settle` in this tree, and it may stay that way: the
- * store's own doc comment states the licence as narrow and single-purpose, and
- * what makes it narrow is that exactly one branch of one function reaches it.
- * Every other write in this module asserts the status it is leaving, which is
- * the closed edge relation and the safety property -- but this row has no
- * readable status to assert, and refusing to write it is what leaves the
- * conductor with no path forward at all.
- *
- * Why the row did not decode is recorded beside the operator's reason: the
- * status-blind write is the unusual one, and a person reading the settled row
- * afterwards should be able to see why it was used.
- */
-async function settleUnreadable(
-  ports: Pick<ConductorPorts, "store" | "now">,
-  lines: string[],
-  id: string,
-  decodeReason: string,
-  reason: string,
-): Promise<ConductorReport> {
-  lines.push(`Iteration ${id} exists but will not decode: ${decodeReason}`);
-  const outcome = await ports.store.settle(
-    id,
-    `${reason}; the row did not decode: ${decodeReason}`,
-    ports.now(),
-  );
-  switch (outcome.kind) {
-    case "settled":
-      lines.push(
-        `Iteration ${id} was settled at 'abandoned' by id alone, without decoding it: ${reason}`,
-        "That write asserted no previous status, because a row whose status cannot be read has " +
-          "none to assert. It is the one place rondo writes that way, and abandon() is the one " +
-          "call that reaches it.",
-        "'abandoned' is terminal, so the single-flight lock is released and a new iteration can " +
-          "be reserved.",
-        "rondo cannot say whether a run or a gate is open under this iteration, because the row " +
-          "did not decode. 'gate list' and continuo's own run listing are how a person finds out, " +
-          "and closing either is theirs (D-0010, D-0013).",
-      );
-      return { iterationId: id, status: "abandoned", lines: Object.freeze(lines) };
-    case "missing":
-      lines.push(
-        `Iteration ${id} no longer exists in the store, so there was nothing left to settle.`,
-      );
-      return { iterationId: id, status: null, lines: Object.freeze(lines) };
-    case "defect":
-      lines.push(
-        `Stopped: the store could not settle iteration ${id}: ${outcome.reason}`,
-        "The row is unchanged and still holds the single-flight lock, and this is the last call " +
-          "that could have released it, so a person has to look at the database itself.",
-      );
-      return { iterationId: id, status: null, lines: Object.freeze(lines) };
-  }
-}
-
 // --- the driver -------------------------------------------------------------
 
 /**
@@ -783,7 +728,9 @@ export async function faulted(
   reason: string,
   /** `lost`: driver and child both gone (D-0139); `ended`: by a person (rondo#655). */
   kind: "defect" | "lost" | "ended" = "defect",
-): Promise<ConductorReport> {
+  /** The row as the caller judged it, where that is not a read of its own (rondo#661). */
+  judged: AssertedRow | null = null,
+): Promise<Ending> {
   const lines: string[] = [];
   const found = await ports.store.read(iterationId);
   if (found.kind !== "read") {
@@ -792,26 +739,41 @@ export async function faulted(
         ? `No iteration ${iterationId} exists, so there is nothing to end.`
         : `Iteration ${iterationId} will not decode, so it was not ended here: ${found.reason}`,
     );
-    return { iterationId, status: null, lines: Object.freeze(lines) };
+    const moved = found.kind === "absent" ? "moved" : "refused";
+    return { iterationId, status: null, lines: Object.freeze(lines), ending: moved };
   }
   const record = found.record;
   if (isTerminal(record.status) || beingDriven.has(record.id)) {
     lines.push(
       `Iteration ${record.id} is '${record.status}'${beingDriven.has(record.id) ? " and is being driven by this process" : ""}; nothing was written.`,
     );
-    return finish(record, lines);
+    return { ...finish(record, lines), ending: isTerminal(record.status) ? "moved" : "refused" };
   }
-  const step = await terminal(
+  const fields = { ...appendedReason(record, reason), failureKind: kind };
+  const committed = await commit(
     ports,
-    record,
     lines,
+    record,
     "failed",
-    { ...appendedReason(record, reason), failureKind: kind },
-    `Iteration ${record.id} was ended from '${record.status}': ${reason}`,
+    fields,
+    null,
+    judged ?? record.status,
   );
-  // `terminal` answers `finished` for every terminal status, which `failed` is.
-  return step.kind === "finished" ? step.report : finish(step.record, lines);
+  if (committed.kind === "blocked") {
+    return { ...committed.report, ending: committed.moved ? "moved" : "refused" };
+  }
+  lines.push(
+    `Iteration ${record.id} was ended from '${record.status}': ${reason}`,
+    `Iteration ${record.id} ended at 'failed'.`,
+  );
+  return { ...finish(committed.record, lines), ending: "ended" };
 }
+
+/**
+ * What {@link faulted} did (rondo#661): `ended` the row, found it `moved` by
+ * another writer first -- ended, resumed or gone -- or was `refused`.
+ */
+export type Ending = ConductorReport & { readonly ending: "ended" | "moved" | "refused" };
 
 async function drive(
   ports: ConductorPorts,
@@ -1759,7 +1721,8 @@ function readingLines(reading: LapReadingDraft): readonly string[] {
 /** A transition either happened, or the call is over and says why. */
 type CommitResult =
   | { readonly kind: "committed"; readonly record: IterationRecord }
-  | { readonly kind: "blocked"; readonly report: ConductorReport };
+  /** `moved`: another writer moved the row first, rather than the store failing. */
+  | { readonly kind: "blocked"; readonly report: ConductorReport; readonly moved: boolean };
 
 /**
  * One committed transition, asserting the status this call last saw.
@@ -1776,15 +1739,9 @@ async function commit(
   to: IterationStatus,
   fields: IterationFields,
   reading: LapReadingDraft | null = null,
+  from: AssertedRow = record.status,
 ): Promise<CommitResult> {
-  const outcome = await ports.store.transition(
-    record.id,
-    record.status,
-    to,
-    fields,
-    ports.now(),
-    reading,
-  );
+  const outcome = await ports.store.transition(record.id, from, to, fields, ports.now(), reading);
   switch (outcome.kind) {
     case "transitioned":
       return { kind: "committed", record: outcome.record };
@@ -1797,18 +1754,31 @@ async function commit(
       return {
         kind: "blocked",
         report: { iterationId: record.id, status: outcome.found, lines: Object.freeze(lines) },
+        moved: true,
+      };
+    case "driverMoved":
+      lines.push(
+        `Stopped: another process drives iteration ${record.id} now. Nothing was written by ` +
+          "this call.",
+      );
+      return {
+        kind: "blocked",
+        report: { iterationId: record.id, status: record.status, lines: Object.freeze(lines) },
+        moved: true,
       };
     case "missing":
       lines.push(`Stopped: iteration ${record.id} no longer exists in the store.`);
       return {
         kind: "blocked",
         report: { iterationId: record.id, status: null, lines: Object.freeze(lines) },
+        moved: true,
       };
     case "defect":
       lines.push(`Stopped: the store could not write the transition to '${to}': ${outcome.reason}`);
       return {
         kind: "blocked",
         report: { iterationId: record.id, status: record.status, lines: Object.freeze(lines) },
+        moved: false,
       };
   }
 }

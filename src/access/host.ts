@@ -546,8 +546,8 @@ export async function serveWeb(
   const lost = lostLapHost({
     store,
     record,
-    end: async (iterationId, reason) =>
-      await endLost({ store, now: Date.now }, iterationId, reason),
+    end: async (lap, reason) =>
+      await endLost({ store, now: Date.now }, lap.iterationId, reason, "lost", lap),
     byItself: async (lap) => await startsByItself(record, lap),
     get restart() {
       return approved.restart;
