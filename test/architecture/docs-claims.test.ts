@@ -1,6 +1,6 @@
 /**
- * The claims `AGENTS.md` and `docs/operations/rondo-cli.md` make about the
- * tree, checked against the tree, and `DECISIONS.md`'s index checked against
+ * The claims `AGENTS.md`, `README.md`, `docs/README.md` and
+ * `docs/operations/rondo-cli.md` make about the tree, checked against the tree, and `DECISIONS.md`'s index checked against
  * its entries.
  *
  * rondo#324 is the reason this file exists, and its finding is the design.
@@ -30,7 +30,7 @@
  * cheapest way to make a red check green would be to delete the claim it
  * checks, and the documentation would decay into whatever survives that.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,6 +41,8 @@ import { COMMANDS } from "../../src/access/cli.js";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const AGENTS = readFileSync(join(ROOT, "AGENTS.md"), "utf8");
+const README = readFileSync(join(ROOT, "README.md"), "utf8");
+const DOCS_INDEX = readFileSync(join(ROOT, "docs", "README.md"), "utf8");
 const CLI_DOC_PATH = join("docs", "operations", "rondo-cli.md");
 const CLI_DOC = readFileSync(join(ROOT, CLI_DOC_PATH), "utf8");
 
@@ -49,9 +51,9 @@ const CLI_DOC = readFileSync(join(ROOT, CLI_DOC_PATH), "utf8");
  *
  * A claim wraps across lines at eighty columns, so the unit a reader thinks of
  * as "the sentence" is several lines of the file. The block ends at the first
- * blank line, heading or *following* bullet -- the anchor line may itself be a
- * bullet, which is why the first line is taken before the loop rather than by
- * it.
+ * blank line, heading, *following* bullet or following table row -- the anchor
+ * line may itself be a bullet or a row, which is why the first line is taken
+ * before the loop rather than by it.
  *
  * Throws when the phrase is absent, so that deleting a checked claim fails
  * here rather than quietly removing the check with it.
@@ -69,7 +71,7 @@ function claim(document: string, phrase: string): string {
   }
   const block = [lines[start] ?? ""];
   for (const line of lines.slice(start + 1)) {
-    if (line.trim() === "" || line.startsWith("#") || /^\s*- /.test(line)) {
+    if (line.trim() === "" || line.startsWith("#") || line.startsWith("|") || /^\s*- /.test(line)) {
       break;
     }
     block.push(line);
@@ -99,6 +101,20 @@ function modulesUnderSrc(directory = "src"): string[] {
     return entry.name.endsWith(".ts") || entry.name.endsWith(".tsx") ? [path] : [];
   });
 }
+
+/**
+ * The modules under `src/` that start a process.
+ *
+ * Acquisition, not mention: every comment in this tree writes the module name
+ * inside backticks, and every acquisition writes it inside double quotes --
+ * `import ... from "node:child_process"`,
+ * `process.getBuiltinModule("node:child_process")`. The boundary sweep is what
+ * refuses any third spelling, and any acquisition its per-module grants do not
+ * name, so this set is the grants as they are enforced.
+ */
+const SPAWNING = modulesUnderSrc()
+  .filter((module) => readFileSync(join(ROOT, module), "utf8").includes('"node:child_process"'))
+  .sort();
 
 describe("the CLI reference documents the commands the CLI dispatches", () => {
   /**
@@ -152,20 +168,12 @@ describe("AGENTS.md's enumerations match the tree", () => {
 
   it("names the modules that may start a process", () => {
     const stated = named(claim(AGENTS, "start a process"), /^src\/.+\.tsx?$/);
-    // Acquisition, not mention: every comment in this tree writes the module
-    // name inside backticks, and every acquisition writes it inside double
-    // quotes -- `import ... from "node:child_process"`,
-    // `process.getBuiltinModule("node:child_process")`. The boundary sweep is
-    // what refuses any third spelling, so this pattern does not have to.
-    const spawning = modulesUnderSrc()
-      .filter((module) => readFileSync(join(ROOT, module), "utf8").includes('"node:child_process"'))
-      .sort();
     expect(
       stated,
       "AGENTS.md section 2 names a different set of process-starting modules than src/ has. " +
         "This is rondo#324's own example: the file said src/continuo/ was the only one while " +
         "the boundary table granted src/access/forge.ts the same capability (D-0025 rule 6).",
-    ).toEqual(spawning);
+    ).toEqual(SPAWNING);
   });
 
   it("names the continuo verbs rondo drives", () => {
@@ -199,6 +207,67 @@ describe("AGENTS.md's enumerations match the tree", () => {
         "drives. The set moves whenever a verb is taken up or dropped, and the paragraph around " +
         "it is about which of them carry --json, which is a claim about exactly these verbs.",
     ).toEqual(driven);
+  });
+});
+
+describe("README.md's and docs/README.md's enumerations match the tree", () => {
+  it("names the subcommands the CLI dispatches", () => {
+    const stated = named(claim(README, "whose subcommands cover"), /^[a-z][a-z-]*$/);
+    expect(
+      stated,
+      "README.md's paragraph on the binary names a different set of subcommands than " +
+        "src/access/cli-parse.ts's COMMANDS. It is the first list of verbs a reader meets, so a " +
+        "verb added to COMMANDS is added there in the same diff.",
+    ).toEqual([...COMMANDS].sort());
+  });
+
+  it("names the modules that may start a process, in README.md's layout", () => {
+    const stated = named(claim(README, "| `src/continuo/` |"), /^src\/.+\.tsx?$/);
+    expect(
+      stated,
+      "README.md's src/continuo/ row names a different set of process-starting modules than " +
+        "src/ has. It once called invoker.ts the only one while the boundary table granted " +
+        "forge.ts and reach.ts the same capability (rondo#660).",
+    ).toEqual(SPAWNING);
+  });
+
+  it("names the modules that may start a process, in docs/README.md's enforced rules", () => {
+    const stated = named(claim(DOCS_INDEX, "owns SQLite"), /^src\/.+\.tsx?$/);
+    expect(
+      stated,
+      "docs/README.md's row for the boundary test names a different set of process-starting " +
+        "modules than src/ has. It once said exactly one starts a process (rondo#660).",
+    ).toEqual(SPAWNING);
+  });
+
+  it("lists every page under docs/operations/ in its operations table, and no page that is not there", () => {
+    const section = /^## Operations$([\s\S]*?)^## /m.exec(DOCS_INDEX)?.[1];
+    if (section === undefined) {
+      throw new Error(
+        "docs/README.md has no '## Operations' section followed by another heading. This anchor is " +
+          "how test/architecture/docs-claims.test.ts finds the table it checks.",
+      );
+    }
+    const linked = [...section.matchAll(/\]\(operations\/([^)]+)\)/g)].map(
+      (match) => match[1] ?? "",
+    );
+    const missing = linked.filter((path) => !existsSync(join(ROOT, "docs", "operations", path)));
+    expect(
+      missing,
+      "docs/README.md's operations table links a page docs/operations/ does not hold. A row for " +
+        "a page that was renamed or moved reads as current.",
+    ).toEqual([]);
+    const pages = readdirSync(join(ROOT, "docs", "operations"))
+      .filter((name) => name.endsWith(".md"))
+      .sort();
+    // The pages one directory down are listed by `earlier-laps.md`'s own table,
+    // which the index links; only the directory's own pages are held here.
+    const listed = [...new Set(linked.filter((path) => !path.includes("/")))].sort();
+    expect(
+      listed,
+      "docs/README.md's operations table and the pages in docs/operations/ disagree. A page the " +
+        "index does not list is a record nobody is pointed at.",
+    ).toEqual(pages);
   });
 });
 

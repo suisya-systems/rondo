@@ -152,12 +152,12 @@ Consequences for anyone adding code here:
   not patch. D-0001's escalation list is largely spent: three of its four
   requests were carried out at the siblings' gates on 2026-09-05, and the fourth
   was a request to un-decide something.
-- **Three modules under `src/` start a process, and no others**:
+- **These modules under `src/` start a process, and no others**:
   `src/continuo/invoker.ts`, which drives the pinned continuo (D-0017 rule 3),
   `src/access/forge.ts`, which runs `git` and `gh` on the operator's behalf
   (D-0025 rule 6), and `src/access/reach.ts`, which runs the one notification
   program setup found when the person's turn has come and they are not looking
-  at the page (rondo#311). All three are granted `spawn` by module and by
+  at the page (rondo#311). Each is granted `spawn` by module and by
   binding rather than by layer, which is the difference that matters: a
   layer-wide grant would put a spawn in reach of every command instead of the
   one an operator has to type `publish` to reach. The third is narrower still
