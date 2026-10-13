@@ -223,11 +223,6 @@ export async function publishView(
           {publishBlockLines(wording, shown.block).map((line) => (
             <p class="text-body leading-5 wrap-anywhere">{line}</p>
           ))}
-          {/* git's or the preflight's own words, beside the sentence and shut
-              (D-0076 rule 4.5): the sentence says it in the person's terms. */}
-          {shown.block.why === "target" || shown.block.why === "statusUnreadable"
-            ? maintainerFold("publish-not-yet-reason", wording, shown.block.reason)
-            : null}
           {/* The screen reads the workspace again when it is opened, so this
               is the check once the workspace is repaired (rondo#677). */}
           {shown.block.why === "statusUnreadable" ? (
@@ -238,6 +233,11 @@ export async function publishView(
               {wording.publishRecheck}
             </a>
           ) : null}
+          {/* git's or the preflight's own words, beside the sentence and shut
+              (D-0076 rule 4.5): the sentence says it in the person's terms. */}
+          {shown.block.why === "target" || shown.block.why === "statusUnreadable"
+            ? maintainerFold("publish-not-yet-reason", wording, shown.block.reason)
+            : null}
         </section>
       </>,
     );

@@ -1307,11 +1307,11 @@ explanation you pressed on and then answers the gate.`,
     "Nothing read this work independently. Unread and read-and-nothing-raised must not look " +
     "alike, so publishing stops here by default.",
   publishReviewNotClear: (verdict, count) =>
-    (verdict === "concerns"
-      ? `The reading of this work raised ${String(count)} point(s).`
+    (verdict === "concerns" && count > 0
+      ? `The reading of this work raised ${count === 1 ? "1 point" : `${String(count)} points`}.`
       : verdict === "unavailable"
         ? "The reading of this work could not be taken."
-        : `The reading of this work is '${verdict}'.`) +
+        : "The reading of this work did not come back clear.") +
     " It settles nothing and it is not a veto; it is a point you have not answered.",
   publishReviewNoEvidence:
     "The reading says it found nothing, but records no measurement of what it read, so there is " +

@@ -145,13 +145,13 @@ const STATE_WORDS: Record<string, string | undefined> = {
 const GATE_OUTCOME_WORDS: Record<string, string | undefined> = {
   withdrawn: "取り下げ",
   expired: "期限切れ",
-  unanswerable: "回答できない状態",
+  unanswerable: "回答できないまま",
 };
 
 /** The plan's keys a publish is built from, in the words the publish screen uses. */
 const PLAN_FIELD_WORDS: Record<string, string | undefined> = {
   workspace: "作業場所",
-  topic_branch: "ブランチ名",
+  topic_branch: "作業ブランチ",
   base_branch: "取り込み先ブランチ",
 };
 
@@ -1256,12 +1256,12 @@ export const JA: Chrome = Object.freeze({
   publishReviewHeading: "rondo のチェックが通っていません",
   publishReviewNoReading: "この回は、まだ rondo のチェックが実施されていません。" + "",
   publishReviewNotClear: (verdict, count) =>
-    verdict === "concerns"
+    verdict === "concerns" && count > 0
       ? `rondo のチェックで、回答していない指摘が ${String(count)} 件あります。` +
         "読んでから、公開するかを決めてください。"
       : verdict === "unavailable"
         ? "rondo のチェックを実施できませんでした。チェックなしで公開するかを決めてください。"
-        : "rondo のチェックが通っていません。公開するかを決めてください。",
+        : "rondo のチェックの結果が「問題なし」ではありません。読んでから、公開するかを決めてください。",
   publishReviewNoEvidence:
     "rondo のチェックは問題なしとしていますが、何を読んだかの計測が記録されていないため、" +
     "突き合わせて確かめられません。",
@@ -1485,7 +1485,7 @@ export const JA: Chrome = Object.freeze({
   publishRefusedNoRepo:
     "何も公開していません。プルリクエストをどのリポジトリに出すか、rondo に記録がありません。" +
     "このコンピュータで rondo を管理する人に記録してもらってください。",
-  publishRefusedTarget: () => "何も公開していません。push の宛先を rondo が保証できません。",
+  publishRefusedTarget: () => "何も公開していません。push 先が正しいか確認できませんでした。",
   publishRefusedUncommitted: (detail) =>
     `公開していません。作業場所に、コミットされていない変更が残っています（${detail}）。`,
   publishRefusedStatusUnreadable: () =>

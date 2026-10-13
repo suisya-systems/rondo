@@ -378,7 +378,7 @@ test("rondo's own English stays out of the Japanese sentences: values are named,
   // Nothing recorded, or an outcome the page has no word for: no brackets at all.
   expect(JA.publishNotApproved("")).not.toContain("（");
   expect(JA.publishNotApproved("timed_out")).not.toContain("timed_out");
-  expect(JA.publishPlanField("topic_branch")).toContain("ブランチ名");
+  expect(JA.publishPlanField("topic_branch")).toContain("作業ブランチ");
   expect(JA.publishReviewNotClear("concerns", 2)).toContain("指摘が 2 件");
   expect(JA.publishReviewNotClear("unavailable", 0)).not.toContain("unavailable");
 
