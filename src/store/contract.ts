@@ -1221,7 +1221,7 @@ export interface AdvisoryRecord {
    * row inserted: the marks are the caller's clocks and this asks how far the
    * reading has reached, which is the largest of them and not the newest row.
    */
-  lastView(actorId: string): Promise<number | null>;
+  lastView(actorId: string, beforeMs?: number): Promise<number | null>;
   /**
    * The latest moment this actor did something rondo dated, or null if they
    * never have (rondo#631): a message written, a gate answered, a proposal or

@@ -371,3 +371,20 @@ test("with no mark the answer reads the last day, and says so", async () => {
     EN.explainResultsNone(null),
   );
 });
+
+test("a fix pushed onto an open pull request is not said as one opened, and a later mark is not read", async () => {
+  const w = await asked();
+  await rondoSays(
+    w,
+    `report-published-${LAP}`,
+    `Lap '${LAP}' commits were pushed onto https://github.com/o/n/pull/12, which stays open.`,
+    3_200,
+  );
+  await rondoSays(w, `report-merged-${LAP}`, `Lap '${LAP}' merged into main.`, 3_300);
+  await askAcross(w);
+  // `rondo inbox` run after the question moves no mark this answer reads.
+  await w.record.recordView("ada", 4_500);
+  const material = await gatherExplainerMaterial(w, ACROSS, 5_000);
+  expect(material.results?.forMs).toBe(5_000 - 3_001);
+  expect(material.results?.items.map((item) => item.kind)).toEqual(["merged"]);
+});

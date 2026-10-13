@@ -171,15 +171,16 @@ export function sinceLooked(
  * of the terminal's mark and one past the person's own last press, read off
  * rows that press already wrote. The page and the answer across every request
  * (rondo#656) both read it here, so they cannot disagree about where the
- * person stopped. `beforeMs` leaves out presses from then on: the question an
- * answer is written for is itself a press, and is not where the person looked.
+ * person stopped. `beforeMs` leaves out marks and presses from then on: the
+ * question an answer is written for is itself a press, and is not where the
+ * person looked.
  */
 export async function lastLooked(
   record: Pick<AdvisoryRecord, "lastView" | "lastActed">,
   actorId: string,
   beforeMs?: number,
 ): Promise<number | null> {
-  const viewed = await record.lastView(actorId);
+  const viewed = await record.lastView(actorId, beforeMs);
   const acted = await record.lastActed(actorId, beforeMs);
   return acted === null ? viewed : Math.max(viewed ?? acted + 1, acted + 1);
 }

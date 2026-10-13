@@ -327,7 +327,10 @@ async function resultsSince(
       if (pull === undefined) continue;
       const lap = messageId.slice(pull[0].length);
       reported.add(lap);
-      out.push({ kind: pull[1], messageId, number: resultOf(said, lap)?.number ?? null, request });
+      const result = resultOf(said, lap);
+      // A fix pushed onto a pull request already open opens none (Codex).
+      if (pull[1] === "opened" && result?.pushedOnto === true) continue;
+      out.push({ kind: pull[1], messageId, number: result?.number ?? null, request });
     }
     for (const iterationId of moved.endedLaps) {
       const record = records.find((r) => r.id === iterationId);
