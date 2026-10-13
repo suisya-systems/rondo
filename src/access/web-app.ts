@@ -68,6 +68,7 @@ import { basisOf } from "./explainer/material.js";
 import { signInRoute } from "./github-sign-in-route.js";
 import type { EndRefusal, HoldsRefusal, ReleaseRefusal } from "./line-ports.js";
 import type { ServedPorts } from "./page/contract.js";
+import type { ApproveRefusal, ClaimRefusal } from "./page/refusal-words.js";
 import { postedAnswers, postedClauses } from "./page/triage.js";
 import { MAX_END_REASON_CHARS } from "./page-logic/end-lap.js";
 import {
@@ -362,25 +363,6 @@ export type AnswerFromWeb = (
   body: string,
   claim: string | null,
 ) => Promise<AnswerOutcome>;
-
-/**
- * Why a press carrying a claim answered nothing, as the wording key the page
- * says it in (rondo#220 S2 review). A person causes these by typing or by
- * answering a gate someone else already did, so they are said in the
- * request's language with the way back to the gate, never as the English
- * plain-text line the older refusals are.
- */
-export type ClaimRefusal =
-  | "claimTooLong"
-  | "claimGateUnread"
-  | "claimGateClosed"
-  | "claimNotRecorded"
-  /**
-   * The one of these the person did not cause: the write failed on an errno,
-   * so pressing again changes nothing until this machine is repaired
-   * (rondo#349, `D-0076` rule 4.3).
-   */
-  | "claimHostSetup";
 
 /** What one answer came to; `why` is set only on a claim's own refusals. */
 export interface AnswerOutcome {
@@ -1742,7 +1724,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     }
     return fromThisMachine(c.req.header("host"))
       ? await next()
-      : said(c, 421, "rondo serves this page to 127.0.0.1 and localhost only");
+      : said(c, 421, wordingOf(c).notThisMachine);
   });
   app.use(
     secureHeaders({
@@ -1791,7 +1773,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // words, every other request at most the press's short fields and its claim.
   const pressLimit = bodyLimit({
     maxSize: MAX_FORM_BYTES,
-    onError: (c) => said(c, 413, "that is larger than this page's form"),
+    onError: (c) => said(c, 413, wordingOf(c).formTooLarge),
   });
   const sendLimit = bodyLimit({
     maxSize: MAX_MESSAGE_BYTES,
@@ -1804,7 +1786,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // press's.
   const flowAnswerLimit = bodyLimit({
     maxSize: MAX_MESSAGE_BYTES,
-    onError: (c) => said(c, 413, "that is larger than this page's form"),
+    onError: (c) => said(c, 413, wordingOf(c).formTooLarge),
   });
   app.use(async (c, next) =>
     MESSAGE_ROUTES.has(c.req.path)
@@ -1820,7 +1802,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         const bytes = await readFile(served.file);
         return c.body(bytes, 200, { "content-type": served.type });
       } catch {
-        return said(c, 404, "not found");
+        return said(c, 404, wordingOf(c).notFound);
       }
     });
   }
@@ -1884,21 +1866,20 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // first row). Everything that decides whether this request may write happens
   // in `mintPress`, and the port checks the press again on its own side.
   app.post("/", async (c) => {
-    if (answer === null) {
-      return said(
-        c,
-        403,
-        "RONDO_APPROVER is not set, so there is nobody this page could answer as",
-      );
-    }
     const form = await c.req.parseBody();
+    // The thread the press was made in, which the form carries (D-0083 rule
+    // 3): every refusal goes back to it, and so does the `303`.
+    const request = typeof form["request"] === "string" ? form["request"] : "";
+    if (answer === null) {
+      return claimRefused(c, "approveRefusedNoApprover", request, 403);
+    }
     const minting = mintPress(c, form["token"]);
     if (!("press" in minting)) {
-      return said(c, minting.status, minting.line);
+      return claimRefused(c, "approveRefusedPress", request, minting.status);
     }
     const iterationId = form["iteration"];
     if (typeof iterationId !== "string" || iterationId === "") {
-      return said(c, 400, "that form named no iteration");
+      return claimRefused(c, "approveRefusedForm", request, 400);
     }
     // **What the person says they verified rides on this press** (`D-0045` as
     // annotated from rondo#220): absent is no claim, and anything but text is a
@@ -1906,15 +1887,12 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     // silently lost is a person believing the record holds what they checked.
     const verified = form["verified"];
     if (verified !== undefined && typeof verified !== "string") {
-      return said(c, 400, "what that form said you verified was not text");
+      return claimRefused(c, "approveRefusedForm", request, 400);
     }
-    // The thread the press was made in, which the form carries (D-0083 rule
-    // 3): the refusal goes back to it, and so does the `303`.
-    const request = typeof form["request"] === "string" ? form["request"] : "";
     const answered = await answer.answer(minting.press, iterationId, verified ?? null);
     if (!answered.ok) {
       return answered.why === undefined
-        ? said(c, 409, answered.note)
+        ? claimRefused(c, "approveRefused", request, 409, answered.note)
         : claimRefused(c, answered.why, request);
     }
     // **The tag the press was made under, for the `303`** (D-0056 rule 11),
@@ -3722,7 +3700,13 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
    * the gate (rondo#220 S2 review). Only a native submit carries a claim, so
    * there is no htmx fragment; the draft is kept by the gate's own composer.
    */
-  function claimRefused(c: Context<PageEnv>, why: ClaimRefusal, requestMessageId: string) {
+  function claimRefused(
+    c: Context<PageEnv>,
+    why: ClaimRefusal | ApproveRefusal,
+    requestMessageId: string,
+    status: 400 | 403 | 409 = 409,
+    note: string | null = null,
+  ) {
     const wording = wordingOf(c);
     const line = why === "claimTooLong" ? wording.claimTooLong(MAX_CLAIM_CHARS) : wording[why];
     const href = viewHref(
@@ -3738,11 +3722,11 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         line,
         href,
         back: wording.gateBack,
-        note: null,
+        note,
         holders: [],
         releasable: false,
       }),
-      409,
+      status,
     );
   }
 
@@ -3765,7 +3749,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
 
   // One page and no router: a typo'd path says so rather than quietly showing
   // the only page there is.
-  app.notFound((c) => said(c, 404, "not found"));
+  app.notFound((c) => said(c, 404, wordingOf(c).notFound));
   // Every reader the page uses is total, so a throw is a defect: shown rather
   // than swallowed. Hono's own refusals (`csrf`) keep their response.
   app.onError((error, c) =>

@@ -6,6 +6,7 @@
 import { APPROVED_OUTCOME } from "../../store/records.js";
 import type { GateAuto, GateAutoReason } from "../gate-auto.js";
 import { EXPLAIN_JA } from "../page/explain-words.js";
+import { REFUSAL_JA } from "../page/refusal-words.js";
 import { REPORT_JA } from "../page/report-words.js";
 import { SINCE_JA } from "../page/since-words.js";
 import { TRIAGE_SOURCE_JA } from "../page/triage-words.js";
@@ -187,6 +188,7 @@ export const JA: Chrome = Object.freeze({
   ...PAGE_JA,
   ...EXPLAIN_JA,
   ...SINCE_JA,
+  ...REFUSAL_JA,
   ...REPORT_JA,
   ...TRIAGE_SOURCE_JA,
   lang: "ja",

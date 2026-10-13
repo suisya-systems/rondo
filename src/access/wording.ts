@@ -47,6 +47,7 @@ import type { ReadingReach } from "../store/records.js";
 import type { GateAuto } from "./gate-auto.js";
 import type { IssueReadFailure } from "./issue-read.js";
 import type { ExplainWords } from "./page/explain-words.js";
+import type { RefusalWords } from "./page/refusal-words.js";
 import type { ReportWords } from "./page/report-words.js";
 import type { SinceWords } from "./page/since-words.js";
 import type { TriageSourceWords } from "./page/triage-words.js";
@@ -78,6 +79,7 @@ export interface Chrome
   extends PageWords,
     ExplainWords,
     SinceWords,
+    RefusalWords,
     ReportWords,
     TriageSourceWords {
   /** The tag this set is written in, which is what the document declares. */

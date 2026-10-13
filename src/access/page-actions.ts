@@ -76,6 +76,7 @@ import { modelReviewPorts, takeModelReading } from "./model-review/host.js";
 import { retakeOffered, reviewRoundsAlong } from "./model-review/judgement.js";
 import { APPROVE_BODY } from "./page/approve.js";
 import type { ClaimReach, LapMaterialRead } from "./page/contract.js";
+import type { ClaimRefusal } from "./page/refusal-words.js";
 import { BEFORE_THE_GATE } from "./page-logic/end-lap.js";
 import { fixCauseOf } from "./page-logic/result.js";
 import { requestWords, threadsOf } from "./page-logic/threads.js";
@@ -89,7 +90,6 @@ import {
 import { admitUnderScope, agentTypeRecordOf, approvalTip } from "./scope.js";
 import { setupPlanFiles } from "./setup-files.js";
 import type {
-  ClaimRefusal,
   ConflictFixed,
   ConflictFixInput,
   Retaken,
