@@ -7,7 +7,8 @@
  * proposal row, and a rescan over the same material spends nothing; a *not
  * now* is kept beside the proposal, is refused for a candidate the proposal
  * did not name, and takes that candidate out of the next reading; a failed
- * forge read writes no row, because "no issues" would propose from the rest.
+ * forge read writes no row, because "no issues" would propose from the rest;
+ * a request no lap was started for is read once its thread has gone quiet.
  */
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
@@ -38,6 +39,8 @@ function world(
     request: (key) => `Fix ${key} in o/r`,
     language: "",
   },
+  /** The request ids the store holds a lap for. */
+  lapped: readonly string[] = [],
 ) {
   const clock = { ms: 10_000 };
   const record = advisoryRecord(new DatabaseSync(":memory:"));
@@ -45,7 +48,23 @@ function world(
   const logged: string[] = [];
   let n = 0;
   const ports: TriageHostPorts = {
-    store: { terminalIterations: async () => [], readLive: async () => [] },
+    store: {
+      terminalIterations: async () =>
+        await Promise.resolve(
+          lapped.map((id) => ({
+            kind: "read" as const,
+            record: {
+              id: `lap-${id}`,
+              requestMessageId: id,
+              status: "merged",
+              updatedAtMs: 1,
+              plan: {},
+              request: "",
+            } as never,
+          })),
+        ),
+      readLive: async () => await Promise.resolve([]),
+    },
     record,
     repositories: async () => [REPO],
     listIssues: async () => await Promise.resolve(issues()),
@@ -263,4 +282,96 @@ test("the drafter is handed the in-force policies by id, and the test for raisin
   await w.host.idle();
   expect(w.handed).toHaveLength(2);
   expect(w.handed[1]).toContain("- policy-1: Never touch the release workflow");
+});
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const said = (messageId: string, body: string, atMs: number, more: object = {}) => ({
+  messageId,
+  body,
+  authorKind: "operator" as const,
+  authorId: "ada",
+  inReplyTo: null,
+  atMs,
+  bases: [],
+  asks: false,
+  ...more,
+});
+
+test("a request no lap was started for is read once its thread is a day quiet (rondo#658)", async () => {
+  const w = world(() => listed([{ number: 7, title: "setup asks for a shell", labels: [] }]));
+  await w.record.recordGoal(goal);
+  expect(
+    (
+      await w.record.recordThreadMessage(
+        said("m-1", "Make setup run without a shell\nmore", 10_000),
+      )
+    ).kind,
+  ).toBe("recorded");
+  w.host.kick();
+  await w.host.idle();
+  expect(w.handed[0]).not.toContain("unlapped:");
+
+  w.clock.ms += DAY_MS;
+  w.host.kick();
+  await w.host.idle();
+  // The day passing moves the material, so it is read again with the request in it.
+  expect(w.handed).toHaveLength(2);
+  expect(w.handed[1]).toContain("key: unlapped:m-1\n  title: Make setup run without a shell");
+  const [row] = await w.record.latestTriage();
+  const payload = readTriagePayload(row?.payload ?? {});
+  expect(payload?.read).toEqual({ issues: 1, stopped: 0, unlapped: 1 });
+  // Its basis is the request itself, a locator a person can follow (D-0032 rule 2).
+  expect(payload?.ranked.find((one) => one.key === "unlapped:m-1")?.source).toEqual({
+    form: "unlapped",
+    requestMessageId: "m-1",
+  });
+});
+
+test("a request with a lap, one a person stopped and did not ask again, or one still talked about is not left (rondo#658)", async () => {
+  const w = world(() => listed([]), "answered", undefined, ["m-lapped"]);
+  await w.record.recordGoal(goal);
+  for (const draft of [
+    said("m-lapped", "Already worked on", 10_000),
+    said("m-stopped", "Dropped later", 10_000),
+    {
+      ...said("ask-1", "Which one?", 11_000),
+      authorKind: "drafter" as const,
+      authorId: "rondo/deterministic/1",
+      inReplyTo: "m-stopped",
+      bases: [{ form: "message", messageId: "m-stopped" }],
+      asks: true,
+    },
+    said("m-stop", "Drop it.", 12_000, { inReplyTo: "ask-1", answerOutcome: "stop" }),
+    said("m-resumed", "Dropped, then asked again", 1_000),
+    {
+      ...said("ask-2", "Which one?", 2_000),
+      authorKind: "drafter" as const,
+      authorId: "rondo/deterministic/1",
+      inReplyTo: "m-resumed",
+      bases: [{ form: "message", messageId: "m-resumed" }],
+      asks: true,
+    },
+    said("m-stop-2", "Drop it.", 3_000, { inReplyTo: "ask-2", answerOutcome: "stop" }),
+    said("m-again", "Do it after all", 4_000, { inReplyTo: "m-resumed" }),
+    said("m-talked", "Still being talked about", 10_000),
+    said("m-reply", "One more thing", 10_000 + DAY_MS, { inReplyTo: "m-talked" }),
+  ]) {
+    const outcome = await w.record.recordThreadMessage(draft);
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("recorded");
+  }
+  // Each is kept out by one thing alone: the stopped thread is a day quiet, the talked one is not.
+  w.clock.ms = 12_000 + DAY_MS;
+  w.host.kick();
+  await w.host.idle();
+  // Only the request asked for again after its stop is read.
+  expect([...(w.handed[0] ?? "").matchAll(/key: (\S+)/g)].map((m) => m[1])).toEqual([
+    "unlapped:m-resumed",
+  ]);
+  const [row] = await w.record.latestTriage();
+  expect(readTriagePayload(row?.payload ?? {})?.read).toEqual({
+    issues: 0,
+    stopped: 0,
+    unlapped: 1,
+  });
 });

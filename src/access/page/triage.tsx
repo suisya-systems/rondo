@@ -371,6 +371,7 @@ function readLine(wording: Chrome, payload: TriagePayload, row: StoredTriage, no
   const parts = [
     ...(payload.read.issues === 0 ? [] : [wording.triageReadIssues(payload.read.issues)]),
     ...(payload.read.stopped === 0 ? [] : [wording.triageReadStopped(payload.read.stopped)]),
+    ...(payload.read.unlapped === 0 ? [] : [wording.triageReadUnlapped(payload.read.unlapped)]),
   ];
   const cost = row.snapshot["cost_usd"];
   return wording.triageRead(
@@ -409,7 +410,7 @@ function candidateView(
             href: `https://github.com/${ranked.source.repository}/issues/${String(ranked.source.number)}`,
           }
         : {
-            said: wording.triageStopped,
+            said: ranked.source.form === "stopped" ? wording.triageStopped : wording.triageUnlapped,
             href: viewHref(
               { kind: "thread", messageId: ranked.source.requestMessageId, to: null },
               wording.lang,

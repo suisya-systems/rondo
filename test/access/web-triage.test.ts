@@ -250,7 +250,7 @@ test("a candidate still mixing scripts is marked on the card, on a runner-up and
     goalId: "g-1",
     ranked: [one(1), one(2)],
     withheld: [],
-    read: { issues: 2, stopped: 0 },
+    read: { issues: 2, stopped: 0, unlapped: 0 },
     unavailable: null,
   };
   const ask = {
@@ -368,7 +368,7 @@ test("an answer is taken from any round of the candidate the flow waits on, and 
           open_points: [],
         })),
         withheld: [],
-        read: { issues: numbers.length, stopped: 0 },
+        read: { issues: numbers.length, stopped: 0, unlapped: 0 },
         unavailable: null,
       },
     },
@@ -436,7 +436,7 @@ test("the card is the candidate the flow asks about, and a candidate put aside l
           goalId: "g-1",
           ranked: [one(534), one(290), one(286)],
           withheld: [],
-          read: { issues: 3, stopped: 0 },
+          read: { issues: 3, stopped: 0, unlapped: 0 },
           unavailable: null,
         },
       ],
@@ -506,7 +506,7 @@ test("beside an ask, the card shows what rondo decided in the asked reading, as 
       },
     ],
     withheld: [],
-    read: { issues: 1, stopped: 0 },
+    read: { issues: 1, stopped: 0, unlapped: 0 },
     unavailable: null,
   });
   const [block] = triageBlocks(

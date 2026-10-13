@@ -243,10 +243,6 @@ export interface PageWords extends DayWords {
   /** The points rondo decided as suggested, nothing in them waiting on the person (D-0193). */
   readonly triageDecided: string;
   readonly triageFrom: string;
-  readonly triageIssue: (repository: string, number: number) => string;
-  readonly triageStopped: string;
-  readonly triageReadIssues: (count: number) => string;
-  readonly triageReadStopped: (count: number) => string;
   /** `parts` are the non-zero counts above; `when` is an age; `cost` is dollars without the sign, or null. */
   readonly triageRead: (parts: readonly string[], when: string, cost: string | null) => string;
   readonly triagePutInBox: string;
@@ -819,11 +815,6 @@ export const PAGE_EN: PageWords = Object.freeze({
   triageOpenPoints: "Open points, with rondo's suggestion after each",
   triageDecided: "Decided by rondo as suggested, yours to change",
   triageFrom: "From",
-  triageIssue: (repository, number) => `${repository}#${String(number)}`,
-  triageStopped: "the request whose work stopped",
-  triageReadIssues: (count) => (count === 1 ? "1 open issue" : `${String(count)} open issues`),
-  triageReadStopped: (count) =>
-    count === 1 ? "1 request whose work stopped" : `${String(count)} requests whose work stopped`,
   triageRead: (parts, when, cost) =>
     (parts.length === 0 ? `Nothing to read, ${when}` : `Read ${parts.join(", ")}, ${when}`) +
     (cost === null ? "." : `; this reading cost $${cost}.`),
@@ -1484,10 +1475,6 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageOpenPoints: "決めること（rondo の案つき）",
   triageDecided: "rondo が案のとおり決めたこと（変えられます）",
   triageFrom: "もとにしたもの",
-  triageIssue: (repository, number) => `${repository}#${String(number)}`,
-  triageStopped: "作業が止まった依頼",
-  triageReadIssues: (count) => `開いているイシュー ${String(count)} 件`,
-  triageReadStopped: (count) => `作業が止まった依頼 ${String(count)} 件`,
   triageRead: (parts, when, cost) =>
     `${parts.length === 0 ? "読むものはありませんでした" : `${parts.join("、")}を読みました`}（${when}）` +
     (cost === null ? "。" : `。この読み取りの費用は $${cost}。`),
