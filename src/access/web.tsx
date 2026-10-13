@@ -214,7 +214,13 @@ async function threadModel(
    * followed a stale link, and showing them somebody else's thread would be
    * rondo answering a question it was not asked.
    */
-  const namedThread = view.kind === "thread" ? threads.rootOf(view.messageId) : null;
+  /*
+   * **A scope screen names its request too** (rondo#664): the right face
+   * beside it is that request's, and falling back to the oldest waiting one
+   * put another request's finished lap beside work that has not started.
+   */
+  const namedThread =
+    view.kind === "thread" || view.kind === "scope" ? threads.rootOf(view.messageId) : null;
   const noSuchThread = view.kind === "thread" && namedThread === null;
   const selection = selectRequest(namedThread, requestsList);
   /**
@@ -223,7 +229,11 @@ async function threadModel(
    * would answer a person who came to write with somebody else's question.
    */
   const selectedRoot =
-    noSuchThread || view.kind === "requests" || view.kind === "goal" || selection.kind !== "request"
+    noSuchThread ||
+    view.kind === "requests" ||
+    view.kind === "goal" ||
+    (view.kind === "scope" && namedThread === null) ||
+    selection.kind !== "request"
       ? null
       : selection.messageId;
   const selectedLap = selectedRoot === null ? null : lapUnder(selectedRoot);
