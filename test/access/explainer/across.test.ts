@@ -4,7 +4,7 @@
  * request and resting on the row that waits, answered from the records alone.
  */
 import { expect, test } from "vitest";
-
+import { DETERMINISTIC_DRAFTER } from "../../../src/access/advisory.js";
 import { explainerHost } from "../../../src/access/explainer/host.js";
 import {
   answerBody,
@@ -16,10 +16,11 @@ import {
   gatherExplainerMaterial,
 } from "../../../src/access/explainer/material.js";
 import { FLOW_STOP } from "../../../src/access/flow-stop.js";
+import { ago } from "../../../src/access/inbox.js";
 import type { DrafterRun } from "../../../src/access/model-draft/judgement.js";
 import { PAGE_EN } from "../../../src/access/page/words.js";
 import { chromeFor, EN } from "../../../src/access/wording.js";
-import { fresh, operatorPage, portsOver } from "../page-world.js";
+import { fresh, openGate, operatorPage, portsOver, reserve } from "../page-world.js";
 import { approve, asked, LAP, QUESTION, REQUEST, type World } from "./world.js";
 
 const ACROSS = "question-across";
@@ -273,4 +274,117 @@ test("one request's waits are one line, and the answer still rests on every wait
       { form: "message", messageId: REQUEST },
     ]),
   );
+});
+
+/** A message rondo wrote into `request` at `atMs`, as its reports are written. */
+async function rondoSays(
+  w: World,
+  messageId: string,
+  body: string,
+  atMs: number,
+  request = REQUEST,
+) {
+  const said = await w.record.recordThreadMessage({
+    messageId,
+    body,
+    authorKind: "drafter",
+    authorId: DETERMINISTIC_DRAFTER,
+    inReplyTo: request,
+    atMs,
+    bases: [{ form: "message", messageId: request }],
+    asks: false,
+  });
+  if (said.kind !== "recorded") throw new Error(JSON.stringify(said));
+}
+
+/**
+ * The person last pressed at 3000 (the question in the request's thread); then
+ * a pull request opened and merged, a request's report, and another request's
+ * try failed. A pull request closed before that press is not news.
+ */
+async function endedSinceLooked(): Promise<World> {
+  const w = await asked();
+  await rondoSays(w, "report-closed-lap-0", "Lap 'lap-0' closed.", 2_900);
+  await rondoSays(w, `report-published-${LAP}`, "Opened https://github.com/o/n/pull/12.", 3_200);
+  await rondoSays(w, `report-merged-${LAP}`, `Lap '${LAP}' merged into main.`, 3_300);
+  await rondoSays(w, "request-report-p1", "What this request did.", 3_400);
+  await reserve(w, "lap-2", "Add a dark theme.");
+  await openGate(w, "lap-2");
+  const failed = await w.store.transition("lap-2", "awaiting_human", "failed", {}, 3_500);
+  if (failed.kind !== "transitioned") throw new Error(JSON.stringify(failed));
+  await askAcross(w);
+  return w;
+}
+
+test("what ended since the person last looked is its own section, each under its request (rondo#656)", async () => {
+  const w = await endedSinceLooked();
+  const material = await gatherExplainerMaterial(w, ACROSS, 5_000);
+  // The mark is the press before the question, not the question itself.
+  expect(material.results?.forMs).toBe(5_000 - 3_001);
+  expect(material.results?.items.map((item) => item.kind).toSorted()).toEqual([
+    "lap",
+    "merged",
+    "opened",
+    "report",
+  ]);
+  for (const locator of [
+    `message:report-published-${LAP}`,
+    `message:report-merged-${LAP}`,
+    "message:request-report-p1",
+    "iteration:lap-2",
+  ]) {
+    expect(material.locators).toContain(locator);
+  }
+  const { answer, claims } = deterministicAnswer(material, EN, { kind: "acrossRequests" });
+  expect(claims).toContainEqual({
+    label: '"Fix the flaky test"',
+    value: "Pull request #12, merged",
+    basis: { form: "message", messageId: `report-merged-${LAP}` },
+  });
+  expect(claims).toContainEqual({
+    label: '"Add a dark theme"',
+    value: "a try failed",
+    basis: { form: "iteration", iterationId: "lap-2" },
+  });
+  const { page } = answerBody(EN, material, answer, claims, { kind: "free" });
+  const section = page.slice(page.indexOf(EN.explainResultsLead(EN.age(ago(0, 1_999)))));
+  expect(section).toContain('- "Fix the flaky test": Pull request #12, opened');
+  expect(section).toContain(`- "Fix the flaky test": ${EN.explainReported}`);
+  expect(section).not.toContain("closed without merging");
+  // The waits come first, under their own lead.
+  expect(page.indexOf(EN.explainAcrossLead)).toBeLessThan(page.indexOf(section));
+  // And in the other catalogue, composed again from the same material.
+  const ja = chromeFor("ja");
+  const inJa = deterministicAnswer(material, ja, { kind: "acrossRequests" });
+  const jaPage = answerBody(ja, material, inJa.answer, inJa.claims, { kind: "free" }).page;
+  expect(jaPage).toContain(ja.explainResultsLead(ja.age(ago(0, 1_999))));
+  expect(jaPage).toContain(`- 「Add a dark theme」: ${ja.explainLapEnded("failed")}`);
+});
+
+test("with no mark the answer reads the last day, and says so", async () => {
+  const w = fresh();
+  await askAcross(w);
+  const material = await gatherExplainerMaterial(w, ACROSS, 5_000);
+  expect(material.results).toEqual({ forMs: null, items: [], more: 0 });
+  const { answer, claims } = deterministicAnswer(material, EN, { kind: "acrossRequests" });
+  expect(answerBody(EN, material, answer, claims, { kind: "free" }).page).toContain(
+    EN.explainResultsNone(null),
+  );
+});
+
+test("a fix pushed onto an open pull request is not said as one opened, and a later mark is not read", async () => {
+  const w = await asked();
+  await rondoSays(
+    w,
+    `report-published-${LAP}`,
+    `Lap '${LAP}' commits were pushed onto https://github.com/o/n/pull/12, which stays open.`,
+    3_200,
+  );
+  await rondoSays(w, `report-merged-${LAP}`, `Lap '${LAP}' merged into main.`, 3_300);
+  await askAcross(w);
+  // `rondo inbox` run after the question moves no mark this answer reads.
+  await w.record.recordView("ada", 4_500);
+  const material = await gatherExplainerMaterial(w, ACROSS, 5_000);
+  expect(material.results?.forMs).toBe(5_000 - 3_001);
+  expect(material.results?.items.map((item) => item.kind)).toEqual(["merged"]);
 });

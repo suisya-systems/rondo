@@ -776,10 +776,13 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
       ]);
     },
 
-    async lastView(actorId: string): Promise<number | null> {
+    async lastView(actorId: string, beforeMs?: number): Promise<number | null> {
       const row = connection
-        .prepare("SELECT MAX(viewed_at_ms) AS mark FROM operator_view WHERE actor_id = ?")
-        .get(actorId) as SqlRow | undefined;
+        .prepare(
+          "SELECT MAX(viewed_at_ms) AS mark FROM operator_view " +
+            "WHERE actor_id = ? AND viewed_at_ms < ?",
+        )
+        .get(actorId, beforeMs ?? Number.MAX_SAFE_INTEGER) as SqlRow | undefined;
       const mark = row === undefined ? null : row["mark"];
       // `MAX` over no rows is one row holding NULL rather than no row at all,
       // so "never looked" arrives here as a null column and not as an absent
@@ -787,17 +790,21 @@ export function advisoryRecord(connection: StoreConnection): AdvisoryRecord {
       return mark === null || mark === undefined ? null : Number(mark);
     },
 
-    async lastActed(actorId: string): Promise<number | null> {
+    async lastActed(actorId: string, beforeMs?: number): Promise<number | null> {
+      const by = [actorId, beforeMs ?? Number.MAX_SAFE_INTEGER] as const;
       const row = connection
         .prepare(
           "SELECT MAX(at) AS acted FROM (" +
             "SELECT MAX(at_ms) AS at FROM conversation_message " +
-            "WHERE author_kind = 'operator' AND author_id = ? " +
-            "UNION ALL SELECT MAX(answered_at_ms) FROM gate_answer WHERE actor_id = ? " +
-            "UNION ALL SELECT MAX(decided_at_ms) FROM human_decision WHERE actor_id = ? " +
-            "UNION ALL SELECT MAX(decided_at_ms) FROM scope_decision WHERE actor_id = ?)",
+            "WHERE author_kind = 'operator' AND author_id = ? AND at_ms < ? " +
+            "UNION ALL SELECT MAX(answered_at_ms) FROM gate_answer " +
+            "WHERE actor_id = ? AND answered_at_ms < ? " +
+            "UNION ALL SELECT MAX(decided_at_ms) FROM human_decision " +
+            "WHERE actor_id = ? AND decided_at_ms < ? " +
+            "UNION ALL SELECT MAX(decided_at_ms) FROM scope_decision " +
+            "WHERE actor_id = ? AND decided_at_ms < ?)",
         )
-        .get(actorId, actorId, actorId, actorId) as SqlRow | undefined;
+        .get(...by, ...by, ...by, ...by) as SqlRow | undefined;
       const acted = row === undefined ? null : row["acted"];
       return acted === null || acted === undefined ? null : Number(acted);
     },

@@ -30466,6 +30466,24 @@ rules 2, 3, 4 and 5 (its annotation from this entry). Supersedes nothing. Refs `
 >
 > - Amends: D-0189 rule 4
 
+> **Annotation (2026-10-14, from rondo#656).** Added after this entry was accepted, and **not
+> additive**: rule 5.2 and *What it costs* change. The cross-request answer now also says what
+> happened, under the waits: since the person last looked, each pull request opened, merged or
+> closed without merging, each lap that ended (one that closed is left to its pull request's line),
+> and each request's report rondo wrote (`D-0064`), one line per row, named by its request and
+> resting on that row. The material carries these results and still no laps or approval of its
+> own. The reading is the empty centre's *since you last looked* (`D-0083` rule 4, rondo#631):
+> the same mark (`lastLooked`: the later of `rondo inbox`'s mark and one past the person's last
+> press, taken from before the question, which is itself a press) and the same sorting of
+> `changedSince`'s rows under their requests (`sinceLooked`), so the page and the answer cannot
+> disagree about what moved. With no mark it reads the last day and says so. At most eight are
+> named and the rest counted. It stays deterministic and free (rule 5.3). *What it costs*' line
+> that the answer says only what waits is closed for results; the decisions the person recently
+> made (`D-0190`'s reader) are still not in it, which needs an owner decision. Nothing below is
+> edited.
+>
+> - Amends: D-0189 rule 5
+
 ### Context
 
 rondo#626 asks for a role that works like claude-org's secretary. A person gives it a request in

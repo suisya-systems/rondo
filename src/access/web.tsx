@@ -150,7 +150,7 @@ import { holdsLap, partCounts, takeInFrom } from "./page-logic/parts.js";
 import { askOverLine, resultOf } from "./page-logic/result.js";
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
 import { selectRequest, walkPosition } from "./page-logic/selection.js";
-import { sinceLooked } from "./page-logic/since.js";
+import { sinceLooked, sinceReads } from "./page-logic/since.js";
 import { lapStory } from "./page-logic/story.js";
 import { lapEvents, resultLap, revisedIn } from "./page-logic/thread-events.js";
 import { firstLine, lineOf, replyTarget } from "./page-logic/threads.js";
@@ -1124,37 +1124,19 @@ function sinceView(
   if (inbox.sinceMs === null) {
     return { kind: "never" };
   }
-  const laps = new Map(
-    [...allLapsByRequest].flatMap(([requestId, under]) =>
-      under.map((lap) => [
-        lap.record.id,
-        {
-          requestId,
-          ended: isTerminal(lap.record.status),
-          updatedAtMs: lap.record.updatedAtMs,
-        },
-      ]),
-    ),
-  );
   return {
     kind: "looked",
     when: wording.age(ago(inbox.sinceMs, nowMs)),
-    reading: sinceLooked(inbox.changed, inbox.sinceMs, {
-      authorOf: (messageId) => {
-        const message = threads.byId.get(messageId);
-        if (message === undefined) {
-          return undefined;
-        }
-        // Another person's message is theirs, not the one looking's (Codex).
-        return message.authorKind !== "operator"
-          ? "rondo"
-          : message.authorId === actorId
-            ? "you"
-            : "other";
-      },
-      rootOf: threads.rootOf,
-      lapOf: (iterationId) => laps.get(iterationId) ?? null,
-    }),
+    reading: sinceLooked(
+      inbox.changed,
+      inbox.sinceMs,
+      sinceReads(
+        threads.byId,
+        threads.rootOf,
+        actorId,
+        [...allLapsByRequest.values()].flatMap((under) => under.map((lap) => lap.record)),
+      ),
+    ),
     titleOf: (messageId) => firstLine(threads.byId.get(messageId)?.body ?? ""),
     placeOf: placeOfRequest,
     hrefOf: (messageId) => viewHref({ kind: "thread", messageId, to: null }, wording.lang),

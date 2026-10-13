@@ -66,6 +66,8 @@ test("each changed row lands under its request, and the rest are counted", () =>
       lapsMoved: 3,
       // lap-2 closed before the mark: a reading landing on it is not an ending.
       lapsEnded: 1,
+      endedLaps: ["lap-1"],
+      rondoSaid: [],
       atMs: 160,
     },
     {
@@ -76,6 +78,8 @@ test("each changed row lands under its request, and the rest are counted", () =>
       othersWrote: 1,
       lapsMoved: 0,
       lapsEnded: 0,
+      endedLaps: [],
+      rondoSaid: ["a-rondo"],
       atMs: 120,
     },
     {
@@ -86,6 +90,8 @@ test("each changed row lands under its request, and the rest are counted", () =>
       othersWrote: 1,
       lapsMoved: 0,
       lapsEnded: 0,
+      endedLaps: [],
+      rondoSaid: [],
       atMs: 101,
     },
     {
@@ -96,6 +102,8 @@ test("each changed row lands under its request, and the rest are counted", () =>
       othersWrote: 0,
       lapsMoved: 0,
       lapsEnded: 0,
+      endedLaps: [],
+      rondoSaid: ["req-flow"],
       atMs: 100,
     },
   ]);
@@ -111,6 +119,8 @@ test("a moved request is said as one sentence, in each language", () => {
     othersWrote: 0,
     lapsMoved: 3,
     lapsEnded: 1,
+    endedLaps: ["lap-1"],
+    rondoSaid: ["m-1", "m-2"],
     atMs: 0,
   };
   // rondo's name keeps its lower case at the head of the sentence.
