@@ -806,7 +806,14 @@ function reviseForm(
             hidden
             class="note text-meta leading-5 text-muted-foreground"
           >
-            {wording.reviseDraftArrived}
+            {wording.reviseDraftArrived}{" "}
+            <button
+              type="button"
+              data-use-draft={draftKey}
+              class="text-link underline-offset-2 hover:underline"
+            >
+              {wording.reviseUseDraft}
+            </button>
           </p>
         ) : null}
         {box.kind === "unavailable" ? maintainerFold("revise-why", wording, box.reason) : null}

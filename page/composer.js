@@ -154,6 +154,31 @@ for (const box of document.querySelectorAll("textarea[data-draft-take]")) {
 }
 restore(false);
 
+// **The later draft, on one press** (rondo#674): the note above carries a
+// button that puts the draft the server drew in place of the person's words,
+// so seeing it no longer means emptying the box and reloading. What it puts
+// in is the box's `defaultValue`, which the morph keeps current.
+document.addEventListener("click", (event) => {
+  const use = event.target instanceof Element ? event.target.closest("[data-use-draft]") : null;
+  const box = use === null ? null : boxFor(use.dataset.useDraft);
+  if (box === null) {
+    return;
+  }
+  box.value = box.defaultValue;
+  store.set(draftKey(box), box.value);
+  store.set(drewKey(box), box.defaultValue);
+  for (const note of document.querySelectorAll("[data-draft-arrived]")) {
+    if (note.dataset.draftArrived === box.dataset.draft) {
+      note.hidden = true;
+    }
+  }
+  for (const line of document.querySelectorAll("[data-draft-state]")) {
+    if (line.dataset.draftState === box.dataset.draft) {
+      line.hidden = false;
+    }
+  }
+});
+
 document.addEventListener("input", (event) => {
   if (event.target instanceof HTMLTextAreaElement && event.target.dataset.draft !== undefined) {
     const emptied = event.target.value === "";

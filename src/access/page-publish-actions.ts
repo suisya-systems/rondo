@@ -277,13 +277,18 @@ export async function publishFromPage(
     // `reviseFromPage`'s rule, for its reason: a double press of one screen is
     // one act, and a press carrying anything else is a second act that must not
     // join the first.
-    return already.shown === input.shown && already.despiteReview === input.despiteReview
-      ? await already.running
-      : {
-          ok: false,
-          why: "publishRefusedStillRunning",
-          note: `a publish of '${input.iterationId}' is already running, and it read something else`,
-        };
+    if (already.shown === input.shown && already.despiteReview === input.despiteReview) {
+      return await already.running;
+    }
+    // **Refused once the first has ended, not while it runs** (rondo#674): the
+    // refusal's way back is the publish screen, and drawn now that screen
+    // shows how the first publish went rather than a lap still moving.
+    await already.running.catch(() => undefined);
+    return {
+      ok: false,
+      why: "publishRefusedStillRunning",
+      note: `a publish of '${input.iterationId}' was already running, and it read something else`,
+    };
   }
   const running = publishPage(environment, store, storePath, approver, asked, input);
   publishing.set(input.iterationId, {

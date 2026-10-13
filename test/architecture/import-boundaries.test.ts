@@ -497,7 +497,6 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // and exactly the four middleware D-0059 rule 2 names for this surface.
   "src/access/web-app.ts": {
     "node:crypto": ["randomUUID", "timingSafeEqual"],
-    "node:fs": ["readFileSync"],
     "node:fs/promises": ["readFile"],
     // One listening socket, handed Hono's request listener.
     "node:http": ["createServer"],
@@ -507,6 +506,11 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
     "hono/cookie": ["setCookie"],
     "hono/csrf": ["csrf"],
     "hono/secure-headers": ["secureHeaders"],
+  },
+  // The manifest read once at load, moved out of `web-app.ts` with the map it
+  // builds (rondo#674).
+  "src/access/served.ts": {
+    "node:fs": ["readFileSync"],
   },
 };
 
@@ -1440,6 +1444,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/screens/release.tsx": [HUMAN],
   "src/access/screens/end-lap.tsx": [HUMAN],
   "src/access/screens/scope.tsx": [HUMAN],
+  "src/access/screens/plan-start.tsx": [HUMAN],
   "src/access/screens/tier.tsx": [HUMAN],
   "src/access/screens/week.ts": [HUMAN],
   "src/access/screens/goal-scope.tsx": [HUMAN],
@@ -1448,6 +1453,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/line-ports.ts": [HUMAN],
   "src/access/end-lap-host.ts": [HUMAN],
   "src/access/web-app.ts": [HUMAN],
+  "src/access/served.ts": [HUMAN],
   "src/access/scope-form.ts": [HUMAN],
   "src/access/web.tsx": [HUMAN],
   "src/access/wording/en.ts": [HUMAN],

@@ -74,6 +74,11 @@ export async function pageDocument({
   faces,
 }: PageDocument): Promise<string> {
   const here = viewHref(view, wording.lang);
+  // **htmx is loaded where something asks it for a redraw** (rondo#674): every
+  // live view, and a view that holds still only while one of its lines waits
+  // and redraws itself -- the scope screen's start, until there is room for it.
+  // A still view with nothing waiting loads no library, as D-0054 rule 1 has it.
+  const asksHtmx = keepsCurrent || faces.includes("hx-get=");
   // **The keys that do something on this view**, for the hints and the `?`
   // sheet alike; the summary has nowhere to go back to.
   const keys: readonly (readonly [string, string])[] = [
@@ -105,13 +110,13 @@ export async function pageDocument({
           // and morphs the ledger in place, so the reader's scroll and focus
           // survive. The `answer` view reaches none of this: it has no refresh
           // in either mode, so there is nothing for it to degrade to.
-          keepsCurrent ? (
+          asksHtmx ? (
             <>
               {
                 // **Not where a person may be writing** (#220 S1): with script
                 // off a reload would throw a half-written draft away, so a
                 // view with a composer does not reload itself and says so.
-                writingHere ? null : (
+                !keepsCurrent || writingHere ? null : (
                   <noscript>
                     <meta http-equiv="refresh" content={`${String(REFRESH_SECONDS)};url=${here}`} />
                   </noscript>
@@ -180,7 +185,7 @@ export async function pageDocument({
           // composer scripts run; none runs before the document exists. None
           // draws anything a person must read -- the whole document is already
           // here, rendered by the server (D-0054 rule 7).
-          keepsCurrent ? (
+          asksHtmx ? (
             <>
               <script src="/htmx.min.js" defer />
               <script src="/idiomorph-ext.min.js" defer />
@@ -190,6 +195,12 @@ export async function pageDocument({
         <script src="/keys.js" defer />
         <script src="/composer.js" defer />
         <script src="/chime.js" defer />
+        {
+          // **The press token, kept current** (rondo#674): on every view, the
+          // ones that hold still included, so a press after a restart of the
+          // host is not refused for a token the page was drawn with.
+          token === null ? null : <script src="/token.js" defer />
+        }
         {
           // **What the redraw changed, said in colour** (rondo#494 item 1). It
           // listens for the swap htmx makes, so it is loaded where the page

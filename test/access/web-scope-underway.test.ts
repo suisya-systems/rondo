@@ -363,6 +363,13 @@ test("an approved drafted scope offers each plan its own start, and says so wher
   const full = await render({ ...ports, policy: { maxOccupying: 4, maxLive: 1 } });
   expect(starts(full)).toBe(0);
   expect(full).toContain(EN.planFull(1, 1));
+  // **And the line asks again until there is room** (rondo#674): the scope
+  // view holds still, so the waiting line is the one thing that redraws itself,
+  // and the page loads htmx for it.
+  expect(full).toMatch(
+    /<div id="plan-start-(\d+)" hx-get="[^"]+" hx-trigger="every 5s" hx-select="#plan-start-\1" hx-swap="outerHTML">/,
+  );
+  expect(full).toContain('<script src="/htmx.min.js" defer="">');
 
   // The scope's own test says no -- expired -- in words, in both languages.
   const late = { ...ports, now: () => 9_000_000_000_000 };
@@ -371,6 +378,8 @@ test("an approved drafted scope offers each plan its own start, and says so wher
     expect(starts(expired)).toBe(0);
     expect(expired).toContain(wording.planOutside("expiry"));
     expect(expired).not.toContain("expiry test");
+    // A line that will not change by waiting does not ask again.
+    expect(expired).not.toContain("hx-trigger");
   }
 
   // Plan 0's work finishes without being found on the default branch: plan 1

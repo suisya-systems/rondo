@@ -531,6 +531,8 @@ test("liveness is per view: two views poll and swap, and the answer view updates
       '<script src="/keys.js" defer="">',
       '<script src="/composer.js" defer="">',
       '<script src="/chime.js" defer="">',
+      // The press token, kept current on every view (rondo#674).
+      '<script src="/token.js" defer="">',
       // What the redraw changed, said in colour (rondo#494 item 1): loaded
       // where the page keeps itself current, since that is what it listens to.
       '<script src="/changed.js" defer="">',
@@ -665,6 +667,8 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     '<script src="/keys.js" defer="">',
     '<script src="/composer.js" defer="">',
     '<script src="/chime.js" defer="">',
+    // The press token is kept current on a still view too (rondo#674).
+    '<script src="/token.js" defer="">',
   ]);
   expect(still).not.toMatch(/hx-[a-z]+=/);
   expect(still).not.toContain("htmx");

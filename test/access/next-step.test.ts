@@ -381,7 +381,9 @@ test("the presses that start a lap carry their busy label and what a lap waits o
     "data-busy={fix.red === null ? wording.conflictFixBusy : wording.checksFixBusy}",
   );
   expect(revise.match(/\{wording\.lapBusyNote\}/g)).toHaveLength(2);
-  const scope = source("src/access/screens/scope.tsx");
+  // The plan's own start is drawn in `screens/plan-start.tsx` (rondo#674).
+  const scope =
+    source("src/access/screens/scope.tsx") + source("src/access/screens/plan-start.tsx");
   // Both starts -- the plan's own and the one under an approval -- and every
   // scope press, each of the three drawn twice: at the form's top and again
   // under its last box (D-0106 rule 7).
