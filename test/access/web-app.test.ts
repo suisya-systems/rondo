@@ -1979,6 +1979,54 @@ test("(claim) a claim refused past the port is said in the press's language, nev
   expect(await closed).toBe(0);
 });
 
+test("(a) every approve refusal is said in the press's language, with the way back and no reload (rondo#702)", async () => {
+  const closedGate = new AnswerPort(
+    async () => await Promise.resolve({ ok: false, note: "g1 closed" }),
+  );
+  const person = (base: string) => pressHeaders(base);
+  const cases: [
+    string,
+    ServedPorts["answer"],
+    (base: string) => Record<string, string | undefined>,
+    Record<string, string>,
+    number,
+    "approveRefusedNoApprover" | "approveRefusedPress" | "approveRefusedForm" | "approveRefused",
+  ][] = [
+    ["no approver", null, person, FORM, 403, "approveRefusedNoApprover"],
+    // The tab left open across a restart: the press carries the old token.
+    [
+      "a stale token",
+      closedGate,
+      person,
+      { ...FORM, token: "the-last-process" },
+      403,
+      "approveRefusedPress",
+    ],
+    ["no iteration", closedGate, person, { ...FORM, iteration: "" }, 400, "approveRefusedForm"],
+    ["the port's own refusal", closedGate, person, FORM, 409, "approveRefused"],
+  ];
+  for (const [shape, answer, headers, form, status, key] of cases) {
+    const ports = { hostLanguage: null, answer, say: null } as unknown as ServedPorts;
+    const { base, stop, closed } = await served(createApp(ports, TOKEN));
+    for (const lang of ["en", "ja"]) {
+      const words = chromeFor(lang);
+      const refused = await send(base, `/?lang=${lang}`, "POST", headers(base), form);
+      expect(refused.status, shape).toBe(status);
+      expect(refused.body, shape).toContain(words[key]);
+      expect(refused.body, shape).toContain(`href="/?thread=req-1&amp;lang=${lang}"`);
+      expect(words[key], shape).not.toMatch(/reload|読み込み直/i);
+    }
+    stop.abort();
+    expect(await closed).toBe(0);
+  }
+});
+
+test("no refusal line in web-app.ts is an English literal: each comes from the wording sets (rondo#702)", () => {
+  const source = readFileSync(new URL("../../src/access/web-app.ts", import.meta.url), "utf8");
+  expect(source.match(/\bsaid\(\s*c,\s*[^,]+,\s*["'`]/g) ?? []).toEqual([]);
+  expect(source.match(/\bsaid\(\s*c,\s*minting\.status/g) ?? []).toEqual([]);
+});
+
 test("(claim) a claim cannot be carried by an htmx post, a fetch or a send", async () => {
   const written: Written = [];
   const sent: Sent = [];
