@@ -133,7 +133,7 @@ import {
   takenInCommit,
 } from "./conductor.js";
 import { asciiEscape, consoleSeams, legibleAsciiEscape, relayUpstream } from "./console.js";
-import { commandDecisionReads } from "./decisions-cli.js";
+import { commandDecisionReads, DECISION_READS_USAGE } from "./decisions-cli.js";
 import { allowedBashIn } from "./delegation.js";
 import { type ClosingFinding, closingLapSection, definitionOfDone } from "./done.js";
 import {
@@ -375,13 +375,7 @@ export const USAGE = `rondo - the operator surface for delegated work
                           continuo. Looking is recorded: it counts what it
                           showed you (once per thing, however often it is
                           drawn) and moves your last-look mark
-  rondo decisions [--since TIME] [--attention]
-                          every decision held, oldest first: who took it, its
-                          outcome, the option index pressed, the row it is
-                          about. Writes nothing. --since is ISO 8601, inclusive;
-                          --attention adds what was presented or withheld
-  rondo asks              per request, the drafter's asks back and how many
-                          presses took its recommendation. --since as above
+${DECISION_READS_USAGE}
   rondo show --proposal-id ID
                           read one proposal back: its options in the order the
                           record holds them, which one is recommended, what each
@@ -1376,8 +1370,8 @@ export async function main(
   if (parsed.command === "show") {
     return await commandShow(parsed, store, opened.path);
   }
-  // `decisions` and `asks` read rondo's own rows and write none (D-0190 rule 10.4, rondo#637).
-  if (parsed.command === "decisions" || parsed.command === "asks") {
+  // These read rondo's own rows and write none (D-0190 rule 10.4, rondo#637, rondo#659).
+  if (["decisions", "asks", "raises", "explains"].includes(parsed.command)) {
     return await commandDecisionReads(opened.path, parsed);
   }
 

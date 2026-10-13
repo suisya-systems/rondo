@@ -44,7 +44,8 @@ ships a binary (`bin/rondo.mjs`) whose subcommands cover the lap itself
 (`start`, `answer`, `revise`, `publish`, `abandon`, `retry`, `release`), the
 conversation a lap is started from (`request`, `reply`), what is waiting and why
 (`inbox`, `between`, `explain`, `show`), what was decided and how often rondo
-asked back (`decisions`, `asks`), the advisory (`propose`, `decide`,
+asked back (`decisions`, `asks`), what would falsify its own judgements
+(`raises`, `explains`), the advisory (`propose`, `decide`,
 `elevate`), scopes (`scope`, `decide-scope`), setup (`setup-plan`) and `web`.
 [`docs/operations/rondo-cli.md`](docs/operations/rondo-cli.md) is the runbook.
 

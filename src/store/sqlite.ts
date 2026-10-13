@@ -61,6 +61,7 @@ import { DatabaseSync } from "node:sqlite";
 import { advisoryRecord } from "./advisory.js";
 import type { AdvisoryRecord, HostPolicy, IterationStore } from "./contract.js";
 import { iterationStore } from "./iteration.js";
+import { readExplainSignals, readTriageJudgement } from "./judgement-signals.js";
 
 export { advisoryRecord } from "./advisory.js";
 export { LANE_LEDGER_AUTHOR } from "./claims.js";
@@ -151,4 +152,18 @@ function openStoreFile(databasePath: string): DatabaseSync {
  */
 export function openAdvisoryRecord(databasePath: string): AdvisoryRecord {
   return advisoryRecord(openStoreFile(databasePath));
+}
+
+/**
+ * The two readers of rondo#659 over one store file, read-only and derived
+ * (`judgement-signals.ts`). Beside {@link openAdvisoryRecord} rather than on
+ * its port: a CLI that only counts needs none of the record's writers.
+ */
+export function openJudgementSignals(databasePath: string) {
+  const connection = openStoreFile(databasePath);
+  return {
+    triageJudgement: (sinceMs: number | null, asDrawn: (recommendation: string) => string) =>
+      readTriageJudgement(connection, sinceMs, asDrawn),
+    explainSignals: (sinceMs: number | null) => readExplainSignals(connection, sinceMs),
+  };
 }
