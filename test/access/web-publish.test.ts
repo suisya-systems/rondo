@@ -16,6 +16,7 @@ import { consoleSeams } from "../../src/access/console.js";
 import { inspectLapWork } from "../../src/access/forge.js";
 import { GATE_ACTOR } from "../../src/access/gate-host.js";
 import type {} from "../../src/access/inbox.js";
+import type { PublishShown } from "../../src/access/page/contract.js";
 import { holdsFromPage, releaseFromPage } from "../../src/access/page-actions.js";
 import { resultOf } from "../../src/access/page-logic/result.js";
 import { threadsOf } from "../../src/access/page-logic/threads.js";
@@ -368,6 +369,48 @@ test("the publish screen is in the page's language, and the model's reading is m
   expect(screen).toContain("review  2 point(s) raised");
   expect(screen).toContain("rondo が気づいたこと");
   expect(screen).toContain('action="/publish?lang=ja"');
+});
+
+test("rondo's own English stays out of the Japanese sentences: values are named, reasons are folded (rondo#677)", async () => {
+  const JA = chromeFor("ja");
+  expect(JA.publishNotClosed("performing")).toContain("（いまの状態: 実行中）");
+  expect(JA.publishNotApproved("expired")).toContain("（期限切れ）");
+  // Nothing recorded, or an outcome the page has no word for: no brackets at all.
+  expect(JA.publishNotApproved("")).not.toContain("（");
+  expect(JA.publishNotApproved("timed_out")).not.toContain("timed_out");
+  expect(JA.publishPlanField("topic_branch")).toContain("ブランチ名");
+  expect(JA.publishReviewNotClear("concerns", 2)).toContain("指摘が 2 件");
+  expect(JA.publishReviewNotClear("unavailable", 0)).not.toContain("unavailable");
+
+  const world = fresh();
+  await approvedLap(world);
+  const drawn = async (shown: PublishShown) => {
+    const html = await operatorPage(
+      portsOver(world, "ada", [], null, null, async () => shown),
+      "t",
+      { kind: "publish", iterationId: "i-0001" },
+      JA,
+    );
+    return html.slice(html.indexOf('id="publish"'));
+  };
+  const reason = "fatal: index file smaller than expected";
+  const unreadable = await drawn({ kind: "refused", block: { why: "statusUnreadable", reason } });
+  expect(unreadable).toContain(JA.publishStatusUnreadable);
+  // git's line is under the maintainer fold, not inside the sentence.
+  expect(unreadable).toMatch(new RegExp(`id="publish-not-yet-reason"[\\s\\S]*${reason}`));
+  expect(unreadable).toContain('href="/?publish=i-0001&amp;lang=ja"');
+
+  const review = await drawn({
+    ...DRY_RUN,
+    review: {
+      why: "notClear",
+      verdict: "unavailable",
+      findings: [],
+      unavailableReason: "the model call timed out",
+    },
+  });
+  expect(review).toContain(JA.publishReviewNotClear("unavailable", 0));
+  expect(review).toMatch(/id="publish-review-reason"[\s\S]*the model call timed out/);
 });
 
 test("the publish screen says in the person's words what the body and the model's reading hold, and keeps rondo's lines shut (rondo#437)", async () => {

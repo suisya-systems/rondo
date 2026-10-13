@@ -127,6 +127,39 @@ function raisedJa(blockers: number, majors: number): string {
 }
 
 /** The three measurements a basis names, in the Japanese set's words. */
+/** A lap's state, as the row's pill says it; `closed` is the pill's own, by its gate outcome. */
+const STATE_WORDS: Record<string, string | undefined> = {
+  awaiting_human: "あなたの回答待ち",
+  withdrawal_requested: "取り下げ依頼中",
+  stalled: "停止中",
+  planned: "開始中",
+  classified: "開始中",
+  admitting: "開始中",
+  admitted: "開始中",
+  performing: "実行中",
+  abandoned: "放棄",
+  failed: "失敗",
+};
+
+/** How a gate closed without a person's answer (`records.ts`, `APPROVED_OUTCOME`'s three others). */
+const GATE_OUTCOME_WORDS: Record<string, string | undefined> = {
+  withdrawn: "取り下げ",
+  expired: "期限切れ",
+  unanswerable: "回答できない状態",
+};
+
+/** The plan's keys a publish is built from, in the words the publish screen uses. */
+const PLAN_FIELD_WORDS: Record<string, string | undefined> = {
+  workspace: "作業場所",
+  topic_branch: "ブランチ名",
+  base_branch: "取り込み先ブランチ",
+};
+
+/** `（…）` around a known word, and nothing for a value only rondo's internals spell. */
+function bracketed(word: string | undefined, say: (word: string) => string): string {
+  return word === undefined ? "" : `（${say(word)}）`;
+}
+
 const JA_MEASURE: Record<string, string> = {
   first_lap_cost: "1 回目の費用",
   redo_cost: "やり直しの回の費用",
@@ -169,14 +202,7 @@ export const JA: Chrome = Object.freeze({
   statePill: (status, gateOutcome) =>
     (
       ({
-        awaiting_human: "あなたの回答待ち",
-        withdrawal_requested: "取り下げ依頼中",
-        stalled: "停止中",
-        planned: "開始中",
-        classified: "開始中",
-        admitting: "開始中",
-        admitted: "開始中",
-        performing: "実行中",
+        ...STATE_WORDS,
         closed:
           gateOutcome === "approve" || gateOutcome === APPROVED_OUTCOME
             ? "承認済み"
@@ -185,8 +211,6 @@ export const JA: Chrome = Object.freeze({
               : gateOutcome === null
                 ? "完了"
                 : `完了: ${gateOutcome}`,
-        abandoned: "放棄",
-        failed: "失敗",
       }) as Record<string, string | undefined>
     )[status] ?? status,
   noReasonRecorded: "理由は記録されていない",
@@ -1197,9 +1221,13 @@ export const JA: Chrome = Object.freeze({
   publishNotOffered:
     "承認する人が決まるまで、このページからは公開できません。ページ上部で名前を入れてください。",
   publishNotClosed: (status) =>
-    `この回はまだ確認で承認されていません（いまの状態: ${status}）。公開できるのは、確認で承認された回だけです。`,
+    "この回はまだ確認で承認されていません" +
+    bracketed(STATE_WORDS[status], (word) => `いまの状態: ${word}`) +
+    "。公開できるのは、確認で承認された回だけです。",
   publishNotApproved: (outcome) =>
-    `確認は、誰も回答しないまま終わっています（${outcome}）。` + "公開に必要な承認がありません。",
+    "確認は、誰も回答しないまま終わっています" +
+    bracketed(GATE_OUTCOME_WORDS[outcome], (word) => word) +
+    "。公開に必要な承認がありません。",
   publishAnswerNotApproval: (answer) =>
     answer === "revise"
       ? "この回の確認には、承認ではなく変更依頼で回答しています。公開するのは、変更依頼のあとの回です。"
@@ -1207,12 +1235,12 @@ export const JA: Chrome = Object.freeze({
         "承認の記録がないため、公開しません。",
   publishNoRun: "この作業の記録がないため、閉じるものがありません。",
   publishPlanField: (field) =>
-    `この回の計画に ${field} が記録されていないため、` + "公開できません。",
+    `この回の計画に${PLAN_FIELD_WORDS[field] ?? field}が記録されていないため、公開できません。`,
   publishNoRepo:
     "この作業のプルリクエストをどのリポジトリに出すか、rondo に記録がありません。" +
     "このコンピュータで rondo を管理する人に、リポジトリを記録してもらってください。",
-  publishTargetRefused: (reason) =>
-    `push 先が正しいか確認できないため、公開しません（${reason}）。このコンピュータで rondo を管理する人に確かめてもらってください。`,
+  publishTargetRefused:
+    "push 先が正しいか確認できないため、公開しません。このコンピュータで rondo を管理する人に確かめてもらってください。",
   publishUncommitted: (paths) =>
     `作業場所に、コミットされていない変更が残っています（${paths}）。` +
     "このまま公開すると、この変更はプルリクエストに含まれません。",
@@ -1221,21 +1249,24 @@ export const JA: Chrome = Object.freeze({
   publishUncommittedRemedies:
     "この変更を片付けてから公開してください。回をやり直してワーカーにコミットさせるか、作業場所で自分でコミットするか、作業でない変更なら捨てるかです。" +
     "",
-  publishStatusUnreadable: (reason) =>
-    `作業場所の状態を読めません（${reason}）。` +
-    "コミットされていない変更が残っているか分からないため、公開しません。" +
-    "このコンピュータで rondo を管理する人に、作業場所を確かめてもらってください。",
+  publishStatusUnreadable:
+    "作業場所の状態を読めず、コミットされていない変更が残っているか分からないため、公開しません。" +
+    "このコンピュータで rondo を管理する人に作業場所を直してもらい、もう一度確かめてください。",
+  publishRecheck: "もう一度確かめる",
   publishReviewHeading: "rondo のチェックが通っていません",
   publishReviewNoReading: "この回は、まだ rondo のチェックが実施されていません。" + "",
-  publishReviewNotClear: (verdict, findings) =>
-    `rondo のチェックの結果は '${verdict}' です${findings === "" ? "" : `: ${findings}`}。` +
-    "回答していない指摘があります。読んでから、公開するかを決めてください。",
+  publishReviewNotClear: (verdict, count) =>
+    verdict === "concerns"
+      ? `rondo のチェックで、回答していない指摘が ${String(count)} 件あります。` +
+        "読んでから、公開するかを決めてください。"
+      : verdict === "unavailable"
+        ? "rondo のチェックを実施できませんでした。チェックなしで公開するかを決めてください。"
+        : "rondo のチェックが通っていません。公開するかを決めてください。",
   publishReviewNoEvidence:
     "rondo のチェックは問題なしとしていますが、何を読んだかの計測が記録されていないため、" +
     "突き合わせて確かめられません。",
-  publishReviewUnreadable: (reason) =>
-    `作業場所をいま読めません（${reason}）。` +
-    "チェックした内容と公開する内容が同じかどうか、確認できません。",
+  publishReviewUnreadable:
+    "作業場所をいま読めないため、チェックした内容と公開する内容が同じかどうか確認できません。",
   publishReviewMoved: (readTip, nowTip) =>
     `rondo のチェックは ${readTip} の時点のもので、いま公開するのは ${nowTip} です。` +
     "チェックのあとにコミットが変わっています。",
@@ -1454,13 +1485,12 @@ export const JA: Chrome = Object.freeze({
   publishRefusedNoRepo:
     "何も公開していません。プルリクエストをどのリポジトリに出すか、rondo に記録がありません。" +
     "このコンピュータで rondo を管理する人に記録してもらってください。",
-  publishRefusedTarget: (detail) =>
-    `何も公開していません。push の宛先を rondo が保証できません。${detail}`,
+  publishRefusedTarget: () => "何も公開していません。push の宛先を rondo が保証できません。",
   publishRefusedUncommitted: (detail) =>
     `公開していません。作業場所に、コミットされていない変更が残っています（${detail}）。`,
-  publishRefusedStatusUnreadable: (detail) =>
+  publishRefusedStatusUnreadable: () =>
     "公開していません。作業場所の状態を読めず、コミットされていない変更が残っているか" +
-    `分かりません (${detail})。`,
+    "分かりません。",
   publishRefusedNotRead:
     "公開していません。画面を開いたあとに、rondo のチェックが通らなくなりました。" +
     "公開の画面に戻って、それでも公開するかを決めてください。",
@@ -1476,10 +1506,9 @@ export const JA: Chrome = Object.freeze({
   publishRefusedNoContinuo:
     "公開していません。rondo の一部が起動せず、push も行っていません。" +
     "このコンピュータで rondo を管理する人に確かめてもらってください。",
-  publishRefusedPushFailed: (detail) =>
-    `何も公開していません。ブランチを push できませんでした。${detail}`,
-  publishRefusedPullRequestFailed: (detail) =>
-    `ブランチは push できましたが、プルリクエストは作れませんでした。${detail} ` +
+  publishRefusedPushFailed: () => "何も公開していません。ブランチを push できませんでした。",
+  publishRefusedPullRequestFailed: () =>
+    "ブランチは push できましたが、プルリクエストは作れませんでした。" +
     "戻って「プルリクエストを作る」をもう一度押してください。" +
     "すでにプルリクエストができていた場合は、残りの手続きだけ済ませます。",
   publishRefusedRunNotClosed:
