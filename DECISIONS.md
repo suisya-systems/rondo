@@ -3444,6 +3444,18 @@ surface that replaces all of that, and it is deliberately the smallest one that 
    `CONSERVATIVE_POLICY`'s `ask_every_iteration` is refused before a row exists and a command called
    `start` must be able to start; and the iteration id, defaulting to the run id, which is a copy of
    an identifier the operator already chose rather than a mint.
+   > **Annotation (2026-10-14, from D-0023, by rondo#703).** Added after this entry was accepted,
+   > and **not additive**. **"No allocator is added" no longer holds**: `D-0023` rule 3 has rondo
+   > derive the `(run id, topic branch, workspace)` triple from the iteration id, and rule 9 takes
+   > the three out of `RunPlan` for one `workspaceRoot`. The allocator is `allocate()` in
+   > `src/refrain/allocator.ts`. With it went three of the four per-run overrides (`--run-id`,
+   > `--topic-branch`, `--workspace`) and the `parties.grantee` rewrite: the allocator fills the
+   > grantee, and `--prompt` is the override left (`src/access/cli.ts`, `loadPlan`). The rest of
+   > this rule stands: the plan file is still the whole of configuration, `readPlan` still infers
+   > nothing, and `D-0019` rule 3's second half, no defaults for a fence's geometry, is untouched.
+   > `D-0022` carried this as a residual. Nothing above is edited.
+   >
+   > - Amends: D-0025 rule 5
 6. **`publish` runs the push and opens the pull request, and never merges.** This is the one place
    this entry touches `D-0010`, and it does not overturn it. `D-0010` settles **where the authority
    to publish sits** — with the operator, not with rondo — and that is unchanged: nothing here runs
@@ -4686,7 +4698,7 @@ argument.
 
 | Residual | Why not here | Who decides |
 |---|---|---|
-| `D-0025` rule 5's "No allocator is added", overtaken by `D-0023` | A dated annotation on an accepted entry is additive but is still a change to the record; `AGENTS.md` section 7 keeps it out of a diff scoped to something else | rondo's gate, as its own annotation |
+| `D-0025` rule 5's "No allocator is added", overtaken by `D-0023` | A dated annotation on an accepted entry is additive but is still a change to the record; `AGENTS.md` section 7 keeps it out of a diff scoped to something else | rondo's gate, as its own annotation *(Annotation, 2026-10-14:* **answered** — the annotation from `D-0023` under `D-0025` rule 5, by rondo#703.*)* |
 | A `GATE_SHOW` reader carrying the transitions array | Rule 4's snapshot tuple and rule 16's match key both need `transition_seq`, which no decoder supplies; the gate-detail pane needs it independently | `D-0020` rule 1's surface work |
 | Enumerating **terminal** rows | `read(id)` needs an id already known and `readLive` filters terminal rows out (`src/store/sqlite.ts:225`, `:236`, `:742-746`), so the abandoned iteration this component most exists to explain cannot currently be found at all | the record-design task (rule 19) |
 | The amplification bound rule 17 gives up | It costs nothing until an agent type exists whose grants are wider than one approval should carry | a later entry, if the falsifier below fires |
