@@ -28,6 +28,7 @@ import {
 } from "./claims.js";
 import {
   type AppendReadingOutcome,
+  type AssertedRow,
   type BoundName,
   type ClosingLap,
   DRIVEN_STATUSES,
@@ -104,6 +105,9 @@ const JOINED = "joined:";
 
 /** {@link DRIVEN_STATUSES} as an SQL list; the names are fixed, so nothing is bound. */
 const DRIVEN_IN = DRIVEN_STATUSES.map((status) => `'${status}'`).join(", ");
+
+/** The processes a transition asserts, as `markLapProcess` wrote them (rondo#661). */
+const PROCESSES_ARE = " AND driver_host IS ? AND driver_pid IS ? AND lap_pid IS ?";
 
 /**
  * The two bounds, in the order `reserve()` checks them.
@@ -580,7 +584,7 @@ export function iterationStore(connection: StoreConnection, policy: HostPolicy):
 
     async transition(
       id: string,
-      from: IterationStatus,
+      from: AssertedRow,
       to: IterationStatus,
       fields: IterationFields,
       nowMs: number,
@@ -588,24 +592,39 @@ export function iterationStore(connection: StoreConnection, policy: HostPolicy):
     ): Promise<TransitionOutcome> {
       try {
         const outcome = inTransaction<TransitionOutcome | null>(() => {
-          const row = readRow(id);
-          if (row === null) {
-            return { kind: "missing" };
-          }
-          const found = requireStatus(row);
-          if (found !== from) {
-            // Refused, and nothing is written: the closed edge relation of
-            // D-0019 rule 6, enforced in the one place a restart cannot argue
-            // with. The transaction rolls back through the `null` below rather
-            // than through a throw, because this is an answer and not a fault.
-            return { kind: "unexpectedStatus", found };
-          }
+          const asserted = typeof from === "string" ? { status: from } : from;
           const write = assignmentsFor(fields);
-          connection
+          // **The assertion is the UPDATE's own WHERE** (rondo#661), so no
+          // other writer -- a CLI resume, a second press, the lost-lap sweep --
+          // can act between a read and this write: the closed edge relation of
+          // D-0019 rule 6, and where `from` names them, the processes the
+          // caller judged the row by.
+          const changed = connection
             .prepare(
-              `UPDATE iteration SET status = ?, updated_at_ms = ?${write.clauses} WHERE id = ?`,
+              `UPDATE iteration SET status = ?, updated_at_ms = ?${write.clauses} ` +
+                `WHERE id = ? AND status = ?${"driverPid" in asserted ? PROCESSES_ARE : ""}`,
             )
-            .run(to, nowMs, ...write.values, id);
+            .run(
+              to,
+              nowMs,
+              ...write.values,
+              id,
+              asserted.status,
+              ...("driverPid" in asserted
+                ? [asserted.driverHost, asserted.driverPid, asserted.lapPid]
+                : []),
+            ).changes;
+          if (Number(changed) === 0) {
+            // Refused: nothing was written, and the row is read only to say why.
+            const row = readRow(id);
+            if (row === null) {
+              return { kind: "missing" };
+            }
+            const found = requireStatus(row);
+            return found === asserted.status
+              ? { kind: "driverMoved" }
+              : { kind: "unexpectedStatus", found };
+          }
           // **After the status assertion and inside the same lock.** The
           // assertion above is what makes this reading belong to the transition
           // it came with: a row another writer had already moved is refused
@@ -650,7 +669,7 @@ export function iterationStore(connection: StoreConnection, policy: HostPolicy):
         if (outcome === null) {
           return {
             kind: "defect",
-            reason: `the transition of '${id}' from '${from}' to '${to}' produced no answer`,
+            reason: `the transition of '${id}' to '${to}' produced no answer`,
           };
         }
         return outcome;

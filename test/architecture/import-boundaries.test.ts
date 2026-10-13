@@ -1496,6 +1496,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/refrain/policy.ts": [DISPATCHER],
   "src/refrain/ports.ts": [DISPATCHER],
   "src/refrain/revision.ts": [DISPATCHER],
+  "src/refrain/settle.ts": [DISPATCHER],
   // D-0171: the store split by concern behind the one driver owner.
   "src/store/advisory.ts": [RECORD],
   "src/store/ask-options.ts": [RECORD],

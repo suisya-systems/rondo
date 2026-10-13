@@ -20,14 +20,14 @@ function world() {
         : { kind: "absent" }) as never,
     transition: async (
       id: string,
-      from: string,
+      from: unknown,
       to: string,
       fields: { failureKind?: string | null },
     ) => {
       if (refusing) {
         return { kind: "unexpectedStatus", found: "performing" } as never;
       }
-      ended.push({ from, to, fields });
+      ended.push({ from: String(from), to, fields });
       status = to;
       return { kind: "transitioned", record: { id, status: to } } as never;
     },

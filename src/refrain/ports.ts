@@ -33,6 +33,7 @@ import type {
   LaneClaimAsk,
   LaneHolder,
   LapReadingDraft,
+  PerformingLap,
   ScopeRefusal,
 } from "../store/records.js";
 import type { AdmittedPlan } from "./plan.js";
@@ -257,12 +258,25 @@ export type ReserveOutcome =
 /** Which of the host's two bounds an admission was refused by (D-0023 rule 8). */
 export type BoundName = "maxOccupying" | "maxLive";
 
+/**
+ * The row a write asserts (rondo#661): its status, or its status with the
+ * processes the writer saw drive it, so a driver a resume stamped since fails
+ * the write as surely as a moved status does.
+ */
+export type AssertedRow =
+  | IterationStatus
+  | (Pick<PerformingLap, "driverHost" | "driverPid" | "lapPid"> & {
+      readonly status: IterationStatus;
+    });
+
 /** Why a transition did not happen. */
 export type TransitionOutcome =
   | { readonly kind: "transitioned"; readonly record: IterationRecord }
   /** The row was not in the status the caller asserted. The closed edge
    *  relation, enforced where it can actually be enforced. */
   | { readonly kind: "unexpectedStatus"; readonly found: IterationStatus }
+  /** The status held, but not the processes asserted: another process drives it now. */
+  | { readonly kind: "driverMoved" }
   | { readonly kind: "missing" }
   | { readonly kind: "defect"; readonly reason: string };
 
@@ -324,7 +338,9 @@ export interface StorePort {
    */
   reserve(input: ReserveInput): Promise<ReserveOutcome>;
   /**
-   * Assert the current status, then write the new one with its fields.
+   * Assert the current status, then write the new one with its fields, in one
+   * conditional UPDATE: a row another writer moved, or whose processes moved
+   * where `from` names them, changes nothing and answers why (rondo#661).
    *
    * **The optional reading is written in the same transaction as the
    * transition** (D-0029 rule 8). It is a parameter here rather than a second
@@ -335,7 +351,7 @@ export interface StorePort {
    */
   transition(
     id: string,
-    from: IterationStatus,
+    from: AssertedRow,
     to: IterationStatus,
     fields: IterationFields,
     nowMs: number,

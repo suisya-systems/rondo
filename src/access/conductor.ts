@@ -50,6 +50,7 @@ import {
   abandon as abandonIteration,
   admit as admitIteration,
   type ConductorReport,
+  type Ending,
   faulted as faultedIteration,
   requestWithdrawal as requestIterationWithdrawal,
   resume as resumeIteration,
@@ -57,6 +58,7 @@ import {
 import type { AdmittedPlan, RunPlan } from "../refrain/plan.js";
 import type { LoopPolicy } from "../refrain/policy.js";
 import type {
+  AssertedRow,
   ConductorPorts,
   DecisionSpend,
   EffectOutcome,
@@ -2213,21 +2215,13 @@ export async function abandon(
 }
 
 /** End a lap whose driver threw, at `failed` with `defect` (D-0109 rule 3); no verb is driven. */
-export async function endFaulted(
-  ports: {
-    readonly store: Pick<ConductorPorts["store"], "read" | "transition">;
-    readonly now: () => number;
-  },
-  iterationId: string,
-  reason: string,
-): Promise<ConductorReport> {
-  return await faultedIteration(ports, iterationId, reason);
-}
+export { faultedIteration as endFaulted };
 
 /**
  * End a lost lap at `failed` with `lost` (D-0139): its driver and its `lap
  * perform` child are gone. `ended` is one a person ended from the page
- * (rondo#655). Answers the status the row is at afterwards.
+ * (rondo#655). `judged` is the row as the caller tested it, which the write
+ * asserts (rondo#661); answers whether this write ended it.
  */
 export async function endLost(
   ports: {
@@ -2237,8 +2231,9 @@ export async function endLost(
   iterationId: string,
   reason: string,
   kind: "lost" | "ended" = "lost",
-): Promise<string | null> {
-  return (await faultedIteration(ports, iterationId, reason, kind)).status;
+  judged: AssertedRow | null = null,
+): Promise<Ending> {
+  return await faultedIteration(ports, iterationId, reason, kind, judged);
 }
 
 /**

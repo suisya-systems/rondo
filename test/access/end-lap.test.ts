@@ -44,7 +44,8 @@ async function pass(w: World, restarted: string[]) {
   const ports: LostLapPorts = {
     store: w.store,
     record: w.record,
-    end: async (id, reason) => await endLost({ store: w.store, now: Date.now }, id, reason),
+    end: async (lap, reason) =>
+      await endLost({ store: w.store, now: Date.now }, lap.iterationId, reason, "lost", lap),
     byItself: async () => true,
     restart: async (lap) => {
       restarted.push(lap.id);
@@ -178,13 +179,13 @@ test("an ending whose fresh ask was never written is asked about by the lost-lap
   await startStopped(w);
   await carryOn(w, "start-stopped-lap-1", 2_500, "m-early");
   // The press ended the row, and the host stopped before the fresh ask.
-  const status = await endLost(
+  const ended = await endLost(
     { store: w.store, now: Date.now },
     "lap-1",
     'ended on the page by ada: "it hung overnight"',
     "ended",
   );
-  expect(status).toBe("failed");
+  expect(ended.ending).toBe("ended");
   const restarted: string[] = [];
   await pass(w, restarted);
   expect(restarted).toEqual([]);
@@ -345,4 +346,97 @@ test("no sentence the page says about these laps sends the person to a log or a 
       expect(one).not.toMatch(/\blog\b|ログ|journal|rondo abandon|`/i);
     }
   }
+});
+
+// --- rondo#661: two writers on one row, exactly one write wins --------------
+
+/** A lap held before its gate by a start that threw, its driver `this-host` pid 999001 gone. */
+async function heldStart() {
+  const w = await stuck("admitted");
+  await startStopped(w);
+  await w.store.markLapProcess("lap-1", { driverHost: "this-host", driverPid: 999_001 });
+  return w;
+}
+
+/** `w.store`, with `first` run just before its next terminal write. */
+const raced = (w: World, first: () => Promise<unknown>): World["store"] =>
+  Object.create(w.store, {
+    transition: {
+      value: async (...args: Parameters<World["store"]["transition"]>) => {
+        await first();
+        return await w.store.transition(...args);
+      },
+    },
+  });
+
+const pressOver = (w: World, store: World["store"], reason: string) =>
+  endLapFromPage(ENV, store, w.record, EN, "ada", { iterationId: "lap-1", reason });
+
+test("page end vs sweep: the sweep's end between the press's test and its write wins alone", async () => {
+  const w = await heldStart();
+  const store = raced(w, async () => await pass(w, []));
+  expect(await pressOver(w, store, "mine")).toMatchObject({ ok: false, why: "endRefusedChanged" });
+  const after = await row(w);
+  expect(after).toMatchObject({ status: "failed", failureKind: "lost" });
+  expect(after.reason).not.toContain("mine");
+});
+
+test("page end vs sweep: the press between the sweep's judgement and its write wins alone", async () => {
+  const w = await heldStart();
+  const logs: string[] = [];
+  const host = lostLapHost({
+    store: w.store,
+    record: w.record,
+    end: async (lap, reason) => {
+      const store = raced(w, async () => {
+        expect(await pressOver(w, w.store, "mine")).toMatchObject({ ok: true });
+      });
+      return await endLost({ store, now: Date.now }, lap.iterationId, reason, "lost", lap);
+    },
+    byItself: async () => false,
+    restart: null,
+    words: EN,
+    host: "this-host",
+    alive: () => false,
+    now: Date.now,
+    log: (line) => logs.push(line),
+  });
+  host.kick();
+  await host.settled();
+  const after = await row(w);
+  expect(after).toMatchObject({ status: "failed", failureKind: "ended" });
+  expect(after.reason).toContain('"mine"');
+  expect(logs.join("\n")).not.toContain("was lost");
+});
+
+test("page end vs CLI resume: a driver named between the press's test and its write keeps the lap", async () => {
+  const w = await heldStart();
+  // `rondo resume` in a terminal names itself the lap's driver, as `driveResumed` does.
+  const store = raced(w, async () => {
+    await w.store.markLapProcess("lap-1", { driverHost: "this-host", driverPid: 999_005 });
+  });
+  expect(await pressOver(w, store, "mine")).toMatchObject({ ok: false, why: "endRefusedChanged" });
+  expect((await row(w)).status).toBe("admitted");
+  const driven = (await w.store.drivenLaps()).find((lap) => lap.iterationId === "lap-1");
+  expect(driven).toMatchObject({ driverPid: 999_005 });
+});
+
+test("page end vs CLI resume: a press first leaves the resume nothing to walk", async () => {
+  const w = await heldStart();
+  expect(await pressOver(w, w.store, "mine")).toMatchObject({ ok: true });
+  const walked = await w.store.transition("lap-1", "admitted", "performing", {}, Date.now());
+  expect(walked).toEqual({ kind: "unexpectedStatus", found: "failed" });
+  expect(await row(w)).toMatchObject({ status: "failed", failureKind: "ended" });
+});
+
+test("two page presses: the second between the first's test and its write wins alone", async () => {
+  const w = await stuck("stalled");
+  const store = raced(w, async () => {
+    expect(await pressOver(w, w.store, "second")).toMatchObject({ ok: true });
+  });
+  expect(await pressOver(w, store, "first")).toMatchObject({ ok: false, why: "endRefusedChanged" });
+  const after = await row(w);
+  expect(after).toMatchObject({ status: "failed", failureKind: "ended" });
+  expect(after.reason).toContain('"second"');
+  expect(after.reason).not.toContain('"first"');
 });
