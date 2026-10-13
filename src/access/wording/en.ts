@@ -957,9 +957,7 @@ explanation you pressed on and then answers the gate.`,
   reviseDraftArrived: "A draft arrived after you started writing, and your own words were kept.",
   reviseUseDraft: "Use the draft instead",
   forMaintainer: "For whoever maintains rondo on this machine",
-  hostLog:
-    "The rest of what rondo printed is in the host's log: journalctl --user -u rondo.service " +
-    "(or the terminal, when the host was started by hand with rondo web).",
+  hostLog: "rondo's own log from the two minutes before the refusal",
   reviseRefusedNoApprover:
     "Nothing was answered: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   reviseRefusedPress:

@@ -25,6 +25,7 @@ import { request as httpRequest } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { type Context, Hono } from "hono";
 import { expect, test } from "vitest";
+import { relayUpstream } from "../../src/access/console.js";
 import {
   type Ended,
   type EndInput,
@@ -1892,6 +1893,8 @@ test("a refused revise or publish sends nobody to a terminal, and folds rondo's 
       ["en", EN],
       ["ja", chromeFor("ja")],
     ] as const) {
+      // What the host printed around the press, as a port's relay prints it.
+      relayUpstream("continuo run close refused (StoreBusy)", `database is locked ${lang}`);
       const refused = await send(base, `${path}?lang=${lang}`, "POST", pressHeaders(base), form);
       const body = refused.body.replaceAll("&#39;", "'");
       expect(refused.status).toBe(409);
@@ -1901,11 +1904,14 @@ test("a refused revise or publish sends nobody to a terminal, and folds rondo's 
       expect(line, path).not.toBe("");
       expect(line, path).not.toMatch(/terminal|ターミナル/);
       // The sentence says who can look; the closed fold is what they look at:
-      // the port's own reason, and where the rest of the host's output is.
+      // the port's own reason, and what the host printed just before -- not a
+      // command to read the host's log in a terminal (rondo#676).
       const fold = body.slice(body.indexOf('<details id="refused-reason"'));
       expect(fold).toContain(`>${wording.forMaintainer}</summary>`);
       expect(fold).toContain(`<p lang="en">${note}</p>`);
-      expect(fold).toContain("journalctl --user -u rondo.service");
+      expect(fold).toContain(wording.hostLog);
+      expect(fold).toContain(`continuo run close refused (StoreBusy): database is locked ${lang}`);
+      expect(fold).not.toContain("journalctl");
     }
     stop.abort();
     expect(await closed).toBe(0);

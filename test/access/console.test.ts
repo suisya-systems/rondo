@@ -15,6 +15,7 @@ import {
   asciiEscape,
   consoleSeams,
   legibleAsciiEscape,
+  printedSince,
   relayUpstream,
 } from "../../src/access/console.js";
 
@@ -111,4 +112,17 @@ describe("relayUpstream", () => {
       "continuo gate show: no such database '/tmp/\\u65e5\\u672c.sqlite3'\n",
     ]);
   });
+});
+
+test("what the process printed is kept for the page: from a moment on, and only the latest lines (rondo#676)", () => {
+  const before = Date.now();
+  relayUpstream("continuo run close refused", "database is locked");
+  expect(printedSince(before)).toContain("continuo run close refused: database is locked");
+  expect(printedSince(Date.now() + 60_000)).toEqual([]);
+  for (let i = 0; i < 250; i += 1) {
+    relayUpstream("line", String(i));
+  }
+  const kept = printedSince(0);
+  expect(kept).toHaveLength(200);
+  expect(kept.at(-1)).toBe("line: 249");
 });
