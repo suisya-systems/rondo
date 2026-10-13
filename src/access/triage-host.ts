@@ -441,13 +441,18 @@ async function ownRecord(
   const nowMs = ports.now();
   for (const [root, messages] of threads) {
     const opener = messages.find((m) => m.messageId === root);
+    // A stop holds until the person asks for the work again after it, as the
+    // drafter reads a thread (`stopsDrafterAsk`).
+    const stoppedAtMs = Math.max(
+      ...messages.filter((m) => m.answerOutcome === "stop").map((m) => m.atMs),
+    );
     if (
       opener === undefined ||
       opener.inReplyTo !== null ||
       !asksForWork(opener) ||
       live.has(root) ||
       latestOf.has(root) ||
-      messages.some((m) => m.answerOutcome === "stop") ||
+      !messages.some((m) => m.atMs > stoppedAtMs && m.answerOutcome !== "stop" && asksForWork(m)) ||
       nowMs - Math.max(...messages.map((m) => m.atMs)) < UNLAPPED_QUIET_MS
     ) {
       continue;

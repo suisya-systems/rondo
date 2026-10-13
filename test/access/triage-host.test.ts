@@ -328,7 +328,7 @@ test("a request no lap was started for is read once its thread is a day quiet (r
   });
 });
 
-test("a request with a lap, one a person stopped, or one still talked about is not left (rondo#658)", async () => {
+test("a request with a lap, one a person stopped and did not ask again, or one still talked about is not left (rondo#658)", async () => {
   const w = world(() => listed([]), "answered", undefined, ["m-lapped"]);
   await w.record.recordGoal(goal);
   for (const draft of [
@@ -343,6 +343,17 @@ test("a request with a lap, one a person stopped, or one still talked about is n
       asks: true,
     },
     said("m-stop", "Drop it.", 12_000, { inReplyTo: "ask-1", answerOutcome: "stop" }),
+    said("m-resumed", "Dropped, then asked again", 1_000),
+    {
+      ...said("ask-2", "Which one?", 2_000),
+      authorKind: "drafter" as const,
+      authorId: "rondo/deterministic/1",
+      inReplyTo: "m-resumed",
+      bases: [{ form: "message", messageId: "m-resumed" }],
+      asks: true,
+    },
+    said("m-stop-2", "Drop it.", 3_000, { inReplyTo: "ask-2", answerOutcome: "stop" }),
+    said("m-again", "Do it after all", 4_000, { inReplyTo: "m-resumed" }),
     said("m-talked", "Still being talked about", 10_000),
     said("m-reply", "One more thing", 10_000 + DAY_MS, { inReplyTo: "m-talked" }),
   ]) {
@@ -353,11 +364,14 @@ test("a request with a lap, one a person stopped, or one still talked about is n
   w.clock.ms = 12_000 + DAY_MS;
   w.host.kick();
   await w.host.idle();
-  expect(w.handed).toEqual([]);
+  // Only the request asked for again after its stop is read.
+  expect([...(w.handed[0] ?? "").matchAll(/key: (\S+)/g)].map((m) => m[1])).toEqual([
+    "unlapped:m-resumed",
+  ]);
   const [row] = await w.record.latestTriage();
   expect(readTriagePayload(row?.payload ?? {})?.read).toEqual({
     issues: 0,
     stopped: 0,
-    unlapped: 0,
+    unlapped: 1,
   });
 });
