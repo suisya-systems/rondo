@@ -30501,6 +30501,16 @@ rules 2, 3, 4 and 5 (its annotation from this entry). Supersedes nothing. Refs `
 > is read by `rondo explains` (its annotation from rondo#659). Both measure and set no threshold.
 > Nothing below is edited.
 
+> **Annotation (2026-10-14, from rondo#660).** Added after this entry was accepted, and **not
+> additive**: rule 4's table changes. Two rows that no annotation had closed were built without
+> one. C1's *`D-0071` rule 7.4's two planted drafter requests are not recorded* is closed by
+> rondo#635: `docs/operations/model-drafter-planted-requests.md` records them. C2's *the empty
+> centre has no* since you last looked is closed by rondo#631: `D-0083` rule 4 is built as
+> decided, and that entry's annotation from rondo#631 says how. The other rows stand. Nothing
+> below is edited.
+>
+> - Amends: D-0189 rule 4
+
 ### Context
 
 rondo#626 asks for a role that works like claude-org's secretary. A person gives it a request in
