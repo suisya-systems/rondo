@@ -906,7 +906,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   roundChangedAsk:
     "rondo read the candidates again while you were answering, and asks something else now. What you wrote is kept here.",
   roundChangedStep:
-    "This step changed while you were writing: rondo is at another step now. What you wrote is kept here, so you can copy it.",
+    'This step ended while you were writing; rondo is on a new step now. Press "Show the new step" to continue there. What you wrote comes with you.',
   roundGone: "No longer asked:",
   roundAdded: "Newly asked:",
   roundUseAsk: "Use the new points",
@@ -1570,7 +1570,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   roundChangedAsk:
     "回答している間に rondo の質問が変わりました。書いた内容はここに残してあります。",
   roundChangedStep:
-    "書いている間にこの段階が終わり、rondo は次の段階に進んでいます。書いた内容はここに残してあります。",
+    "書いている間にこの段階が終わり、rondo は次の段階に進んでいます。「新しい段階を表示する」を押すと、書いた内容もそちらに移ります。",
   roundGone: "聞かなくなったこと：",
   roundAdded: "新しく聞いていること：",
   roundUseAsk: "新しい質問に切り替える",

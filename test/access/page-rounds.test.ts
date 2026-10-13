@@ -292,3 +292,25 @@ test("a round the server does not say can be kept offers only the new one", () =
   expect(said).toContain("Use the new points");
   expect(said).not.toContain("Keep answering these");
 });
+
+test("a gate's new step takes what was written with it, and offers no keeping of the old one (rondo#676)", () => {
+  const step = (round: string) =>
+    el(
+      "form",
+      {
+        "data-round": round,
+        "data-round-moves": "",
+        "data-round-said": "the step changed",
+        "data-round-use-label": "Show the new step",
+        "data-round-held-label": "Nothing was sent",
+      },
+      box("verified", ""),
+    );
+  const tab = page(step("lap-1:gate-1"));
+  (tab.form().querySelectorAll("textarea")[0] as Node).value = "I ran the tests";
+  tab.redraw(step("lap-2:gate-2"));
+  expect(tab.notice()?.textContent).not.toContain("Keep answering these");
+  tab.press("Show the new step");
+  expect(tab.form().dataset.round).toBe("lap-2:gate-2");
+  expect((tab.form().querySelectorAll("textarea")[0] as Node).value).toBe("I ran the tests");
+});

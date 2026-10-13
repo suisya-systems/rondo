@@ -1612,6 +1612,10 @@ async function scopeApproved(
   // `scopeVerdict` refuses that press at the `superseded` test. Drawing the
   // button anyway would be this screen offering a press it knows cannot work.
   const retired = await ports.record.scopeSupersededByApproved(scope.scopeId);
+  // **Where to start instead, as a link** (rondo#676): the approval that
+  // replaced this one, so nobody hunts for it through the thread. A chain
+  // that forked names no single successor, and the sentence stands alone.
+  const replacedBy = retired ? await ports.record.scopeTip(decisionId) : null;
   const held = await heldAgentTypeLines(wording, ports.record, payload.agent_types);
   // **A drafted scope starts its drafted plans** (rondo#238 C2b): each with
   // its own button, or the reason it cannot start yet, and never the person's
@@ -1682,6 +1686,26 @@ async function scopeApproved(
       {retired ? (
         <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
           {wording.scopeRetired}
+          {replacedBy?.kind === "tip" && replacedBy.scopeDecisionId !== decisionId ? (
+            <>
+              {" "}
+              <a
+                href={viewHref(
+                  {
+                    kind: "scope",
+                    messageId: view.messageId,
+                    rounds: null,
+                    decisionId: replacedBy.scopeDecisionId,
+                    plan: null,
+                  },
+                  wording.lang,
+                )}
+                class="text-link underline-offset-2 hover:underline"
+              >
+                {wording.scopeRetiredLink}
+              </a>
+            </>
+          ) : null}
         </p>
       ) : null}
       {draftedStarts !== null ? (
