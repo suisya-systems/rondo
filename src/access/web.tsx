@@ -1626,6 +1626,7 @@ export async function operatorPage(
     view,
     actorId: ports.actorId,
     token,
+    namingToken: ports.namingToken ?? null,
     threads,
     threadRead,
     reads,

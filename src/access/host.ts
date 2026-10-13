@@ -11,6 +11,7 @@ import { readLapLog } from "../continuo/transcript.js";
 import { readRunPlan } from "../refrain/plan.js";
 import { isQuestion } from "../store/records.js";
 import { asRefusal, type IterationStore, openAdvisoryRecord } from "../store/sqlite.js";
+import { type NamingPort, recordApprover } from "./approver.js";
 import { checksHost, continuoChecksReader } from "./checks-host.js";
 import {
   APPROVER_ENV,
@@ -48,10 +49,10 @@ import {
   stoppedShort,
 } from "./forge.js";
 import { forgeHost } from "./forge-preflight.js";
-import { gateHost } from "./gate-host.js";
+import { type GateHostPorts, gateHost } from "./gate-host.js";
 import { bareIssueRepository, issueReader } from "./issue-read.js";
 import { EndPort, HoldsPort, ReleasePort } from "./line-ports.js";
-import { lostLapHost, pidAlive, thisDriver } from "./lost-laps.js";
+import { type LostLapPorts, lostLapHost, pidAlive, thisDriver } from "./lost-laps.js";
 import { continuoWorkspaceRemover, mergeOnGreen, mergePress, scopedAuthority } from "./merge.js";
 import { heldPlans, requestRepository } from "./model-draft/host.js";
 import { orderHost } from "./order-host.js";
@@ -104,10 +105,15 @@ import {
   RevisePort,
   SayPort,
   ScopePort,
+  type ServedPorts,
   serveOperatorPage,
+  spendPress,
   TriagePort,
 } from "./web-app.js";
 import { chromeFor } from "./wording.js";
+
+/** The approver as the allowlist answered for it; null where none is named. */
+type Sender = ReturnType<typeof approvedActor> | null;
 
 /**
  * `rondo web`: the resident host -- the operator page and every host that runs
@@ -115,10 +121,13 @@ import { chromeFor } from "./wording.js";
  */
 export async function serveWeb(
   parsed: ParsedCommand,
-  environment: Readonly<Record<string, string | undefined>>,
+  given: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
   storePath: string,
 ): Promise<number> {
+  // **A copy this host may write one variable into**: the approver named from
+  // the page (rondo#675), so every press's allowlist check reads that name.
+  const environment: Record<string, string | undefined> = { ...given };
   const bounds = hostPolicyOf(environment);
   if ("refusal" in bounds) {
     return refuse(bounds.refusal);
@@ -129,17 +138,19 @@ export async function serveWeb(
   if ("refusal" in selected) {
     return refuse(selected.refusal);
   }
-  // **The approver is read once, here, and decides whether there is a write
-  // port at all** (D-0041 rules 4 and 5). Building the function and letting
-  // the page decide not to draw a button would leave a door with nobody's
-  // name on it reachable by a hand-written POST.
+  // **The approver decides whether there is a write port at all** (D-0041
+  // rules 4 and 5). Building the function and letting the page decide not to
+  // draw a button would leave a door with nobody's name on it reachable by a
+  // hand-written POST. Read here, and again only when the page names one
+  // (rondo#675, D-0196), which rebuilds the ports and the hosts below.
   const approver = environment[APPROVER_ENV];
   const record = openAdvisoryRecord(storePath);
   // **The sender is the approver, through the same allowlist `request` and
   // `reply` use** (D-0061 rule 4, D-0059 section 5a): no approver, or one the
   // allowlist refuses, is no say port, and so no forms.
-  const sender =
-    approver === undefined || approver === "" ? null : approvedActor(approver, environment);
+  const senderOf = (name: string | undefined): Sender =>
+    name === undefined || name === "" ? null : approvedActor(name, environment);
+  const sender = senderOf(approver);
   // **What a publish would need that the lap's row does not carry**
   // (rondo#233 S5): the remote to push to, and the repository for a plan that
   // names none. `--repo` is the same flag `publish` takes, read once here.
@@ -293,8 +304,8 @@ export async function serveWeb(
       );
       // A merge closed out may be what the goal's next request waits on
       // (rondo#469), and its release what a held start waits on (rondo#284).
-      flow?.kick();
-      order?.kick();
+      approved.flow?.kick();
+      approved.order?.kick();
       return merged;
     },
     // rondo#551: the first red on a head re-runs its failed Actions jobs once,
@@ -307,7 +318,7 @@ export async function serveWeb(
         ])) !== null,
       rerunFailedJobs,
     },
-    closedOut: () => flow?.kick(),
+    closedOut: () => approved.flow?.kick(),
     host: forgeHost(environment),
     now: Date.now,
     log: say,
@@ -338,91 +349,164 @@ export async function serveWeb(
     language: selected.tag,
     log: say,
   });
-  // **And the order tick** (D-0098 rule 1.4, D-0127): each part of an
-  // approved split starts once it can -- a part with `after` on its
-  // predecessor's landing -- through the press's own path and in the
-  // approver's name, so only where there is an approver the allowlist
-  // accepts, the start press's own condition.
-  const order =
-    sender === null || "refusal" in sender
-      ? null
-      : orderHost({
-          record,
-          splits: async () => await approvedSplits({ record }),
-          readiness: async (split, planIndex) =>
-            await draftedStartReadiness(
-              { store, record, policy: bounds.policy, nowMs: Date.now() },
-              split.requestMessageId,
-              split.scopeDecisionId,
-              split.proposalId,
-              planIndex,
-            ),
-          readHolder: async (lineageId) =>
-            await readHolder(
-              // **`READING_REMOTE` here as everywhere** (rondo#286, D-0153
-              // rule 4): one remote this host reads landings from, whichever
-              // path reads one, so the order tick and an admission refusal
-              // cannot answer about one line two ways. A host started with
-              // `--remote NAME` therefore settles no landing by itself and
-              // says so; that is the stop rule 4 asks for.
-              {
+  // **What runs only in an approver's name** (rondo#675, D-0196): the order
+  // tick, the flow, publish and the conflict fix under a scope, and the
+  // presses the lost-lap and gate hosts make. Built for the approver this
+  // host starts with, and again when the page names one.
+  const approvedHosts = (sender: Sender) => {
+    // **And the order tick** (D-0098 rule 1.4, D-0127): each part of an
+    // approved split starts once it can -- a part with `after` on its
+    // predecessor's landing -- through the press's own path and in the
+    // approver's name, so only where there is an approver the allowlist
+    // accepts, the start press's own condition.
+    const order =
+      sender === null || "refusal" in sender
+        ? null
+        : orderHost({
+            record,
+            splits: async () => await approvedSplits({ record }),
+            readiness: async (split, planIndex) =>
+              await draftedStartReadiness(
+                { store, record, policy: bounds.policy, nowMs: Date.now() },
+                split.requestMessageId,
+                split.scopeDecisionId,
+                split.proposalId,
+                planIndex,
+              ),
+            readHolder: async (lineageId) =>
+              await readHolder(
+                // **`READING_REMOTE` here as everywhere** (rondo#286, D-0153
+                // rule 4): one remote this host reads landings from, whichever
+                // path reads one, so the order tick and an admission refusal
+                // cannot answer about one line two ways. A host started with
+                // `--remote NAME` therefore settles no landing by itself and
+                // says so; that is the stop rule 4 asks for.
+                {
+                  store,
+                  readLanding,
+                  readChangedPaths,
+                  remote: READING_REMOTE,
+                  issuesClosed: issuesClosedOver(record),
+                },
+                lineageId,
+                Date.now(),
+              ),
+            // Answered once the row is reserved (D-0109), as the press is, so
+            // one pass starts two parts rather than waiting out the first lap.
+            start: async (split, planIndex) => {
+              const input = {
+                iterationId: newIterationId(),
+                requestMessageId: split.requestMessageId,
+                scopeDecisionId: split.scopeDecisionId,
+                proposalId: split.proposalId,
+                planIndex,
+              };
+              const running = startSplitFromPage(
+                environment,
                 store,
-                readLanding,
-                readChangedPaths,
-                remote: READING_REMOTE,
-                issuesClosed: issuesClosedOver(record),
-              },
-              lineageId,
-              Date.now(),
-            ),
-          // Answered once the row is reserved (D-0109), as the press is, so
-          // one pass starts two parts rather than waiting out the first lap.
-          start: async (split, planIndex) => {
-            const input = {
-              iterationId: newIterationId(),
-              requestMessageId: split.requestMessageId,
-              scopeDecisionId: split.scopeDecisionId,
-              proposalId: split.proposalId,
-              planIndex,
-            };
-            const running = startSplitFromPage(
+                storePath,
+                sender.actorId,
+                bounds.policy,
+                input,
+              );
+              // The lap has ended when its start settles: the flow may ask
+              // for the goal's next request (rondo#469).
+              const ended = (): void => flow?.kick();
+              void running.then(ended, ended);
+              return await answerOnceReserved(
+                store,
+                record,
+                chromeFor(selected.tag),
+                input,
+                running,
+              );
+            },
+            // **And the person's own start that held files kept waiting**
+            // (rondo#284).
+            held: heldStartPort(
               environment,
               store,
               storePath,
               sender.actorId,
+              record,
+              chromeFor(selected.tag),
               bounds.policy,
-              input,
-            );
-            // The lap has ended when its start settles: the flow may ask
-            // for the goal's next request (rondo#469).
-            const ended = (): void => flow?.kick();
-            void running.then(ended, ended);
-            return await answerOnceReserved(store, record, chromeFor(selected.tag), input, running);
-          },
-          // **And the person's own start that held files kept waiting**
-          // (rondo#284).
-          held: heldStartPort(
-            environment,
+            ),
+            now: Date.now,
+            log: say,
+          });
+    // **And the flow** (D-0128 rule 5, rondo#469): under a goal scope a person
+    // approved, the goal's next request is asked for here; the drafter drafts
+    // it and the order tick above starts it. Only where the tick runs, since
+    // nothing else would start what it asks for.
+    const flow =
+      order === null
+        ? null
+        : flowHost({
             store,
-            storePath,
-            sender.actorId,
             record,
-            chromeFor(selected.tag),
-            bounds.policy,
-          ),
-          now: Date.now,
-          log: say,
-        });
-  // **And lost laps** (D-0139, rondo#506): a lap whose rondo process and
-  // `lap perform` child are both gone is ended, and started again by itself
-  // or asked about -- read now, as this host starts, and on every minute.
-  const lost = lostLapHost({
-    store,
-    record,
-    end: async (iterationId, reason) =>
-      await endLost({ store, now: Date.now }, iterationId, reason),
-    byItself: async (lap) => await startsByItself(record, lap),
-    restart:
+            policy: bounds.policy,
+            // What it leaves in a request's thread -- a refused draft's note,
+            // its stop -- is read by the person, so it is written in their
+            // language (D-0055, D-0079, rondo#549).
+            words: chromeFor(selected.tag),
+            now: Date.now,
+            log: say,
+            // Its issue is read first; the drafter waits on the read.
+            injected: () => {
+              issues.kick();
+              drafter.kick();
+            },
+          });
+    // **And the organisation's answer at a gate** (D-0125 rule 6, rondo#467):
+    // a lap whose gate would be approved automatically is approved under its
+    // scope, on the tick and right after a model reading lands here.
+    // **And publish inside a scope** (rondo#470, D-0126 part 2): an approved
+    // lap whose scope includes the push and the pull request is published
+    // through the press's own path, in the approver's name -- so only where
+    // there is one the allowlist accepts, the press's own condition.
+    const publisher =
+      sender === null || "refusal" in sender
+        ? null
+        : publishHost({
+            store,
+            record,
+            publish: async (iterationId, scoped) =>
+              await publishUnderScope(
+                environment,
+                store,
+                storePath,
+                sender.actorId,
+                asked,
+                iterationId,
+                scoped,
+              ),
+            // Its pull request open, the line's files are free (D-0114): a
+            // start they held is attempted now, not on the minute (rondo#284).
+            published: () => {
+              checks.kick();
+              order?.kick();
+            },
+            now: Date.now,
+            log: say,
+          });
+    // **And the conflict fix of a line started with no claim** (D-0194,
+    // rondo#557): the press's own path, under an approval that starts a lost
+    // lap by itself, and only where the press could be made.
+    const fixer =
+      sender === null || "refusal" in sender
+        ? null
+        : fixHost({
+            store,
+            record,
+            byItself: async (lap) => await startsByItself(record, lap),
+            fix: async (input) =>
+              await conflictFixFromPage(environment, store, storePath, sender.actorId, input),
+            mintId: newIterationId,
+            log: say,
+          });
+    // The lost-lap host's start again (D-0139), on the same condition.
+    const restart: LostLapPorts["restart"] =
       sender === null || "refusal" in sender
         ? null
         : async (lap) =>
@@ -433,96 +517,9 @@ export async function serveWeb(
               sender.actorId,
               chromeFor(selected.tag),
               lap,
-            ),
-    words: chromeFor(selected.tag),
-    host: thisDriver().driverHost,
-    alive: pidAlive,
-    now: Date.now,
-    log: say,
-  });
-  // **And the flow** (D-0128 rule 5, rondo#469): under a goal scope a person
-  // approved, the goal's next request is asked for here; the drafter drafts
-  // it and the order tick above starts it. Only where the tick runs, since
-  // nothing else would start what it asks for.
-  const flow =
-    order === null
-      ? null
-      : flowHost({
-          store,
-          record,
-          policy: bounds.policy,
-          // What it leaves in a request's thread -- a refused draft's note,
-          // its stop -- is read by the person, so it is written in their
-          // language (D-0055, D-0079, rondo#549).
-          words: chromeFor(selected.tag),
-          now: Date.now,
-          log: say,
-          // Its issue is read first; the drafter waits on the read.
-          injected: () => {
-            issues.kick();
-            drafter.kick();
-          },
-        });
-  // **And the organisation's answer at a gate** (D-0125 rule 6, rondo#467):
-  // a lap whose gate would be approved automatically is approved under its
-  // scope, on the tick and right after a model reading lands here.
-  // **And publish inside a scope** (rondo#470, D-0126 part 2): an approved
-  // lap whose scope includes the push and the pull request is published
-  // through the press's own path, in the approver's name -- so only where
-  // there is one the allowlist accepts, the press's own condition.
-  const publisher =
-    sender === null || "refusal" in sender
-      ? null
-      : publishHost({
-          store,
-          record,
-          publish: async (iterationId, scoped) =>
-            await publishUnderScope(
-              environment,
-              store,
-              storePath,
-              sender.actorId,
-              asked,
-              iterationId,
-              scoped,
-            ),
-          // Its pull request open, the line's files are free (D-0114): a
-          // start they held is attempted now, not on the minute (rondo#284).
-          published: () => {
-            checks.kick();
-            order?.kick();
-          },
-          now: Date.now,
-          log: say,
-        });
-  // **And the conflict fix of a line started with no claim** (D-0194,
-  // rondo#557): the press's own path, under an approval that starts a lost
-  // lap by itself, and only where the press could be made.
-  const fixer =
-    sender === null || "refusal" in sender
-      ? null
-      : fixHost({
-          store,
-          record,
-          byItself: async (lap) => await startsByItself(record, lap),
-          fix: async (input) =>
-            await conflictFixFromPage(environment, store, storePath, sender.actorId, input),
-          mintId: newIterationId,
-          log: say,
-        });
-  const gates = gateHost({
-    store,
-    record,
-    answer: async (lap, delegation) => {
-      const answered = await answerUnderScope(environment, store, storePath, lap, delegation);
-      if (answered.kind === "delegated") {
-        publisher?.kick();
-      }
-      return answered;
-    },
-    // **And the drafted change under a goal scope** (D-0145, rondo#517), on
-    // the revise press's own condition: an approver the allowlist accepts.
-    revise:
+            );
+    // The gate host's drafted change under a goal scope (D-0145).
+    const revise: GateHostPorts["revise"] =
       sender === null || "refusal" in sender
         ? null
         : {
@@ -538,7 +535,43 @@ export async function serveWeb(
               ),
             hasRoom: async () => (await store.occupancy()).occupying < bounds.policy.maxOccupying,
             mintId: newIterationId,
-          },
+          };
+    return { order, flow, publisher, fixer, restart, revise };
+  };
+  let approved = approvedHosts(sender);
+  // **And lost laps** (D-0139, rondo#506): a lap whose rondo process and
+  // `lap perform` child are both gone is ended, and started again by itself
+  // or asked about -- read now, as this host starts, and on every minute.
+  const lost = lostLapHost({
+    store,
+    record,
+    end: async (iterationId, reason) =>
+      await endLost({ store, now: Date.now }, iterationId, reason),
+    byItself: async (lap) => await startsByItself(record, lap),
+    get restart() {
+      return approved.restart;
+    },
+    words: chromeFor(selected.tag),
+    host: thisDriver().driverHost,
+    alive: pidAlive,
+    now: Date.now,
+    log: say,
+  });
+  const gates = gateHost({
+    store,
+    record,
+    answer: async (lap, delegation) => {
+      const answered = await answerUnderScope(environment, store, storePath, lap, delegation);
+      if (answered.kind === "delegated") {
+        approved.publisher?.kick();
+      }
+      return answered;
+    },
+    // **And the drafted change under a goal scope** (D-0145, rondo#517), on
+    // the revise press's own condition: an approver the allowlist accepts.
+    get revise() {
+      return approved.revise;
+    },
     words: chromeFor(selected.tag),
     now: Date.now,
     log: say,
@@ -599,11 +632,11 @@ export async function serveWeb(
       reviser.kick();
       checks.kick();
       triage.kick();
-      order?.kick();
+      approved.order?.kick();
       gates.kick();
-      publisher?.kick();
-      fixer?.kick();
-      flow?.kick();
+      approved.publisher?.kick();
+      approved.fixer?.kick();
+      approved.flow?.kick();
       report();
       // **Reaching starts a minute in, and not in the burst above.** The
       // person who has just started rondo is looking at it this second, and
@@ -618,11 +651,11 @@ export async function serveWeb(
         reviser.kick();
         checks.kick();
         triage.kick();
-        order?.kick();
+        approved.order?.kick();
         gates.kick();
-        publisher?.kick();
-        fixer?.kick();
-        flow?.kick();
+        approved.publisher?.kick();
+        approved.fixer?.kick();
+        approved.flow?.kick();
         report();
         // **Order on the tick buys nothing, and nothing here depends on
         // it**: every kick above returns before its own pass finishes, so
@@ -653,10 +686,32 @@ export async function serveWeb(
       await checks.idle();
     },
   });
-  const served = await serveOperatorPage(
-    {
+  // **Naming the approver from the page** (rondo#675, D-0196): only while
+  // nobody is named, recorded beside the store, and then the ports and the
+  // hosts above are built again for that name, with no restart.
+  const naming: NamingPort = async (press, name) => {
+    if (!spendPress(press)) {
+      return { ok: false, why: "approverRefusedPress" };
+    }
+    const named = recordApprover(environment, storePath, name);
+    if (named.ok) {
+      const now = senderOf(name);
+      approved = approvedHosts(now);
+      shown = pagePorts(now, name);
+      approved.order?.kick();
+      approved.publisher?.kick();
+      approved.fixer?.kick();
+      approved.flow?.kick();
+    }
+    return named;
+  };
+  // **The page's ports for one approver**, rebuilt by {@link naming}.
+  const pagePorts = (sender: Sender, approver: string | undefined): ServedPorts => {
+    const { order, flow, publisher, fixer } = approved;
+    return {
       store,
       record,
+      naming: sender === null ? naming : null,
       policy: bounds.policy,
       // **The host's statement, as a tag, and one step of five** (D-0056
       // rules 2 and 3). The page resolves it against the request's `?lang=`,
@@ -1119,7 +1174,11 @@ export async function serveWeb(
       // one D-0048 rule 4's "read at render time" has to keep honest.
       locateTranscript: transcriptPort(environment),
       readLog: readLapLog,
-    },
+    };
+  };
+  let shown = pagePorts(sender, approver);
+  const served = await serveOperatorPage(
+    () => shown,
     parsed.port ?? DEFAULT_WEB_PORT,
     listening,
     (line) => refuse(line),

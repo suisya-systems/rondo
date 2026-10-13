@@ -168,8 +168,7 @@ reading, so it holds still while you read it. Reading it writes nothing -- no la
 and no presentation is counted. The one thing that writes is the approve button, which records the
 explanation you pressed on and then answers the gate.`,
   noApproverNote:
-    "RONDO_APPROVER is not set, so there is nobody this page could answer as, and no inbox of " +
-    "theirs to draw.",
+    "Nobody is named as the approver yet, so nothing can be approved or started from this page. Enter the approver's name below.",
 
   // rondo#439: the status in the person's words, not the enum.
   endedHead: (status, since, why) =>
@@ -319,7 +318,7 @@ explanation you pressed on and then answers the gate.`,
   sendNote: "Sent as written. To correct it, reply again.",
   keySend: "send",
   composerNoApprover:
-    "RONDO_APPROVER is not set, so there is nobody this page could send as: the threads can be read, not written to.",
+    "Nobody is named as the approver yet, so messages cannot be sent from this page. Name them at the top of the page.",
   evOfTry: (at, said) => `Try ${String(at)}: ${said}`,
   walkAt: (at, of) => `your turn ${String(at)} / ${String(of)}`,
   walkNext: "next",
@@ -331,7 +330,8 @@ explanation you pressed on and then answers the gate.`,
   noSuchThread: "No request thread holds that message.",
   threadsUnreadable: (reason) => `The request threads could not be read: ${reason}`,
   notSent: (line) => `Not sent, and your words are kept: ${line}`,
-  sendRefusedNoApprover: "RONDO_APPROVER is not set, so there is nobody this page could send as.",
+  sendRefusedNoApprover:
+    "Nothing was sent: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   sendRefusedForm:
     "This did not come from this page's own form, or the page is older than this rondo. Reload the page and send again.",
   sendRefusedNoWords: "There are no words to send.",
@@ -729,7 +729,7 @@ explanation you pressed on and then answers the gate.`,
     "rondo holds no plan for the place and the agent type this scope allows, so there is " +
     "nothing to start under it yet. Reply in the request's thread with a plan for them.",
   scopeNoApprover:
-    "RONDO_APPROVER is not set, so there is nobody this page could approve a scope as.",
+    "Nobody is named as the approver yet. Name them at the top of the page to approve this.",
   // The place is said only where it is what tells two of these apart (D-0081
   // rule 4.2): with nothing to tell apart, the root answers "where" by itself.
   scopeWorkspace: (place, root) => (place === null ? root : `${place} at ${root}`),
@@ -875,8 +875,7 @@ explanation you pressed on and then answers the gate.`,
     chosen ? `${provider} (chosen for this request)` : `${provider} (this host's default)`,
   workerProviderUnknown: "Not recorded: this lap started before rondo wrote the worker down.",
   scopeRefusedNoApprover:
-    "Nothing was recorded: RONDO_APPROVER is not set, so there is nobody this page could " +
-    "approve a scope as.",
+    "Nothing was recorded: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   scopeRefusedPress:
     "Nothing was recorded: a scope is approved by a person pressing this page's button, and a " +
     "script cannot.",
@@ -898,8 +897,7 @@ explanation you pressed on and then answers the gate.`,
     "was approved.",
   scopeRefusedNotApproved: "The scope was recorded and not approved. Nothing has been spent.",
   startRefusedNoApprover:
-    "Nothing was started: RONDO_APPROVER is not set, so there is nobody this page could start " +
-    "work as.",
+    "Nothing was started: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   startRefusedPress:
     "Nothing was started: work is started by a person pressing this page's button, and a script " +
     "cannot.",
@@ -958,8 +956,7 @@ explanation you pressed on and then answers the gate.`,
     "The rest of what rondo printed is in the host's log: journalctl --user -u rondo.service " +
     "(or the terminal, when the host was started by hand with rondo web).",
   reviseRefusedNoApprover:
-    "Nothing was answered: RONDO_APPROVER is not set, so there is nobody this page could " +
-    "answer as.",
+    "Nothing was answered: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   reviseRefusedPress:
     "Nothing was answered: a gate is answered by a person pressing this page's button, and a " +
     "script cannot.",
@@ -1102,8 +1099,7 @@ explanation you pressed on and then answers the gate.`,
     "Part of this work is still running or waiting for your review, so it keeps its files until " +
     "that ends.",
   releaseRefusedNoApprover:
-    "Nothing was released: rondo on this machine does not yet know who you are, so nothing " +
-    "here can be decided as you.",
+    "Nothing was released: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   releaseRefusedPress:
     "Nothing was released: this is done by a person pressing this page's button, and a script " +
     "cannot.",
@@ -1166,13 +1162,11 @@ explanation you pressed on and then answers the gate.`,
   endBack: "Back to the work to end",
   endBrief: "What rondo asked the work to do, in full",
   endNoApprover:
-    "This work can be ended only by a person rondo knows, and rondo on this machine does not yet " +
-    "know who you are.",
+    "Nobody is named as the approver yet. Name them at the top of the page to end this work.",
   endNothingToEnd:
     "There is nothing here to end: this work has ended already, or has moved on by itself.",
   endRefusedNoApprover:
-    "Nothing was ended: rondo on this machine does not yet know who you are, so nothing here can " +
-    "be decided as you.",
+    "Nothing was ended: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   endRefusedPress:
     "Nothing was ended: this is done by a person pressing this page's button, and a script " +
     "cannot.",
@@ -1187,8 +1181,7 @@ explanation you pressed on and then answers the gate.`,
     "work stays as it was; if it is stuck again later, pressing again is safe.",
   holdsPlain: "Records which files this work keeps, as your decision",
   holdsRefusedNoApprover:
-    "Nothing was changed: rondo on this machine does not yet know who you are, so nothing " +
-    "here can be decided as you.",
+    "Nothing was changed: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   holdsRefusedPress:
     "Nothing was changed: this is done by a person pressing this page's button, and a script " +
     "cannot.",
@@ -1271,9 +1264,7 @@ explanation you pressed on and then answers the gate.`,
   publishPlain: "Pushes this branch, opens its pull request and closes the run.",
   publishBack: "Back to publishing",
   publishNotOffered:
-    "Nothing can be published from this page. Publishing needs a person this host accepts to " +
-    "publish as, and it was started without one. That is given to rondo when the page is " +
-    "started.",
+    "Nothing can be published until an approver is named. Name them at the top of the page.",
   publishNotClosed: (status) =>
     `This lap is ${status}. Publishing is for work a person has already approved at the gate.`,
   publishNotApproved: (outcome) =>
@@ -1389,8 +1380,7 @@ explanation you pressed on and then answers the gate.`,
     `rondo could not tell how ${repo} is built, so the worker can change and commit its files ` +
     "but cannot run its build or tests.",
   addRepositoryRefusedNoApprover:
-    "Nothing was added: rondo on this machine does not yet know who you are, so nothing here " +
-    "can be decided as you.",
+    "Nothing was added: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   addRepositoryRefusedPress:
     "Nothing was added: this is done by a person pressing this page's button, and a script " +
     "cannot.",
@@ -1524,8 +1514,7 @@ explanation you pressed on and then answers the gate.`,
     "Received. rondo is pushing the branch and opening the pull request; this usually takes " +
     "under a minute. There is no need to press again.",
   publishRefusedNoApprover:
-    "Nothing was published: RONDO_APPROVER is not set, so there is nobody this page could " +
-    "publish as.",
+    "Nothing was published: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   publishRefusedPress:
     "Nothing was published: this is done by a person pressing this page's button, and a script " +
     "cannot.",
@@ -1603,8 +1592,7 @@ explanation you pressed on and then answers the gate.`,
     "seconds. There is no need to press again.",
   mergeBack: "Back to the request",
   mergeRefusedNoApprover:
-    "Nothing was merged: rondo on this machine does not yet know who you are, so nothing here " +
-    "can be decided as you.",
+    "Nothing was merged: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   mergeRefusedPress:
     "Nothing was merged: this is done by a person pressing this page's button, and a script " +
     "cannot.",
@@ -1665,8 +1653,7 @@ explanation you pressed on and then answers the gate.`,
   checksFixAction: "Have rondo reproduce and fix the failing checks",
   checksFixBusy: "Starting the repair...",
   conflictFixRefusedNoApprover:
-    "Nothing was started: rondo on this machine does not yet know who you are, so nothing here " +
-    "can be decided as you.",
+    "Nothing was started: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   conflictFixRefusedPress:
     "Nothing was started: this is done by a person pressing this page's button, and a script " +
     "cannot.",
@@ -1696,8 +1683,7 @@ explanation you pressed on and then answers the gate.`,
   retakeReviewBusy: "Taking the review again...",
   retakeReviewBack: "Back to the confirmation",
   retakeRefusedNoApprover:
-    "The review was not taken again: rondo on this machine does not yet know who you are, so " +
-    "nothing here can be decided as you.",
+    "The review was not taken again: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   retakeRefusedPress:
     "The review was not taken again: this is done by a person pressing this page's button, and a " +
     "script cannot.",

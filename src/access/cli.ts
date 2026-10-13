@@ -111,6 +111,10 @@ import {
   showProposal,
   type UnpromptedPorts,
 } from "./advisory.js";
+import { APPROVER_ENV, approvedActor, withRecordedApprover } from "./approver.js";
+
+export { APPROVER_ENV, approvedActor };
+
 import { pullRequestIn } from "./checks-host.js";
 import { type ParsedCommand, parseCommand } from "./cli-parse.js";
 import {
@@ -471,7 +475,6 @@ const STORE_ENV = "RONDO_STORE";
  */
 const MAX_LIVE_ENV = "RONDO_MAX_LIVE";
 const MAX_OCCUPYING_ENV = "RONDO_MAX_OCCUPYING";
-export const APPROVER_ENV = "RONDO_APPROVER";
 
 /**
  * The language rondo writes its own prose to the operator in (D-0055 rule 5).
@@ -1070,62 +1073,6 @@ export function readPlanDocument(file: string): { document: JsonRecord } | { ref
   return { document: document as JsonRecord };
 }
 
-/**
- * The identity check both answering and publishing pass through.
- *
- * **An allowlist of size one, read from the environment, checked before any
- * verb runs.** It keeps the half of D-0020 rule 2 that a command line can keep
- * -- rondo acts for a named person and refuses to act for an unnamed one -- and
- * it cannot keep the other half: there is no OIDC subject here, so the identity
- * is asserted by whoever is typing. That is a stated reduction scoped to lap 1,
- * and the thing that ends it is the adapter D-0020 already specifies.
- *
- * Exported so it can be tested. The end-to-end walk cannot reach its refusals:
- * by the time an operator gets an actor wrong, the interesting states are gone.
- */
-export function approvedActor(
-  // **The identity and not the whole parse.** The web surface has no
-  // `ParsedCommand` and takes its actor from `RONDO_APPROVER` directly
-  // (D-0041 rule 5); passing the one field this function ever read is what
-  // lets both surfaces reach the same allowlist rather than two copies of it.
-  actorId: string | null,
-  environment: Readonly<Record<string, string | undefined>>,
-): { actorId: string } | { refusal: string } {
-  if (actorId === null) {
-    return { refusal: "This command needs --actor-id ID, naming who is acting." };
-  }
-  const approver = environment[APPROVER_ENV];
-  if (approver === undefined || approver === "") {
-    return {
-      refusal:
-        `${APPROVER_ENV} is not set. It names the one identity allowed to answer a gate or ` +
-        "publish, and rondo will not act for an unnamed person.",
-    };
-  }
-  if (actorId !== approver) {
-    return {
-      refusal:
-        `--actor-id is '${actorId}' and ${APPROVER_ENV} is '${approver}'. They must be ` +
-        "the same identity.",
-    };
-  }
-  // The shape continuo requires of an identifier, checked **here** rather than
-  // left to the verb that first carries it. An identity with whitespace in it
-  // passes the allowlist and is then refused at the argument boundary -- after
-  // `publish` has already pushed and opened a pull request, or after `answer`
-  // has already presented and delivered. Rondo refuses before a process starts
-  // when it can, and this is one of the places it can.
-  if (/\s/.test(actorId) || actorId.startsWith("-")) {
-    return {
-      refusal:
-        `--actor-id is '${actorId}', and continuo's identifiers carry no whitespace and ` +
-        "do not begin with a dash. It would be refused partway through, after the effects before " +
-        "it had already happened.",
-    };
-  }
-  return { actorId: actorId };
-}
-
 /** Open rondo's own store, or say why it cannot be opened. */
 function openStore(
   environment: Readonly<Record<string, string | undefined>>,
@@ -1307,7 +1254,7 @@ export function hostPolicyOf(
  */
 export async function main(
   argv: readonly string[],
-  environment: Readonly<Record<string, string | undefined>>,
+  given: Readonly<Record<string, string | undefined>>,
 ): Promise<number> {
   const parsedOutcome = parseCommand(argv);
   if (parsedOutcome.kind === "refused") {
@@ -1321,11 +1268,13 @@ export async function main(
     return 0;
   }
 
-  const opened = openStore(environment);
+  const opened = openStore(given);
   if ("refusal" in opened) {
     return refuse(opened.refusal);
   }
   const store = opened.store;
+  // The approver the page named where RONDO_APPROVER is unset (rondo#675).
+  const environment = withRecordedApprover(given, opened.path);
 
   // **`abandon` is dispatched before continuo is started, and that ordering is the whole of its
   // usefulness.** It is the way out of a row that is holding the single-flight lock with nothing

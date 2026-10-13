@@ -2623,7 +2623,6 @@ test("a wording set is whole in its own language, and no string is the English o
   // And the tokens the entry names stay ASCII inside the Japanese sentences
   // that frame them (rule 3).
   expect(ja.inboxNote).toContain("rondo inbox");
-  expect(ja.noApproverNote).toContain("RONDO_APPROVER");
   expect(ja.readOneBack).toContain("rondo show --proposal-id ID");
   // The owner removed the Japanese tooltip that named the terminal command (rondo#663).
   expect(ja.approveNote("gate-1", "approve")).toBe("");

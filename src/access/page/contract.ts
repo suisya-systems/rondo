@@ -18,10 +18,25 @@ import type { LapLogReading } from "../../continuo/transcript.js";
 import type { HostPolicy } from "../../refrain/policy.js";
 import type { GateAnswer, IterationRecord, ThreadMessageDraft } from "../../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
+import type { NamingPort } from "../approver.js";
 import type { LapWorkInspection } from "../forge.js";
 import type { InboxReadPorts } from "../inbox.js";
 import type { NamedIssue, WorkRepository } from "../issue-read.js";
-import type { ConflictFixed } from "../web-app.js";
+import type { EndPort, HoldsPort, ReleasePort } from "../line-ports.js";
+import type { TabOutcome } from "../reach.js";
+import type {
+  AddRepositoryPort,
+  AnswerPort,
+  ConflictFixed,
+  MergePort,
+  PolicyPort,
+  PublishPort,
+  ReadInPort,
+  RevisePort,
+  SayPort,
+  ScopePort,
+  TriagePort,
+} from "../web-app.js";
 import type { Chrome } from "../wording.js";
 
 /**
@@ -112,6 +127,8 @@ export interface WebPorts extends InboxReadPorts {
     >;
   readonly policy: HostPolicy;
   readonly actorId: string | null;
+  /** The press token, present only while the page may name the approver (rondo#675). */
+  readonly namingToken?: string;
   /**
    * Whether a *read in my language* press may be drawn (rondo#490): true
    * where the server holds the port that spends on it. Absent is false.
@@ -469,3 +486,62 @@ export type MintIterationId = () => string;
 
 /** A message id minted for one form (`newMessageId` in `src/access/web-app.ts`). */
 export type MintMessageId = (kind: "request" | "reply") => string;
+
+/** The ports the server is handed: the reading half, and the eight writers. */
+export interface ServedPorts extends WebPorts {
+  /**
+   * Null when `RONDO_APPROVER` is unset, which is also when no button is drawn
+   * -- rondo does not act for an unnamed person on a screen either (D-0020
+   * rule 2).
+   */
+  readonly answer: AnswerPort | null;
+  /** Null on the same condition as {@link answer}: no approver, no forms. */
+  readonly say: SayPort | null;
+  /**
+   * Null on the same condition as {@link say}: a scope row and a decision row
+   * both need an actor the allowlist accepts, so no approver is no forms
+   * (rondo#233 S3).
+   */
+  readonly scope: ScopePort | null;
+  /**
+   * Null on {@link scope}'s condition: a revise answers a gate as somebody and
+   * admits a lap under an approval, and both need an actor the allowlist
+   * accepts (rondo#233 S4).
+   */
+  readonly revise: RevisePort | null;
+  /**
+   * Null on {@link revise}'s condition and on one of its own: publishing
+   * closes a run as somebody, and the forge repository is the one fact no plan
+   * carries, so a host that named none draws no publish screen (rondo#233 S5).
+   */
+  readonly publish: PublishPort | null;
+  /**
+   * Null on {@link revise}'s condition: a release is recorded as the person's
+   * judgement, so it needs an actor the allowlist accepts (D-0073 rule 4.3).
+   */
+  readonly release: ReleasePort | null;
+  /** Null on {@link release}'s condition: what a line keeps is changed as the person (D-0163). Absent is null. */
+  readonly holds?: HoldsPort | null;
+  /** Null on {@link release}'s condition: a lap is ended as the person (rondo#655). Absent is null. */
+  readonly end?: EndPort | null;
+  /** Null on {@link release}'s condition: the recorded plan is the approver's, as setup's is. */
+  readonly addRepository?: AddRepositoryPort | null;
+  /**
+   * Null on {@link publish}'s condition: the merge is pressed by a person the
+   * allowlist accepts (rondo#380). Absent is null.
+   */
+  readonly merge?: MergePort | null;
+  /** Null on {@link release}'s condition: a goal and a *not now* are the person's (D-0097). Absent is null. */
+  readonly triage?: TriagePort | null;
+  /**
+   * Where an open tab's report of its notice is written (rondo#414). Null on
+   * {@link say}'s condition. Absent is null.
+   */
+  readonly notice?: ((waits: readonly string[], outcome: TabOutcome) => Promise<void>) | null;
+  /** Null on {@link triage}'s condition: a reading spends as the person (rondo#490). Absent is null. */
+  readonly readIn?: ReadInPort | null;
+  /** Null on {@link triage}'s condition: retiring a policy is the person's (D-0067 rule 6.3). Absent is null. */
+  readonly policies?: PolicyPort | null;
+  /** Present only while nobody is named: the press that names the approver (rondo#675). */
+  readonly naming?: NamingPort | null;
+}

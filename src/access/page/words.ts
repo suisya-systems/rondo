@@ -357,6 +357,13 @@ export interface PageWords extends DayWords {
   /** Where that policy was taken back (rule 6.3). */
   readonly policyForgotten: string;
   readonly policyForgetRefusedNoApprover: string;
+  /** Naming the approver from the page (rondo#675): the box, the press and its refusals. */
+  readonly approverLabel: string;
+  readonly approverAction: string;
+  readonly approverRefusedTaken: string;
+  readonly approverRefusedPress: string;
+  readonly approverRefusedShape: string;
+  readonly approverRefusedUnwritten: string;
   readonly policyForgetRefusedPress: string;
   readonly policyForgetRefused: string;
   readonly goalScopeHeading: string;
@@ -864,14 +871,14 @@ export const PAGE_EN: PageWords = Object.freeze({
   ],
   goalAction: "Keep this goal",
   goalRefusedNoApprover:
-    "Nothing was kept: no approver is set for this rondo, so it writes nothing from the page.",
+    "Nothing was kept: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   goalRefusedPress: "Nothing was kept: this did not come from a press on this page.",
   goalRowIncomplete: "Each clause needs both parts: the clause and when it is unmet.",
   goalRefusedEmpty: "A goal needs at least one clause.",
   goalRefused: "Nothing was kept: rondo's store refused the goal.",
   triageNotNowAction: "Not now",
   triageNotNowRefusedNoApprover:
-    "Nothing was put aside: no approver is set for this rondo, so it writes nothing from the page.",
+    "Nothing was put aside: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   triageNotNowRefusedPress: "Nothing was put aside: this did not come from a press on this page.",
   triageNotNowRefused: "Nothing was put aside: the proposal has moved on since the page was drawn.",
   triageBack: "Back to the front",
@@ -893,7 +900,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   triageMixedScript:
     "These words mix in letters of another language, and reading them again did not fix it. Check them before they are sent.",
   flowAskRefusedNoApprover:
-    "Nothing was answered: no approver is set for this rondo, so it writes nothing from the page.",
+    "Nothing was answered: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   flowAskRefusedPress: "Nothing was answered: this did not come from a press on this page.",
   flowAskRefused: "Nothing was answered: the question has moved on since the page was drawn.",
   roundChangedAsk:
@@ -912,7 +919,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   readInRead: (when, cost) =>
     `Read in English ${when}` + (cost === null ? "." : `; this reading cost $${cost}.`),
   readInRefusedNoApprover:
-    "Nothing was read: no approver is set for this rondo, so it spends nothing from the page.",
+    "Nothing was read: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   readInRefusedPress: "Nothing was read: this did not come from a press on this page.",
   readInRefusedForm:
     "Nothing was read: the words to read were missing, or longer than a press carries.",
@@ -922,7 +929,15 @@ export const PAGE_EN: PageWords = Object.freeze({
   policyForgetBusy: "Taking this back...",
   policyForgotten: "You took this back, so rondo no longer follows it.",
   policyForgetRefusedNoApprover:
-    "Nothing was taken back: no approver is set for this rondo, so nothing is changed from the page.",
+    "Nothing was taken back: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
+  approverLabel: "Approver's name",
+  approverAction: "Name the approver",
+  approverRefusedTaken: "Nothing was changed: an approver is already named.",
+  approverRefusedPress: "Nothing was named: this did not come from a press on this page.",
+  approverRefusedShape:
+    "Nothing was named: a name cannot contain spaces or start with a dash. Try another name.",
+  approverRefusedUnwritten:
+    "Nothing was named: rondo could not save the name on this computer. Try again.",
   policyForgetRefusedPress: "Nothing was taken back: this did not come from a press on this page.",
   policyForgetRefused:
     "Nothing was taken back: rondo no longer keeps this, or it changed after the page was drawn.",
@@ -1519,7 +1534,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   ],
   goalAction: "この目標を保存する",
   goalRefusedNoApprover:
-    "保存していません。この rondo には承認者が設定されていないので、画面からは何も書き込みません。",
+    "保存していません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   goalRefusedPress: "保存していません。この画面のボタンから送られたものではありません。",
   goalRowIncomplete:
     "保存していません。各項目には、項目と「満たしていない条件」の両方を書いてください。",
@@ -1527,7 +1542,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   goalRefused: "目標を保存できませんでした。",
   triageNotNowAction: "今はやらない",
   triageNotNowRefusedNoApprover:
-    "見送っていません。この rondo には承認者が設定されていないので、画面からは何も書き込みません。",
+    "見送っていません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   triageNotNowRefusedPress: "見送っていません。この画面のボタンから送られたものではありません。",
   triageNotNowRefused: "見送っていません。画面を開いたあとで、提案が新しくなっています。",
   triageBack: "最初の画面へ戻る",
@@ -1547,7 +1562,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   triageAnswerAsk: "下の質問に答える",
   triageMixedScript: "この文には別の言語の文字が混じっています。送る前に確認してください。",
   flowAskRefusedNoApprover:
-    "回答は記録されませんでした。RONDO_APPROVER が正しく設定されていないため、このページからは回答できません。",
+    "回答は記録されませんでした。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   flowAskRefusedPress:
     "回答は記録されませんでした。人がこのページのボタンを押したときだけ受け付けます。",
   flowAskRefused:
@@ -1568,7 +1583,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   readInRead: (when, cost) =>
     `日本語にしました（${when}）` + (cost === null ? "。" : `。この訳の費用は $${cost}。`),
   readInRefusedNoApprover:
-    "訳していません。この rondo には承認者が設定されていないので、画面からは費用を使いません。",
+    "訳していません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   readInRefusedPress: "訳していません。この画面のボタンから送られたものではありません。",
   readInRefusedForm: "訳していません。訳す文がないか、ボタンで送れる長さを超えています。",
   readInRefused: "訳していません。訳す途中で失敗しました。原文はそのまま残っています。",
@@ -1577,7 +1592,15 @@ export const PAGE_JA: PageWords = Object.freeze({
   policyForgetBusy: "取り消しています…",
   policyForgotten: "取り消したので、rondo はもうこれを守りません。",
   policyForgetRefusedNoApprover:
-    "取り消していません。この rondo には承認者が設定されていないので、画面からは変えられません。",
+    "取り消していません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
+  approverLabel: "承認する人の名前",
+  approverAction: "承認する人を決める",
+  approverRefusedTaken: "変えていません。承認する人はもう決まっています。",
+  approverRefusedPress: "決めていません。このページのボタンから押されたものではありません。",
+  approverRefusedShape:
+    "決めていません。名前には空白を入れられず、先頭に「-」も使えません。別の名前を入れてください。",
+  approverRefusedUnwritten:
+    "決めていません。このコンピュータに名前を保存できませんでした。もう一度押してください。",
   policyForgetRefusedPress: "取り消していません。この画面のボタンから送られたものではありません。",
   policyForgetRefused:
     "取り消していません。すでに取り消されているか、画面を開いたあとで変わっています。",

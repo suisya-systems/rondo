@@ -86,7 +86,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0038 | Whether the premise under a proposal has moved, decided per basis and at render time: the record and not the field as the unit, re-gathered rather than remembered, and `undetermined` as a value the screen may never round to unchanged | accepted |
 | D-0039 | A lap cannot verify what it wrote, and `--allowedTools` is not the way out: `D-0011`'s first falsifier fires, the fence input rondo asks continuo for, and what `granted` maps to once it exists | accepted |
 | D-0040 | Where a run's authorisation is written down now that continuo owns a table for it: `D-0020` rule 4's falsifier fires in substance, the durable home does not move, and the envelope carries only facts that exist today | accepted |
-| D-0041 | The one write the operator's page may do: an unattended redraw and a person's click are told apart at runtime and never by type, the approver is the only actor, and the write is a single function rather than a store | accepted |
+| D-0041 | The one write the operator's page may do: an unattended redraw and a person's click are told apart at runtime and never by type, the approver is the only actor, and the write is a single function rather than a store | accepted, amended |
 | D-0042 | What counts as a presentation on a page that redraws itself: the press and not the render, recorded before the gate is answered, and the reader who does not press left uncounted | accepted |
 | D-0043 | The trigger a stopped lap pulls: one proposal at the abandon the conductor's own arc reaches, `contract_keys` because it is the only option set that is a choice, and a successor identity rondo mints and nobody has yet adopted | accepted, amended |
 | D-0044 | The second model tier is `mechanical`, it is reached by naming an agent type and never by rondo reading a request, and its model id waits on rondo recording what a lap costs | superseded by D-0062 |
@@ -230,6 +230,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0193 | Triage raises only the open points that are real decisions: each point says whether it is in dispute, irreversible or against a standing policy, rondo decides the rest as it recommends and writes each one where the person can change it, and the goal flow asks only the raised ones | accepted |
 | D-0194 | The conflict fix of a line started with no claim is started by rondo, once, under an approval that starts work by itself; a try that started nothing is the press again, with why | accepted |
 | D-0195 | A lap only a person can end -- stalled, held by a start that threw, or a row that will not decode -- is ended from the page with their reason, gives back what it held and asks whether to carry on; a lap before its gate whose driver is gone is lost | accepted |
+| D-0196 | A host started with nobody named as the approver lets the page name them, once, and builds its write ports for that name without a restart | accepted |
 
 ---
 
@@ -7799,6 +7800,14 @@ rondo `09830d6`, on **2026-09-12**, by running as well as by reading.
 > write port refuses a call without a value minted from the live request (a press for approvals, a
 > send for a thread message), and a test enumerates the running app's routes against that table.
 > **Rule 1 stands**; rule 7 is `D-0064`'s to move. Nothing below is edited.
+
+> **Annotation (2026-10-14, from D-0196).** Added after this entry was accepted, and **not
+> additive**: rule 5's "no button on the page at all" while `RONDO_APPROVER` is unset is narrowed.
+> The page then draws one form that names the approver, and the host builds its write ports for
+> that name without a restart; every other press is still refused until someone is named. Nothing
+> below is edited.
+>
+> - Amends: D-0041 rule 5
 
 > **Annotation (2026-09-12, from D-0054).** Added after this entry was accepted, and additive:
 > nothing below is removed or rewritten. **Rule 3(a) is repealed in half.** Its client-side claim --
@@ -31402,3 +31411,50 @@ so a restart while a lap was `admitting` left it holding the lock for ever.
 ### Annotations this entry adds
 
 - `D-0139`, **not additive**: the statuses a lap is lost at, and the `ended` kind.
+
+## D-0196 — A host started with nobody named as the approver lets the page name them, once, and builds its write ports for that name without a restart
+
+**Status:** accepted (2026-10-14, rondo#675). Amends `D-0041` rule 5. Supersedes nothing.
+Refs `D-0020` rule 2, `D-0055` rule 5, `D-0059` section 5a, `D-0079`, `D-0191` rule 2.2, rondo#663.
+
+### Context
+
+With `RONDO_APPROVER` unset the page drew no button, and thirteen of its sentences said so by
+naming the variable. The only fix was to set it on the host and restart rondo, which a person at
+the page cannot do. Setup already writes it (`scripts/start-command.sh --approver`); a host started
+by hand did not have it.
+
+### Decision
+
+1. **`RONDO_APPROVER` still decides when it is set.** The page names an approver only while it is
+   unset, and never changes one already named.
+2. **The page draws one form while nobody is named**: the note at the top of every view, a box for
+   the name and one press (`POST /approver`), minted like every press (`D-0059` section 5a). Every
+   sentence that said the variable is unset now says nobody is named and points at that form, in
+   both catalogues (`D-0079`).
+3. **The name is one line in `<store>.approver`**, beside the store as setup's plan files are
+   (`D-0191` rule 2.2), written with `wx` so a second naming loses to the first. `main` fills
+   `RONDO_APPROVER` from it where the variable is unset, so the next start and every command line
+   read the same name. The name passes `approvedActor`'s shape check before it is written.
+4. **No restart.** The host keeps a writable copy of its environment; naming writes the variable
+   into it, then builds the page's ports and the hosts that act only in an approver's name (the order
+   tick, the flow, publish and the conflict fix under a scope, the lost lap's start again and the
+   gate's drafted change) for that name. The server reads its ports per request and builds a new
+   app over the same token when they change. Nothing ran in an approver's name before, so nothing
+   runs twice.
+
+### What it costs
+
+- **A wrong name is fixed by hand**: delete `<store>.approver` and restart, or set
+  `RONDO_APPROVER`. The page offers no way to change a name once given.
+- **The identity is still asserted, not authenticated** (`D-0041` rule 5's stated reduction):
+  whoever can reach the page while nobody is named can name anyone.
+- **A file is now a host fact beside the variables** that `D-0055` rule 5 described as the only
+  ones; it is read once, by `main`, and holds one value.
+
+### What would falsify it
+
+- **A host whose page was named, then refused a press as unnamed**: the ports and the copy of the
+  environment disagree.
+- **Work started twice after a naming**: a host built for no approver was running something in
+  an approver's name.
