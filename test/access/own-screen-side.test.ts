@@ -2,7 +2,8 @@
  * The right face beside a screen of its own (rondo#693, after rondo#664):
  * publish, merge, release and end are about one lap, so the side is that
  * lap's request's; sign-in is about none, so the side names no request. In
- * every case another request first under *your turn* stays off the side.
+ * every case another request first under *your turn* stays off the side. A
+ * goal-scope screen is about a repository, so its side names none (rondo#696).
  */
 import { expect, test } from "vitest";
 
@@ -33,6 +34,12 @@ for (const kind of ["publish", "merge", "release", "end"] as const) {
 
 test("the sign-in screen's right side names no request, not the one first under your turn (rondo#693)", async () => {
   const side = await sideOf({ kind: "signIn" });
+  expect(side).not.toContain("lap-elsewhere");
+  expect(side).not.toContain("What remains before this ends");
+});
+
+test("the goal-scope screen's right side names no request, not the one first under your turn (rondo#696)", async () => {
+  const side = await sideOf({ kind: "goalScope", repository: "acme/app" });
   expect(side).not.toContain("lap-elsewhere");
   expect(side).not.toContain("What remains before this ends");
 });
