@@ -4257,9 +4257,10 @@ test("(triage) a person's press answers the flow's open points, each in order (r
     (await send(base, "/flow-answer", "POST", { ...person, "sec-fetch-user": undefined }, form))
       .status,
   ).toBe(403);
-  expect(
-    (await send(base, "/flow-answer", "POST", person, { token: TOKEN, ask: "x" })).status,
-  ).toBe(400);
+  const noAnswers = await send(base, "/flow-answer", "POST", person, { token: TOKEN, ask: "x" });
+  expect(noAnswers.status).toBe(400);
+  // Not "the question has moved on", which is untrue of a form with no answers (rondo#677).
+  expect(noAnswers.body).toContain(EN.flowAskRefusedPress);
   expect(answered).toHaveLength(1);
   stop.abort();
   expect(await closed).toBe(0);

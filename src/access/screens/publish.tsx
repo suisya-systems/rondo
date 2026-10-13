@@ -2,6 +2,7 @@ import { type IterationRecord, isModelReadingDrafter, latestReading } from "../.
 import { markdownHtml } from "../markdown.js";
 import { scopedAuthority } from "../merge.js";
 import type { PublishBlock, ReviewBlock, WebPorts } from "../page/contract.js";
+import { maintainerFold } from "../page/gate-material.js";
 import {
   backHead,
   CARD,
@@ -12,7 +13,7 @@ import {
   publishedReport,
   SECONDARY,
 } from "../page/vocabulary.js";
-import type { PageView } from "../page-logic/routes.js";
+import { type PageView, viewHref } from "../page-logic/routes.js";
 import type { Threads } from "../page-logic/threads.js";
 import type { Chrome } from "../wording.js";
 
@@ -222,6 +223,21 @@ export async function publishView(
           {publishBlockLines(wording, shown.block).map((line) => (
             <p class="text-body leading-5 wrap-anywhere">{line}</p>
           ))}
+          {/* The screen reads the workspace again when it is opened, so this
+              is the check once the workspace is repaired (rondo#677). */}
+          {shown.block.why === "statusUnreadable" ? (
+            <a
+              href={viewHref({ kind: "publish", iterationId: record.id }, wording.lang)}
+              class={`${SECONDARY} mt-2 h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
+            >
+              {wording.publishRecheck}
+            </a>
+          ) : null}
+          {/* git's or the preflight's own words, beside the sentence and shut
+              (D-0076 rule 4.5): the sentence says it in the person's terms. */}
+          {shown.block.why === "target" || shown.block.why === "statusUnreadable"
+            ? maintainerFold("publish-not-yet-reason", wording, shown.block.reason)
+            : null}
         </section>
       </>,
     );
@@ -288,6 +304,23 @@ export async function publishView(
         >
           <h3 class={CARD_HEADING}>{wording.publishReviewHeading}</h3>
           <p class="text-body leading-5 wrap-anywhere">{reviewBlockLine(wording, review)}</p>
+          {review.why === "notClear" && review.findings.length > 0 ? (
+            <ul class="mt-2 space-y-1.5" lang="en">
+              {review.findings.map((finding) => (
+                <li class="flex gap-2 text-body leading-5">
+                  <span aria-hidden="true" class="text-wait">
+                    •
+                  </span>
+                  <span class="min-w-0 wrap-anywhere">{finding}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {review.why === "notClear" && review.unavailableReason !== null
+            ? maintainerFold("publish-review-reason", wording, review.unavailableReason)
+            : review.why === "unreadable"
+              ? maintainerFold("publish-review-reason", wording, review.reason)
+              : null}
         </section>
       )}
       {/* **No approver, no press, and no sentence here either**: nothing was
@@ -380,9 +413,9 @@ function publishBlockLines(wording: Chrome, block: PublishBlock): readonly strin
     case "noRepo":
       return [wording.publishNoRepo];
     case "target":
-      return [wording.publishTargetRefused(block.reason)];
+      return [wording.publishTargetRefused];
     case "statusUnreadable":
-      return [wording.publishStatusUnreadable(block.reason)];
+      return [wording.publishStatusUnreadable];
     default:
       return [
         wording.publishUncommitted(block.paths.join(", ")),
@@ -398,17 +431,11 @@ function reviewBlockLine(wording: Chrome, block: ReviewBlock): string {
     case "noReading":
       return wording.publishReviewNoReading;
     case "notClear":
-      return wording.publishReviewNotClear(
-        block.verdict,
-        [
-          ...block.findings,
-          ...(block.unavailableReason === null ? [] : [block.unavailableReason]),
-        ].join("; "),
-      );
+      return wording.publishReviewNotClear(block.verdict, block.findings.length);
     case "noEvidence":
       return wording.publishReviewNoEvidence;
     case "unreadable":
-      return wording.publishReviewUnreadable(block.reason);
+      return wording.publishReviewUnreadable;
     default:
       return wording.publishReviewMoved(block.readTip, block.nowTip);
   }

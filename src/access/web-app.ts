@@ -2907,7 +2907,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       return triageRefused(c, minting.status, "flowAskRefusedPress", null);
     }
     if (askId === "" || answers.length === 0) {
-      return triageRefused(c, 400, "flowAskRefused", null);
+      return triageRefused(c, 400, "flowAskRefusedPress", null);
     }
     const answered = await triage.answer(minting.press, { askId, answers, request, why });
     if (!answered.ok) {

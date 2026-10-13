@@ -1479,18 +1479,22 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
   readonly publishPlanField: (field: string) => string;
   /** Nowhere to open a pull request: neither the lap nor the host names one. */
   readonly publishNoRepo: string;
-  readonly publishTargetRefused: (reason: string) => string;
+  /** Its reason is git's or the preflight's English, so it goes in the maintainer fold. */
+  readonly publishTargetRefused: string;
   readonly publishUncommitted: (paths: string) => string;
   readonly publishUncommittedElsewhere: (branch: string) => string;
   readonly publishUncommittedRemedies: string;
   /** `git status` failed, so what the push would leave behind is unknown (D-0099). */
-  readonly publishStatusUnreadable: (reason: string) => string;
+  readonly publishStatusUnreadable: string;
+  /** Opens this screen again, which reads the workspace again. */
+  readonly publishRecheck: string;
   /** Why the reading does not cover this work, one sentence each ({@link ReviewBlock}). */
   readonly publishReviewHeading: string;
   readonly publishReviewNoReading: string;
-  readonly publishReviewNotClear: (verdict: string, findings: string) => string;
+  /** `verdict` is the reading's own (`concerns`, `unavailable`); its findings are listed under it. */
+  readonly publishReviewNotClear: (verdict: string, count: number) => string;
   readonly publishReviewNoEvidence: string;
-  readonly publishReviewUnreadable: (reason: string) => string;
+  readonly publishReviewUnreadable: string;
   readonly publishReviewMoved: (readTip: string, nowTip: string) => string;
   /** The second press, which overrules exactly the refusal drawn above it. */
   readonly publishDespiteFold: string;

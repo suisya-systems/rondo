@@ -1286,8 +1286,9 @@ explanation you pressed on and then answers the gate.`,
   publishNoRepo:
     "rondo has no record of which repository this work's pull request goes to. Ask whoever " +
     "maintains rondo on this computer to record it.",
-  publishTargetRefused: (reason) =>
-    `The push has nowhere to go that rondo can vouch for: ${reason}`,
+  publishTargetRefused:
+    "The push has nowhere to go that rondo can vouch for, so this is not published. Ask whoever " +
+    "maintains rondo on this computer to check where it goes.",
   publishUncommitted: (paths) =>
     `The workspace still holds work that is not on the branch: ${paths}. The push would leave ` +
     "it behind, and no button here changes that.",
@@ -1297,23 +1298,27 @@ explanation you pressed on and then answers the gate.`,
     "Answer it about those paths rather than about the publish: run the lap again so it commits " +
     "its own work and is read again, commit them yourself in the workspace, or discard them if " +
     "they are not work.",
-  publishStatusUnreadable: (reason) =>
-    `git could not say what the workspace holds outside the branch (${reason}), so whether the ` +
-    "push would leave work behind is unknown. No button here changes that: repair the workspace " +
-    "so git status answers, then come back.",
+  publishStatusUnreadable:
+    "git could not say what the workspace holds outside the branch, so whether the push would " +
+    "leave work behind is unknown. Repair the workspace so git status answers, then check again.",
+  publishRecheck: "Check again",
   publishReviewHeading: "The reading does not cover this",
   publishReviewNoReading:
     "Nothing read this work independently. Unread and read-and-nothing-raised must not look " +
     "alike, so publishing stops here by default.",
-  publishReviewNotClear: (verdict, findings) =>
-    `The reading of this work is '${verdict}'${findings === "" ? "" : `: ${findings}`}. It ` +
-    "settles nothing and it is not a veto; it is a point you have not answered.",
+  publishReviewNotClear: (verdict, count) =>
+    (verdict === "concerns" && count > 0
+      ? `The reading of this work raised ${count === 1 ? "1 point" : `${String(count)} points`}.`
+      : verdict === "unavailable"
+        ? "The reading of this work could not be taken."
+        : "The reading of this work did not come back clear.") +
+    " It settles nothing and it is not a veto; it is a point you have not answered.",
   publishReviewNoEvidence:
     "The reading says it found nothing, but records no measurement of what it read, so there is " +
     "nothing to check it against.",
-  publishReviewUnreadable: (reason) =>
-    `The workspace cannot be read now (${reason}), so the reading cannot be checked against ` +
-    "what would be pushed.",
+  publishReviewUnreadable:
+    "The workspace cannot be read now, so the reading cannot be checked against what would be " +
+    "pushed.",
   publishReviewMoved: (readTip, nowTip) =>
     `The reading was taken over ${readTip} and this would push ${nowTip}, so it does not ` +
     "describe the work any more.",
