@@ -48,10 +48,18 @@ export function signInView(ports: WebPorts, wording: Chrome, token: string | nul
         </p>
         <p class="text-meta leading-5 text-muted-foreground">{wording.signInWaitingNote}</p>
       </section>
-    ) : state.kind === "signedIn" ? (
-      note(wording.signInDone)
+    ) : // The press stays after either (Codex round 1): a sign-in GitHub later
+    // revoked, or a CLI installed since, is signed in again without a restart.
+    state.kind === "signedIn" ? (
+      <>
+        {note(wording.signInDone)}
+        {press}
+      </>
     ) : state.kind === "noGh" ? (
-      note(wording.signInNoGh)
+      <>
+        {note(wording.signInNoGh)}
+        {press}
+      </>
     ) : state.kind === "failed" ? (
       <>
         {note(wording.signInFailed)}

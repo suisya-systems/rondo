@@ -60,12 +60,14 @@ test("the sign-in screen says where this computer stands and offers the press on
   const done = await screen({ kind: "signedIn" });
   expect(done).toContain(EN.signInDone);
   expect(done).not.toContain("hx-get");
-  expect(done).not.toContain("<form");
+  // Signed in again from here if GitHub later lets the sign-in go.
+  expect(done).toContain('action="/github-sign-in?lang=en"');
 
-  // Installing gh is setup's: said for whoever maintains rondo, with no press.
+  // Installing gh is setup's: said for whoever maintains rondo, and pressed
+  // again once it is installed.
   const noGh = await screen({ kind: "noGh" });
   expect(noGh).toContain(EN.signInNoGh);
-  expect(noGh).not.toContain("<form");
+  expect(noGh).toContain('action="/github-sign-in?lang=en"');
 
   const failed = await screen({ kind: "failed", reason: "error connecting to github.com" });
   expect(failed).toContain(EN.signInFailed);
