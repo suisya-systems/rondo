@@ -310,7 +310,11 @@ test("the scope screen's right side is the scoped request's, not the one first u
   // The list still names the waiting request; the side must not draw its lap.
   expect(html).toContain('href="/?thread=req-lap-elsewhere&amp;lang=en"');
   const side = html.slice(html.indexOf('<aside class="face face-side"'));
-  expect(side.slice(0, side.indexOf("</aside>"))).not.toContain("lap-elsewhere");
+  const own = side.slice(0, side.indexOf("</aside>"));
+  expect(own).not.toContain("lap-elsewhere");
+  // And it is the scoped request's own steps, with nothing run yet.
+  expect(own).toContain("What remains before this ends");
+  expect(own).toContain("Plan and scope");
 });
 
 test("a goal scope in force over the plan's repository checks its outward acts on a person's request, and says why (D-0140)", async () => {
