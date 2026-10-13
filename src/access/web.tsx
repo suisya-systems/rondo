@@ -223,6 +223,7 @@ async function threadModel(
    * **And a lap's own screen names the lap's request** (rondo#693): publish,
    * merge, release and end are about one lap, so the face beside them is its
    * request's. Sign-in is about no request, and its side is left empty.
+   * Nor is a goal scope, which is a repository's approval (rondo#696).
    */
   const ownLapId =
     view.kind === "publish" ||
@@ -253,6 +254,7 @@ async function threadModel(
     noSuchThread ||
     view.kind === "requests" ||
     view.kind === "goal" ||
+    view.kind === "goalScope" ||
     ((view.kind === "scope" || ownLapId !== null || view.kind === "signIn") &&
       namedThread === null) ||
     selection.kind !== "request"
