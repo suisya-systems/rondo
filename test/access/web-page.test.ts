@@ -1180,9 +1180,7 @@ test("a scope stop over a lap at its gate offers raising and carrying on, with t
   expect(expired).not.toContain(EN.scopeStopWiderDoes.replaceAll('"', "&quot;"));
   // rondo#673: both say where the waiting lap is, with a link to its gate.
   for (const html of [await draw("awaiting_human", rounds), expired]) {
-    expect(html).toContain(
-      'href="/?thread=req-a&amp;gate=i-0001&amp;lang=en#answering"',
-    );
+    expect(html).toContain('href="/?thread=req-a&amp;gate=i-0001&amp;lang=en#answering"');
     expect(html).toContain(EN.scopeStopToLap);
   }
 });

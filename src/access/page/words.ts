@@ -397,10 +397,6 @@ export interface PageWords extends DayWords {
   /** A stop whose raise is the gate's own screen: the expiry or the laps (rondo#512). */
   readonly scopeStopWiderAtGate: string;
   readonly scopeStopWiderNoLap: string;
-  /** The stop card's way to the lap waiting at its gate (rondo#673). */
-  readonly scopeStopToLap: string;
-  /** The stop card's way to the new-request box holding the request's words (rondo#673). */
-  readonly scopeStopAskAgain: string;
   readonly scopeStopChange: string;
   readonly scopeStopChangeDoes: string;
   readonly scopeStopStop: string;
@@ -995,16 +991,13 @@ export const PAGE_EN: PageWords = Object.freeze({
   scopeStopWider: "Approve more room",
   scopeStopWiderDoes:
     'Press "Raise the budget and carry on" below: a raised approval is recorded and approved, ' +
-    "and this question closes. Then ask for the change again at the waiting lap. The old " +
-    "approval is retired.",
+    "and this question closes. Then ask again at the waiting lap. The old approval is retired.",
   scopeStopWiderAtGate:
     'At the waiting lap, press "Raise the budget", then press "Carry on". The old approval is ' +
     "retired once the raised one is approved.",
   scopeStopWiderNoLap:
     "No lap has started yet, so there is no budget to raise here. Stop this line and send the " +
     "request again as a new one; its scope is drafted afresh.",
-  scopeStopToLap: "Open the waiting lap",
-  scopeStopAskAgain: "Send this request again",
   scopeStopChange: "Change the work",
   scopeStopChangeDoes:
     'Write below what to change, then press "Carry on". The changed work runs, not the planned one.',
@@ -1659,8 +1652,6 @@ export const PAGE_JA: PageWords = Object.freeze({
     "確認待ちの回で「この承認の予算を引き上げる」を開いて「予算を引き上げる」を押し、そのあと「続ける」を押してください。",
   scopeStopWiderNoLap:
     "まだ 1 回目が始まっていないため、ここで引き上げる予算はありません。この作業を止めて、同じ依頼を新しく出し直してください。範囲は改めて下書きされます。",
-  scopeStopToLap: "確認待ちの回を開く",
-  scopeStopAskAgain: "同じ依頼をもう一度出す",
   scopeStopChange: "作業を変える",
   scopeStopChangeDoes:
     "下に変えてほしいことを書いて「続ける」を押すと、予定していた作業の代わりに、変えた内容で作業が始まります。",

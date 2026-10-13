@@ -895,8 +895,10 @@ export const JA: Chrome = Object.freeze({
   reviseRaises: (rounds) =>
     `承認したレビュー回数（${String(rounds)} 回）を使い切っています。押すと、まずレビュー回数を引き上げてから、変更を依頼できます。ほかの予算は変わりません。`,
   reviseNoScope:
-    "この回は承認した範囲なしで始まったため、ここから変更は依頼できません。今の作業をそのまま承認するか、依頼の範囲を承認して依頼の内容から始め直せます。",
+    "この回は範囲を承認せずに始まったため、ここから変更は依頼できません。今の作業をそのまま承認するか、範囲を承認して依頼を最初からやり直せます。",
   reviseNoScopeAction: "この依頼の範囲を承認する",
+  scopeStopToLap: "確認待ちの回を開く",
+  scopeStopAskAgain: "同じ依頼を出し直す",
   reviseDraftFinding: (severity, text) => `- ${severityJa(severity)}: ${text}`,
   reviseDraftBases: (bases) => `  場所: ${bases}`,
   reviseDraftChange: (words) => `  直すこと: ${words}`,

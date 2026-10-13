@@ -15,6 +15,7 @@ import { type FlowStopFacts, flowStopBody } from "../flow-stop.js";
 import { type IssueComment, parseForgeRead } from "../issue-read.js";
 import { isModelDrafterName, REDRAFT_AUTHOR } from "../model-draft/judgement.js";
 import type { PartView } from "../page-logic/parts.js";
+import { viewHref } from "../page-logic/routes.js";
 import type { Threads } from "../page-logic/threads.js";
 import {
   everyPartEnded,
@@ -22,7 +23,6 @@ import {
   requestReportText,
   scopeExits,
 } from "../request-report.js";
-import { viewHref } from "../page-logic/routes.js";
 import { stopRaises } from "../scope.js";
 import type { Chrome } from "../wording.js";
 import { held } from "./gate-material.js";
