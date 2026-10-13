@@ -514,6 +514,9 @@ test("the approval reads what its predecessor spent, and repeats that the review
   );
   expect(retired).toContain("A later scope has replaced this one");
   expect(retired).not.toContain('id="start-form"');
+  // And where to start instead is a link, not a search through the thread (rondo#676).
+  expect(retired).toContain(`href="/?scope=${requestId}&amp;decision=decision-succ&amp;lang=en"`);
+  expect(retired).toContain(`>${EN.scopeRetiredLink}</a>`);
 });
 
 test("the scope screen speaks Japanese, and every id, digest and 'rondo' token stays ASCII", async () => {

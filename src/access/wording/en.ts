@@ -854,9 +854,8 @@ explanation you pressed on and then answers the gate.`,
     "The scope this one replaces was never approved, so it has spent nothing.",
   scopePredecessorUnreadable: (reason) =>
     `What the replaced scope spent could not be read: ${reason}`,
-  scopeRetired:
-    "A later scope has replaced this one, so nothing starts under this approval any more. The " +
-    "scope that replaced it is the one to start under.",
+  scopeRetired: "A later scope has replaced this one, so nothing starts from it any more.",
+  scopeRetiredLink: "Open the scope that replaced it",
   startAction: "Start the work",
   startPlain: "Starts one lap under this approval",
   startBeside:

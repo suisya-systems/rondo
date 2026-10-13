@@ -311,6 +311,9 @@ function stepRound(wording: Chrome, record: IterationRecord) {
     "data-round-said": wording.roundChangedStep,
     "data-round-use-label": wording.roundUseStep,
     "data-round-held-label": wording.roundHeld,
+    // What was written moves to the new step's form when the person takes it
+    // (rondo#676): copied by `page/rounds.js`, never by hand.
+    "data-round-moves": "",
   };
 }
 
@@ -521,6 +524,7 @@ export function approveView(
               name="verified"
               rows={1}
               data-draft={`claim:${record.id}:${record.gateId}`}
+              data-round-carry="verified"
               placeholder={wording.claimPlaceholder}
               class="max-h-32 min-h-9 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 text-body leading-5 outline-none [field-sizing:content] placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
             />
@@ -801,6 +805,7 @@ function reviseForm(
             rows={4}
             lang=""
             data-draft={draftKey}
+            data-round-carry="body"
             placeholder={wording.revisePlaceholder}
             class="max-h-64 min-h-20 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-body leading-5 outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
           >

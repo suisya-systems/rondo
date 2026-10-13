@@ -1023,6 +1023,8 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
    * Said where the button was, rather than drawn and refused.
    */
   readonly scopeRetired: string;
+  /** The link after {@link scopeRetired} to the approval that replaced it (rondo#676). */
+  readonly scopeRetiredLink: string;
   /** The scoped start, beside the approval it runs under. */
   readonly startAction: string;
   readonly startPlain: string;

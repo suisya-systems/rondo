@@ -145,7 +145,12 @@
     // the same candidate -- one's request is not another's (Codex). The input
     // event is what `page/composer.js` keeps a draft from.
     const fresh = kept.next;
-    const carried = keeps(form, fresh) ? form.querySelectorAll("[data-round-carry]") : [];
+    // A gate's step carries its words on even though the old step cannot be
+    // answered (`data-round-moves`, rondo#676): taking the new one is the only way.
+    const carried =
+      keeps(form, fresh) || form.dataset.roundMoves !== undefined
+        ? form.querySelectorAll("[data-round-carry]")
+        : [];
     for (const field of carried) {
       const to = fresh.querySelector(
         `[data-round-carry="${CSS.escape(field.dataset.roundCarry)}"]`,

@@ -829,9 +829,8 @@ export const JA: Chrome = Object.freeze({
     `費用がまだ分からない回が ${String(unread)} 回あり、その分は取っておく額で見ています。`,
   scopePredecessorNoApproval: "前の範囲は承認されていないため、何も使っていません。",
   scopePredecessorUnreadable: (reason) => `前の範囲が何を使ったかは読めませんでした: ${reason}`,
-  scopeRetired:
-    "あとから承認した範囲に置き換わったため、この範囲からは何も始められません。" +
-    "始めるときは、新しい範囲から始めてください。",
+  scopeRetired: "あとから承認した範囲に置き換わったため、この範囲からは何も始められません。",
+  scopeRetiredLink: "新しい範囲を開く",
   startAction: "作業を始める",
   startPlain: "作業を 1 回始めます。",
   startAgainSafe: "2 回押しても、始まるのは 1 回だけです。" + "",
