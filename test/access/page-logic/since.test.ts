@@ -116,7 +116,7 @@ test("a moved request is said as one sentence, in each language", () => {
   // rondo's name keeps its lower case at the head of the sentence.
   expect(EN.sinceSaid(moved)).toBe("rondo wrote 2 messages, 3 laps moved and 1 ended.");
   expect(JA.sinceSaid(moved)).toBe(
-    "rondo が 2 件書きました。3 周が動き、うち 1 周が終わりました。",
+    "rondo が 2 件書きました。3 回が進み、うち 1 回が終わりました。",
   );
   expect(EN.sinceSaid({ ...moved, rondoWrote: 0, asked: true })).toBe(
     "You asked for it, 3 laps moved and 1 ended.",

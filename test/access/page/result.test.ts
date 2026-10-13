@@ -170,9 +170,9 @@ test("green is said as green, by colour and word, and a skipped check is not sai
 
   const japanese = await ja(world);
   expect(head(japanese)).toContain('class="result-checks result-checks-green"');
-  expect(head(japanese)).toContain("<b>緑</b>");
-  expect(head(japanese)).toContain("6 件通過、1 件スキップ");
-  expect(japanese).toContain("#372 のチェック: 緑（6 件通過、1 件スキップ）");
+  expect(head(japanese)).toContain("<b>通過</b>");
+  expect(head(japanese)).toContain("6 件、スキップ 1 件");
+  expect(japanese).toContain("#372 のチェック: 通過（6 件、スキップ 1 件）");
   const english = await en(world);
   expect(head(english)).toContain("6 passed, 1 skipped");
   expect(english).toContain("The checks on #372: green (6 passed, 1 skipped).");
@@ -185,13 +185,13 @@ test("red names what failed, and a later green is what the state says", async ()
   await checked(world, { kind: "red", failed: ["build", "lint"], cancelled: [], timedOut: [] });
   const red = await ja(world);
   expect(head(red)).toContain('class="result-checks result-checks-red"');
-  expect(head(red)).toContain("<b>赤</b>");
+  expect(head(red)).toContain("<b>失敗</b>");
   expect(head(red)).toContain("失敗: build、lint");
 
   await checked(world, { kind: "green", counted: 2, skipped: 0 }, 8_000);
   const green = await ja(world);
-  expect(head(green)).toContain("<b>緑</b>");
-  expect(head(green)).toContain("2 件すべて通過");
+  expect(head(green)).toContain("<b>通過</b>");
+  expect(head(green)).toContain("全 2 件");
   // A rerun that goes red again is retold under its time, and is what the state says.
   await reportToRequest(
     threadOf(world),
@@ -204,7 +204,7 @@ test("red names what failed, and a later green is what the state says", async ()
     },
     9_000,
   );
-  expect(head(await ja(world))).toContain("<b>赤</b>");
+  expect(head(await ja(world))).toContain("<b>失敗</b>");
 });
 
 test("a cancelled or timed-out check is said as what it came to, and is not green (continuo D-1113)", async () => {
@@ -240,7 +240,7 @@ test("a change asked for whose next try never started is not said to be approved
 test("a lap answered before the record existed says rondo does not know, and claims no approval", async () => {
   const world = await approved(null);
   const japanese = await ja(world);
-  expect(japanese).toContain("承認か変更依頼か、記録がありません");
+  expect(japanese).toContain("確認には回答済みですが、承認か変更依頼かの記録がありません。");
   expect(japanese).not.toContain("承認しました");
   expect(head(japanese)).not.toContain("承認済み");
   const english = await en(world);
@@ -404,7 +404,7 @@ test("a basis is named by what it is, and never by the id it is stored under (D-
     [{ form: "proposal", proposalId: "draft-24c87431" }, "rondo の提案"],
     [{ form: "iteration", iterationId: "lap-590e0e66" }, "この依頼の作業"],
     [{ form: "continuoRun", runId: "rondo-lap-590e0e66" }, "作業の実行記録"],
-    [{ form: "scope", scopeId: "scope-1" }, "取り決めた範囲"],
+    [{ form: "scope", scopeId: "scope-1" }, "承認した範囲"],
   ] as const) {
     const word = basisWord(chromeFor("ja"), basis, threads, null, "ada");
     expect(word.said).toBe(said);
@@ -1042,9 +1042,9 @@ test("a conflict rondo fixes by itself draws no press and says so; one it left i
   const japanese = await page(true, null);
   expect(japanese).not.toContain("/fix-conflict?");
   expect(japanese).toContain("rondo の番です");
-  expect(japanese).toContain("承認の範囲で rondo が自分で main を取り込み、競合を解消しています");
+  expect(japanese).toContain("承認した範囲で、rondo が main を取り込んで競合を解消しています");
   // The band says it is settling, as for a fix already running.
-  expect(head(japanese)).toContain("rondo が main を取り込む新しい回で、競合を解消しています。");
+  expect(head(japanese)).toContain("rondo が新しい回で main を取り込み、競合を解消しています。");
   expect(await page(true, null, "en")).toContain(
     "rondo is bringing main into the branch and settling the conflict by itself",
   );
@@ -1284,7 +1284,7 @@ test("while the fix's attempt runs, no press is drawn and the band says rondo is
   expect(succeeded.kind).toBe("reserved");
   const japanese = await fixing(world);
   expect(japanese).not.toContain("/fix-conflict?");
-  expect(head(japanese)).toContain("rondo が main を取り込む新しい回で、競合を解消しています。");
+  expect(head(japanese)).toContain("rondo が新しい回で main を取り込み、競合を解消しています。");
   expect(head(japanese)).not.toContain("push してください");
 });
 

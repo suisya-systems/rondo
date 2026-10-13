@@ -15,17 +15,17 @@ import type { AgentTypeSource, Chrome } from "../wording.js";
 function agentTypeSourceJa(from: AgentTypeSource): string {
   switch (from) {
     case "iteration":
-      return "周回のプラン";
+      return "前の回の計画";
     case "scope":
-      return "範囲に記録されたプラン";
+      return "承認した範囲の記録";
     default:
-      return "この範囲が記録するプラン";
+      return "いま承認する計画";
   }
 }
 
 /** A finding's severity as the {@link JA} set names it, wherever it names one. */
 function severityJa(severity: string): string {
-  return { blocker: "阻害", major: "重大", minor: "軽微", nit: "細部" }[severity] ?? severity;
+  return { blocker: "致命的", major: "重大", minor: "軽微", nit: "細かい点" }[severity] ?? severity;
 }
 
 /** One reason a gate goes to the person, as the {@link JA} set says it (D-0125). */
@@ -36,17 +36,17 @@ function gateAutoReasonJa(reason: GateAutoReason): string {
     case "scope_declined":
       return "範囲が承認されていません";
     case "scope_superseded":
-      return "範囲が新しい範囲に置き換えられています";
+      return "新しい範囲が設定されました";
     case "scope_expired":
       return "範囲の期限が切れています";
     case "checks_not_clear":
       return "チェックが通っていません";
     case "model_pending":
-      return "モデルレビューがまだ読んでいません";
+      return "レビューがまだ届いていません";
     case "model_unavailable":
-      return "モデルレビューを取れませんでした";
+      return "レビューを受け取れませんでした";
     case "model_ungraded":
-      return "モデルレビューの重大度が読み取れません";
+      return "レビューの重大度が読み取れません";
     case "model_raised":
       return `${reason.counts
         .map(({ severity, count }) => `${severityJa(severity)} ${String(count)} 件`)
@@ -58,25 +58,25 @@ function gateAutoReasonJa(reason: GateAutoReason): string {
     case "tests_errored":
       return "テストのコマンドがエラーで終わっています";
     case "repair_not_reproduced":
-      return "修正の回が、失敗の再現とそのあとの通った実行を示していません";
+      return "失敗したテストを直す回ですが、テストが失敗してから通るようになった記録がありません";
     case "tests_all_skipped":
-      return "最後の実行ではテストがすべてスキップされ、何も確かめていません";
+      return "最後の実行ではテストがすべてスキップされ、何も確認できていません";
     case "question_open":
-      return "質問が開いています";
+      return "回答が必要な質問があります";
     case "closing_lap":
-      return "締めの周回です";
+      return "残った軽微な指摘を直す";
   }
 }
 
 function gateAutoJa(auto: GateAuto): string {
   return auto.kind === "would_not_approve"
-    ? `自動では承認しません: ${auto.reasons.map(gateAutoReasonJa).join("、")}。`
-    : "rondo ならこれを自動で承認します。";
+    ? `自動では承認しない理由: ${auto.reasons.map(gateAutoReasonJa).join("。")}。`
+    : "自動承認の条件をすべて満たしています。";
 }
 
 /** The lap a change starts, by its number in the line where it was read. */
 function lapJa(next: number | null): string {
-  return next === null ? "次の周回" : `${String(next)} 周目`;
+  return next === null ? "次の回" : `${String(next)} 回目`;
 }
 
 function scopeTestJa(test: string): string {
@@ -84,27 +84,27 @@ function scopeTestJa(test: string): string {
     case "decision":
       return "範囲がまだ承認されていません";
     case "superseded":
-      return "この範囲は新しい範囲に置き換えられています";
+      return "この範囲は新しい範囲に置き換わっています";
     case "request":
-      return "この範囲はこの依頼を含んでいません";
+      return "この依頼は、この範囲に含まれていません";
     case "workspace":
-      return "この作業が動く場所を、この範囲は含んでいません";
+      return "作業場所が、承認した範囲に入っていません";
     case "agent_type":
-      return "この作業のエージェント種別を、この範囲は許していません";
+      return "この作業に使うワーカーの種類が、承認した範囲に入っていません";
     case "contract":
-      return "この作業は、そのエージェント種別に許されている以上のことを必要としています";
+      return "この作業には、このワーカーの種類に許されている以上の権限が必要です";
     case "irreversible":
-      return "この作業は、範囲が取り返しのつかない行為として止めているものを行います";
+      return "承認した範囲が、この作業の開始を取り返しのつかない行為として禁じています";
     case "expiry":
       return "範囲の期限が切れています";
     case "laps":
-      return "範囲の周回数を使い切っています";
+      return "承認した回数を使い切っています";
     case "cost":
-      return "費用がまだ読めていない周回の引当も含めると、範囲の費用の予算にもう 1 周回分の余裕がありません";
+      return "もう 1 回分の費用が、承認した予算に収まりません";
     case "asks":
-      return "依頼のスレッドにある問いが、この作業を止めています。どの問いかはスレッドにあります";
+      return "依頼のスレッドに、まだ回答していない質問があります";
     case "grants":
-      return "この作業は、続く元の周回より多くを許されることになります";
+      return "次の回では、ワーカーに許すことが前の回より増えます";
     case "readings":
       return "範囲のレビュー回数を使い切っています";
     default:
@@ -119,7 +119,7 @@ function filesJa(paths: readonly string[]): string {
 /** The same count, as the {@link JA} set says it. */
 function raisedJa(blockers: number, majors: number): string {
   return [
-    blockers === 0 ? "" : `阻害 ${String(blockers)} 件`,
+    blockers === 0 ? "" : `致命的 ${String(blockers)} 件`,
     majors === 0 ? "" : `重大 ${String(majors)} 件`,
   ]
     .filter((part) => part !== "")
@@ -128,9 +128,9 @@ function raisedJa(blockers: number, majors: number): string {
 
 /** The three measurements a basis names, in the Japanese set's words. */
 const JA_MEASURE: Record<string, string> = {
-  first_lap_cost: "初回周回の費用",
-  redo_cost: "やり直した周回の費用",
-  lap_duration: "周回の所要時間",
+  first_lap_cost: "1 回目の費用",
+  redo_cost: "やり直しの回の費用",
+  lap_duration: "1 回の所要時間",
 };
 
 /**
@@ -156,22 +156,17 @@ export const JA: Chrome = Object.freeze({
   ...REPORT_JA,
   lang: "ja",
 
-  liveNote: (seconds) =>
-    `${String(seconds)}秒ごとに描き直しますが、描き直しは何も書き込みません。最後に見た印は動かず、
-提示も数えられません。書き込むのは approve ボタンだけで、押した時点の説明を記録してからゲートに
-答えます。`,
-  stillNote: `押したときに記録されるのは、いま読んでいる内容そのものです。だから読んでいるあいだ、
-画面がひとりでに書き換わることはありません。読むこと自体は何も書き込みません -- 最後に見た印は動かず、提示も
-数えられません。書き込むのは approve ボタンだけで、押した時点の説明を記録してからゲートに答えます。`,
+  liveNote: () => "",
+  stillNote: "",
   noApproverNote:
-    "RONDO_APPROVER が設定されていないので、このページが誰として答えることもできず、" +
-    "その人の inbox も描けません。",
+    "RONDO_APPROVER が正しく設定されていないため、このページからは操作できず、" +
+    "あなたが対応する一覧も表示できません。",
 
   // rondo#439: the status in the person's words, one line and no ` -- `.
   endedHead: (status, since, why) =>
     `${since}前に${({ closed: "終了", failed: "失敗", abandoned: "放棄" } as Record<string, string | undefined>)[status] ?? status}・${why}`,
   gateAnswered: (outcome) =>
-    outcome === APPROVED_OUTCOME ? "ゲートで承認された" : `ゲートに '${outcome}' と答えた`,
+    outcome === APPROVED_OUTCOME ? "確認で承認された" : `確認に「${outcome}」と回答した`,
   statePill: (status, gateOutcome) =>
     (
       ({
@@ -187,7 +182,7 @@ export const JA: Chrome = Object.freeze({
           gateOutcome === "approve" || gateOutcome === APPROVED_OUTCOME
             ? "承認済み"
             : gateOutcome === "revise"
-              ? "差し戻し"
+              ? "変更依頼"
               : gateOutcome === null
                 ? "完了"
                 : `完了: ${gateOutcome}`,
@@ -197,76 +192,73 @@ export const JA: Chrome = Object.freeze({
     )[status] ?? status,
   noReasonRecorded: "理由は記録されていない",
   aboutIteration: (iterationId) =>
-    iterationId === null ? "どの iteration についてでもない" : `'${iterationId}' について`,
+    iterationId === null ? "対象の回なし" : `'${iterationId}' について`,
   willNotDecode: (reason) => `読み取れません: ${reason}`,
 
   spent: (cost, turns, took) => `${cost}、${turns}、${took}`,
-  fenceUnknown: "fence: continuo は何を拒否したか答えられませんでした",
-  fenceRefusedNothing: "fence は何も拒否しませんでした",
-  fenceRefused: (denials) => `fence が拒否したもの: ${denials}`,
+  fenceUnknown: "",
+  fenceRefusedNothing: "",
+  fenceRefused: () => "",
 
-  pressNote: "「承認する」を押すと「提示された」として記録される内容と、その対象:",
-  approveNote: (gateId, word) =>
-    `ゲート ${gateId} に '${word}' と答えます。rondo answer と同じ動作です`,
+  pressNote: "「承認する」を押すと、承認と一緒に次の内容が記録されます。",
+  approveNote: () => "",
 
   asksWaiting: (count) => `あなたへの質問 ${String(count)}`,
   askWaitingPill: "あなたの回答待ち",
-  askStoppedPill: "あなたが止めた線",
-  answerStoppedPill: "この線を止めた",
+  askStoppedPill: "あなたが止めた作業",
+  answerStoppedPill: "この作業を止めた",
   answerCarriedOnPill: "続けた",
   answerChosePill: (option) => `${String(option)} を選んだ`,
   askedChangePill: "変更を頼んだ",
   reviseWaitsOnQuestion:
-    "作業者の質問に答えるまで、変更の依頼は送れません。答えると送れるようになります。" +
-    "ここに書いたものは、質問に答えて戻ってきても消えません。",
+    "ワーカーの質問に回答するまで、変更を依頼できません。" + "回答内容は記録されます。",
   reviseWaitsLink: "質問へ",
   reviseWaitsOnStopped:
-    "作業者の質問に「この線を止める」と答えたため、変更の依頼は送れません。依頼するには、" +
-    "質問に「続ける」で答え直してください。ここに書いたものは、戻ってきても消えません。",
+    "ワーカーの質問に「この作業を止める」と回答済みです。新たに依頼する場合、" +
+    "質問に「続ける」と答え直してください。回答内容は記録されます。",
   reviseRefusedAsks:
-    "変更の依頼は送られていません。作業者の質問がまだこの線を止めています（答えていないか、" +
-    "止めると答えたため）。ゲートも枠もそのままです。質問に「続ける」で答えてから、もう一度" +
-    "押してください。書いた内容は欄に残っています。",
+    "変更は送られていません。ワーカーの質問にまだ回答していないか、「この作業を止める」と回答したままです。質問に「続ける」と回答してから、もう一度押してください。回答内容は記録されます。",
   you: "あなた",
   drafterNoDraft:
-    "rondo はこの依頼の下書きを作れなかったので、まだ何も提案されていません。範囲はご自身で" +
-    "決められます。",
+    "rondo はこの依頼の範囲を下書きできませんでした。範囲は上の「範囲を決める」から、" +
+    "自分で決めてください。",
   drafterNoDraftWhy: "止まった理由",
-  drafterRedrafted: "rondo の最初の下書きは通らなかったので、もう一度下書きしました。",
+  drafterRedrafted: "最初の下書きが rondo のチェックを通らなかったため、もう一度下書きしました。",
   issueRead: (pullRequest, comments) =>
     `rondo がこの${pullRequest ? "プルリクエストの会話" : "イシュー"}` +
     `${comments === 0 ? "" : `とコメント ${String(comments)} 件`}を読みました。` +
-    "作業者には書かれたとおりの全文が渡されます。",
+    "ワーカーには書かれたとおりの全文が渡されます。",
   issueReadFold: "読んだ内容",
   issueNotRead: (why) =>
     ({
-      no_gh: "この環境の rondo はまだイシューを読めません",
-      signed_out: "この環境の rondo はまだイシューを読めません",
-      no_repo: "この環境の rondo は、この番号がどのリポジトリのものかを知りません",
+      no_gh: "このコンピュータの rondo はまだイシューを読めません",
+      signed_out: "このコンピュータの rondo はまだイシューを読めません",
+      no_repo: "この番号がどのリポジトリのイシューか、rondo には分かりません",
       missing: "このイシューが見つからないか、あなたのアカウントからは見えません",
-      refused: "このイシューへのアクセスが、あなたのアカウントでは拒否されました",
-      too_long: "イシューが長すぎて丸ごとは渡せず、一部だけを渡すこともしていません",
-      too_many: "rondo が 1 つのメッセージから読むイシューは 5 件までで、これはその先でした",
+      refused: "あなたのアカウントでは、このイシューを読めません",
+      too_long: "このイシューは長すぎて、ワーカーに渡せません",
+      too_many:
+        "1 つのメッセージから rondo が読むイシューは 5 件までで、このイシューはそれを超えていました",
       failed: "rondo はこのイシューを読めませんでした",
-    })[why] + "。そのため作業者には、ここにあなたが書いたことだけが渡されます。",
+    })[why] + "。そのためワーカーには、ここにあなたが書いたことだけが渡されます。",
   issueNotReadTail:
-    "費用はかかっていません。イシューに依頼にないことが書かれていれば、別のメッセージで伝えて" +
-    "ください。",
-  issuePending: "rondo はまだこれを読んでいません。rondo がここで動いている間に読みます。",
+    "費用はかかっていません。イシューにしか書いていないことがあれば、別のメッセージで" +
+    "書き足してください。",
+  issuePending: "rondo はこのイシューをまだ読んでいません。まもなく読みます。",
   scopeIssuesHeading: "この依頼が名指ししたイシュー",
-  scopeIssueGiven: "作業者に渡す",
-  scopeIssueNotGiven: "渡さない: 読めなかった",
+  scopeIssueGiven: "ワーカーに渡す",
+  scopeIssueNotGiven: "読めなかったため渡しません",
   scopeIssuePending: "まだ読んでいない",
-  scopeDoneHeading: "完了の定義 (rondo がどの作業にも付けます)",
+  scopeDoneHeading: "完了の条件 (どの回のワーカーにも伝えます)",
   scopeDoneAsks: [
-    "作業はこの作業のブランチにコミットする。",
+    "作業はこの回のブランチにコミットする。",
     "報告の前に、リポジトリが定める手順でインストールと検証を回す。",
     "検証が回せない・通らないときは報告でそう言い、通ったとは言わない。",
   ],
   scopeDoneRules: (files) => `手順はリポジトリの ${files.join("、")} に従うよう伝えます。`,
   scopeDoneNoRules:
-    "このプランはリポジトリの規則ファイルを名指していないので、手順は作業者がリポジトリの文書から探します。",
-  scopeDoneExact: "作業者に送る文面 (英語)",
+    "計画で手順のファイルを指定していないため、ワーカーがリポジトリの文書から手順を探します。",
+  scopeDoneExact: "ワーカーに送る文面 (英語)",
   inReplyTo: (who, words) => `${who} への返信: ${words}`,
   basesLabel: "根拠",
   replyAction: "返信する",
@@ -274,27 +266,27 @@ export const JA: Chrome = Object.freeze({
   answeringTo: (who, since) => `${who} の質問に回答 · ${since}前`,
   answerAskAction: "回答する",
   answerCarryOnAction: "続ける",
-  answerStopAction: "この線を止める",
+  answerStopAction: "この作業を止める",
   answerOutcomeNote:
-    "書いたとおりに送られます。「続ける」は仕事をもう一度試させ、「この線を止める」は止めたままにします。" +
+    "書いたとおりに送られます。「続ける」を押すともう一度試し、「この作業を止める」を押すと止まったままになります。" +
     "あとから「続ける」こともできます。",
-  answerInMyWordsAction: "自分の言葉で答える",
+  answerInMyWordsAction: "自分の言葉で回答する",
   answerRecommended: "おすすめ",
   answerOptionsNote:
-    "選択肢はそれぞれ押すだけで回答になり、書いた文も一緒に送られます。" +
-    "「この線を止める」は止めたままにし、あとから答えることもできます。",
+    "選択肢を押すだけで回答になり、書いた文も一緒に送られます。" +
+    "「この作業を止める」を押すと止まったままになり、あとから回答し直せます。",
   answerRaiseAction: "予算を増やして続ける",
-  answerReviseNote: "「続ける」を押すと、この回答を持たせて次の試行をすぐに始めます。",
+  answerReviseNote: "「続ける」を押すと、この回答を渡して次の回をすぐに始めます。",
   answerReviseOptionsNote:
-    "選択肢のどれか、または「自分の言葉で答える」を押すと、この回答を持たせて次の試行をすぐに始めます。",
-  answerReviseDraftLead: "次の試行には、次の変更依頼も一緒に渡します:",
-  answerReviseCallsSend: "判断が要る次の点も一緒に送る（回答と食い違う点は回答に従います）:",
+    "選択肢のどれか、または「自分の言葉で回答する」を押すと、この回答を渡して次の回をすぐに始めます。",
+  answerReviseDraftLead: "次の回には、下の変更依頼も一緒に渡します。",
+  answerReviseCallsSend: "判断が必要な次の点も一緒に送る（回答と食い違う点は回答を優先します）",
   answerRaiseLabel: "これからの予算（USD）",
-  answerRaiseRoundsLabel: "この線のレビュー回数",
+  answerRaiseRoundsLabel: "この作業のレビュー回数",
   answerRaiseLeft: (left, reserve, enough) =>
-    `この承認に残っているのは $${left} で、次の 1 回が取り置く $${reserve} に` +
+    `この承認の残りは $${left} で、次の 1 回に見込む $${reserve} に` +
     `${enough ? "足ります" : "足りません"}。増やすと、予算だけを変えた新しい承認が記録されます。` +
-    "これまでに使った額は元の承認に残ります。",
+    "",
   answerRaisePaused:
     "この目標に向けた作業は一時停止中のため、ここで予算を増やしてもまた止まります。先に再開してください。",
   newRequestHeading: "新しい依頼",
@@ -304,7 +296,7 @@ export const JA: Chrome = Object.freeze({
   sendNote: "書いたとおりに送られます。直すときは、もう一度返信します。",
   keySend: "送信",
   composerNoApprover:
-    "RONDO_APPROVER が設定されていないため、このページが誰として送るのかが決まりません。スレッドは読めますが、書き込めません。",
+    "RONDO_APPROVER が正しく設定されていないため、このページが誰として送るのかが決まりません。スレッドは読めますが、書き込めません。",
   evOfTry: (at, said) => `${String(at)} 回目: ${said}`,
   walkAt: (at, of) => `あなたの番 ${String(at)} ／ ${String(of)}`,
   walkNext: "次へ",
@@ -317,36 +309,35 @@ export const JA: Chrome = Object.freeze({
   threadsUnreadable: (reason) => `依頼スレッドを読めませんでした: ${reason}`,
   notSent: (line) => `送信されませんでした。書いた文は残しています: ${line}`,
   sendRefusedNoApprover:
-    "RONDO_APPROVER が設定されていないため、このページが誰として送るのかが決まりません。",
+    "RONDO_APPROVER が正しく設定されていないため、このページが誰として送るのかが決まりません。",
   sendRefusedForm:
     "このページ自身のフォームから届いていないか、ページが今の rondo より古いものです。ページを読み込み直してから、もう一度送信してください。",
   sendRefusedNoWords: "送る文がありません。",
-  sendRefusedNotTaken:
-    "会話がこのメッセージを記録しませんでした。返信先のメッセージがスレッドに無いのかもしれません。スレッドを読み込み直してから、もう一度試してください。",
+  sendRefusedNotTaken: "このメッセージは記録されませんでした。もう一度送ってください。",
   sendRefusedAsk:
-    "返信先は、まだあなたの回答を待っている質問です。スレッドを開いて「回答する」を押してください。",
+    "送信されていません。返信先は回答待ちの質問です。スレッドに戻って「回答する」を押してください。",
   sendRefusedTooLong:
     "このページが受け付けるより長いメッセージです。短くするか、2 つの返信に分けてください。",
   sendRefusedUnknown:
     "rondo はこのメッセージを受け取りませんでした。ページを読み込み直してから、もう一度送信してください。",
   answerRefusedPress:
-    "回答は、このページのボタンを押したときだけ受け付けます。スレッドを読み込み直して、もう一度ボタンを押してください。",
+    "回答は記録されませんでした。スレッドに戻って、もう一度ボタンを押してください。",
   answerRefusedRaise:
     "予算は増えておらず、質問にもまだ答えていません。承認がすでに増やされたか、置き換えられた" +
     "可能性があります。スレッドを読み込み直して、もう一度答えてください。",
   answerRefusedNoWords:
-    "「自分の言葉で答える」には文が要ります。書くか、選択肢のどれかを押してください。",
+    "「自分の言葉で回答する」には文が要ります。書くか、選択肢のどれかを押してください。",
   replyNotAnswer: "返信しただけでは、このスレッドで待っている質問に答えたことになりません。",
   sendBack: "スレッドに戻る",
   sendBackNote: "ブラウザの「戻る」で、書いた文に戻れます。",
   threadsLiveNote: (seconds) =>
-    `${String(seconds)}秒ごとに描き直しますが、描き直しは何も書き込みません。ここで書き込むのは送信だけで、` +
-    "書いた文をそのまま RONDO_APPROVER の名前でスレッドに記録します。メッセージは何も承認しません。",
+    `${String(seconds)}秒ごとに画面を更新します。記録されるのは送信した文だけで、` +
+    "あなたの名前でスレッドに残ります。メッセージを送っても、何かを承認したことにはなりません。",
   approvePlain: "この作業をこのまま受け入れます。",
   approveFace: "承認する",
   approveDespite: "指摘を残したまま承認する",
   approveDespitePlain: "モデルレビューが挙げた点に答えないまま、この作業をこのまま受け入れます。",
-  undeterminedFold: (count) => `rondo が決められなかった項目 ${String(count)} 件`,
+  undeterminedFold: (count) => `rondo が判定できなかった項目 ${String(count)} 件`,
   liveShort: (seconds) => `ライブ · ${String(seconds)}秒ごとに更新`,
   stillShort: "読んでいるあいだは更新しません",
   age: (ago) => {
@@ -362,34 +353,30 @@ export const JA: Chrome = Object.freeze({
   blockedUnknown: "止めたコマンドは不明",
   fenceHeading: "実行の制限:",
   fenceMeaning:
-    "これらのコマンドは、この周回に許されている範囲の外だったため、実行される前に止められました。何も変えていません。" +
-    "作業者はそれらなしで作業を続けました。どれかが作業の前提になる手順 (チェック、インストール、push など) だった場合、" +
-    "結果にその手順が欠けている可能性がありますが、必要だったかどうかは rondo には判断できません。",
-  reportHeading: "作業者の報告",
-  reportFold: "作業者が書いたとおりの全文",
-  reportNotRead: "作業者の報告は読み取れませんでした。読めていれば下のテキストにあります。",
+    "これらのコマンドは、この作業では許可されていないため、実行前に止められました。" +
+    "止められたものの中に必要な手順（チェック、インストール、push など）があれば、" +
+    "結果にその手順が欠けているかもしれません。",
+  reportHeading: "ワーカーの報告",
+  reportFold: "ワーカーが書いたとおりの全文",
+  reportNotRead:
+    "ワーカーの報告を読み取れませんでした。報告があれば、下の「記録全文」の中にあります。",
   workHeading: "変わったもの",
   changedAgainst: (baseRef) => `${baseRef} との比較`,
   changedUnreadable:
-    "作業場所を読み取れなかったため、この作業で何が変わったかをここには出せません。" +
-    "作業場所がまだ残っているかどうかは、このマシンで rondo を管理する人に確かめてもらえます。",
+    "作業場所が読み取れなかったため、この作業で何が変わったかをここには出せません。",
   changedNoRange: "比べる相手のブランチが記録されていないので、変更を一覧にできません。",
   noCommits: "ブランチにコミットはありません。",
   noFiles: "変わったファイルはありません。",
   binaryFile: "バイナリ",
   moreRows: (count) => `ほか ${String(count)} 件`,
-  reachHeading: "押さえているファイルの外に出たもの",
+  reachHeading: "予定外のファイルへの変更",
   reachCollided: (paths) =>
-    `この作業は ${filesJa(paths)} を変更しましたが、これは別の作業が押さえているファイルです。` +
-    "同じファイルを二つの作業が書き換えているので、取り込むときにぶつかります。" +
-    "承認する前に、もう一方の作業を見てください。",
+    `${filesJa(paths)} は別の作業も変更しています。マージのときにぶつかります。` +
+    "承認する前に、その作業を確かめてください。",
   reachUnheld: (paths) =>
-    `この作業は ${filesJa(paths)} を変更しましたが、これは自分で押さえると言ったファイルの外です。` +
-    "ほかに押さえている作業はないので、止まるものはありません。押さえる範囲は広げていません。" +
-    "広げるかどうかを決めるのはあなたです。",
+    `${filesJa(paths)} は予定外のファイルです。ほかの作業とはぶつかりません。`,
   reachUnread:
-    "この作業が変更したものと、押さえているファイルとを突き合わせられませんでした。" +
-    "ここに別の作業のファイルが混じっているかどうかは、rondo には言えません。",
+    "予定外のファイルを変更したかどうかを確かめられませんでした。ほかの作業とぶつかるかどうかは分かりません。",
   checksHeading: "チェック",
   modelHeading: "モデルレビュー",
   verdictPill: (verdict, count) =>
@@ -400,153 +387,134 @@ export const JA: Chrome = Object.freeze({
         : verdict === "unavailable"
           ? "取れず"
           : verdict,
-  checksNone:
-    "作業をチェックした記録がありません。公開するときに、それで進めてよいかを確認します。",
+  checksNone: "まだチェックが実施されていません。",
   checksCounted: (commits, files) =>
     `コミット ${String(commits)} 件とファイル ${String(files)} 件を読みました。`,
   whatItRead: "読んだものと読んでいないもの",
   checksReader: "rondo のチェック",
-  workerRan: "作業者が実行したもの",
+  workerRan: "ワーカーが実行したもの",
   workerRanUnrecorded:
-    "この周回で作業者が何を実行したかは記録に残っていません。テストが走ったかどうかは rondo には言えません。",
+    "この回でワーカーが何を実行したかは記録に残っていないため、テストが走ったかどうかは分かりません。",
   workerRanNone: (commands) =>
-    `この周回に記録されたコマンド ${String(commands)} 件の中に、rondo が読み取れるテスト実行はありませんでした。` +
-    "テストが走らなかった、という意味ではありません。",
+    `この回に記録されたコマンド ${String(commands)} 件の中に、rondo が読み取れるテスト実行はありませんでした。`,
   workerCount: (kind, count) =>
     `${{ passed: "成功", failed: "失敗", skipped: "スキップ" }[kind]} ${String(count)}`,
   workerRanErrored: "コマンド自体はエラーで終わっています。",
   workerRanEarlier: (runs) => `これより前にも ${String(runs)} 回実行しています`,
-  workerRanSuperseded: (line) =>
-    `作業者はこの後にテスト全体をもう一度実行し (作業記録 ${String(line)} 行目)、それはエラーなく終わっています。` +
-    "そのため、この失敗はこの周回の結果ではありません。テストが失敗することを確かめるために、作業者がわざとコードを壊してから戻した確認かもしれません。",
-  workerRanSource: (line) =>
-    `continuo がこの周回について記録したコマンド (作業記録 ${String(line)} 行目) を rondo が読み取ったものです。` +
-    "rondo が実行したのではありません。",
+  workerRanSuperseded: () =>
+    `ワーカーはこの後にテスト全体をもう一度実行し、エラーなく終わっています。`,
+  workerRanSource: () => "",
   readingCovered: (reach) => {
-    const built =
-      "ビルドもテストも、何かの実行もしていません。rondo は周回の作業を動かせないためです。" +
-      "この周回に求められた検証が実際に行われたかどうかは、確かめてもいなければ、行われたとも言っていません。";
     switch (reach) {
       case "model":
-        return (
-          "読んだのは、コミット済みの差分、コミットメッセージ、周回への指示、作業記録に残ったコマンドと" +
-          "その出力、それに渡されたリポジトリの決まりごとです。自分では何も実行していません。" +
-          "材料は渡しましたが、それが理解されたかどうかは確かめようがありません。"
-        );
+        return "レビュワーは、この回でコミットされた変更と、ワーカーが実行したコマンドの結果を読んでいます。";
       case "history":
         return (
-          `${built}読んだのはコミット済みの履歴だけで、周回が頼まれたとおりのことをしたかどうかは` +
+          `読んだのはコミット済みの履歴だけで、この回で頼まれたとおりのことをしたかどうかは` +
           "判断できません。"
         );
       case "historyAndStatus":
         return (
-          `${built}読んだのはコミット済みの履歴と、作業場所に残るコミットされていない変更で、` +
-          "周回が頼まれたとおりのことをしたかどうかは判断できません。"
+          `読んだのはコミット済みの履歴と、作業場所に残るコミットされていない変更で、` +
+          "この回で頼まれたとおりのことをしたかどうかまでは判断できません。"
         );
       default:
-        return "この読み手が何を見たかは記録されていないため、どこまで確かめたかはここでは言えません。";
+        return "このレビュワーが何を見たかは記録に残っていないため、どこまで確かめたかは分かりません。";
     }
   },
   basisNone: "根拠の指定なし",
   basisUnresolved: "どれも渡した作業と一致しませんでした",
-  modelPending: "まだ届いていません。これから届くかもしれません。",
+  modelPending: "まだ届いていません。あとから届くことがあります。",
   modelOlder:
-    "以前のコミットを読んだ結果です。いまのコミットを読んだ結果は、これから届くかもしれません。",
+    "これは前のコミットに対するレビューです。いまのコミットへのレビューは、あとから届くことがあります。",
   reloadPage: "読み込み直す",
-  readingsNote: "どちらの読み取りも判断材料です。どちらも何も承認しません。答えるのはあなたです。",
+  readingsNote: "最終的に承認するかどうかを決めるのはあなたです。",
   allAsText: "記録全文 (上に出していない項目も含む)",
-  claimLabel: "確認したこと (承認と一緒に記録されます)",
+  claimLabel: "確かめたこと（任意。承認と一緒に記録されます）",
   claimPlaceholder: "例: 手元でテストを実行した / 差分を読んだ / スマートフォンで画面を開いた",
   claimTooLong: (max) =>
-    `確認した内容が、このページで受け付ける ${String(max)} 文字より長くなっています。短くしてから、もう一度 approve を押してください。`,
+    `確かめた内容が長すぎます。${String(max)} 文字までにしてから、もう一度「承認する」を押してください。`,
   claimGateUnread:
-    "rondo がこのゲートを読めなかったため、確認した内容は記録していません。ゲートに戻って、もう一度試してください。",
-  claimGateClosed:
-    "ゲートがすでに回答済みだったため、確認した内容は記録していません。ゲートに戻ると、どう終わったかを確認できます。",
-  claimNotRecorded:
-    "rondo が確認した内容を記録できなかったため、何も回答していません。ゲートに戻って、もう一度試してください。",
+    "承認が記録されませんでした。確認の画面に戻って、もう一度「承認する」を押してください。",
+  claimGateClosed: "この確認にはすでに回答済みです。",
+  claimNotRecorded: "確認の画面に戻って、もう一度「承認する」を押してください。",
   claimHostSetup:
-    "この環境の rondo は、確認した内容を記録できません。そのため何も回答しておらず、費用もかかっていません。" +
-    "この環境のセットアップが終わっていないか、動かなくなっています。" +
-    "もう一度 approve を押しても同じです。この環境の rondo を用意した人なら、理由を見られます。",
-  answerNotDone: "回答されませんでした",
-  gateBack: "ゲートに戻る",
+    "確かめた内容を記録できないため、承認は送っておらず、費用もかかっていません。このコンピュータの rondo のセットアップが終わっていないか、動かなくなっています。",
+  answerNotDone: "承認は送信されませんでした",
+  gateBack: "確認の画面に戻る",
   gateAuto: gateAutoJa,
   approvalNamed: (goal, costUsd) =>
     `${goal ? "目標に向けた承認" : "この依頼の承認"}（$${costUsd} まで）`,
   gateAutoSaid: (approval, approver, line) =>
     [
-      `${approver} による${approval}のもとで、rondo がこの周回を自動で承認しました。`,
-      "自動で承認する条件をすべて満たしていました:",
+      `${approver} の${approval}に基づいて、rondo がこの回を承認しました。`,
+      "自動承認の条件をすべて満たしていました。",
       "- チェックが通っている",
-      `- 同じコミットのモデルレビューに、${severityJa(line)}以上の指摘がない`,
+      `- レビュワーによるレビューに、${severityJa(line)}以上の指摘がない`,
       "- ワーカーの最後のテスト実行が通っている",
-      "- この線に開いている質問がない",
-      "- 締めの周回ではない",
+      "- 回答待ちの質問がない",
+      "- 締めの回ではない",
     ].join("\n"),
   gateReviseSaid: (approval, approver, notSent, line, left) =>
     [
-      `${approver} による${approval}のもとで、rondo が下書きした変更依頼を自分で送りました。`,
-      "ボタンを押さずに送る条件をすべて満たしていました:",
-      "- 承認を止めていたのはレビューの指摘だけで、下書きはそのすべてを引いている",
-      `- 下書きは、${severityJa(line)}以上のどの指摘も判断が要るものとしていない`,
-      "- レビューの回数と予算が残っている",
-      "- この線に開いている質問がない",
+      `${approver} の${approval}に基づいて、rondo が変更依頼を下書きし、そのまま送りました。`,
+      "自動で送る条件をすべて満たしていました。",
       ...(left.length === 0
         ? []
         : [
             "",
-            `${severityJa(line)}未満で、下書きが判断をあなたに任せた次の指摘は、送った依頼から外しました。`,
-            "必要なら、あなた自身の変更依頼で頼んでください:",
+            `${severityJa(line)}未満で、あなたの判断に任せた次の指摘は、この変更依頼に入れていません。`,
+            "必要なら、変更を依頼してください。",
             ...left,
           ]),
       ...(notSent === null
         ? []
         : [
             "",
-            "ゲートには変更依頼が届いているかもしれませんが、次の周回は始まっていません:",
+            "変更依頼は送りましたが、次の回は始まっていません。",
             notSent,
-            "目標の承認を一時停止するか予算を増やすか、依頼から作業をもう一度始めてください。",
+            "目標の承認を一時停止するか、予算を増やすか、依頼から作業を始め直してください。",
           ]),
     ].join("\n"),
   modelRaised: (blockers, majors) => `モデルレビューの指摘: ${raisedJa(blockers, majors)}。`,
   modelRaisedLink: "読む",
   severityWord: severityJa,
   severityCount: (severity, count) => `${severityJa(severity)} ${String(count)} 件`,
-  readingNotTaken: "読み取りを取れなかったため、判断材料はありません。",
+  readingNotTaken: "結果が出力されませんでした",
   whyNotTaken: "理由",
   checksWorkUnreadable:
-    "いまは変わったものを読み取れないため、この読み取りを作業と照らし合わせられません。",
+    "この作業の変更を現在読み取れないため、この結果がいまの変更と合っているか確認できません。",
   checksNotMatched: "照合できず",
-  modelNotTaken: "チェックだけが読みました。モデルレビューは取れていません。",
+  modelNotTaken:
+    "rondoによるチェックは実施されましたが、レビュワーによるレビューは確認できていません。",
   neitherReadingTaken: "チェックもモデルレビューも、この作業を読めませんでした。",
   storyHeading: "これまでの経緯",
   storyLaps: (count) =>
-    `この作業はこれで ${String(count)} 周目です。以下の周目はこの作業の中での数で、依頼全体の通し番号ではありません。`,
+    `この作業は、これで ${String(count)} 回目です。下の番号はこの作業の中での回数です。`,
   storyPart: (part, parts) =>
-    `この依頼は ${String(parts)} つに分けて起案されました。このゲートはその ${String(part)} つ目 (作業 ${String(part)}) のものです。`,
-  storyLapName: (n, current) => (current ? `${String(n)} 周目 (今回)` : `${String(n)} 周目`),
+    `この依頼は ${String(parts)} つの作業に分けてあります。この確認は、そのうちの作業 ${String(part)} のものです。`,
+  storyLapName: (n, current) => (current ? `${String(n)} 回目 (今回)` : `${String(n)} 回目`),
   storyToldRequest: "依頼の内容に取り組みました。",
-  storyToldAsked: "次の変更を求められました:",
-  storyToldNotRecorded: "前の周回の続きです。何を求められたかは記録にありません。",
-  storyToldContinued: (n) => `${String(n)} 周目が途中で終わったため、その続きに取り組みました。`,
+  storyToldAsked: "頼まれた変更は次のとおりです。",
+  storyToldNotRecorded: "前の回の続きです。何を頼まれたかは記録に残っていません。",
+  storyToldContinued: (n) => `${String(n)} 回目が途中で終わったため、その続きを実施しています。`,
   storyChanged: (commits, files) =>
     `${String(commits)} 件のコミットで ${String(files)} ファイルを変更しました。`,
   storyChangedUnread: "コミット内容は読み取れていません。",
-  storyNow: "いまあなたの回答を待っています。",
+  storyNow: "あなたの回答を待っています。",
   storyEnded: (answer, otherwise) =>
     answer === "revise"
-      ? "ゲートで変更を求められ、差し戻されました。"
+      ? "変更依頼を受けて、次の回でやり直しました。"
       : answer === "approve"
-        ? "ゲートで承認されました。"
+        ? "承認されました。"
         : `終わりました (${otherwise})。`,
-  storyIntended: "起案時の説明 (起案者の言葉のまま):",
+  storyIntended: "この依頼で変えようとしたこと:",
   storyOthers: "ほかの作業:",
   recordsFold: (count) => `承認したときに記録される内容 (${String(count)} 項目) と記録全文`,
   denialUnreadable: "どのコマンドだったかを rondo は記録できませんでした。",
   modelMayArrive: "モデルレビューはこれから届くかもしれません。",
   reachYourTurn: "rondo があなたの答えを待っています。",
-  reachLate: "rondo に、かかると決めていた時間を過ぎても終わらないものがあります。",
+  reachLate: "rondo に、予定の時間を過ぎても終わらない作業があります。",
   chimeAsk: "このタブに通知を許可",
   chimeAskShort: "通知を許可",
   tabTitle: (count) => (count === 0 ? "rondo" : `(${String(count)}) rondo`),
@@ -564,17 +532,18 @@ export const JA: Chrome = Object.freeze({
   themeLabel: "配色",
   themes: ["ライト", "ダーク", "OS の設定に従う"],
 
-  inboxNote: "ここを読んでも最後に見た印は動きません。印を動かすのは rondo inbox です。",
+  inboxNote:
+    "ここを読んでも「最後に見た」の記録は進みません。進むのは rondo inbox を実行したときだけです。",
 
   inboxFor: (actorId) => `'${actorId}' の inbox`,
   waitingOnYou: "あなたを待っているもの",
   bindingProposals: (count) => `  承認すると契約になる proposal (${String(count)})`,
   nonBindingProposals: (count) => `  何も拘束しない proposal (${String(count)})`,
   movedOnProposals: (count) =>
-    `    ほかに ${String(count)} 件は lap が終わったか新しいものに置き換わり、誰も待っていない`,
+    `    ほかに ${String(count)} 件は、対象の回が終わったか新しいものに置き換わっていて、誰も待っていない`,
   takenProposals: (count) =>
-    `    ほかに ${String(count)} 件は後継の識別子を別の lap がすでに持っており、承認しても何も走らない`,
-  readOneBack: "    選択肢と各々の根拠つきで 1 件読み直す: rondo show --proposal-id ID",
+    `    ほかに ${String(count)} 件は、引き継ぐはずの名前を別の回がすでに使っていて、承認しても何も動かない`,
+  readOneBack: "    選択肢とそれぞれの根拠つきで 1 件を読み直すには: rondo show --proposal-id ID",
   iterationsWaiting: (count) => `  あなたを待っている iteration (${String(count)})`,
   newMark: "  新着",
   proposalLine: (proposalId, kind, about, waited) =>
@@ -588,108 +557,104 @@ export const JA: Chrome = Object.freeze({
   changedHeading: (since, records) =>
     `最後に見てから ${since}前 に変わったもの (${String(records)} 件)`,
   changedHeadingNever: "最後に見てから",
-  neverLooked: "  まだ一度も見ていません: 以下に new の印は付きません",
+  neverLooked: "  まだ一度も見ていないため、下のどれにも新着の印は付きません",
   nothingChanged: "  なし",
   censusEntry: (kind, count) => `${kind} ${String(count)}`,
   changeLine: (kind, id, since) => `    ${kind}  ${id ?? "(id なし)"}  ${since}前`,
   silenceHeading: "あなたに示されたものと、示されなかったもの",
   countedLine: (what, presented, withheld) =>
-    `${what}: 提示 ${String(presented)}、留保 ${String(withheld)}`,
+    `${what}: 見せた ${String(presented)} 件、見せなかった ${String(withheld)} 件`,
   overAllTime: "全期間",
   sinceLastLook: (since) => `最後に見た ${since}前 から`,
   neverLookedSince: "  最後に見てから: まだ一度も見ていません",
-  withheldBy: (ruleName, count) => `'${ruleName}' により留保 ${String(count)}`,
+  withheldBy: (ruleName, count) => `'${ruleName}' の規則で見せなかったもの ${String(count)} 件`,
   unnamedRule: "(名前なし)",
   unspentHeading: (count) => `承認されたまま使われていないもの (${String(count)})`,
   unspentLine: (decisionId, proposalId, approved, actorId, since) =>
     `  ${decisionId}  proposal ${proposalId}  ${approved}  '${actorId}' が ${since}前 に`,
 
-  noGateDecide: "ゲートはありません: 人が判断する必要があります",
+  noGateDecide: "確認待ちではありません。人が判断する必要があります",
   noGateReleases: (gateId) =>
-    `ゲートに答えても解除されません (${gateId} で停止): 人が判断する必要があります`,
-  suspendedNoGate: "gate id が記録されないまま中断されたので、rondo はゲートを名指しできません",
-  answerGate: (gateId) => `ゲート ${gateId} に答える`,
+    `確認に答えても先へ進みません (${gateId} で停止中)。人が判断する必要があります`,
+  suspendedNoGate: "確認の id が記録されないまま中断されたため、どの確認かを rondo は示せません",
+  answerGate: (gateId) => `確認 ${gateId} に答える`,
   runsIn: (transcript, workspace) => `${transcript}  場所は ${workspace}`,
   noWorkspace: "(行に workspace がありません)",
-  transcriptNotLookedFor: "transcript (まだ開始していない行なので探していません)",
+  transcriptNotLookedFor: "transcript (まだ始まっていない作業なので探していません)",
   transcriptNotNamed: (reason) => `transcript (名指しできません: ${reason})`,
   transcriptAt: (directory, sessions) =>
     `transcript ${directory}${sessions > 1 ? `  (${String(sessions)} セッション中の最新)` : ""}`,
 
   declarationCaveat: Object.freeze([
-    "ここにあるのは run 自身の declaration で、fence の全体ではありません。continuo は",
-    "role のテンプレートを同じ allow リストへ展開しますが、rondo はここでそれを読みません。",
+    "ここにあるのは、この回が自分で宣言した許可だけです。",
+    "実際に効いている制限のすべてではありません。",
   ]),
   secondFence: Object.freeze([
-    "worker 自身の sandbox は第二の封じ込めですが、rondo はそれを観測しません。何も拒否",
-    "しないまま起動に失敗しうるので、sandbox が無効なまま走った lap もそうでない lap と",
-    "まったく同じように表示されます。それを報告したことがあるのは、ゲートに置かれた",
-    "worker 自身の記述だけです (D-0050)。",
+    "ワーカー側の制限が効いていたかどうかを、rondo は確認していません。",
+    "効いていないまま動いた回も、同じように表示されます。",
+    "それが分かるのは、確認の画面にあるワーカー自身の報告だけです。",
+    "",
   ]),
   lapNestedSandbox:
-    "作業を始める前に止めました。rondo が別のサンドボックスの中（たいていは別の Claude Code " +
-    "の中）で動いているため、作業する側が自分のサンドボックスを立ち上げられず、このまま" +
-    "ではコマンドが守られずに実行されてしまいます。rondo を普段の端末から起動し直してから、" +
+    "作業を始める前に止めました。rondo が別の Claude Code などの中で動いているため、" +
+    "ワーカーを始められません。" +
+    "rondo を普段の端末から起動し直してから、" +
     "もう一度試してください。",
   lapTurnTimedOut: (minutes) =>
-    `時間切れで止まりました。作業する側が${minutes === null ? "決められた時間" : ` ${String(minutes)} 分`}` +
-    "のうちに作業を終えられなかったため、途中で止めています。それまでの変更は作業場所に残っていますが、" +
-    "コミットされていない変更は届けられません。この回にかかった費用は報告" +
-    "されなかったため分かりません。続けるには、この停止に「続ける」と答えてください。rondo がこの作業の" +
-    "コミットからもう一度始めます。作業を小さく分けて範囲を決め直すこともできます。",
+    `時間切れで止めました。ワーカーが${minutes === null ? "決められた時間" : ` ${String(minutes)} 分`}` +
+    "のうちに作業を終えられませんでした。コミットされていない変更は届きません。" +
+    "この回の費用は分かりません。" +
+    "続けるには、この質問に「続ける」と回答してください。rondo が最後のコミットから始め直します。" +
+    "作業を小さく分けて、範囲を決め直すこともできます。",
   lapWorkKept: (branch, commit) =>
     "コミットされていなかった変更は、rondo が未検証の印を付けて、この作業のブランチに 1 つの" +
     `コミットとして残しました（${branch}、${commit.slice(0, 12)}）。届けてはいません。続けると、` +
     "この作業はそこからもう一度始まり、まずその中身を確かめます。",
   lapWorkNotKept: (reason) =>
-    "コミットされていなかった変更を rondo は残せませんでした。変更は作業場所にだけあり、やり直しは" +
-    `そこから始まりません: ${reason}`,
+    "コミットされていなかった変更を rondo は残せませんでした。続けると最後のコミットからやり直しになり、" +
+    `その変更は含まれません: ${reason}`,
 
   scopeAction: "範囲を決める",
   scopeHeading: "この依頼の範囲",
   backToThread: "依頼に戻る",
   scopeLead:
-    "範囲を決めるのはあなたです。プランは rondo が持っているものから選び、数値はこのストアに" +
-    "記録された周回から出しています。読んで、変えたいところを変えてください。1 回押せば記録と" +
-    "承認の両方が行われます。",
-  scopeNoPlanHeld:
-    "この作業に使えるプランを rondo はまだ持っていません。このマシンでの rondo のセットアップから、" +
-    "まだプランを受け取っていないためです。",
-  scopePlansUnread: (reason) =>
-    `rondo が持っているプランを読めなかったので、選べるものがありません: ${reason}`,
-  scopePlanAsk: "作業に使うプラン",
-  scopePlanGone:
-    "選んだプランは、この依頼ではもう使えなくなりました。次の中から選び直してください。",
+    "範囲はあなたが決めます。数値には、これまでの回の記録から出した値を入れてあります。" +
+    "変えたいところを変えて、「範囲を決める」を押してください。" +
+    "1 回押せば、記録と承認が済みます。",
+  scopeNoPlanHeld: "この依頼に使える計画が、" + "まだ rondo にありません。",
+  scopePlansUnread: (reason) => `計画を読み出せなかったため、選べるものがありません: ${reason}`,
+  scopePlanAsk: "作業に使う計画",
+  scopePlanGone: "選んでいた計画は、この依頼ではもう使えません。下の一覧から選び直してください。",
   scopePlanFrom: (from) =>
     from === "message"
       ? "このスレッドに貼られたもの"
       : from === "setup"
-        ? "このマシンのセットアップで用意したもの"
-        : "以前の周回が使ったもの",
-  scopePlanLine: (where, agentType, from) => `${where}、エージェント種別 ${agentType}（${from}）`,
+        ? "このコンピュータのセットアップで用意したもの"
+        : "前の回で使ったもの",
+  scopePlanLine: (where, agentType, from) => `${where}、ワーカーの種類 ${agentType}（${from}）`,
   scopePlanHeldAt: (line, at) => `${line}、${at} UTC から保持`,
   scopeDraftedLead:
-    "この依頼の範囲を rondo が下書きしました。下の作業と、このストアに記録された周回から出した" +
-    "予算です。そのまま承認するか、先に値を変えてください。変えた場合は、rondo の下書きの" +
-    "代わりにあなたの版が記録されます。",
+    "この依頼の範囲を rondo が下書きしました。作業の内容と、これまでの回の記録から出した予算です。" +
+    "そのまま承認するか、値を変えてから承認してください。" +
+    "値を変えた場合は、あなたの版が記録されます。",
   scopeDraftedPlansHeading: "rondo が動かそうとしている作業",
   scopeDraftedPlan: (n) => `作業 ${String(n)}`,
-  scopeDraftedTemplateGone: "この下書きの元になったプランを、rondo はもう持っていません。",
+  scopeDraftedTemplateGone: "この作業の計画は、もう rondo にありません。",
   tierHeading: "この作業を動かすモデル",
   tierSaid: (tier, lighter) =>
     tier === "standard"
-      ? "標準のモデルです。人が読んで受け入れる作業に rondo が使う既定のモデルです。"
+      ? "標準のモデルで動きます。"
       : tier === "mechanical"
         ? lighter === false
           ? "軽いモデル向けと指定されていますが、この提供元には軽いモデルが無いので、ほかの作業と同じモデルで動きます。"
-          : "軽くて安いモデルです。人が読まなくても確かめられる作業にだけ、rondo はこれを使えます。"
+          : "軽くて安いモデルで動きます。結果を人が読まずに確かめられる作業にだけ使えます。"
         : tier === null
-          ? "rondo には分かりません。この作業のエージェント種別の段階が、下書きに残っていません。"
-          : `段階 '${tier}' です。rondo にはこれに当てるモデルがありません。`,
+          ? "どのモデルで動くか分かりません。下書きにモデルの指定がありません。"
+          : `モデルの指定が '${tier}' ですが、rondo にはこれに当てるモデルがありません。`,
   tierModel: (model, provider) => `${model} (提供元 ${provider})`,
   tierWhy:
-    "軽いモデルでよいとした理由です (下書きした側の言葉のまま)。rondo が確かめたのは、理由が揃っていて" +
-    "あなたのメッセージに基づいていることだけで、正しいかどうかではありません。承認する前に判断してください。",
+    "軽いモデルでよいとした理由です (下書きした側の言葉のまま)。rondo が確かめたのは、理由があなたのメッセージに基づいていることだけです。" +
+    "理由が正しいかどうかは、承認する前にあなたが判断してください。",
   tierCondition: (condition) =>
     condition === "files_named"
       ? "依頼が対象のファイルを名指ししている"
@@ -698,147 +663,147 @@ export const JA: Chrome = Object.freeze({
         : condition === "checks_are_acceptance"
           ? "テストが通れば完了と言える"
           : condition,
-  tierLapsHeading: "周回ごとのモデルと費用",
+  tierLapsHeading: "回ごとのモデルと費用",
   tierLap: (n, model, provider, costUsd) =>
-    `周回 ${String(n)}: ${model ?? "モデルの記録なし"}` +
+    `${String(n)} 回目: ${model ?? "モデルの記録なし"}` +
     `${provider === null ? "" : ` (提供元 ${provider})`}、` +
     `${costUsd === null ? "費用はまだ読めていません" : `$${costUsd}`}`,
-  scopeNarrowed: (computed) => `ここに書かれた内容に合わせて、rondo が ${computed} から下げました:`,
-  scopeNarrowedStricter: "ここに書かれた内容に合わせて、rondo が「重大」より厳しくしました:",
-  scopeNarrowedAdded: "ここに書かれた内容に合わせて、rondo が加えました:",
+  scopeNarrowed: (computed) => `あなたのメッセージを受けて、rondo が ${computed} から下げました:`,
+  scopeNarrowedStricter: "あなたのメッセージを受けて、rondo が「重大」より厳しくしました:",
+  scopeNarrowedAdded: "あなたのメッセージを受けて、rondo が加えました:",
   scopeAnswerFirst:
-    "この依頼のスレッドで、rondo があなたの回答を待っています。回答するまで、範囲はここでは" +
-    "決められません。先に回答してください。",
+    "依頼のスレッドに、まだ回答していない質問があります。" +
+    "回答するまで、範囲は決められません。先に回答してください。",
   scopeRedrafted:
     "下の範囲が承認されたあとで、rondo が下書きし直しました。新しい下書きはこちらです。" +
     "承認すると、この依頼の範囲がもう 1 つ加わり、下の範囲はそのまま残ります。",
   scopeDraftedAction: "承認する",
   scopeDraftedPlain: "この範囲、または値を変えたあなたの版を承認します",
   scopeDraftedPressNote:
-    "1 回押せば承認されます。値を変えた場合は、rondo が下書きの代わりにあなたの版を記録して" +
-    "承認します。承認しただけでは何も消費しません。周回は始まる時点で毎回この範囲に照らして" +
-    "判定されます。",
+    "ボタンを 1 回押せば承認されます。" +
+    "値を変えた場合は、変えた値で承認されます。" +
+    "承認しただけでは費用はかかりません。",
   planStartAction: "この作業を始める",
-  planStartPlain: "この作業で周回を 1 つ始め、承認した範囲に数えます",
+  planStartPlain: "この作業を 1 回始めます。費用は承認した予算から使います",
   planStarted: "開始済みです。",
-  planStartedLink: "周回を開く",
+  planStartedLink: "依頼のスレッドを開く",
   planBusy: (limit) =>
     limit === 1
-      ? "まだ空きがありません。同時に動かせる周回は 1 件までで、いまその 1 件が動いています。" +
-        "その周回がゲートまで進むと、ここに開始ボタンが出ます。"
-      : `まだ空きがありません。同時に動かせる周回は ${String(limit)} 件までで、いま` +
-        "そのすべてが動いています。どれかがゲートまで進むと、ここに開始ボタンが出ます。",
+      ? "いまは始められません。同時に動かせるのは 1 回までで、その 1 回がいま動いています。" +
+        "それが確認待ちになると始められます。"
+      : `いまは始められません。同時に動かせるのは ${String(limit)} 回までで、いま` +
+        "そのすべてが動いています。どれかが確認待ちになると始められます。",
   planFull: (live, limit) =>
-    `まだ空きがありません。開いている周回が ${String(live)} 件あり、このホストが許す上限` +
-    `（${String(limit)} 件）です。どれかが終わると、ここに開始ボタンが出ます。`,
+    `いまは始められません。進行中の回が ${String(live)} 件あり、このコンピュータで同時に持てる上限` +
+    `（${String(limit)} 件）です。どれかを終わらせると始められます。`,
   planOutside: (test) => `始められません。${scopeTestJa(test)}。`,
-  planUnrunnable: "もう動かせなくなりました。依頼のスレッドに返信すると、下書きし直されます。",
+  planUnrunnable:
+    "この作業はもう始められません。依頼のスレッドに返信すると、rondo が下書きし直します。",
   planUnrunnableWhy: "止めている理由",
   planUndecidable: "いま、この作業を範囲に照らして確かめられませんでした。",
   scopeNoPlanForScope:
-    "この範囲が許す場所とエージェント種別のプランを rondo はまだ持っていないので、この範囲で" +
-    "開始できるものがありません。それに合うプランを依頼のスレッドに返信として貼ってください。",
+    "承認した範囲に合う計画が rondo にないため、" + "この範囲では作業を始められません。",
   scopeNoApprover:
-    "RONDO_APPROVER が設定されていないので、このページが誰として範囲を承認することもできません。",
+    "RONDO_APPROVER が正しく設定されていないため、このページからは範囲を承認できません。",
   // The place is said only where it is what tells two of these apart (D-0081
   // rule 4.2); with nothing to tell apart, the root answers "where" alone.
   // Japanese names the place first and keeps the root beside it in brackets,
   // which is how a Japanese reader carries a qualifier.
   scopeWorkspace: (place, root) => (place === null ? root : `${place}（${root}）`),
-  scopePlanDigest: (digest) => `プラン ${digest}`,
-  scopePlanHeading: "rondo が動かすプランと、動かす場所",
-  scopeRecordedFold: "作業場所とエージェント種別の許可（rondo の記録）",
+  scopePlanDigest: (digest) => `計画 ${digest}`,
+  scopePlanHeading: "作業に使う計画と作業場所",
+  scopeRecordedFold: "作業場所とワーカーの種類の許可（rondo の記録）",
   scopeMaybeApproved:
-    "この依頼の範囲をすでに承認済みかどうかは、ここからは分かりません。どちらであってもこれは" +
-    "新しい下書きで、押せば 2 つめが記録されます。",
+    "この依頼の範囲をすでに承認したかどうかは、この画面では分かりません。" +
+    "押すと、範囲がもう 1 つ記録されます。先に依頼のスレッドで確かめてください。",
   scopeHeldBounds: (digest, tier, granted, from) =>
-    `エージェント種別 ${digest}: モデルの規模は ${tier}、許可は` +
+    `ワーカーの種類 ${digest}: モデルの規模は ${tier}、許可は` +
     `${granted.length === 0 ? "なし" : granted.join(", ")}` +
     `（${agentTypeSourceJa(from)}から読み取り）`,
   scopeHeldNone: (digest) =>
-    `エージェント種別 ${digest}: 何が許されているかの記録を rondo は持っていません`,
+    `ワーカーの種類 ${digest}: 何が許されているかの記録を rondo は持っていません`,
   scopeHeldUnreadable: (digest, reason) =>
-    `エージェント種別 ${digest}: 記録を読めないので、何が許されているかを出せません: ${reason}`,
+    `ワーカーの種類 ${digest}: 記録を読めないので、何が許されているかを出せません: ${reason}`,
   scopeHeldRebuilds: (digest, rebuilt, from) =>
-    `エージェント種別 ${digest}: ` +
+    `ワーカーの種類 ${digest}: ` +
     `${agentTypeSourceJa(from)}から読み取った記録は ` +
     `${rebuilt} に組み直されるので、何が許されているかを出せません`,
   scopeHeldNoBuild: (digest, from, reason) =>
-    `エージェント種別 ${digest}: ` +
+    `ワーカーの種類 ${digest}: ` +
     `${agentTypeSourceJa(from)}から読み取った記録は` +
     `組み立てられないので、何が許されているかを出せません: ${reason}`,
   scopeRoundsAsk: "レビュー回数",
   scopeRoundsRedraw:
-    "数を選ぶと予算はプランから引き直されるので、入力した値は rondo の下書きに戻ります。",
-  scopeLapsLabel: "周回数",
+    "レビュー回数を選ぶと、入力した値は下書きの値に戻ります。先にレビュー回数を選んでから、ほかの値を直してください。",
+  scopeLapsLabel: "回数",
   scopeRoundsLabel: "レビュー回数",
   scopeCostLabel: "費用（USD）",
-  scopeReserveLabel: "費用未読の周回ごとの引当（USD）",
+  scopeReserveLabel: "費用がまだ分からない回に取っておく額（1 回あたり、USD）",
   scopeExpiresLabel: "有効期限（UTC）",
   scopeFormula: (how) => `計算: ${how}`,
   scopeFormulaRounds: "選んだレビュー回数そのもの",
   scopeFormulaLaps: (plans, rounds) =>
-    `プラン数 x レビュー回数 = ${String(plans)} x ${String(rounds)}`,
-  scopeFormulaReserve: "最も高かった初回周回の費用を、0.10 USD 単位で切り上げた値",
+    `作業数 x レビュー回数 = ${String(plans)} x ${String(rounds)}`,
+  scopeFormulaReserve: "1 回目の費用で最も高かったものを、0.10 USD 単位で切り上げた値",
   scopeFormulaCost: (plans, reserve, laterRounds, redo) =>
-    `プラン数 x（引当 + 2 回目以降のラウンド数 x やり直し費用）= ` +
+    `作業数 x（取っておく額 + 2 回目以降のレビュー回数 x やり直しの回の費用）= ` +
     `${String(plans)} x（${reserve} + ${String(laterRounds)} x ${redo}）`,
   scopeFormulaExpires: (laps, seconds) =>
-    `下書き時刻 + 周回数 x 最長の周回 + 返信のための 1 日 = 下書き時刻 + ` +
+    `下書きした時刻 + 回数 x 最も長くかかった回の時間 + 返信のための 1 日 = 下書きした時刻 + ` +
     `${String(laps)} x ${String(seconds)} 秒 + 24 時間`,
   scopeBasesFold: (count) => `この数の出どころ (${String(count)})`,
-  scopeBasisRows: (measurement, laps, level, tier) =>
+  scopeBasisRows: (measurement, laps, level) =>
     `${
       level === "agent_type"
-        ? "このエージェント種別"
+        ? "このワーカーの種類"
         : level === "model_tier"
-          ? `tier ${String(tier)}`
+          ? `近い種類のワーカー`
           : "このリポジトリ"
-    }の直近 ${String(laps)} 周回のうち、` +
+    }の直近 ${String(laps)} 回のうち、` +
     `${JA_MEASURE[measurement] ?? measurement}が最も高かったもの`,
   scopeBasisColdStart: (measurement) =>
-    `${JA_MEASURE[measurement] ?? measurement}: このストアでは一度も測っていないので、rondo の` +
+    `${JA_MEASURE[measurement] ?? measurement}: 記録された回がまだないため、rondo の` +
     `初期値を使いました`,
   scopeColdStartNote: (whole) =>
     whole
-      ? "ここではまだ周回が記録されていないため、この値は rondo の見込みで、測った値ではありません。" +
+      ? "記録された回がまだないため、この値は rondo の見込みです。" +
         "大きな作業なら上げてください。"
-      : "一部は rondo の見込みです。挙げたエージェント種別のうち、ここでまだ周回が記録されていない" +
+      : "一部は rondo の見込みです。この依頼に使うワーカーの種類のうち、記録された回がまだない" +
         "ものがあります。大きな作業なら上げてください。",
-  scopeBasisPlans: (plans) => `プラン数: ${String(plans)}`,
+  scopeBasisPlans: (plans) => `作業数: ${String(plans)}`,
   scopeBasisRounds: (rounds, byDefault) =>
     byDefault
       ? `レビュー回数: ${String(rounds)}（誰も選ばなかったときに rondo が使う数）`
       : `レビュー回数: ${String(rounds)}（あなたが選んだ数）`,
-  scopeBasisReplyAllowance: "あなたの返信のための 1 日。測った値ではなく、見込みの余裕です",
-  scopeBasisLap: (iterationId) => `周回 ${iterationId}`,
-  scopeSampleHeading: "依頼の大きさが過去の周回と同じくらいだと見て、予算を出しています",
-  scopeSampleRows: (laps, level, tier, lowest, highest) =>
+  scopeBasisReplyAllowance: "返信のための 1 日。計測した値ではなく、余裕として足した分です",
+  scopeBasisLap: (iterationId) => `回 ${iterationId}`,
+  scopeSampleHeading: "依頼の大きさが過去の回と同じくらいだとして、予算を出しています",
+  scopeSampleRows: (laps, level, _tier, lowest, highest) =>
     `${
       level === "agent_type"
-        ? "このエージェント種別"
+        ? "このワーカーの種類"
         : level === "model_tier"
-          ? `まだ記録のないエージェント種別なので、同じ tier ${String(tier)} の別のエージェント種別`
-          : "このエージェント種別にもその tier にも記録がないので、このリポジトリの別のエージェント種別"
-    }の初回周回 ${String(laps)} 件をもとに下書きしました。費用は ` +
-    `${lowest === highest ? highest : `${lowest}〜${highest}`} USD で、引当にはその最高値を` +
-    `使っています。rondo が記録しているのは周回にかかった費用だけで、どれだけの作業をしたかは` +
-    `記録していません。そのため、この依頼がそれらと同じくらいの大きさかどうかは分かりません。` +
-    `大きいと思うなら、ここで費用を上げてください。初回の作業で使い切っても、作業があなたの` +
-    `確認に戻ってきたときに引き上げられます。`,
+          ? `このワーカーの種類には記録がないので、近い種類のワーカー`
+          : "このワーカーの種類にも近い種類にも記録がないので、このリポジトリの別のワーカーの種類"
+    }の 1 回目 ${String(laps)} 件をもとに下書きしました。費用は ` +
+    `${lowest === highest ? highest : `${lowest}〜${highest}`} USD で、取っておく額にはその最高値を` +
+    `使っています。` +
+    `この依頼がそれらと同じくらいの大きさかどうかは分かりません。` +
+    `大きいと思うなら、ここで費用を上げてください。1 回目で使い切っても、作業があなたの` +
+    `確認に戻ってきたときに増やせます。`,
   scopeSampleColdStart: (reserve) =>
-    `このエージェント種別にも、その tier にも、このリポジトリにも、記録された周回がありません。` +
-    `そのため引当は rondo の見込み ${reserve} USD で、rondo が測れた場所での初回周回の費用に` +
-    `合わせた値です。ここで誰かが測った値ではなく、依頼がどれだけの大きさかも分かりません。` +
-    `大きな作業なら、ここで費用を上げてください。予算の上限で止まったときは、その質問から` +
-    `予算を増やして続けることもできます。`,
+    `この種類のワーカーにも、近い種類にも、このリポジトリにも、記録された回がありません。` +
+    `取っておく額 ${reserve} USD は、rondo の見込みです。` +
+    `依頼の大きさも分かりません。` +
+    `大きな作業なら、ここで費用を上げてください。` +
+    `予算の上限で止まったときにも、そこから予算を増やせます。`,
   scopeDefaultsHeading: "rondo が埋めたもの",
-  scopeDefaultNote: "既定値で、依頼から導いたものではありません。",
-  scopeSeverityLabel: "この重大度以上の指摘が出たら 1 ラウンド終了",
-  scopeOutwardLabel: "この範囲で許す外向きの行為",
+  scopeDefaultNote: "rondo の既定値です。依頼の内容から出した値ではありません。",
+  scopeSeverityLabel: "この重さ以上の指摘は、直すまでレビューを通さない",
+  scopeOutwardLabel: "この範囲で許す、リポジトリの外に影響する操作",
   scopeOutwardFromGoal:
-    "このリポジトリの目標の範囲で許しているものに、チェックを入れてあります。この依頼も同じ目標に" +
-    "向けた作業だからです。自分でしたいものは外してください。",
+    "このリポジトリの目標で許している操作には、あらかじめチェックを入れてあります。" +
+    "自分でやりたいものは、チェックを外してください。",
   scopeOutwardAct: (act) =>
     ({
       push_branch: "ブランチを push する",
@@ -846,107 +811,89 @@ export const JA: Chrome = Object.freeze({
       merge_default_branch: "チェックが通ればデフォルトブランチにマージする",
     })[act] ?? act,
   scopeOutwardNone: "なし",
-  scopeIrreversibleNone: "取り返しのつかない行為の一覧には何も足しません。",
+  scopeIrreversibleNone: "取り返しのつかない行為は、何も加えていません。",
   scopeCostCaveat:
-    "費用の予算は周回そのものの費用だけを数えます。レビュー側の費用は数えず、費用がまだ読めて" +
-    "いない周回は引当を保持しますが、これは見積もりです。",
+    "費用の予算に入るのは、各回の費用だけです。レビュワーの費用は入りません。" +
+    "費用がまだ分からない回は、取っておく額の分として見ています。",
   scopePressNote:
-    "1 回押すと、この範囲があなたの名前で記録され、承認されます。承認しただけでは何も消費" +
-    "しません。行為はそれが取られた時点で毎回この範囲に照らして判定されます。",
+    "1 回押すと、この範囲があなたの名前で記録され、承認されます。" +
+    "承認しただけでは費用はかかりません。",
   scopePlain: "この範囲を記録して承認します",
   scopeApproved: (since) => `${since}前に承認済み`,
-  scopeDigest: (digest) => `ダイジェスト ${digest}`,
+  scopeDigest: (digest) => `識別子 ${digest}`,
   scopeNotThisRequest: "その承認はこの依頼のものではないので、ここには何も表示しません。",
   scopePredecessorSpent: (laps, usd, unread) =>
-    `これが置き換える範囲は、これまでに ${String(laps)} 周回と読み取り済み $${usd} を使い、` +
-    `費用がまだ読めていない ${String(unread)} 周回が引当を保持しています。`,
-  scopePredecessorNoApproval:
-    "これが置き換える範囲は承認されたことがないので、何も使っていません。",
-  scopePredecessorUnreadable: (reason) =>
-    `置き換える範囲が何を使ったかは読めませんでした: ${reason}`,
+    `前の範囲では、${String(laps)} 回を動かし、費用が分かっている分で $${usd} を使いました。` +
+    `費用がまだ分からない回が ${String(unread)} 回あり、その分は取っておく額で見ています。`,
+  scopePredecessorNoApproval: "前の範囲は承認されていないため、何も使っていません。",
+  scopePredecessorUnreadable: (reason) => `前の範囲が何を使ったかは読めませんでした: ${reason}`,
   scopeRetired:
-    "後から入った範囲に置き換えられたので、ここで承認した範囲では何も始まりません。" +
-    "始めるなら、新しいほうの範囲で始めることになります。",
+    "あとから承認した範囲に置き換わったため、この範囲からは何も始められません。" +
+    "始めるときは、新しい範囲から始めてください。",
   startAction: "作業を始める",
-  startPlain: "この承認のもとで 1 周回を始めます",
-  startAgainSafe:
-    "二度押しても、始まる周回は 1 つです。2 回目の押下は 1 回目にまとめられ、それ以上は" +
-    "始まりません。",
+  startPlain: "作業を 1 回始めます。",
+  startAgainSafe: "2 回押しても、始まるのは 1 回だけです。" + "",
   workerProviderLabel: "作業を実行する提供元",
-  workerProviderDefault: (provider) => `このホストの既定値 (${provider})`,
+  workerProviderDefault: (provider) => `このコンピュータの既定値 (${provider})`,
   workerProviderBefore: "選べるのは作業を始める前だけです。始まったあとは変わりません。",
   workerProviderRan: (provider, chosen) =>
-    chosen ? `${provider} (この依頼で選ばれたもの)` : `${provider} (このホストの既定値)`,
-  workerProviderUnknown:
-    "不明です。この周回は、rondo が提供元を記録するようになる前に始まりました。",
+    chosen ? `${provider}（この依頼で選択）` : `${provider}（このコンピュータの既定）`,
+  workerProviderUnknown: "不明です。この回では提供元を記録していません。",
   startBeside:
-    "計画が無いので、ほかの作業と並べて始めます。ぶつかったら、作業を自分で進める承認なら rondo が直す作業を" +
-    "自分で始め、そうでなければボタン一つで出します。",
-  startNote:
-    "依頼に書いた言葉が、そのまま作業への指示になります。周回の名前は rondo が付けるので、" +
-    "あなたが決める必要はありません。",
-  scopeRefusedNoApprover:
-    "何も記録していません。RONDO_APPROVER が設定されていないので、このページが誰として範囲を" +
-    "承認することもできません。",
+    "ほかの作業と並行して始めます。" +
+    "ほかの作業とぶつかったときは、直す作業を rondo が始めるか、" +
+    "ボタン 1 つで始められるようにします。",
+  startNote: "依頼に書いた言葉が、そのまま作業への指示になります。",
+  scopeRefusedNoApprover: "RONDO_APPROVER が正しく設定されていないため、作業を継続できません。",
   scopeRefusedPress:
     "何も記録していません。範囲の承認はこのページのボタンを人が押したときだけ行われ、" +
     "スクリプトからはできません。",
   scopeRefusedForm:
     "何も記録していません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
-  scopeRefusedFields:
-    "何も記録していません。数値のどれかが rondo の使える値になっていません。予算を確かめてから" +
-    "押してください。",
-  scopeRefusedNotTaken: "何も記録していません。ストアがこの範囲を受け付けませんでした。",
+  scopeRefusedFields: "予算の数値に使えない値があります。直してから、もう一度押してください。",
+  scopeRefusedNotTaken: "範囲の受付に失敗しました。",
   scopeRefusedPlanChanged:
-    "何も記録していません。あの画面のプランは、もうこの依頼で rondo が選べるものではありません。" +
-    "読み込み直して、選び直してください。",
+    "この画面を開いたあとに表示していた内容が変わったため、承認は記録されていません。" +
+    "「範囲に戻る」で開き直した画面から、選び直して承認してください。",
   scopeRefusedEdited:
-    "今回は何も記録していません。そのフォームはすでに記録・承認済みで、いま変えた内容は" +
-    "保存されている内容とは違います。読み込み直して、新しい範囲を下書きしてください。",
-  scopeRefusedNotRead: "範囲は記録されましたが読み戻せないので、承認はしていません。",
+    "このフォームはすでに承認済みのため、いま書き換えた値は記録されていません。" +
+    "「範囲に戻る」で開き直した画面に新しい値を入れて、承認してください。",
+  scopeRefusedNotRead:
+    "範囲は保存しましたが、承認はしていません。範囲の画面に戻って、もう一度承認してください。",
   scopeRefusedNotShown:
-    "範囲は記録されましたが、あなたに見せたことを rondo が書き残せなかったので、承認は" +
-    "していません。",
-  scopeRefusedNotApproved: "範囲は記録されましたが、承認されていません。何も消費されていません。",
+    "範囲は保存しましたが、承認はしていません。範囲の画面に戻って、もう一度承認してください。",
+  scopeRefusedNotApproved:
+    "範囲は保存しましたが、承認はしていません。費用もかかっていません。範囲の画面に戻って、もう一度承認してください。",
   startRefusedNoApprover:
-    "何も開始していません。RONDO_APPROVER が設定されていないので、このページが誰として作業を" +
-    "始めることもできません。",
+    "RONDO_APPROVER が正しく設定されていないため、このページからは作業を" + "始められません。",
   startRefusedPress:
-    "何も開始していません。作業の開始はこのページのボタンを人が押したときだけ行われ、" +
-    "スクリプトからはできません。",
+    "作業は始まっていません。" + "範囲の画面に戻って、もう一度ボタンを押してください。",
   startRefusedForm:
     "何も開始していません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
   startRefusedNoPlan:
-    "何も開始していません。選んだプランが、この依頼で使えるプランのなかにありません。",
-  startRefusedNoRequest:
-    "何も開始していません。依頼を読み戻せなかったので、作業に頼むことがありません。",
-  startRefusedNoContinuo: "何も開始していません。作業を動かす部分が起動しません。",
+    "選んだ計画は、この依頼ではもう使えません。範囲の画面に戻って、選び直してください。",
+  startRefusedNoRequest: "依頼の内容を読み出せませんでした。戻って、もう一度試してください。",
+  startRefusedNoContinuo:
+    "作業を開始する仕組みが起動しませんでした。時間をおいて、もう一度試してください。",
   startRefusedOutside: (test) =>
     // Said in words, never the test's name (rondo#431): `asks` is a word to ask about.
-    `何も開始せず、何も消費していません。承認した範囲の外にある作業です。${scopeTestJa(test)}。` +
-    `選択肢は依頼のスレッドに書かれたメッセージにあります。`,
+    `作業は始まっておらず、費用もかかっていません。${scopeTestJa(test)}。` +
+    `どうするかの選択肢は、依頼のスレッドのメッセージにあります。`,
   startRefusedNotAdmitted:
-    "何も開始せず、何も消費していません。承認はそのまま有効なので、もう一度押しても安全です。",
+    "作業は始まっておらず、費用もかかっていません。承認はそのまま有効です。戻って、もう一度押してください。",
   scopeBack: "範囲に戻る",
 
   reviseAction: "変更を依頼する",
-  revisePlain: (next) =>
-    `書かれた内容をこのゲートに送り、同じ承認のもとで${lapJa(next)}をその内容で動かします。`,
+  revisePlain: (next) => `書いた変更依頼を送り、${lapJa(next)}を始めます。`,
   reviseLabel: "変更してほしいこと",
   revisePlaceholder: "例: パーサーの変更はそのまま、コマンドラインには手を入れないでほしい",
   reviseNote: (next) =>
-    `書かれた言葉はそのままゲートに渡り、${lapJa(next)}はその言葉で作業をやり直すよう頼まれます。` +
-    "その周回と費用は、この周回が動いた承認の枠に数えられます。周回の名前は rondo が" +
-    "付けるので、入力の必要はありません。",
+    `書いた内容がワーカーに渡り、${lapJa(next)}はその内容で作業をやり直します。その回の費用は、いまの承認の予算から使われます。`,
   reviseRaises: (rounds) =>
-    `承認したレビュー回数 (${String(rounds)} 回) をすべて使っています。押すと、まずレビュー回数を` +
-    "下の数まで引き上げ、続けて変更を依頼します。引き上げは新しい承認として記録され、今の承認と" +
-    "置き換わります。ほかの予算は変わりません。",
-  reviseNoScope:
-    "承認済みの範囲のもとで始めた周回ではないため、次の周回を数える枠がありません。" +
-    "ここから変更を依頼することはできません。",
+    `承認したレビュー回数（${String(rounds)} 回）を使い切っています。押すと、まずレビュー回数を引き上げてから、変更を依頼できます。ほかの予算は変わりません。`,
+  reviseNoScope: "ここから変更は依頼できません。",
   reviseDraftFinding: (severity, text) => `- ${severityJa(severity)}: ${text}`,
   reviseDraftBases: (bases) => `  場所: ${bases}`,
   reviseDraftChange: (words) => `  直すこと: ${words}`,
@@ -954,144 +901,117 @@ export const JA: Chrome = Object.freeze({
   reviseDraftTakeIn: (finding) =>
     `- ${finding}\n  直すこと: まずそのコミットを git merge --no-edit で取り込み、競合があれば解消して ` +
     "merge をコミットする。",
-  reviseDrafted:
-    "レビューで見つかった点から rondo が下書きしました。自由に編集できます。送る内容はあなたのものです。",
+  reviseDrafted: "レビューの指摘をもとに rondo が下書きしました。自由に書き換えて構いません。",
   reviseDrafting:
-    "レビューで見つかった点から、変更内容の下書きを作成中です。1〜2 分後にページを再読み込みすると表示されます。" +
-    "待つ必要はなく、今すぐ自分で書くこともできます。",
+    "レビューの指摘をもとに、変更依頼の下書きを作っています。1〜2 分後にページを読み込み直すと表示されます。" +
+    "自分で変更依頼を書いても構いません。",
   reviseUndrafted:
-    "今回は rondo が変更内容を下書きできませんでした。このレビューについて再度試みることはありません。" +
-    "変更してほしいことをご自身で書いてください。レビューで見つかった点は上にあります。",
+    "rondo が変更内容を下書きできませんでした。" +
+    "自分で変更依頼を書いてください。レビューの指摘は上にあります。",
   reviseDraftArrived:
-    "書き始めた後に下書きが届きましたが、あなたの書いた内容をそのまま残しています。下書きを見るには、" +
-    "欄を空にしてからページを再読み込みしてください。",
-  forMaintainer: "このマシンで rondo を管理する人向け",
+    "書き始めたあとに下書きが届いたので、あなたが書いた内容をそのまま残しています。下書きを見るには、" +
+    "一度入力欄を空にしてからページを読み込み直してください。",
+  forMaintainer: "このコンピュータで rondo を管理する人向け",
   hostLog:
-    "rondo が出力したそれ以外の内容はホストのログにあります: journalctl --user -u rondo.service" +
-    "（ホストを rondo web で手動で起動した場合は、そのターミナル）。",
+    "rondo の残りの出力はホストのログで読めます（journalctl --user -u rondo.service。" +
+    "ホストを rondo web で手で起動した場合は、そのターミナルから確認できます）。",
   reviseRefusedNoApprover:
-    "何も回答していません。RONDO_APPROVER が未設定なので、このページが誰として回答するか" +
-    "決まりません。",
-  reviseRefusedPress:
-    "何も回答していません。ゲートへの回答は人がこのページのボタンを押して行うもので、" +
-    "スクリプトにはできません。",
+    "RONDO_APPROVER が正しく設定されていないため、このページからは変更を依頼できません。",
+  reviseRefusedPress: "確認の画面に戻って、ボタンを押してください。",
   reviseRefusedForm:
-    "何も回答していません。そのフォームはこのページのものではありません。読み込み直してから" +
-    "押してください。",
-  reviseRefusedNoWords: "何も回答していません。変更の依頼には内容が要りますが、入力欄が空でした。",
-  reviseRefusedGateClosed:
-    "何も回答していません。開いているゲートがもう残っていません。戻って結果を" +
-    "確認してください。",
+    "変更は送られていません。画面が古くなっています。読み込み直してから、もう一度押してください。",
+  reviseRefusedNoWords:
+    "変更依頼は送られていません。入力欄が空でした。変更依頼を書いてから押してください。",
+  reviseRefusedGateClosed: "変更依頼は送られていません。この確認はすでに終わっています。",
   reviseRefusedNotItsScope:
-    "何も回答していません。消費しようとしている承認は、この周回が動いた承認ではありません。" +
-    "ゲートを読み込み直してから押してください。",
+    "変更依頼は送られていません。この画面を開いたあとに承認内容が変わっています。確認の画面を読み込み直してから、もう一度押してください。",
   reviseRefusedStillRunning:
-    "何も回答していません。ゲートには別の言葉ですでに回答していて、その処理が続いています。" +
-    "終わるのを待ってから、ゲートを読み込み直して状態を確認してください。",
+    "変更依頼は送られていません。先に押した分が、まだ処理中です。終わるのを待ってから、確認の画面を読み込み直してください。",
   reviseRefusedNotSetUp:
-    "何も回答せず、ゲートにも触れていません。次の周回を用意できませんでした。" +
-    "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
-  reviseRefusedNoContinuo: "何も回答していません。作業を動かす部分が起動しません。",
+    "変更依頼は送られていません。次の回を用意できませんでした。確認はそのままです。" +
+    "何が起きたかは、このコンピュータで rondo を管理する人が確かめられます。",
+  reviseRefusedNoContinuo:
+    "変更依頼は送られていません。作業を依頼する仕組みが起動しませんでした。このコンピュータで rondo を管理する人に確かめてもらってください。",
   reviseRefusedOutside: (test) =>
-    `何も回答せず、何も消費していません。次の周回はこの周回が動いた範囲の外です。${scopeTestJa(test)}。` +
-    `ゲートはそのままです。選択肢は依頼のスレッドに書かれたメッセージにあります。`,
+    `変更依頼は送られておらず、費用もかかっていません。${scopeTestJa(test)}。` +
+    `どうするかの選択肢は、依頼のスレッドのメッセージにあります。`,
   reviseRefusedWalkFailed:
-    "ゲートへの回答が途中で終わり、次の周回も開始していません。書かれた言葉はすでにゲートに" +
-    "届いているかもしれません。もう一度押す前に、戻ってゲートの状態を確認してください。" +
-    "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
+    "変更依頼の送信が途中で止まり、次の回も始まっていません。書いた内容はすでに届いているかもしれません。" +
+    "もう一度押す前に、戻って確認の状態を確かめてください。" +
+    "何が起きたかは、このコンピュータで rondo を管理する人が確かめられます。",
   reviseRefusedNotSettled:
-    "ゲートには書かれた言葉で回答しましたが、次の周回は開始していません。回答した周回の後始末が" +
-    "終わりませんでした。何も消費していません。" +
-    "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
+    "変更依頼は届きましたが、次の回は始まっていません。前の回の終了処理が終わっていません。" +
+    "何が起きたかは、このコンピュータで rondo を管理する人が確かめられます。",
   reviseRefusedAfterGate:
-    "ゲートには書かれた言葉で回答しましたが、次の周回は開始していません。承認がもう 1 周回を" +
-    "受け付けませんでした。書かれた内容は記録されています。選択肢は依頼のスレッドに書かれた" +
-    "メッセージにあります。",
+    "変更依頼は届きましたが、次の回は始まっていません。書いた内容は記録してあります。どうするかの選択肢は、依頼のスレッドのメッセージにあります。",
   reviseRefusedNotStarted:
-    "次の周回は開始していません。ここで書いた内容は失われていません。" +
-    "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
-  reviseForked:
-    "ここでは変更を依頼できません。この依頼で承認した予算が別々に 2 回引き上げられていて、" +
-    "rondo はどちらを使うかを選びません。何も消費していません。今の作業をそのまま承認する" +
-    "ことはできます。",
+    "次の回は始まっていません。書いた内容は失われていません。" +
+    "何が起きたかは、このコンピュータで rondo を管理する人が確かめられます。",
+  reviseForked: "ここでは変更を依頼できません。今の作業をそのまま承認することはできます。",
   reviseRefusedForked:
-    "何も回答せず、何も消費していません。この依頼で承認した予算が別々に 2 回引き上げられて" +
-    "いて、rondo はどちらを使うかを選びません。",
+    "変更依頼は送られておらず、費用もかかっていません。この依頼の予算が別々に 2 回引き上げられていて、どちらを使うかを rondo は決めません。",
 
   raiseNeeded: (why) =>
-    `変更を依頼すると作業をもう 1 回やり直しますが、${why}ため、ここでは依頼できません。` +
-    "何も依頼しておらず、何も消費していません。予算を引き上げると、ここからまた変更を依頼" +
-    "できます。今の作業をそのまま承認することもできます。",
+    `${why}ため、ここでは変更を依頼できません。予算を引き上げると、変更を依頼できるようになります。今の作業をそのまま承認することもできます。`,
   raiseWhyLaps: (laps) => `承認した ${String(laps)} 回をすべて使っている`,
   raiseWhyCost: (spent, reserve, cost) =>
-    `やり直しには費用が分かるまで $${reserve} を確保する必要があり、すでに使ったか確保している ` +
-    `$${spent} と合わせると承認した $${cost} を超える`,
+    `使った分と確保中の分（$${spent}）に、やり直しに確保する $${reserve} を足すと、承認した $${cost} を超える`,
   raiseWhyExpiry: (at) => `承認した期限 ${at} (UTC) を過ぎている`,
   raiseLink: "この承認の予算を引き上げる",
   raiseLead:
     "この依頼で承認した予算を引き上げます。変わるのは予算だけで、作業の内容、作業する場所、" +
-    "作業者に許すことは承認したときのままです。",
+    "ワーカーに許すことは承認したときのままです。",
   raiseWasHeading: "承認した内容と、これまでに使った分",
   raiseWas: (laps, cost, until) => `${String(laps)} 回まで、$${cost} まで、${until} (UTC) まで。`,
   raiseUsed: (attempts, usd, unread) =>
     `これまでに ${String(attempts)} 回、$${usd} を使いました` +
     (unread === 0 ? "。" : `（うち ${String(unread)} 回は費用が報告されていません）。`),
   raiseFromHere:
-    "新しい予算はこれから先の分です。これまでに使った分は前の承認に数えられたままで、新しい" +
-    "予算からは引かれません。費用を $15 に引き上げると、合計 $15 ではなく、ここからさらに " +
-    "$15 まで使えます。",
-  raiseRetires:
-    "押すと、前の承認ではこれ以降何も新しく始まりません。前の承認が対象にしていたすべての" +
-    "依頼についてです。この承認がその代わりになります。",
+    "新しい予算は、ここから先にさらに使える分です。これまでに使った分は差し引かれません。",
+  raiseRetires: "押すと、この承認が前の承認の代わりになります。" + "",
   raiseAskStands:
-    "rondo はこの作業を以前止めて、どう進めるかをあなたに尋ねています。予算を引き上げても" +
-    "その回答にはなりません。依頼のスレッドで続けるよう伝えるまで、作業は止まったままです。",
-  raiseAskLink: "尋ねた内容を読む",
-  raiseNotTip:
-    "予算はすでに引き上げられていて、ここから引き上げるものはありません。戻って、今" +
-    "有効な予算を確認してください。",
+    "rondo はこの作業を止めて、どう進めるかを質問しています。予算を引き上げても、質問への回答にはなりません。" +
+    "依頼のスレッドで質問に回答するまで、作業は止まったままです。",
+  raiseAskLink: "質問を読む",
+  raiseNotTip: "この予算はすでに引き上げられています。確認に戻って、いまの予算を確かめてください。",
   raisePressNote:
-    "1 回押すと、新しい予算があなたの名前で記録・承認され、あなたを待っている作業に戻ります。" +
+    "押すと、新しい予算があなたの名前で承認され、あなたを待っている作業に戻ります。" +
     "承認しただけでは何も消費しません。",
   raiseAction: "予算を引き上げる",
   raisePlain: "新しい予算を記録して承認します",
   raiseRefusedNotTip:
-    "何も記録していません。別のタブか別の人が、先に予算を引き上げています。" +
-    "戻って、今有効な予算を確認してください。",
+    "別のタブか別の人が、先に予算を引き上げています。確認に戻って、いまの予算を確かめてください。",
   raiseRefusedForked:
-    "何も記録していません。この依頼で承認した予算が別々に 2 回引き上げられていて、rondo は" +
-    "どちらをさらに引き上げるかを選びません。",
-  raiseRefusedNotAtGate:
-    "何も記録していません。作業はもうあなたを待っていないので、予算を引き上げる対象が" +
-    "ありません。戻って結果を確認してください。",
+    "この依頼の予算が、別々に 2 回引き上げられています。" + "rondo はどちらも引き上げていません。",
+  raiseRefusedNotAtGate: "作業はもう確認を待っていません。確認に戻って、結果を確かめてください。",
 
   publishAction: "プルリクエストを作る",
   published: (branch) =>
-    `公開済み: ${branch === null ? "ブランチ" : `ブランチ ${branch}`} を push し、` +
+    `公開済みです。${branch === null ? "ブランチ" : `ブランチ ${branch}`} を push し、` +
     "この作業の記録を閉じました。",
   publishedPullRequest: "プルリクエスト",
   holds: (paths) => `この作業が押さえているファイル: ${filesJa(paths)}`,
   notLanded:
-    "プルリクエストはまだ作られておらず、この変更も既定ブランチで見つかっていません。それまで" +
-    "ファイルはこの作業が押さえたままで、同じファイルを使う別の作業は待つことになります。",
-  landed: "変更は既定ブランチに入りました。ファイルは別の作業に使えます。",
+    "プルリクエストはまだ作られておらず、この変更もデフォルトブランチで見つかっていません。それまで" +
+    "ファイルはこの作業が押さえたままで、同じファイルを使う別の作業は待たされます。",
+  landed: "変更はデフォルトブランチに入りました。ファイルは別の作業に使えます。",
   releasedByPerson: "人の判断でファイルが手放されたので、別の作業に使えます。",
   releaseLink: "ファイルを手放す",
   releaseHeading: "この作業が押さえているファイルを手放す",
   releaseLead:
     "この作業は終わっていますが、ファイルを押さえたままです。あなたが手放すか、プルリクエストが" +
-    "作られるか、変更が既定ブランチで見つかるまで、同じファイルを使う作業は始められません。",
+    "作られるか、変更がデフォルトブランチで見つかるまで、同じファイルを使う作業は始められません。",
   releaseWorkHeading: "作業",
-  releaseBrief: "rondo が作業に伝えた内容（全文）",
+  releaseBrief: "依頼の全文",
   releaseHoldsHeading: "押さえているファイル",
   releaseWhyHeading: "rondo が自分で手放していない理由",
   releaseWhy: [
     "rondo は、この作業のプルリクエストを作った時点でファイルを手放します。それより前は、" +
-      "この変更が既定ブランチに入ったと確かめられたときだけ手放します。作業が変えたファイルが" +
-      "すべて、作業が残したとおりの中身で既定ブランチにあることが条件です。確かめるのは、別の" +
+      "この変更がデフォルトブランチに入ったと確かめられたときだけ手放します。作業が変えたファイルが" +
+      "すべて、作業が残したとおりの中身でデフォルトブランチにあることが条件です。確かめるのは、別の" +
       "作業が同じファイルを求めたときです。",
     "どちらもまだです。まだ公開していない、または別の方法でマージされて、取り込むときに手が" +
-      "入った（コンフリクトの解消を含む）、別のリモートに送られた、既定ブランチを読めなかった、" +
+      "入った（コンフリクトの解消を含む）、別のリモートに送られた、デフォルトブランチを読めなかった、" +
       "のどれかです。",
     "作業が済んだかどうかを決めるのはあなたです。rondo が見分けられない形でマージ済みのとき、" +
       "またはマージしないと決めたときは、ファイルを手放してください。",
@@ -1111,11 +1031,8 @@ export const JA: Chrome = Object.freeze({
     "この作業の一部がまだ動いているか、あなたのレビューを待っているので、それが終わるまで" +
     "ファイルは押さえたままです。",
   releaseRefusedNoApprover:
-    "何も手放していません。この端末の rondo はまだあなたが誰かを知らないので、ここでは" +
-    "あなたとして何も決められません。",
-  releaseRefusedPress:
-    "何も手放していません。これは人がこのページのボタンを押して行うもので、スクリプトからは" +
-    "できません。",
+    "RONDO_APPROVER が正しく設定されていないため、このページからはファイルを手放せません。",
+  releaseRefusedPress: "ファイルを手放す画面に戻って、もう一度ボタンを押してください。",
   releaseRefusedForm:
     "何も手放していません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
@@ -1132,8 +1049,7 @@ export const JA: Chrome = Object.freeze({
     "フォルダです。外したものはすぐに別の作業が使えるようになります。",
   holdsLabel: "押さえるファイル",
   holdsRunning:
-    "この作業の一部がまだ動いています。ファイルを加えるのはいまでき、外すのはレビューで" +
-    "止まってからできます。",
+    "この作業の一部がまだ動いています。作業対象のファイルを加えることはできますが、除外するのは作業が一旦止まってからになります。",
   holdsAtReview:
     "加えたものはすぐにこの作業が押さえ、別の作業は使えなくなります（別の作業が押さえている" +
     "ものは加えられません）。",
@@ -1143,13 +1059,11 @@ export const JA: Chrome = Object.freeze({
     "手放せません。押さえるファイルは下で変えられます。",
   othersHold: (paths) => `別の作業が押さえているファイル: ${filesJa(paths)}`,
   holdsAction: "このファイルを押さえる",
-  nextStepEnd:
-    "この作業は止まったまま、自分では先へ進めません。終わらせられるのは人だけです。それまでこの" +
-    "作業は、このホストの枠、取り置いた金額、押さえたファイルを持ち続けるので、同じ作業を始め直せません。",
+  nextStepEnd: "この作業は止まったまま進みません。終わらせるまで、" + "同じ作業を始め直せません。",
   endHeading: "この作業を終わらせる",
   endUnnamed: "rondo が読めなくなった作業",
   unreadableHolds:
-    "このホストの枠をまだ押さえているので、ほかの作業が待たされているかもしれません。" +
+    "この作業が残っている間、ほかの作業が待たされることがあります。" +
     "終わらせられるのはあなただけです。",
   endLeadStalled:
     "この作業は途中で止まり、自分では先へ進めません。動いているものはなく、答える質問も" +
@@ -1159,11 +1073,11 @@ export const JA: Chrome = Object.freeze({
     "あなたが決め、その理由を記録します。",
   endLeadUnreadable:
     "rondo はこの作業を読めなくなったので、内容を示すことも、自分で終わらせることもできません。" +
-    "それでもこのホストの枠は押さえたままです。終わらせるかどうかはあなたが決め、その理由を記録します。",
+    "このコンピュータで同時に動かせる作業の枠を1つ占有しています。理由を記録して中断することができます。",
   endEffectHeading: "終わらせると起きること",
   endEffect: [
     "この作業はもう動きません。完了ではなく、終了として記録されます。",
-    "このホストの枠、取り置いた金額、押さえていたファイルは、すぐに返されます。",
+    "抑えられていた予算やファイルはすぐに解放されます。",
     "あなたの理由は作業に記録され、依頼のスレッドにも出ます。",
     "依頼そのものは止まりません。続けるか、作業を変えるか、やめるかを、スレッドで改めて聞きます。",
   ],
@@ -1174,18 +1088,15 @@ export const JA: Chrome = Object.freeze({
   endAction: "この作業を終わらせる",
   endPlain: "あなたの判断としてこの作業を終わらせ、理由を記録し、押さえていたものを返します",
   endBack: "作業を終わらせる画面に戻る",
-  endBrief: "rondo が作業に伝えた内容（全文）",
+  endBrief: "rondo がワーカーに頼んだ内容（全文）",
   endNoApprover:
-    "この作業を終わらせられるのは rondo が知っている人だけですが、この端末の rondo はまだ" +
-    "あなたが誰かを知りません。",
+    "RONDO_APPROVER が正しく設定されていないため、このページからは作業を終わらせられません。",
   endNothingToEnd:
     "ここで終わらせるものはありません。この作業はすでに終わったか、自分で先へ進みました。",
   endRefusedNoApprover:
-    "何も終わらせていません。この端末の rondo はまだあなたが誰かを知らないので、ここでは" +
-    "あなたとして何も決められません。",
+    "RONDO_APPROVER が正しく設定されていないため、このページからは作業を終わらせられません。",
   endRefusedPress:
-    "何も終わらせていません。これは人がこのページで押して行うもので、スクリプトからはできません。" +
-    "ページを読み込み直してから、もう一度押してください。",
+    "終わらせていません。作業を終わらせる画面に戻って、もう一度ボタンを押してください。",
   endRefusedForm:
     "何も終わらせていません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
@@ -1199,11 +1110,8 @@ export const JA: Chrome = Object.freeze({
     "記録できませんでした。作業はそのままです。あとでまた止まっていれば、もう一度押しても大丈夫です。",
   holdsPlain: "この作業が押さえるファイルを、あなたの判断として記録します",
   holdsRefusedNoApprover:
-    "何も変えていません。この端末の rondo はまだあなたが誰かを知らないので、ここでは" +
-    "あなたとして何も決められません。",
-  holdsRefusedPress:
-    "何も変えていません。これは人がこのページのボタンを押して行うもので、スクリプトからは" +
-    "できません。",
+    "RONDO_APPROVER が正しく設定されていないため、このページからは押さえるファイルを変えられません。",
+  holdsRefusedPress: "ファイルの画面に戻って、もう一度ボタンを押してください。",
   holdsRefusedForm:
     "何も変えていません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
@@ -1220,10 +1128,10 @@ export const JA: Chrome = Object.freeze({
     "何も変えていません。外したファイルのうち、この作業がすでに変えたものがあります。それは" +
     "作業が取り込まれるか終わるまで押さえたままです。",
   holdsRefusedUnread:
-    "何も変えていません。rondo はこの作業が変えたファイルを読めなかったので、何も外し" + "ません。",
+    "この作業で変えたファイルを rondo が読めなかったため、ファイルを外せませんでした。あとでもう一度試してください。",
   holdsRefusedPaths:
-    "何も変えていません。書かれたファイルはそのままでは押さえられません（空、パターン、" +
-    "いま押さえているものと同じ、または終わった作業へのファイルの追加）。",
+    "書いたファイルの一覧は受け付けられていません。空である、" +
+    "パターンが含まれる、いま押さえているものと同じ、終わった作業に加えている、のどれかです。",
   holdsRefusedNotRecorded:
     "何も変えていません。rondo があなたの判断を記録できませんでした。押さえているファイルは" +
     "そのままです。",
@@ -1246,17 +1154,16 @@ export const JA: Chrome = Object.freeze({
     "消費していません。その作業のプルリクエストが作られるか、ファイルが手放されると、rondo が" +
     "これを自動で開始します。押す必要はありません。",
   publishHeading: "この作業のプルリクエストを作る",
-  publishLead:
-    "公開すると何が起きるかを、いまの状態から読み取って示します。下のボタンを押すまで、何も起きません。",
-  publishNotYetLead: "まだ何も送信していません。いまのままでは公開できません。",
+  publishLead: "公開すると何が起きるかを示します。実際に公開するのは、下のボタンを押したときです。",
+  publishNotYetLead: "まだ何も送信していません。この作業はいまのままでは公開できません。",
   publishReviewLead:
-    "まだ何も送信していません。公開すると何が起きるかを、いまの状態から読み取って示します。" +
-    "作業の読み取りはそこまで及んでいないので、押せるのは、それを承知で進めるボタンだけです。",
-  publishNotYetHeading: "何が止めているか",
-  publishTargetHeading: "何が起きるか",
+    "まだ何も送信していません。公開すると何が起きるかを示します。" +
+    "ただし rondo のチェックがこの作業の内容と合っていないため、押せるのは、それを承知で公開するボタンだけです。",
+  publishNotYetHeading: "公開できない理由",
+  publishTargetHeading: "押すと起きること",
   publishPushes: (branch, remote) => `ブランチ ${branch} を ${remote} へ push します。`,
   publishOpens: (repo, base) => `${repo} に、${base} 向けのプルリクエストを作ります。`,
-  publishCloses: () => "rondo の中の、この作業の記録を完了として閉じます。",
+  publishCloses: () => "rondo ではこの作業を完了として閉じます。",
   publishPushUrl: (url) => `その push が届くのは ${url} です。`,
   publishWorkspace: (workspace) => `作業は ${workspace} にあります。`,
   publishRequestHeading: "作られるプルリクエスト",
@@ -1271,139 +1178,128 @@ export const JA: Chrome = Object.freeze({
   publishBodyRawNote: "この本文が、一字一句このまま送信されます。",
   publishNoticedHeading: "rondo が気づいたこと",
   publishModelHeading: "モデルが読んだこと",
-  publishModelNote:
-    "判断の材料です。承認ではなく、この画面の内容がこれで決まったわけでもありません。",
+  publishModelNote: "判断の参考です。承認ではありません。",
   publishNote: (merges) =>
     "ボタンを押すと、rondo があなたの名前で push し、プルリクエストを作り、作業の記録を閉じます。" +
     (merges
-      ? "チェックが通れば、範囲にしたがって rondo がデフォルトブランチにマージします。"
-      : "マージはしません。") +
+      ? "チェックが通れば、承認した範囲にしたがって rondo がデフォルトブランチにマージします。"
+      : "マージはしません。マージするかどうかはあなたが決めます。") +
     "画面を開いたあとに何か変わっていれば、実行せず、理由を表示します。",
   publishPlain: "このブランチを push し、プルリクエストを作り、作業の記録を閉じます。",
   publishBack: "公開の画面に戻る",
   publishNotOffered:
-    "ここからは公開できません。公開には、このホストが受け付ける公開者が要りますが、" +
-    "それがないまま起動されています。公開者はページを起動するときに rondo へ渡します。",
+    "RONDO_APPROVER が正しく設定されていないため、このページからは公開できません。" + "",
   publishNotClosed: (status) =>
-    `周回が ${status} の状態です。公開できるのは、人がゲートで承認した作業だけです。`,
+    `この回はまだ確認で承認されていません（いまの状態: ${status}）。公開できるのは、確認で承認された回だけです。`,
   publishNotApproved: (outcome) =>
-    `ゲートが ${outcome} で終わっていて、人が回答したわけではないため、` +
-    "公開してよいという承認がありません。",
+    `確認は、誰も回答しないまま終わっています（${outcome}）。` + "公開に必要な承認がありません。",
   publishAnswerNotApproval: (answer) =>
     answer === "revise"
-      ? "この周回のゲートには、承認ではなく変更の依頼で答えています。公開してよいという承認がありません。"
-      : "この周回のゲートには、rondo がどちらの答えかを記録するようになる前に答えています。" +
-        "承認か変更依頼かが分からないため、推測で公開はしません。",
+      ? "この回の確認には、承認ではなく変更依頼で回答しています。公開するのは、変更依頼のあとの回です。"
+      : "この回の確認に、承認と変更依頼のどちらで回答したかの記録が rondo にありません。" +
+        "承認の記録がないため、公開しません。",
   publishNoRun: "この作業の記録がないため、閉じるものがありません。",
   publishPlanField: (field) =>
-    `公開は周回の plan から組み立てますが、その plan に ${field} がありません。このままでは` +
-    "公開できません。",
+    `この回の計画に ${field} が記録されていないため、` + "公開できません。",
   publishNoRepo:
-    "この周回には、プルリクエストを出す先が記録されていません。このホストにも指定が" +
-    "ありません。ここからは決められません。出す先は、作業する場所を用意するときに、" +
-    "rondo を入れた人が記録します。",
-  publishTargetRefused: (reason) => `push の宛先を rondo が保証できません: ${reason}`,
+    "プルリクエストを出すリポジトリが、この回にも rondo の設定にも記録されていません。" +
+    "" +
+    "このコンピュータで rondo を管理する人に、リポジトリを記録してもらってください。",
+  publishTargetRefused: (reason) =>
+    `push 先が正しいか確認できないため、公開しません（${reason}）。このコンピュータで rondo を管理する人に確かめてもらってください。`,
   publishUncommitted: (paths) =>
-    `ワークスペースにブランチへ載っていない作業が残っています: ${paths}。push はそれを` +
-    "置き去りにしますし、ここのボタンでは変えられません。",
+    `作業場所に、コミットされていない変更が残っています（${paths}）。` +
+    "このまま公開すると、この変更はプルリクエストに含まれません。",
   publishUncommittedElsewhere: (branch) =>
-    `ワークスペースは ${branch} をチェックアウトしており、push 対象のブランチではありません。`,
+    `作業場所のブランチは ${branch} で、公開するブランチとは別です。`,
   publishUncommittedRemedies:
-    "公開ではなくそのパスについて答えてください。周回をやり直して作業自体をコミットさせ" +
-    "読み直させる、ワークスペースで自分でコミットする、作業でないなら捨てる、のいずれかです。",
+    "この変更を片付けてから公開してください。回をやり直してワーカーにコミットさせるか、作業場所で自分でコミットするか、作業でない変更なら捨てるかです。" +
+    "",
   publishStatusUnreadable: (reason) =>
-    `ワークスペースで git status が読めません (${reason})。push がコミットされていない作業を` +
-    "置き去りにするかどうか分かりませんし、ここのボタンでは変えられません。git status が" +
-    "答えるようにワークスペースを直してから、もう一度来てください。",
-  publishReviewHeading: "読み取りがこの作業を説明していません",
-  publishReviewNoReading:
-    "この作業を独立に読んだものがありません。「読まれていない」と「読んで何も出なかった」が" +
-    "同じに見えてはいけないので、既定では公開はここで止まります。",
+    `作業場所の状態を読めません（${reason}）。` +
+    "コミットされていない変更が残っているか分からないため、公開しません。" +
+    "このコンピュータで rondo を管理する人に、作業場所を確かめてもらってください。",
+  publishReviewHeading: "rondo のチェックが通っていません",
+  publishReviewNoReading: "この回は、まだ rondo のチェックが実施されていません。" + "",
   publishReviewNotClear: (verdict, findings) =>
-    `作業を読んだ結果は '${verdict}' です${findings === "" ? "" : `: ${findings}`}。` +
-    "結論でも拒否権でもなく、まだ誰も答えていない指摘です。",
+    `rondo のチェックの結果は '${verdict}' です${findings === "" ? "" : `: ${findings}`}。` +
+    "回答していない指摘があります。読んでから、公開するかを決めてください。",
   publishReviewNoEvidence:
-    "読み取りは何も出なかったと言っていますが、何を読んだかの測定が記録されていないため、" +
-    "照合する相手がありません。",
+    "rondo のチェックは問題なしとしていますが、何を読んだかの計測が記録されていないため、" +
+    "突き合わせて確かめられません。",
   publishReviewUnreadable: (reason) =>
-    `いまワークスペースを読めません (${reason})。そのため、読み取りと push される内容を` +
-    "照合できません。",
+    `作業場所をいま読めません（${reason}）。` +
+    "チェックした内容と公開する内容が同じかどうか、確認できません。",
   publishReviewMoved: (readTip, nowTip) =>
-    `読み取りは ${readTip} に対して取られ、push されるのは ${nowTip} です。もうこの作業を` +
-    "説明していません。",
-  publishDespiteFold: "その読み取りなしでプルリクエストを作る",
+    `rondo のチェックは ${readTip} の時点のもので、いま公開するのは ${nowTip} です。` +
+    "チェックのあとにコミットが変わっています。",
+  publishDespiteFold: "rondo のチェックが通らないままプルリクエストを作る",
   publishDespiteAction: "それでもプルリクエストを作る",
   publishDespiteNote:
-    "これを決めるのはあなたで、そのための押下は別に 1 回必要です。rondo はあなたが決めたことを" +
-    "記録します。読み取りはそのまま残ります。",
-  publishDespitePlain: "上の読み取りがこの作業を説明していないまま公開します。",
+    "押すと、rondo のチェックが通らないまま公開します。その判断は、あなたの名前で記録されます。" +
+    "",
+  publishDespitePlain: "rondo のチェックが通らないまま公開します。",
   scopeBusy: "範囲を記録しています…",
   nextStepHeading: "次にやること",
   nextStepScope:
     "この依頼の範囲（使ってよい費用と触ってよい場所）がまだ決まっていません。範囲を決めると、" +
     "作業を始められます。",
-  nextStepDrafted: "rondo が作業の範囲を提案しました。確認して承認すると、作業を始められます。",
+  nextStepDrafted: "rondo が作業の範囲を提案しました。承認すると作業が始まります。",
   nextStepRondoHeading: "rondo の番です",
   nextStepDrafting:
-    "rondo が依頼を読んで、計画を下書きしています。下書きができると、確認していただく範囲が" +
+    "rondo が依頼を読んで、計画を下書きしています。下書きができると、確認する範囲が" +
     "ここに出ます。いまのところ、あなたにしていただくことはありません。",
   nextStepNoDraft:
     "rondo はこの依頼の計画を下書きできませんでした。止まった理由は下のスレッドにあります。" +
     "範囲（使ってよい費用と触ってよい場所）をご自身で決めると、作業を始められます。",
-  nextStepAnswer:
-    "rondo があなたの回答を待っています。回答するまで、この依頼の作業は先へ進みません。",
+  nextStepAnswer: "rondo があなたの回答を待っています。回答するまで、この依頼の作業は進みません。",
   nextStepStart: "範囲は承認済みです。範囲の画面から作業を始めてください。",
   nextStepStartAction: "作業を始める画面へ",
   nextStepPublish: (merges) =>
-    "作業は承認済みです。プルリクエストを作ると、ブランチを push してレビューに出します。" +
+    "作業は承認済みです。プルリクエストを作ると、レビューに出ます。" +
     (merges
-      ? "チェックが通れば、範囲にしたがって rondo がデフォルトブランチにマージします。"
+      ? "チェックが通れば、承認した範囲で rondo がデフォルトブランチにマージします。"
       : "マージはしません。"),
   nextStepPublishing: (updating, merges) =>
     (updating === null
-      ? "作業は承認済みです。範囲にしたがって、rondo がいまプルリクエストを作っています。" +
-        "押すものはありません。"
-      : `競合の解消は承認済みです。範囲にしたがって、rondo がいま ${updating} に push しています。` +
-        "押すものはありません。") +
+      ? "作業は承認済みです。rondo がプルリクエストを作っています。" + "押すボタンはありません。"
+      : `競合の解消は承認済みです。rondo が ${updating} を更新しています。` +
+        "押すボタンはありません。") +
     (merges
       ? "チェックが通れば、rondo がデフォルトブランチにマージします。"
       : "マージはしません。"),
   nextStepAddRepository: (named, repo) =>
-    `この依頼は ${named} を名指ししていますが、rondo はまだ ${repo} で作業していないので、` +
-    `何も下書きしていません。追加すると、${repo} を rondo のほかのリポジトリと同じ場所に` +
-    `このコンピュータへコピーし、プルリクエストは ${repo} に出します。`,
+    `この依頼は ${named} を指していますが、rondo はまだ ${repo} で作業したことがないため、` +
+    `下書きはありません。追加すると、${repo} をこのコンピュータにコピーし、` +
+    `プルリクエストは ${repo} に出します。`,
   nextStepAddProposedRepository: (repo) =>
-    `この依頼はどのリポジトリでの作業かを書いていません。rondo は作業場所を ${repo} と読みましたが、` +
-    `${repo} の計画をまだ持っていないので、何も下書きしていません。追加すると、${repo} を rondo の` +
-    "ほかのリポジトリと同じ場所にこのコンピュータへコピーし、そこで作業を下書きしてあなたの承認を待ち、" +
-    `プルリクエストは ${repo} に出します。違うリポジトリなら、追加せずに返信で正しいものを伝えてください。`,
+    `この依頼にはリポジトリが書かれていません。rondo は ${repo} と読みましたが、` +
+    `まだ ${repo} で作業したことがないため、下書きはありません。追加すると、${repo} をこのコンピュータにコピーし、` +
+    `作業を下書きしてあなたの承認を待ちます。プルリクエストは ${repo} に出します。` +
+    `違うリポジトリなら、追加せずに返信で正しいリポジトリを伝えてください。`,
   nextStepRecordSetupPlan: (files) =>
-    "rondo はまだこれを動かす計画を持っていないので、何も下書きしていません。このコンピュータでの" +
-    `セットアップが計画を ${String(files)} 件書きましたが、記録までは終わっていません。残っているのは` +
-    "記録だけです。記録すると、rondo がこの依頼を下書きしてあなたの承認を待ちます。",
+    "セットアップの計画がまだ記録されていないため、この依頼の下書きはありません。" +
+    `このコンピュータのセットアップで、計画が ${String(files)} 件書かれています。` +
+    "記録すると、rondo がこの依頼を下書きして、あなたの承認を待ちます。",
   nextStepRunSetup:
-    "rondo はまだこれを動かす計画を持っていないので、何も下書きしていません。このコンピュータで" +
-    "セットアップがまだ実行されていません。rondo をここに入れた人が一度だけ実行すると" +
-    "（rondo のフォルダの scripts/dogfood-env.sh）、rondo がこの依頼を自分で下書きします。",
+    "このコンピュータでは rondo のセットアップがまだ実行されていないため、この依頼の下書きはありません。" +
+    "rondo を管理する人がセットアップ（rondo のフォルダの scripts/dogfood-env.sh）を一度実行すると、" +
+    "rondo がこの依頼を下書きします。",
   recordSetupPlanAction: "セットアップの計画を記録する",
   addRepositoryAction: "このリポジトリを追加する",
   addRepositoryBack: "依頼に戻る",
   repositoryUnbuilt: (repo) =>
-    `rondo には ${repo} のビルド方法が分からなかったので、作業者はファイルの変更とコミットは` +
-    "できますが、ビルドやテストは実行できません。",
+    `${repo} のビルド方法が分からないため、ワーカーはファイルの変更とコミットはできますが、` +
+    "ビルドとテストは実行できません。",
   addRepositoryRefusedNoApprover:
-    "何も追加していません。この端末の rondo はまだあなたが誰かを知らないので、ここでは" +
-    "あなたとして何も決められません。",
-  addRepositoryRefusedPress:
-    "何も追加していません。これは人がこのページのボタンを押して行うもので、スクリプトからは" +
-    "できません。",
+    "RONDO_APPROVER が正しく設定されていないため、このページからはリポジトリを追加できません。",
+  addRepositoryRefusedPress: "依頼に戻って、もう一度ボタンを押してください。",
   addRepositoryRefusedForm:
     "何も追加していません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
   addRepositoryRefusedInstall:
-    "何も追加していません。このコンピュータの rondo は、あなたとして GitHub に届きません。" +
-    "見られるのは、ここに rondo を入れた人です。直ったら、ボタンはそのまま残っているので" +
-    "もう一度押せます。",
+    "このコンピュータの rondo が、あなたとして GitHub につながりません。" +
+    "rondo を管理する人に直してもらってから、もう一度押してください。",
   addRepositoryRefusedUnseen:
     "何も追加していません。GitHub にそのリポジトリが無いか、あなたのアカウントからは見えません。" +
     "依頼に書いた名前が違っていれば、返信で正しい名前を伝えてください。",
@@ -1411,111 +1307,106 @@ export const JA: Chrome = Object.freeze({
     "何も追加していません。今回はリポジトリをコピーできませんでした。もう一度押しても" +
     "大丈夫です。止まったところから続けます。",
   addRepositoryRefusedChanged:
-    "何も追加していません。この依頼はもう、rondo が作業していないリポジトリを名指ししていません。" +
-    "戻っていまの状態を確かめてください。",
+    "この依頼にリポジトリを追加する必要はなくなりました。" +
+    "依頼に戻って、いまの状態を確認してください。",
   addRepositoryRefusedNoSetup:
-    "何も追加していません。このコンピュータの rondo の設定が、リポジトリを置く場所をまだ" +
-    "rondo に渡していません。見られるのは、ここに rondo を入れた人です。",
+    "このコンピュータでは rondo のセットアップが済んでいません。" +
+    "rondo を管理する人にセットアップを実施してもらってください。",
   approveBusy: "承認を記録しています…",
   startBusy: "作業を始めています…",
   reviseBusy: "変更を依頼しています…",
   publishBusy: "プルリクエストを作っています…",
   startStoppedHeldSaid: [
-    "中断しました。始めた作業を続けられなくなり、rondo は自分では終了させられませんでした。",
-    "この作業は、このホストの枠、取り置いた金額、押さえたファイルをまだ持っています。終わらせる" +
-      "までは、同じ作業を始め直せません。何が起きたかは、その作業の記録に残っています。",
+    "始めた作業を続けられなくなりました。rondo はこの作業を終わらせられませんでした。",
+    "終わらせるまで、同じ作業は始め直せません。" + "",
     "選べること:",
-    "- 作業を終わらせる。この依頼の上にある「次にやること」から進めます。理由を書くと rondo が" +
-      "押さえていたものを返し、そのあとここで「続ける」と答えれば、rondo が作業をもう一度始めます。",
-    "- この線を止める。あきらめるもの: この依頼の作業。押さえているものはそのままです。",
+    "- 作業を終わらせる。この依頼の上の「次にやること」から終わらせて、" +
+      "ここで「続ける」と回答すると、rondo が作業をもう一度始めます。",
+    "- この作業を止める。あきらめるもの: この依頼の作業。",
     "おすすめ: 作業を終わらせる。",
-    "この流れは、このメッセージに答えるまで止まったままです。",
+    "このメッセージに回答するまで、この作業は止まったままです。",
   ].join("\n"),
   lapStoppedSaid: (said) =>
     [
       `作業が途中で止まりました。${said ?? "何が起きたかは、このスレッドの作業の行に出ています。"}`,
       "選べること:",
-      "- 続ける。そのあと、もう一度始めます。あきらめるもの: 今回の試行でコミットされなかった変更。",
-      "- この線を止める。あきらめるもの: この依頼の作業。",
+      "- 続ける。作業をもう一度始めます。あきらめるもの: この回でコミットしていない変更。",
+      "- この作業を止める。あきらめるもの: この依頼の作業。",
       "おすすめ: 続ける。",
-      "この流れは、このメッセージに答えるまで止まったままです。",
+      "このメッセージに回答するまで、この作業は止まったままです。",
     ].join("\n"),
   lapBudgetStoppedSaid: (said) =>
     [
       `作業が予算の上限で止まりました。${said ?? "何が起きたかは、このスレッドの作業の行に出ています。"}`,
       "選べること:",
-      "- 予算を増やして続ける。rondo がこの作業のコミットからもう一度始めます。あきらめるもの: " +
-        "増やした分のお金と、今回の試行でコミットされなかった変更。",
-      "- 同じ予算のまま続ける。rondo が同じようにもう一度始めます。あきらめるもの: 今回の試行で" +
-        "コミットされなかった変更。残りが少ないとまた止まります。",
-      "- この線を止める。あきらめるもの: この依頼の作業。",
+      "- 予算を増やして続ける。rondo が最後のコミットからもう一度始めます。あきらめるもの: " +
+        "増やした分の費用と、この回でコミットしていない変更。",
+      "- 同じ予算のまま続ける。あきらめるもの: この回で" +
+        "コミットしていない変更。予算の残りが少ないと、また止まります。",
+      "- この作業を止める。あきらめるもの: この依頼の作業。",
       "おすすめ: 予算を増やして続ける。",
-      "この流れは、このメッセージに答えるまで止まったままです。",
+      "このメッセージに回答するまで、この作業は止まったままです。",
     ].join("\n"),
   lapLostAsk: [
-    "作業が失われました。実行中に rondo が再起動されたためで、いま動いているものはありません。" +
-      "取り置いていた金額は戻しました。",
+    "作業の途中で rondo が再起動され、この回は失われました。動いているものはなく、" +
+      "費用もかかっていません。",
     "選べること:",
-    "- この作業をもう一度始める（「続ける」で答える）。あきらめるもの: 失われた回でコミットされなかった変更。",
-    "- 作業を変える（「止める」で答えてから、変えた内容で依頼し直す）。あきらめるもの: この回の流れ。",
-    "- 止める（「止める」で答える）。あきらめるもの: この作業。",
+    "- この作業をもう一度始める（「続ける」と回答する）。あきらめるもの: 失われた回でコミットしていない変更。",
+    "- 作業の内容を変える（「この作業を止める」と回答してから、依頼し直す）。あきらめるもの: この作業。",
+    "- 止める（「この作業を止める」と回答する）。あきらめるもの: この作業。",
     "おすすめ: この作業をもう一度始める。",
-    "この流れは、このメッセージに答えるまで止まったままです。",
+    "このメッセージに回答するまで、この作業は止まったままです。",
   ].join("\n"),
   lapEndedAsk: (reason) =>
     [
-      "あなたがこの作業を終わらせました。動いているものはなく、このホストの枠、取り置いていた金額、" +
-        "押さえていたファイルは戻しました。",
-      `あなたの理由: ${reason}`,
+      "この作業はあなたが終わらせました。動いているものはなく、" + "費用もかかっていません。",
+      `あなたが書いた理由: ${reason}`,
       "選べること:",
-      "- この作業をもう一度始める（「続ける」で答える）。あきらめるもの: 終わらせた回でコミットされなかった変更。",
-      "- 作業を変える（「止める」で答えてから、変えた内容で依頼し直す）。あきらめるもの: この回の流れ。",
-      "- 止める（「止める」で答える）。あきらめるもの: この作業。",
-      "おすすめ: この作業をもう一度始める。ただし、理由が作業そのものを変えるべきだと言っているなら別です。",
-      "この流れは、このメッセージに答えるまで止まったままです。",
+      "- この作業をもう一度始める（「続ける」と回答する）。あきらめるもの: 終わらせた回でコミットしていない変更。",
+      "- 作業の内容を変える（「この作業を止める」と回答してから、依頼し直す）。あきらめるもの: この作業。",
+      "- 止める（「この作業を止める」と回答する）。あきらめるもの: この作業。",
+      "おすすめ: この作業をもう一度始める。理由が作業そのものを変えるべきだという内容なら、作業の内容を変える。",
+      "このメッセージに回答するまで、この作業は止まったままです。",
     ].join("\n"),
   lapEndedUnreadableAsk: (reason) =>
     [
-      "rondo が読めなくなっていたこの依頼の作業を、あなたが終わらせました。このホストの枠は" +
-        "戻しました。コミットされていなかった変更は残っていません。",
-      `あなたの理由: ${reason}`,
+      "rondo が読めなくなっていたこの作業を、あなたが終わらせました。" +
+        "コミットしていなかった変更は残っていません。",
+      `あなたが書いた理由: ${reason}`,
       "選べること:",
-      "- 続ける（「続ける」で答える）。rondo が依頼の内容から、作業をもう一度計画します。",
-      "- 作業を変える（「止める」で答えてから、変えた内容で依頼し直す）。あきらめるもの: この流れ。",
-      "- 止める（「止める」で答える）。あきらめるもの: この依頼の作業。",
+      "- 続ける（「続ける」と回答する）。rondo が依頼の内容から、作業を計画し直します。",
+      "- 作業の内容を変える（「この作業を止める」と回答してから、依頼し直す）。あきらめるもの: この依頼の作業。",
+      "- 止める（「この作業を止める」と回答する）。あきらめるもの: この依頼の作業。",
       "おすすめ: 続ける。",
-      "この流れは、このメッセージに答えるまで止まったままです。",
+      "このメッセージに回答するまで、この作業は止まったままです。",
     ].join("\n"),
   flowStopWithdrawn: [
-    "この停止はもう有効ではありません。rondo が直近に始めた 2 つの依頼は、もう両方とも失敗とは" +
-      "読まれていません。rondo が弾いた下書きや、再起動で失われてやり直された回は、失敗した依頼では" +
-      "ありません。",
-    "rondo はこの質問を取り下げ、目標の依頼を頼み続けます。ここで答える必要はありません。",
+    "この停止は取り下げました。失敗と見ていた依頼が、失敗ではなくなりました。" + "" + "",
+    "rondo は目標の依頼を続けます。回答は不要です。",
   ].join("\n"),
   flowDraftRefusedAsk: [
     "rondo はこの依頼の計画を下書きできませんでした。そのため作業は何も始まっていません。" +
       "弾かれたのは rondo が書いた下書きで、あなたの依頼ではありません。",
     "選べること:",
     "- 依頼を言い換えて、もう一度頼む。あきらめるもの: なし。この依頼はこのまま残ります。",
-    "- この依頼を止める（「止める」で答える）。あきらめるもの: この依頼の作業。",
-    "おすすめ: 依頼を言い換えて、もう一度頼む。",
-    "rondo は目標のほかの依頼を頼み続けます。この依頼の下書きを自分でやり直すことはしません。",
+    "- この依頼を止める（「この作業を止める」と回答する）。あきらめるもの: この依頼の作業。",
+    "おすすめ: 依頼を言い換えて、もう一度依頼する。",
+    "rondo は目標のほかの依頼を続けます。この依頼の下書きを rondo がやり直すことはありません。",
   ].join("\n"),
   startStoppedSaid: [
-    "中断しました。始めた作業を続けられなくなったので、rondo が終了させました。",
-    "動いているものはもうありません。このホストの枠も、取り置いていた金額も、押さえていた" +
-      "ファイルも返しました。何が起きたかは、その作業の記録に残っています。",
+    "始めた作業を続けられなくなったため、rondo が終わらせました。",
+    "動いているものはなく、費用もかかっていません。" + "",
     "選べること:",
-    "- もう一度始める。あきらめるもの: 今回の試行でできたもの。依頼の内容から始め直します。",
-    "- やめる。あきらめるもの: この依頼の作業。",
+    "- もう一度始める。依頼の内容から始め直します。あきらめるもの: この回でできたもの。",
+    "- この作業を止める。あきらめるもの: この依頼の作業。",
     "おすすめ: もう一度始める。",
-    "この流れは、このメッセージに答えるまで止まったままです。",
+    "このメッセージに回答するまで、この作業は止まったままです。",
   ].join("\n"),
   startBusyNote:
     "受け付けました。作業の準備をしています。動き出したらすぐ依頼のスレッドに移り、" +
     "そこで進み具合が分かります。もう一度押す必要はありません。",
   lapBusyNote:
-    "受け付けました。いま作業が動いていて、確認をお願いする所まで進むとこの画面が切り替わります。" +
+    "受け付けました。作業が開始されました。確認が必要になると、この画面が切り替わります。" +
     "数分、長いと数十分かかります。もう一度押す必要はありません。" +
     "別のタブで一覧を開くと、作業中だと分かります。",
   publishBusyNote:
@@ -1530,78 +1421,72 @@ export const JA: Chrome = Object.freeze({
   publishRefusedForm:
     "何も公開していません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
-  publishRefusedGone:
-    "何も公開していません。周回がもう読めなくなっています。一覧に戻ってください。",
-  publishRefusedNotClosed: "何も公開していません。周回が、承認されたゲートで終わっていません。",
-  publishRefusedNotApproved:
-    "何も公開していません。ゲートが人の回答なしに終わっていて、公開してよいという承認が" +
-    "ありません。",
-  publishRefusedNoRun: "何も公開していません。閉じる作業の記録がありません。",
-  publishRefusedPlanField:
-    "何も公開していません。この周回の plan に、公開の組み立てに要るものが欠けています。",
+  publishRefusedGone: "この回の記録が見つからないため、公開できません。一覧に戻ってください。",
+  publishRefusedNotClosed: "公開していません。この回は、確認で承認されていません。",
+  publishRefusedNotApproved: "公開していません。この回の確認に承認がありません。",
+  publishRefusedNoRun: "公開していません。この回の作業の記録が見つかりません。",
+  publishRefusedPlanField: "公開していません。この回の計画に、公開に必要な情報が足りません。",
   publishRefusedNoRepo:
-    "何も公開していません。この周回にも、このホストにも、プルリクエストを出す先の記録が" +
-    "ありません。",
+    "公開していません。プルリクエストを出すリポジトリが記録されていません。" +
+    "このコンピュータで rondo を管理する人に記録してもらってください。",
   publishRefusedTarget: (detail) =>
     `何も公開していません。push の宛先を rondo が保証できません。${detail}`,
   publishRefusedUncommitted: (detail) =>
-    `何も公開していません。ワークスペースにブランチへ載っていない作業が残っています (${detail})。`,
+    `公開していません。作業場所に、コミットされていない変更が残っています（${detail}）。`,
   publishRefusedStatusUnreadable: (detail) =>
-    "何も公開していません。git status が読めず、ブランチへ載っていない作業が残っているか" +
+    "公開していません。作業場所の状態を読めず、コミットされていない変更が残っているか" +
     `分かりません (${detail})。`,
   publishRefusedNotRead:
-    "何も公開していません。この作業の読み取りが、push される内容を説明していません。" +
-    "この画面を読み込み直してください。それを踏み越えて公開するには、別の押下が要ります。",
+    "公開していません。画面を開いたあとに、rondo のチェックが通らなくなりました。" +
+    "公開の画面に戻って、それでも公開するかを決めてください。",
   publishRefusedNothingOverruled:
-    "何も公開していません。読み取りはこの作業を説明しているので、踏み越えるものがありません。" +
-    "この画面を読み込み直して、公開を押してください。",
+    "公開していません。rondo のチェックは通っているので、チェックなしで公開する必要はありません。" +
+    "公開の画面に戻って、「プルリクエストを作る」を押してください。",
   publishRefusedChanged:
     "何も公開していません。画面に出ていた内容と、いま公開したら起きることが食い違っています。" +
     "読み込み直し、もう一度読んでから押してください。",
   publishRefusedStillRunning:
-    "二重には公開していません。別の内容を読んだ画面から、すでに公開の処理が進んでいます。" +
-    "終わるのを待ってから読み込み直してください。",
+    "二重には公開していません。この回の公開は、すでに進んでいます。" +
+    "終わるのを待ってから、公開の画面を開き直してください。",
   publishRefusedNoContinuo:
-    "何も公開していません。作業の記録を閉じる部分が起動しないため、rondo は最後まで終えられない" +
-    "push を行いません。",
+    "公開していません。rondo の一部が起動せず、push も行っていません。" +
+    "このコンピュータで rondo を管理する人に確かめてもらってください。",
   publishRefusedPushFailed: (detail) =>
     `何も公開していません。ブランチを push できませんでした。${detail}`,
   publishRefusedPullRequestFailed: (detail) =>
-    `ブランチは push 済みで、プルリクエストは作れませんでした。${detail} その前に作られていたか` +
-    "どうかは rondo が持っている情報ではありません。もう一度押す前にフォージ側を見てください。" +
-    "すでにあるプルリクエストを 2 回目の押下で作ることはできません。ある場合、残っているのは " +
-    "作業の記録を閉じることだけで、そのための 1 行は、このマシンで rondo を管理する人が確かめられます。",
+    `ブランチは push できましたが、プルリクエストは作れませんでした。${detail}` +
+    "プルリクエストがすでにできているかどうかは、rondo には分かりません。GitHub で確かめてください。" +
+    "プルリクエストがなければ、もう一度押してください。" +
+    "プルリクエストがあれば、残りは作業の記録を閉じることだけです。このコンピュータで rondo を管理する人に頼んでください。",
   publishRefusedRunNotClosed:
-    "ブランチは push 済みで、プルリクエストも作られています。作業の記録が閉じていません。残っているのは" +
-    "その 1 つです。" +
-    "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
+    "ブランチは push 済みで、プルリクエストもできています。" +
+    "作業の記録を閉じる処理だけが終わっていません。" +
+    "このコンピュータで rondo を管理する人に確かめてもらってください。",
   nextStepMerge:
-    "プルリクエストの最新のコミットでチェックが緑になり、あなたの回答を待っているものも" +
-    "ありません。マージすると、プルリクエストを作った先のブランチへ、リポジトリが許す方法で" +
-    "取り込みます。このページからは取り消せません。",
+    "プルリクエストのチェックが通り、回答待ちのものもありません。" +
+    "マージすると、プルリクエストのマージ先のブランチに取り込みます。" +
+    "マージはこのページからは取り消せません。",
   mergeAction: "プルリクエストをマージする",
   mergeConfirmHeading: "この作業のプルリクエストをマージする",
   mergeConfirmInto: (pullRequest, base) =>
     `${pullRequest} を ${base} へ、リポジトリが許す方法で取り込みます。`,
   mergeConfirmCommit: (commit) =>
-    `取り込むのはプルリクエストの最新のコミット ${commit} で、チェックはこのコミットで緑です。`,
+    `マージするのはプルリクエストの最新のコミット ${commit} です。チェックはこのコミットで通っています。`,
   mergeConfirmNoUndo:
-    "このページからは取り消せません。この画面を開いたあとにプルリクエストが動いていれば、" +
-    "マージせず、何が動いたかを依頼のスレッドに示します。",
+    "マージはこのページからは取り消せません。この画面を開いたあとにプルリクエストが変わっていれば、" +
+    "マージせず、何が変わったかを依頼のスレッドに表示します。",
   mergeConfirmMore: (count) => `ほか ${String(count)} 件`,
-  mergeConfirmNotNow:
-    "いまはここからマージできません。依頼に戻ると、次にやることが示されています。",
+  mergeConfirmNotNow: "いまはここからマージできません。次にやることは依頼の画面にあります。",
   nextStepMergeMoved: (count) =>
-    `プルリクエストの最新のコミットでチェックが緑になりました。このコミットには、この作業のものではないコミットが ${String(count)} 件含まれています（上に挙げています）。マージすると、それらもいっしょに、プルリクエストを作った先のブランチへ、リポジトリが許す方法で取り込みます。このページからは取り消せません。取り込みたくなければ、押さないでください。`,
+    `プルリクエストのチェックが通りました。ただし、この作業のものではないコミットが ${String(count)} 件含まれています（上に挙げています）。マージすると、それもいっしょに取り込みます。マージはこのページからは取り消せません。取り込みたくなければ、ボタンを押さないでください。`,
   mergeMovedAction: "そのコミットも含めてマージする",
   mergeBusy: "マージしています…",
   mergeBusyNote:
-    "受け付けました。rondo がプルリクエストのマージを依頼しています。ふつうは数秒で終わります。" +
+    "受け付けました。GitHub にマージを依頼しています。ふつうは数秒で終わります。" +
     "もう一度押す必要はありません。",
   mergeBack: "依頼に戻る",
   mergeRefusedNoApprover:
-    "マージしていません。この端末の rondo はまだあなたが誰かを知らないので、ここでは" +
-    "あなたとして何も決められません。",
+    "マージしていません。RONDO_APPROVER が正しく設定されていないため、このページからはマージできません。",
   mergeRefusedPress:
     "マージしていません。マージは人がこのページのボタンを押して行うもので、スクリプトからは" +
     "できません。",
@@ -1612,18 +1497,18 @@ export const JA: Chrome = Object.freeze({
     "マージしていません。この作業がもう読めません。ページを読み込み直してください。",
   mergeRefusedNotPublished: "マージしていません。この作業のプルリクエストがまだありません。",
   mergeRefusedNotGreen:
-    "マージしていません。プルリクエストの最新のコミットで、チェックが緑だと rondo はまだ" +
-    "読めていません。終わるのを待ってから、もう一度押してください。",
+    "マージしていません。プルリクエストの最新のコミットで、チェックが通ったことを確認できていません。" +
+    "チェックの結果を確かめてから、もう一度押してください。",
   mergeRefusedAsked:
     "マージしていません。この作業には、あなたの回答を待っている質問や確認が残っています。" +
     "先に答えてください。",
-  mergeRefusedMerged: "もう一度はマージしていません。このプルリクエストはマージ済みです。",
+  mergeRefusedMerged: "マージしていません。このプルリクエストはすでにマージ済みです。",
   mergeRefusedLanded:
-    "マージしていません。この作業はすでに既定のブランチに入っているので、マージするものが" +
+    "マージしていません。この作業はすでにデフォルトブランチに入っているので、マージするものが" +
     "残っていません。",
   mergeRefusedMoved:
-    "マージしていません。rondo がチェックを緑と読んだあとで、プルリクエストに新しいコミットが" +
-    "加わっています。ページを読み込み直すと表示されます。",
+    "マージしていません。rondo がチェックの結果を確かめたあとで、プルリクエストに新しいコミットが" +
+    "加わっています。ページを読み込み直すと、そのコミットが表示されます。",
   mergeRefusedRetargeted:
     "マージしていません。プルリクエストの取り込み先が、rondo が開いたときのブランチから変わっています。" +
     "GitHub で確かめてください。",
@@ -1642,34 +1527,31 @@ export const JA: Chrome = Object.freeze({
     "（リポジトリがマージキューを使っているか、GitHub から返事がありませんでした）。" +
     "もう一度押す前に、GitHub でプルリクエストを確かめてください。",
   mergeRefusedInFlight:
-    "この押下ではマージしていません。このプルリクエストのマージがすでに進んでいます。少し待って" +
+    "今回はマージしていません。このプルリクエストのマージはすでに進んでいます。少し待って" +
     "から依頼に戻り、結果を確かめてください。",
   publishRefusedNotStarted:
-    "何も公開していません。ここで見た内容は失われていません。" +
-    "何が起きたかは、このマシンで rondo を管理する人が確かめられます。",
+    "公開を始められませんでした。ここで見た内容は失われていません。" +
+    "何が起きたかは、このコンピュータで rondo を管理する人が確かめられます。",
   nextStepConflictFix: (pullRequest, base) =>
     `${pullRequest} は ${base} と競合していて、チェックが動きません。rondo が ${base} を` +
-    "取り込んで競合を解消できます（ほかは変えません）。push の前に、その結果をここで確認して" +
-    "もらいます。",
+    "取り込んで競合を解消できます。ほかの変更はしません。" +
+    "解消した結果は、プルリクエストを更新する前にここで確認できます。",
   nextStepConflictFixing: (pullRequest, base) =>
-    `${pullRequest} は ${base} と競合しています。この作業は計画無しでほかの作業と並べて始めたので、` +
-    `承認の範囲で rondo が自分で ${base} を取り込み、競合を解消しています（ほかは変えません）。` +
-    "押すものはありません。解消の回も、ほかの作業と同じく確認の場で止まります。",
+    `${pullRequest} は ${base} と競合しています。` +
+    `承認した範囲で、rondo が ${base} を取り込んで競合を解消しています。ほかの変更はしません。` +
+    "押すボタンはありません。解消した結果は、プルリクエストを更新する前にここで確認できます。",
   conflictFixLeft: (reason) => `rondo は自分でこの解消を始めようとしました。${reason}`,
   conflictFixAction: "rondo に競合を解消してもらう",
   conflictFixBusy: "解消を始めています…",
   conflictFixBack: "依頼に戻る",
   nextStepChecksFix: (pullRequest, checks) =>
     `${pullRequest} のチェックが通りませんでした${checks === null ? "" : `（${checks}）`}。rondo がプルリクエストのブランチで` +
-    "失敗を再現して直せます（ほかは変えません）。push の前に、その結果をここで確認してもらいます。",
+    "失敗を再現して直せます。ほかの変更はしません。直した結果は、プルリクエストを更新する前にここで確認できます。",
   checksFixAction: "rondo に失敗したチェックを再現して直してもらう",
   checksFixBusy: "修正を始めています…",
   conflictFixRefusedNoApprover:
-    "何も始めていません。この端末の rondo はまだあなたが誰かを知らないので、ここでは" +
-    "あなたとして何も決められません。",
-  conflictFixRefusedPress:
-    "何も始めていません。これは人がこのページのボタンを押して行うもので、スクリプトからは" +
-    "できません。",
+    "RONDO_APPROVER が正しく設定されていないため、このページからは作業を始められません。",
+  conflictFixRefusedPress: "依頼に戻って、もう一度ボタンを押してください。",
   conflictFixRefusedForm:
     "何も始めていません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
@@ -1677,50 +1559,45 @@ export const JA: Chrome = Object.freeze({
     "何も始めていません。プルリクエストにもう解消が要らないか、すでに解消が進んでいます。" +
     "ページを読み込み直すと、いまの状態が分かります。",
   conflictFixRefusedNotItsScope:
-    "何も始めていません。使おうとした承認が、この作業の動いた承認と違います。ページを" +
+    "この画面を開いたあとに承認内容が変わったため、解消は始めていません。ページを" +
     "読み込み直してから押してください。",
   conflictFixRefusedForked:
-    "何も始めていません。この作業の承認が別々に 2 回引き上げられていて、rondo はどちらかを" +
-    "選びません。",
-  conflictFixRefusedNoContinuo: "何も始めていません。作業を動かす rondo の部分が起動しません。",
+    "この作業の承認が別々に 2 つあるため、" + "rondo はどちらも使わず、解消は始めていません。",
+  conflictFixRefusedNoContinuo:
+    "作業を開始する仕組みが起動しませんでした。このコンピュータで rondo を管理する人に確かめてもらってください。",
   conflictFixRefusedNotSetUp:
-    "何も始めていません。解消の準備ができませんでした。何が起きたかは、このマシンで rondo を" +
+    "解消の準備ができませんでした。何が起きたかは、このコンピュータで rondo を" +
     "管理する人が確かめられます。",
   conflictFixRefusedOutside: (test) =>
-    `何も始めておらず、何も使っていません。もう 1 回の作業は、この作業が動いた範囲の外です` +
-    `（${test} の確認）。選べることは、依頼のスレッドのメッセージに書いてあります。`,
+    `何も始めておらず、費用もかかっていません。もう 1 回は承認した範囲を超えます（${test}）。` +
+    `選べることは、依頼のスレッドの rondo のメッセージにあります。`,
   conflictFixRefusedNotStarted:
-    "何も始めていません。ここで見た内容は失われていません。何が起きたかは、このマシンで" +
+    "解消を始められませんでした。ここで見た内容は失われていません。何が起きたかは、このコンピュータで" +
     " rondo を管理する人が確かめられます。",
   retakeReviewAction: "レビューをもう一度受ける",
   retakeReviewBusy: "レビューをもう一度受けています…",
   retakeReviewBack: "確認に戻る",
   retakeRefusedNoApprover:
-    "レビューはやり直していません。この端末の rondo はまだあなたが誰かを知らないので、" +
-    "ここではあなたとして何も決められません。",
+    "レビューはやり直していません。RONDO_APPROVER が正しく設定されていないため、このページからはレビューをやり直せません。",
   retakeRefusedPress:
-    "レビューはやり直していません。これは人がこのページのボタンを押して行うもので、" +
-    "スクリプトからはできません。",
+    "レビューはやり直していません。確認の画面に戻って、もう一度ボタンを押してください。",
   retakeRefusedForm:
     "レビューはやり直していません。そのフォームはこのページのものではありません。" +
     "読み込み直してから押してください。",
   retakeRefusedGone:
-    "レビューはやり直していません。この確認はもうあなたを待っていないか、レビューは" +
+    "レビューはやり直していません。この確認はもう終わっているか、レビューは" +
     "すでにやり直されています。ページを読み込み直すと、いまの状態が分かります。",
   retakeRefusedBudget: (taken, budget) =>
-    `レビューはやり直していません。この作業は、範囲が認めるレビュー ${String(budget)} 回の` +
-    `うち ${String(taken)} 回を使っていて、やり直しはもう 1 回に数えます。範囲のレビュー回数を` +
-    "引き上げれば、やり直せます。",
+    `レビューはやり直していません。承認したレビュー ${String(budget)} 回のうち ${String(taken)} 回を使っていて、やり直すと 1 回増えます。承認のレビュー回数を引き上げれば、やり直せます。`,
   retakeRefusedForked:
-    "レビューはやり直していません。この作業の承認が別々に 2 回引き上げられていて、レビューが" +
-    "あと何回できるかが決まらず、rondo はどちらかを選びません。",
+    "レビューはやり直していません。この作業の予算が別々に 2 回引き上げられていて、レビューがあと何回できるかが決まりません。",
   retakeRefusedNoContinuo:
-    "レビューはやり直していません。作業を動かす rondo の部分が起動しません。",
+    "レビューはやり直していません。作業を開始する仕組みが起動しませんでした。このコンピュータで rondo を管理する人に確かめてもらってください。",
   nextStepPublishUpdate: (pullRequest, merges) =>
     `競合の解消は承認済みです。公開すると ${pullRequest} に push し、チェックがもう一度` +
     "動きます。" +
     (merges
-      ? "チェックが通れば、範囲にしたがって rondo がデフォルトブランチにマージします。"
+      ? "チェックが通れば、承認した範囲で rondo がデフォルトブランチにマージします。"
       : "マージはしません。"),
   publishUpdates: (pullRequest, base) =>
     `${base} 向けに開いている ${pullRequest} へ push します。プルリクエストは新しく作りません。`,
@@ -1730,8 +1607,8 @@ export const JA: Chrome = Object.freeze({
   publishNoteUpdate: (merges) =>
     "ボタンを押すと、rondo があなたの名前で、開いているプルリクエストへ push し、作業の記録を閉じます。" +
     (merges
-      ? "プルリクエストは作りません。" +
-        "チェックが通れば、範囲にしたがって rondo がデフォルトブランチにマージします。"
+      ? "プルリクエストは新しく作りません。" +
+        "チェックが通れば、承認した範囲にしたがって rondo がデフォルトブランチにマージします。"
       : "プルリクエストは作らず、マージもしません。") +
     "画面を開いたあとに何か変わっていたり、" +
     "プルリクエストが閉じていたりすれば、実行せず、理由を表示します。",

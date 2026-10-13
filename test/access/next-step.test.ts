@@ -701,7 +701,7 @@ test("a start refused at a scope test says the test in words, never its name (ro
   for (const wording of [EN, chromeFor("ja")]) {
     const said = wording.startRefusedOutside("asks");
     expect(said).not.toMatch(/\basks\b/);
-    expect(said).toContain(wording.lang === "ja" ? "問い" : "question");
+    expect(said).toContain(wording.lang === "ja" ? "質問" : "question");
   }
 });
 

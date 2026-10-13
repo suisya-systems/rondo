@@ -387,7 +387,7 @@ test("a lap that committed nothing still shows its question over the box, saying
   expect(box).toBeGreaterThan(at);
   expect(html.slice(at, box)).not.toContain('href="#changed"');
   expect(html).toContain(QUESTION.question);
-  expect(await gatePage(w, JA)).toContain("作業者は何もコミットせずに質問しました。");
+  expect(await gatePage(w, JA)).toContain("ワーカーは何もコミットせずに質問しました。");
 });
 
 /** The revise box's sentence about the question, as text. */
@@ -429,7 +429,7 @@ test("the revise box says what answering releases and how long the question has 
   expect(box).toContain("Should the pin move to the tag or the commit?");
   expect(answered).toContain(EN.reviseAnswerDrafted.replaceAll("'", "&#x27;").slice(0, 20));
   expect(answerSaid(await gatePage(w, JA))).toBe(
-    "質問に答えたあとにこれを押すと、あなたの返事を入れて作業 1 の次の回を始めます。" +
+    "質問に回答してからこのボタンを押すと、回答を渡して作業 1 の次の回を始めます。" +
       "返事をすると、この作業のマージを待っている作業 2 も先へ進みます。",
   );
 });
@@ -908,7 +908,7 @@ test("the page says the report in the reader's language, with the words as writt
     /<div class="space-y-2" data-report="">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
   const ja = block(await page(w.world, JA));
   expect(ja).toContain(
-    "この依頼の作業は、すべて結果が出ました（マージ済み 1 件、取りやめ 1 件）。",
+    "この依頼の作業はすべて終わりました（マージ済み 1 件、途中で止まったもの 1 件）。",
   );
   expect(ja).toContain("作業 1: マージ済み（#7）");
   expect(ja).toContain("終わらなかった作業: 作業 2。");
@@ -932,7 +932,7 @@ test("the page says the report in the reader's language, with the words as writt
     await page(w.world, JA),
   )?.[0];
   expect(old).toContain("Every part of this request has ended: 2 merged.");
-  expect(old).not.toContain("すべて結果が出ました");
+  expect(old).not.toContain("すべて終わりました");
   // Read in the language it was written in, it is said once.
   expect(block(await page(w.world))).not.toContain("<details");
 });
@@ -966,7 +966,7 @@ test("a request whose split was one part gets its report too, in one line, and t
   const html = await page(w.world, JA);
   const block = /<div class="space-y-2" data-report="">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
   expect(block).toContain(
-    "この依頼の結果: 終わる前に取りやめました。1 回試しました。費用は記録されていません。",
+    "この依頼は途中で止まりました。1 回実施しましたが、費用は記録されていません。",
   );
   expect(block).toContain("This request has ended");
   // Still one request on one line: no parts are drawn for it.
@@ -1028,7 +1028,7 @@ test("across every request, a lap in flight and a part held by order are lines w
   expect(material.locators).toContain("iteration:lap-one");
 
   const ja = deterministicAnswer(material, JA, { kind: "acrossRequests" }).claims[0]?.value;
-  expect(ja).toContain("試行が 1分前から動いています（計画の上限まであと最大");
+  expect(ja).toContain("いまの回は 1分前から続いています（計画の上限まであと ");
   expect(ja).toContain("作業 2: 作業 1 がマージされるのを待っています");
 });
 

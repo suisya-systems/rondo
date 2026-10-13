@@ -122,7 +122,7 @@ test("the sentence that says a second start press is safe is in both catalogues 
   // fall into English in the middle of the one paragraph beside the press.
   expect(EN.startAgainSafe).not.toBe("");
   expect(chromeFor("ja").startAgainSafe).not.toBe(EN.startAgainSafe);
-  expect(chromeFor("ja").startAgainSafe).toContain("2 回目の押下は 1 回目にまとめられ");
+  expect(chromeFor("ja").startAgainSafe).toContain("2 回押しても、始まるのは 1 回だけです。");
 });
 
 const DRAFTED_PROMPTS = ["Fix the scope screen cost box.", "Title-case the approve button."];

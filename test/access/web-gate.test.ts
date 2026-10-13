@@ -626,7 +626,7 @@ test("the change is offered in the page's language, and the findings stay the re
   // Before a draft lands, the box is empty and the view says one is coming,
   // in the page's language (D-0077 rule 4.3).
   expect(bar).toMatch(/<textarea name="body"[^>]*><\/textarea>/);
-  expect(bar).toContain("変更内容の下書きを作成中です");
+  expect(bar).toContain("変更依頼の下書きを作っています");
 
   await draftRevise(world, REVISE_ANSWER);
   const drafted = await operatorPage(
@@ -640,7 +640,7 @@ test("the change is offered in the page's language, and the findings stay the re
   );
   const box = drafted.slice(drafted.indexOf('id="answer-bar"'));
   // Quoted, not translated (D-0055 rule 4): the finding and its basis as given.
-  expect(box).toContain("- 阻害: the loop never stops");
+  expect(box).toContain("- 致命的: the loop never stops");
   expect(box).toContain("場所: src/notifier.ts:41");
   expect(box).toContain("直すこと: Cap the backoff at 30 seconds.");
   expect(box).not.toContain("モデルレビューが挙げた点を直してください");
@@ -915,8 +915,9 @@ test("the qualified approve is in the page's language too (#237)", async () => {
   const bar = barOf(html);
   expect(bar).toContain(">指摘を残したまま承認する</button>");
   expect(bar).toContain("モデルレビューが挙げた点に答えないまま、この作業をこのまま受け入れます。");
-  // The answer carried to the gate is a token and stays ASCII (D-0055 rule 3).
-  expect(bar).toContain("'approve'");
+  // The Japanese page no longer carries the tooltip naming the terminal
+  // command and its 'approve' token (rondo#663).
+  expect(bar).not.toContain("rondo answer");
 });
 
 test("a lap nobody approved says nothing about what was raised (#237)", async () => {
@@ -1547,7 +1548,7 @@ test("the gate opens on what happened: each lap, what it was asked, what it comm
   );
   expect(story).toContain(EN.storyLaps(2));
   expect(EN.storyLaps(2)).toContain("within this work");
-  expect(JA.storyLaps(2)).toContain("この作業の中での数");
+  expect(JA.storyLaps(2)).toContain("この作業の中での回数");
   expect(story).toContain(EN.storyToldRequest);
   expect(story).toContain(EN.modelRaised(1, 1));
   expect(story).toContain(EN.storyEnded("revise", ""));

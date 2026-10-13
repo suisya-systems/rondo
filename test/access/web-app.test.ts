@@ -1822,7 +1822,7 @@ test("(claim) a press carries what the person verified, trimmed; blank is none, 
   expect(tooLong.status).toBe(409);
   expect(tooLong.body).toContain(String(MAX_CLAIM_CHARS));
   expect(tooLong.body).toContain('<html lang="ja">');
-  expect(tooLong.body).toContain("ゲートに戻る");
+  expect(tooLong.body).toContain("確認の画面に戻る");
   expect(tooLong.body).toContain('href="/?thread=req-1&amp;lang=ja"');
   expect(written).toEqual([
     { iterationId: "i-0001", body: "approve", claim: said.trim() },
@@ -1850,7 +1850,7 @@ test("(claim) a claim refused past the port is said in the press's language, nev
   const { base, stop, closed } = await served(createApp(ports, TOKEN));
   for (const [lang, words] of [
     ["en", "This gate was already answered"],
-    ["ja", "ゲートがすでに回答済み"],
+    ["ja", "この確認にはすでに回答済みです。"],
   ] as const) {
     const refused = await send(base, `/?lang=${lang}`, "POST", pressHeaders(base), {
       ...FORM,

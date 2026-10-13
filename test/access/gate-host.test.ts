@@ -481,8 +481,8 @@ describe("rondo sends the drafted change under a goal scope (D-0145)", () => {
     approved.requests = ["msg-1"];
     await pass(approved, JA);
     const [revise, auto] = [sent.messages[0]?.body ?? "", approved.messages[0]?.body ?? ""];
-    expect(revise).toContain("happy_ryo による目標に向けた承認（$100.00 まで）のもとで");
-    expect(auto).toContain("happy_ryo によるこの依頼の承認（$100.00 まで）のもとで");
+    expect(revise).toContain("happy_ryo の目標に向けた承認（$100.00 まで）に基づいて");
+    expect(auto).toContain("happy_ryo のこの依頼の承認（$100.00 まで）に基づいて");
     expect(auto).toContain("重大以上の指摘がない");
     for (const body of [revise, auto]) {
       expect(body).not.toContain("scope-1");

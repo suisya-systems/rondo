@@ -80,29 +80,29 @@ const outcomeJa = (o: PartOutcome) =>
   `${
     o.standing === "merged"
       ? `マージ済み（${o.pullRequest ?? "プルリクエスト"}）`
-      : "終わる前に取りやめました"
+      : "途中で止まりました"
   }。${
     o.tries === 0
       ? "一度も始まりませんでした"
       : o.spent === null
-        ? `${String(o.tries)} 回試しました。費用は記録されていません`
-        : `${String(o.tries)} 回試して $${o.spent} を使いました${
+        ? `${String(o.tries)} 回実施しましたが、費用は記録されていません`
+        : `${String(o.tries)} 回実施して $${o.spent} 使いました${
             o.unread === 0 ? "" : `。うち ${String(o.unread)} 回は費用が記録されていません`
           }`
   }。`;
 
 export const REPORT_JA: ReportWords = {
   reportLead: (merged, stopped) =>
-    `この依頼の作業は、すべて結果が出ました（${[
+    `この依頼の作業はすべて終わりました（${[
       ...(merged > 0 ? [`マージ済み ${String(merged)} 件`] : []),
-      ...(stopped > 0 ? [`取りやめ ${String(stopped)} 件`] : []),
+      ...(stopped > 0 ? [`途中で止まったもの ${String(stopped)} 件`] : []),
     ].join("、")}）。`,
   reportPart: (o) => `${o.part}: ${outcomeJa(o)}`,
-  reportOne: (o) => `この依頼の結果: ${outcomeJa(o)}`,
+  reportOne: (o) => `この依頼は${outcomeJa(o)}`,
   reportByRondo: (gates) =>
-    `あなたの承認の範囲で、rondo がゲート ${String(gates)} 件に自分で答えました。あなたには尋ねていません。`,
+    `承認した範囲内だったため、確認 ${String(gates)} 件は rondo が回答しました。`,
   reportUndone: (parts) => `終わらなかった作業: ${parts.join("、")}。`,
   reportScopeExits: (count) =>
-    `承認の範囲の端に達したため、rondo が作業を止めてあなたに尋ねたことが ${String(count)} 回ありました。`,
-  reportAsksNothing: "この報告であなたに求めることはありません。",
+    `承認した範囲の上限に達して rondo が止まり、あなたに尋ねたことが ${String(count)} 回ありました。`,
+  reportAsksNothing: "この報告について、あなたがすることはありません。",
 };

@@ -463,7 +463,7 @@ test("the threads speak Japanese where the page does, tokens and words untouched
   expect(html).toContain("rondo の質問に回答 · ");
   expect(html).not.toContain("rondo-drafter");
   expect(html).toContain(">続ける</button>");
-  expect(html).toContain(">この線を止める</button>");
+  expect(html).toContain(">この作業を止める</button>");
   expect(html).toContain('action="/answer-ask?lang=ja"');
   expect(bodiesIn(html)).toEqual([LATER_BODY, ASK_BODY, ROOT_BODY]);
 });
@@ -638,7 +638,7 @@ test("an ask with options is answered by one press per option, the recommended o
   expect(html).toContain(EN.answerOptionsNote);
   expect(html).not.toContain(">Carry on</button>");
   const ja = await operatorPage(portsOver(world, "ada", []), "t", view, chromeFor("ja"), mint);
-  expect(ja).toContain(">自分の言葉で答える</button>");
+  expect(ja).toContain(">自分の言葉で回答する</button>");
   expect(ja).toContain("おすすめ");
 
   // Answered with the second option: the answer is marked with which one, numbered from 1.

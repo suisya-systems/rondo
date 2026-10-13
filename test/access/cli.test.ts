@@ -2625,7 +2625,8 @@ test("a wording set is whole in its own language, and no string is the English o
   expect(ja.inboxNote).toContain("rondo inbox");
   expect(ja.noApproverNote).toContain("RONDO_APPROVER");
   expect(ja.readOneBack).toContain("rondo show --proposal-id ID");
-  expect(ja.approveNote("gate-1", "approve")).toContain("rondo answer");
+  // The owner removed the Japanese tooltip that named the terminal command (rondo#663).
+  expect(ja.approveNote("gate-1", "approve")).toBe("");
   expect(ja.answerGate("gate-1")).toContain("gate-1");
 });
 
