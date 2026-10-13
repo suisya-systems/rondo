@@ -29913,6 +29913,15 @@ review for rondo#318).
 > - Amends: D-0177 rule 4
 > - Amends: D-0177 rule 5
 
+> **Annotation (2026-10-14, from rondo#659).** Added after this entry was accepted, and additive.
+> The residual *what the K4 signals are read for* now has a reader of the count. `rondo explains
+> [--since TIME]` reads the `signal` on every explanation's snapshot and prints one line per thing
+> asked about (the basis the "?" was pressed beside, ids only, or `-` for a typed question), with
+> how many times, by button and by text, and when first and last, most asked first. It is derived
+> and keeps nothing, beside `rondo asks`. It counts and does not judge: what a count says against
+> `D-0173` K4 is still the later entry the residual names. A question no answer was written for
+> carries no signal, so it is not counted. Nothing below is edited.
+
 ### Context
 
 A person reading the page meets a gate, a lap's status, a check that went red or a word that is
@@ -30483,6 +30492,14 @@ rules 2, 3, 4 and 5 (its annotation from this entry). Supersedes nothing. Refs `
 > edited.
 >
 > - Amends: D-0189 rule 5
+
+> **Annotation (2026-10-14, from rondo#659).** Added after this entry was accepted, and additive.
+> C4's row *triage puts open points on almost every candidate*, closed by `D-0193`, now has a
+> reader that would show it reopening: `rondo raises [--since TIME]` prints, per triage reading,
+> the candidates with a raised point and its `raising_share` over all candidates (`D-0193`'s
+> annotation from rondo#659). `D-0177`'s K4 count, which rule 4 leaves to that entry's residual,
+> is read by `rondo explains` (its annotation from rondo#659). Both measure and set no threshold.
+> Nothing below is edited.
 
 ### Context
 
@@ -31141,6 +31158,21 @@ recommended option below taken within that direction). Amends `D-0097` section 1
 `D-0189` rule 4's table (their annotations from this entry). Supersedes nothing. Refs `D-0032`
 rule 10, `D-0063` rule 2.2, `D-0064` P2-P5, O8 and rule 4.1, `D-0067` rule 6, `D-0082` rule 2,
 `D-0125`, `D-0164`, `D-0168`, rondo#487, rondo#504, rondo#645.
+
+> **Annotation (2026-10-14, from rondo#659).** Added after this entry was accepted, and additive.
+> Each of *What would falsify it* is now counted, by `rondo raises [--since TIME]`, one line per
+> triage reading and one over them all. `raised` and `decided` are its points by `raise`, and
+> `raising_share` is the candidates with a raised point over all candidates: *asks that still
+> arrive on almost every candidate*. `as_recommended_share` is the answered points of the flow's
+> asks whose answer is the recommendation as written or as the answer field draws it: *a raised
+> point the person always answers as recommended*. `replied_share` is the requests the flow sent
+> with decided points in which the person then wrote in their own words, not by an ask's press:
+> *a person who changes a decided point after the fact as a rule*. That last one reads whether a
+> reply came, not what it says, so it is an upper bound, and a change at a gate is not read. The
+> reader is derived from the `proposal`, `flow_ask`, `flow_answer` and `conversation_message`
+> rows and keeps nothing, beside `rondo asks`. It measures and sets no threshold; what share
+> falsifies this entry is the owner's to say. *Nothing deterministic checks* a point's `null`
+> still holds: this counts what would show it wrong after the fact. Nothing below is edited.
 
 ### Context
 

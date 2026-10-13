@@ -1494,6 +1494,51 @@ requests=2 asked_in=1 asks=2 asks_per_request=1.00 pressed=2 recommended=1 recom
 - **An ask from before `D-0190` has no options**, so it counts as an ask and never as a press. Only
   the drafter's asks count: a worker's question or a scope stop is not the drafter asking back.
 
+### 8.3 Raises -- whether triage's raised-or-decided reading holds
+
+`raises` counts, per triage reading, what would falsify `D-0193`'s reading of which open points are
+the person's to decide (rondo#659). Read-only and ids and counts only, like `asks`.
+
+```console
+$ node bin/rondo.mjs raises --since 2026-10-11
+2026-10-11T09:00:00.000Z reading=p-0040 repository=o/n candidates=3 raising=2 raised=2 decided=2 asks=3 answered=2 answered_points=3 as_recommended=2 sent_decided=2 replied=1
+readings=1 candidates=3 raised=2 decided=2 raising_share=0.67 as_recommended_share=0.67 replied_share=0.50
+```
+
+- **One line per triage reading** (a `triage` proposal row), oldest first. `raised` and `decided`
+  are its open points marked with a reason and marked `null`; a point written before `D-0193` reads
+  as raised. `raising` is the candidates with at least one raised point, each of which the flow asks
+  about before it starts it.
+- **`asks` and `answered` are the flow's asks over the reading's raised points.** `answered_points`
+  is the points of the answered asks, and `as_recommended` the ones whose answer is the
+  recommendation as written or as the answer field draws it.
+- **`sent_decided` is the requests the flow sent under the reading that carried decided points**,
+  and `replied` the ones the person wrote in, in their own words rather than by an ask's press. Any
+  such reply counts, whatever it says, so `replied` is an upper bound on decided points changed; a
+  change made at a gate is not read.
+- **The last line's three shares are `D-0193`'s three falsifiers**: `replied_share` (decided points
+  changed after the fact), `raising_share` (asks on almost every candidate) and
+  `as_recommended_share` (raised points always answered as recommended). Each is `-` with nothing
+  to divide by.
+
+### 8.4 Explains -- what the person asked the explainer about
+
+`explains` counts the K4 signals (`D-0173` K4, written by `D-0177`'s explainer), one line per thing
+asked about, most asked first, then one over them all (rondo#659).
+
+```console
+$ node bin/rondo.mjs explains --since 2026-10-11
+about={"form":"message","messageId":"m-0040"} asked=2 button=1 text=1 first=2026-10-11T09:00:00.000Z last=2026-10-11T10:00:00.000Z
+about=- asked=1 button=0 text=1 first=2026-10-11T11:00:00.000Z last=2026-10-11T11:00:00.000Z
+things=2 asked=3
+```
+
+- **The thing is the basis the "?" was pressed beside**, ids only; `about=-` is a question typed into
+  the reply box about nothing pressed. `button` and `text` split how it was asked.
+- **It counts answered questions.** The signal is written with each explanation, so a question no
+  answer was written for is not counted, and a person who did not ask is not counted either.
+- **`--since` bounds when the answer was written.**
+
 ---
 
 ## 9. What has and has not been walked on real infrastructure

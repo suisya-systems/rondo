@@ -42,6 +42,8 @@ export interface ParsedCommand {
     | "web"
     | "decisions"
     | "asks"
+    | "raises"
+    | "explains"
     | "help";
   readonly planFile: string | null;
   /** Every `--plan`, in order: more than one only for `scope` (D-0069 section 1). */
@@ -78,7 +80,7 @@ export interface ParsedCommand {
    */
   readonly workerProvider: string | null;
   readonly port: number | null;
-  /** `decisions --since` / `asks --since`, as epoch ms (D-0190 rule 10.4); null when absent. */
+  /** `--since` of `decisions`, `asks`, `raises` and `explains`, as epoch ms (D-0190 rule 10.4); null when absent. */
   readonly sinceMs: number | null;
   /** `decisions --attention`: add `operator_attention` (rule 10.2). */
   readonly attention: boolean;
@@ -154,6 +156,8 @@ export const COMMANDS = [
   "web",
   "decisions",
   "asks",
+  "raises",
+  "explains",
 ] as const;
 
 /**
@@ -294,6 +298,9 @@ export const FLAGS_BY_COMMAND: Readonly<Record<string, readonly string[]>> = {
   decisions: ["since", "attention"],
   // rondo#637: the same read-only shape, `--since` bounding when a request opened.
   asks: ["since"],
+  // rondo#659: the same again, `--since` bounding when a reading or an answer was written.
+  raises: ["since"],
+  explains: ["since"],
 };
 
 /**

@@ -1508,6 +1508,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/store/standing-policy.ts": [RECORD],
   // rondo#637: the derived ask-back counts, the same shape.
   "src/store/ask-frequency.ts": [RECORD],
+  "src/store/judgement-signals.ts": [RECORD],
   "src/store/iteration.ts": [RECORD],
   "src/store/lanes.ts": [RECORD],
   "src/store/plan.ts": [RECORD],
