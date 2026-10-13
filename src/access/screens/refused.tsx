@@ -1,3 +1,4 @@
+import { printedSince } from "../console.js";
 import { CARD, CARD_HEADING, PRIMARY } from "../page/vocabulary.js";
 import { viewHref } from "../page-logic/routes.js";
 import { firstLine } from "../page-logic/threads.js";
@@ -23,7 +24,7 @@ export interface Refused {
   /**
    * rondo's own reason, when the press reached a port that gave one: the
    * sentence says who can look, and this is what they look at (D-0076 rule
-   * 4.2), closed, with where the rest of the host's output is.
+   * 4.2), closed, with what the host printed just before (rondo#676).
    */
   readonly note: string | null;
   /**
@@ -40,7 +41,15 @@ export interface Refused {
   readonly releasable: boolean;
 }
 
+/** How far back a refusal's fold reaches into what rondo printed (rondo#676). */
+const PRINTED_WINDOW_MS = 120_000;
+/** And how many of those lines it shows, the latest. */
+const PRINTED_LINES = 40;
+
 export async function refusedPage(wording: Chrome, refused: Refused): Promise<string> {
+  // What rondo printed around this press, for whoever maintains it, in place
+  // of a terminal command to read the host's log (rondo#676).
+  const printed = printedSince(Date.now() - PRINTED_WINDOW_MS).slice(-PRINTED_LINES);
   const page = (
     <html lang={wording.lang}>
       <head>
@@ -90,7 +99,17 @@ export async function refusedPage(wording: Chrome, refused: Refused): Promise<st
             <details id="refused-reason" class="text-meta text-muted-foreground">
               <summary class="cursor-pointer">{wording.forMaintainer}</summary>
               <p lang="en">{refused.note}</p>
-              <p>{wording.hostLog}</p>
+              {printed.length === 0 ? null : (
+                <>
+                  <p>{wording.hostLog}</p>
+                  <pre
+                    class="overflow-x-auto font-mono text-meta leading-5 whitespace-pre-wrap wrap-anywhere"
+                    lang="en"
+                  >
+                    {printed.join("\n")}
+                  </pre>
+                </>
+              )}
             </details>
           )}
           <p class="text-meta leading-5 text-muted-foreground">{wording.sendBackNote}</p>

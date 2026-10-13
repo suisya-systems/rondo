@@ -122,12 +122,38 @@ export function legibleAsciiEscape(text: string): string {
  */
 export const consoleSeams = {
   write: (text: string): void => {
+    remember(text);
     process.stdout.write(text);
   },
   writeError: (text: string): void => {
+    remember(text);
     process.stderr.write(text);
   },
 };
+
+/**
+ * **What this process printed lately, kept for the page** (rondo#676): a
+ * refused press's fold shows it, so whoever maintains rondo reads it there
+ * instead of being sent to the host's log in a terminal. Bounded, in memory,
+ * and gone with the process; the terminal still gets every line.
+ */
+const RECENT_LINES = 200;
+const recent: { readonly atMs: number; readonly line: string }[] = [];
+
+function remember(text: string): void {
+  const atMs = Date.now();
+  for (const line of text.split("\n")) {
+    if (line !== "") {
+      recent.push({ atMs, line });
+    }
+  }
+  recent.splice(0, Math.max(0, recent.length - RECENT_LINES));
+}
+
+/** The lines this process printed at or after `sinceMs`, oldest first. */
+export function printedSince(sinceMs: number): readonly string[] {
+  return recent.filter((entry) => entry.atMs >= sinceMs).map((entry) => entry.line);
+}
 
 /**
  * Relay one line of continuo's own words to the operator, escaped.

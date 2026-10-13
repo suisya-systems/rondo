@@ -919,9 +919,7 @@ export const JA: Chrome = Object.freeze({
     "書き始めたあとに下書きが届きました。あなたが書いた内容はそのまま残しています。",
   reviseUseDraft: "下書きに置き換える",
   forMaintainer: "このコンピュータで rondo を管理する人向け",
-  hostLog:
-    "rondo の残りの出力はホストのログで読めます（journalctl --user -u rondo.service。" +
-    "ホストを rondo web で手で起動した場合は、そのターミナルから確認できます）。",
+  hostLog: "拒否の直前 2 分間の rondo のログ",
   reviseRefusedNoApprover:
     "変更を依頼していません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   reviseRefusedPress:

@@ -1183,9 +1183,9 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
   /** D-0076 rule 4.5: the closed fold holding rondo's own reason, and whom it is for. */
   readonly forMaintainer: string;
   /**
-   * Where the rest of what a refused press printed is, under that fold: the
-   * host runs as a user service (D-0080), so its output is the journal and not
-   * a terminal anybody is looking at.
+   * The label over what the host printed just before a refused press, under
+   * that fold (rondo#676): the host runs as a user service (D-0080), so its
+   * output is otherwise in a journal nobody on the page can read.
    */
   readonly hostLog: string;
   /** Why a revise press answered nothing, one sentence each, as the scope screen's are. */
