@@ -50,6 +50,16 @@ export function forgeView(wording: Chrome, message: ThreadMessageDraft) {
         <p class="text-body leading-6">
           {issueNameLink(read)} {wording.issueNotRead(read.failed.why)} {wording.issueNotReadTail}
         </p>
+        {read.failed.why === "signed_out" ? (
+          <p class="text-body leading-6">
+            <a
+              href={viewHref({ kind: "signIn" }, wording.lang)}
+              class="text-link underline-offset-2 hover:underline"
+            >
+              {wording.signInAction}
+            </a>
+          </p>
+        ) : null}
         <details class="group">
           <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
             {chevron()}

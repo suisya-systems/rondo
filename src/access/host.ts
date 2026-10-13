@@ -46,13 +46,14 @@ import {
   readRepositoryPaths,
   rerunFailedJobs,
   runDrafter,
-  stoppedShort,
 } from "./forge.js";
 import { forgeHost } from "./forge-preflight.js";
 import { type GateHostPorts, gateHost } from "./gate-host.js";
+import { gitHubSignIn } from "./github-sign-in.js";
+import { SignInPort } from "./github-sign-in-route.js";
 import { bareIssueRepository, issueReader } from "./issue-read.js";
 import { EndPort, HoldsPort, ReleasePort } from "./line-ports.js";
-import { type LostLapPorts, lostLapHost, pidAlive, thisDriver } from "./lost-laps.js";
+import { type LostLapPorts, lostLapHost, pidAlive, stoppedShort, thisDriver } from "./lost-laps.js";
 import { continuoWorkspaceRemover, mergeOnGreen, mergePress, scopedAuthority } from "./merge.js";
 import { heldPlans, requestRepository } from "./model-draft/host.js";
 import { orderHost } from "./order-host.js";
@@ -88,13 +89,13 @@ import {
 import { publishHost } from "./publish-host.js";
 import { notifierAt, reachThePerson, recordTabNotice } from "./reach.js";
 import { readIn } from "./read-in.js";
+import { AddRepositoryPort } from "./repository-add.js";
 import { writeRequestReports } from "./request-report.js";
 import { READING_REMOTE } from "./review.js";
 import { reviseDrafterHost } from "./revise-draft/host.js";
 import { setupPlanFiles } from "./setup-files.js";
 import { triageHost } from "./triage-host.js";
 import {
-  AddRepositoryPort,
   AnswerPort,
   MergePort,
   newDraftId,
@@ -705,6 +706,9 @@ export async function serveWeb(
     }
     return named;
   };
+  // **One sign-in for the host's life** (rondo#676), outside the ports a
+  // naming rebuilds, so a code on screen outlives the approver being named.
+  const signIn = new SignInPort(gitHubSignIn(forgeHost(environment)));
   // **The page's ports for one approver**, rebuilt by {@link naming}.
   const pagePorts = (sender: Sender, approver: string | undefined): ServedPorts => {
     const { order, flow, publisher, fixer } = approved;
@@ -980,6 +984,7 @@ export async function serveWeb(
       // the person's judgement, so it needs an actor the allowlist accepts.
       releasable: sender !== null && !("refusal" in sender),
       endsLaps: sender !== null && !("refusal" in sender),
+      signIn: sender !== null && !("refusal" in sender) ? signIn : null,
       // **The workers this host is equipped for** (rondo#462): read here,
       // where the host's other settings are read, and handed to the page as
       // names so the start form can offer the choice and say which worker

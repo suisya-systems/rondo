@@ -112,6 +112,7 @@ import {
   type UnpromptedPorts,
 } from "./advisory.js";
 import { APPROVER_ENV, approvedActor, withRecordedApprover } from "./approver.js";
+import { stoppedShort } from "./lost-laps.js";
 
 export { APPROVER_ENV, approvedActor };
 
@@ -151,7 +152,6 @@ import {
   readRecordAdditions,
   readRecordFloor,
   runDrafter,
-  stoppedShort,
 } from "./forge.js";
 import { forgeHost, publishesTo, publishPreflight } from "./forge-preflight.js";
 import { serveWeb } from "./host.js";

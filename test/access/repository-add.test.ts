@@ -318,7 +318,7 @@ test("a clone that fails records nothing and says which of three things went wro
     [ran("", null, "", "spawn gh ENOENT"), "addRepositoryRefusedInstall"],
     [
       ran("", 4, "To get started with GitHub CLI, please run:  gh auth login"),
-      "addRepositoryRefusedInstall",
+      "addRepositoryRefusedSignedOut",
     ],
     [
       ran("", 1, "GraphQL: Could not resolve to a Repository with the name 'owner/other'."),

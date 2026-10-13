@@ -18,6 +18,7 @@
  */
 
 import type { JsonRecord } from "../store/records.js";
+import { type Press, spendPress } from "./web-app.js";
 
 /** `OWNER/NAME` split, or null when it is not one a path may be made of. */
 export function repositoryParts(
@@ -121,4 +122,59 @@ export function planForRepository(
     ],
     project_name: project,
   };
+}
+
+// The press's port and its words, moved out of `web-app.ts` at its size cap (rondo#676).
+
+/** What one add-repository press names (rondo#383): the request, and the repository it named. */
+export interface AddRepositoryInput {
+  readonly requestMessageId: string;
+  /** `OWNER/NAME`, as the page read it off the request. */
+  readonly repo: string;
+}
+
+/**
+ * Why an add-repository press added nothing, as the wording key the page says
+ * it in (D-0090 rule 4): the ones a person answers differently -- `gh` not
+ * installed (this computer's setup), not signed in (the sign-in screen,
+ * rondo#676), what the account can see, and anything else, which a press
+ * again may clear -- and a store setup never finished, which no press repairs.
+ */
+export type AddRepositoryRefusal =
+  | "addRepositoryRefusedInstall"
+  | "addRepositoryRefusedSignedOut"
+  | "addRepositoryRefusedUnseen"
+  | "addRepositoryRefusedFailed"
+  | "addRepositoryRefusedNoSetup"
+  | "addRepositoryRefusedChanged";
+
+/** What adding a repository did: added, or why not with rondo's own reason. */
+export type AddedRepository =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly why: AddRepositoryRefusal; readonly note: string };
+
+/**
+ * The seventh thing this surface may write (rondo#383, D-0090): a repository
+ * cloned and recorded as setup records one, on the person's press. Its own
+ * class for `ReleasePort`'s reason: adding a repository is not answering
+ * a gate, and a holder of the other ports must not be able to do it.
+ */
+export class AddRepositoryPort {
+  readonly #add: (input: AddRepositoryInput) => Promise<AddedRepository>;
+
+  constructor(add: (input: AddRepositoryInput) => Promise<AddedRepository>) {
+    this.#add = add;
+  }
+
+  /** Add one repository, on one press. */
+  async add(press: Press, input: AddRepositoryInput): Promise<AddedRepository> {
+    if (!spendPress(press)) {
+      return {
+        ok: false,
+        why: "addRepositoryRefusedFailed",
+        note: "nothing was added: this was not a person's press",
+      };
+    }
+    return await this.#add(input);
+  }
 }

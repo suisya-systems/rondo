@@ -252,8 +252,10 @@ explanation you pressed on and then answers the gate.`,
   issueReadFold: "What was read",
   issueNotRead: (why) =>
     ({
-      no_gh: "rondo on this machine cannot read issues yet",
-      signed_out: "rondo on this machine cannot read issues yet",
+      no_gh:
+        "rondo could not read this issue because the GitHub CLI is not installed on this computer",
+      signed_out:
+        "rondo could not read this issue because rondo on this computer is not signed in to GitHub",
       no_repo: "rondo on this machine does not know which repository this number is in",
       missing: "This issue could not be found, or your account cannot see it",
       refused: "The forge refused your account access to this issue",
@@ -1389,8 +1391,27 @@ explanation you pressed on and then answers the gate.`,
   addRepositoryRefusedForm:
     "Nothing was added: that form did not come from this page. Reload it and press again.",
   addRepositoryRefusedInstall:
-    "Nothing was added: rondo on this computer cannot reach GitHub as you. Whoever installed " +
-    "rondo here is the one who can look; once they have, the button is still there to press again.",
+    "Nothing was added: the GitHub CLI is not installed on this computer. Ask whoever maintains " +
+    "rondo on this computer to install it; the button is still there to press again.",
+  addRepositoryRefusedSignedOut:
+    'Nothing was added: rondo on this computer is not signed in to GitHub. Sign in, then press "Add this repository" again.',
+  signInAction: "Sign in to GitHub",
+  signInBack: "Back to signing in to GitHub",
+  signInRefusedNoApprover:
+    "Nothing was started: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
+  signInRefusedPress:
+    "Nothing was started: signing in happens only when a person presses the button on this page.",
+  signInNone:
+    "rondo on this computer is not signed in to GitHub, so it cannot read issues or add " +
+    "repositories for you. Sign in once and rondo keeps using it.",
+  signInWaiting: "Open GitHub's sign-in page and enter this code:",
+  signInWaitingNote: "This page changes by itself once GitHub has signed you in.",
+  signInDone:
+    "rondo is signed in to GitHub. Go back to the page you came from and press the button again.",
+  signInNoGh:
+    "The GitHub CLI is not installed on this computer, so rondo cannot sign in. Ask whoever " +
+    "maintains rondo on this computer to install it.",
+  signInFailed: "The sign-in did not finish. Press the button to try again.",
   addRepositoryRefusedUnseen:
     "Nothing was added: GitHub has no such repository, or your account cannot see it. If the " +
     "name in your request is wrong, say the right one in a reply.",

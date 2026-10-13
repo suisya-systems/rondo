@@ -164,6 +164,7 @@ import { mergeView } from "./screens/merge.js";
 import { publishView } from "./screens/publish.js";
 import { releaseView } from "./screens/release.js";
 import { scopeView } from "./screens/scope.js";
+import { signInView } from "./screens/sign-in.js";
 import { weekSide } from "./screens/week.js";
 import { type Chrome, EN } from "./wording.js";
 
@@ -1578,7 +1579,8 @@ export async function operatorPage(
     view.kind === "publish" ||
     view.kind === "merge" ||
     view.kind === "release" ||
-    view.kind === "end";
+    view.kind === "end" ||
+    view.kind === "signIn";
   /*
    * **The right face** (D-0083 rule 4): the week where the centre is empty,
    * and otherwise the request's own.
@@ -1617,6 +1619,8 @@ export async function operatorPage(
     view.kind === "release"
       ? await releaseView(ports, wording, view, releaseToken, ledger, threads, nowMs)
       : null;
+  // The sign-in press draws itself only where the port is (rondo#676).
+  const signingIn = view.kind === "signIn" ? signInView(ports, wording, token) : null;
   // The end press on `release`'s terms (rondo#655): no port, no press.
   const ending =
     view.kind === "end"
@@ -1669,7 +1673,9 @@ export async function operatorPage(
                       ? merging
                       : view.kind === "end"
                         ? ending
-                        : releasing}
+                        : view.kind === "signIn"
+                          ? signingIn
+                          : releasing}
               </div>
             ).toString(),
           }

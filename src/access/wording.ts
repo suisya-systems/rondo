@@ -1557,8 +1557,26 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
   readonly addRepositoryRefusedNoApprover: string;
   readonly addRepositoryRefusedPress: string;
   readonly addRepositoryRefusedForm: string;
-  /** No `gh`, or not signed in: this computer's setup, so whoever installed rondo. */
+  /** No `gh`: this computer's setup, so whoever maintains rondo. */
   readonly addRepositoryRefusedInstall: string;
+  /** `gh` is there and not signed in: the sign-in screen, which the refusal links to (rondo#676). */
+  readonly addRepositoryRefusedSignedOut: string;
+  /**
+   * **The sign-in screen** (rondo#676): signing this computer's `gh` in to
+   * GitHub with a one-time code, instead of a terminal. The heading and the
+   * button, the way back to it from a refused press, the two refusals, and one
+   * sentence for each place a sign-in can stand.
+   */
+  readonly signInAction: string;
+  readonly signInBack: string;
+  readonly signInRefusedNoApprover: string;
+  readonly signInRefusedPress: string;
+  readonly signInNone: string;
+  readonly signInWaiting: string;
+  readonly signInWaitingNote: string;
+  readonly signInDone: string;
+  readonly signInNoGh: string;
+  readonly signInFailed: string;
   /** The forge has no such repository, or this account cannot see it. */
   readonly addRepositoryRefusedUnseen: string;
   /** Anything else: the network, a timeout, a copy rondo could not read. */
