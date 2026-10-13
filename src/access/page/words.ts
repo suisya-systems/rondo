@@ -996,8 +996,8 @@ export const PAGE_EN: PageWords = Object.freeze({
     'At the waiting lap, press "Raise the budget", then press "Carry on". The old approval is ' +
     "retired once the raised one is approved.",
   scopeStopWiderNoLap:
-    "No lap has started yet, so there is no budget to raise here. Stop this line and ask " +
-    "again in a new request; its scope is drafted afresh.",
+    "No lap has started yet, so there is no budget to raise here. Stop this line and send the " +
+    "request again as a new one; its scope is drafted afresh.",
   scopeStopChange: "Change the work",
   scopeStopChangeDoes:
     'Write below what to change, then press "Carry on". The changed work runs, not the planned one.',
@@ -1651,7 +1651,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   scopeStopWiderAtGate:
     "確認待ちの回で「この承認の予算を引き上げる」を開いて「予算を引き上げる」を押し、そのあと「続ける」を押してください。",
   scopeStopWiderNoLap:
-    "まだ 1 回目が始まっていないため、ここで引き上げる予算はありません。この作業を止めて、新しい依頼として出し直してください。範囲は改めて下書きされます。",
+    "まだ 1 回目が始まっていないため、ここで引き上げる予算はありません。この作業を止めて、同じ依頼を新しく出し直してください。範囲は改めて下書きされます。",
   scopeStopChange: "作業を変える",
   scopeStopChangeDoes:
     "下に変えてほしいことを書いて「続ける」を押すと、予定していた作業の代わりに、変えた内容で作業が始まります。",

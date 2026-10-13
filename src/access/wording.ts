@@ -1142,6 +1142,12 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
    * where the form would be, rather than drawing a press that cannot work.
    */
   readonly reviseNoScope: string;
+  /** The way from a lap with no scope to its request's scope screen (rondo#673). */
+  readonly reviseNoScopeAction: string;
+  /** A scope stop's way to the lap waiting at its gate (rondo#673). */
+  readonly scopeStopToLap: string;
+  /** A scope stop's way to the new-request box holding the request's words (rondo#673). */
+  readonly scopeStopAskAgain: string;
   /**
    * How rondo lays out the drafted instruction around the drafter's words
    * (D-0077 rule 3.4): per finding, its line with its severity, its bases

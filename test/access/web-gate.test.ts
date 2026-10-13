@@ -297,10 +297,25 @@ test("a lap admitted under no approval is told so where the change would be (#23
     () => "lap-00000000-0000-4000-8000-000000000002",
   );
   expect(html).toContain('id="revise-none"');
-  expect(html).toContain("has no budget to be counted against");
+  expect(html).toContain(EN.reviseNoScope);
+  // rondo#673: with a way on, to the request's scope screen.
+  expect(html).toMatch(/<a href="\/\?scope=[^"]+"[^>]*>Approve a scope for this request<\/a>/);
   expect(html).not.toContain('id="revise-form"');
   // Approving is untouched by the absence of the other answer.
   expect(html).toContain(">approve despite what was raised</button>");
+  // Not while the worker's question waits: the scope screen holds until then.
+  await workerAsks(world);
+  const asked = await operatorPage(
+    { ...portsOver(world, "ada", []), material: structured },
+    "t",
+    { kind: "summary" },
+    EN,
+    null,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000002",
+  );
+  expect(asked).toContain(EN.reviseNoScope);
+  expect(asked).not.toContain(EN.reviseNoScopeAction);
 });
 
 /**

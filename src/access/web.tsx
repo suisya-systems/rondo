@@ -804,7 +804,17 @@ async function threadBoxes(
   // reading written after the page was drawn must not empty a box a person
   // pressed for, nor a reload of it.
   const taken = await (async () => {
-    if (view.kind !== "requests" || view.take === undefined) {
+    if (view.kind !== "requests") {
+      return null;
+    }
+    // A request asked again (rondo#673): its own words, read from its thread.
+    if (view.again !== undefined) {
+      const again = threads.byId.get(view.again);
+      return again === undefined || again.inReplyTo !== null
+        ? null
+        : { key: `again:${again.messageId}`, text: again.body };
+    }
+    if (view.take === undefined) {
       return null;
     }
     const take = view.take;

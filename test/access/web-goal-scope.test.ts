@@ -532,8 +532,20 @@ test("a scope stop shows its three options, in the page's language, with rondo's
     // A first admission's stop names no lap: there is no gate to raise at.
     expect(html).toContain(wording.scopeStopWiderNoLap);
     expect(html).not.toContain(wording.scopeStopWiderDoes);
+    // rondo#673: the option is a way to send the request again, not a rewrite.
+    expect(html).toContain(`href="/?requests=open&amp;again=m-req&amp;lang=${wording.lang}"`);
+    expect(html).toContain(wording.scopeStopAskAgain);
     // rondo's record is kept, shut, byte for byte.
     expect(html).toContain("is outside scope 's-1'.");
+  }
+  // rondo#673: that way draws the new-request box holding the request's words.
+  const again = await w.page({ kind: "requests", again: "m-req" }, EN);
+  expect(again).toMatch(/<textarea id="composer-body"[^>]*>Please fix the parser\.<\/textarea>/);
+  expect(again).toContain('data-draft-take="again:m-req"');
+  // Only a request's own words: a reply or an unknown id draws an empty box.
+  for (const id of ["scope-stop-lap-1-5000", "m-none"]) {
+    const html = await w.page({ kind: "requests", again: id }, EN);
+    expect(html).not.toContain("data-draft-take");
   }
 });
 
