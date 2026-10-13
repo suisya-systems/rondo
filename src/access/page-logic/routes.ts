@@ -57,6 +57,12 @@ export type PageView =
        * press works without script and the language switch keeps it.
        */
       readonly take?: { readonly proposalId: string; readonly candidate: string };
+      /**
+       * A request asked again (rondo#673): the box is drawn holding the words
+       * of the request this message id opened, so a line a scope stopped
+       * before its first lap is asked again without writing it out again.
+       */
+      readonly again?: string;
     }
   /** The goal a repository's triage is ranked against (D-0097 point 2.1 (a)). */
   | { readonly kind: "goal"; readonly repository: string }
@@ -236,10 +242,12 @@ export function viewHref(view: PageView, tag: string): string {
     case "end":
       return `/?end=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "requests":
-      return view.take === undefined
-        ? `/?requests=open&${lang}`
-        : `/?requests=open&take=${encodeURIComponent(view.take.proposalId)}` +
-            `&candidate=${encodeURIComponent(view.take.candidate)}&${lang}`;
+      return view.take !== undefined
+        ? `/?requests=open&take=${encodeURIComponent(view.take.proposalId)}` +
+            `&candidate=${encodeURIComponent(view.take.candidate)}&${lang}`
+        : view.again !== undefined
+          ? `/?requests=open&again=${encodeURIComponent(view.again)}&${lang}`
+          : `/?requests=open&${lang}`;
     case "goal":
       return `/?goal=${encodeURIComponent(view.repository)}&${lang}`;
     case "goalScope":
@@ -311,9 +319,12 @@ export function viewOf(query: URLSearchParams): PageView {
   if (query.get("requests") === "open") {
     const take = query.get("take");
     const candidate = query.get("candidate");
-    return take === null || take === "" || candidate === null || candidate === ""
-      ? { kind: "requests" }
-      : { kind: "requests", take: { proposalId: take, candidate } };
+    const again = query.get("again");
+    return take !== null && take !== "" && candidate !== null && candidate !== ""
+      ? { kind: "requests", take: { proposalId: take, candidate } }
+      : again !== null && again !== ""
+        ? { kind: "requests", again }
+        : { kind: "requests" };
   }
   const goalScope = query.get("goal_scope");
   if (goalScope !== null && goalScope !== "") {

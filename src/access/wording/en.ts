@@ -932,8 +932,10 @@ explanation you pressed on and then answers the gate.`,
     "review rounds to the number below, then asks for the change. The raise is recorded as a new " +
     "approval in place of this one; no other budget changes.",
   reviseNoScope:
-    "This lap was not started under an approved scope, so the next lap has no budget to be " +
-    "counted against, and asking for a change is not offered here.",
+    "This lap was started without an approved scope, so a change cannot be asked for here. " +
+    "You can approve the work as it is, or approve a scope for the request and start it " +
+    "again from the request's own words.",
+  reviseNoScopeAction: "Approve a scope for this request",
   reviseDraftFinding: (severity, text) => `- [${severity}] ${text}`,
   reviseDraftBases: (bases) => `  where: ${bases}`,
   reviseDraftChange: (words) => `  to change: ${words}`,

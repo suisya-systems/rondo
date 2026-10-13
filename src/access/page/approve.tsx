@@ -687,10 +687,33 @@ function reviseForm(
     return null;
   }
   if (framing.forked || framing.scopeDecisionId === null) {
+    // **A lap started under no scope has a way on** (rondo#673): no approval
+    // can join its line, so the way is the request's scope screen, where an
+    // approval starts the request again from its own words.
+    const toScope = !framing.forked && record.requestMessageId !== null;
     return (
-      <p id="revise-none" class="note text-meta leading-5 text-faint">
-        {framing.forked ? wording.reviseForked : wording.reviseNoScope}
-      </p>
+      <div id="revise-none" class="space-y-2">
+        <p class="note text-meta leading-5 text-faint">
+          {framing.forked ? wording.reviseForked : wording.reviseNoScope}
+        </p>
+        {toScope && record.requestMessageId !== null ? (
+          <a
+            href={viewHref(
+              {
+                kind: "scope",
+                messageId: record.requestMessageId,
+                rounds: null,
+                decisionId: null,
+                plan: null,
+              },
+              wording.lang,
+            )}
+            class={`${SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
+          >
+            {wording.reviseNoScopeAction}
+          </a>
+        ) : null}
+      </div>
     );
   }
   // **A budget that would refuse the change is said before the press, with

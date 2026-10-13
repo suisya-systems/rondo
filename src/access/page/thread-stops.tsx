@@ -22,6 +22,7 @@ import {
   requestReportText,
   scopeExits,
 } from "../request-report.js";
+import { viewHref } from "../page-logic/routes.js";
 import { stopRaises } from "../scope.js";
 import type { Chrome } from "../wording.js";
 import { held } from "./gate-material.js";
@@ -252,12 +253,27 @@ export function scopeStopView(
 ) {
   // More room is approved by raising the budget at the lap's gate (D-0074),
   // which the stop does not lift; the other two options are the answering
-  // presses below. No link: the request's scope screen holds while a question
+  // presses below. No link to the scope screen: it holds while a question
   // waits (rondo#431), so it cannot approve a successor now.
   // A redo's stop names the lap it stopped (an `iteration` basis), which is
-  // waiting with its gate; a first admission's names none, and has no budget
-  // to raise yet (Codex round 2).
-  const atLap = message.bases.some((basis) => basis["form"] === "iteration");
+  // waiting with its gate, and the option links to that gate; a first
+  // admission's names none, has no budget to raise yet, and links to the
+  // request's own words in a new request's box (rondo#673).
+  const lap = message.bases.find((basis) => basis["form"] === "iteration")?.["iterationId"];
+  const request = message.bases.find((basis) => basis["form"] === "message")?.["messageId"];
+  const atLap = typeof lap === "string";
+  const way =
+    typeof request !== "string"
+      ? null
+      : atLap
+        ? {
+            href: `${viewHref({ kind: "thread", messageId: request, to: null, gate: lap }, wording.lang)}#answering`,
+            said: wording.scopeStopToLap,
+          }
+        : {
+            href: viewHref({ kind: "requests", again: request }, wording.lang),
+            said: wording.scopeStopAskAgain,
+          };
   const options = [
     [
       wording.scopeStopWider,
@@ -285,6 +301,14 @@ export function scopeStopView(
             <span class="min-w-0">
               <b class="font-semibold">{option}</b>
               <span class="block text-meta leading-5 text-muted-foreground">{does}</span>
+              {at === 0 && way !== null ? (
+                <a
+                  href={way.href}
+                  class="text-meta leading-5 font-medium text-link underline-offset-2 hover:underline"
+                >
+                  {way.said}
+                </a>
+              ) : null}
             </span>
           </li>
         ))}

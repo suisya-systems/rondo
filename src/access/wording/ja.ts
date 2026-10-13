@@ -894,7 +894,9 @@ export const JA: Chrome = Object.freeze({
     `書いた内容がワーカーに渡り、${lapJa(next)}はその内容で作業をやり直します。その回の費用は、いまの承認の予算から使われます。`,
   reviseRaises: (rounds) =>
     `承認したレビュー回数（${String(rounds)} 回）を使い切っています。押すと、まずレビュー回数を引き上げてから、変更を依頼できます。ほかの予算は変わりません。`,
-  reviseNoScope: "ここから変更は依頼できません。",
+  reviseNoScope:
+    "この回は承認した範囲なしで始まったため、ここから変更は依頼できません。今の作業をそのまま承認するか、依頼の範囲を承認して依頼の内容から始め直せます。",
+  reviseNoScopeAction: "この依頼の範囲を承認する",
   reviseDraftFinding: (severity, text) => `- ${severityJa(severity)}: ${text}`,
   reviseDraftBases: (bases) => `  場所: ${bases}`,
   reviseDraftChange: (words) => `  直すこと: ${words}`,
