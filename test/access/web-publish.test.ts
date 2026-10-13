@@ -173,8 +173,8 @@ test("a lap that names no repository to publish to says so on its own screen (D-
   // What is missing, whose it is to set, and nothing the person is expected to
   // do here: the repository is recorded when the place the work happens is set
   // up, which is not an act on this page (D-0076 rule 4.1).
-  expect(screen).toContain("does not say where its pull request would be opened");
-  expect(screen).toContain("whoever installed rondo");
+  expect(screen).toContain("no record of which repository this work");
+  expect(screen).toContain("whoever maintains rondo on this computer");
   expect(screen).not.toContain("<form");
   // Not a flag, not a field name, and not the host-wide sentence that used to
   // stand in for this.

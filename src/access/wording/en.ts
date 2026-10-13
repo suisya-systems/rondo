@@ -1282,9 +1282,8 @@ explanation you pressed on and then answers the gate.`,
     `This lap's plan records no ${field}, and publishing is built from it. It cannot be ` +
     "published as it stands.",
   publishNoRepo:
-    "This lap does not say where its pull request would be opened, and neither does this host. " +
-    "Nothing here can set that: where work is published to is recorded when the place the work " +
-    "happens is set up, by whoever installed rondo.",
+    "rondo has no record of which repository this work's pull request goes to. Ask whoever " +
+    "maintains rondo on this computer to record it.",
   publishTargetRefused: (reason) =>
     `The push has nowhere to go that rondo can vouch for: ${reason}`,
   publishUncommitted: (paths) =>
@@ -1530,8 +1529,8 @@ explanation you pressed on and then answers the gate.`,
   publishRefusedPlanField:
     "Nothing was published: this lap's plan is missing something publishing is built from.",
   publishRefusedNoRepo:
-    "Nothing was published: this lap does not say where its pull request would be opened, and " +
-    "neither does this host.",
+    "Nothing was published: rondo has no record of which repository the pull request goes to. " +
+    "Ask whoever maintains rondo on this computer to record it.",
   publishRefusedTarget: (detail) =>
     `Nothing was published: the push has nowhere to go that rondo can vouch for. ${detail}`,
   publishRefusedUncommitted: (detail) =>
@@ -1556,14 +1555,12 @@ explanation you pressed on and then answers the gate.`,
     "will not push work it could not then finish.",
   publishRefusedPushFailed: (detail) => `Nothing was published: the branch did not push. ${detail}`,
   publishRefusedPullRequestFailed: (detail) =>
-    `The branch is pushed; rondo could not open the pull request. ${detail} Whether one was ` +
-    "created before that is not something rondo holds: go and look at the forge before pressing " +
-    "again, because a second press cannot open a pull request that is already there. If it " +
-    "exists, the only leg left is closing the run, and whoever maintains rondo on this machine " +
-    "can see the line that does it.",
+    `The branch is pushed, but the pull request could not be opened. ${detail} Go back and ` +
+    'press "Open a pull request" again. If the pull request turns out to be open already, ' +
+    "pressing it only marks the work finished.",
   publishRefusedRunNotClosed:
-    "The branch is pushed and the pull request is open; the run did not close. That is the one " +
-    "leg left, and whoever maintains rondo on this machine can see what it said.",
+    "The branch is pushed and the pull request is open, but the work is not marked finished " +
+    'yet. Go back and press "Open a pull request" again to finish it.',
   publishRefusedNotStarted:
     "Nothing was published, and nothing here is lost. " +
     "Whoever maintains rondo on this machine can see what it said.",

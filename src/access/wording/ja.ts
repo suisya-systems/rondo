@@ -1206,8 +1206,7 @@ export const JA: Chrome = Object.freeze({
   publishPlanField: (field) =>
     `この回の計画に ${field} が記録されていないため、` + "公開できません。",
   publishNoRepo:
-    "プルリクエストを出すリポジトリが、この回にも rondo の設定にも記録されていません。" +
-    "" +
+    "この作業のプルリクエストをどのリポジトリに出すか、rondo に記録がありません。" +
     "このコンピュータで rondo を管理する人に、リポジトリを記録してもらってください。",
   publishTargetRefused: (reason) =>
     `push 先が正しいか確認できないため、公開しません（${reason}）。このコンピュータで rondo を管理する人に確かめてもらってください。`,
@@ -1431,7 +1430,7 @@ export const JA: Chrome = Object.freeze({
   publishRefusedNoRun: "公開していません。この回の作業の記録が見つかりません。",
   publishRefusedPlanField: "公開していません。この回の計画に、公開に必要な情報が足りません。",
   publishRefusedNoRepo:
-    "公開していません。プルリクエストを出すリポジトリが記録されていません。" +
+    "何も公開していません。プルリクエストをどのリポジトリに出すか、rondo に記録がありません。" +
     "このコンピュータで rondo を管理する人に記録してもらってください。",
   publishRefusedTarget: (detail) =>
     `何も公開していません。push の宛先を rondo が保証できません。${detail}`,
@@ -1458,14 +1457,12 @@ export const JA: Chrome = Object.freeze({
   publishRefusedPushFailed: (detail) =>
     `何も公開していません。ブランチを push できませんでした。${detail}`,
   publishRefusedPullRequestFailed: (detail) =>
-    `ブランチは push できましたが、プルリクエストは作れませんでした。${detail}` +
-    "プルリクエストがすでにできているかどうかは、rondo には分かりません。GitHub で確かめてください。" +
-    "プルリクエストがなければ、もう一度押してください。" +
-    "プルリクエストがあれば、残りは作業の記録を閉じることだけです。このコンピュータで rondo を管理する人に頼んでください。",
+    `ブランチは push できましたが、プルリクエストは作れませんでした。${detail} ` +
+    "戻って「プルリクエストを作る」をもう一度押してください。" +
+    "すでにプルリクエストができていた場合は、残りの手続きだけ済ませます。",
   publishRefusedRunNotClosed:
-    "ブランチは push 済みで、プルリクエストもできています。" +
-    "作業の記録を閉じる処理だけが終わっていません。" +
-    "このコンピュータで rondo を管理する人に確かめてもらってください。",
+    "ブランチは push 済みで、プルリクエストもできていますが、作業の記録はまだ閉じていません。" +
+    "戻って「プルリクエストを作る」をもう一度押すと閉じます。",
   nextStepMerge:
     "プルリクエストのチェックが通り、回答待ちのものもありません。" +
     "マージすると、プルリクエストのマージ先のブランチに取り込みます。" +

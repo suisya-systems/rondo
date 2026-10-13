@@ -9,7 +9,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
 import { expect, test } from "vitest";
 
@@ -27,6 +27,7 @@ import {
   rerunFailedJobs,
   runReviewer,
 } from "../../src/access/forge.js";
+import { alreadyOpen, openPullRequest } from "../../src/access/pull-request.js";
 import { evidenceOf, materialDigestOf, readingOf } from "../../src/access/review.js";
 import { KEPT_WORK_SUBJECT } from "../../src/refrain/revision.js";
 import { contentDigest } from "../../src/store/plan.js";
@@ -71,6 +72,17 @@ const request = (work: string) => ({
   remote: "origin",
   baseBranch: "main",
   topicBranch: "topic",
+});
+
+test("a second pull request's refusal names the open one; other refusals name none (rondo#676)", () => {
+  expect(
+    alreadyOpen(
+      'a pull request for branch "rondo/x" into branch "main" already exists:\n' +
+        "https://github.com/o/r/pull/12\n",
+    ),
+  ).toBe("https://github.com/o/r/pull/12");
+  expect(alreadyOpen("GraphQL: A pull request already exists for o:rondo/x.\n")).toBeNull();
+  expect(alreadyOpen("HTTP 401: Bad credentials")).toBeNull();
 });
 
 test("everything uncommitted: the reading names the paths beside 'left nothing'", async () => {
@@ -1093,6 +1105,35 @@ posix(
     } finally {
       if (before === undefined) delete process.env["PATH"];
       else process.env["PATH"] = before;
+    }
+  },
+);
+
+posix(
+  "a press after the pull request opened is answered with the open one, not a refusal (rondo#676)",
+  async () => {
+    const bin = mkdtempSync(join(tmpdir(), "rondo-gh-open-"));
+    writeFileSync(
+      join(bin, "gh"),
+      "#!/bin/sh\n" +
+        'echo \'a pull request for branch "rondo/x" into branch "main" already exists:\' >&2\n' +
+        "echo https://github.com/o/r/pull/12 >&2\nexit 1\n",
+      { mode: 0o755 },
+    );
+    const path = process.env.PATH;
+    process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+    try {
+      const opened = await openPullRequest({
+        repo: "github.com/o/r",
+        baseBranch: "main",
+        headRef: "rondo/x",
+        title: "t",
+        body: "b",
+      });
+      expect(opened.status).toBe(0);
+      expect(opened.stdout.trim()).toBe("https://github.com/o/r/pull/12");
+    } finally {
+      process.env.PATH = path;
     }
   },
 );

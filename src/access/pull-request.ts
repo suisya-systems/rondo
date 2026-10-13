@@ -26,7 +26,7 @@ import {
   type OperatorVerificationClaim,
   planField,
 } from "../store/records.js";
-import { fileCounts, type LapWorkInspection } from "./forge.js";
+import { type CommandOutcome, fileCounts, type LapWorkInspection, runCommand } from "./forge.js";
 import { type NamedIssue, namedIssues } from "./issue-read.js";
 import { COMPOSED_SECTIONS, type ComposedBodyOutcome } from "./publish-body.js";
 import { LIST_LIMIT } from "./review.js";
@@ -826,4 +826,76 @@ function longestBacktickRun(text: string): number {
     longest = Math.max(longest, run.length);
   }
   return longest;
+}
+
+/** What a pull request needs. */
+export interface PullRequestRequest {
+  /**
+   * `host/owner/name`: `--repo`'s two segments with the host the caller
+   * checked in front of them, so that the repository this reaches is the one
+   * the preflight agreed about rather than one the CLI resolves for itself.
+   */
+  readonly repo: string;
+  readonly baseBranch: string;
+  /**
+   * What `--head` is given: the topic branch, or `owner:branch` when the push
+   * went to a repository other than `--repo`. The caller decides which, because
+   * deciding it needs the push URL preflight read (see `./cli.ts`).
+   */
+  readonly headRef: string;
+  readonly title: string;
+  readonly body: string;
+}
+
+/**
+ * Open the pull request, and stop there.
+ *
+ * `--repo` is explicit rather than inferred from the workspace's remote,
+ * because the workspace is a worktree cut from a local path and an inferred
+ * slug would be whatever that clone happened to point at. That is unchanged by
+ * `D-0081`, which moved *where a person tells rondo the slug* -- onto the plan,
+ * recorded by setup, with the host's `--repo` left as the fallback for a plan
+ * that carries none -- and refused inference a second time (rule 3.3). What
+ * reaches here is still a slug somebody wrote, never one rondo worked out.
+ *
+ * **There is no merge here.** Opening a pull request puts the work in front of
+ * a reviewer; merging it is a different act under a different authority, a
+ * person's press per act (`D-0091`), and it is `forge.ts`'s `mergePullRequest`.
+ *
+ * **One already open from this head into this base is the one this opened**
+ * (rondo#676): a publish whose run close failed, or whose report of the new
+ * pull request was lost, is pressed again, and `gh` then refuses with the open
+ * one's address. That is answered as opened, so the press goes on to the leg
+ * that is left instead of sending a person to a terminal.
+ */
+export async function openPullRequest(request: PullRequestRequest): Promise<CommandOutcome> {
+  const opened = await runCommand("gh", [
+    "pr",
+    "create",
+    "--repo",
+    request.repo,
+    "--base",
+    request.baseBranch,
+    "--head",
+    request.headRef,
+    "--title",
+    request.title,
+    "--body",
+    request.body,
+  ]);
+  const open = opened.status === 0 ? null : alreadyOpen(opened.stderr);
+  return open === null ? opened : { ...opened, status: 0, stdout: `${open}\n` };
+}
+
+/**
+ * The address in `gh pr create`'s refusal of a second pull request from one
+ * head into one base, or null for any other answer. `gh` looks only among open
+ * pull requests before it refuses this way.
+ */
+export function alreadyOpen(stderr: string): string | null {
+  return (
+    /a pull request for branch "[^"]+" into branch "[^"]+" already exists:\s*(https?:\/\/\S+)/.exec(
+      stderr,
+    )?.[1] ?? null
+  );
 }
