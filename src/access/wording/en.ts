@@ -336,14 +336,14 @@ explanation you pressed on and then answers the gate.`,
     "This did not come from this page's own form, or the page is older than this rondo. Reload the page and send again.",
   sendRefusedNoWords: "There are no words to send.",
   sendRefusedNotTaken:
-    "The conversation did not record this message; the message it replies to may not be in the thread. Reload the thread and try again.",
+    "The message it replies to may no longer be in the thread; reply to one that is.",
   sendRefusedAsk:
     "That message is a question still waiting on your answer. Open its thread and press Answer.",
   sendRefusedTooLong:
     "That message is longer than this page accepts. Shorten it, or split it into two replies.",
   sendRefusedUnknown: "rondo did not take this message. Reload the page and send again.",
   answerRefusedPress:
-    "An answer is taken only from a press on this page. Reload the thread and press one of its buttons again.",
+    "An answer comes only from a person pressing a button on this page, not from a script.",
   answerRefusedRaise:
     "The budget was not raised, and the question is not answered yet: the approval may have " +
     "been raised or replaced already. Reload the thread and answer again.",
@@ -946,14 +946,13 @@ explanation you pressed on and then answers the gate.`,
   reviseDrafted:
     "rondo drafted this from what the review found. Edit it as you like: what you send is yours.",
   reviseDrafting:
-    "A draft of what to change is being written from what the review found; reload the page " +
-    "in a minute or two to see it. You do not have to wait for it: you can write your own now.",
+    "A draft of what to change is being written from what the review found, and it will " +
+    "appear in the box. You do not have to wait for it: you can write your own now.",
   reviseUndrafted:
     "rondo could not draft what to change this time, and will not try again for this review. " +
     "Write what you want changed yourself; what the review found is above.",
-  reviseDraftArrived:
-    "A draft arrived after you started writing, and your own words were kept. To see the " +
-    "draft instead, empty the box and reload the page.",
+  reviseDraftArrived: "A draft arrived after you started writing, and your own words were kept.",
+  reviseUseDraft: "Use the draft instead",
   forMaintainer: "For whoever maintains rondo on this machine",
   hostLog:
     "The rest of what rondo printed is in the host's log: journalctl --user -u rondo.service " +
@@ -964,18 +963,17 @@ explanation you pressed on and then answers the gate.`,
   reviseRefusedPress:
     "Nothing was answered: a gate is answered by a person pressing this page's button, and a " +
     "script cannot.",
-  reviseRefusedForm:
-    "Nothing was answered: that form did not come from this page. Reload it and press again.",
+  reviseRefusedForm: "Nothing was answered: that form did not come from this page.",
   reviseRefusedNoWords:
     "Nothing was answered: a change has to say what to change, and the box was empty.",
   reviseRefusedGateClosed:
     "Nothing was answered: this lap has no gate open any more. Go back to see how it ended.",
   reviseRefusedNotItsScope:
-    "Nothing was answered: the approval this asks to spend is not the one this lap ran under. " +
-    "Reload the gate and press again.",
+    "Nothing was answered: the approval changed after this gate was drawn, and the gate now " +
+    "shows the one in force.",
   reviseRefusedStillRunning:
-    "Nothing was answered: this gate is already being answered with other words, and that is " +
-    "still running. Wait for it, then reload the gate to see how it stands.",
+    "Nothing was answered: this gate is already being answered with other words, and the " +
+    "thread will show how it ends.",
   reviseRefusedNotSetUp:
     "Nothing was answered and the gate was not touched: the next lap could not be set up. " +
     "Whoever maintains rondo on this machine can see what it said.",
@@ -1176,8 +1174,8 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was ended: rondo on this machine does not yet know who you are, so nothing here can " +
     "be decided as you.",
   endRefusedPress:
-    "Nothing was ended: this is done by a person pressing on this page, and a script cannot. " +
-    "Reload the page and press again.",
+    "Nothing was ended: this is done by a person pressing this page's button, and a script " +
+    "cannot.",
   endRefusedForm:
     "Nothing was ended: that form did not come from this page. Reload it and press again.",
   endRefusedNoReason: "Nothing was ended: write why you are ending it first. One line is enough.",
@@ -1562,8 +1560,8 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was published: what this screen showed is not what publishing would do now. " +
     "Reload it, read it again, and press again.",
   publishRefusedStillRunning:
-    "Nothing was published twice: this lap is already being published, from a screen that read " +
-    "something else. Wait for it, then reload.",
+    "Nothing was published twice: this lap was already being published, and the publish " +
+    "screen shows how that went.",
   publishRefusedNoContinuo:
     "Nothing was published: the part of rondo that closes the run will not start, and rondo " +
     "will not push work it could not then finish.",
@@ -1625,8 +1623,8 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was merged: this work is already on the default branch, so there is nothing left " +
     "to merge.",
   mergeRefusedMoved:
-    "Nothing was merged: the pull request has new commits since rondo read its checks green. " +
-    "Reload the page to see them.",
+    "Nothing was merged: the pull request has new commits since rondo read its checks green, " +
+    "and the merge screen shows them.",
   mergeRefusedRetargeted:
     "Nothing was merged: the pull request now targets a different branch than the one rondo " +
     "opened it against. Look at it on the forge.",
@@ -1678,8 +1676,8 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was started: the pull request no longer needs this, or a fix is already under way. " +
     "Reload the page to see where it stands.",
   conflictFixRefusedNotItsScope:
-    "Nothing was started: the approval this asks to spend is not the one this work ran under. " +
-    "Reload the page and press again.",
+    "Nothing was started: the approval changed after this page was drawn, and the thread " +
+    "now shows the one in force.",
   conflictFixRefusedForked:
     "Nothing was started: this work's approval was raised twice, separately, and rondo does not " +
     "pick one of them.",

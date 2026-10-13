@@ -877,6 +877,7 @@ const LOADED = [
   "keys.js",
   "composer.js",
   "chime.js",
+  "token.js",
   "changed.js",
   "rounds.js",
 ];

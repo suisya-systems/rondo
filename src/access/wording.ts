@@ -1172,6 +1172,8 @@ export interface Chrome extends PageWords, ExplainWords, SinceWords, ReportWords
   readonly reviseDrafting: string;
   readonly reviseUndrafted: string;
   readonly reviseDraftArrived: string;
+  /** The button beside {@link reviseDraftArrived} that puts the later draft in the box (rondo#674). */
+  readonly reviseUseDraft: string;
   /** D-0076 rule 4.5: the closed fold holding rondo's own reason, and whom it is for. */
   readonly forMaintainer: string;
   /**

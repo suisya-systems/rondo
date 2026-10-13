@@ -1549,7 +1549,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   flowAskRefusedNoApprover:
     "回答は記録されませんでした。RONDO_APPROVER が正しく設定されていないため、このページからは回答できません。",
   flowAskRefusedPress:
-    "回答は記録されませんでした。ホーム画面に戻って、もう一度ボタンを押してください。",
+    "回答は記録されませんでした。人がこのページのボタンを押したときだけ受け付けます。",
   flowAskRefused:
     "回答は記録されませんでした。質問が新しくなっています。ホーム画面に戻って、いまの質問に回答してください。",
   roundChangedAsk:

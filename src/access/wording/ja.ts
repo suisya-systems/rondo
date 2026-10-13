@@ -313,7 +313,8 @@ export const JA: Chrome = Object.freeze({
   sendRefusedForm:
     "このページ自身のフォームから届いていないか、ページが今の rondo より古いものです。ページを読み込み直してから、もう一度送信してください。",
   sendRefusedNoWords: "送る文がありません。",
-  sendRefusedNotTaken: "このメッセージは記録されませんでした。もう一度送ってください。",
+  sendRefusedNotTaken:
+    "返信先のメッセージは、もうスレッドにないようです。いまスレッドにあるメッセージに返信してください。",
   sendRefusedAsk:
     "送信されていません。返信先は回答待ちの質問です。スレッドに戻って「回答する」を押してください。",
   sendRefusedTooLong:
@@ -321,7 +322,7 @@ export const JA: Chrome = Object.freeze({
   sendRefusedUnknown:
     "rondo はこのメッセージを受け取りませんでした。ページを読み込み直してから、もう一度送信してください。",
   answerRefusedPress:
-    "回答は記録されませんでした。スレッドに戻って、もう一度ボタンを押してください。",
+    "回答は記録されませんでした。人がこのページのボタンを押したときだけ受け付けます。",
   answerRefusedRaise:
     "予算は増えておらず、質問にもまだ答えていません。承認がすでに増やされたか、置き換えられた" +
     "可能性があります。スレッドを読み込み直して、もう一度答えてください。",
@@ -903,30 +904,31 @@ export const JA: Chrome = Object.freeze({
     "merge をコミットする。",
   reviseDrafted: "レビューの指摘をもとに rondo が下書きしました。自由に書き換えて構いません。",
   reviseDrafting:
-    "レビューの指摘をもとに、変更依頼の下書きを作っています。1〜2 分後にページを読み込み直すと表示されます。" +
+    "レビューの指摘をもとに、変更依頼の下書きを作っています。できあがると入力欄に入ります。" +
     "自分で変更依頼を書いても構いません。",
   reviseUndrafted:
     "rondo が変更内容を下書きできませんでした。" +
     "自分で変更依頼を書いてください。レビューの指摘は上にあります。",
   reviseDraftArrived:
-    "書き始めたあとに下書きが届いたので、あなたが書いた内容をそのまま残しています。下書きを見るには、" +
-    "一度入力欄を空にしてからページを読み込み直してください。",
+    "書き始めたあとに下書きが届きました。あなたが書いた内容はそのまま残しています。",
+  reviseUseDraft: "下書きに置き換える",
   forMaintainer: "このコンピュータで rondo を管理する人向け",
   hostLog:
     "rondo の残りの出力はホストのログで読めます（journalctl --user -u rondo.service。" +
     "ホストを rondo web で手で起動した場合は、そのターミナルから確認できます）。",
   reviseRefusedNoApprover:
     "RONDO_APPROVER が正しく設定されていないため、このページからは変更を依頼できません。",
-  reviseRefusedPress: "確認の画面に戻って、ボタンを押してください。",
-  reviseRefusedForm:
-    "変更は送られていません。画面が古くなっています。読み込み直してから、もう一度押してください。",
+  reviseRefusedPress:
+    "変更依頼は送られていません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
+  reviseRefusedForm: "変更依頼は送られていません。そのフォームはこのページのものではありません。",
   reviseRefusedNoWords:
     "変更依頼は送られていません。入力欄が空でした。変更依頼を書いてから押してください。",
   reviseRefusedGateClosed: "変更依頼は送られていません。この確認はすでに終わっています。",
   reviseRefusedNotItsScope:
-    "変更依頼は送られていません。この画面を開いたあとに承認内容が変わっています。確認の画面を読み込み直してから、もう一度押してください。",
+    "変更依頼は送られていません。この確認を表示したあとに承認内容が変わりました。確認の画面には、" +
+    "いまの承認内容が出ています。",
   reviseRefusedStillRunning:
-    "変更依頼は送られていません。先に押した分が、まだ処理中です。終わるのを待ってから、確認の画面を読み込み直してください。",
+    "変更依頼は送られていません。先に押した分がまだ処理中です。結果はスレッドに表示されます。",
   reviseRefusedNotSetUp:
     "変更依頼は送られていません。次の回を用意できませんでした。確認はそのままです。" +
     "何が起きたかは、このコンピュータで rondo を管理する人が確かめられます。",
@@ -1032,7 +1034,8 @@ export const JA: Chrome = Object.freeze({
     "ファイルは押さえたままです。",
   releaseRefusedNoApprover:
     "RONDO_APPROVER が正しく設定されていないため、このページからはファイルを手放せません。",
-  releaseRefusedPress: "ファイルを手放す画面に戻って、もう一度ボタンを押してください。",
+  releaseRefusedPress:
+    "何も手放していません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   releaseRefusedForm:
     "何も手放していません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
@@ -1096,7 +1099,7 @@ export const JA: Chrome = Object.freeze({
   endRefusedNoApprover:
     "RONDO_APPROVER が正しく設定されていないため、このページからは作業を終わらせられません。",
   endRefusedPress:
-    "終わらせていません。作業を終わらせる画面に戻って、もう一度ボタンを押してください。",
+    "終わらせていません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   endRefusedForm:
     "何も終わらせていません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
@@ -1111,7 +1114,8 @@ export const JA: Chrome = Object.freeze({
   holdsPlain: "この作業が押さえるファイルを、あなたの判断として記録します",
   holdsRefusedNoApprover:
     "RONDO_APPROVER が正しく設定されていないため、このページからは押さえるファイルを変えられません。",
-  holdsRefusedPress: "ファイルの画面に戻って、もう一度ボタンを押してください。",
+  holdsRefusedPress:
+    "何も変えていません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   holdsRefusedForm:
     "何も変えていません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
@@ -1293,7 +1297,8 @@ export const JA: Chrome = Object.freeze({
     "ビルドとテストは実行できません。",
   addRepositoryRefusedNoApprover:
     "RONDO_APPROVER が正しく設定されていないため、このページからはリポジトリを追加できません。",
-  addRepositoryRefusedPress: "依頼に戻って、もう一度ボタンを押してください。",
+  addRepositoryRefusedPress:
+    "何も追加していません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   addRepositoryRefusedForm:
     "何も追加していません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
@@ -1446,8 +1451,8 @@ export const JA: Chrome = Object.freeze({
     "何も公開していません。画面に出ていた内容と、いま公開したら起きることが食い違っています。" +
     "読み込み直し、もう一度読んでから押してください。",
   publishRefusedStillRunning:
-    "二重には公開していません。この回の公開は、すでに進んでいます。" +
-    "終わるのを待ってから、公開の画面を開き直してください。",
+    "二重には公開していません。この回の公開は、すでに進んでいました。結果は公開の画面に" +
+    "表示されます。",
   publishRefusedNoContinuo:
     "公開していません。rondo の一部が起動せず、push も行っていません。" +
     "このコンピュータで rondo を管理する人に確かめてもらってください。",
@@ -1508,7 +1513,7 @@ export const JA: Chrome = Object.freeze({
     "残っていません。",
   mergeRefusedMoved:
     "マージしていません。rondo がチェックの結果を確かめたあとで、プルリクエストに新しいコミットが" +
-    "加わっています。ページを読み込み直すと、そのコミットが表示されます。",
+    "加わりました。マージの画面にそのコミットが表示されます。",
   mergeRefusedRetargeted:
     "マージしていません。プルリクエストの取り込み先が、rondo が開いたときのブランチから変わっています。" +
     "GitHub で確かめてください。",
@@ -1551,7 +1556,8 @@ export const JA: Chrome = Object.freeze({
   checksFixBusy: "修正を始めています…",
   conflictFixRefusedNoApprover:
     "RONDO_APPROVER が正しく設定されていないため、このページからは作業を始められません。",
-  conflictFixRefusedPress: "依頼に戻って、もう一度ボタンを押してください。",
+  conflictFixRefusedPress:
+    "何も始めていません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   conflictFixRefusedForm:
     "何も始めていません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
@@ -1559,8 +1565,8 @@ export const JA: Chrome = Object.freeze({
     "何も始めていません。プルリクエストにもう解消が要らないか、すでに解消が進んでいます。" +
     "ページを読み込み直すと、いまの状態が分かります。",
   conflictFixRefusedNotItsScope:
-    "この画面を開いたあとに承認内容が変わったため、解消は始めていません。ページを" +
-    "読み込み直してから押してください。",
+    "この画面を表示したあとに承認内容が変わったため、解消は始めていません。スレッドは" +
+    "いまの承認内容に変わっています。",
   conflictFixRefusedForked:
     "この作業の承認が別々に 2 つあるため、" + "rondo はどちらも使わず、解消は始めていません。",
   conflictFixRefusedNoContinuo:
@@ -1580,7 +1586,7 @@ export const JA: Chrome = Object.freeze({
   retakeRefusedNoApprover:
     "レビューはやり直していません。RONDO_APPROVER が正しく設定されていないため、このページからはレビューをやり直せません。",
   retakeRefusedPress:
-    "レビューはやり直していません。確認の画面に戻って、もう一度ボタンを押してください。",
+    "レビューはやり直していません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   retakeRefusedForm:
     "レビューはやり直していません。そのフォームはこのページのものではありません。" +
     "読み込み直してから押してください。",

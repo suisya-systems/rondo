@@ -438,6 +438,28 @@ test("(a) every other shape of request to the write route is refused and writes 
   expect(await closed).toBe(0);
 });
 
+test("a page hears this process's press token, and a reading host hands out none (rondo#674)", async () => {
+  const heard = await createApp(spyPorts([]), TOKEN).request("http://127.0.0.1/events", {
+    headers: { host: "127.0.0.1" },
+  });
+  expect(heard.status).toBe(200);
+  expect(heard.headers.get("content-type")).toBe("text/event-stream");
+  expect(heard.headers.get("cache-control")).toBe("no-store");
+  // One event and the end of the response; the browser asks again after `retry`.
+  expect(await heard.text()).toBe(`retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`);
+  // The `Host` check holds here as on every read.
+  const rebound = await createApp(spyPorts([]), TOKEN).request("http://evil.example/events", {
+    headers: { host: "evil.example" },
+  });
+  expect(rebound.status).toBe(421);
+  // A host that answers nothing draws no form, and has no token to give.
+  const reading = await createApp({ ...spyPorts([]), answer: null }, TOKEN).request(
+    "http://127.0.0.1/events",
+    { headers: { host: "127.0.0.1" } },
+  );
+  expect(reading.status).toBe(204);
+});
+
 test("(a) a request that never crossed the socket mints nothing, whatever its headers say", async () => {
   // In-process a writer can build a request with every press header and the
   // token: `Sec-Fetch-*` are forbidden to a page, not to Node. It is refused
