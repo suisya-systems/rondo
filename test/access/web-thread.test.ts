@@ -289,7 +289,7 @@ test("with no approver the threads are read and never written: no form, and the 
     const html = await operatorPage(ports, null, view, EN, null);
     expect(html).not.toContain("<form");
     expect(html).not.toContain("<textarea");
-    expect(html).toContain("RONDO_APPROVER is not set, so there is nobody this page could send as");
+    expect(html).toContain("Nobody is named as the approver yet, so messages cannot be sent");
     expect(bodiesIn(html).length > 0 || html.includes("Please look at the flaky test.")).toBe(true);
     expect(html).not.toContain(">Reply</a>");
   }

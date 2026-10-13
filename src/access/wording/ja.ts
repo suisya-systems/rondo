@@ -159,8 +159,7 @@ export const JA: Chrome = Object.freeze({
   liveNote: () => "",
   stillNote: "",
   noApproverNote:
-    "RONDO_APPROVER が正しく設定されていないため、このページからは操作できず、" +
-    "あなたが対応する一覧も表示できません。",
+    "承認する人がまだ決まっていないため、このページからは承認も作業の開始もできません。下に名前を入れると使えるようになります。",
 
   // rondo#439: the status in the person's words, one line and no ` -- `.
   endedHead: (status, since, why) =>
@@ -296,7 +295,7 @@ export const JA: Chrome = Object.freeze({
   sendNote: "書いたとおりに送られます。直すときは、もう一度返信します。",
   keySend: "送信",
   composerNoApprover:
-    "RONDO_APPROVER が正しく設定されていないため、このページが誰として送るのかが決まりません。スレッドは読めますが、書き込めません。",
+    "承認する人がまだ決まっていないため、このページからはメッセージを送れません。ページ上部で名前を入れてください。",
   evOfTry: (at, said) => `${String(at)} 回目: ${said}`,
   walkAt: (at, of) => `あなたの番 ${String(at)} ／ ${String(of)}`,
   walkNext: "次へ",
@@ -309,7 +308,7 @@ export const JA: Chrome = Object.freeze({
   threadsUnreadable: (reason) => `依頼スレッドを読めませんでした: ${reason}`,
   notSent: (line) => `送信されませんでした。書いた文は残しています: ${line}`,
   sendRefusedNoApprover:
-    "RONDO_APPROVER が正しく設定されていないため、このページが誰として送るのかが決まりません。",
+    "送っていません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   sendRefusedForm:
     "このページ自身のフォームから届いていないか、ページが今の rondo より古いものです。ページを読み込み直してから、もう一度送信してください。",
   sendRefusedNoWords: "送る文がありません。",
@@ -705,7 +704,7 @@ export const JA: Chrome = Object.freeze({
   scopeNoPlanForScope:
     "承認した範囲に合う計画が rondo にないため、" + "この範囲では作業を始められません。",
   scopeNoApprover:
-    "RONDO_APPROVER が正しく設定されていないため、このページからは範囲を承認できません。",
+    "承認する人がまだ決まっていません。ページ上部で名前を入れると、ここで承認できます。",
   // The place is said only where it is what tells two of these apart (D-0081
   // rule 4.2); with nothing to tell apart, the root answers "where" alone.
   // Japanese names the place first and keeps the root beside it in brackets,
@@ -845,7 +844,8 @@ export const JA: Chrome = Object.freeze({
     "ほかの作業とぶつかったときは、直す作業を rondo が始めるか、" +
     "ボタン 1 つで始められるようにします。",
   startNote: "依頼に書いた言葉が、そのまま作業への指示になります。",
-  scopeRefusedNoApprover: "RONDO_APPROVER が正しく設定されていないため、作業を継続できません。",
+  scopeRefusedNoApprover:
+    "記録していません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   scopeRefusedPress:
     "何も記録していません。範囲の承認はこのページのボタンを人が押したときだけ行われ、" +
     "スクリプトからはできません。",
@@ -867,7 +867,7 @@ export const JA: Chrome = Object.freeze({
   scopeRefusedNotApproved:
     "範囲は保存しましたが、承認はしていません。費用もかかっていません。範囲の画面に戻って、もう一度承認してください。",
   startRefusedNoApprover:
-    "RONDO_APPROVER が正しく設定されていないため、このページからは作業を" + "始められません。",
+    "作業を始めていません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   startRefusedPress:
     "作業は始まっていません。" + "範囲の画面に戻って、もう一度ボタンを押してください。",
   startRefusedForm:
@@ -917,7 +917,7 @@ export const JA: Chrome = Object.freeze({
     "rondo の残りの出力はホストのログで読めます（journalctl --user -u rondo.service。" +
     "ホストを rondo web で手で起動した場合は、そのターミナルから確認できます）。",
   reviseRefusedNoApprover:
-    "RONDO_APPROVER が正しく設定されていないため、このページからは変更を依頼できません。",
+    "変更を依頼していません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   reviseRefusedPress:
     "変更依頼は送られていません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   reviseRefusedForm: "変更依頼は送られていません。そのフォームはこのページのものではありません。",
@@ -1033,7 +1033,7 @@ export const JA: Chrome = Object.freeze({
     "この作業の一部がまだ動いているか、あなたのレビューを待っているので、それが終わるまで" +
     "ファイルは押さえたままです。",
   releaseRefusedNoApprover:
-    "RONDO_APPROVER が正しく設定されていないため、このページからはファイルを手放せません。",
+    "ファイルを手放していません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   releaseRefusedPress:
     "何も手放していません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   releaseRefusedForm:
@@ -1093,11 +1093,11 @@ export const JA: Chrome = Object.freeze({
   endBack: "作業を終わらせる画面に戻る",
   endBrief: "rondo がワーカーに頼んだ内容（全文）",
   endNoApprover:
-    "RONDO_APPROVER が正しく設定されていないため、このページからは作業を終わらせられません。",
+    "承認する人がまだ決まっていません。ページ上部で名前を入れると、ここで作業を終わらせられます。",
   endNothingToEnd:
     "ここで終わらせるものはありません。この作業はすでに終わったか、自分で先へ進みました。",
   endRefusedNoApprover:
-    "RONDO_APPROVER が正しく設定されていないため、このページからは作業を終わらせられません。",
+    "作業を終わらせていません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   endRefusedPress:
     "終わらせていません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   endRefusedForm:
@@ -1113,7 +1113,7 @@ export const JA: Chrome = Object.freeze({
     "記録できませんでした。作業はそのままです。あとでまた止まっていれば、もう一度押しても大丈夫です。",
   holdsPlain: "この作業が押さえるファイルを、あなたの判断として記録します",
   holdsRefusedNoApprover:
-    "RONDO_APPROVER が正しく設定されていないため、このページからは押さえるファイルを変えられません。",
+    "押さえるファイルを変えていません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   holdsRefusedPress:
     "何も変えていません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   holdsRefusedForm:
@@ -1192,7 +1192,7 @@ export const JA: Chrome = Object.freeze({
   publishPlain: "このブランチを push し、プルリクエストを作り、作業の記録を閉じます。",
   publishBack: "公開の画面に戻る",
   publishNotOffered:
-    "RONDO_APPROVER が正しく設定されていないため、このページからは公開できません。" + "",
+    "承認する人が決まるまで、このページからは公開できません。ページ上部で名前を入れてください。",
   publishNotClosed: (status) =>
     `この回はまだ確認で承認されていません（いまの状態: ${status}）。公開できるのは、確認で承認された回だけです。`,
   publishNotApproved: (outcome) =>
@@ -1296,7 +1296,7 @@ export const JA: Chrome = Object.freeze({
     `${repo} のビルド方法が分からないため、ワーカーはファイルの変更とコミットはできますが、` +
     "ビルドとテストは実行できません。",
   addRepositoryRefusedNoApprover:
-    "RONDO_APPROVER が正しく設定されていないため、このページからはリポジトリを追加できません。",
+    "リポジトリを追加していません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   addRepositoryRefusedPress:
     "何も追加していません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   addRepositoryRefusedForm:
@@ -1418,8 +1418,7 @@ export const JA: Chrome = Object.freeze({
     "受け付けました。ブランチを push してプルリクエストを作っています。たいてい 1 分以内に" +
     "終わります。もう一度押す必要はありません。",
   publishRefusedNoApprover:
-    "何も公開していません。RONDO_APPROVER が未設定なので、このページが誰として公開するか" +
-    "決まりません。",
+    "何も公開していません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   publishRefusedPress:
     "何も公開していません。公開は人がこのページのボタンを押して行うもので、スクリプトからは" +
     "できません。",
@@ -1491,7 +1490,7 @@ export const JA: Chrome = Object.freeze({
     "もう一度押す必要はありません。",
   mergeBack: "依頼に戻る",
   mergeRefusedNoApprover:
-    "マージしていません。RONDO_APPROVER が正しく設定されていないため、このページからはマージできません。",
+    "マージしていません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   mergeRefusedPress:
     "マージしていません。マージは人がこのページのボタンを押して行うもので、スクリプトからは" +
     "できません。",
@@ -1555,7 +1554,7 @@ export const JA: Chrome = Object.freeze({
   checksFixAction: "rondo に失敗したチェックを再現して直してもらう",
   checksFixBusy: "修正を始めています…",
   conflictFixRefusedNoApprover:
-    "RONDO_APPROVER が正しく設定されていないため、このページからは作業を始められません。",
+    "作業を始めていません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   conflictFixRefusedPress:
     "何も始めていません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   conflictFixRefusedForm:
@@ -1584,7 +1583,7 @@ export const JA: Chrome = Object.freeze({
   retakeReviewBusy: "レビューをもう一度受けています…",
   retakeReviewBack: "確認に戻る",
   retakeRefusedNoApprover:
-    "レビューはやり直していません。RONDO_APPROVER が正しく設定されていないため、このページからはレビューをやり直せません。",
+    "レビューはやり直していません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   retakeRefusedPress:
     "レビューはやり直していません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
   retakeRefusedForm:

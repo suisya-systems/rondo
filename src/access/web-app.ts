@@ -65,15 +65,8 @@ import {
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
 import { pressedAnswer } from "./answer-press.js";
 import { basisOf } from "./explainer/material.js";
-import type {
-  EndPort,
-  EndRefusal,
-  HoldsPort,
-  HoldsRefusal,
-  ReleasePort,
-  ReleaseRefusal,
-} from "./line-ports.js";
-import type { WebPorts } from "./page/contract.js";
+import type { EndRefusal, HoldsRefusal, ReleasePort, ReleaseRefusal } from "./line-ports.js";
+import type { ServedPorts } from "./page/contract.js";
 import { postedAnswers, postedClauses } from "./page/triage.js";
 import { MAX_END_REASON_CHARS } from "./page-logic/end-lap.js";
 import {
@@ -85,7 +78,7 @@ import {
 } from "./page-logic/language.js";
 import { viewHref, viewOf } from "./page-logic/routes.js";
 import { answeredRevise, questionRevise } from "./question.js";
-import { TAB_OUTCOMES, type TabOutcome } from "./reach.js";
+import { TAB_OUTCOMES } from "./reach.js";
 import { heldAnchor, pressable } from "./read-in.js";
 import { budgetsOf, scopeDraftOf, scopeValuesOf, wholeNumber } from "./scope-form.js";
 import { refusedPage } from "./screens/refused.js";
@@ -1498,62 +1491,7 @@ export class PolicyPort {
   }
 }
 
-/** The ports the server is handed: the reading half, and the eight writers. */
-export interface ServedPorts extends WebPorts {
-  /**
-   * Null when `RONDO_APPROVER` is unset, which is also when no button is drawn
-   * -- rondo does not act for an unnamed person on a screen either (D-0020
-   * rule 2).
-   */
-  readonly answer: AnswerPort | null;
-  /** Null on the same condition as {@link answer}: no approver, no forms. */
-  readonly say: SayPort | null;
-  /**
-   * Null on the same condition as {@link say}: a scope row and a decision row
-   * both need an actor the allowlist accepts, so no approver is no forms
-   * (rondo#233 S3).
-   */
-  readonly scope: ScopePort | null;
-  /**
-   * Null on {@link scope}'s condition: a revise answers a gate as somebody and
-   * admits a lap under an approval, and both need an actor the allowlist
-   * accepts (rondo#233 S4).
-   */
-  readonly revise: RevisePort | null;
-  /**
-   * Null on {@link revise}'s condition and on one of its own: publishing
-   * closes a run as somebody, and the forge repository is the one fact no plan
-   * carries, so a host that named none draws no publish screen (rondo#233 S5).
-   */
-  readonly publish: PublishPort | null;
-  /**
-   * Null on {@link revise}'s condition: a release is recorded as the person's
-   * judgement, so it needs an actor the allowlist accepts (D-0073 rule 4.3).
-   */
-  readonly release: ReleasePort | null;
-  /** Null on {@link release}'s condition: what a line keeps is changed as the person (D-0163). Absent is null. */
-  readonly holds?: HoldsPort | null;
-  /** Null on {@link release}'s condition: a lap is ended as the person (rondo#655). Absent is null. */
-  readonly end?: EndPort | null;
-  /** Null on {@link release}'s condition: the recorded plan is the approver's, as setup's is. */
-  readonly addRepository?: AddRepositoryPort | null;
-  /**
-   * Null on {@link publish}'s condition: the merge is pressed by a person the
-   * allowlist accepts (rondo#380). Absent is null.
-   */
-  readonly merge?: MergePort | null;
-  /** Null on {@link release}'s condition: a goal and a *not now* are the person's (D-0097). Absent is null. */
-  readonly triage?: TriagePort | null;
-  /**
-   * Where an open tab's report of its notice is written (rondo#414). Null on
-   * {@link say}'s condition. Absent is null.
-   */
-  readonly notice?: ((waits: readonly string[], outcome: TabOutcome) => Promise<void>) | null;
-  /** Null on {@link triage}'s condition: a reading spends as the person (rondo#490). Absent is null. */
-  readonly readIn?: ReadInPort | null;
-  /** Null on {@link triage}'s condition: retiring a policy is the person's (D-0067 rule 6.3). Absent is null. */
-  readonly policies?: PolicyPort | null;
-}
+export type { ServedPorts } from "./page/contract.js";
 
 /**
  * Whether a `Host` (or an `Origin`'s host) names this machine.
@@ -1709,6 +1647,7 @@ const RETAKE_REVIEW_ROUTE = "/retake-review";
 const READ_IN_ROUTE = "/read-in";
 /** Taking back a standing policy rondo keeps (D-0067 rule 6.3). */
 const FORGET_POLICY_ROUTE = "/forget-policy";
+const APPROVER_ROUTE = "/approver";
 
 /**
  * Where an open tab reports what its notice did (rondo#414). Not a press: the
@@ -1747,6 +1686,7 @@ const PRESS_ROUTES: ReadonlySet<string> = new Set([
   RETAKE_REVIEW_ROUTE,
   READ_IN_ROUTE,
   FORGET_POLICY_ROUTE,
+  APPROVER_ROUTE,
 ]);
 
 /**
@@ -1835,6 +1775,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     notice = null,
     readIn = null,
     policies = null,
+    naming = null,
     ...reading
   } = ports;
   const app = new Hono<PageEnv>();
@@ -1971,7 +1912,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       return c.redirect(viewHref(view, wording.lang), 303);
     }
     const html = await operatorPage(
-      reading,
+      naming === null ? reading : { ...reading, namingToken: token },
       answer === null ? null : token,
       view,
       wording,
@@ -3079,6 +3020,32 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       : refuse(policyId === "" ? 400 : 409, wording.policyForgetRefused, forgot?.note ?? null);
   });
 
+  // **Naming the approver** (rondo#675, D-0196): the one press drawn while
+  // nobody is named, landing back where it was pressed.
+  app.post(APPROVER_ROUTE, async (c) => {
+    const form = await c.req.parseBody();
+    const name = typeof form["name"] === "string" ? form["name"].trim() : "";
+    const posted = typeof form["back"] === "string" ? form["back"] : "";
+    const wording = wordingOf(c);
+    const back =
+      posted.startsWith("/") && !posted.startsWith("//") && !posted.includes("\\")
+        ? posted
+        : viewHref({ kind: "requests" }, wording.lang);
+    const refuse = (status: 400 | 403 | 409, line: string) =>
+      pressRefused(c, status, wording.approverAction, line, back, wording.triageBack);
+    if (naming === null) {
+      return refuse(409, wording.approverRefusedTaken);
+    }
+    const minting = mintPress(c, form["token"]);
+    if (!("press" in minting)) {
+      return refuse(minting.status, wording.approverRefusedPress);
+    }
+    const named = await naming(minting.press, name);
+    return named.ok
+      ? c.redirect(back, 303)
+      : refuse(named.why === "approverRefusedShape" ? 400 : 409, wording[named.why]);
+  });
+
   // **The merge press** (rondo#380, `D-0091`): a lap's pull request merged by
   // the operator's own forge CLI, on a person's press. Everything the button
   // was drawn on is read again in the port, and the head it carried must still
@@ -3864,7 +3831,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
  * read. Resolves 0 when the server closes and 1 when it cannot listen.
  */
 export function serveApp(
-  app: Hono<PageEnv>,
+  /** The app for this request: {@link serveOperatorPage} builds a new one when its ports change. */
+  appNow: () => Hono<PageEnv>,
   port: number,
   listening: (boundPort: number) => void,
   announceError: (line: string) => void,
@@ -3879,6 +3847,7 @@ export function serveApp(
   const server = createServer(
     getRequestListener(
       (request, env) => {
+        const app = appNow();
         const { incoming } = env as PageEnv["Bindings"];
         live.set(
           incoming,
@@ -3918,7 +3887,8 @@ export function serveApp(
  * test passes one.
  */
 export function serveOperatorPage(
-  ports: ServedPorts,
+  /** Read per request; a new object is a new app over the same token (rondo#675). */
+  ports: () => ServedPorts,
   port: number,
   announce: (line: string) => void,
   announceError: (line: string) => void,
@@ -3928,12 +3898,20 @@ export function serveOperatorPage(
   // process, because a token that changed under the five-second redraw would
   // expire every form before anybody could press it.
   const token = randomUUID();
+  let built = ports();
+  let app = createApp(built, token);
   return serveApp(
-    createApp(ports, token),
+    () => {
+      if (ports() !== built) {
+        built = ports();
+        app = createApp(built, token);
+      }
+      return app;
+    },
     port,
     (at) => {
       announce(
-        `rondo is ${ports.answer === null ? "reading" : "reading and answering"} at ` +
+        `rondo is ${built.answer === null ? "reading" : "reading and answering"} at ` +
           `http://127.0.0.1:${String(at)}/ -- ctrl-c to stop`,
       );
     },

@@ -579,7 +579,7 @@ export async function serving(ports: ServedPorts): Promise<{
   let announced = "";
   const stop = new AbortController();
   const served = serveOperatorPage(
-    ports,
+    () => ports,
     0,
     (line) => {
       announced = line;

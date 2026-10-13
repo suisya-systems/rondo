@@ -612,7 +612,7 @@ test("rendering the scope screen writes nothing, however many times or in which 
     ),
   ).toEqual([]);
   expect(bare).toContain(
-    "RONDO_APPROVER is not set, so there is nobody this page could approve a scope as.",
+    "Nobody is named as the approver yet. Name them at the top of the page to approve this.",
   );
 
   expect(rows(world.connection, "scope")).toBe(0);

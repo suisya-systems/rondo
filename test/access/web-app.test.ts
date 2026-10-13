@@ -81,6 +81,7 @@ import {
   type SentMessage,
   type ServedPorts,
   serveApp,
+  serveOperatorPage,
   TriagePort,
   type TriageWritten,
 } from "../../src/access/web-app.js";
@@ -207,7 +208,7 @@ async function served(app: Hono<PageEnv>): Promise<{
   const stop = new AbortController();
   let bound = 0;
   const closed = serveApp(
-    app,
+    () => app,
     0,
     (at) => {
       bound = at;
@@ -1248,6 +1249,89 @@ test("(read-in) a person's press reads the text once and lands back on it; a scr
   expect(await failing.closed).toBe(0);
 });
 
+test("(approver) a person's press names the approver and lands back; a script, a refused name or a named host changes nothing (rondo#675)", async () => {
+  const names: string[] = [];
+  const withNaming = (naming: ServedPorts["naming"]) =>
+    ({ ...spyPorts([]), naming }) as ServedPorts;
+  const { base, stop, closed } = await served(
+    createApp(
+      withNaming(async (_press, name) => {
+        names.push(name);
+        return await Promise.resolve(
+          name === "ada" ? { ok: true } : { ok: false, why: "approverRefusedShape" },
+        );
+      }),
+      TOKEN,
+    ),
+  );
+  const person = pressHeaders(base);
+  const form = { token: TOKEN, name: " ada ", back: "/?thread=req-1&lang=en" };
+  const pressed = await send(base, "/approver?lang=en", "POST", person, form);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
+  expect(names).toEqual(["ada"]);
+
+  const script = await send(
+    base,
+    "/approver?lang=en",
+    "POST",
+    { ...person, "sec-fetch-user": undefined },
+    form,
+  );
+  expect(script.status).toBe(403);
+  const shaped = await send(base, "/approver?lang=en", "POST", person, { ...form, name: "-x" });
+  expect(shaped.status).toBe(400);
+  expect(shaped.body).toContain(chromeFor("en").approverRefusedShape);
+  expect(names).toEqual(["ada", "-x"]);
+  stop.abort();
+  expect(await closed).toBe(0);
+
+  const named = await served(createApp(withNaming(null), TOKEN));
+  const taken = await send(named.base, "/approver?lang=en", "POST", pressHeaders(named.base), form);
+  expect(taken.status).toBe(409);
+  expect(taken.body).toContain(chromeFor("en").approverRefusedTaken);
+  named.stop.abort();
+  expect(await named.closed).toBe(0);
+});
+
+test("(approver) the served page follows its ports: new ones are a new app over the same token (rondo#675)", async () => {
+  let ports = {
+    ...spyPorts([]),
+    naming: async () => await Promise.resolve({ ok: true }),
+  } as ServedPorts;
+  const stop = new AbortController();
+  let base = "";
+  const closed = serveOperatorPage(
+    () => ports,
+    0,
+    (line) => {
+      base = /http:\/\/127\.0\.0\.1:\d+/.exec(line)?.[0] ?? "";
+    },
+    () => {
+      throw new Error("the server refused to listen");
+    },
+    stop.signal,
+  );
+  while (base === "") {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  const press = async (): Promise<number> =>
+    (
+      await send(base, "/approver?lang=en", "POST", pressHeaders(base), {
+        token: TOKEN,
+        name: "ada",
+        back: "/?lang=en",
+      })
+    ).status;
+  // The process mints its own token, so this press stops at the token: the port is there.
+  expect(await press()).toBe(403);
+  // Named now: the same server answers from the app built over the new ports.
+  ports = { ...ports, naming: null };
+  expect(await press()).toBe(409);
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
 test("(forget-policy) a person's press takes a policy back and lands on its note; a script, a bad form or no port changes nothing (D-0067 rule 6.3)", async () => {
   const forgot: string[] = [];
   const withPolicies = (port: PolicyPort | null) =>
@@ -1995,6 +2079,8 @@ const WRITE_TABLE = [
   // Reading English-held text in the page's language (rondo#490, D-0144).
   "ALL /read-in",
   "ALL /forget-policy",
+  // Naming the approver while nobody is (rondo#675, D-0196).
+  "ALL /approver",
   // An open tab's report of its notice (rondo#414, D-0108).
   "ALL /notice",
   "ALL /*",
@@ -2023,6 +2109,7 @@ const WRITE_TABLE = [
   "POST /read-in",
   // Taking back a standing policy rondo keeps (D-0067 rule 6.3).
   "POST /forget-policy",
+  "POST /approver",
   "POST /retake-review",
   "POST /fix-conflict",
   "POST /merge",
@@ -2086,6 +2173,8 @@ const PRESS_ROUTES = [
   "/read-in",
   // Taking back a standing policy rondo keeps (D-0067 rule 6.3).
   "/forget-policy",
+  // Naming the approver while nobody is (rondo#675, D-0196).
+  "/approver",
 ];
 
 /**
@@ -2895,7 +2984,7 @@ test("(send) with no approver there is no say port, and a send says why", async 
     body: "words",
   });
   expect(refused.status).toBe(403);
-  expect(refused.body).toContain("RONDO_APPROVER");
+  expect(refused.body).toContain("nobody is named as the approver yet");
   expect(sent).toEqual([]);
 
   stop.abort();

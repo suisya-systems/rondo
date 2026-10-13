@@ -339,6 +339,12 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // there unrecorded. No write and no read of its own -- each file is read
   // through `cli.ts`'s plan reader -- and `dirname` and `join` only name the
   // directory and a file in it.
+  // The approver named from the page (rondo#675, D-0196): one line beside the
+  // store, read at start and written once with `wx`, so a second naming loses
+  // to the first. No other file is read or written, and nothing is removed.
+  "src/access/approver.ts": {
+    "node:fs": ["readFileSync", "writeFileSync"],
+  },
   "src/access/setup-files.ts": {
     "node:fs": ["readdirSync"],
     "node:path": ["dirname", "join"],
@@ -1313,6 +1319,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   // thread is told. Neither the recording nor the verdict is played here.
   "src/access/checks-host.ts": ["Publishing"],
   "src/access/cli-parse.ts": [HUMAN],
+  "src/access/approver.ts": [HUMAN],
   "src/access/cli.ts": [HUMAN],
   // D-0190 rule 10.4: `rondo decisions`, lifted beside `cli.ts` for its line cap.
   "src/access/decisions-cli.ts": [HUMAN],

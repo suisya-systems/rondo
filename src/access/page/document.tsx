@@ -16,7 +16,7 @@ import type { Wait } from "../page-logic/waits.js";
 import { type Chrome, SHIPPED_SETS } from "../wording.js";
 import type { HeldReads } from "./held.js";
 import { READ_IN_FORM } from "./held.js";
-import { PILL, TONE } from "./vocabulary.js";
+import { PILL, PRIMARY, TONE } from "./vocabulary.js";
 
 /** How often a live view redraws itself, in seconds: the `<noscript>` refresh and htmx's `every 5s`. */
 const REFRESH_SECONDS = 5;
@@ -40,6 +40,8 @@ export interface PageDocument {
   readonly view: PageView;
   readonly actorId: string | null;
   readonly token: string | null;
+  /** Where nobody is named, the press token for the form that names them (rondo#675). */
+  readonly namingToken: string | null;
   readonly threads: Threads;
   readonly threadRead: PageModel["threadRead"];
   readonly reads: HeldReads | null;
@@ -62,6 +64,7 @@ export async function pageDocument({
   view,
   actorId,
   token,
+  namingToken,
   threads,
   threadRead,
   reads,
@@ -487,10 +490,32 @@ export async function pageDocument({
             // have an operator looking for a button that is missing for a
             // reason rondo knows and did not say. It sits above the faces
             // because it is true of the whole page and not of one of them.
+            // Where the page may name them, it is the form that does (rondo#675).
             actorId === null ? (
-              <p class="note faces-width mx-auto w-full rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
-                {wording.noApproverNote}
-              </p>
+              <div class="note faces-width mx-auto w-full rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
+                <p>{wording.noApproverNote}</p>
+                {namingToken === null ? null : (
+                  <form
+                    method="post"
+                    action={`/approver?lang=${encodeURIComponent(wording.lang)}`}
+                    class="mt-2 flex flex-wrap items-center gap-2"
+                  >
+                    <input type="hidden" name="token" value={namingToken} />
+                    <input type="hidden" name="back" value={here} />
+                    <label for="approver-name">{wording.approverLabel}</label>
+                    <input
+                      id="approver-name"
+                      name="name"
+                      required
+                      autocomplete="off"
+                      class="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-2"
+                    />
+                    <button type="submit" class={`${PRIMARY} h-9 px-4 text-sm`}>
+                      {wording.approverAction}
+                    </button>
+                  </form>
+                )}
+              </div>
             ) : null
           }
           {

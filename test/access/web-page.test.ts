@@ -156,7 +156,19 @@ test("an empty store renders a page rather than an error", async () => {
   // No approver, and the page says so **where it is visible**, rather than
   // drawing somebody else's inbox, showing an empty one as though it were
   // theirs, or explaining a missing button on a screen nobody arrives at.
-  expect(html).toContain("RONDO_APPROVER is not set");
+  expect(html).toContain("Nobody is named as the approver yet");
+  // A page that cannot name them draws no form to do it with.
+  expect(html).not.toContain('action="/approver');
+});
+
+test("where the page may name the approver, the note carries the form that does (rondo#675)", async () => {
+  const html = await operatorPage({ ...portsOver(fresh(), null), namingToken: "the-token" });
+  expect(html).toContain('action="/approver?lang=en"');
+  expect(html).toContain('name="token" value="the-token"');
+  expect(html).toContain(">Name the approver</button>");
+  // Named, there is no form.
+  const named = await operatorPage({ ...portsOver(fresh()), namingToken: "the-token" });
+  expect(named).not.toContain('action="/approver');
 });
 
 test("a request keeps its paragraphs and its markup is text (rondo#90)", async () => {

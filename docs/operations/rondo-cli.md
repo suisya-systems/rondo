@@ -949,7 +949,7 @@ yours.
 | `N iterations are live, so "the live one" does not name anything` | More than one is open, which is now normal. | Re-run with `--iteration-id ID`; the message lists them. |
 | `continuo gate deliver refused (LeaseHeld)` | A lap holds the global delivery lease. | Wait; the lease is 60 s. |
 | `continuo is not usable: ...` | The build is not the pinned revision, or is dirty. | Rebuild the pinned continuo (section 1). |
-| `RONDO_APPROVER is not set` | rondo will not act for an unnamed person. | Export it. |
+| `RONDO_APPROVER is not set` | rondo will not act for an unnamed person. | Export it, or name the approver from the page, which records it in `<store>.approver`. |
 | `RONDO_OPERATOR_LANGUAGE is '<x>', which is not an IETF language tag` | The page's language is a tag (`ja`, `zh-Hant`), not a locale (`ja_JP`) or a sentence. | Fix it, or unset it for English. |
 | `No iteration is live` on `publish` | Answering closed the iteration, so it is no longer live. | Pass `--iteration-id`, which the `answer` output prints for you. |
 | `closed at gate outcome 'withdrawn'` on `publish` | The gate ended without a person answering it. | Nothing to publish; the work was not approved. |
