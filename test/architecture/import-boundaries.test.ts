@@ -513,6 +513,11 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
     "hono/csrf": ["csrf"],
     "hono/secure-headers": ["secureHeaders"],
   },
+  // rondo#676: the sign-in press, out of `web-app.ts` at its size cap as
+  // `line-ports.ts` is, registered on the app `web-app.ts` built. Types only.
+  "src/access/github-sign-in-route.ts": {
+    hono: ["Context", "Hono"],
+  },
   // The manifest read once at load, moved out of `web-app.ts` with the map it
   // builds (rondo#674).
   "src/access/served.ts": {
@@ -1344,6 +1349,9 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/flow-stop.ts": [WORK_DISCOVERY],
   "src/access/forge-preflight.ts": ["Publishing"],
   "src/access/forge.ts": ["Publishing"],
+  // rondo#676: signing this computer's `gh` in to GitHub, on the person's press.
+  "src/access/github-sign-in.ts": [HUMAN],
+  "src/access/github-sign-in-route.ts": [HUMAN],
   "src/access/framing.ts": [SPLITTING, "Reviewer"],
   // D-0125: whether the readings would let a gate be approved without the person.
   "src/access/gate-auto.ts": ["Reviewer"],
@@ -1449,6 +1457,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/screens/publish.tsx": [HUMAN],
   "src/access/screens/refused.tsx": [HUMAN],
   "src/access/screens/release.tsx": [HUMAN],
+  "src/access/screens/sign-in.tsx": [HUMAN],
   "src/access/screens/end-lap.tsx": [HUMAN],
   "src/access/screens/scope.tsx": [HUMAN],
   "src/access/screens/plan-start.tsx": [HUMAN],

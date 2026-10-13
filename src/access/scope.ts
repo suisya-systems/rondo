@@ -63,9 +63,8 @@ import {
   type ScopeTip,
 } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
-import { stoppedShort } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
-import { endedLost } from "./lost-laps.js";
+import { endedLost, stoppedShort } from "./lost-laps.js";
 import {
   type ReviewScope,
   reviewPolicyOf,

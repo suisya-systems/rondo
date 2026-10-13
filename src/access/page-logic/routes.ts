@@ -149,7 +149,12 @@ export type PageView =
    * The end of a lap only a person can end (rondo#655): what ending does, the
    * reason they write and the press. A view of its own for `publish`'s reason.
    */
-  | { readonly kind: "end"; readonly iterationId: string };
+  | { readonly kind: "end"; readonly iterationId: string }
+  /**
+   * Signing this computer's rondo in to GitHub (rondo#676): the one-time code
+   * and where to enter it, instead of a terminal.
+   */
+  | { readonly kind: "signIn" };
 
 /**
  * The most review rounds this screen will draft for.
@@ -209,6 +214,7 @@ export function isLive(view: PageView): boolean {
     view.kind !== "merge" &&
     view.kind !== "release" &&
     view.kind !== "end" &&
+    view.kind !== "signIn" &&
     view.kind !== "goal" &&
     view.kind !== "goalScope"
   );
@@ -241,6 +247,8 @@ export function viewHref(view: PageView, tag: string): string {
       return `/?release=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "end":
       return `/?end=${encodeURIComponent(view.iterationId)}&${lang}`;
+    case "signIn":
+      return `/?github=sign-in&${lang}`;
     case "requests":
       return view.take !== undefined
         ? `/?requests=open&take=${encodeURIComponent(view.take.proposalId)}` +
@@ -345,6 +353,9 @@ export function viewOf(query: URLSearchParams): PageView {
   const releasing = query.get("release");
   if (releasing !== null && releasing !== "") {
     return { kind: "release", iterationId: releasing };
+  }
+  if (query.get("github") === "sign-in") {
+    return { kind: "signIn" };
   }
   const ending = query.get("end");
   if (ending !== null && ending !== "") {

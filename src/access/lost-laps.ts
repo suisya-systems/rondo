@@ -28,12 +28,12 @@
  */
 
 import { hostname } from "node:os";
+import { isTurnTimeoutRefusal } from "../continuo/protocol.js";
 import type { ReadOutcome, StorePort } from "../refrain/ports.js";
 import type { DrivenLap } from "../store/contract.js";
 import type { IterationRecord } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { DETERMINISTIC_DRAFTER } from "./advisory.js";
-import { stoppedShort } from "./forge.js";
 import type { Chrome } from "./wording.js";
 
 /** Who drives a lap sent from this process (D-0139). */
@@ -458,4 +458,29 @@ async function tell(
   if (outcome.kind !== "recorded" && outcome.kind !== "duplicate") {
     ports.log(`lost     the thread was not told about lap '${lap.id}': ${outcome.reason}`);
   }
+}
+
+// Moved out of `forge.ts` at its size cap (rondo#676): they read a row, and run nothing.
+
+/**
+ * Whether a row is a lap continuo stopped at its time limit (D-0143): ended
+ * `failed` on the turn-timeout refusal, with a workspace and a branch to keep.
+ */
+export function stoppedAtTimeLimit(row: IterationRecord): boolean {
+  return (
+    row.status === "failed" &&
+    row.reason !== null &&
+    isTurnTimeoutRefusal(row.reason) &&
+    row.workspace !== null &&
+    row.topicBranch !== null
+  );
+}
+
+/**
+ * Whether a row is a lap stopped short of its gate whose retry starts from its
+ * branch: at its time limit (D-0143) or at its budget (D-0149). Its commits are
+ * on its branch either way; only a time-limit stop has a kept commit.
+ */
+export function stoppedShort(row: IterationRecord): boolean {
+  return stoppedAtTimeLimit(row) || (row.status === "failed" && row.failureKind === "budget");
 }

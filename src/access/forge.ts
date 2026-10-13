@@ -38,12 +38,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { isTurnTimeoutRefusal } from "../continuo/protocol.js";
 import type { DrafterRow, ReviewerRow } from "../continuo/roles.js";
 import { KEPT_WORK_SUBJECT } from "../refrain/revision.js";
 import { recordNumber, recordNumbers } from "../store/lanes.js";
 import { contentDigest } from "../store/plan.js";
-import type { IterationRecord, ReadingEvidence } from "../store/records.js";
+import type { ReadingEvidence } from "../store/records.js";
 import { FINDING_SEVERITIES } from "../store/records.js";
 import { hostFailure } from "./host-failure.js";
 import { type DrafterRun, drafterFailed } from "./model-draft/judgement.js";
@@ -78,7 +77,12 @@ export async function runCommand(
   executable: string,
   argv: readonly string[],
   timeoutMs: number = FORGE_TIMEOUT_MS,
-  options: { readonly input?: string; readonly cwd?: string } = {},
+  options: {
+    readonly input?: string;
+    readonly cwd?: string;
+    /** Each chunk of either stream as it arrives, for a caller that cannot wait for the end. */
+    readonly onOutput?: (chunk: Buffer) => void;
+  } = {},
 ): Promise<CommandOutcome> {
   const commandLine = [executable, ...argv].join(" ");
   return await new Promise<CommandOutcome>((resolve) => {
@@ -195,9 +199,11 @@ export async function runCommand(
 
     child.stdout?.on("data", (chunk: Buffer) => {
       stdoutChunks.push(chunk);
+      options.onOutput?.(chunk);
     });
     child.stderr?.on("data", (chunk: Buffer) => {
       stderrChunks.push(chunk);
+      options.onOutput?.(chunk);
     });
     child.on("error", (error: Error) => {
       finish({ commandLine, status: null, signal: null, ...streams(), spawnError: error.message });
@@ -466,29 +472,6 @@ export type KeptWork =
   | { readonly kind: "kept"; readonly commit: string }
   | { readonly kind: "clean" }
   | { readonly kind: "notKept"; readonly reason: string };
-
-/**
- * Whether a row is a lap continuo stopped at its time limit (D-0143): ended
- * `failed` on the turn-timeout refusal, with a workspace and a branch to keep.
- */
-export function stoppedAtTimeLimit(row: IterationRecord): boolean {
-  return (
-    row.status === "failed" &&
-    row.reason !== null &&
-    isTurnTimeoutRefusal(row.reason) &&
-    row.workspace !== null &&
-    row.topicBranch !== null
-  );
-}
-
-/**
- * Whether a row is a lap stopped short of its gate whose retry starts from its
- * branch: at its time limit (D-0143) or at its budget (D-0149). Its commits are
- * on its branch either way; only a time-limit stop has a kept commit.
- */
-export function stoppedShort(row: IterationRecord): boolean {
-  return stoppedAtTimeLimit(row) || (row.status === "failed" && row.failureKind === "budget");
-}
 
 /**
  * **Keep what a lap stopped at its time limit had not committed** (D-0143,

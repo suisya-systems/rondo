@@ -20,12 +20,13 @@ import type { GateAnswer, IterationRecord, ThreadMessageDraft } from "../../stor
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
 import type { NamingPort } from "../approver.js";
 import type { LapWorkInspection } from "../forge.js";
+import type { SignInPort } from "../github-sign-in-route.js";
 import type { InboxReadPorts } from "../inbox.js";
 import type { NamedIssue, WorkRepository } from "../issue-read.js";
 import type { EndPort, HoldsPort, ReleasePort } from "../line-ports.js";
 import type { TabOutcome } from "../reach.js";
+import type { AddRepositoryPort } from "../repository-add.js";
 import type {
-  AddRepositoryPort,
   AnswerPort,
   ConflictFixed,
   MergePort,
@@ -179,6 +180,8 @@ export interface WebPorts extends InboxReadPorts {
   readonly releasable?: boolean;
   /** Whether the host holds an end press (rondo#655), on {@link releasable}'s terms. Absent is false. */
   readonly endsLaps?: boolean;
+  /** Signing this computer's `gh` in to GitHub (rondo#676); null without an approver. Absent is null. */
+  readonly signIn?: SignInPort | null;
   /**
    * Whether the host holds a merge press (rondo#380, `D-0091`): true exactly
    * where the merge port is not null, so no merge button is drawn where every

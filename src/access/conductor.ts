@@ -105,11 +105,10 @@ import {
   readIssueState,
   readLanding,
   readRecordAdditions,
-  stoppedAtTimeLimit,
 } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
 import { issuesClosedNow } from "./issue-read.js";
-import { driveResumed, thisDriver } from "./lost-laps.js";
+import { driveResumed, stoppedAtTimeLimit, thisDriver } from "./lost-laps.js";
 import { modelReadingLines } from "./model-review/judgement.js";
 import { refusalSaid } from "./page-logic/laps.js";
 import { relayQuestion } from "./question.js";

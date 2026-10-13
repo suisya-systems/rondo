@@ -60,7 +60,7 @@ import {
 import { asciiEscape, consoleSeams } from "./console.js";
 import { approvedSplits } from "./drafted-view.js";
 import { conflictFixOffered } from "./fix-host.js";
-import { cloneRepository, readChangedPaths, stoppedShort } from "./forge.js";
+import { cloneRepository, readChangedPaths } from "./forge.js";
 import {
   GATE_ACTOR,
   type ScopedAnswer,
@@ -70,7 +70,7 @@ import {
 import { hostFailure } from "./host-failure.js";
 import { commandFailure as forgeCommandFailure } from "./issue-read.js";
 import type { HoldsInput, HoldsMoved, Released, ReleaseInput } from "./line-ports.js";
-import { againId, startsAgainOnCarryOn, stoppedLapOf } from "./lost-laps.js";
+import { againId, startsAgainOnCarryOn, stoppedLapOf, stoppedShort } from "./lost-laps.js";
 import { type DrafterPorts, requestRepository } from "./model-draft/host.js";
 import { modelReviewPorts, takeModelReading } from "./model-review/host.js";
 import { retakeOffered, reviewRoundsAlong } from "./model-review/judgement.js";
@@ -79,6 +79,7 @@ import type { ClaimReach, LapMaterialRead } from "./page/contract.js";
 import { BEFORE_THE_GATE } from "./page-logic/end-lap.js";
 import { fixCauseOf } from "./page-logic/result.js";
 import { requestWords, threadsOf } from "./page-logic/threads.js";
+import type { AddedRepository, AddRepositoryInput } from "./repository-add.js";
 import {
   cloneDirectory,
   planForRepository,
@@ -88,8 +89,6 @@ import {
 import { admitUnderScope, agentTypeRecordOf, approvalTip } from "./scope.js";
 import { setupPlanFiles } from "./setup-files.js";
 import type {
-  AddedRepository,
-  AddRepositoryInput,
   ClaimRefusal,
   ConflictFixed,
   ConflictFixInput,
@@ -1815,11 +1814,13 @@ export async function addRepositoryFromPage(
       return {
         ok: false,
         why:
-          failure.why === "no_gh" || failure.why === "signed_out"
+          failure.why === "no_gh"
             ? "addRepositoryRefusedInstall"
-            : failure.why === "missing" || failure.why === "refused"
-              ? "addRepositoryRefusedUnseen"
-              : "addRepositoryRefusedFailed",
+            : failure.why === "signed_out"
+              ? "addRepositoryRefusedSignedOut"
+              : failure.why === "missing" || failure.why === "refused"
+                ? "addRepositoryRefusedUnseen"
+                : "addRepositoryRefusedFailed",
         note: failure.detail,
       };
     }

@@ -44,6 +44,8 @@ import {
   type AddedRepository,
   type AddRepositoryInput,
   AddRepositoryPort,
+} from "../../src/access/repository-add.js";
+import {
   AnswerPort,
   type ConflictFixInput,
   createApp,
@@ -2098,6 +2100,7 @@ const WRITE_TABLE = [
   "POST /start",
   "POST /revise",
   "POST /publish",
+  "POST /github-sign-in",
   "POST /release",
   "POST /holds",
   "POST /end-lap",
@@ -2158,6 +2161,8 @@ const PRESS_ROUTES = [
   "/end-lap",
   // Cloning and recording a repository a request named (rondo#383, D-0090).
   "/add-repository",
+  // Signing this computer's gh in to GitHub, instead of a terminal (rondo#676).
+  "/github-sign-in",
   // The one irreversible act on the page, per act (D-0064 rule 3.4, D-0091).
   "/merge",
   // The person's say over what rondo ranks (D-0097 points 2.1 (a) and 4.5 (a)).
@@ -3897,6 +3902,26 @@ test("(add-repository) no press, no form or no approver adds nothing; a failed c
     failing.stop.abort();
     expect(await failing.closed).toBe(0);
   }
+
+  // Signed out is answered on the page (rondo#676): its one link is the sign-in.
+  const signedOut = await served(
+    createApp(
+      addPorts([], { ok: false, why: "addRepositoryRefusedSignedOut", note: "gh: exited 4" }),
+      TOKEN,
+    ),
+  );
+  const answered = await send(
+    signedOut.base,
+    "/add-repository",
+    "POST",
+    pressHeaders(signedOut.base),
+    ADD_FORM,
+  );
+  expect(answered.status).toBe(409);
+  expect(answered.body).toContain("/?github=sign-in&amp;lang=en");
+  expect(answered.body).toContain(EN.signInAction);
+  signedOut.stop.abort();
+  expect(await signedOut.closed).toBe(0);
 });
 
 test("(release) the port refuses anything but a minted, unspent press", async () => {

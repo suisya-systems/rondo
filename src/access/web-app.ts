@@ -65,7 +65,8 @@ import {
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
 import { pressedAnswer } from "./answer-press.js";
 import { basisOf } from "./explainer/material.js";
-import type { EndRefusal, HoldsRefusal, ReleasePort, ReleaseRefusal } from "./line-ports.js";
+import { signInRoute } from "./github-sign-in-route.js";
+import type { EndRefusal, HoldsRefusal, ReleaseRefusal } from "./line-ports.js";
 import type { ServedPorts } from "./page/contract.js";
 import { postedAnswers, postedClauses } from "./page/triage.js";
 import { MAX_END_REASON_CHARS } from "./page-logic/end-lap.js";
@@ -80,6 +81,7 @@ import { viewHref, viewOf } from "./page-logic/routes.js";
 import { answeredRevise, questionRevise } from "./question.js";
 import { TAB_OUTCOMES } from "./reach.js";
 import { heldAnchor, pressable } from "./read-in.js";
+import type { AddRepositoryRefusal } from "./repository-add.js";
 import { budgetsOf, scopeDraftOf, scopeValuesOf, wholeNumber } from "./scope-form.js";
 import { refusedPage } from "./screens/refused.js";
 import { SERVED, TOKEN_ROUTE, tokenEvents } from "./served.js";
@@ -1243,58 +1245,6 @@ export class PublishPort {
   }
 }
 
-/** What one add-repository press names (rondo#383): the request, and the repository it named. */
-export interface AddRepositoryInput {
-  readonly requestMessageId: string;
-  /** `OWNER/NAME`, as the page read it off the request. */
-  readonly repo: string;
-}
-
-/**
- * Why an add-repository press added nothing, as the wording key the page says
- * it in (D-0090 rule 4): the three a person answers differently -- this
- * computer's setup, what the account can see, and anything else, which a press
- * again may clear -- and a store setup never finished, which no press repairs.
- */
-export type AddRepositoryRefusal =
-  | "addRepositoryRefusedInstall"
-  | "addRepositoryRefusedUnseen"
-  | "addRepositoryRefusedFailed"
-  | "addRepositoryRefusedNoSetup"
-  | "addRepositoryRefusedChanged";
-
-/** What adding a repository did: added, or why not with rondo's own reason. */
-export type AddedRepository =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly why: AddRepositoryRefusal; readonly note: string };
-
-/**
- * The seventh thing this surface may write (rondo#383, D-0090): a repository
- * cloned and recorded as setup records one, on the person's press. Its own
- * class for {@link ReleasePort}'s reason: adding a repository is not answering
- * a gate, and a holder of the other ports must not be able to do it.
- */
-export class AddRepositoryPort {
-  readonly #add: (input: AddRepositoryInput) => Promise<AddedRepository>;
-
-  constructor(add: (input: AddRepositoryInput) => Promise<AddedRepository>) {
-    this.#add = add;
-  }
-
-  /** Add one repository, on one press. */
-  async add(press: Press, input: AddRepositoryInput): Promise<AddedRepository> {
-    if (!minted.has(press)) {
-      return {
-        ok: false,
-        why: "addRepositoryRefusedFailed",
-        note: "nothing was added: this was not a person's press",
-      };
-    }
-    minted.delete(press);
-    return await this.#add(input);
-  }
-}
-
 /**
  * What one merge press names (rondo#380, `D-0091`): the lap, and the head the
  * button was drawn for, so a press over a pull request that has moved since
@@ -1753,7 +1703,8 @@ function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 5
  * scope screen's two presses, `POST /scope` and `POST /start`, the gate's
  * other answer, `POST /revise`, the one write that leaves this machine,
  * `POST /publish`, the release of a finished line's files, `POST /release`,
- * the end of a stuck lap, `POST /end-lap` (rondo#655), and the merge of a lap's pull request, `POST /merge` (`D-0091`).
+ * the end of a stuck lap, `POST /end-lap` (rondo#655), the merge of a lap's pull request, `POST /merge` (`D-0091`),
+ * and signing `gh` in to GitHub, `POST /github-sign-in` (rondo#676).
  * `test/access/web-app.test.ts` enumerates `app.routes` and
  * fails on any other non-`GET` entry.
  */
@@ -2719,6 +2670,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // line holds, given up on the person's judgement that its work is done. The
   // claim and laps the screen was drawn over are carried, so a line that moved
   // under the screen releases nothing (the store's own staleness test).
+  signInRoute(app, reading.signIn ?? null, wordingOf);
+
   app.post(RELEASE_ROUTE, async (c) => {
     if (release === null) {
       return releaseRefused(c, 403, "releaseRefusedNoApprover", null);
@@ -3695,10 +3648,14 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       wording.addRepositoryAction,
       wording[why],
       viewHref(
-        request === "" ? { kind: "summary" } : { kind: "thread", messageId: request, to: null },
+        why === "addRepositoryRefusedSignedOut"
+          ? { kind: "signIn" }
+          : request === ""
+            ? { kind: "summary" }
+            : { kind: "thread", messageId: request, to: null },
         wording.lang,
       ),
-      wording.addRepositoryBack,
+      why === "addRepositoryRefusedSignedOut" ? wording.signInAction : wording.addRepositoryBack,
       note,
     );
   }

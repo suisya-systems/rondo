@@ -230,8 +230,10 @@ export const JA: Chrome = Object.freeze({
   issueReadFold: "読んだ内容",
   issueNotRead: (why) =>
     ({
-      no_gh: "このコンピュータの rondo はまだイシューを読めません",
-      signed_out: "このコンピュータの rondo はまだイシューを読めません",
+      no_gh:
+        "このコンピュータに GitHub CLI が入っていないため、rondo はこのイシューを読めませんでした",
+      signed_out:
+        "このコンピュータの rondo が GitHub にサインインしていないため、このイシューを読めませんでした",
       no_repo: "この番号がどのリポジトリのイシューか、rondo には分かりません",
       missing: "このイシューが見つからないか、あなたのアカウントからは見えません",
       refused: "あなたのアカウントでは、このイシューを読めません",
@@ -1306,8 +1308,27 @@ export const JA: Chrome = Object.freeze({
     "何も追加していません。そのフォームはこのページのものではありません。読み込み直してから" +
     "押してください。",
   addRepositoryRefusedInstall:
-    "このコンピュータの rondo が、あなたとして GitHub につながりません。" +
-    "rondo を管理する人に直してもらってから、もう一度押してください。",
+    "リポジトリを追加していません。このコンピュータに GitHub CLI が入っていません。" +
+    "このコンピュータで rondo を管理する人に入れてもらってください。ボタンはそのまま残っているので、あとでもう一度押せます。",
+  addRepositoryRefusedSignedOut:
+    "リポジトリを追加していません。このコンピュータの rondo が GitHub にサインインしていません。" +
+    "サインインしてから、「このリポジトリを追加する」をもう一度押してください。",
+  signInAction: "GitHub にサインインする",
+  signInBack: "GitHub へのサインインに戻る",
+  signInRefusedNoApprover:
+    "サインインを始めていません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
+  signInRefusedPress:
+    "サインインを始めていません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
+  signInNone:
+    "このコンピュータの rondo は GitHub にサインインしていないため、イシューを読んだりリポジトリを追加したりできません。" +
+    "サインインは一度だけで済みます。",
+  signInWaiting: "GitHub のサインインページを開き、次のコードを入力してください。",
+  signInWaitingNote: "GitHub でサインインが済むと、このページは自動で切り替わります。",
+  signInDone: "GitHub にサインインしました。元のページに戻って、ボタンをもう一度押してください。",
+  signInNoGh:
+    "このコンピュータに GitHub CLI が入っていないため、サインインできません。" +
+    "このコンピュータで rondo を管理する人に入れてもらってください。",
+  signInFailed: "サインインが終わりませんでした。ボタンを押すと、もう一度試せます。",
   addRepositoryRefusedUnseen:
     "何も追加していません。GitHub にそのリポジトリが無いか、あなたのアカウントからは見えません。" +
     "依頼に書いた名前が違っていれば、返信で正しい名前を伝えてください。",
