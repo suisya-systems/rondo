@@ -17,7 +17,13 @@ import { ago } from "../inbox.js";
 import { answerJson } from "../model-draft/judgement.js";
 import { firstLine } from "../page-logic/threads.js";
 import type { Chrome } from "../wording.js";
-import { acrossRequests, basisOf, type ExplainerMaterial, waitLocator } from "./material.js";
+import {
+  acrossRequests,
+  basisOf,
+  type ExplainerMaterial,
+  resultLocator,
+  waitLocator,
+} from "./material.js";
 
 export const EXPLAINER_INSTRUCTIONS_VERSION = 1;
 /** The most one answer may cost, and what is counted when its cost is not reported. */
@@ -438,8 +444,37 @@ function acrossAnswer(
   }
   return {
     answer: `${unexplainedLine(words, why)}\n${words.explainAcrossLead}`,
-    claims,
+    claims: [...claims, ...resultClaims(material, words)],
   };
+}
+
+/**
+ * What ended since the person last looked (rondo#656), one line per row, each
+ * named by its request and resting on that row. Last among the claims, which
+ * is where {@link answerBody} puts their lead.
+ */
+function resultClaims(material: ExplainerMaterial, words: Chrome): Claim[] {
+  return (material.results?.items ?? []).flatMap((result): Claim[] => {
+    const basis = basisOf(resultLocator(result));
+    if (basis === null) return [];
+    const value =
+      result.kind === "report"
+        ? words.explainReported
+        : result.kind === "lap"
+          ? words.explainLapEnded(result.status)
+          : {
+              opened: words.explainOpened,
+              merged: words.rowMerged,
+              closed: words.rowClosed,
+            }[result.kind](words.pullRequest(result.number));
+    return [
+      {
+        label: words.explainRequestQuoted(result.request.title.replace(/[.!?。！？]+$/u, "")),
+        value,
+        basis,
+      },
+    ];
+  });
 }
 
 /** What an answer cost, as its body says it. */
@@ -475,7 +510,26 @@ export function answerBody(
             words.explainCost(money(cost.costUsd), request),
             ...(cost.costUsd > EXPLAINER_CAP_USD ? [words.explainOverCap(cap)] : []),
           ];
-  const lead = [answer, "", ...claims.map((claim) => `- ${claim.label}: ${claim.value}`), ""];
+  const line = (claim: Claim) => `- ${claim.label}: ${claim.value}`;
+  // Across every request, what ended is a section of its own under the waits.
+  const results = acrossRequests(material) ? material.results : undefined;
+  const named =
+    results === undefined ? [] : claims.slice(claims.length - resultClaims(material, words).length);
+  const when = results?.forMs == null ? null : words.age(ago(0, results.forMs));
+  const lead = [
+    answer,
+    "",
+    ...claims.slice(0, claims.length - named.length).map(line),
+    "",
+    ...(results === undefined
+      ? []
+      : [
+          named.length === 0 ? words.explainResultsNone(when) : words.explainResultsLead(when),
+          ...named.map(line),
+          ...(results.more === 0 ? [] : [words.explainResultsMore(results.more)]),
+          "",
+        ]),
+  ];
   // Across every request, each wait's own link is where it is answered.
   const where = acrossRequests(material)
     ? []

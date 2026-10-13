@@ -52,6 +52,7 @@ import {
 import { type PartView, partCounts, partReadsOver, partViews } from "./parts.js";
 import { resultOf } from "./result.js";
 import type { PageView } from "./routes.js";
+import { lastLooked } from "./since.js";
 import { firstLine, type Threads, threadsOf } from "./threads.js";
 import {
   draftsOwedNow,
@@ -121,11 +122,7 @@ export function draftingOver(standing: Awaited<ReturnType<typeof scopeStanding>>
  * the terminal's mark, whose rows at the bound may not have been shown.
  */
 function lookedFromPage(ports: WebPorts): WebPorts {
-  const lastView = async (actorId: string): Promise<number | null> => {
-    const viewed = await ports.record.lastView(actorId);
-    const acted = await ports.record.lastActed(actorId);
-    return acted === null ? viewed : Math.max(viewed ?? acted + 1, acted + 1);
-  };
+  const lastView = (actorId: string): Promise<number | null> => lastLooked(ports.record, actorId);
   // Over the record rather than a copy of it: a record may keep its methods on
   // a prototype, which a spread would leave behind.
   const record: WebPorts["record"] = Object.assign(Object.create(ports.record), { lastView });

@@ -16,7 +16,8 @@
  * one number, said on the page and pointing nowhere else (`D-0173` K3: a step to
  * a terminal is off the line).
  */
-import type { RecordChange } from "../../store/records.js";
+import { type IterationStatus, isTerminal, type RecordChange } from "../../store/records.js";
+import type { AdvisoryRecord } from "../../store/sqlite.js";
 
 /** The change kinds whose id is a lap's: each says that lap moved. */
 /**
@@ -47,6 +48,10 @@ export interface MovedRequest {
   readonly lapsMoved: number;
   /** Of those, the ones that ended since the mark. */
   readonly lapsEnded: number;
+  /** Those laps' ids, which the answer across every request names one by one (rondo#656). */
+  readonly endedLaps: readonly string[];
+  /** The ids of the messages rondo wrote into the thread, which `rondoWrote` counts. */
+  readonly rondoSaid: readonly string[];
   /** The newest change under it, which orders the list. */
   readonly atMs: number;
 }
@@ -81,7 +86,7 @@ export function sinceLooked(
     string,
     {
       asked: boolean;
-      rondoWrote: number;
+      rondoSaid: string[];
       youWrote: number;
       othersWrote: number;
       laps: Set<string>;
@@ -93,7 +98,7 @@ export function sinceLooked(
   const under = (requestId: string, atMs: number) => {
     const entry = byRequest.get(requestId) ?? {
       asked: false,
-      rondoWrote: 0,
+      rondoSaid: [],
       youWrote: 0,
       othersWrote: 0,
       laps: new Set<string>(),
@@ -125,7 +130,7 @@ export function sinceLooked(
       } else if (author === "you") {
         entry.youWrote += 1;
       } else {
-        entry.rondoWrote += 1;
+        entry.rondoSaid.push(change.id);
       }
       continue;
     }
@@ -147,14 +152,78 @@ export function sinceLooked(
       .map(([messageId, entry]) => ({
         messageId,
         asked: entry.asked,
-        rondoWrote: entry.rondoWrote,
+        rondoWrote: entry.rondoSaid.length,
         youWrote: entry.youWrote,
         othersWrote: entry.othersWrote,
         lapsMoved: entry.laps.size,
         lapsEnded: entry.ended.size,
+        endedLaps: [...entry.ended],
+        rondoSaid: entry.rondoSaid,
         atMs: entry.atMs,
       }))
       .toSorted((left, right) => right.atMs - left.atMs),
     elsewhere,
+  };
+}
+
+/**
+ * **Where the person last looked** (rondo#631, D-0083 rules 4 and 7): the later
+ * of the terminal's mark and one past the person's own last press, read off
+ * rows that press already wrote. The page and the answer across every request
+ * (rondo#656) both read it here, so they cannot disagree about where the
+ * person stopped. `beforeMs` leaves out presses from then on: the question an
+ * answer is written for is itself a press, and is not where the person looked.
+ */
+export async function lastLooked(
+  record: Pick<AdvisoryRecord, "lastView" | "lastActed">,
+  actorId: string,
+  beforeMs?: number,
+): Promise<number | null> {
+  const viewed = await record.lastView(actorId);
+  const acted = await record.lastActed(actorId, beforeMs);
+  return acted === null ? viewed : Math.max(viewed ?? acted + 1, acted + 1);
+}
+
+/**
+ * The reads {@link sinceLooked} sorts with, over the messages and laps one
+ * draw read: the page's centre and the answer across every request (rondo#656)
+ * build them here, so a row is one request's on both. Another person's
+ * message is theirs, not the one looking's (Codex).
+ */
+export function sinceReads(
+  byId: ReadonlyMap<string, { readonly authorKind: string; readonly authorId: string }>,
+  rootOf: SinceReads["rootOf"],
+  actorId: string | null,
+  records: readonly {
+    readonly id: string;
+    readonly requestMessageId: string;
+    readonly status: IterationStatus;
+    readonly updatedAtMs: number;
+  }[],
+): SinceReads {
+  const laps = new Map(
+    records.map((record) => [
+      record.id,
+      {
+        requestId: record.requestMessageId,
+        ended: isTerminal(record.status),
+        updatedAtMs: record.updatedAtMs,
+      },
+    ]),
+  );
+  return {
+    authorOf: (messageId) => {
+      const message = byId.get(messageId);
+      if (message === undefined) {
+        return undefined;
+      }
+      return message.authorKind !== "operator"
+        ? "rondo"
+        : message.authorId === actorId
+          ? "you"
+          : "other";
+    },
+    rootOf,
+    lapOf: (iterationId) => laps.get(iterationId) ?? null,
   };
 }

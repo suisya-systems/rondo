@@ -1228,8 +1228,9 @@ export interface AdvisoryRecord {
    * a scope decided. A read over rows that already exist, and no mark of its
    * own -- the page takes a person's own press as the latest sure sign of
    * having looked, where a page that only redraws writes nothing (D-0041).
+   * With `beforeMs`, only what was done before it (rondo#656).
    */
-  lastActed(actorId: string): Promise<number | null>;
+  lastActed(actorId: string, beforeMs?: number): Promise<number | null>;
   /**
    * Append one side of the silence -- **or refuse it** (D-0032 rule 10).
    *

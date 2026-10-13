@@ -33,6 +33,20 @@ export interface ExplainWords {
   /** The label of the question itself in an answer across every request. */
   /** Nothing waits on the person anywhere. */
   readonly explainNothingWaits: string;
+  /**
+   * Across every request, what ended since the person last looked, `when`
+   * already said, or in the last day with no mark (rondo#656); and the same
+   * said when nothing did.
+   */
+  readonly explainResultsLead: (when: string | null) => string;
+  readonly explainResultsNone: (when: string | null) => string;
+  /** The rest past the ones named, each in its request's thread. */
+  readonly explainResultsMore: (count: number) => string;
+  /** One result: a pull request opened, a try that ended, a request's report. */
+  readonly explainOpened: (pullRequest: string) => string;
+  /** A try that ended, by its status (`closed`, `failed`, `abandoned`). */
+  readonly explainLapEnded: (status: string) => string;
+  readonly explainReported: string;
   /** Why no model was asked: the approval in force has expired. */
   readonly explainExpired: string;
   /** Why no model was asked: less left than one answer may cost. */
@@ -105,6 +119,23 @@ export const EXPLAIN_EN: ExplainWords = Object.freeze({
     "Here is what waits on you, and what rondo is still waiting on, request by request.",
   explainRequestQuoted: (title) => `"${title}"`,
   explainNothingWaits: "nothing waits on you now",
+  explainResultsLead: (when) =>
+    when === null
+      ? "What happened in the last day:"
+      : `What happened since you last looked, ${when} ago:`,
+  explainResultsNone: (when) =>
+    when === null
+      ? "Nothing happened in the last day."
+      : `Nothing happened since you last looked, ${when} ago.`,
+  explainResultsMore: (count) => `And ${String(count)} more; open a request to see its own.`,
+  explainOpened: (pullRequest) => `Pull request ${pullRequest}, opened`,
+  explainLapEnded: (status) =>
+    status === "failed"
+      ? "a try failed"
+      : status === "abandoned"
+        ? "a try was abandoned"
+        : "a try was closed",
+  explainReported: "its report is ready to read",
   explainExpired: "No model was asked: the approval for this request has expired.",
   explainTooLittleLeft: (left, cap) =>
     `No model was asked: the approval has $${left} left, less than the $${cap} an answer may cost.`,
@@ -166,6 +197,21 @@ export const EXPLAIN_JA: ExplainWords = Object.freeze({
     "依頼ごとに、あなたの対応を待っているものと、rondo 側で進行中のものをまとめます。",
   explainRequestQuoted: (title) => `「${title}」`,
   explainNothingWaits: "あなたの対応を待っているものはありません",
+  explainResultsLead: (when) =>
+    when === null ? "この 1 日に起きたこと:" : `${when}前に見てから起きたこと:`,
+  explainResultsNone: (when) =>
+    when === null
+      ? "この 1 日、動きはありませんでした。"
+      : `${when}前に見てから、動きはありません。`,
+  explainResultsMore: (count) => `ほかに ${String(count)} 件。それぞれの依頼を開くと見られます。`,
+  explainOpened: (pullRequest) => `プルリクエスト ${pullRequest}・作成`,
+  explainLapEnded: (status) =>
+    status === "failed"
+      ? "作業が失敗して終わりました"
+      : status === "abandoned"
+        ? "作業が途中で打ち切られました"
+        : "作業が閉じられました",
+  explainReported: "報告が読めるようになりました",
   explainExpired:
     "この依頼の承認は期限が切れているため、rondo の記録にあることだけを回答しています。承認し直すと、次の質問から詳しく回答します。",
   explainTooLittleLeft: (left, cap) =>

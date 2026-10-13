@@ -25,6 +25,7 @@ import { goalScopeStanding } from "../goal-scope.js";
 import { threadOf } from "../model-draft/host.js";
 import { currentGoals } from "../page/triage.js";
 import { type LapResult, resultOf } from "../page-logic/result.js";
+import { lastLooked, sinceLooked, sinceReads } from "../page-logic/since.js";
 import { firstLine, type Threads, threadsOf } from "../page-logic/threads.js";
 import {
   draftsOwedNow,
@@ -33,6 +34,7 @@ import {
   scopesAwaitingYou,
   waitsOnYou,
 } from "../page-logic/waits.js";
+import { isRequestReport } from "../request-report.js";
 
 /** One message's body is cut here, so one pasted log does not crowd out the thread. */
 const BODY_BOUND = 4_000;
@@ -53,6 +55,9 @@ export interface ExplainerPorts {
       | "readProposal"
       | "goals"
       | "approvalsInForce"
+      | "lastView"
+      | "lastActed"
+      | "changedSince"
     >;
   /**
    * What the list's *your turn* also reads, for a question across every
@@ -231,6 +236,119 @@ export interface ExplainerMaterial {
   readonly words: string | null;
   /** Every locator an answer may cite, as {@link locatorText} writes it. */
   readonly locators: readonly string[];
+  /**
+   * Across every request, what ended since the person last looked (rondo#656);
+   * absent on a row written before it was read, and on an answer in a thread.
+   */
+  readonly results?: ExplainerResults;
+}
+
+/**
+ * **What ended, off the page's own reading** (rondo#656): the rows *since you
+ * last looked* sorts under each request (`page-logic/since.ts`), from the same
+ * mark, so the empty centre and this answer cannot disagree. A pull request
+ * opened, merged or closed, a lap that failed or was abandoned, and a request's
+ * report, each under its request and resting on its own row.
+ */
+export interface ExplainerResults {
+  /** How long before now the person last looked, or null with no mark: the last day is read. */
+  readonly forMs: number | null;
+  /** Newest request first, at most {@link RESULTS_BOUND}. */
+  readonly items: readonly ExplainerResult[];
+  /** How many more there were past the bound. */
+  readonly more: number;
+}
+
+export type ExplainerResult = {
+  readonly request: { readonly messageId: string; readonly title: string };
+} & (
+  | {
+      readonly kind: "opened" | "merged" | "closed";
+      readonly messageId: string;
+      readonly number: string | null;
+    }
+  | { readonly kind: "report"; readonly messageId: string }
+  | {
+      readonly kind: "lap";
+      readonly iterationId: string;
+      readonly status: string;
+    }
+);
+
+/** How many results the answer names before it only counts the rest. */
+export const RESULTS_BOUND = 8;
+/** With no mark, the window read instead: the last day. */
+const RESULTS_WINDOW_MS = 86_400_000;
+
+export const resultLocator = (result: ExplainerResult): string =>
+  result.kind === "lap" ? `iteration:${result.iterationId}` : `message:${result.messageId}`;
+
+/** The report ids that say a pull request moved, and what each says. */
+const PULL_REPORTS = [
+  ["report-published-", "opened"],
+  ["report-merged-", "merged"],
+  ["report-closed-", "closed"],
+] as const;
+
+/** {@link ExplainerResults}, read off `sinceLooked` from the mark the page reads. */
+async function resultsSince(
+  ports: ExplainerPorts,
+  messages: readonly ThreadMessageDraft[],
+  threads: ReturnType<typeof threadsOf>,
+  records: readonly IterationRecord[],
+  question: ThreadMessageDraft,
+  nowMs: number,
+): Promise<ExplainerResults> {
+  const actorId = question.authorKind === "operator" ? question.authorId : null;
+  // The mark as it stood when the question was asked: asking is a press too.
+  const sinceMs = actorId === null ? null : await lastLooked(ports.record, actorId, question.atMs);
+  const fromMs = sinceMs ?? nowMs - RESULTS_WINDOW_MS;
+  const byId = new Map(messages.map((m) => [m.messageId, m]));
+  const said = new Map(messages.map((m) => [m.messageId, { body: m.body, atMs: m.atMs }]));
+  const reading = sinceLooked(
+    await ports.record.changedSince(fromMs),
+    fromMs,
+    sinceReads(byId, threads.rootOf, actorId, records),
+  );
+  const items = reading.moved.flatMap((moved): ExplainerResult[] => {
+    const request = {
+      messageId: moved.messageId,
+      title: firstLine(byId.get(moved.messageId)?.body ?? ""),
+    };
+    const reported = new Set<string>();
+    const out: ExplainerResult[] = [];
+    for (const messageId of moved.rondoSaid) {
+      const message = byId.get(messageId);
+      if (message !== undefined && isRequestReport(message)) {
+        out.push({ kind: "report", messageId, request });
+        continue;
+      }
+      const pull = PULL_REPORTS.find(([prefix]) => messageId.startsWith(prefix));
+      if (pull === undefined) continue;
+      const lap = messageId.slice(pull[0].length);
+      reported.add(lap);
+      out.push({ kind: pull[1], messageId, number: resultOf(said, lap)?.number ?? null, request });
+    }
+    for (const iterationId of moved.endedLaps) {
+      const record = records.find((r) => r.id === iterationId);
+      // A lap that closed with its pull request said is said by that.
+      if (record === undefined || (record.status === "closed" && reported.has(iterationId))) {
+        continue;
+      }
+      out.push({
+        kind: "lap",
+        iterationId,
+        status: record.status,
+        request,
+      });
+    }
+    return out;
+  });
+  return {
+    forMs: sinceMs === null ? null : Math.max(0, nowMs - sinceMs),
+    items: items.slice(0, RESULTS_BOUND),
+    more: Math.max(0, items.length - RESULTS_BOUND),
+  };
 }
 
 /**
@@ -454,6 +572,9 @@ export async function gatherExplainerMaterial(
       waits.push({ kind: "press", messageId: root });
     }
   }
+  const results = across
+    ? await resultsSince(ports, read.messages, threads, [...live, ...ended], question, nowMs)
+    : undefined;
   const about = aboutOf(question.bases);
   const asked =
     about?.form === "message" ? read.messages.find((m) => m.messageId === about.messageId) : null;
@@ -464,6 +585,7 @@ export async function gatherExplainerMaterial(
     ...(across ? waits.map(waitLocator) : []),
     ...waits.flatMap((w) => (w.kind === "scope" ? [`scope:${w.scopeId}`] : [])),
     ...(about === null ? [] : [locatorText(about) as string]),
+    ...(results?.items.map(resultLocator) ?? []),
   ]);
   return {
     question: {
@@ -482,6 +604,7 @@ export async function gatherExplainerMaterial(
         ? null
         : cut(asked.body),
     locators: [...locators],
+    ...(results === undefined ? {} : { results }),
   };
 }
 
