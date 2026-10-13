@@ -145,7 +145,6 @@ import {
   isAncestor,
   type LapWorkInspection,
   type LapWorkRequest,
-  openPullRequest,
   pushTopicBranch,
   readChangedPaths,
   readPullRequest,
@@ -174,7 +173,7 @@ import {
   type PublishBodyPorts,
   publishBodyOnce,
 } from "./publish-body.js";
-import { type PullRequestText, pullRequestText } from "./pull-request.js";
+import { openPullRequest, type PullRequestText, pullRequestText } from "./pull-request.js";
 import { nextNumbers, numbersSection } from "./record-numbers.js";
 import { denialLine, evidenceOf, LIST_LIMIT, READING_REMOTE, uncommittedPaths } from "./review.js";
 import {

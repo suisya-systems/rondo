@@ -31,11 +31,12 @@ import {
   say,
 } from "./cli.js";
 import { reportToRequest } from "./conductor.js";
-import { openPullRequest, pushTopicBranch, runDrafter } from "./forge.js";
+import { pushTopicBranch, runDrafter } from "./forge.js";
 import { redactRemoteUrl } from "./forge-preflight.js";
-import { releasePublished } from "./merge.js";
+import { reasonOf, releasePublished } from "./merge.js";
 import type { PublishBlock, PublishShown } from "./page/contract.js";
 import { recordedPublishBody } from "./publish-body.js";
+import { openPullRequest } from "./pull-request.js";
 import type { Published, PublishInput, PublishRefusal } from "./web-app.js";
 
 /**
@@ -497,10 +498,10 @@ async function publishPage(
     // from here.** rondo does not persist how far a publish got -- that would
     // be a durable record of somebody else's state -- so what this cannot know
     // is whether the pull request was in fact created and only the reporting
-    // failed. Pressing again is *not* free there: `gh` refuses a duplicate for
-    // ever, and the run row stays open. So the screen says go and look, and the
-    // one leg that would be left is said in the terminal `rondo web` runs in,
-    // which is where `commandPublish` says it too (D-0015 rule 7's shape).
+    // failed. Pressing again finds out (rondo#676): `openPullRequest` answers
+    // a duplicate with the open one, and the press goes on to the run close.
+    // The close is still said in the terminal `rondo web` runs in, as
+    // `commandPublish` says it (D-0015 rule 7's shape).
     say("");
     say(`The branch '${plan.topicBranch}' was pushed to '${plan.remote}'; that part is done.`);
     say("If the pull request already exists, the only leg left is the run close:");
@@ -530,18 +531,17 @@ async function publishPage(
     actorId: actor.actorId,
   });
   if (closed.kind !== "answered") {
-    // **Relayed, and not only returned** (Codex round 1, the rule S4's revise
-    // press already follows): the screen's sentence sends a person to the
-    // terminal `rondo web` runs in for the detail, so the detail has to be
-    // there. `relayFailure` is where continuo's own diagnosis is printed for
-    // every other verb, ASCII-escaped on the way out (`AGENTS.md`); its exit
-    // status is nobody's here, because this surface answers with a refusal and
-    // not a status.
+    // **Relayed, and returned** (Codex round 1, rondo#676): the refusal's fold
+    // carries continuo's own diagnosis, so nobody is sent to a terminal for
+    // it, and the host's output keeps it too. Pressing again finishes: the
+    // push is a no-op and `openPullRequest` answers with the open pull request.
     relayFailure("run close", closed);
     return {
       ok: false,
       why: "publishRefusedRunNotClosed",
-      note: `the branch is pushed and the pull request is open; the run did not close`,
+      note:
+        "the branch is pushed and the pull request is open; the run did not close: " +
+        reasonOf(closed),
     };
   }
   await reportToRequest(

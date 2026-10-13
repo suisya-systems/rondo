@@ -74,7 +74,7 @@ export interface CommandOutcome {
 const FORGE_TIMEOUT_MS = 300_000;
 
 /** Run one command, capture both streams, and never interpret either. */
-async function runCommand(
+export async function runCommand(
   executable: string,
   argv: readonly string[],
   timeoutMs: number = FORGE_TIMEOUT_MS,
@@ -566,57 +566,6 @@ export async function keepStoppedWork(request: {
   return head.status === 0 && head.spawnError === null
     ? { kind: "kept", commit: head.stdout.trim() }
     : failed(head);
-}
-
-/** What a pull request needs. */
-export interface PullRequestRequest {
-  /**
-   * `host/owner/name`: `--repo`'s two segments with the host the caller
-   * checked in front of them, so that the repository this reaches is the one
-   * the preflight agreed about rather than one the CLI resolves for itself.
-   */
-  readonly repo: string;
-  readonly baseBranch: string;
-  /**
-   * What `--head` is given: the topic branch, or `owner:branch` when the push
-   * went to a repository other than `--repo`. The caller decides which, because
-   * deciding it needs the push URL preflight read (see `./cli.ts`).
-   */
-  readonly headRef: string;
-  readonly title: string;
-  readonly body: string;
-}
-
-/**
- * Open the pull request, and stop there.
- *
- * `--repo` is explicit rather than inferred from the workspace's remote,
- * because the workspace is a worktree cut from a local path and an inferred
- * slug would be whatever that clone happened to point at. That is unchanged by
- * `D-0081`, which moved *where a person tells rondo the slug* -- onto the plan,
- * recorded by setup, with the host's `--repo` left as the fallback for a plan
- * that carries none -- and refused inference a second time (rule 3.3). What
- * reaches here is still a slug somebody wrote, never one rondo worked out.
- *
- * **There is no merge here.** Opening a pull request puts the work in front of
- * a reviewer; merging it is a different act under a different authority, a
- * person's press per act (`D-0091`), and it is {@link mergePullRequest}.
- */
-export async function openPullRequest(request: PullRequestRequest): Promise<CommandOutcome> {
-  return await runCommand("gh", [
-    "pr",
-    "create",
-    "--repo",
-    request.repo,
-    "--base",
-    request.baseBranch,
-    "--head",
-    request.headRef,
-    "--title",
-    request.title,
-    "--body",
-    request.body,
-  ]);
 }
 
 /** Which issue to read, as `readIssueFromForge` spells it (D-0078 section 2.1). */

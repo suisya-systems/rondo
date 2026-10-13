@@ -618,7 +618,8 @@ export function continuoWorkspaceRemover(
   };
 }
 
-function reasonOf(result: Exclude<ContinuoResult<unknown>, { kind: "answered" }>): string {
+/** What continuo said when it did not answer, in its own words. */
+export function reasonOf(result: Exclude<ContinuoResult<unknown>, { kind: "answered" }>): string {
   switch (result.kind) {
     case "refused":
       return result.message;

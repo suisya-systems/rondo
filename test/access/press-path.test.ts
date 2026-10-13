@@ -1443,9 +1443,23 @@ publishPress(
     expect(await runStatus(lap)).not.toBe("completed");
 
     // **And rondo says nothing it cannot stand behind**: the thread carries no
-    // published line, because the close-out did not finish. A person is sent to
-    // the terminal `rondo web` runs in, where the refusal was relayed.
+    // published line, because the close-out did not finish.
     expect(await publishedLine(lap)).toBeUndefined();
+
+    // **Pressing again finishes it, with no terminal** (rondo#676): `gh`
+    // refuses a second pull request with the open one's address, and the
+    // press goes on to the close it could not take the first time.
+    const again = await pressPublish(lap, {
+      status: 1,
+      stdout: "",
+      stderr:
+        `a pull request for branch "${lap.preview.target.topicBranch}" into branch "main" ` +
+        `already exists:\n${PULL_REQUEST_URL}\n`,
+    });
+    expect(again.pressed).toEqual({ ok: true, note: "" });
+    expect(again.asked).toHaveLength(1);
+    expect(await runStatus(lap)).toBe("completed");
+    expect(await publishedLine(lap)).toContain(PULL_REQUEST_URL);
   },
   PRESS_TIMEOUT_MS,
 );
