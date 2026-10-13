@@ -219,8 +219,29 @@ async function threadModel(
    * beside it is that request's, and falling back to the oldest waiting one
    * put another request's finished lap beside work that has not started.
    */
+  /*
+   * **And a lap's own screen names the lap's request** (rondo#693): publish,
+   * merge, release and end are about one lap, so the face beside them is its
+   * request's. Sign-in is about no request, and its side is left empty.
+   */
+  const ownLapId =
+    view.kind === "publish" ||
+    view.kind === "merge" ||
+    view.kind === "release" ||
+    view.kind === "end"
+      ? view.iterationId
+      : null;
+  const ownRequest =
+    ownLapId === null
+      ? null
+      : ([...model.allLapsByRequest.values()].flat().find((lap) => lap.record.id === ownLapId)
+          ?.record.requestMessageId ?? null);
   const namedThread =
-    view.kind === "thread" || view.kind === "scope" ? threads.rootOf(view.messageId) : null;
+    view.kind === "thread" || view.kind === "scope"
+      ? threads.rootOf(view.messageId)
+      : ownRequest === null
+        ? null
+        : threads.rootOf(ownRequest);
   const noSuchThread = view.kind === "thread" && namedThread === null;
   const selection = selectRequest(namedThread, requestsList);
   /**
@@ -232,7 +253,8 @@ async function threadModel(
     noSuchThread ||
     view.kind === "requests" ||
     view.kind === "goal" ||
-    (view.kind === "scope" && namedThread === null) ||
+    ((view.kind === "scope" || ownLapId !== null || view.kind === "signIn") &&
+      namedThread === null) ||
     selection.kind !== "request"
       ? null
       : selection.messageId;
