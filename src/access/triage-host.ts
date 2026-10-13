@@ -15,10 +15,11 @@
  * **It writes nothing outside rondo** (point 6 (a)): the forge is read through
  * the operator's `gh`, and the one write is a proposal row in rondo's store.
  *
- * What it reads, of point 1 (b)'s list: the repository's open issues and a
- * request whose latest try stopped or failed and was not asked again. The
- * residuals of rondo's decisions, requests left without a lap and what rondo
- * decided without asking are not read yet (the PR that built this names them).
+ * What it reads, of point 1 (b)'s list: the repository's open issues, a
+ * request whose latest try stopped or failed and was not asked again, and a
+ * request no lap was ever started for whose thread has gone quiet (rondo#658).
+ * The residuals of rondo's decisions and what rondo decided without asking are
+ * not read yet (rondo#658 names them).
  */
 import {
   type Judged,
@@ -35,10 +36,11 @@ import {
   unavailableTriage,
 } from "../advisory/triage.js";
 import { drafterRow } from "../continuo/roles.js";
-import type { IterationRecord, JsonRecord } from "../store/records.js";
+import { asksForWork, type IterationRecord, type JsonRecord } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import type { CommandOutcome, runDrafter } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
+import { workRepository } from "./issue-read.js";
 
 /** The name its rows are written under: never the split drafter's prefix, so it covers no message. */
 export const TRIAGE_DRAFTER_PREFIX = "rondo/triage/1/";
@@ -58,6 +60,16 @@ const ISSUES_FRESH_MS = 10 * 60 * 1000;
  * hour and not once a minute.
  */
 const UNAVAILABLE_RETRY_MS = 60 * 60 * 1000;
+
+/**
+ * How long a request's thread stays quiet, with no lap ever started for it,
+ * before triage reads it as left (rondo#658): a request still being drafted,
+ * or answered today, is not left.
+ *
+ * ponytail: a fixed day; a reading of what the thread waits on (a draft owed,
+ * an approved part waiting for its predecessor) if a day is felt as wrong.
+ */
+const UNLAPPED_QUIET_MS = 24 * 60 * 60 * 1000;
 
 /** What the host reaches, as values a test can replace. */
 export interface TriageHostPorts {
@@ -139,7 +151,7 @@ async function pass(
   const goals = new Map((await ports.record.goals()).map((goal) => [goal.repository, goal]));
   const latest = new Map((await ports.record.latestTriage()).map((row) => [row.repository, row]));
   const declines = await ports.record.triageDeclines();
-  const stopped = await stoppedWork(ports, repositories);
+  const own = await ownRecord(ports, repositories);
   // D-0193 rule 2: whole, by id, so a point can be raised against one.
   const policies = ((await ports.record.standingPolicies?.()) ?? []).map((policy) => ({
     id: policy.policyId,
@@ -169,7 +181,11 @@ async function pass(
       repository,
       goalId: goal.goalId,
       clauses: goal.clauses,
-      candidates: [...issues.issues, ...(stopped.get(repository) ?? [])],
+      candidates: [
+        ...issues.issues,
+        ...(own.stopped.get(repository) ?? []),
+        ...(own.unlapped.get(repository) ?? []),
+      ],
       putAside: [
         ...new Set(
           declines.filter((one) => one.repository === repository).map((one) => one.candidate),
@@ -343,14 +359,25 @@ export function openIssues(repository: string, read: CommandOutcome): TriageCand
 }
 
 /**
- * Requests whose latest try stopped or failed, and which nobody asked again,
- * by repository (point 1 (b): "laps that stopped or failed and were not asked
- * again"). A request with a try still going is not stopped.
+ * What triage reads of rondo's own record, by repository (point 1 (b)):
+ *
+ * - `stopped`: requests whose latest try stopped or failed, and which nobody
+ *   asked again ("laps that stopped or failed and were not asked again"). A
+ *   request with a try still going is not stopped.
+ * - `unlapped`: requests no lap was ever started for, whose thread has been
+ *   quiet for {@link UNLAPPED_QUIET_MS} and which a person did not stop
+ *   ("requests left unfinished", rondo#658).
+ *
+ * A thread that will not read throws: reading it as empty would drop every
+ * request from the material and re-rank over what is left.
  */
-async function stoppedWork(
+async function ownRecord(
   ports: TriageHostPorts,
   repositories: readonly string[],
-): Promise<ReadonlyMap<string, TriageCandidate[]>> {
+): Promise<{
+  readonly stopped: ReadonlyMap<string, TriageCandidate[]>;
+  readonly unlapped: ReadonlyMap<string, TriageCandidate[]>;
+}> {
   const rows = (outcomes: readonly { kind: string; record?: IterationRecord }[]) =>
     outcomes.flatMap((one) =>
       one.kind === "read" && one.record !== undefined ? [one.record] : [],
@@ -364,37 +391,92 @@ async function stoppedWork(
     }
   }
   const thread = await ports.record.threadMessages();
-  const bodies = new Map(
-    thread.kind === "read"
-      ? thread.messages.map((message) => [message.messageId, message.body] as const)
-      : [],
-  );
-  const found = new Map<string, TriageCandidate[]>();
+  if (thread.kind !== "read") {
+    throw new Error(`the thread will not read: ${thread.reason}`);
+  }
+  const bodies = new Map(thread.messages.map((message) => [message.messageId, message.body]));
+  const add = (found: Map<string, TriageCandidate[]>, repository: string, one: TriageCandidate) => {
+    found.set(repository, [...(found.get(repository) ?? []), one]);
+  };
+  const only = repositories.length === 1 ? (repositories[0] ?? null) : null;
+
+  const stopped = new Map<string, TriageCandidate[]>();
   for (const [request, row] of latestOf) {
     if (live.has(request) || (row.status !== "failed" && row.status !== "abandoned")) {
       continue;
     }
     const named = row.plan["forge_repository"];
+    const repository = typeof named === "string" && named !== "" ? named : only;
+    if (repository === null) {
+      continue;
+    }
+    add(stopped, repository, {
+      key: `stopped:${request}`,
+      source: { form: "stopped", iterationId: row.id, requestMessageId: request },
+      title: (bodies.get(request) ?? row.request).split("\n")[0]?.trim() ?? "",
+      labels: [],
+    });
+  }
+
+  // Every message under its request's opener, so a thread's newest message
+  // and its words are read once.
+  const parent = new Map(thread.messages.map((m) => [m.messageId, m.inReplyTo]));
+  const rootOf = (id: string): string => {
+    let at = id;
+    for (let hops = 0; hops < thread.messages.length; hops += 1) {
+      const up = parent.get(at);
+      if (up === undefined || up === null) {
+        return at;
+      }
+      at = up;
+    }
+    return at;
+  };
+  const threads = new Map<string, (typeof thread.messages)[number][]>();
+  for (const message of thread.messages) {
+    const root = rootOf(message.messageId);
+    threads.set(root, [...(threads.get(root) ?? []), message]);
+  }
+  const unlapped = new Map<string, TriageCandidate[]>();
+  const nowMs = ports.now();
+  for (const [root, messages] of threads) {
+    const opener = messages.find((m) => m.messageId === root);
+    if (
+      opener === undefined ||
+      opener.inReplyTo !== null ||
+      !asksForWork(opener) ||
+      live.has(root) ||
+      latestOf.has(root) ||
+      messages.some((m) => m.answerOutcome === "stop") ||
+      nowMs - Math.max(...messages.map((m) => m.atMs)) < UNLAPPED_QUIET_MS
+    ) {
+      continue;
+    }
+    // Where the person's words put the work, as the drafter reads it (D-0090);
+    // a request that names none is the only repository's, or nobody's.
+    const work = workRepository(
+      messages.filter((m) => asksForWork(m)).map((m) => m.body),
+      repositories,
+    );
     const repository =
-      typeof named === "string" && named !== ""
-        ? named
-        : repositories.length === 1
-          ? (repositories[0] ?? null)
+      work.kind === "held"
+        ? work.repos.length === 1
+          ? (work.repos[0] ?? null)
+          : null
+        : work.kind === "open"
+          ? only
           : null;
     if (repository === null) {
       continue;
     }
-    const title = (bodies.get(request) ?? row.request).split("\n")[0]?.trim() ?? "";
-    const list = found.get(repository) ?? [];
-    list.push({
-      key: `stopped:${request}`,
-      source: { form: "stopped", iterationId: row.id, requestMessageId: request },
-      title,
+    add(unlapped, repository, {
+      key: `unlapped:${root}`,
+      source: { form: "unlapped", requestMessageId: root },
+      title: opener.body.split("\n")[0]?.trim() ?? "",
       labels: [],
     });
-    found.set(repository, list);
   }
-  return found;
+  return { stopped, unlapped };
 }
 
 /**

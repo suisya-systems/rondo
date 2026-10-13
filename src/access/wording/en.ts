@@ -8,6 +8,7 @@ import type { GateAuto, GateAutoReason } from "../gate-auto.js";
 import { EXPLAIN_EN } from "../page/explain-words.js";
 import { REPORT_EN } from "../page/report-words.js";
 import { SINCE_EN } from "../page/since-words.js";
+import { TRIAGE_SOURCE_EN } from "../page/triage-words.js";
 import { PAGE_EN } from "../page/words.js";
 import type { AgentTypeSource, Chrome } from "../wording.js";
 
@@ -157,6 +158,7 @@ export const EN: Chrome = Object.freeze({
   ...EXPLAIN_EN,
   ...SINCE_EN,
   ...REPORT_EN,
+  ...TRIAGE_SOURCE_EN,
   lang: "en",
 
   liveNote: (seconds) =>

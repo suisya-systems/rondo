@@ -69,7 +69,7 @@ test("the order is the clause, then an explicit label, then the order found; the
     "issue:o/r#1",
   ]);
   expect(payload.withheld).toEqual([{ key: "issue:o/r#4", why: "no_clause" }]);
-  expect(payload.read).toEqual({ issues: 5, stopped: 0 });
+  expect(payload.read).toEqual({ issues: 5, stopped: 0, unlapped: 0 });
 });
 
 test("nothing is dropped silently: put aside, not judged and below the runners-up are withheld with their rule", () => {
@@ -203,4 +203,25 @@ test("a store with no policy in force keeps its material's digest (D-0193 rule 3
   expect(materialDigest({ ...plain, policies: [{ id: "p", body: "b" }] })).not.toBe(
     materialDigest(plain),
   );
+});
+
+test("a request without a lap is counted, moves the digest and reads back from the row (rondo#658)", () => {
+  const unlapped: TriageCandidate = {
+    key: "unlapped:m-1",
+    source: { form: "unlapped", requestMessageId: "m-1" },
+    title: "make setup run without a shell",
+    labels: [],
+  };
+  const found = material([issue(1), unlapped]);
+  expect(materialDigest(found)).not.toBe(materialDigest(material([issue(1)])));
+  const payload = rankTriage(found, [judged("unlapped:m-1", 1)]);
+  expect(payload.read).toEqual({ issues: 1, stopped: 0, unlapped: 1 });
+  const document = triagePayloadDocument(payload);
+  expect(readTriagePayload(document)).toEqual(payload);
+  // A row written before rondo#658 read no such request.
+  expect(readTriagePayload({ ...document, read: { issues: 1, stopped: 0 } })?.read).toEqual({
+    issues: 1,
+    stopped: 0,
+    unlapped: 0,
+  });
 });
