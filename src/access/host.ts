@@ -343,17 +343,20 @@ export async function serveWeb(
     record,
     repositories: triageRepositories,
     listIssues: listOpenIssues,
-    // rondo#658: the residuals of the record a setup plan names.
+    // rondo#658: the residuals of the record the latest setup plan names
+    // (oldest first, so a later plan naming none clears an earlier one).
     decisionRecords: async () =>
       new Map(
-        (await record.setupPlans()).flatMap((setup) => {
-          const planned = readRunPlan(setup.plan);
-          return planned.kind === "planned" &&
-            planned.plan.forgeRepository !== null &&
-            planned.plan.decisionRecord !== null
-            ? [[planned.plan.forgeRepository, planned.plan.decisionRecord] as const]
-            : [];
-        }),
+        [
+          ...new Map(
+            (await record.setupPlans()).flatMap((setup) => {
+              const planned = readRunPlan(setup.plan);
+              return planned.kind === "planned" && planned.plan.forgeRepository !== null
+                ? [[planned.plan.forgeRepository, planned.plan.decisionRecord] as const]
+                : [];
+            }),
+          ),
+        ].flatMap(([repository, path]) => (path === null ? [] : [[repository, path] as const])),
       ),
     readDecisionRecord,
     runDrafter,

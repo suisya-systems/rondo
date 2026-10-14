@@ -414,7 +414,7 @@ function candidateView(
           ? {
               said: wording.triageResidual(ranked.source.entry),
               // ponytail: github.com only, as the issue's link.
-              href: `https://github.com/${ranked.source.repository}/blob/${ranked.source.commit}/${ranked.source.path}#L${String(ranked.source.lines.start)}-L${String(ranked.source.lines.end)}`,
+              href: `https://github.com/${ranked.source.repository}/blob/${ranked.source.commit}/${ranked.source.path.split("/").map(encodeURIComponent).join("/")}#L${String(ranked.source.lines.start)}-L${String(ranked.source.lines.end)}`,
             }
           : {
               said:
