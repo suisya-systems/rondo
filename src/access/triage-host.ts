@@ -469,7 +469,6 @@ export function decisionResiduals(
   let entry: { id: string; accepted: boolean | null; rows: { at: number; cell: string }[] } | null =
     null;
   let inResiduals = false;
-  let tableRow = 0;
   const close = () => {
     const rows = entry?.accepted === true ? entry.rows : [];
     const first = rows[0];
@@ -490,7 +489,9 @@ export function decisionResiduals(
       });
     }
   };
-  text.split("\n").forEach((line, at) => {
+  const separator = (line: string | undefined) => /^\|[\s:|-]*-{3,}[\s:|-]*$/.test(line ?? "");
+  const lines = text.split("\n");
+  lines.forEach((line, at) => {
     const heading = /^## (D-\d+)\b/.exec(line);
     if (heading !== null || line.startsWith("## ")) {
       close();
@@ -506,16 +507,17 @@ export function decisionResiduals(
     }
     if (line.startsWith("### ")) {
       inResiduals = /^### Residuals\b/.test(line);
-      tableRow = 0;
       return;
     }
-    if (!inResiduals || !line.startsWith("|")) {
-      tableRow = 0;
-      return;
-    }
-    tableRow += 1;
-    // The first two lines of a table are its header and separator.
-    if (tableRow > 2 && !line.includes("**answered**")) {
+    // A header is the row its separator follows; an annotation between rows
+    // does not start a new table.
+    if (
+      inResiduals &&
+      line.startsWith("|") &&
+      !separator(line) &&
+      !separator(lines[at + 1]) &&
+      !line.includes("**answered**")
+    ) {
       entry.rows.push({ at: at + 1, cell: line.split("|")[1]?.trim() ?? "" });
     }
   });

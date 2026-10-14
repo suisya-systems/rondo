@@ -402,6 +402,9 @@ const RECORD = [
   "|---|---|---|",
   "| A reader for terminal rows | nothing asks yet | a later entry |",
   "| An allocator | done since | the gate *(Annotation:* **answered** — by rondo#1.*)* |",
+  "",
+  "> **Annotation (2026-09-02).** An annotation inside the table.",
+  "",
   "| `--paginate` on the issue list | one page holds them | whoever has more |",
   "",
   "### What would falsify it",
@@ -451,7 +454,7 @@ test("an accepted entry with open residual rows is one candidate, its basis the 
         path: "DECISIONS.md",
         commit: "c0ffee",
         entry: "D-0001",
-        lines: { start: 15, end: 17 },
+        lines: { start: 15, end: 20 },
       },
       title: "D-0001 residuals: A reader for terminal rows; `--paginate` on the issue list",
       labels: [],
@@ -488,7 +491,7 @@ test("the residuals of the record a setup names are read, counted and re-read wh
   expect(payload?.ranked.find((one) => one.key === "residual:D-0001")?.source).toMatchObject({
     form: "residual",
     commit: "c0ffee",
-    lines: { start: 15, end: 17 },
+    lines: { start: 15, end: 20 },
   });
 
   // The record moves: a fresh reading re-ranks over it.
