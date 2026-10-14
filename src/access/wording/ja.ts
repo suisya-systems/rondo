@@ -1372,6 +1372,8 @@ export const JA: Chrome = Object.freeze({
   discardRefusedNothing:
     "捨てるものは残っていませんでした。作業場所はすでにブランチと同じ状態です。",
   discardRefusedNotOffered: "この依頼はもう変更を捨てられる段階ではないため、何も捨てていません。",
+  discardRefusedIgnored:
+    "プロジェクトが無視しているファイルが、ブランチのファイルが戻る場所のフォルダの中にあり、捨てるとそれらも消えるため、何も捨てていません。それらを別の場所へ移してから、もう一度お試しください。",
   discardRefusedFailed:
     "途中で捨てきれませんでした。一部のファイルはすでに消えている可能性があります。画面の一覧で、残っているものを確かめてください。",
   signInRefusedNoApprover:

@@ -66,6 +66,10 @@ export function discardableOf(record: IterationRecord, shown: PublishShown): Dis
  * out, untracked paths removed. Ignored paths stay (no `-x`), which is the
  * repository's own statement that they are not work. Null when both ran.
  *
+ * **Refused before anything runs where an ignored file is in the way** (Codex
+ * round 2): one inside a folder that stands where the branch has a file would
+ * be deleted when that file comes back, and it was never on the list.
+ *
  * **`clean` first, under the ignore rules the list was read with** (Codex
  * round 1). Reset first would put back a `.gitignore` the changes edited, and
  * `clean` would then delete what that edit ignored -- files nobody was shown.
@@ -73,14 +77,43 @@ export function discardableOf(record: IterationRecord, shown: PublishShown): Dis
  * ponytail: an untracked nested repository survives `clean -fd`; the screen
  * then lists it as still there rather than claiming it is gone.
  */
-export async function discardUncommitted(workspace: string): Promise<string | null> {
+export async function discardUncommitted(
+  workspace: string,
+): Promise<{ readonly why: DiscardRefusal; readonly note: string } | null> {
+  const listed = async (...args: string[]): Promise<readonly string[] | string> => {
+    const ran = await runCommand("git", ["-C", workspace, ...args], DISCARD_TIMEOUT_MS);
+    return ran.spawnError !== null || ran.status !== 0
+      ? `${ran.commandLine}: ${ran.spawnError ?? ran.stderr.trim()}`
+      : ran.stdout.split("\0").filter((path) => path !== "");
+  };
+  const ignored = await listed("ls-files", "-z", "--others", "--ignored", "--exclude-standard");
+  const branch = await listed("ls-tree", "-r", "-z", "--name-only", "HEAD");
+  if (typeof ignored === "string" || typeof branch === "string") {
+    return {
+      why: "discardRefusedFailed",
+      note: typeof ignored === "string" ? ignored : `${branch}`,
+    };
+  }
+  const files = new Set(branch);
+  const inTheWay = ignored.filter((path) =>
+    path
+      .split("/")
+      .slice(0, -1)
+      .some((_, at, parts) => files.has(parts.slice(0, at + 1).join("/"))),
+  );
+  if (inTheWay.length > 0) {
+    return { why: "discardRefusedIgnored", note: inTheWay.join("\n") };
+  }
   for (const args of [
     ["clean", "-fd", "--quiet"],
     ["reset", "--hard", "--quiet"],
   ]) {
     const ran = await runCommand("git", ["-C", workspace, ...args], DISCARD_TIMEOUT_MS);
     if (ran.spawnError !== null || ran.status !== 0) {
-      return `${ran.commandLine}: ${ran.spawnError ?? ran.stderr.trim()}`;
+      return {
+        why: "discardRefusedFailed",
+        note: `${ran.commandLine}: ${ran.spawnError ?? ran.stderr.trim()}`,
+      };
     }
   }
   return null;
@@ -91,6 +124,7 @@ export type DiscardRefusal =
   | "discardRefusedChanged"
   | "discardRefusedNothing"
   | "discardRefusedNotOffered"
+  | "discardRefusedIgnored"
   | "discardRefusedFailed";
 
 export type Discarded =
@@ -155,7 +189,7 @@ export class DiscardPort {
       return refused("discardRefusedChanged");
     }
     const failed = await discardUncommitted(now.workspace);
-    return failed === null ? ({ ok: true } as const) : refused("discardRefusedFailed", failed);
+    return failed === null ? ({ ok: true } as const) : refused(failed.why, failed.note);
   }
 }
 

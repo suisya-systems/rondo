@@ -1437,6 +1437,10 @@ explanation you pressed on and then answers the gate.`,
     "There was nothing left to discard; the workspace already matches the branch.",
   discardRefusedNotOffered:
     "This request is no longer at a point where discarding applies, so nothing was discarded.",
+  discardRefusedIgnored:
+    "Some files the project ignores are in a folder that stands where a file on the branch comes " +
+    "back, and discarding would delete them, so nothing was discarded. Move them elsewhere, then " +
+    "try again.",
   discardRefusedFailed:
     "Discarding stopped partway, and some files may already be gone. The list on the page shows " +
     "what is still there.",

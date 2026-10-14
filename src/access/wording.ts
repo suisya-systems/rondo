@@ -1602,6 +1602,7 @@ export interface Chrome
   readonly discardRefusedNothing: string;
   readonly discardRefusedNotOffered: string;
   readonly discardRefusedFailed: string;
+  readonly discardRefusedIgnored: string;
   readonly signInRefusedNoApprover: string;
   readonly signInRefusedPress: string;
   readonly signInNone: string;

@@ -4,7 +4,7 @@
  * press, with the publish plan standing in for what git said.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
@@ -82,7 +82,7 @@ test("discarding puts tracked files back, removes untracked ones and leaves igno
   expect(existsSync(join(repo, "loose"))).toBe(false);
   expect(existsSync(join(repo, "ignored.log"))).toBe(true);
   // A workspace git cannot work in says so, with git's own words.
-  expect(await discardUncommitted(join(repo, "nowhere"))).toMatch(/^git -C .*nowhere clean/);
+  expect((await discardUncommitted(join(repo, "nowhere")))?.why).toBe("discardRefusedFailed");
 
   // A file the changes' own `.gitignore` edit ignores was not on the list, so it stays.
   writeFileSync(join(repo, ".gitignore"), "ignored.log\nlocal.env\n");
@@ -90,6 +90,18 @@ test("discarding puts tracked files back, removes untracked ones and leaves igno
   expect(await discardUncommitted(repo)).toBeNull();
   expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe("ignored.log\n");
   expect(existsSync(join(repo, "local.env"))).toBe(true);
+
+  // An ignored file inside a folder standing where the branch has a file would
+  // go when the file comes back, so nothing runs and the file is named.
+  rmSync(join(repo, "kept.txt"));
+  mkdirSync(join(repo, "kept.txt"));
+  writeFileSync(join(repo, "kept.txt", "ignored.log"), "never shown\n");
+  writeFileSync(join(repo, "kept.txt", "loose.txt"), "shown\n");
+  expect(await discardUncommitted(repo)).toEqual({
+    why: "discardRefusedIgnored",
+    note: "kept.txt/ignored.log",
+  });
+  expect(existsSync(join(repo, "kept.txt", "loose.txt"))).toBe(true);
 });
 
 test("the screen lists what will be lost; only a person's press over that list discards it", async () => {
