@@ -34,6 +34,7 @@
  * needs from lap 1 is the `resume(iterationId)` entry point (D-0019 rule 5), and
  * it is re-exported below.
  */
+
 import {
   admitRun,
   type PerformLapRequest,
@@ -87,9 +88,9 @@ import {
   type IterationStore,
   LANE_LEDGER_AUTHOR,
 } from "../store/sqlite.js";
-
 import { DETERMINISTIC_DRAFTER, proposeAfterAbandon, type UnpromptedPorts } from "./advisory.js";
 import type { ChecksReading, FailingCheck } from "./checks-host.js";
+import { claimComparisonLines, gateWideningLines } from "./claim-lines.js";
 import { discard, writeDelegationRecord } from "./delegation.js";
 import {
   type ChangedPathsReading,
@@ -951,14 +952,15 @@ export async function readHolder(
  * report is printed by the command line and by nothing else, so the page reads
  * the comparison for itself where the press is ({@link compareClaim}, and
  * `pageMaterial` in `src/access/page-actions.ts`): rondo#294, because a person
- * who only reads the page met a collision at merge time instead. Rule
- * 5's widening onto an unheld path is not written for a drafted claim: the
- * person answered at rondo#283's gate that the ledger does not widen a claim
- * by itself, and whether to widen it is theirs. **A line that declared
- * nothing is the exception** (rondo#554, D-0160): it claims the unheld paths
- * its lap changed here, so later starts see them. The collision's finding and
- * its `sequence` are `D-0067`'s, not built. It cannot fail the step: the gate
- * is already committed.
+ * who only reads the page met a collision at merge time instead. **A line
+ * that declared nothing** claims the unheld paths its lap changed here
+ * (rondo#554, D-0160), so later starts see them. **A drafted claim is widened
+ * only inside an approved scope** (D-0073 rule 4.4, D-0201 rule 4): the
+ * unheld paths are added and the held ones wait, each recorded against the
+ * approval that admitted the lap; outside every scope it is left as it is,
+ * and whether to widen it is the person's. The collision's finding is
+ * `D-0067`'s, not built. It cannot fail the step: the gate is already
+ * committed.
  */
 async function withClaimComparison(
   ports: ReportingPorts,
@@ -993,6 +995,21 @@ async function withClaimComparison(
           : { ...comparison, unheld };
     } else if (outcome.kind === "defect") {
       claimed.push(`What lap ${report.iterationId} changed was not claimed: ${outcome.reason}.`);
+    }
+  }
+  if (comparison.kind === "outside") {
+    const widened = await ports.lanes.store.widenAtGate({
+      iterationId: report.iterationId,
+      paths: [...comparison.unheld, ...comparison.held.flatMap((holder) => holder.sharedPaths)],
+      nowMs: ports.now(),
+    });
+    claimed.push(...gateWideningLines(report.iterationId, widened));
+    if (widened.kind === "widened") {
+      const unheld = comparison.unheld.filter((path) => !widened.added.includes(path));
+      comparison =
+        unheld.length === 0 && comparison.held.length === 0
+          ? { kind: "inside" }
+          : { ...comparison, unheld };
     }
   }
   const lines = [
@@ -1174,33 +1191,6 @@ export function takenInCommit(plan: JsonRecord): string | null {
 }
 
 /** The report's lines, unchanged: what the terminal has printed since rondo#293. */
-function claimComparisonLines(iterationId: string, comparison: ClaimComparison): readonly string[] {
-  if (comparison.kind === "inside") {
-    return [];
-  }
-  if (comparison.kind === "uncompared") {
-    return [
-      `What lap ${iterationId} changed was not compared with its line's claim: ${comparison.reason}.`,
-    ];
-  }
-  const quoted = (paths: readonly string[]) => paths.map((path) => `'${path}'`).join(", ");
-  return [
-    ...comparison.held.map(
-      (holder) =>
-        `Lap ${iterationId} changed ${quoted(holder.sharedPaths)} outside line ` +
-        `${comparison.lineageId}'s claim, and line ${holder.lineageId} holds it: the two lines ` +
-        "collide there.",
-    ),
-    ...(comparison.unheld.length === 0
-      ? []
-      : [
-          `Lap ${iterationId} changed ${quoted(comparison.unheld)} outside line ` +
-            `${comparison.lineageId}'s claim, and no other open line holds it; the claim is ` +
-            "left as it is.",
-        ]),
-  ];
-}
-
 /**
  * One line for the report, saying what the unprompted door did.
  *
@@ -1337,6 +1327,7 @@ export interface LandingPorts {
     | "releaseLane"
     | "compareLane"
     | "claimChanged"
+    | "widenAtGate"
     | "numberReservations"
   >;
   readonly readLanding: (request: LandingRequest) => Promise<LandingReading>;

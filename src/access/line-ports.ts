@@ -4,7 +4,7 @@
  * a lap only a person can end. Moved out of `web-app.ts`, which is at its size
  * cap; each checks its press there, through {@link spendPress}.
  */
-import { type Press, type Started, spendPress } from "./web-app.js";
+import { type Press, spendPress } from "./web-app.js";
 
 /**
  * What one release press names (D-0073 rule 4.3): a lap of the line, and the
@@ -70,7 +70,6 @@ export interface HoldsInput {
 /** Why a press that changes a line's files changed nothing, as the wording key the page says it in. */
 export type HoldsRefusal =
   | "holdsRefusedChanged"
-  | "holdsRefusedHeld"
   | "holdsRefusedBusy"
   | "holdsRefusedKept"
   | "holdsRefusedUnread"
@@ -83,8 +82,8 @@ export interface HoldsMoved {
   readonly why?: HoldsRefusal;
   /** On `holdsRefusedKept`: the files the work changed, which it keeps. */
   readonly paths?: readonly string[];
-  /** On `holdsRefusedHeld`: the lines keeping the files it asked for. */
-  readonly holders?: Started["holders"];
+  /** On a move that waits (D-0201 rule 2): the files it takes once other work lets them go. */
+  readonly waiting?: readonly string[];
 }
 
 /** Change which files one open line keeps, as the person wrote them. */

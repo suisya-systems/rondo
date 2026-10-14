@@ -248,6 +248,7 @@ async function lines() {
       readHolder: never,
       start: never,
       held: heldStartPort(ENV, store, storePath, "ada", over, EN, policy),
+      widenings: null,
       now: Date.now,
       log: (line) => logged.push(line),
     });

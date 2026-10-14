@@ -438,6 +438,8 @@ export async function serveWeb(
                 running,
               );
             },
+            // **And a widening that waits for other work's files** (D-0201).
+            widenings: { store },
             // **And the person's own start that held files kept waiting**
             // (rondo#284).
             held: heldStartPort(
@@ -1140,7 +1142,7 @@ export async function serveWeb(
         sender === null || "refusal" in sender
           ? null
           : new HoldsPort(async (input) => {
-              const moved = await holdsFromPage(environment, store, record, sender.actorId, input);
+              const moved = await holdsFromPage(environment, store, sender.actorId, input);
               // Files a narrowing gave up may be what a held start waits on.
               order?.kick();
               return moved;

@@ -2037,6 +2037,7 @@ export const SCOPE_ACT_KINDS = Object.freeze([
   "gate_answer",
   "triage_reading",
   "explanation_reading",
+  "claim_move",
 ] as const);
 
 export type ScopeActKind = (typeof SCOPE_ACT_KINDS)[number];
@@ -2053,17 +2054,15 @@ export type ScopeActKind = (typeof SCOPE_ACT_KINDS)[number];
  * it injects a request that reading ranked, so the reading's model spend counts
  * toward the goal scope's cost (rondo#469); an explanation reading's is the
  * explainer's answer proposal id, written with the answer so a model's
- * explanation counts toward the approval it was asked under (D-0177).
+ * explanation counts toward the approval it was asked under (D-0177); a claim
+ * move's is the claim row's id, written with the row the gate or the order
+ * tick writes under an approval (D-0201 rule 5), and it spends no budget.
+ * Every kind is writable today, so this is {@link SCOPE_ACT_KINDS}; a kind
+ * recorded before it is written splits the two again.
  */
-export const WRITABLE_SCOPE_ACT_KINDS = Object.freeze([
-  "admission",
-  "push_branch",
-  "open_pull_request",
-  "merge_default_branch",
-  "gate_answer",
-  "triage_reading",
-  "explanation_reading",
-] as const satisfies readonly ScopeActKind[]);
+export const WRITABLE_SCOPE_ACT_KINDS: readonly ScopeActKind[] = Object.freeze([
+  ...SCOPE_ACT_KINDS,
+]);
 
 /** Who wrote a scope row (D-0066 rule 1.5, D-0061 rule 2.3's voice column). */
 export type ScopeAuthorKind = "operator" | "drafter";

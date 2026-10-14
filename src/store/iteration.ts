@@ -53,6 +53,13 @@ import {
   type TransitionOutcome,
 } from "./contract.js";
 import {
+  applyHeldWidening,
+  heldWidenings,
+  holdersOf,
+  holdWidening,
+  widenAtGate,
+} from "./held-widening.js";
+import {
   changedDropped,
   claimCovers,
   claimMove,
@@ -834,6 +841,7 @@ export function iterationStore(connection: StoreConnection, policy: HostPolicy):
             return move;
           }
           const shape = lineShape(laps);
+          let holders: readonly LaneHolder[] = [];
           if (move.added.length > 0) {
             // Only work still going can change a path it takes: a finished
             // line taking more would hold it from others for nothing.
@@ -844,15 +852,20 @@ export function iterationStore(connection: StoreConnection, policy: HostPolicy):
               };
             }
             const record = lineRecord(connection, root.id);
-            const holders = openLines(connection, head.repository, root.id).flatMap((line) => {
-              const shared = sharedPaths(move.added, line.paths, record);
-              return shared.length === 0
-                ? []
-                : [{ lineageId: line.lineageId, sharedPaths: shared }];
-            });
-            if (holders.length > 0) {
-              return { kind: "held", holders };
-            }
+            holders = holdersOf(connection, head.repository, root.id, move.added, record);
+          }
+          // **Paths another open line holds wait** (D-0201 rule 2): the order
+          // tick adds them once they are free, and the rest is written now.
+          const waiting = [...new Set(holders.flatMap((holder) => holder.sharedPaths))].sort();
+          const paths = move.paths.filter((path) => !waiting.includes(path));
+          const added = move.added.filter((path) => !waiting.includes(path));
+          if (paths.length === 0) {
+            return {
+              kind: "refused",
+              reason:
+                "every file this line would keep is held by other work, and keeping none is a " +
+                "release; keep one of its files until the others are free",
+            };
           }
           if (move.dropped.length > 0) {
             if (!mayBeOpen(shape)) {
@@ -870,29 +883,74 @@ export function iterationStore(connection: StoreConnection, policy: HostPolicy):
           // A line whose claim its gates write (D-0160) keeps that after the
           // person moves it: its next gate still claims what it changed.
           const forms = basisForms(claimBases(connection, head.claimId));
-          insertClaim(
+          if (added.length > 0 || move.dropped.length > 0) {
+            insertClaim(
+              connection,
+              {
+                lineageId: root.id,
+                repository: head.repository,
+                paths,
+                supersedesClaimId: head.claimId,
+                authorKind: "operator",
+                authorId: input.authorId,
+                bases: [
+                  { form: "iteration", iterationId: input.iterationId },
+                  ...(added.length > 0 ? [{ form: "widened" }] : []),
+                  ...(move.dropped.length > 0 ? [{ form: "narrowed" }] : []),
+                  ...(forms.includes("changed") ? [CHANGED] : []),
+                ],
+                why: head.why,
+              },
+              input.nowMs,
+            );
+          }
+          if (waiting.length === 0) {
+            return { kind: "moved", lineageId: root.id, added, dropped: move.dropped };
+          }
+          holdWidening(
             connection,
             {
               lineageId: root.id,
-              repository: head.repository,
-              paths: move.paths,
-              supersedesClaimId: head.claimId,
+              paths: waiting,
               authorKind: "operator",
               authorId: input.authorId,
-              bases: [
-                { form: "iteration", iterationId: input.iterationId },
-                ...(move.added.length > 0 ? [{ form: "widened" }] : []),
-                ...(move.dropped.length > 0 ? [{ form: "narrowed" }] : []),
-                ...(forms.includes("changed") ? [CHANGED] : []),
-              ],
-              why: head.why,
+              scopeDecisionId: null,
             },
             input.nowMs,
           );
-          return { kind: "moved", lineageId: root.id, added: move.added, dropped: move.dropped };
+          return {
+            kind: "waits",
+            lineageId: root.id,
+            added,
+            dropped: move.dropped,
+            waiting,
+            holders,
+          };
         });
       } catch (error) {
         return { kind: "defect", reason: describe(error) };
+      }
+    },
+
+    async heldWidenings() {
+      return heldWidenings(connection);
+    },
+
+    async applyHeldWidening(wideningId, nowMs) {
+      try {
+        return inTransaction(() => applyHeldWidening(connection, wideningId, nowMs));
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) } as const;
+      }
+    },
+
+    async widenAtGate(input) {
+      try {
+        return inTransaction(() =>
+          widenAtGate(connection, input.iterationId, input.paths, input.nowMs),
+        );
+      } catch (error) {
+        return { kind: "defect", reason: describe(error) } as const;
       }
     },
 

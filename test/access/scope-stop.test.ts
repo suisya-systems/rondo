@@ -2174,3 +2174,74 @@ test(
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
+
+test("D-0201: inside an approved scope the gate widens a drafted claim onto what its lap changed, against the approval", async () => {
+  const h = await harness();
+  let changed: ChangedPathsReading = { kind: "read", paths: [] };
+  const lanes = {
+    store: h.store,
+    remote: "origin",
+    readLanding: async () => ({ kind: "undetermined", reason: "not asked" }) as const,
+    readChangedPaths: async () => changed,
+  };
+  const drafted = (paths: readonly string[]) => ({
+    paths,
+    authorKind: "drafter" as const,
+    authorId: "rondo/drafter/3/claude-fixture",
+    bases: [{ form: "proposal", proposalId: "draft-1" }],
+  });
+  // Another open line holds `src/store/`, outside every scope.
+  const other = await admit(
+    { ...h.reporting, lanes },
+    h.advisory,
+    PLAN,
+    POLICY,
+    "i-store",
+    null,
+    null,
+    REQUEST,
+    null,
+    drafted(["src/store/"]),
+  );
+  expect(other.status).toBe("awaiting_human");
+
+  changed = { kind: "read", paths: ["docs/a.md", "src/store/sqlite.ts"] };
+  const ports: ScopeAdmitPorts = {
+    ...h.ports,
+    admit: async (p, id, supersedes, request, scopeSpend) =>
+      await admit(
+        { ...h.reporting, lanes },
+        h.advisory,
+        p,
+        POLICY,
+        id,
+        supersedes,
+        null,
+        request,
+        scopeSpend,
+        drafted(["lib/"]),
+      ),
+  };
+  const scoped = await admitUnderScope(ports, "sd-1", start("i-a"));
+  if (scoped.kind !== "admitted") throw new Error(JSON.stringify(scoped));
+  const said = scoped.report.lines.join("\n");
+  expect(said).toContain(
+    "Line i-a now claims 'docs/a.md', which lap i-a changed, under approval sd-1.",
+  );
+  expect(said).toContain(
+    "Line i-a waits to claim 'src/store/sqlite.ts', which other open lines hold",
+  );
+  const line = await h.store.laneLine("i-a");
+  expect(line.kind === "read" ? line.line.claim?.paths : undefined).toEqual(["docs/a.md", "lib/"]);
+  expect(
+    h.connection
+      .prepare("SELECT subject_id FROM scope_consumption WHERE act_kind = 'claim_move'")
+      .all(),
+  ).toEqual([{ subject_id: "i-a:2" }]);
+  expect(await h.store.heldWidenings()).toMatchObject([
+    { lineageId: "i-a", paths: ["src/store/sqlite.ts"], scopeDecisionId: "sd-1" },
+  ]);
+  // The unscoped line's drafted claim is left as it is (D-0073 rule 4.4).
+  const unscoped = await h.store.laneLine("i-store");
+  expect(unscoped.kind === "read" ? unscoped.line.claim?.paths : undefined).toEqual(["src/store/"]);
+});

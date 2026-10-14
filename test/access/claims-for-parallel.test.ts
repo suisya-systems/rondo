@@ -257,6 +257,7 @@ async function world(holds: readonly string[], answers: readonly DrafterRun[]) {
         planIndex,
       }),
     held: null,
+    widenings: null,
     now: Date.now,
     log: (line) => logged.push(line),
   });

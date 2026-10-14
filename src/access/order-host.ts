@@ -33,6 +33,13 @@
  * not usable, it waits on; started, or refused for a reason waiting does not
  * change, its wait ends and the reason is said, so the page draws the ordinary
  * start again rather than a wait nothing will end.
+ *
+ * **And a widening that waits for other work's files** (D-0073 rule 4.1,
+ * D-0201): kept as a `held_widening` row by the release screen's press or by
+ * the gate under an approval, and written here once no other open line holds
+ * its paths (`paths_free`), re-tested in the store's transaction. A finished
+ * holder's landing is read first, as a split's `first` is, so the wait does
+ * not outlast a landing nothing else reads.
  */
 
 import { readSplitPayload } from "../advisory/proposal.js";
@@ -83,6 +90,10 @@ export interface OrderHostPorts {
     readonly retired: (held: HeldStart) => Promise<string | null>;
     readonly start: (held: HeldStart) => Promise<Started>;
   } | null;
+  /** The widenings waiting for other work's files (D-0201). Null where none is attempted. */
+  readonly widenings: {
+    readonly store: Pick<IterationStore, "heldWidenings" | "applyHeldWidening" | "laneLedger">;
+  } | null;
   readonly now: () => number;
   readonly log: (line: string) => void;
 }
@@ -117,6 +128,13 @@ export function orderHost(ports: OrderHostPorts): OrderHost {
           await readSplit(ports, split, said);
         } catch (error) {
           ports.log(`order    ${split.proposalId}: ${describe(error)}`);
+        }
+      }
+      if (ports.widenings !== null) {
+        try {
+          await readHeldWidenings(ports, ports.widenings.store, said);
+        } catch (error) {
+          ports.log(`order    the held widenings could not be read: ${describe(error)}`);
         }
       }
       if (ports.held !== null) {
@@ -297,6 +315,60 @@ async function readHeldStarts(
         `order    ${id}: ` +
           (started.ok ? "started once its files were free" : `not started: ${started.note}`),
       );
+    } catch (error) {
+      ports.log(`order    ${id}: ${describe(error)}`);
+    }
+  }
+}
+
+/** Write each waiting widening whose files are free now (D-0201 rule 3). */
+async function readHeldWidenings(
+  ports: OrderHostPorts,
+  store: NonNullable<OrderHostPorts["widenings"]>["store"],
+  said: Set<string>,
+): Promise<void> {
+  for (const wait of await store.heldWidenings()) {
+    const id = wait.wideningId;
+    // One wait's failure costs that wait, never the pass.
+    try {
+      let outcome = await store.applyHeldWidening(id, ports.now());
+      if (outcome.kind === "waits") {
+        // A holder that has finished is read for its landing, which releases it.
+        const ledger = await store.laneLedger();
+        let released = false;
+        for (const { lineageId } of outcome.holders) {
+          if (ledger.find((line) => line.lineageId === lineageId)?.inFlight === false) {
+            released = (await ports.readHolder(lineageId)).released || released;
+          }
+        }
+        if (released) {
+          outcome = await store.applyHeldWidening(id, ports.now());
+        }
+      }
+      switch (outcome.kind) {
+        case "applied":
+          ports.log(
+            `order    line ${outcome.lineageId} ` +
+              (outcome.added.length === 0
+                ? "already holds the files it waited for"
+                : `took ${outcome.added.join(", ")} once other work let them go`),
+          );
+          break;
+        case "waits":
+          sayOnce(
+            ports,
+            said,
+            id,
+            `line ${wait.lineageId} waits for ${wait.paths.join(", ")}: line ` +
+              `${outcome.holders.map((holder) => holder.lineageId).join(", ")} still holds them`,
+          );
+          break;
+        case "ended":
+          ports.log(`order    line ${wait.lineageId} no longer waits for files: ${outcome.reason}`);
+          break;
+        default:
+          ports.log(`order    ${id}: ${outcome.reason}`);
+      }
     } catch (error) {
       ports.log(`order    ${id}: ${describe(error)}`);
     }

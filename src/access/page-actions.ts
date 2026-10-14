@@ -79,7 +79,7 @@ import type { ClaimReach, LapMaterialRead } from "./page/contract.js";
 import type { ClaimRefusal } from "./page/refusal-words.js";
 import { BEFORE_THE_GATE } from "./page-logic/end-lap.js";
 import { fixCauseOf } from "./page-logic/result.js";
-import { requestWords, threadsOf } from "./page-logic/threads.js";
+import { threadsOf } from "./page-logic/threads.js";
 import type { AddedRepository, AddRepositoryInput } from "./repository-add.js";
 import {
   cloneDirectory,
@@ -1649,12 +1649,12 @@ export async function releaseFromPage(
  * **A narrowing reads what the line changed first** (rule 4.2), over the
  * laps the screen was drawn over: the store refuses when those moved, and
  * refuses a narrowing while a lap may still commit, so what was read is what
- * the line has.
+ * the line has. **Files it adds that other work keeps wait** (D-0201 rule 2):
+ * the rest is written now, and the order tick adds those once they are free.
  */
 export async function holdsFromPage(
   environment: Readonly<Record<string, string | undefined>>,
   store: IterationStore,
-  record: Pick<AdvisoryRecord, "threadMessages">,
   approver: string,
   input: HoldsInput,
 ): Promise<HoldsMoved> {
@@ -1715,28 +1715,13 @@ export async function holdsFromPage(
       return { ok: false, why: "holdsRefusedBusy", note: "" };
     case "kept":
       return { ok: false, why: "holdsRefusedKept", note: "", paths: outcome.paths };
-    case "held": {
-      const read = await record.threadMessages();
-      const messages = read.kind === "read" ? read.messages : [];
-      const ledger = await store.laneLedger().catch(() => []);
-      const holders = await Promise.all(
-        outcome.holders.map(async ({ lineageId }) => {
-          const root = await store.read(lineageId);
-          return {
-            lineageId,
-            request: root.kind === "read" ? requestWords(messages, root.record) : null,
-            inFlight: ledger.find((each) => each.lineageId === lineageId)?.inFlight ?? true,
-          };
-        }),
+    case "waits":
+      say(
+        `Line ${outcome.lineageId} waits for ${outcome.waiting.join(", ")}, which other work ` +
+          "keeps, and takes them by itself once they are free; on a press from the page it " +
+          `took ${outcome.added.join(", ") || "none"} and gave up ${outcome.dropped.join(", ") || "none"} now.`,
       );
-      return {
-        ok: false,
-        why: "holdsRefusedHeld",
-        note: "",
-        paths: [...new Set(outcome.holders.flatMap(({ sharedPaths }) => sharedPaths))],
-        holders,
-      };
-    }
+      return { ok: true, note: "", waiting: outcome.waiting };
     case "refused":
       return { ok: false, why: "holdsRefusedPaths", note: outcome.reason };
     default:

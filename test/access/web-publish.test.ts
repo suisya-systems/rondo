@@ -1789,13 +1789,13 @@ test("rondo#282 (D-0163): the page changes what a line keeps as the approver, ov
     return { iterationId: "i-0001", claimId: line.line.claim.claimId, lapIds: ["i-0001"] };
   };
   const press = async (paths: string[]) =>
-    await holdsFromPage(env, world.store, world.record, "ada", { ...(await head()), paths });
+    await holdsFromPage(env, world.store, "ada", { ...(await head()), paths });
 
   expect(
-    await holdsFromPage({}, world.store, world.record, "ada", { ...(await head()), paths: ["x/"] }),
+    await holdsFromPage({}, world.store, "ada", { ...(await head()), paths: ["x/"] }),
   ).toMatchObject({ ok: false, why: "holdsRefusedNotRecorded" });
   expect(
-    await holdsFromPage(env, world.store, world.record, "ada", {
+    await holdsFromPage(env, world.store, "ada", {
       ...(await head()),
       claimId: "i-0001:9",
       paths: ["x/"],
@@ -1808,13 +1808,22 @@ test("rondo#282 (D-0163): the page changes what a line keeps as the approver, ov
   expect(line.kind === "read" ? line.line.claim : null).toMatchObject({
     paths: ["docs/", "lanes/i-0001/"],
   });
-  // Onto files another open line keeps: refused, naming that line.
-  expect(await press(["lanes/i-0001/", "docs/", "lanes/i-0002/x.ts"])).toMatchObject({
-    ok: false,
-    why: "holdsRefusedHeld",
-    paths: ["lanes/i-0002/x.ts"],
-    holders: [{ lineageId: "i-0002", inFlight: true }],
+  // Onto files another open line keeps: they wait, and rondo takes them by itself (D-0201).
+  expect(await press(["lanes/i-0001/", "docs/", "lanes/i-0002/x.ts"])).toEqual({
+    ok: true,
+    note: "",
+    waiting: ["lanes/i-0002/x.ts"],
   });
+  // The release screen says what it waits for, in both catalogues, so nobody presses again.
+  for (const wording of [EN, chromeFor("ja")]) {
+    const html = await operatorPage(
+      portsOver(world),
+      "t",
+      { kind: "release", iterationId: "i-0001" },
+      wording,
+    );
+    expect(html).toContain(wording.holdsWaiting(["lanes/i-0002/x.ts"]));
+  }
   // Running, a narrowing waits for review.
   expect(await press(["lanes/i-0001/"])).toMatchObject({ ok: false, why: "holdsRefusedBusy" });
 
