@@ -82,7 +82,14 @@ test("discarding puts tracked files back, removes untracked ones and leaves igno
   expect(existsSync(join(repo, "loose"))).toBe(false);
   expect(existsSync(join(repo, "ignored.log"))).toBe(true);
   // A workspace git cannot work in says so, with git's own words.
-  expect(await discardUncommitted(join(repo, "nowhere"))).toMatch(/^git -C .*nowhere reset/);
+  expect(await discardUncommitted(join(repo, "nowhere"))).toMatch(/^git -C .*nowhere clean/);
+
+  // A file the changes' own `.gitignore` edit ignores was not on the list, so it stays.
+  writeFileSync(join(repo, ".gitignore"), "ignored.log\nlocal.env\n");
+  writeFileSync(join(repo, "local.env"), "not shown\n");
+  expect(await discardUncommitted(repo)).toBeNull();
+  expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe("ignored.log\n");
+  expect(existsSync(join(repo, "local.env"))).toBe(true);
 });
 
 test("the screen lists what will be lost; only a person's press over that list discards it", async () => {

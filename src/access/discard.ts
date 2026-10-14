@@ -66,13 +66,17 @@ export function discardableOf(record: IterationRecord, shown: PublishShown): Dis
  * out, untracked paths removed. Ignored paths stay (no `-x`), which is the
  * repository's own statement that they are not work. Null when both ran.
  *
+ * **`clean` first, under the ignore rules the list was read with** (Codex
+ * round 1). Reset first would put back a `.gitignore` the changes edited, and
+ * `clean` would then delete what that edit ignored -- files nobody was shown.
+ *
  * ponytail: an untracked nested repository survives `clean -fd`; the screen
  * then lists it as still there rather than claiming it is gone.
  */
 export async function discardUncommitted(workspace: string): Promise<string | null> {
   for (const args of [
-    ["reset", "--hard", "--quiet"],
     ["clean", "-fd", "--quiet"],
+    ["reset", "--hard", "--quiet"],
   ]) {
     const ran = await runCommand("git", ["-C", workspace, ...args], DISCARD_TIMEOUT_MS);
     if (ran.spawnError !== null || ran.status !== 0) {

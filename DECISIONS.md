@@ -31839,9 +31839,11 @@ as a page press with a confirmation step, and to leave committing and excluding 
 3. **What is discarded is what was shown, or nothing is** (`D-0042` rules 2 and 3's shape). The form
    carries the digest of the workspace, the paths and the checked-out branch; the press reads the
    plan again and refuses, discarding nothing, when the list has changed or is empty.
-4. **Discarding is `git reset --hard` then `git clean -fd` in the plan's workspace**: tracked
-   changes go back to what is checked out, untracked paths are removed, ignored paths stay (no
-   `-x`). The lap is closed, so no worker writes in the workspace between the read and the discard.
+4. **Discarding is `git clean -fd` then `git reset --hard` in the plan's workspace**: untracked
+   paths are removed, tracked changes go back to what is checked out, ignored paths stay (no `-x`).
+   `clean` runs first so it reads the same ignore rules the list was read with: a `.gitignore` the
+   changes edited is put back only after it, and what that edit ignored is never deleted unseen.
+   The lap is closed, so no worker writes in the workspace between the read and the discard.
 5. **The press lands back on the screen, which says what happened**: that the changes are gone and
    the workspace matches the branch, only where it now reads clean, and the way back to publish.
 6. **rondo still commits nothing on a lap's behalf** (`D-0060` rule 6 stands). This removes work
