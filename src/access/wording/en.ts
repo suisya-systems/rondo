@@ -1293,14 +1293,14 @@ explanation you pressed on and then answers the gate.`,
     "The push has nowhere to go that rondo can vouch for, so this is not published. Ask whoever " +
     "maintains rondo on this computer to check where it goes.",
   publishUncommitted: (paths) =>
-    `The workspace still holds work that is not on the branch: ${paths}. The push would leave ` +
-    "it behind, and no button here changes that.",
+    `The workspace still holds work that is not on the branch: ${paths}. Publishing now would ` +
+    "leave it behind.",
   publishUncommittedElsewhere: (branch) =>
     `The workspace has ${branch} checked out, which is not the branch this would push.`,
   publishUncommittedRemedies:
-    "Answer it about those paths rather than about the publish: run the lap again so it commits " +
-    "its own work and is read again, commit them yourself in the workspace, or discard them if " +
-    "they are not work.",
+    "Settle those files first: run the lap again so it commits its own work, commit them " +
+    "yourself in the workspace, or, if they are not work worth keeping, discard them with the " +
+    "button below.",
   publishStatusUnreadable:
     "git could not say what the workspace holds outside the branch, so whether the push would " +
     "leave work behind is unknown. Repair the workspace so git status answers, then check again.",
@@ -1402,6 +1402,44 @@ explanation you pressed on and then answers the gate.`,
     'Nothing was added: rondo on this computer is not signed in to GitHub. Sign in, then press "Add this repository" again.',
   signInAction: "Sign in to GitHub",
   signInBack: "Back to signing in to GitHub",
+  publishDiscardLink: "Discard these changes",
+  discardHeading: "Discard uncommitted changes",
+  discardLead:
+    "Discarding puts every changed file back to the branch's version and deletes the new files " +
+    "listed here. This cannot be undone.",
+  discardListHeading: (count) =>
+    count === 1 ? "1 file will be lost" : `${count} files will be lost`,
+  discardKeeps:
+    "The branch and its commits stay as they are, and files the project marks as ignored are " +
+    "left alone.",
+  discardAction: (count) => (count === 1 ? "Discard 1 file" : `Discard ${count} files`),
+  discardCancel: "Keep them and go back",
+  discardNoApprover:
+    "Nobody is named as approver here, so these changes cannot be discarded from this page.",
+  discardNothing:
+    "The workspace holds nothing that is not on the branch, so there is nothing to discard.",
+  discardNotOffered:
+    "This request is not at a point where discarding applies, and the workspace was left as it is.",
+  discardDone:
+    "The changes are gone and the workspace matches the branch again. You can go back and publish.",
+  discardBackToPublish: "Back to publish",
+  discardBack: "Back to the list",
+  discardRefusedNoApprover: "Nobody is named as approver here, so nothing was discarded.",
+  discardRefusedPress:
+    "That did not come from this page's button, so nothing was discarded. Open the page again " +
+    "and use the button there.",
+  discardRefusedForm:
+    "The form was incomplete, so nothing was discarded. Open the page again and try once more.",
+  discardRefusedChanged:
+    "The files in the workspace changed after this page was drawn, so nothing was discarded. " +
+    "Look at the new list before deciding again.",
+  discardRefusedNothing:
+    "There was nothing left to discard; the workspace already matches the branch.",
+  discardRefusedNotOffered:
+    "This request is no longer at a point where discarding applies, so nothing was discarded.",
+  discardRefusedFailed:
+    "Discarding stopped partway, and some files may already be gone. The list on the page shows " +
+    "what is still there.",
   signInRefusedNoApprover:
     "Nothing was started: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
   signInRefusedPress:

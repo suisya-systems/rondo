@@ -154,7 +154,13 @@ export type PageView =
    * Signing this computer's rondo in to GitHub (rondo#676): the one-time code
    * and where to enter it, instead of a terminal.
    */
-  | { readonly kind: "signIn" };
+  | { readonly kind: "signIn" }
+  /**
+   * The uncommitted changes in one lap's workspace, and the press that
+   * discards them (rondo#676, D-0198): reached from the publish screen, and a
+   * view of its own for `publish`'s reason. `done` is where the press lands.
+   */
+  | { readonly kind: "discard"; readonly iterationId: string; readonly done: boolean };
 
 /**
  * The most review rounds this screen will draft for.
@@ -215,6 +221,7 @@ export function isLive(view: PageView): boolean {
     view.kind !== "release" &&
     view.kind !== "end" &&
     view.kind !== "signIn" &&
+    view.kind !== "discard" &&
     view.kind !== "goal" &&
     view.kind !== "goalScope"
   );
@@ -249,6 +256,8 @@ export function viewHref(view: PageView, tag: string): string {
       return `/?end=${encodeURIComponent(view.iterationId)}&${lang}`;
     case "signIn":
       return `/?github=sign-in&${lang}`;
+    case "discard":
+      return `/?discard=${encodeURIComponent(view.iterationId)}${view.done ? "&done=1" : ""}&${lang}`;
     case "requests":
       return view.take !== undefined
         ? `/?requests=open&take=${encodeURIComponent(view.take.proposalId)}` +
@@ -356,6 +365,10 @@ export function viewOf(query: URLSearchParams): PageView {
   }
   if (query.get("github") === "sign-in") {
     return { kind: "signIn" };
+  }
+  const discarding = query.get("discard");
+  if (discarding !== null && discarding !== "") {
+    return { kind: "discard", iterationId: discarding, done: query.get("done") === "1" };
   }
   const ending = query.get("end");
   if (ending !== null && ending !== "") {

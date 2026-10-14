@@ -1581,6 +1581,27 @@ export interface Chrome
    */
   readonly signInAction: string;
   readonly signInBack: string;
+  /** The discard screen (rondo#676, D-0198): a workspace's uncommitted changes thrown away. */
+  readonly publishDiscardLink: string;
+  readonly discardHeading: string;
+  readonly discardLead: string;
+  readonly discardListHeading: (count: number) => string;
+  readonly discardKeeps: string;
+  readonly discardAction: (count: number) => string;
+  readonly discardCancel: string;
+  readonly discardNoApprover: string;
+  readonly discardNothing: string;
+  readonly discardNotOffered: string;
+  readonly discardDone: string;
+  readonly discardBackToPublish: string;
+  readonly discardBack: string;
+  readonly discardRefusedNoApprover: string;
+  readonly discardRefusedPress: string;
+  readonly discardRefusedForm: string;
+  readonly discardRefusedChanged: string;
+  readonly discardRefusedNothing: string;
+  readonly discardRefusedNotOffered: string;
+  readonly discardRefusedFailed: string;
   readonly signInRefusedNoApprover: string;
   readonly signInRefusedPress: string;
   readonly signInNone: string;

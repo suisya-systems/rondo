@@ -515,6 +515,10 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   },
   // rondo#676: the sign-in press, out of `web-app.ts` at its size cap as
   // `line-ports.ts` is, registered on the app `web-app.ts` built. Types only.
+  // rondo#676 (D-0198): the discard press, out of `web-app.ts` for the same reason.
+  "src/access/discard.ts": {
+    hono: ["Context", "Hono"],
+  },
   "src/access/github-sign-in-route.ts": {
     hono: ["Context", "Hono"],
   },
@@ -1354,6 +1358,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   // rondo#676: signing this computer's `gh` in to GitHub, on the person's press.
   "src/access/github-sign-in.ts": [HUMAN],
   "src/access/github-sign-in-route.ts": [HUMAN],
+  // rondo#676 (D-0198): a lap's uncommitted changes thrown away, on the person's press.
+  "src/access/discard.ts": [HUMAN],
   "src/access/framing.ts": [SPLITTING, "Reviewer"],
   // D-0125: whether the readings would let a gate be approved without the person.
   "src/access/gate-auto.ts": ["Reviewer"],
@@ -1462,6 +1468,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/screens/refused.tsx": [HUMAN],
   "src/access/screens/release.tsx": [HUMAN],
   "src/access/screens/sign-in.tsx": [HUMAN],
+  "src/access/screens/discard.tsx": [HUMAN],
   "src/access/screens/end-lap.tsx": [HUMAN],
   "src/access/screens/scope.tsx": [HUMAN],
   "src/access/screens/plan-start.tsx": [HUMAN],

@@ -232,6 +232,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0195 | A lap only a person can end -- stalled, held by a start that threw, or a row that will not decode -- is ended from the page with their reason, gives back what it held and asks whether to carry on; a lap before its gate whose driver is gone is lost | accepted |
 | D-0196 | A host started with nobody named as the approver lets the page name them, once, and builds its write ports for that name without a restart | accepted |
 | D-0197 | The readers of rondo#659 say when a falsifier is breached: a share of triage's raised-or-decided reading at or above its line over enough to judge, and K4 tripped by one thing asked about twice | accepted |
+| D-0198 | The uncommitted changes that hold a lap's publish are discarded from the page, on a screen that lists them, by a press that discards only that list | accepted |
 | D-0199 | Asking across every request also says the decisions recorded on a request since the person last looked, in the same section as what ended | accepted |
 | D-0201 | A widening onto another open line's files waits as a row and is written by the order tick once they are free, and inside an approved scope the gate widens a drafted claim onto what its lap changed and records it against that approval | accepted |
 
@@ -31810,3 +31811,50 @@ At rondo `e086a5a` on **2026-10-14**, by reading the code:
 - **Two open lines holding one path** after a wait was written: the transaction's test missed it.
 - **People pressing the files again while a wait stands**: the release screen's sentence is not read
   as a wait.
+
+## D-0198 — The uncommitted changes that hold a lap's publish are discarded from the page, on a screen that lists them, by a press that discards only that list
+
+**Status:** accepted (2026-10-14, rondo#676). Supersedes nothing.
+Refs `D-0059` section 5a, `D-0060` rules 4 to 6, `D-0099`, `D-0042` rules 2 and 3.
+
+### Context
+
+`D-0060` rule 4 refuses to publish a workspace that holds uncommitted paths, and rule 5 names
+three answers an operator gives about the paths: commit them, discard them, or exclude them. All
+three were terminal commands, so the publish screen said *no button here changes that*. rondo#676
+removes the terminal from the person's path; the owner decided on that issue to build the discard
+as a page press with a confirmation step, and to leave committing and excluding as they are.
+
+### Decision
+
+1. **The discard is offered only where publishing is refused for uncommitted work.** The publish
+   screen's refusal card links to a screen of its own (`/?discard=<lap>`). That screen reads the
+   same publish plan the press reads (`publishPlanFor`, with no body composed); anything else that
+   plan says -- a lap not closed or approved, a target refused, a `git status` that failed --
+   offers no discard.
+2. **The screen shows what will be lost before anything is lost**: the paths `git status` listed,
+   the workspace, and that ignored files and the branch's commits stay. The press is a second,
+   separate press on that screen, a native form minted like every press (`D-0059` section 5a); no
+   browser dialog stands in for it.
+3. **What is discarded is what was shown, or nothing is** (`D-0042` rules 2 and 3's shape). The form
+   carries the digest of the workspace, the paths and the checked-out branch; the press reads the
+   plan again and refuses, discarding nothing, when the list has changed or is empty.
+4. **Discarding is `git reset --hard` then `git clean -fd` in the plan's workspace**: tracked
+   changes go back to what is checked out, untracked paths are removed, ignored paths stay (no
+   `-x`). The lap is closed, so no worker writes in the workspace between the read and the discard.
+5. **The press lands back on the screen, which says what happened**: that the changes are gone and
+   the workspace matches the branch, only where it now reads clean, and the way back to publish.
+6. **rondo still commits nothing on a lap's behalf** (`D-0060` rule 6 stands). This removes work
+   rather than adding any, so nothing is written to the topic branch and no reading is affected.
+
+### What it costs
+
+- **A wrong press loses work for good.** Rule 2 and rule 3 are the whole of the protection; there
+  is no undo and no copy kept.
+- **An untracked nested repository survives `clean -fd`**; the screen then still lists it.
+
+### What would falsify it
+
+- **A path discarded that the screen did not list**: rule 3's digest did not cover what git acted on.
+- **A discard offered on a lap that was still running**: rule 1's plan let a lap that is not closed
+  through.

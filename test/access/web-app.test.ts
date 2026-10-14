@@ -2155,6 +2155,7 @@ const WRITE_TABLE = [
   "POST /revise",
   "POST /publish",
   "POST /github-sign-in",
+  "POST /discard",
   "POST /release",
   "POST /holds",
   "POST /end-lap",
@@ -2217,6 +2218,8 @@ const PRESS_ROUTES = [
   "/add-repository",
   // Signing this computer's gh in to GitHub, instead of a terminal (rondo#676).
   "/github-sign-in",
+  // Throwing away a lap's uncommitted changes, from its own screen (rondo#676, D-0198).
+  "/discard",
   // The one irreversible act on the page, per act (D-0064 rule 3.4, D-0091).
   "/merge",
   // The person's say over what rondo ranks (D-0097 points 2.1 (a) and 4.5 (a)).

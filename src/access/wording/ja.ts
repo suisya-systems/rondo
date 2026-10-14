@@ -1249,8 +1249,7 @@ export const JA: Chrome = Object.freeze({
   publishUncommittedElsewhere: (branch) =>
     `作業場所のブランチは ${branch} で、公開するブランチとは別です。`,
   publishUncommittedRemedies:
-    "この変更を片付けてから公開してください。回をやり直してワーカーにコミットさせるか、作業場所で自分でコミットするか、作業でない変更なら捨てるかです。" +
-    "",
+    "この変更を片付けてから公開してください。回をやり直してワーカーにコミットさせるか、作業場所で自分でコミットするか、残す必要のない変更なら下のボタンから捨てるかです。",
   publishStatusUnreadable:
     "作業場所の状態を読めず、コミットされていない変更が残っているか分からないため、公開しません。" +
     "このコンピュータで rondo を管理する人に作業場所を直してもらい、もう一度確かめてください。",
@@ -1345,6 +1344,36 @@ export const JA: Chrome = Object.freeze({
     "サインインしてから、「このリポジトリを追加する」をもう一度押してください。",
   signInAction: "GitHub にサインインする",
   signInBack: "GitHub へのサインインに戻る",
+  publishDiscardLink: "この変更を捨てる",
+  discardHeading: "コミットされていない変更を捨てる",
+  discardLead:
+    "捨てると、変更したファイルはブランチの状態に戻り、ここに挙がった新しいファイルは削除されます。" +
+    "元に戻すことはできません。",
+  discardListHeading: (count) => `失われるファイル（${count}件）`,
+  discardKeeps:
+    "ブランチとそのコミットはそのまま残ります。プロジェクトが無視する設定にしているファイルも触りません。",
+  discardAction: (count) => `${count}件のファイルを捨てる`,
+  discardCancel: "捨てずに戻る",
+  discardNoApprover: "この画面には承認者の名前がないため、ここから変更を捨てることはできません。",
+  discardNothing: "作業場所にコミットされていない変更はなく、捨てるものはありません。",
+  discardNotOffered:
+    "この依頼は今、作業場所の変更を捨てられる段階にありません。作業場所はそのままです。",
+  discardDone:
+    "変更を捨て、作業場所はブランチと同じ状態になりました。公開の画面に戻って公開できます。",
+  discardBackToPublish: "公開の画面へ戻る",
+  discardBack: "一覧へ戻る",
+  discardRefusedNoApprover: "承認者の名前がないため、何も捨てていません。",
+  discardRefusedPress:
+    "この画面のボタンからの操作ではなかったため、何も捨てていません。画面を開き直して、そこのボタンからやり直してください。",
+  discardRefusedForm:
+    "送られた内容が足りなかったため、何も捨てていません。画面を開き直してやり直してください。",
+  discardRefusedChanged:
+    "この画面を開いたあとで作業場所のファイルが変わったため、何も捨てていません。新しい一覧を確かめてから、改めて選んでください。",
+  discardRefusedNothing:
+    "捨てるものは残っていませんでした。作業場所はすでにブランチと同じ状態です。",
+  discardRefusedNotOffered: "この依頼はもう変更を捨てられる段階ではないため、何も捨てていません。",
+  discardRefusedFailed:
+    "途中で捨てきれませんでした。一部のファイルはすでに消えている可能性があります。画面の一覧で、残っているものを確かめてください。",
   signInRefusedNoApprover:
     "サインインを始めていません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
   signInRefusedPress:

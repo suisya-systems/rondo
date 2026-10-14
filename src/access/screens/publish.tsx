@@ -233,6 +233,20 @@ export async function publishView(
               {wording.publishRecheck}
             </a>
           ) : null}
+          {/* The list and the second press are on a screen of their own,
+              since what this throws away cannot be had back (D-0198). */}
+          {shown.block.why === "uncommitted" && (ports.discard ?? null) !== null ? (
+            <a
+              id="publish-discard"
+              href={viewHref(
+                { kind: "discard", iterationId: record.id, done: false },
+                wording.lang,
+              )}
+              class={`${SECONDARY} mt-2 h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
+            >
+              {wording.publishDiscardLink}
+            </a>
+          ) : null}
           {/* git's or the preflight's own words, beside the sentence and shut
               (D-0076 rule 4.5): the sentence says it in the person's terms. */}
           {shown.block.why === "target" || shown.block.why === "statusUnreadable"
