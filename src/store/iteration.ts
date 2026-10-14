@@ -857,7 +857,13 @@ export function iterationStore(connection: StoreConnection, policy: HostPolicy):
           // **Paths another open line holds wait** (D-0201 rule 2): the order
           // tick adds them once they are free, and the rest is written now.
           const waiting = [...new Set(holders.flatMap((holder) => holder.sharedPaths))].sort();
-          const paths = move.paths.filter((path) => !waiting.includes(path));
+          // What the line holds under a waiting directory is kept until the
+          // directory is written, so the wait gives nothing up (Codex).
+          const free = move.paths.filter((path) => !waiting.includes(path));
+          const paths = [
+            ...free,
+            ...head.paths.filter((path) => !claimCovers(free, path) && claimCovers(waiting, path)),
+          ].sort();
           const added = move.added.filter((path) => !waiting.includes(path));
           if (paths.length === 0) {
             return {

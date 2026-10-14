@@ -208,6 +208,20 @@ test("a press onto held files writes what it can now and keeps the rest waiting"
   expect(line.find((one) => one.lineageId === "a")?.claimId).toBe("a:3");
 });
 
+test("a waiting directory keeps what the line already holds under it", async () => {
+  const { store } = await world(new DatabaseSync(":memory:"));
+  await reserve(store, "a", ["src/a.ts"], false);
+  await reserve(store, "b", ["src/b.ts"], false);
+  await walk(store, "a", "performing");
+  expect(await store.moveClaim(press("a", "a:1", ["src/", "lib/"]))).toMatchObject({
+    kind: "waits",
+    added: ["lib/"],
+    dropped: [],
+    waiting: ["src/"],
+  });
+  expect(await head(store, "a")).toEqual(["lib/", "src/a.ts"]);
+});
+
 test("a press whose every kept file is held is refused, since keeping none is a release", async () => {
   const { store } = await world(new DatabaseSync(":memory:"));
   await reserve(store, "a", ["src/"], false);
