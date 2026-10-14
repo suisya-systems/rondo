@@ -91,6 +91,17 @@ const SOURCES = [
     "NULL",
     "request_message_id",
   ],
+  // A widening's wait (D-0201): who asked, and whether it was written.
+  [
+    "held_widening",
+    "widening_id",
+    "COALESCE(settled_at_ms, held_at_ms)",
+    "author_id",
+    "CASE WHEN settled_at_ms IS NULL THEN 'held' WHEN outcome = 'applied' THEN 'applied' " +
+      "ELSE 'ended' END",
+    "NULL",
+    "lineage_id",
+  ],
   [
     "scope_consumption",
     "subject_id",

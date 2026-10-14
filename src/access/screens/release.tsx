@@ -27,7 +27,8 @@ import type { Chrome } from "../wording.js";
  *
  * **It is also where what a line keeps is changed** (D-0163): for an open
  * line, running or finished, the files it keeps are a list the person edits,
- * whatever the release press offers.
+ * whatever the release press offers, and the files a running line waits to
+ * take from other work are said above it (D-0201).
  */
 
 export async function releaseView(
@@ -110,12 +111,25 @@ export async function releaseView(
   // folded under it, so the press is not below a page of rondo's own text.
   const named = root === undefined ? "" : firstLine(requestWords([...threads.byId.values()], root));
   if (line.inFlight) {
+    // **What it waits to take** (D-0201 rule 2): said, so nobody presses again.
+    const waiting = [
+      ...new Set(
+        (await ports.store.heldWidenings())
+          .filter((wait) => wait.lineageId === line.lineageId)
+          .flatMap((wait) => wait.paths),
+      ),
+    ].sort();
     return framed(
       <>
         <p class="text-title leading-6 wrap-anywhere" lang="">
           {named}
         </p>
         {note(token === null ? wording.releaseStillOpen : wording.holdsStillOpen)}
+        {waiting.length === 0 ? null : (
+          <p id="holds-waiting" class="text-body leading-5 wrap-anywhere">
+            {wording.holdsWaiting(waiting)}
+          </p>
+        )}
         {holds}
       </>,
     );

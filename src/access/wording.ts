@@ -1361,8 +1361,8 @@ export interface Chrome
   readonly holdsEnded: string;
   /** Over the form of a line still open, in place of {@link releaseStillOpen}. */
   readonly holdsStillOpen: string;
-  /** The files another piece of work keeps, after a refused widening. */
-  readonly othersHold: (paths: readonly string[]) => string;
+  /** Files a running line waits to take from other work, which rondo adds by itself (D-0201 rule 2). */
+  readonly holdsWaiting: (paths: readonly string[]) => string;
   readonly holdsAction: string;
   /**
    * **Ending a lap only a person can end** (rondo#655): stalled, held by a
@@ -1407,8 +1407,6 @@ export interface Chrome
   readonly holdsRefusedPress: string;
   readonly holdsRefusedForm: string;
   readonly holdsRefusedChanged: string;
-  /** Followed by the files other work keeps; the holders are listed under it. */
-  readonly holdsRefusedHeld: string;
   readonly holdsRefusedBusy: string;
   /** Followed by the files the work changed. */
   readonly holdsRefusedKept: string;

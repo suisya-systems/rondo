@@ -1132,7 +1132,9 @@ explanation you pressed on and then answers the gate.`,
   holdsStillOpen:
     "Part of this work is still running or waiting for your review, so its files cannot be " +
     "released yet. You can change which files it keeps below.",
-  othersHold: (paths) => `Files other work keeps: ${filesEn(paths)}`,
+  holdsWaiting: (paths) =>
+    `Waiting for other work to let go of ${filesEn(paths)}: rondo adds them to this work by ` +
+    "itself once they are free, so there is nothing to press again.",
   holdsAction: "Keep these files",
   nextStepEnd:
     "This work has stopped and cannot go on by itself. Only a person can end it; until then it " +
@@ -1196,9 +1198,6 @@ explanation you pressed on and then answers the gate.`,
   holdsRefusedChanged:
     "Nothing was changed: this work changed after the screen was drawn (it reached review, " +
     "was tried again, or its files changed). Go back to see where it stands now.",
-  holdsRefusedHeld:
-    "Nothing was changed: other work keeps files you added, and two pieces of open work never " +
-    "keep the same file.",
   holdsRefusedBusy:
     "Nothing was changed: part of this work is still running, and it may still change the " +
     "files you left out. Leave them out once it stops at review.",

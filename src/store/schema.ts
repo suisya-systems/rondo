@@ -935,6 +935,24 @@ CREATE TABLE IF NOT EXISTS held_start (
   -- row, so a wait that lost it would start the work on another worker.
   worker_provider             TEXT
 );
+
+-- rondo#657, D-0201. A widening that waits for files another open line holds
+-- (D-0073 rule 4.1): from a person's press, or from the gate under the approval
+-- in scope_decision_id (null for a press). paths is canonical JSON, sorted.
+-- The order tick writes the successor claim once no other open line holds
+-- them; settled_at_ms is null while it waits, and outcome is 'applied' or
+-- rondo's own sentence for why it ended with nothing written.
+CREATE TABLE IF NOT EXISTS held_widening (
+  widening_id                 TEXT    PRIMARY KEY,
+  lineage_id                  TEXT    NOT NULL,
+  paths                       TEXT    NOT NULL,
+  author_kind                 TEXT    NOT NULL CHECK (author_kind IN ('operator', 'drafter')),
+  author_id                   TEXT    NOT NULL,
+  scope_decision_id           TEXT,
+  held_at_ms                  INTEGER NOT NULL,
+  settled_at_ms               INTEGER,
+  outcome                     TEXT
+);
 `;
 
 /**
@@ -1306,6 +1324,13 @@ export const CHANGE_SOURCES = Object.freeze([
     kind: "held_start",
     table: "held_start",
     id: "iteration_id",
+    at: "COALESCE(settled_at_ms, held_at_ms)",
+  },
+  // D-0201: a widening's wait, and its end, which redraws the release screen.
+  {
+    kind: "held_widening",
+    table: "held_widening",
+    id: "widening_id",
     at: "COALESCE(settled_at_ms, held_at_ms)",
   },
 ] as const);

@@ -203,7 +203,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0160 | Claims that let two lines run: a finished line nothing will publish gives its files up, a refused draft is drafted once more, and a start with no drafted claim claims nothing until its gate claims what it changed | accepted, amended |
 | D-0161 | A worker's question is put to the person whether or not its lap committed anything: nothing committed is said on the page, not a reason to drop the question | accepted |
 | D-0162 | The model reviewer's answer is shaped by codex's `--output-schema`, which rondo writes as a file of its own beside the reviewer's empty directory | accepted |
-| D-0163 | A person changes which files an open line keeps: a widening for work still going and never onto another open line's files, a narrowing once nothing of the line can commit and never of a file it changed | accepted |
+| D-0163 | A person changes which files an open line keeps: a widening for work still going and never onto another open line's files, a narrowing once nothing of the line can commit and never of a file it changed | accepted, amended |
 | D-0164 | A gate whose review rounds are spent raises them on the change press itself: one press records the raised approval and asks for the change under it | accepted |
 | D-0165 | `revise --iteration-id` names the lap being revised, as on every other verb, and the second lap is named by `--successor-id`, so a revise works while several iterations are open | accepted |
 | D-0166 | A form the redraw would replace while the person is writing in it is kept: a notice says what changed, nothing is sent until they choose, and an answer is taken from any round of the candidate the flow waits on | accepted |
@@ -233,6 +233,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0196 | A host started with nobody named as the approver lets the page name them, once, and builds its write ports for that name without a restart | accepted |
 | D-0197 | The readers of rondo#659 say when a falsifier is breached: a share of triage's raised-or-decided reading at or above its line over enough to judge, and K4 tripped by one thing asked about twice | accepted |
 | D-0199 | Asking across every request also says the decisions recorded on a request since the person last looked, in the same section as what ended | accepted |
+| D-0201 | A widening onto another open line's files waits as a row and is written by the order tick once they are free, and inside an approved scope the gate widens a drafted claim onto what its lap changed and records it against that approval | accepted |
 
 ---
 
@@ -17840,6 +17841,17 @@ Each dated and additive unless marked, and added with this entry's acceptance:
 > 4.2 are built for a person's press only; the held widening, rule 4.4's drafted rows and the
 > **Scope binding** residual stay open. The table above is not edited.
 
+> **Annotation (2026-10-14, from D-0201).** Added after this entry was accepted, and **not
+> additive** for rule 4.1: the held widening is a `held_widening` row the order tick reads, not a
+> `sequence` with a `paths` member, and its row is written by the tick once `paths_free` reads true
+> rather than in a transaction admitting a held act. Rule 4.4's drafted rows are built for the
+> gate's comparison (rule 5) inside an approved scope, and the **Scope binding** residual is
+> answered by a `scope_consumption` row of kind `claim_move` beside each such row, not by a column
+> on `lane_claim` (`D-0201` rules 4 and 5). Outside every scope nothing is decided, as rule 4.4
+> says. The table above is not edited.
+>
+> - Amends: D-0073 rule 4.1
+
 > **Annotation (2026-10-08, from rondo#280's build, recorded on rondo#287), and not additive for
 > its first point.** Four things the store half (rondo#280) settled that this entry did not record,
 > as the code holds them at `cabb2ba`:
@@ -25084,6 +25096,11 @@ At rondo `2de3190` on **2026-09-26**, by reading `DECISIONS.md`, `git log` and t
 > files is refused and pressed again once they are free), so the **Fold** row's widening held until
 > the paths are free is still open. The rows are unedited.
 
+> **Annotation (2026-10-14, from D-0201).** The **Fold** row's open cell is closed: a widening onto
+> files another open line holds waits as a row and the order tick writes it once they are free,
+> from the person's press or, inside an approved scope, from the gate (`D-0201`); the `revise` that
+> follows is the person's press, as before. The rows are unedited.
+
 3. **rondo#250 is done with this entry.** Its ask, a decision naming the layer and its authorities,
    is answered by `D-0073`, `D-0098` and this table. What is left is building work, and each piece has
    an issue of its own: rondo#282, rondo#284, rondo#286, rondo#287 and rondo#452. The residuals of
@@ -28738,6 +28755,14 @@ rules 3.3, 4.3, 6 and 7, `D-0098` rule 1.5, `D-0105`, `D-0114`, `D-0138` rule 2,
 >
 > - Amends: D-0160 rule 4
 
+> **Annotation (2026-10-14, from D-0201).** Added after this entry was accepted, and **not
+> additive**: rule 4.2's *a drafted claim is not widened by the gate* holds only outside every
+> scope. For a lap admitted under an approval in force, the gate adds the changed paths no other
+> open line holds and keeps the held ones as a wait, each recorded against that approval
+> (`D-0073` rule 4.4, `D-0201` rule 4). Nothing below is edited.
+>
+> - Amends: D-0160 rule 4.2
+
 ### Context
 
 On lap 19 (2026-09-28, `~/rondo-lap-19`), with two lines in parallel (the owner's decision of
@@ -28957,6 +28982,21 @@ findings.
 **Status:** accepted (2026-10-08, rondo#282). Builds `D-0073` rules 4.1 and 4.2 for a person's
 press, and answers its residual **Quiescence**. Refs `D-0073` rules 2.2, 2.6, 3.2, 3.3, 4.3, 4.4
 and 9.2, `D-0098` rule 3.5, `D-0117`, `D-0158` rule 4, `D-0160` rule 4.
+
+> **Annotation (2026-10-14, from D-0201).** Added after this entry was accepted, and **not
+> additive**. Rule 2's refusal onto another open line's files gives way to rule 4.1's held widening,
+> as this entry's falsifier foresaw: the held paths wait as a `held_widening` row, the rest of the
+> move is written at once, and the order tick adds them once they are free, with no second press.
+> Rule 6 no longer holds whole: inside an approved scope the gate writes rule 4.4's drafted rows and
+> records each against its approval (**Scope binding**, `D-0201` rules 4 and 5). The person's own
+> press still names no approval. The option *holding the widening as an order* is taken as a row,
+> not as `D-0067`'s `sequence`, and the costs *a widening onto held files needs a second press* and
+> *a move names no approval* (for rondo's rows) no longer hold. Nothing below is edited.
+>
+> - Amends: D-0163 rule 2
+> - Amends: D-0163 rule 6
+> - Amends: D-0163 "Holding the widening as an order"
+> - Amends: D-0163 "A widening onto held files needs a second press"
 
 ### Context
 
@@ -31665,3 +31705,108 @@ explainer's material. The owner decided to include them.
 
 - **A decision since the mark on a request that moved, missing from the answer**, or one before the
   mark listed in it.
+
+## D-0201 — A widening onto another open line's files waits as a row and is written by the order tick once they are free, and inside an approved scope the gate widens a drafted claim onto what its lap changed and records it against that approval
+
+**Status:** accepted (2026-10-14, rondo#657). Builds `D-0073` rules 4.1 and 4.4 and answers its
+residual **Scope binding**. Amends `D-0073` rule 4.1, `D-0160` rule 4.2 and `D-0163` rules 2 and 6.
+Closes the **Fold** row's open cell of `D-0117`. Refs `D-0064` O1 and P5, `D-0066` rule 3,
+`D-0067` rule 3.4, `D-0073` rules 3.5 and 5, `D-0114`, `D-0158`, rondo#283.
+
+### Context
+
+Goal ledger G3: several lines run side by side on their own. Two places still put a person's press
+between two lines. `D-0163` rule 2 refuses a person's widening onto files another open line holds,
+and the person presses again once they are free. `D-0163` rule 6 left rule 4.4's drafted claim rows
+unbuilt, and `D-0160` rule 4.2 kept rondo#283's closing note: the gate does not widen a drafted claim,
+so a lap that had to change one file more than its plan named leaves its line claiming too little
+until a person widens it, and a third line can be admitted onto that file in the meantime.
+
+### What was measured
+
+At rondo `e086a5a` on **2026-10-14**, by reading the code:
+
+- **Every piece of a held widening but the wait exists.** `moveClaim` tests the added paths against
+  `openLines` under `BEGIN IMMEDIATE` and answers `held` with the holders; nothing is written. The
+  order tick (`D-0127`, `D-0158`) runs each minute and after every publish, merge, release and claim
+  move, reads stored waits (`held_start`) and reads a finished holder's landing (`readHolder`).
+- **`D-0067`'s `sequence` proposal is still unbuilt** (`D-0158`'s measurement stands), so rule
+  4.1's `sequence` with a `paths` member has no row kind to live in.
+- **The gate already has rule 5's two sets.** `compareClaim` splits the changed paths outside the
+  claim into `unheld` and `held`; `claimChanged` writes the unheld ones only for a line that
+  declared nothing (`D-0160`).
+- **An approval is found for any admitted lap.** `scope_consumption` holds one `admission` row per
+  scoped lap (`admittedUnder`), and an act of another kind is a row there with its own subject;
+  budgets count only `admission` rows and lap costs.
+
+### Decision
+
+1. **A widening onto held files waits as a row, `held_widening`** (rule 4.1's held widening). It
+   holds the line, the paths asked for that another open line holds, who asked (the person, or
+   rondo's ledger under an approval) and the approval, and survives a restart because it is a row.
+   It is not `D-0067`'s `sequence`: like `D-0158`'s `held_start`, one row the tick reads does what
+   the order needs here, and the page names the holder. `paths_free` (rule 3.5) is read off the
+   ledger: no other open line's in-force claim overlaps the paths.
+2. **The person's press waits instead of being refused** (`D-0163` rule 2). Of the paths the press
+   adds, those another open line holds are kept as a wait, and the rest of the move -- the paths
+   nobody holds, and a narrowing where rule 3 allows one -- is written at once as before. A move
+   whose claim would be empty without the held paths is refused, since writing it would be a
+   release. The release screen says which files the line waits for and that rondo adds them by
+   itself; there is no second press.
+3. **The order tick writes it** (rule 7). Each pass reads every wait, and in one transaction: a line
+   none of whose laps is in flight takes no more paths (`D-0163` rule 2), and a line that holds
+   nothing (released, or its pull request opened, `D-0114`) has nothing to widen, so both end the
+   wait with that reason; paths the line already covers end it with nothing to write; paths another
+   open line still holds keep it waiting; otherwise one successor row adds them, by whoever asked,
+   with a `held_widening` basis, and the wait is settled `applied`. **A finished holder's landing is
+   read** (`readHolder`, as for a split's `first`) so a wait does not outlast a landing nobody else
+   reads. A wait under an approval no longer in force ends with that reason and writes nothing.
+4. **Inside an approved scope the gate widens a drafted claim** (rules 4.4 and 5). When a lap
+   reaches its gate, the changed paths outside its line's drafted claim are rows rondo writes
+   without asking: those no other open line holds are added at once, and those another line holds
+   become a wait (rule 1), released at `paths_free`. The approval is the one that admitted the
+   gated lap, and it must be in force: approved, not superseded by an approved successor, not
+   expired. **Outside every scope nothing is decided** (rule 4.4): the comparison is reported as
+   before and the person widens from the release screen. A line that declared nothing keeps
+   `D-0160`'s claim, which needs no approval.
+5. **Scope binding: each such row is recorded against its approval.** The claim row carries a
+   `scope_decision` basis naming the approval, and a `scope_consumption` row of act kind
+   `claim_move`, subject the claim row's id, is written in the same transaction, so `D-0066`'s audit
+   reads which approval allowed the move. A wait under an approval records it when it is written.
+   A claim move spends no budget: budgets count admissions and lap costs only.
+6. **Said where the person reads it.** The gate's report lines say what was widened and what waits,
+   naming the approval; the order tick's console says each wait once and each write; the decision
+   log lists both rows.
+
+### Options not taken
+
+- **Build `D-0067`'s `sequence` first.** It answers every kind of order between lines; this needs
+  one, and `D-0158` already chose a row for the same reason.
+- **Hold the whole move while any added path is held.** The narrowing would then have to be read
+  again later, with git, at a moment nobody pressed; writing what can be written now keeps rule 3's
+  test where the person pressed.
+- **Widen at the gate outside a scope too.** Rule 4.4 says nothing is decided outside every scope,
+  and the person's own press is the way there.
+- **A `scope_decision_id` column on `lane_claim`.** The audit already reads `scope_consumption`;
+  one more act kind there keeps one place where acts under an approval are counted.
+
+### What it costs
+
+- **The P5 request report does not list claim moves yet.** Rule 4.4 asks for it; the gate's report
+  lines and the decision log carry them meanwhile.
+- **A wait is not withdrawn by a press.** It ends when its line ends, releases or is covered; a
+  person who no longer wants the files narrows once they have been added.
+- **The gate's wait is for files the lap already changed**, so the collision with their holder is
+  still met and fixed as before (`D-0105`); the wait only stops a third line taking them meanwhile.
+- **A wait whose holder is finished reads that holder's landing every pass**, as a held split part
+  does (`D-0158`'s cost).
+
+### What would falsify it
+
+- **A wait still open while no other open line's claim overlaps its paths and its line is in
+  flight**, after a tick: the tick or `paths_free`'s reading is wrong.
+- **A claim row written by the gate with no `claim_move` row under an approval in force**, or one
+  written for a lap admitted outside every scope.
+- **Two open lines holding one path** after a wait was written: the transaction's test missed it.
+- **People pressing the files again while a wait stands**: the release screen's sentence is not read
+  as a wait.

@@ -86,6 +86,7 @@ export type {
   TransitionOutcome,
 } from "./contract.js";
 export { asRefusal, duplicateReason } from "./contract.js";
+export type { GateWidening } from "./held-widening.js";
 export { iterationStore } from "./iteration.js";
 export { StoreDefect } from "./rows.js";
 export type { StandingPolicyDraft } from "./standing-policy.js";

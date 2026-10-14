@@ -131,6 +131,7 @@ function tick(after: readonly (number | undefined)[], answers: DraftedStartReadi
       return { ok: true, note: "" };
     },
     held: null,
+    widenings: null,
     now: () => 5,
     log: (line) => log.push(line),
   };
@@ -789,6 +790,7 @@ test(
         throw new Error("nothing starts behind a first that did not land");
       },
       held: null,
+      widenings: null,
       now: () => 16_500,
       log: (said) => {
         throw new Error(said);

@@ -2727,7 +2727,6 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         iterationId,
         moved.note,
         moved.paths,
-        moved.holders,
       );
     }
     return c.redirect(viewHref({ kind: "release", iterationId }, tagOf(c)), 303);
@@ -3494,16 +3493,13 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     iterationId: string | null,
     note: string | null = null,
     paths: readonly string[] = [],
-    holders: Started["holders"] = [],
   ) {
     const wording = wordingOf(c);
     return pressRefused(
       c,
       status,
       wording.holdsAction,
-      paths.length === 0
-        ? wording[why]
-        : `${wording[why]} ${why === "holdsRefusedHeld" ? wording.othersHold(paths) : wording.holds(paths)}`,
+      paths.length === 0 ? wording[why] : `${wording[why]} ${wording.holds(paths)}`,
       viewHref(
         iterationId === null || iterationId === ""
           ? { kind: "summary" }
@@ -3512,7 +3508,6 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       ),
       wording.releaseBack,
       note,
-      holders,
     );
   }
 

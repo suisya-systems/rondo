@@ -1,5 +1,6 @@
 import type { AskFrequencyRow } from "./ask-frequency.js";
 import type { DecisionRow } from "./decision-log.js";
+import type { GateWidening, HeldWidening, HeldWideningOutcome } from "./held-widening.js";
 import type {
   AdmissionRefusal,
   AttentionClaim,
@@ -668,8 +669,30 @@ export interface IterationStore {
    * flight and is refused onto a path another open line holds; a narrowing is
    * for a line nothing of which can still commit, and never gives up a path
    * in `changed`. Refused when the line moved under the screen that drew it.
+   * **Paths it adds that another open line holds wait** (D-0201 rule 2): the
+   * rest of the move is written, and those are kept as a `held_widening` row.
    */
   moveClaim(input: LaneMoveInput): Promise<LaneMoveOutcome>;
+  /** The widenings still waiting for another line's files (D-0201), oldest first. Writes nothing. */
+  heldWidenings(): Promise<readonly HeldWidening[]>;
+  /**
+   * Attempt one wait (D-0201 rule 3), re-tested under the write lock: written
+   * as a successor row once no other open line holds its paths, ended where
+   * its line takes no more or its approval is no longer in force.
+   */
+  applyHeldWidening(
+    wideningId: string,
+    nowMs: number,
+  ): Promise<HeldWideningOutcome | { readonly kind: "defect"; readonly reason: string }>;
+  /**
+   * **The gate widens a drafted claim inside an approved scope** (D-0073 rules
+   * 4.4 and 5, D-0201 rule 4): of `paths`, those outside the claim that no
+   * other open line holds are added, and the rest wait, each recorded against
+   * the approval that admitted the lap. Outside every scope, nothing.
+   */
+  widenAtGate(
+    input: LaneCompareInput & { readonly nowMs: number },
+  ): Promise<GateWidening | { readonly kind: "defect"; readonly reason: string }>;
   /**
    * Compare the paths a lap changed with its line's in-force claim (D-0073
    * rule 5): which fall outside it, split into those another open line of the
@@ -926,8 +949,18 @@ export type LaneMoveOutcome =
     }
   /** The line moved under the screen: read it again. */
   | { readonly kind: "stale" }
-  /** A widening onto paths other open lines hold: nothing was written. */
-  | { readonly kind: "held"; readonly holders: readonly LaneHolder[] }
+  /**
+   * Some paths it adds are held by other open lines (D-0201 rule 2): the rest
+   * of the move is written (`added`, `dropped`), and `waiting` waits.
+   */
+  | {
+      readonly kind: "waits";
+      readonly lineageId: string;
+      readonly added: readonly string[];
+      readonly dropped: readonly string[];
+      readonly waiting: readonly string[];
+      readonly holders: readonly LaneHolder[];
+    }
   /** A lap of the line may still commit, so it gives nothing up yet. */
   | { readonly kind: "busy" }
   /** A narrowing would give up paths the line changed. */

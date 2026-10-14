@@ -59,6 +59,8 @@ export interface WebPorts extends InboxReadPorts {
     | "verificationClaimsFor"
     // D-0073 rule 12: what each line holds, and whether its work landed.
     | "laneLedger"
+    // D-0201: the files a line waits to take from other work.
+    | "heldWidenings"
     // D-0098 rule 1: whether a drafted plan's `first` has landed.
     | "landingOf"
     // D-0098 rule 8.6: a closing fix, which the merge press names.

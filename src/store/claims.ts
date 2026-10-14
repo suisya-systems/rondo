@@ -134,8 +134,8 @@ export function claimBases(connection: StoreConnection, claimId: string): unknow
   return row === undefined ? [] : JSON.parse(String(row["bases"]));
 }
 
-/** Write one claim row, its id the lineage's next ordinal. Inside the caller's transaction. */
-export function insertClaim(connection: StoreConnection, write: ClaimWrite, nowMs: number): void {
+/** Write one claim row, its id the lineage's next ordinal, and answer the id. Inside the caller's transaction. */
+export function insertClaim(connection: StoreConnection, write: ClaimWrite, nowMs: number): string {
   const count = Number(
     (
       connection
@@ -143,13 +143,14 @@ export function insertClaim(connection: StoreConnection, write: ClaimWrite, nowM
         .get(write.lineageId) as SqlRow
     )["n"],
   );
+  const claimId = `${write.lineageId}:${String(count + 1)}`;
   connection
     .prepare(
       "INSERT INTO lane_claim (claim_id, lineage_id, repository, paths, supersedes_claim_id, " +
         "author_kind, author_id, bases, created_at_ms, why) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .run(
-      `${write.lineageId}:${String(count + 1)}`,
+      claimId,
       write.lineageId,
       write.repository,
       canonicalJson([...write.paths]),
@@ -160,6 +161,7 @@ export function insertClaim(connection: StoreConnection, write: ClaimWrite, nowM
       nowMs,
       write.why ?? null,
     );
+  return claimId;
 }
 
 /** A lineage tree's laps, root first, or null when the walk passes its bound. */

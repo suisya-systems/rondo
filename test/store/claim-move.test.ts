@@ -1,7 +1,7 @@
 /**
  * A claim widened and narrowed while its line is open (D-0073 rules 4.1 and
  * 4.2, D-0163): one successor row the person writes, a widening only for work
- * still going and never onto another open line's paths, a narrowing only once
+ * still going and onto another open line's paths only as a wait (D-0201), a narrowing only once
  * nothing of the line can still commit and never giving up a changed path.
  */
 import { DatabaseSync } from "node:sqlite";
@@ -122,17 +122,25 @@ test("the arithmetic: a move is what it takes and what it gives up, and nothing 
   expect(quiescent([{ status: "stalled" }])).toBe(false);
 });
 
-test("a running line widens onto a free path as the person's row, and never onto another open line's", async () => {
+test("a running line widens onto a free path as the person's row, and onto another open line's only by waiting", async () => {
   const { store, rows } = fresh();
   await reserved(store, "a", asking(["src/"]));
   await reserved(store, "b", asking(["docs/"]));
   await walk(store, "a", "performing");
 
+  // D-0201 rule 2: the held path waits as a row, and nothing else changed.
   expect(await store.moveClaim(move("a", "a:1", ["src/", "docs/runbook.md"], null))).toEqual({
-    kind: "held",
+    kind: "waits",
+    lineageId: "a",
+    added: [],
+    dropped: [],
+    waiting: ["docs/runbook.md"],
     holders: [{ lineageId: "b", sharedPaths: ["docs/runbook.md"] }],
   });
   expect(rows("a")).toHaveLength(1);
+  expect(await store.heldWidenings()).toMatchObject([
+    { lineageId: "a", paths: ["docs/runbook.md"], authorKind: "operator", scopeDecisionId: null },
+  ]);
 
   expect(await store.moveClaim(move("a", "a:1", ["src/", "lib/"], null))).toEqual({
     kind: "moved",

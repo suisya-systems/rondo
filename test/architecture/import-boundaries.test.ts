@@ -1334,6 +1334,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page-publish-actions.ts": [HUMAN],
   "src/access/page-scope-actions.ts": [HUMAN],
   "src/access/conductor.ts": [DISPATCHER],
+  // D-0201: the gate's report lines about a claim, out of the conductor.
+  "src/access/claim-lines.ts": [DISPATCHER],
   "src/access/console.ts": [HUMAN],
   "src/access/delegation.ts": [RECORD],
   // D-0089's definition of done is part of the wording a worker runs on (D-0064 O3).
@@ -1511,6 +1513,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/store/ask-frequency.ts": [RECORD],
   "src/store/judgement-signals.ts": [RECORD],
   "src/store/iteration.ts": [RECORD],
+  // D-0201: a widening that waits for another line's files.
+  "src/store/held-widening.ts": [RECORD],
   "src/store/lanes.ts": [RECORD],
   "src/store/plan.ts": [RECORD],
   "src/store/records.ts": [RECORD],
