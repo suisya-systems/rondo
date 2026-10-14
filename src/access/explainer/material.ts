@@ -58,6 +58,7 @@ export interface ExplainerPorts {
       | "lastView"
       | "lastActed"
       | "changedSince"
+      | "decisions"
     >;
   /**
    * What the list's *your turn* also reads, for a question across every
@@ -273,6 +274,19 @@ export type ExplainerResult = {
       readonly iterationId: string;
       readonly status: string;
     }
+  /**
+   * A decision recorded on the request since the mark (rondo#656 criterion
+   * 4): an answer to an ask, a gate answer or a held start's verdict, read
+   * off D-0190's reader and resting on its own row.
+   */
+  | {
+      readonly kind: "decision";
+      readonly locator: string;
+      readonly by: "you" | "other" | "rondo";
+      /** The row's `outcome`: `carry_on`, `stop`, `approve`, `revise`, `held`, `started` or `refused`. */
+      readonly outcome: string;
+      readonly option: number | null;
+    }
 );
 
 /** How many results the answer names before it only counts the rest. */
@@ -281,7 +295,18 @@ export const RESULTS_BOUND = 8;
 const RESULTS_WINDOW_MS = 86_400_000;
 
 export const resultLocator = (result: ExplainerResult): string =>
-  result.kind === "lap" ? `iteration:${result.iterationId}` : `message:${result.messageId}`;
+  result.kind === "decision"
+    ? result.locator
+    : result.kind === "lap"
+      ? `iteration:${result.iterationId}`
+      : `message:${result.messageId}`;
+
+/** The decision kinds whose row is a request's own: a thread message, or a lap. */
+const DECISION_ON: Readonly<Record<string, "message" | "iteration">> = {
+  conversation_message: "message",
+  gate_answer: "iteration",
+  held_start: "iteration",
+};
 
 /** The report ids that say a pull request moved, and what each says. */
 const PULL_REPORTS = [
@@ -310,6 +335,16 @@ async function resultsSince(
     fromMs,
     sinceReads(byId, threads.rootOf, actorId, records),
   );
+  // The same window's decisions (D-0190's reader), each under its request.
+  const decided = (await ports.record.decisions(fromMs, false)).flatMap((row) => {
+    const form = DECISION_ON[row.kind];
+    if (form === undefined || row.id === null) return [];
+    const requestId =
+      form === "message"
+        ? threads.rootOf(row.id)
+        : (records.find((r) => r.id === row.id)?.requestMessageId ?? null);
+    return requestId === null ? [] : [{ row, requestId, locator: `${form}:${row.id}` }];
+  });
   const items = reading.moved.flatMap((moved): ExplainerResult[] => {
     const request = {
       messageId: moved.messageId,
@@ -342,6 +377,16 @@ async function resultsSince(
         kind: "lap",
         iterationId,
         status: record.status,
+        request,
+      });
+    }
+    for (const { row, locator } of decided.filter((d) => d.requestId === moved.messageId)) {
+      out.push({
+        kind: "decision",
+        locator,
+        by: row.by === "rondo" ? "rondo" : row.actor === actorId ? "you" : "other",
+        outcome: row.outcome,
+        option: row.option,
         request,
       });
     }

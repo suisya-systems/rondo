@@ -224,13 +224,14 @@ C-NN`, so the spaces can never be read as one.
 | D-0187 | A person's approval at the gate carries the lap to its pull request under a scope that allows it, without a second press, and the page's publish sentences say whether rondo then merges on green | accepted, amended |
 | D-0188 | A request whose only wait is the goal flow's stop says the flow waits, not the request, though it stays under *your turn* | accepted |
 | D-0189 | The secretary-like role rondo#626 asks for is the one `D-0063`, `D-0064`, `D-0067`, `D-0068` and `D-0177` already split across parts: no new role and no wider advisory, the gaps between the parts listed with where each is closed, and a question asked from the new request box answered across every request | accepted, amended |
-| D-0190 | An ask-back's options are stored beside its words and each one is a press, the option pressed is kept on the answer, a stop on the drafter's own ask is not drafted again, and one reader lists every decision the store holds | accepted |
+| D-0190 | An ask-back's options are stored beside its words and each one is a press, the option pressed is kept on the answer, a stop on the drafter's own ask is not drafted again, and one reader lists every decision the store holds | accepted, amended |
 | D-0191 | A request with no template gets a plan rondo assembles and a person approves with one press: the drafter proposes the work and its repository, deterministic code fills every host fact from what setup recorded or wrote, and a store with no plan records the one setup wrote beside it | accepted |
 | D-0192 | An open question of the goal flow is a row under *your turn* in the list, on every view, leading to the questions' form; like a paused flow, it is a row there that is not a request | accepted |
 | D-0193 | Triage raises only the open points that are real decisions: each point says whether it is in dispute, irreversible or against a standing policy, rondo decides the rest as it recommends and writes each one where the person can change it, and the goal flow asks only the raised ones | accepted |
 | D-0194 | The conflict fix of a line started with no claim is started by rondo, once, under an approval that starts work by itself; a try that started nothing is the press again, with why | accepted |
 | D-0195 | A lap only a person can end -- stalled, held by a start that threw, or a row that will not decode -- is ended from the page with their reason, gives back what it held and asks whether to carry on; a lap before its gate whose driver is gone is lost | accepted |
 | D-0196 | A host started with nobody named as the approver lets the page name them, once, and builds its write ports for that name without a restart | accepted |
+| D-0199 | Asking across every request also says the decisions recorded on a request since the person last looked, in the same section as what ended | accepted |
 
 ---
 
@@ -30505,6 +30506,12 @@ rules 2, 3, 4 and 5 (its annotation from this entry). Supersedes nothing. Refs `
 >
 > - Amends: D-0189 rule 5
 
+> **Annotation (2026-10-14, from `D-0199`).** The owner decided: the decisions recorded on a
+> request since the person last looked are in the same section, one line per row. Nothing below
+> is edited.
+>
+> - Amends: D-0189 rule 5
+
 > **Annotation (2026-10-14, from rondo#659).** Added after this entry was accepted, and additive.
 > C4's row *triage puts open points on almost every candidate*, closed by `D-0193`, now has a
 > reader that would show it reopening: `rondo raises [--since TIME]` prints, per triage reading,
@@ -30781,6 +30788,12 @@ Amends `D-0072` rules 1 and 2, `D-0112` rule 4,
 `D-0141` rule 1 and `D-0189` rule 4 (their annotations from this entry). Supersedes nothing. Refs
 `D-0004`, `D-0009`, `D-0032`, `D-0059`, `D-0061`, `D-0064`, `D-0066`, `D-0067`, `D-0071`, `D-0079`,
 `D-0142`, `D-0149`, `D-0168`, `D-0177`.
+
+> **Annotation (2026-10-14, from `D-0199`).** Rule 10.5's "not explainer material" is lifted for
+> the cross-request answer only: it reads this reader for the decisions recorded since the person
+> last looked. There is still no page view of the list. Nothing below is edited.
+>
+> - Amends: D-0190 rule 10
 
 ### Context
 
@@ -31530,3 +31543,45 @@ by hand did not have it.
   environment disagree.
 - **Work started twice after a naming**: a host built for no approver was running something in
   an approver's name.
+
+## D-0199 — Asking across every request also says the decisions recorded on a request since the person last looked, in the same section as what ended
+
+**Status:** accepted (2026-10-14, rondo#656 criterion 4; the owner chose to include them). Amends
+`D-0189` rule 5 and `D-0190` rule 10 (their annotations from this entry). Supersedes nothing. Refs
+`D-0079`, `D-0083` rule 4, `D-0125`.
+
+### Context
+
+rondo#656 added what ended since the person last looked to the cross-request answer, and left its
+criterion 4 -- the decisions -- to the owner, since `D-0190` rule 10.5 keeps its reader out of the
+explainer's material. The owner decided to include them.
+
+### Decision
+
+1. **The same window, the same section.** The answer reads `D-0190`'s reader (without
+   `operator_attention`) from the mark the results read (`lastLooked`, or the last day with no
+   mark), and lists each decision under its request in the results' section, after that request's
+   results, inside the same bound of eight.
+2. **Only the decisions whose row is a request's own**: an answer to an ask (its message, under its
+   thread's request), a gate answer and a held start's verdict (its lap, under the lap's request).
+   Each rests on that row (`message:` or `iteration:`) and names who took it: you, someone else, or
+   rondo (an actor under `rondo/`, as `D-0125`'s gate answers are). The other kinds are left out:
+   their rows are a proposal, a scope, a goal, a policy or a flow's ask rather than one of the
+   request's own, or spending rather than a choice (`scope_consumption`).
+3. **A decision is listed only under a request that moved** in the empty centre's own reading, so
+   the page and the answer still cannot disagree about which requests moved.
+4. Still deterministic and free (`D-0189` rule 5.3); the wording is in both catalogues (`D-0079`).
+
+### What it costs
+
+- **The person's own presses rarely show.** The mark is one past their last press, so a decision
+  they took on the page is before it; what shows is someone else's, rondo's, or theirs within the
+  last day when there is no mark.
+- **Approvals of a split or a scope are not listed** (`human_decision`, `scope_decision`): their
+  rows name a proposal or a scope, not a request, and resolving that is a read the answer does not
+  make yet.
+
+### What would falsify it
+
+- **A decision since the mark on a request that moved, missing from the answer**, or one before the
+  mark listed in it.

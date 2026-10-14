@@ -460,13 +460,15 @@ function resultClaims(material: ExplainerMaterial, words: Chrome): Claim[] {
     const value =
       result.kind === "report"
         ? words.explainReported
-        : result.kind === "lap"
-          ? words.explainLapEnded(result.status)
-          : {
-              opened: words.explainOpened,
-              merged: words.rowMerged,
-              closed: words.rowClosed,
-            }[result.kind](words.pullRequest(result.number));
+        : result.kind === "decision"
+          ? words.explainDecided(result.by, result.outcome, result.option)
+          : result.kind === "lap"
+            ? words.explainLapEnded(result.status)
+            : {
+                opened: words.explainOpened,
+                merged: words.rowMerged,
+                closed: words.rowClosed,
+              }[result.kind](words.pullRequest(result.number));
     return [
       {
         label: words.explainRequestQuoted(result.request.title.replace(/[.!?。！？]+$/u, "")),

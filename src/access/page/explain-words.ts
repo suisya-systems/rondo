@@ -47,6 +47,15 @@ export interface ExplainWords {
   /** A try that ended, by its status (`closed`, `failed`, `abandoned`). */
   readonly explainLapEnded: (status: string) => string;
   readonly explainReported: string;
+  /**
+   * A decision on the request (rondo#656 criterion 4): who took it, and its
+   * row's outcome, with the 0-based option an answer pressed.
+   */
+  readonly explainDecided: (
+    by: "you" | "other" | "rondo",
+    outcome: string,
+    option: number | null,
+  ) => string;
   /** Why no model was asked: the approval in force has expired. */
   readonly explainExpired: string;
   /** Why no model was asked: less left than one answer may cost. */
@@ -136,6 +145,24 @@ export const EXPLAIN_EN: ExplainWords = Object.freeze({
         ? "a try was abandoned"
         : "a try was closed",
   explainReported: "its report is ready to read",
+  explainDecided: (by, outcome, option) =>
+    `${{ you: "you", other: "someone else", rondo: "rondo" }[by]} ${
+      outcome === "carry_on"
+        ? option === null
+          ? "answered: carry on"
+          : `answered with option ${String(option + 1)}`
+        : outcome === "stop"
+          ? "answered: stop"
+          : outcome === "approve"
+            ? "approved at the gate"
+            : outcome === "revise"
+              ? "asked for changes at the gate"
+              : outcome === "started"
+                ? "let a held start begin"
+                : outcome === "refused"
+                  ? "refused a held start"
+                  : "held a start"
+    }`,
   explainExpired: "No model was asked: the approval for this request has expired.",
   explainTooLittleLeft: (left, cap) =>
     `No model was asked: the approval has $${left} left, less than the $${cap} an answer may cost.`,
@@ -212,6 +239,24 @@ export const EXPLAIN_JA: ExplainWords = Object.freeze({
         ? "作業が途中で打ち切られました"
         : "作業が閉じられました",
   explainReported: "報告が読めるようになりました",
+  explainDecided: (by, outcome, option) =>
+    `${{ you: "あなた", other: "ほかの人", rondo: "rondo" }[by]}が${
+      outcome === "carry_on"
+        ? option === null
+          ? "「続ける」と答えました"
+          : `選択肢 ${String(option + 1)} を選びました`
+        : outcome === "stop"
+          ? "「止める」と答えました"
+          : outcome === "approve"
+            ? "ゲートで承認しました"
+            : outcome === "revise"
+              ? "ゲートで修正を求めました"
+              : outcome === "started"
+                ? "保留していた開始を進めました"
+                : outcome === "refused"
+                  ? "保留していた開始を断りました"
+                  : "開始を保留しました"
+    }`,
   explainExpired:
     "この依頼の承認は期限が切れているため、rondo の記録にあることだけを回答しています。承認し直すと、次の質問から詳しく回答します。",
   explainTooLittleLeft: (left, cap) =>

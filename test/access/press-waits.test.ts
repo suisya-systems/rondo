@@ -124,8 +124,13 @@ test("asked across every request, rondo names the press where the list does (D-0
   await openRequest(world, "req-1", "Do owner/other#12.");
   await openRequest(world, "question-across", "What is waiting on me?");
   const waits = async (unheld: (id: string) => Promise<boolean>) =>
-    (await gatherExplainerMaterial({ ...portsOver(world), unheld }, "question-across", 3_000))
-      .waits;
+    (
+      await gatherExplainerMaterial(
+        { ...portsOver(world), record: world.record, unheld },
+        "question-across",
+        3_000,
+      )
+    ).waits;
   expect(await waits(async (id) => await Promise.resolve(id === "req-1"))).toEqual([
     {
       kind: "press",
