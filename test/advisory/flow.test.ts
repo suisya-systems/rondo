@@ -38,7 +38,7 @@ const triage = (ranked: Ranked[], unavailable: string | null = null): TriagePayl
   goalId: "goal-1",
   ranked,
   withheld: [],
-  read: { issues: ranked.length, stopped: 0, unlapped: 0 },
+  read: { issues: ranked.length, stopped: 0, unlapped: 0, residuals: 0 },
   unavailable,
 });
 

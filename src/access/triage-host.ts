@@ -16,10 +16,10 @@
  * the operator's `gh`, and the one write is a proposal row in rondo's store.
  *
  * What it reads, of point 1 (b)'s list: the repository's open issues, a
- * request whose latest try stopped or failed and was not asked again, and a
- * request no lap was ever started for whose thread has gone quiet (rondo#658).
- * The residuals of rondo's decisions and what rondo decided without asking are
- * not read yet (rondo#658 names them).
+ * request whose latest try stopped or failed and was not asked again, a
+ * request no lap was ever started for whose thread has gone quiet, and the
+ * accepted decision entries whose residuals are still open (rondo#658). What
+ * rondo decided without asking is not read yet (rondo#658 names it).
  */
 import {
   type Judged,
@@ -38,7 +38,7 @@ import {
 import { drafterRow } from "../continuo/roles.js";
 import { asksForWork, type IterationRecord, type JsonRecord } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
-import type { CommandOutcome, runDrafter } from "./forge.js";
+import { type CommandOutcome, queryFailure, runCommand, type runDrafter } from "./forge.js";
 import { hostFailure } from "./host-failure.js";
 import { workRepository } from "./issue-read.js";
 
@@ -85,6 +85,13 @@ export interface TriageHostPorts {
     readonly host: string | null;
     readonly repo: string;
   }) => Promise<CommandOutcome>;
+  /** Each repository's decision record path, where a setup plan names one (D-0098 rule 3). */
+  readonly decisionRecords?: () => Promise<ReadonlyMap<string, string>>;
+  readonly readDecisionRecord?: (request: {
+    readonly host: string | null;
+    readonly repo: string;
+    readonly path: string;
+  }) => Promise<DecisionRecordRead>;
   readonly runDrafter: typeof runDrafter;
   /** The forge host for `--hostname`, or null. */
   readonly forgeHost: string | null;
@@ -152,6 +159,7 @@ async function pass(
   const latest = new Map((await ports.record.latestTriage()).map((row) => [row.repository, row]));
   const declines = await ports.record.triageDeclines();
   const own = await ownRecord(ports, repositories);
+  const records = (await ports.decisionRecords?.()) ?? new Map<string, string>();
   // D-0193 rule 2: whole, by id, so a point can be raised against one.
   const policies = ((await ports.record.standingPolicies?.()) ?? []).map((policy) => ({
     id: policy.policyId,
@@ -174,7 +182,29 @@ async function pass(
         );
         continue;
       }
-      issues = { atMs: nowMs, issues: parsed };
+      // The record is read on the issues' clock: a failed read is not "no
+      // residuals", which would re-rank over the rest.
+      const path = records.get(repository);
+      const record =
+        path === undefined || ports.readDecisionRecord === undefined
+          ? ({ kind: "none" } as const)
+          : await ports.readDecisionRecord({ host: ports.forgeHost, repo: repository, path });
+      if (record.kind === "undetermined") {
+        ports.log(
+          `triage   ${repository}: the decision record could not be read (${record.reason}); ` +
+            "read again on the next scan",
+        );
+        continue;
+      }
+      issues = {
+        atMs: nowMs,
+        issues: [
+          ...parsed,
+          ...(record.kind === "read" && path !== undefined
+            ? decisionResiduals(repository, path, record.commit, record.text)
+            : []),
+        ],
+      };
       listed.set(repository, issues);
     }
     const material: TriageMaterial = {
@@ -182,9 +212,10 @@ async function pass(
       goalId: goal.goalId,
       clauses: goal.clauses,
       candidates: [
-        ...issues.issues,
+        ...issues.issues.filter((one) => one.source.form === "issue"),
         ...(own.stopped.get(repository) ?? []),
         ...(own.unlapped.get(repository) ?? []),
+        ...issues.issues.filter((one) => one.source.form === "residual"),
       ],
       putAside: [
         ...new Set(
@@ -356,6 +387,140 @@ export function openIssues(repository: string, read: CommandOutcome): TriageCand
     });
   }
   return issues;
+}
+
+/** How long one read of the record may take; nothing waits on it. */
+const RECORD_READ_TIMEOUT_MS = 60_000;
+
+/** What {@link readDecisionRecord} found on the forge's default branch. */
+export type DecisionRecordRead =
+  | { readonly kind: "read"; readonly commit: string; readonly text: string }
+  /** No commit on the default branch has touched the path: nothing recorded yet. */
+  | { readonly kind: "none" }
+  | { readonly kind: "undetermined"; readonly reason: string };
+
+/**
+ * One repository's decision record for triage (rondo#658): the last commit on
+ * the default branch that touched it, and the file at that commit. The commit
+ * is the one a locator names (D-0032 rule 2), and it moves only when the record
+ * does, so a merge elsewhere does not re-rank. A read through the operator's
+ * own `gh`, as `listOpenIssues` is.
+ */
+export async function readDecisionRecord(request: {
+  readonly host: string | null;
+  readonly repo: string;
+  readonly path: string;
+}): Promise<DecisionRecordRead> {
+  const host = request.host === null ? [] : ["--hostname", request.host];
+  const last = await runCommand(
+    "gh",
+    [
+      "api",
+      ...host,
+      `repos/${request.repo}/commits?path=${encodeURIComponent(request.path)}&per_page=1`,
+      "--jq",
+      ".[0].sha // empty",
+    ],
+    RECORD_READ_TIMEOUT_MS,
+  );
+  const lastFailure = queryFailure(last);
+  if (lastFailure !== null) {
+    return { kind: "undetermined", reason: lastFailure };
+  }
+  const commit = last.stdout.trim();
+  if (commit === "") {
+    return { kind: "none" };
+  }
+  const file = await runCommand(
+    "gh",
+    [
+      "api",
+      ...host,
+      "-H",
+      "Accept: application/vnd.github.raw+json",
+      `repos/${request.repo}/contents/${request.path.split("/").map(encodeURIComponent).join("/")}?ref=${commit}`,
+    ],
+    RECORD_READ_TIMEOUT_MS,
+  );
+  const fileFailure = queryFailure(file);
+  return fileFailure === null
+    ? { kind: "read", commit, text: file.stdout }
+    : { kind: "undetermined", reason: fileFailure };
+}
+
+/**
+ * The accepted entries of a decision record whose residual tables still hold
+ * open rows, one candidate per entry (rondo#658; the owner's option (a)): a
+ * table row under a `### Residuals` heading, past its header and separator,
+ * is open unless it says **answered**, as rondo#703 marked one. A superseded
+ * entry is not read, nor a residual written as a list rather than a table.
+ *
+ * Its basis is the record at `commit`, from the first open row to the last
+ * (D-0032 rule 2); its title is the entry and each open row's first cell, so
+ * an edited row moves the digest.
+ */
+export function decisionResiduals(
+  repository: string,
+  path: string,
+  commit: string,
+  text: string,
+): TriageCandidate[] {
+  const found: TriageCandidate[] = [];
+  let entry: { id: string; accepted: boolean | null; rows: { at: number; cell: string }[] } | null =
+    null;
+  let inResiduals = false;
+  let tableRow = 0;
+  const close = () => {
+    const rows = entry?.accepted === true ? entry.rows : [];
+    const first = rows[0];
+    const last = rows.at(-1);
+    if (entry !== null && first !== undefined && last !== undefined) {
+      found.push({
+        key: `residual:${entry.id}`,
+        source: {
+          form: "residual",
+          repository,
+          path,
+          commit,
+          entry: entry.id,
+          lines: { start: first.at, end: last.at },
+        },
+        title: `${entry.id} residuals: ${rows.map((row) => row.cell).join("; ")}`,
+        labels: [],
+      });
+    }
+  };
+  text.split("\n").forEach((line, at) => {
+    const heading = /^## (D-\d+)\b/.exec(line);
+    if (heading !== null || line.startsWith("## ")) {
+      close();
+      entry = heading === null ? null : { id: heading[1] ?? "", accepted: null, rows: [] };
+      inResiduals = false;
+      return;
+    }
+    if (entry === null) {
+      return;
+    }
+    if (entry.accepted === null && line.startsWith("**Status:**")) {
+      entry.accepted = /^\*\*Status:\*\*\s*accepted\b/.test(line);
+    }
+    if (line.startsWith("### ")) {
+      inResiduals = /^### Residuals\b/.test(line);
+      tableRow = 0;
+      return;
+    }
+    if (!inResiduals || !line.startsWith("|")) {
+      tableRow = 0;
+      return;
+    }
+    tableRow += 1;
+    // The first two lines of a table are its header and separator.
+    if (tableRow > 2 && !line.includes("**answered**")) {
+      entry.rows.push({ at: at + 1, cell: line.split("|")[1]?.trim() ?? "" });
+    }
+  });
+  close();
+  return found;
 }
 
 /**

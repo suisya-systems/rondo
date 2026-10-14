@@ -30,11 +30,27 @@ export type TriageSource =
   /** A request whose latest try stopped or failed and was not asked again. */
   | { readonly form: "stopped"; readonly iterationId: string; readonly requestMessageId: string }
   /** A request no lap was ever started for, whose thread has gone quiet (rondo#658). */
-  | { readonly form: "unlapped"; readonly requestMessageId: string };
+  | { readonly form: "unlapped"; readonly requestMessageId: string }
+  /**
+   * An accepted decision entry whose residual table still holds rows nobody
+   * marked answered (rondo#658): the record's `(path, commit, line range)`,
+   * the rows from first to last open one.
+   */
+  | {
+      readonly form: "residual";
+      readonly repository: string;
+      readonly path: string;
+      readonly commit: string;
+      readonly entry: string;
+      readonly lines: { readonly start: number; readonly end: number };
+    };
 
 /** One thing that might be worth asking for, as the host found it. */
 export interface TriageCandidate {
-  /** Stable across readings: `issue:OWNER/NAME#N`, `stopped:<request id>` or `unlapped:<request id>`. */
+  /**
+   * Stable across readings: `issue:OWNER/NAME#N`, `stopped:<request id>`,
+   * `unlapped:<request id>` or `residual:D-NNNN`.
+   */
   readonly key: string;
   readonly source: TriageSource;
   /** Its title, or the request's first line. */
@@ -48,7 +64,10 @@ export interface TriageMaterial {
   readonly repository: string;
   readonly goalId: string;
   readonly clauses: readonly GoalClause[];
-  /** In the order they were found: issues, then stopped work, then requests without a lap. */
+  /**
+   * In the order they were found: issues, then stopped work, then requests
+   * without a lap, then decision residuals.
+   */
   readonly candidates: readonly TriageCandidate[];
   /** Candidate keys a person put aside with *not now*: withheld, and not handed to the model. */
   readonly putAside: readonly string[];
@@ -117,7 +136,12 @@ export interface TriagePayload {
   readonly ranked: readonly Ranked[];
   readonly withheld: readonly { readonly key: string; readonly why: WithheldWhy }[];
   /** What was read, for the line that tells a quiet triage from one that is not running. */
-  readonly read: { readonly issues: number; readonly stopped: number; readonly unlapped: number };
+  readonly read: {
+    readonly issues: number;
+    readonly stopped: number;
+    readonly unlapped: number;
+    readonly residuals: number;
+  };
   /** Why the reading came to nothing, or null. */
   readonly unavailable: string | null;
 }
@@ -420,6 +444,8 @@ function header(material: TriageMaterial) {
         .length,
       unlapped: material.candidates.filter((candidate) => candidate.source.form === "unlapped")
         .length,
+      residuals: material.candidates.filter((candidate) => candidate.source.form === "residual")
+        .length,
     },
   };
 }
@@ -450,6 +476,7 @@ export function triagePayloadDocument(payload: TriagePayload): JsonRecord {
       issues: payload.read.issues,
       stopped: payload.read.stopped,
       unlapped: payload.read.unlapped,
+      residuals: payload.read.residuals,
     },
     unavailable: payload.unavailable,
   };
@@ -533,26 +560,39 @@ export function readTriagePayload(document: JsonRecord): TriagePayload | null {
         ? [{ key: one["key"], why: one["why"] as WithheldWhy }]
         : [],
     ),
-    // A row written before rondo#658 read no request without a lap.
+    // A row written before rondo#658 read no request without a lap and no residual.
     read: {
       issues: Number(read["issues"] ?? 0),
       stopped: Number(read["stopped"] ?? 0),
       unlapped: Number(read["unlapped"] ?? 0),
+      residuals: Number(read["residuals"] ?? 0),
     },
     unavailable: (document["unavailable"] as string | null) ?? null,
   };
 }
 
 function sourceDocument(source: TriageSource): JsonRecord {
-  return source.form === "issue"
-    ? { form: "issue", repository: source.repository, number: source.number }
-    : source.form === "unlapped"
-      ? { form: "unlapped", request_message_id: source.requestMessageId }
-      : {
-          form: "stopped",
-          iteration_id: source.iterationId,
-          request_message_id: source.requestMessageId,
-        };
+  switch (source.form) {
+    case "issue":
+      return { form: "issue", repository: source.repository, number: source.number };
+    case "unlapped":
+      return { form: "unlapped", request_message_id: source.requestMessageId };
+    case "residual":
+      return {
+        form: "residual",
+        repository: source.repository,
+        path: source.path,
+        commit: source.commit,
+        entry: source.entry,
+        lines: { start: source.lines.start, end: source.lines.end },
+      };
+    case "stopped":
+      return {
+        form: "stopped",
+        iteration_id: source.iterationId,
+        request_message_id: source.requestMessageId,
+      };
+  }
 }
 
 function readSource(value: JsonValue | undefined): TriageSource | null {
@@ -579,6 +619,26 @@ function readSource(value: JsonValue | undefined): TriageSource | null {
   }
   if (value["form"] === "unlapped" && typeof value["request_message_id"] === "string") {
     return { form: "unlapped", requestMessageId: value["request_message_id"] };
+  }
+  const lines = value["lines"];
+  if (
+    value["form"] === "residual" &&
+    typeof value["repository"] === "string" &&
+    typeof value["path"] === "string" &&
+    typeof value["commit"] === "string" &&
+    typeof value["entry"] === "string" &&
+    isRecord(lines) &&
+    typeof lines["start"] === "number" &&
+    typeof lines["end"] === "number"
+  ) {
+    return {
+      form: "residual",
+      repository: value["repository"],
+      path: value["path"],
+      commit: value["commit"],
+      entry: value["entry"],
+      lines: { start: lines["start"], end: lines["end"] },
+    };
   }
   return null;
 }

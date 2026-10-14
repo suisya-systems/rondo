@@ -310,7 +310,7 @@ export type PushTargetInspection =
 const PREFLIGHT_TIMEOUT_MS = 30_000;
 
 /** Why one preflight query did not answer, or null when it did. */
-function queryFailure(outcome: CommandOutcome): string | null {
+export function queryFailure(outcome: CommandOutcome): string | null {
   if (outcome.spawnError !== null) {
     return `${outcome.commandLine}: ${outcome.spawnError}`;
   }

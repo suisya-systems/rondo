@@ -122,7 +122,7 @@ async function world(
             goalId: "g-1",
             ranked: rows,
             withheld: [],
-            read: { issues: rows.length, stopped: 0, unlapped: 0 },
+            read: { issues: rows.length, stopped: 0, unlapped: 0, residuals: 0 },
             unavailable: null,
           }),
           snapshot: { cost_usd: costUsd },

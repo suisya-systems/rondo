@@ -8,12 +8,18 @@
  * now* is kept beside the proposal, is refused for a candidate the proposal
  * did not name, and takes that candidate out of the next reading; a failed
  * forge read writes no row, because "no issues" would propose from the rest;
- * a request no lap was started for is read once its thread has gone quiet.
+ * a request no lap was started for is read once its thread has gone quiet; an
+ * accepted decision entry with open residual rows is one candidate.
  */
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 import type { CommandOutcome } from "../../src/access/forge.js";
-import { type TriageHostPorts, triageHost } from "../../src/access/triage-host.js";
+import {
+  type DecisionRecordRead,
+  decisionResiduals,
+  type TriageHostPorts,
+  triageHost,
+} from "../../src/access/triage-host.js";
 import { readTriagePayload } from "../../src/advisory/triage.js";
 import { advisoryRecord } from "../../src/store/sqlite.js";
 
@@ -41,6 +47,7 @@ function world(
   },
   /** The request ids the store holds a lap for. */
   lapped: readonly string[] = [],
+  extra: Partial<TriageHostPorts> = {},
 ) {
   const clock = { ms: 10_000 };
   const record = advisoryRecord(new DatabaseSync(":memory:"));
@@ -96,6 +103,7 @@ function world(
     },
     language: drafting.language === "" ? null : drafting.language,
     log: (line) => logged.push(line),
+    ...extra,
   };
   return { record, host: triageHost(ports), handed, logged, clock };
 }
@@ -320,7 +328,7 @@ test("a request no lap was started for is read once its thread is a day quiet (r
   expect(w.handed[1]).toContain("key: unlapped:m-1\n  title: Make setup run without a shell");
   const [row] = await w.record.latestTriage();
   const payload = readTriagePayload(row?.payload ?? {});
-  expect(payload?.read).toEqual({ issues: 1, stopped: 0, unlapped: 1 });
+  expect(payload?.read).toEqual({ issues: 1, stopped: 0, unlapped: 1, residuals: 0 });
   // Its basis is the request itself, a locator a person can follow (D-0032 rule 2).
   expect(payload?.ranked.find((one) => one.key === "unlapped:m-1")?.source).toEqual({
     form: "unlapped",
@@ -373,5 +381,129 @@ test("a request with a lap, one a person stopped and did not ask again, or one s
     issues: 0,
     stopped: 0,
     unlapped: 1,
+    residuals: 0,
   });
+});
+
+const RECORD = [
+  "# Decisions",
+  "",
+  "| ID | Title | Status |",
+  "|---|---|---|",
+  "| D-0001 | first | accepted |",
+  "",
+  "## D-0001 — The first",
+  "",
+  "**Status:** accepted (2026-09-01).",
+  "",
+  "### Residuals, with who decides",
+  "",
+  "| Residual | Why not here | Who decides |",
+  "|---|---|---|",
+  "| A reader for terminal rows | nothing asks yet | a later entry |",
+  "| An allocator | done since | the gate *(Annotation:* **answered** — by rondo#1.*)* |",
+  "| `--paginate` on the issue list | one page holds them | whoever has more |",
+  "",
+  "### What would falsify it",
+  "",
+  "| Falsifier | Read by |",
+  "|---|---|",
+  "| a person asking twice | nobody |",
+  "",
+  "## D-0002 — Superseded",
+  "",
+  "**Status:** superseded by D-0003 (2026-09-02).",
+  "",
+  "### Residuals",
+  "",
+  "| Residual | Who |",
+  "|---|---|",
+  "| left over | a later entry |",
+  "",
+  "## D-0003 — All answered, or listed",
+  "",
+  "**Status:** accepted (2026-09-03).",
+  "",
+  "### Residuals",
+  "",
+  "| Residual | Who |",
+  "|---|---|",
+  "| gone | the gate **answered** |",
+  "",
+  "- a residual written as a list item",
+  "",
+  "## Appendix",
+  "",
+  "### Residuals",
+  "",
+  "| Residual | Who |",
+  "|---|---|",
+  "| not an entry's | nobody |",
+].join("\n");
+
+test("an accepted entry with open residual rows is one candidate, its basis the rows' lines at the commit (rondo#658)", () => {
+  expect(decisionResiduals(REPO, "DECISIONS.md", "c0ffee", RECORD)).toEqual([
+    {
+      key: "residual:D-0001",
+      source: {
+        form: "residual",
+        repository: REPO,
+        path: "DECISIONS.md",
+        commit: "c0ffee",
+        entry: "D-0001",
+        lines: { start: 15, end: 17 },
+      },
+      title: "D-0001 residuals: A reader for terminal rows; `--paginate` on the issue list",
+      labels: [],
+    },
+  ]);
+});
+
+test("the residuals of the record a setup names are read, counted and re-read when the record moves (rondo#658)", async () => {
+  let record: DecisionRecordRead = { kind: "read", commit: "c0ffee", text: RECORD };
+  const asked: { path: string; repo: string }[] = [];
+  const w = world(
+    () => listed([{ number: 7, title: "setup asks for a shell", labels: [] }]),
+    "answered",
+    undefined,
+    [],
+    {
+      decisionRecords: async () => await Promise.resolve(new Map([[REPO, "DECISIONS.md"]])),
+      readDecisionRecord: async (request) => {
+        asked.push({ path: request.path, repo: request.repo });
+        return await Promise.resolve(record);
+      },
+    },
+  );
+  expect(await w.record.recordGoal(goal)).toEqual({ kind: "recorded" });
+  w.host.kick();
+  await w.host.idle();
+  expect(asked).toEqual([{ path: "DECISIONS.md", repo: REPO }]);
+  expect(w.handed[0]).toContain(
+    "key: residual:D-0001\n  title: D-0001 residuals: A reader for terminal rows",
+  );
+  const [row] = await w.record.latestTriage();
+  const payload = readTriagePayload(row?.payload ?? {});
+  expect(payload?.read).toEqual({ issues: 1, stopped: 0, unlapped: 0, residuals: 1 });
+  expect(payload?.ranked.find((one) => one.key === "residual:D-0001")?.source).toMatchObject({
+    form: "residual",
+    commit: "c0ffee",
+    lines: { start: 15, end: 17 },
+  });
+
+  // The record moves: a fresh reading re-ranks over it.
+  record = { kind: "read", commit: "beef", text: RECORD.replace("| `--paginate`", "| `--all`") };
+  w.host.kick(true);
+  await w.host.idle();
+  expect(w.handed).toHaveLength(2);
+  const [moved] = await w.record.latestTriage();
+  expect(moved?.proposalId).not.toBe(row?.proposalId);
+
+  // A record that will not read writes nothing, rather than ranking without it.
+  record = { kind: "undetermined", reason: "gh api exited 1" };
+  w.host.kick(true);
+  await w.host.idle();
+  expect(w.handed).toHaveLength(2);
+  expect((await w.record.latestTriage())[0]?.proposalId).toBe(moved?.proposalId);
+  expect(w.logged.join("\n")).toContain("the decision record could not be read (gh api exited 1)");
 });
