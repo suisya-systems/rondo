@@ -31843,8 +31843,9 @@ as a page press with a confirmation step, and to leave committing and excluding 
    paths are removed, tracked changes go back to what is checked out, ignored paths stay (no `-x`).
    `clean` runs first so it reads the same ignore rules the list was read with: a `.gitignore` the
    changes edited is put back only after it, and what that edit ignored is never deleted unseen.
-   Where an ignored file sits inside a folder that stands where the branch has a file, putting the
-   file back would delete it, so the press refuses before anything runs and names those files.
+   Where an ignored file sits at a path the branch holds, at a folder the branch has files in, or
+   inside a folder that stands where the branch has a file, putting the branch's version back would
+   delete it, so the press refuses before anything runs and names those files.
    The lap is closed, so no worker writes in the workspace between the read and the discard.
 5. **The press lands back on the screen, which says what happened**: that the changes are gone and
    the workspace matches the branch, only where it now reads clean, and the way back to publish.

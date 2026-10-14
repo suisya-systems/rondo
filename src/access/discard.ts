@@ -67,8 +67,9 @@ export function discardableOf(record: IterationRecord, shown: PublishShown): Dis
  * repository's own statement that they are not work. Null when both ran.
  *
  * **Refused before anything runs where an ignored file is in the way** (Codex
- * round 2): one inside a folder that stands where the branch has a file would
- * be deleted when that file comes back, and it was never on the list.
+ * rounds 2 and 3): one at a path the branch holds, at a folder the branch has
+ * files in, or inside a folder standing where the branch has a file, would be
+ * deleted when the branch's version comes back, and it was never on the list.
  *
  * **`clean` first, under the ignore rules the list was read with** (Codex
  * round 1). Reset first would put back a `.gitignore` the changes edited, and
@@ -94,12 +95,17 @@ export async function discardUncommitted(
       note: typeof ignored === "string" ? ignored : `${branch}`,
     };
   }
-  const files = new Set(branch);
-  const inTheWay = ignored.filter((path) =>
+  // Every path the branch holds and every folder above one: an ignored file
+  // at one of them, or below a file of the branch, is where `reset` writes.
+  const ancestors = (path: string) =>
     path
       .split("/")
       .slice(0, -1)
-      .some((_, at, parts) => files.has(parts.slice(0, at + 1).join("/"))),
+      .map((_, at, parts) => parts.slice(0, at + 1).join("/"));
+  const files = new Set(branch);
+  const taken = new Set([...branch, ...branch.flatMap(ancestors)]);
+  const inTheWay = ignored.filter(
+    (path) => taken.has(path) || ancestors(path).some((above) => files.has(above)),
   );
   if (inTheWay.length > 0) {
     return { why: "discardRefusedIgnored", note: inTheWay.join("\n") };

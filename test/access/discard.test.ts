@@ -104,6 +104,33 @@ test("discarding puts tracked files back, removes untracked ones and leaves igno
   expect(existsSync(join(repo, "kept.txt", "loose.txt"))).toBe(true);
 });
 
+test("an ignored file at a path the branch holds, or at a folder it has files in, stops the discard", async () => {
+  // At the path itself: a tracked file taken out of the index and now ignored.
+  const same = dirtyRepository();
+  git(same, "add", "-f", "ignored.log");
+  git(same, "commit", "--quiet", "-m", "track it");
+  git(same, "rm", "--quiet", "--cached", "ignored.log");
+  writeFileSync(join(same, "ignored.log"), "local edits\n");
+  expect(await discardUncommitted(same)).toEqual({
+    why: "discardRefusedIgnored",
+    note: "ignored.log",
+  });
+  expect(readFileSync(join(same, "ignored.log"), "utf8")).toBe("local edits\n");
+
+  // At a folder the branch has files in: the folder replaced by an ignored file.
+  const above = dirtyRepository();
+  mkdirSync(join(above, "docs"));
+  writeFileSync(join(above, "docs", "a.txt"), "tracked\n");
+  git(above, "add", "docs");
+  git(above, "commit", "--quiet", "-m", "docs");
+  git(above, "rm", "--quiet", "-r", "--cached", "docs");
+  rmSync(join(above, "docs"), { recursive: true });
+  writeFileSync(join(above, ".gitignore"), "ignored.log\ndocs\n");
+  writeFileSync(join(above, "docs"), "not shown\n");
+  expect(await discardUncommitted(above)).toEqual({ why: "discardRefusedIgnored", note: "docs" });
+  expect(readFileSync(join(above, "docs"), "utf8")).toBe("not shown\n");
+});
+
 test("the screen lists what will be lost; only a person's press over that list discards it", async () => {
   const repo = dirtyRepository();
   const world = fresh();
