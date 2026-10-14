@@ -94,7 +94,7 @@ import { writeRequestReports } from "./request-report.js";
 import { READING_REMOTE } from "./review.js";
 import { reviseDrafterHost } from "./revise-draft/host.js";
 import { setupPlanFiles } from "./setup-files.js";
-import { triageHost } from "./triage-host.js";
+import { readDecisionRecord, triageHost } from "./triage-host.js";
 import {
   AnswerPort,
   MergePort,
@@ -343,6 +343,22 @@ export async function serveWeb(
     record,
     repositories: triageRepositories,
     listIssues: listOpenIssues,
+    // rondo#658: the residuals of the record the latest setup plan names
+    // (oldest first, so a later plan naming none clears an earlier one).
+    decisionRecords: async () =>
+      new Map(
+        [
+          ...new Map(
+            (await record.setupPlans()).flatMap((setup) => {
+              const planned = readRunPlan(setup.plan);
+              return planned.kind === "planned" && planned.plan.forgeRepository !== null
+                ? [[planned.plan.forgeRepository, planned.plan.decisionRecord] as const]
+                : [];
+            }),
+          ),
+        ].flatMap(([repository, path]) => (path === null ? [] : [[repository, path] as const])),
+      ),
+    readDecisionRecord,
     runDrafter,
     forgeHost: forgeHost(environment),
     now: Date.now,

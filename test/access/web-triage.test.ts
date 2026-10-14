@@ -250,7 +250,7 @@ test("a candidate still mixing scripts is marked on the card, on a runner-up and
     goalId: "g-1",
     ranked: [one(1), one(2)],
     withheld: [],
-    read: { issues: 2, stopped: 0, unlapped: 0 },
+    read: { issues: 2, stopped: 0, unlapped: 0, residuals: 0 },
     unavailable: null,
   };
   const ask = {
@@ -368,7 +368,7 @@ test("an answer is taken from any round of the candidate the flow waits on, and 
           open_points: [],
         })),
         withheld: [],
-        read: { issues: numbers.length, stopped: 0, unlapped: 0 },
+        read: { issues: numbers.length, stopped: 0, unlapped: 0, residuals: 0 },
         unavailable: null,
       },
     },
@@ -436,7 +436,7 @@ test("the card is the candidate the flow asks about, and a candidate put aside l
           goalId: "g-1",
           ranked: [one(534), one(290), one(286)],
           withheld: [],
-          read: { issues: 3, stopped: 0, unlapped: 0 },
+          read: { issues: 3, stopped: 0, unlapped: 0, residuals: 0 },
           unavailable: null,
         },
       ],
@@ -506,7 +506,7 @@ test("beside an ask, the card shows what rondo decided in the asked reading, as 
       },
     ],
     withheld: [],
-    read: { issues: 1, stopped: 0, unlapped: 0 },
+    read: { issues: 1, stopped: 0, unlapped: 0, residuals: 0 },
     unavailable: null,
   });
   const [block] = triageBlocks(
@@ -564,4 +564,42 @@ test("beside an ask, the card shows what rondo decided in the asked reading, as 
   expect(html).not.toContain("jest");
   // The asked point is the form's, not drawn as decided.
   expect(card.slice(0, card.indexOf("</dl>"))).not.toContain("Old flag");
+});
+
+test("a residual candidate's box names the record's lines at its commit (rondo#658)", async () => {
+  const { takenRequest } = await import("../../src/access/page/triage.js");
+  const box = takenRequest(
+    EN,
+    {
+      repository: "o/r",
+      goalId: "goal-1",
+      ranked: [
+        {
+          key: "residual:D-0001",
+          clause: 1,
+          request: "Read terminal rows in o/r",
+          why: "w",
+          openPoints: [],
+          source: {
+            form: "residual",
+            repository: "o/r",
+            path: "DECISIONS.md",
+            commit: "c0ffee0123456789",
+            entry: "D-0001",
+            lines: { start: 15, end: 17 },
+          },
+          title: "D-0001 residuals: a reader",
+          labels: [],
+        },
+      ],
+      withheld: [],
+      read: { issues: 0, stopped: 0, unlapped: 0, residuals: 1 },
+      unavailable: null,
+    },
+    [{ said: "they never open a terminal", unmetIf: "" }],
+    "residual:D-0001",
+  );
+  expect(box).toContain(
+    EN.triageBoxFromResidual("DECISIONS.md D-0001, lines 15-17 at c0ffee012345"),
+  );
 });

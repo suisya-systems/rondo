@@ -14,6 +14,10 @@ export interface TriageSourceWords {
   readonly triageReadIssues: (count: number) => string;
   readonly triageReadStopped: (count: number) => string;
   readonly triageReadUnlapped: (count: number) => string;
+  readonly triageResidual: (entry: string) => string;
+  readonly triageReadResiduals: (count: number) => string;
+  /** The box's line naming the record a residual candidate came from, as `triageBoxFrom` names an issue. */
+  readonly triageBoxFromResidual: (where: string) => string;
 }
 
 export const TRIAGE_SOURCE_EN: TriageSourceWords = {
@@ -27,6 +31,12 @@ export const TRIAGE_SOURCE_EN: TriageSourceWords = {
     count === 1
       ? "1 request whose work never started"
       : `${String(count)} requests whose work never started`,
+  triageResidual: (entry) => `${entry}'s open residuals`,
+  triageReadResiduals: (count) =>
+    count === 1
+      ? "1 decision with open residuals"
+      : `${String(count)} decisions with open residuals`,
+  triageBoxFromResidual: (where) => `From the open residuals at ${where}.`,
 };
 
 export const TRIAGE_SOURCE_JA: TriageSourceWords = {
@@ -36,4 +46,7 @@ export const TRIAGE_SOURCE_JA: TriageSourceWords = {
   triageReadIssues: (count) => `開いているイシュー ${String(count)} 件`,
   triageReadStopped: (count) => `作業が止まった依頼 ${String(count)} 件`,
   triageReadUnlapped: (count) => `作業が始まらなかった依頼 ${String(count)} 件`,
+  triageResidual: (entry) => `${entry} の未解決の残課題`,
+  triageReadResiduals: (count) => `残課題が残る決定 ${String(count)} 件`,
+  triageBoxFromResidual: (where) => `もとにした残課題: ${where}`,
 };

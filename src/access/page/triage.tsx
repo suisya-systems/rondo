@@ -372,6 +372,7 @@ function readLine(wording: Chrome, payload: TriagePayload, row: StoredTriage, no
     ...(payload.read.issues === 0 ? [] : [wording.triageReadIssues(payload.read.issues)]),
     ...(payload.read.stopped === 0 ? [] : [wording.triageReadStopped(payload.read.stopped)]),
     ...(payload.read.unlapped === 0 ? [] : [wording.triageReadUnlapped(payload.read.unlapped)]),
+    ...(payload.read.residuals === 0 ? [] : [wording.triageReadResiduals(payload.read.residuals)]),
   ];
   const cost = row.snapshot["cost_usd"];
   return wording.triageRead(
@@ -409,13 +410,20 @@ function candidateView(
             // repository on another one.
             href: `https://github.com/${ranked.source.repository}/issues/${String(ranked.source.number)}`,
           }
-        : {
-            said: ranked.source.form === "stopped" ? wording.triageStopped : wording.triageUnlapped,
-            href: viewHref(
-              { kind: "thread", messageId: ranked.source.requestMessageId, to: null },
-              wording.lang,
-            ),
-          },
+        : ranked.source.form === "residual"
+          ? {
+              said: wording.triageResidual(ranked.source.entry),
+              // ponytail: github.com only, as the issue's link.
+              href: `https://github.com/${ranked.source.repository}/blob/${ranked.source.commit}/${ranked.source.path.split("/").map(encodeURIComponent).join("/")}#L${String(ranked.source.lines.start)}-L${String(ranked.source.lines.end)}`,
+            }
+          : {
+              said:
+                ranked.source.form === "stopped" ? wording.triageStopped : wording.triageUnlapped,
+              href: viewHref(
+                { kind: "thread", messageId: ranked.source.requestMessageId, to: null },
+                wording.lang,
+              ),
+            },
     openPoints: ranked.openPoints,
     takeHref: `${viewHref(
       { kind: "requests", take: { proposalId, candidate: ranked.key } },
@@ -486,7 +494,14 @@ export function takenRequest(
     // thread (`D-0078`) and the drafter has what the proposal was made from.
     ...(ranked.source.form === "issue"
       ? ["", wording.triageBoxFrom(`${ranked.source.repository}#${String(ranked.source.number)}`)]
-      : []),
+      : ranked.source.form === "residual"
+        ? [
+            "",
+            wording.triageBoxFromResidual(
+              `${ranked.source.path} ${ranked.source.entry}, lines ${String(ranked.source.lines.start)}-${String(ranked.source.lines.end)} at ${ranked.source.commit.slice(0, 12)}`,
+            ),
+          ]
+        : []),
   ].join("\n");
 }
 
