@@ -30,6 +30,7 @@ import {
 } from "./cli.js";
 import type { ParsedCommand } from "./cli-parse.js";
 import { endLost, issuesClosedOver, readHolder } from "./conductor.js";
+import { DiscardPort } from "./discard.js";
 import { draftedStartReadiness } from "./drafted-start.js";
 import { approvedSplits } from "./drafted-view.js";
 import { drafterHost } from "./drafter-host.js";
@@ -1003,6 +1004,14 @@ export async function serveWeb(
       releasable: sender !== null && !("refusal" in sender),
       endsLaps: sender !== null && !("refusal" in sender),
       signIn: sender !== null && !("refusal" in sender) ? signIn : null,
+      // rondo#676 (D-0198): the plan publishing reads, with no body composed.
+      discard:
+        sender === null || "refusal" in sender
+          ? null
+          : new DiscardPort(
+              store,
+              async (row) => await publishingForPage(environment, store, asked, row),
+            ),
       // **The workers this host is equipped for** (rondo#462): read here,
       // where the host's other settings are read, and handed to the page as
       // names so the start form can offer the choice and say which worker

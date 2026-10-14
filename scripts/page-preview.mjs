@@ -1206,6 +1206,8 @@ process.stdout.write(
     "press. The second one refuses on D-0060 rule 4, because that workspace still",
     "holds a path the push would leave behind:",
     `also:    ${base}/?publish=${refusingLapId}&lang=en`,
+    "Its uncommitted path can be discarded from a screen that lists it (D-0198):",
+    `discard: ${base}/?discard=${refusingLapId}&lang=en`,
     "",
     "The third holds a reading taken over a tip the branch has moved off, so the",
     "ordinary press is not drawn at all and the only one offered is the second press",

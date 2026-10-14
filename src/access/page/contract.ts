@@ -19,6 +19,7 @@ import type { HostPolicy } from "../../refrain/policy.js";
 import type { GateAnswer, IterationRecord, ThreadMessageDraft } from "../../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../../store/sqlite.js";
 import type { NamingPort } from "../approver.js";
+import type { DiscardPort } from "../discard.js";
 import type { LapWorkInspection } from "../forge.js";
 import type { SignInPort } from "../github-sign-in-route.js";
 import type { InboxReadPorts } from "../inbox.js";
@@ -184,6 +185,8 @@ export interface WebPorts extends InboxReadPorts {
   readonly endsLaps?: boolean;
   /** Signing this computer's `gh` in to GitHub (rondo#676); null without an approver. Absent is null. */
   readonly signIn?: SignInPort | null;
+  /** Discarding a lap's uncommitted changes (rondo#676, D-0198); null without an approver. Absent is null. */
+  readonly discard?: DiscardPort | null;
   /**
    * Whether the host holds a merge press (rondo#380, `D-0091`): true exactly
    * where the merge port is not null, so no merge button is drawn where every

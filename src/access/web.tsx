@@ -158,6 +158,7 @@ import { stepsBeforeLap, stepsOf } from "./page-logic/week.js";
 import { answeredQuestion, readWorkerQuestion } from "./question.js";
 import { isRequestReport } from "./request-report.js";
 import { approvalTip } from "./scope.js";
+import { discardView } from "./screens/discard.js";
 import { endLapView } from "./screens/end-lap.js";
 import { goalScopeView } from "./screens/goal-scope.js";
 import { mergeView } from "./screens/merge.js";
@@ -229,7 +230,8 @@ async function threadModel(
     view.kind === "publish" ||
     view.kind === "merge" ||
     view.kind === "release" ||
-    view.kind === "end"
+    view.kind === "end" ||
+    view.kind === "discard"
       ? view.iterationId
       : null;
   const ownRequest =
@@ -1596,6 +1598,7 @@ export async function operatorPage(
     view.kind === "merge" ||
     view.kind === "release" ||
     view.kind === "end" ||
+    view.kind === "discard" ||
     view.kind === "signIn";
   /*
    * **The right face** (D-0083 rule 4): the week where the centre is empty,
@@ -1637,6 +1640,8 @@ export async function operatorPage(
       : null;
   // The sign-in press draws itself only where the port is (rondo#676).
   const signingIn = view.kind === "signIn" ? signInView(ports, wording, token) : null;
+  const discarding =
+    view.kind === "discard" ? await discardView(ports, wording, view, token) : null;
   // The end press on `release`'s terms (rondo#655): no port, no press.
   const ending =
     view.kind === "end"
@@ -1691,7 +1696,9 @@ export async function operatorPage(
                         ? ending
                         : view.kind === "signIn"
                           ? signingIn
-                          : releasing}
+                          : view.kind === "discard"
+                            ? discarding
+                            : releasing}
               </div>
             ).toString(),
           }

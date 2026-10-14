@@ -64,6 +64,7 @@ import {
 } from "../store/records.js";
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
 import { pressedAnswer } from "./answer-press.js";
+import { discardRoute } from "./discard.js";
 import { basisOf } from "./explainer/material.js";
 import { signInRoute } from "./github-sign-in-route.js";
 import type { EndRefusal, HoldsRefusal, ReleaseRefusal } from "./line-ports.js";
@@ -1685,10 +1686,8 @@ function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 5
  * scope screen's two presses, `POST /scope` and `POST /start`, the gate's
  * other answer, `POST /revise`, the one write that leaves this machine,
  * `POST /publish`, the release of a finished line's files, `POST /release`,
- * the end of a stuck lap, `POST /end-lap` (rondo#655), the merge of a lap's pull request, `POST /merge` (`D-0091`),
- * and signing `gh` in to GitHub, `POST /github-sign-in` (rondo#676).
- * `test/access/web-app.test.ts` enumerates `app.routes` and
- * fails on any other non-`GET` entry.
+ * `POST /end-lap` (rondo#655), `POST /merge` (`D-0091`), `POST /github-sign-in` and `POST /discard`
+ * (rondo#676). `test/access/web-app.test.ts` fails on any other non-`GET` entry of `app.routes`.
  */
 export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // The writer is taken off before anything reading is handed the rest, so
@@ -2649,6 +2648,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // claim and laps the screen was drawn over are carried, so a line that moved
   // under the screen releases nothing (the store's own staleness test).
   signInRoute(app, reading.signIn ?? null, wordingOf);
+  discardRoute(app, reading.discard ?? null, wordingOf);
 
   app.post(RELEASE_ROUTE, async (c) => {
     if (release === null) {
