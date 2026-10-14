@@ -141,7 +141,8 @@ test("the screen lists what will be lost; only a person's press over that list d
 
   const page = (await get(base, "/?discard=i-0001&lang=en")).body;
   expect(page).toContain(EN.discardListHeading(3));
-  for (const path of ["kept.txt", "staged.txt", "loose/"]) {
+  // Every file, and not only the folder an untracked file is in (Codex round 4).
+  for (const path of ["kept.txt", "staged.txt", "loose/a.txt"]) {
     expect(page).toContain(`<li class="wrap-anywhere">${path}</li>`);
   }
   expect(page).not.toContain("ignored.log");
@@ -165,6 +166,12 @@ test("the screen lists what will be lost; only a person's press over that list d
   );
   expect(stale.status).toBe(409);
   expect(stale.body.replaceAll("&#39;", "'")).toContain(EN.discardRefusedChanged);
+  // A file added inside a listed folder after the screen was drawn is a new list.
+  writeFileSync(join(repo, "loose", "b.txt"), "written after the screen\n");
+  const grown = await post(base, { token, iteration: "i-0001", shown }, {}, "/discard");
+  expect(grown.status).toBe(409);
+  expect(existsSync(join(repo, "loose", "b.txt"))).toBe(true);
+  rmSync(join(repo, "loose", "b.txt"));
   expect(existsSync(join(repo, "staged.txt"))).toBe(true);
 
   const pressed = await post(base, { token, iteration: "i-0001", shown }, {}, "/discard");

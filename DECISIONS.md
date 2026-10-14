@@ -31832,13 +31832,15 @@ as a page press with a confirmation step, and to leave committing and excluding 
    same publish plan the press reads (`publishPlanFor`, with no body composed); anything else that
    plan says -- a lap not closed or approved, a target refused, a `git status` that failed --
    offers no discard.
-2. **The screen shows what will be lost before anything is lost**: the paths `git status` listed,
-   the workspace, and that ignored files and the branch's commits stay. The press is a second,
+2. **The screen shows what will be lost before anything is lost**: every file `git status
+   --untracked-files=all` lists -- each file inside an untracked folder, not only the folder --, the
+   workspace, and that ignored files and the branch's commits stay. The press is a second,
    separate press on that screen, a native form minted like every press (`D-0059` section 5a); no
    browser dialog stands in for it.
 3. **What is discarded is what was shown, or nothing is** (`D-0042` rules 2 and 3's shape). The form
-   carries the digest of the workspace, the paths and the checked-out branch; the press reads the
-   plan again and refuses, discarding nothing, when the list has changed or is empty.
+   carries the digest of the workspace, those files and the checked-out branch; the press reads the
+   plan and the files again and refuses, discarding nothing, when the list has changed or is empty,
+   so a file added inside a listed folder after the screen was drawn is a refusal and not a loss.
 4. **Discarding is `git clean -fd` then `git reset --hard` in the plan's workspace**: untracked
    paths are removed, tracked changes go back to what is checked out, ignored paths stay (no `-x`).
    `clean` runs first so it reads the same ignore rules the list was read with: a `.gitignore` the

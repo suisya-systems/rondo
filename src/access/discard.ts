@@ -31,7 +31,12 @@ export type Discardable =
   | {
       readonly kind: "uncommitted";
       readonly workspace: string;
-      /** As `git status` listed them: what the press throws away. */
+      /**
+       * Every path the press throws away, one file at a time (Codex round 4):
+       * `git status --untracked-files=all`, so a file added inside an untracked
+       * folder after the screen was drawn changes the digest and is not lost
+       * under a list that named only the folder.
+       */
       readonly paths: readonly string[];
       readonly elsewhere: string | null;
       /** The digest the press carries back. */
@@ -42,8 +47,11 @@ export type Discardable =
   /** Publishing is refused for something else first, so the list is not known. */
   | { readonly kind: "notOffered" };
 
-/** Which of the three one publish plan is. */
-export function discardableOf(record: IterationRecord, shown: PublishShown): Discardable {
+/**
+ * Which of the three one publish plan is: the plan says whether a discard is
+ * offered, and the workspace is then read file by file for what it would lose.
+ */
+async function discardableAt(record: IterationRecord, shown: PublishShown): Promise<Discardable> {
   if (shown.kind === "ready") {
     return { kind: "clean" };
   }
@@ -52,13 +60,36 @@ export function discardableOf(record: IterationRecord, shown: PublishShown): Dis
     return { kind: "notOffered" };
   }
   const workspace = planField(record, "workspace");
-  return {
-    kind: "uncommitted",
-    workspace,
-    paths: block.paths,
-    elsewhere: block.elsewhere,
-    shown: contentDigest({ workspace, paths: [...block.paths], elsewhere: block.elsewhere }),
-  };
+  const status = await runCommand(
+    "git",
+    ["-C", workspace, "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+    DISCARD_TIMEOUT_MS,
+  );
+  if (status.spawnError !== null || status.status !== 0) {
+    return { kind: "notOffered" };
+  }
+  const paths: string[] = [];
+  const entries = status.stdout.split("\0");
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index] ?? "";
+    if (entry.length < 4) {
+      continue;
+    }
+    paths.push(entry.slice(3));
+    // A rename's source follows as an entry of its own (`inspectLapWork`'s rule).
+    if (/[RC]/.test(entry.slice(0, 2))) {
+      index += 1;
+    }
+  }
+  return paths.length === 0
+    ? { kind: "clean" }
+    : {
+        kind: "uncommitted",
+        workspace,
+        paths,
+        elsewhere: block.elsewhere,
+        shown: contentDigest({ workspace, paths, elsewhere: block.elsewhere }),
+      };
 }
 
 /**
@@ -154,7 +185,7 @@ export class DiscardPort {
   }
 
   async read(record: IterationRecord): Promise<Discardable> {
-    return discardableOf(record, await this.#reading(record));
+    return await discardableAt(record, await this.#reading(record));
   }
 
   /** Null when this was not a person's press. */
