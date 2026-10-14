@@ -437,7 +437,7 @@ export const JA: Chrome = Object.freeze({
   readingCovered: (reach) => {
     switch (reach) {
       case "model":
-        return "レビュワーは、この回でコミットされた変更と、ワーカーが実行したコマンドの結果を読んでいます。";
+        return "モデルレビューは、この回でコミットされた変更と、ワーカーが実行したコマンドの結果を読んでいます。";
       case "history":
         return (
           `読んだのはコミット済みの履歴だけで、この回で頼まれたとおりのことをしたかどうかは` +
@@ -449,7 +449,7 @@ export const JA: Chrome = Object.freeze({
           "この回で頼まれたとおりのことをしたかどうかまでは判断できません。"
         );
       default:
-        return "このレビュワーが何を見たかは記録に残っていないため、どこまで確かめたかは分かりません。";
+        return "何を見て出した結果かは記録に残っていないため、どこまで確かめたかは分かりません。";
     }
   },
   basisNone: "根拠の指定なし",
@@ -480,7 +480,7 @@ export const JA: Chrome = Object.freeze({
       `${approver} の${approval}に基づいて、rondo がこの回を承認しました。`,
       "自動承認の条件をすべて満たしていました。",
       "- チェックが通っている",
-      `- レビュワーによるレビューに、${severityJa(line)}以上の指摘がない`,
+      `- モデルレビューに、${severityJa(line)}以上の指摘がない`,
       "- ワーカーの最後のテスト実行が通っている",
       "- 回答待ちの質問がない",
       "- 締めの回ではない",
@@ -515,8 +515,7 @@ export const JA: Chrome = Object.freeze({
   checksWorkUnreadable:
     "この作業の変更を現在読み取れないため、この結果がいまの変更と合っているか確認できません。",
   checksNotMatched: "照合できず",
-  modelNotTaken:
-    "rondoによるチェックは実施されましたが、レビュワーによるレビューは確認できていません。",
+  modelNotTaken: "この作業を読んだのはチェックだけで、モデルレビューは行われていません。",
   neitherReadingTaken: "チェックもモデルレビューも、この作業を読めませんでした。",
   storyHeading: "これまでの経緯",
   storyLaps: (count) =>
@@ -843,7 +842,7 @@ export const JA: Chrome = Object.freeze({
   scopeOutwardNone: "なし",
   scopeIrreversibleNone: "取り返しのつかない行為は、何も加えていません。",
   scopeCostCaveat:
-    "費用の予算に入るのは、各回の費用だけです。レビュワーの費用は入りません。" +
+    "費用の予算に入るのは、各回の費用だけです。モデルレビューの費用は入りません。" +
     "費用がまだ分からない回は、取っておく額の分として見ています。",
   scopePressNote:
     "1 回押すと、この範囲があなたの名前で記録され、承認されます。" +

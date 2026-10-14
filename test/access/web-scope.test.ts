@@ -206,9 +206,12 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   expect(html).not.toContain(EN.scopeColdStartNote(true));
   expect(html).not.toContain(EN.scopeColdStartNote(false));
 
-  // Every budget's formula, and its bases folded but present.
-  expect(html).toContain("how: plans x review rounds = 1 x 3");
+  // Every budget's formula and its bases, folded but present: the formula is
+  // the fold's first line and not a line under the box (rondo#679).
+  expect(html).toContain("worked out as: plans x review rounds = 1 x 3");
   expect(html).toContain("where this came from");
+  const laps = html.slice(html.indexOf('name="laps"'));
+  expect(laps.indexOf("worked out as:")).toBeGreaterThan(laps.indexOf("where this came from"));
   // **A `rows` basis names its laps and no longer links them.** They used to
   // lead to each lap's gate screen; D-0083 rule 3 took that screen away, and a
   // lap's thread is its request's rather than its own, which this basis does
@@ -516,7 +519,7 @@ test("the approval reads what its predecessor spent, and repeats that the review
   expect(html).toContain("with 0 laps whose cost is not read yet holding their reserve");
   // D-0066's first gate answer, said again beside the approval and not only on the form.
   expect(html).toContain(
-    "the reviewer's cost is not counted, and a lap whose cost is not read yet holds the reserve",
+    "the model review's cost is not counted, and a lap whose cost is not read yet holds the reserve",
   );
   expect(html).toContain('id="start-form"');
   // **The press that spends money says a second press is safe** (rondo#244).
@@ -586,7 +589,11 @@ test("the scope screen speaks Japanese, and every id, digest and 'rondo' token s
   expect(html).toContain("返信のための 1 日");
   expect(html).toContain("モデルの規模は standard、許可はcommand.run");
   expect(html).toContain("ブランチを push する");
-  expect(html).toContain("重大 (major)");
+  // Only the words, never the identifier beside them (rondo#679): the act and
+  // the severity are the form's values, not text on the screen.
+  expect(html).toMatch(/<option value="major"[^>]*>重大<\/option>/);
+  expect(html).not.toContain(">push_branch<");
+  expect(html).not.toContain("(major)");
   // Not one English sentence left in the fold, and no D-number in front of
   // anybody in either language (this catalogue's own rule).
   expect(html).not.toContain("highest");

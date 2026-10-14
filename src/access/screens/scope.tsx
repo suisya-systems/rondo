@@ -27,6 +27,7 @@ import { ago } from "../inbox.js";
 import { latestReads } from "../issue-read.js";
 import { type HeldPlan, heldPlanByDigest, heldPlans } from "../model-draft/host.js";
 import type { MintIterationId, MintScopeId, WebPorts } from "../page/contract.js";
+import { maintainerFold } from "../page/gate-material.js";
 import {
   basisWord,
   CARD,
@@ -162,7 +163,7 @@ function basisRow(wording: Chrome, basis: BudgetBasis) {
 /**
  * **A value that rests on rondo's default says so beside itself** (rondo#378).
  *
- * The formula under it already names the cold start, and lap 11's owner still
+ * The formula in its fold already names the cold start, and lap 11's owner still
  * read $7.50 as a figure somebody had measured: a default drawn exactly like a
  * measurement is read as one. So the sentence sits next to the number, in the
  * words a person uses. A redo cost falling back to the reserve is not counted:
@@ -183,8 +184,10 @@ function coldStartNote(wording: Chrome, bases: readonly BudgetBasis[]) {
 }
 
 /**
- * One budget: the control in a box, the formula quietly under it, and the bases
- * one press away.
+ * One budget: the control in a box, and the formula and its bases one press
+ * away. The formula used to sit unfolded under every box (rondo#679): a person
+ * reads the value, and a line of arithmetic under each one read as five
+ * formulas to check rather than five numbers to approve.
  *
  * **Evidence visible but quiet** (D-0071 rule 4.2): every number on this screen
  * was derived from rows, and the derivation is on the screen rather than in a
@@ -212,9 +215,6 @@ function budgetField(
         {control}
       </label>
       {drawn === value.value ? coldStartNote(wording, value.bases) : null}
-      <p class="note text-meta leading-5 text-faint">
-        {wording.scopeFormula(formulaSaid(wording, value.formula))}
-      </p>
       {value.bases.length === 0 ? null : (
         <details class="group rounded-md border border-border">
           <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
@@ -222,6 +222,9 @@ function budgetField(
             {wording.scopeBasesFold(value.bases.length)}
           </summary>
           <div class="space-y-1 border-t border-border px-3 py-2">
+            <p class="formula text-meta leading-5 text-faint">
+              {wording.scopeFormula(formulaSaid(wording, value.formula))}
+            </p>
             {value.bases.map((basis) => basisRow(wording, basis))}
           </div>
         </details>
@@ -991,7 +994,7 @@ export function defaultsSection(
         <select name="severity_threshold" class={BOX}>
           {FINDING_SEVERITIES.map((severity) => (
             <option value={severity} {...(severity === threshold ? { selected: true } : {})}>
-              {`${wording.severityWord(severity)} (${severity})`}
+              {wording.severityWord(severity)}
             </option>
           ))}
         </select>
@@ -1010,7 +1013,6 @@ export function defaultsSection(
               {...(outward.includes(act) ? { checked: true } : {})}
             />
             <span>{wording.scopeOutwardAct(act)}</span>
-            <span class="font-mono text-id text-faint">{act}</span>
           </label>
         ))}
         {fromGoal ? outwardFromGoal(wording) : null}
@@ -1389,7 +1391,7 @@ async function draftedForm(
                   value={severity}
                   {...(severity === payload.severity_threshold ? { selected: true } : {})}
                 >
-                  {`${wording.severityWord(severity)} (${severity})`}
+                  {wording.severityWord(severity)}
                 </option>
               ))}
             </select>
@@ -1409,7 +1411,6 @@ async function draftedForm(
                   {...(outward.includes(act) ? { checked: true } : {})}
                 />
                 <span>{wording.scopeOutwardAct(act)}</span>
-                <span class="font-mono text-id text-faint">{act}</span>
               </label>
             ))}
             {inherited.length > 0 ? outwardFromGoal(wording) : null}
@@ -1677,9 +1678,7 @@ async function scopeApproved(
         <h3 class={CARD_HEADING}>
           {wording.scopeApproved(wording.age(ago(decided.decision.decidedAtMs, nowMs)))}
         </h3>
-        <p class="font-mono text-id leading-5 wrap-anywhere text-faint">
-          {wording.scopeDigest(scope.scopeDigest)}
-        </p>
+        {maintainerFold("scope-digest", wording, wording.scopeDigest(scope.scopeDigest))}
       </section>
       {/* **Then what can be started** (D-0106, rondo#408): the start press,
           the plans to choose from, or why there is none. */}
@@ -1808,7 +1807,7 @@ async function scopeApproved(
           ).map(([label, value]) => (
             <div class="flex min-w-0 items-baseline justify-between gap-3 border-b border-border/60 py-0.5">
               <dt class="text-meta text-muted-foreground">{label}</dt>
-              <dd class="font-mono text-meta">{value}</dd>
+              <dd class="text-meta tabular-nums">{value}</dd>
             </div>
           ))}
         </dl>

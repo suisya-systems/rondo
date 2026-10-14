@@ -13,7 +13,6 @@ import {
   isModelReadingDrafter,
   type LapReading,
   latestReading,
-  MODEL_READING_DRAFTER_PREFIX,
   readingReach,
   reviewedReading,
 } from "../../store/records.js";
@@ -161,16 +160,18 @@ function coverageLine(id: string, wording: Chrome, drafter: string, who: string 
  * whoever maintains rondo on this machine, holding the reason as rondo
  * received it. The person is never asked to open it.
  */
-export function maintainerFold(id: string, wording: Chrome, reason: string) {
+export function maintainerFold(id: string, wording: Chrome, reason: string | readonly string[]) {
   return (
     <details id={id} class="group">
       <summary class="flex cursor-pointer list-none items-center gap-1.5 text-meta leading-5 text-faint select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
         {chevron()}
         {wording.forMaintainer}
       </summary>
-      <p class="mt-1 pl-5 text-meta leading-5 text-muted-foreground wrap-anywhere" lang="en">
-        {reason}
-      </p>
+      {(typeof reason === "string" ? [reason] : reason).map((line) => (
+        <p class="mt-1 pl-5 text-meta leading-5 text-muted-foreground wrap-anywhere" lang="en">
+          {line}
+        </p>
+      ))}
     </details>
   );
 }
@@ -568,6 +569,20 @@ function modelView(
   retake: RetakePress | null = null,
   reads: HeldReads | null = null,
 ) {
+  // **Who read and where each finding points are rondo's names** (rondo#679):
+  // the drafter, then one line per finding that named a place, numbered in the
+  // card's order -- for the maintainer fold, not for the person deciding.
+  const internals =
+    reading === null
+      ? []
+      : [
+          reading.drafter,
+          ...(reading.graded ?? []).flatMap((graded, index) =>
+            graded.bases.length === 0
+              ? []
+              : [`${String(index + 1)}: ${graded.bases.map(findingBasisText).join(", ")}`],
+          ),
+        ];
   const later = (note: string) => (
     <p class="mt-1 text-body leading-5 text-muted-foreground">
       {note}{" "}
@@ -589,11 +604,6 @@ function modelView(
       <div class="flex flex-wrap items-center gap-2">
         <h3 class={CARD_HEADING}>{wording.modelHeading}</h3>
         {reading === null ? null : modelPill(wording, reading)}
-        {reading === null ? null : (
-          <span class="ml-auto font-mono text-id text-faint" title={reading.drafter}>
-            {reading.drafter.slice(MODEL_READING_DRAFTER_PREFIX.length)}
-          </span>
-        )}
       </div>
       {reading === null ? (
         later(wording.modelPending)
@@ -645,18 +655,16 @@ function modelView(
                             {raw(heldMarkup({ wording, reads, text, className: "wrap-anywhere" }))}
                           </div>
                         )}
-                        {graded === undefined ? null : (
-                          <p class="mt-1 flex flex-wrap items-center gap-1 text-id leading-4">
-                            {graded.bases.map((basis) => (
-                              <code class="basis-chip rounded border border-border bg-muted/60 px-1.5 py-px font-mono text-faint wrap-anywhere">
-                                {findingBasisText(basis)}
-                              </code>
-                            ))}
-                            {graded.bases.length === 0 ? (
-                              <span class="text-faint">{wording.basisNone}</span>
-                            ) : graded.basisResolved ? null : (
-                              <span class="text-faint">{wording.basisUnresolved}</span>
-                            )}
+                        {/* The bases themselves are paths, lines and commits, so
+                            they go in the maintainer fold below (rondo#679);
+                            what a person acts on -- that none was given, or
+                            none matched the work -- stays here. */}
+                        {graded === undefined ||
+                        (graded.bases.length > 0 && graded.basisResolved) ? null : (
+                          <p class="mt-1 text-meta leading-5 text-faint">
+                            {graded.bases.length === 0
+                              ? wording.basisNone
+                              : wording.basisUnresolved}
                           </p>
                         )}
                       </li>
@@ -665,6 +673,7 @@ function modelView(
                 </ul>
               )}
               {coverageLine("model-coverage", wording, reading.drafter)}
+              {maintainerFold("model-internals", wording, internals)}
             </>
           )}
         </>

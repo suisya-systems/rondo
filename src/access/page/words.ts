@@ -795,12 +795,12 @@ export const PAGE_EN: PageWords = Object.freeze({
     })[kind],
   evChecksPassed: "The automatic checks all passed.",
   evChecksFailed: "The automatic checks did not pass.",
-  evReadingClear: "Another model read the change and raised nothing.",
+  evReadingClear: "The model review raised nothing.",
   evReadingRaised: (findings) =>
     findings === 1
-      ? "Another model read the change and raised one thing."
-      : `Another model read the change and raised ${String(findings)} things.`,
-  evReadingUnavailable: "Another model could not read the change.",
+      ? "The model review raised one thing."
+      : `The model review raised ${String(findings)} things.`,
+  evReadingUnavailable: "The model review could not read the change.",
   foldTry: (said, lines) => `${said} (${String(lines)} lines)`,
   foldSeen: (lines) =>
     lines === 1 ? "1 line you had already read" : `${String(lines)} lines you had already read`,
@@ -1342,12 +1342,12 @@ export const PAGE_EN: PageWords = Object.freeze({
   closingHeading: "Closing fix",
   closingSaid: (findings, readCommit, rounds) =>
     `${String(findings)} finding${findings === 1 ? "" : "s"} below your threshold fixed with tests in one attempt; ` +
-    `the reviewer last read commit ${readCommit}, not this one` +
+    `the model review last read commit ${readCommit}, not this one` +
     (rounds === null
       ? "."
       : ` (your limit was ${String(rounds)} round${rounds === 1 ? "" : "s"}).`),
   mergeNotReread: (readCommit) =>
-    `The last commit is a closing fix and was not re-read: the reviewer last read ${readCommit}.`,
+    `The last commit is a closing fix and was not re-read: the model review last read ${readCommit}.`,
 } satisfies PageWords);
 
 export const PAGE_JA: PageWords = Object.freeze({
@@ -1458,10 +1458,9 @@ export const PAGE_JA: PageWords = Object.freeze({
     })[kind],
   evChecksPassed: "自動チェックはすべて通りました。",
   evChecksFailed: "自動チェックが通りませんでした。",
-  evReadingClear: "レビュワーによるレビューで指摘はありませんでした。",
-  evReadingRaised: (findings) =>
-    `レビュワーによるレビューで指摘が ${String(findings)} 件出ました。`,
-  evReadingUnavailable: "レビュワーは変更を読めませんでした。",
+  evReadingClear: "モデルレビューで指摘はありませんでした。",
+  evReadingRaised: (findings) => `モデルレビューで指摘が ${String(findings)} 件出ました。`,
+  evReadingUnavailable: "モデルレビューは変更を読めませんでした。",
   foldTry: (said, lines) => `${said}（${String(lines)} 行）`,
   foldSeen: (lines) => `既読 ${String(lines)} 行`,
   foldOpen: "ひらく",
@@ -1979,8 +1978,8 @@ export const PAGE_JA: PageWords = Object.freeze({
   closingHeading: "仕上げの修正",
   closingSaid: (findings, readCommit, rounds) =>
     `しきい値より軽い指摘 ${String(findings)} 件を、テストつきで 1 回の作業で直しました。` +
-    `レビュワーが最後に読んだのはコミット ${readCommit} で、この修正は読んでいません` +
+    `モデルレビューが最後に読んだのはコミット ${readCommit} で、この修正は読んでいません` +
     (rounds === null ? "。" : `（レビュー回数の上限は ${String(rounds)} 回でした）。`),
   mergeNotReread: (readCommit) =>
-    `最後のコミットは仕上げの修正で、レビュワーは読んでいません。最後に読んだのはコミット ${readCommit} です。`,
+    `最後のコミットは仕上げの修正で、モデルレビューは読んでいません。最後に読んだのはコミット ${readCommit} です。`,
 } satisfies PageWords);
