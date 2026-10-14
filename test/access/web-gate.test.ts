@@ -91,11 +91,15 @@ test("both readings are drawn from the rows on the right face, with the warning 
   expect(html).toContain("a binary file was not read");
   expect(html).toMatch(/severity[^"]*">blocker<\/span><span[^>]*>the loop never stops/);
   expect(html).toMatch(/severity[^"]*">major<\/span>/);
-  expect(html).toContain(">src/notifier.ts:41</code>");
-  expect(html).toContain(">rule AGENTS.md:12</code>");
+  // Paths, lines and the reading's drafter are rondo's names, so they sit in
+  // the card's maintainer fold and nowhere above it (rondo#679).
+  const internals = html.slice(html.indexOf('id="model-internals"'));
+  expect(internals).toMatch(/>1: src\/notifier\.ts:41[^<]*<\/p>/);
+  expect(internals).toContain("rule AGENTS.md:12");
+  expect(internals).toContain(">rondo/model/1/gpt-6-astra</p>");
+  expect(html.slice(0, html.indexOf('id="model-internals"'))).not.toContain("src/notifier.ts:41");
   expect(html).toContain("none of these matched the delivered work");
   expect(html).toContain("no basis given");
-  expect(html).toContain(">gpt-6-astra</span>");
   // What changed, as rows, and the worker's own words.
   expect(html).toContain("feat: retry budget");
   expect(html).toContain(">+64</span>");
@@ -1110,8 +1114,12 @@ test("what a reading did not look at is beside its verdict and not behind a fold
   const checks = html.slice(html.indexOf('id="checks"'), html.indexOf('id="model-review"'));
   const model = html.slice(html.indexOf('id="model-review"'), html.indexOf(EN.readingsNote));
   // The label the summary carried is still there, and the sentences under it
-  // are readable where the verdict is: neither card holds a fold at all now.
-  for (const card of [checks, model]) {
+  // are readable where the verdict is: neither card holds a fold of them. The
+  // model card's one fold is the maintainer's (rondo#679), after them.
+  for (const card of [
+    checks,
+    model.replace(/<details id="model-internals"[\s\S]*?<\/details>/, ""),
+  ]) {
     expect(card).toContain(EN.whatItRead);
     expect(card).not.toContain("<details");
   }

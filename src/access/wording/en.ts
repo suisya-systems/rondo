@@ -767,7 +767,7 @@ explanation you pressed on and then answers the gate.`,
   scopeCostLabel: "Cost (USD)",
   scopeReserveLabel: "Reserve per unread lap (USD)",
   scopeExpiresLabel: "Expires (UTC)",
-  scopeFormula: (how) => `how: ${how}`,
+  scopeFormula: (how) => `worked out as: ${how}`,
   scopeFormulaRounds: "the rounds you chose",
   scopeFormulaLaps: (plans, rounds) =>
     `plans x review rounds = ${String(plans)} x ${String(rounds)}`,
@@ -842,7 +842,7 @@ explanation you pressed on and then answers the gate.`,
   scopeOutwardNone: "none",
   scopeIrreversibleNone: "No act is added to the irreversible list.",
   scopeCostCaveat:
-    "The cost budget counts the laps' own cost only: the reviewer's cost is not counted, and a " +
+    "The cost budget counts the laps' own cost only: the model review's cost is not counted, and a " +
     "lap whose cost is not read yet holds the reserve, which is a guess.",
   scopePressNote:
     "One press records this scope and approves it, under your name. Nothing is spent by " +
