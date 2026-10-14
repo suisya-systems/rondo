@@ -1593,6 +1593,7 @@ export interface Chrome
   readonly discardNothing: string;
   readonly discardNotOffered: string;
   readonly discardDone: string;
+  readonly discardDonePartly: string;
   readonly discardBackToPublish: string;
   readonly discardBack: string;
   readonly discardRefusedNoApprover: string;

@@ -1422,6 +1422,9 @@ explanation you pressed on and then answers the gate.`,
     "This request is not at a point where discarding applies, and the workspace was left as it is.",
   discardDone:
     "The changes are gone and the workspace matches the branch again. You can go back and publish.",
+  discardDonePartly:
+    "The files that were listed are discarded. The workspace still holds the files below, which " +
+    "are not on the branch.",
   discardBackToPublish: "Back to publish",
   discardBack: "Back to the list",
   discardRefusedNoApprover: "Nobody is named as approver here, so nothing was discarded.",
@@ -1438,9 +1441,8 @@ explanation you pressed on and then answers the gate.`,
   discardRefusedNotOffered:
     "This request is no longer at a point where discarding applies, so nothing was discarded.",
   discardRefusedIgnored:
-    "Some files the project ignores are in a folder that stands where a file on the branch comes " +
-    "back, and discarding would delete them, so nothing was discarded. Move them elsewhere, then " +
-    "try again.",
+    "Some files the project ignores are where a listed file would come back, and discarding " +
+    "would delete them, so nothing was discarded. Move them elsewhere, then try again.",
   discardRefusedFailed:
     "Discarding stopped partway, and some files may already be gone. The list on the page shows " +
     "what is still there.",

@@ -58,9 +58,16 @@ export async function discardView(
   if (read.kind === "clean") {
     return settled(view.done ? wording.discardDone : wording.discardNothing);
   }
-  const count = read.paths.length;
+  const count = read.listed.length;
   return framed(
     <>
+      {/* Pressed, and something not on the list is still not on the branch:
+          said as it is, never as the workspace matching the branch. */}
+      {view.done ? (
+        <p id="discard-said" class="text-body leading-6">
+          {wording.discardDonePartly}
+        </p>
+      ) : null}
       <p class="text-body leading-6">{wording.discardLead}</p>
       <p class="text-meta leading-5 wrap-anywhere text-muted-foreground" lang="">
         {wording.publishWorkspace(read.workspace)}
@@ -71,8 +78,8 @@ export async function discardView(
           <p class="text-body leading-5">{wording.publishUncommittedElsewhere(read.elsewhere)}</p>
         )}
         <ul class="space-y-1 font-mono text-id leading-5" lang="">
-          {read.paths.map((path) => (
-            <li class="wrap-anywhere">{path}</li>
+          {read.listed.map(({ path, from }) => (
+            <li class="wrap-anywhere">{from === null ? path : `${from} -> ${path}`}</li>
           ))}
         </ul>
         <p class="text-meta leading-5 text-muted-foreground">{wording.discardKeeps}</p>

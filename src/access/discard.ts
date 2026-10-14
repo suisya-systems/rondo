@@ -4,11 +4,12 @@
  * press goes through and the press itself, `POST /discard`. Out of
  * `web-app.ts`, which is at its size cap, as `github-sign-in-route.ts` is.
  *
- * **What the screen read is what is discarded, or nothing is.** The screen
- * draws the list publishing refused over (D-0060 rule 4) and carries its
- * digest; the press reads the publish plan again and discards only where the
- * list is still the one shown. The lap is closed, so no worker is writing in
- * the workspace between that read and the discard.
+ * **What the screen listed is what is discarded, and nothing else.** The
+ * screen lists the workspace file by file and carries the list's digest; the
+ * press reads it again, discards only where it is still the one shown, and
+ * then acts on those paths alone, so nothing the list did not name -- an
+ * ignored file, a change git status hides, a submodule -- is touched. The lap
+ * is closed, so no worker is writing in the workspace between read and act.
  */
 import type { Context, Hono } from "hono";
 import { contentDigest } from "../store/plan.js";
@@ -23,8 +24,17 @@ import type { Chrome } from "./wording.js";
 
 export const DISCARD_ROUTE = "/discard";
 
-/** How long one of the two git commands may take: local, so well short of a forge's. */
+/** How long one git command may take: local, so well short of a forge's. */
 const DISCARD_TIMEOUT_MS = 60_000;
+
+/** One line of `git status`, as the press acts on it. */
+export interface Listed {
+  readonly path: string;
+  /** A rename's or copy's source, which comes back too. */
+  readonly from: string | null;
+  /** `??`: removed. Anything else is put back to what is checked out. */
+  readonly untracked: boolean;
+}
 
 /** What the discard screen shows for one lap. */
 export type Discardable =
@@ -32,12 +42,11 @@ export type Discardable =
       readonly kind: "uncommitted";
       readonly workspace: string;
       /**
-       * Every path the press throws away, one file at a time (Codex round 4):
-       * `git status --untracked-files=all`, so a file added inside an untracked
-       * folder after the screen was drawn changes the digest and is not lost
-       * under a list that named only the folder.
+       * Every path the press acts on, one file at a time (Codex round 4):
+       * `--untracked-files=all`, so a file added inside an untracked folder
+       * after the screen was drawn changes the digest.
        */
-      readonly paths: readonly string[];
+      readonly listed: readonly Listed[];
       readonly elsewhere: string | null;
       /** The digest the press carries back. */
       readonly shown: string;
@@ -46,6 +55,18 @@ export type Discardable =
   | { readonly kind: "clean" }
   /** Publishing is refused for something else first, so the list is not known. */
   | { readonly kind: "notOffered" };
+
+/** A git command in the workspace, its paths read literally rather than as globs. */
+async function git(workspace: string, args: readonly string[]) {
+  const ran = await runCommand(
+    "git",
+    ["--literal-pathspecs", "-C", workspace, ...args],
+    DISCARD_TIMEOUT_MS,
+  );
+  return ran.spawnError !== null || ran.status !== 0
+    ? { failed: `${ran.commandLine}: ${ran.spawnError ?? ran.stderr.trim()}` }
+    : { out: ran.stdout };
+}
 
 /**
  * Which of the three one publish plan is: the plan says whether a discard is
@@ -60,97 +81,97 @@ async function discardableAt(record: IterationRecord, shown: PublishShown): Prom
     return { kind: "notOffered" };
   }
   const workspace = planField(record, "workspace");
-  const status = await runCommand(
-    "git",
-    ["-C", workspace, "status", "--porcelain=v1", "-z", "--untracked-files=all"],
-    DISCARD_TIMEOUT_MS,
-  );
-  if (status.spawnError !== null || status.status !== 0) {
+  const status = await git(workspace, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
+  if ("failed" in status) {
     return { kind: "notOffered" };
   }
-  const paths: string[] = [];
-  const entries = status.stdout.split("\0");
+  const listed: Listed[] = [];
+  const entries = status.out.split("\0");
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index] ?? "";
     if (entry.length < 4) {
       continue;
     }
-    paths.push(entry.slice(3));
-    // A rename's source follows as an entry of its own (`inspectLapWork`'s rule).
-    if (/[RC]/.test(entry.slice(0, 2))) {
+    // A rename's or copy's source follows as an entry of its own.
+    const renamed = /[RC]/.test(entry.slice(0, 2));
+    listed.push({
+      path: entry.slice(3),
+      from: renamed ? (entries[index + 1] ?? null) : null,
+      untracked: entry.startsWith("??"),
+    });
+    if (renamed) {
       index += 1;
     }
   }
-  return paths.length === 0
+  return listed.length === 0
     ? { kind: "clean" }
     : {
         kind: "uncommitted",
         workspace,
-        paths,
+        listed,
         elsewhere: block.elsewhere,
-        shown: contentDigest({ workspace, paths, elsewhere: block.elsewhere }),
+        shown: contentDigest({
+          workspace,
+          listed: listed.map(({ path, from, untracked }) => ({ path, from, untracked })),
+          elsewhere: block.elsewhere,
+        }),
       };
 }
 
 /**
- * Throw away what `git status` lists: tracked changes back to what is checked
- * out, untracked paths removed. Ignored paths stay (no `-x`), which is the
- * repository's own statement that they are not work. Null when both ran.
+ * Throw away exactly the listed paths: untracked files removed one by one
+ * (`clean` without `-d` or `-x`, over the files named), tracked ones put back
+ * to what is checked out (`restore --staged --worktree`, rename sources too).
+ * Null when both ran.
  *
  * **Refused before anything runs where an ignored file is in the way** (Codex
- * rounds 2 and 3): one at a path the branch holds, at a folder the branch has
- * files in, or inside a folder standing where the branch has a file, would be
- * deleted when the branch's version comes back, and it was never on the list.
+ * rounds 2 and 3): putting a listed path back writes a file or a folder there,
+ * and an ignored file at that path, below it or at a folder above it would be
+ * deleted though it was never listed.
  *
- * **`clean` first, under the ignore rules the list was read with** (Codex
- * round 1). Reset first would put back a `.gitignore` the changes edited, and
- * `clean` would then delete what that edit ignored -- files nobody was shown.
- *
- * ponytail: an untracked nested repository survives `clean -fd`; the screen
- * then lists it as still there rather than claiming it is gone.
+ * ponytail: every path is one argument, so a list past the system's argument
+ * limit fails as a whole and says so; `--pathspec-from-file` if that is met.
  */
 export async function discardUncommitted(
   workspace: string,
+  listed: readonly Listed[],
 ): Promise<{ readonly why: DiscardRefusal; readonly note: string } | null> {
-  const listed = async (...args: string[]): Promise<readonly string[] | string> => {
-    const ran = await runCommand("git", ["-C", workspace, ...args], DISCARD_TIMEOUT_MS);
-    return ran.spawnError !== null || ran.status !== 0
-      ? `${ran.commandLine}: ${ran.spawnError ?? ran.stderr.trim()}`
-      : ran.stdout.split("\0").filter((path) => path !== "");
-  };
-  const ignored = await listed("ls-files", "-z", "--others", "--ignored", "--exclude-standard");
-  const branch = await listed("ls-tree", "-r", "-z", "--name-only", "HEAD");
-  if (typeof ignored === "string" || typeof branch === "string") {
-    return {
-      why: "discardRefusedFailed",
-      note: typeof ignored === "string" ? ignored : `${branch}`,
-    };
+  const untracked = listed.filter((one) => one.untracked).map((one) => one.path);
+  const tracked = listed
+    .filter((one) => !one.untracked)
+    .flatMap((one) => (one.from === null ? [one.path] : [one.path, one.from]));
+  const ignored = await git(workspace, [
+    "ls-files",
+    "-z",
+    "--others",
+    "--ignored",
+    "--exclude-standard",
+  ]);
+  if ("failed" in ignored) {
+    return { why: "discardRefusedFailed", note: ignored.failed };
   }
-  // Every path the branch holds and every folder above one: an ignored file
-  // at one of them, or below a file of the branch, is where `reset` writes.
-  const ancestors = (path: string) =>
-    path
-      .split("/")
-      .slice(0, -1)
-      .map((_, at, parts) => parts.slice(0, at + 1).join("/"));
-  const files = new Set(branch);
-  const taken = new Set([...branch, ...branch.flatMap(ancestors)]);
-  const inTheWay = ignored.filter(
-    (path) => taken.has(path) || ancestors(path).some((above) => files.has(above)),
-  );
+  const inTheWay = ignored.out
+    .split("\0")
+    .filter(
+      (path) =>
+        path !== "" &&
+        tracked.some(
+          (back) => path === back || path.startsWith(`${back}/`) || back.startsWith(`${path}/`),
+        ),
+    );
   if (inTheWay.length > 0) {
     return { why: "discardRefusedIgnored", note: inTheWay.join("\n") };
   }
-  for (const args of [
-    ["clean", "-fd", "--quiet"],
-    ["reset", "--hard", "--quiet"],
-  ]) {
-    const ran = await runCommand("git", ["-C", workspace, ...args], DISCARD_TIMEOUT_MS);
-    if (ran.spawnError !== null || ran.status !== 0) {
-      return {
-        why: "discardRefusedFailed",
-        note: `${ran.commandLine}: ${ran.spawnError ?? ran.stderr.trim()}`,
-      };
+  for (const [args, paths] of [
+    [["clean", "-f", "--quiet", "--"], untracked],
+    [
+      ["restore", "--source=HEAD", "--staged", "--worktree", "--no-recurse-submodules", "--"],
+      tracked,
+    ],
+  ] as const) {
+    const ran = paths.length === 0 ? null : await git(workspace, [...args, ...paths]);
+    if (ran !== null && "failed" in ran) {
+      return { why: "discardRefusedFailed", note: ran.failed };
     }
   }
   return null;
@@ -225,7 +246,7 @@ export class DiscardPort {
     if (now.shown !== input.shown) {
       return refused("discardRefusedChanged");
     }
-    const failed = await discardUncommitted(now.workspace);
+    const failed = await discardUncommitted(now.workspace, now.listed);
     return failed === null ? ({ ok: true } as const) : refused(failed.why, failed.note);
   }
 }

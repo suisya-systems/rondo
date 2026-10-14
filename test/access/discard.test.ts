@@ -9,9 +9,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 
-import { DiscardPort, discardUncommitted } from "../../src/access/discard.js";
+import { DiscardPort, discardUncommitted, type Listed } from "../../src/access/discard.js";
 import type { PublishShown } from "../../src/access/page/contract.js";
 import { chromeFor } from "../../src/access/wording.js";
+import type { IterationRecord } from "../../src/store/records.js";
 import type { IterationStore } from "../../src/store/sqlite.js";
 import { fresh, get, portsOver, post, reserve, serving, tokenIn } from "./page-world.js";
 
@@ -73,61 +74,102 @@ function storeAt(store: IterationStore, repo: string): IterationStore {
   });
 }
 
-test("discarding puts tracked files back, removes untracked ones and leaves ignored ones", async () => {
-  const repo = dirtyRepository();
-  expect(await discardUncommitted(repo)).toBeNull();
-  expect(git(repo, "status", "--porcelain=v1", "--untracked-files=normal")).toBe("");
-  expect(readFileSync(join(repo, "kept.txt"), "utf8")).toBe("committed\n");
-  expect(existsSync(join(repo, "staged.txt"))).toBe(false);
-  expect(existsSync(join(repo, "loose"))).toBe(false);
-  expect(existsSync(join(repo, "ignored.log"))).toBe(true);
-  // A workspace git cannot work in says so, with git's own words.
-  expect((await discardUncommitted(join(repo, "nowhere")))?.why).toBe("discardRefusedFailed");
+/** What the press would act on in `repo`, read as the screen reads it. */
+async function listedIn(repo: string): Promise<readonly Listed[]> {
+  const read = await new DiscardPort(fresh().store, planOver(repo)).read({
+    plan: { workspace: repo },
+  } as unknown as IterationRecord);
+  return read.kind === "uncommitted" ? read.listed : [];
+}
 
-  // A file the changes' own `.gitignore` edit ignores was not on the list, so it stays.
+const status = (repo: string): string =>
+  git(repo, "status", "--porcelain=v1", "--untracked-files=all");
+
+test("only the listed paths are put back or removed; what the list did not name stays", async () => {
+  const repo = dirtyRepository();
+  // A change git status hides is not on the list, so it is not touched (Codex round 5).
+  git(repo, "update-index", "--assume-unchanged", ".gitignore");
+  writeFileSync(join(repo, ".gitignore"), "ignored.log\n# a local note\n");
+  const listed = await listedIn(repo);
+  expect(listed.map((one) => one.path).sort()).toEqual(["kept.txt", "loose/a.txt", "staged.txt"]);
+  expect(await discardUncommitted(repo, listed)).toBeNull();
+  expect(status(repo)).toBe("");
+  expect(readFileSync(join(repo, "kept.txt"), "utf8")).toBe("committed\n");
+  // The staged new file is gone from the index and from the folder.
+  expect(existsSync(join(repo, "staged.txt"))).toBe(false);
+  expect(existsSync(join(repo, "loose", "a.txt"))).toBe(false);
+  expect(existsSync(join(repo, "ignored.log"))).toBe(true);
+  expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe("ignored.log\n# a local note\n");
+  // A workspace git cannot work in says so, with git's own words.
+  expect((await discardUncommitted(join(repo, "nowhere"), listed))?.why).toBe(
+    "discardRefusedFailed",
+  );
+});
+
+test("a rename comes back whole, and a path that looks like a pattern is only itself", async () => {
+  const repo = dirtyRepository();
+  git(repo, "mv", "kept.txt", "moved.txt");
+  writeFileSync(join(repo, "*.txt"), "a name, not a pattern\n");
+  const listed = await listedIn(repo);
+  expect(listed.find((one) => one.path === "moved.txt")?.from).toBe("kept.txt");
+  expect(await discardUncommitted(repo, listed)).toBeNull();
+  expect(readFileSync(join(repo, "kept.txt"), "utf8")).toBe("committed\n");
+  expect(existsSync(join(repo, "moved.txt"))).toBe(false);
+  expect(existsSync(join(repo, "*.txt"))).toBe(false);
+  expect(status(repo)).toBe("");
+});
+
+test("a .gitignore edit is put back, and what it had ignored is left where it was", async () => {
+  const repo = dirtyRepository();
   writeFileSync(join(repo, ".gitignore"), "ignored.log\nlocal.env\n");
   writeFileSync(join(repo, "local.env"), "not shown\n");
-  expect(await discardUncommitted(repo)).toBeNull();
+  const listed = await listedIn(repo);
+  expect(listed.map((one) => one.path)).not.toContain("local.env");
+  expect(await discardUncommitted(repo, listed)).toBeNull();
   expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe("ignored.log\n");
-  expect(existsSync(join(repo, "local.env"))).toBe(true);
+  // Not on the list, so still there -- and now not ignored, so not clean either.
+  expect(readFileSync(join(repo, "local.env"), "utf8")).toBe("not shown\n");
+  expect(status(repo)).toBe("?? local.env\n");
+});
 
-  // An ignored file inside a folder standing where the branch has a file would
-  // go when the file comes back, so nothing runs and the file is named.
-  rmSync(join(repo, "kept.txt"));
-  mkdirSync(join(repo, "kept.txt"));
-  writeFileSync(join(repo, "kept.txt", "ignored.log"), "never shown\n");
-  writeFileSync(join(repo, "kept.txt", "loose.txt"), "shown\n");
-  expect(await discardUncommitted(repo)).toEqual({
+test("an ignored file at, below or above a path that comes back stops the discard before it runs", async () => {
+  // Below: a tracked file replaced by a folder holding an ignored file.
+  const below = dirtyRepository();
+  rmSync(join(below, "kept.txt"));
+  mkdirSync(join(below, "kept.txt"));
+  writeFileSync(join(below, "kept.txt", "ignored.log"), "never shown\n");
+  writeFileSync(join(below, "kept.txt", "loose.txt"), "shown\n");
+  expect(await discardUncommitted(below, await listedIn(below))).toEqual({
     why: "discardRefusedIgnored",
     note: "kept.txt/ignored.log",
   });
-  expect(existsSync(join(repo, "kept.txt", "loose.txt"))).toBe(true);
-});
+  expect(existsSync(join(below, "kept.txt", "loose.txt"))).toBe(true);
 
-test("an ignored file at a path the branch holds, or at a folder it has files in, stops the discard", async () => {
-  // At the path itself: a tracked file taken out of the index and now ignored.
-  const same = dirtyRepository();
-  git(same, "add", "-f", "ignored.log");
-  git(same, "commit", "--quiet", "-m", "track it");
-  git(same, "rm", "--quiet", "--cached", "ignored.log");
-  writeFileSync(join(same, "ignored.log"), "local edits\n");
-  expect(await discardUncommitted(same)).toEqual({
+  // At: a tracked file taken out of the index, and now ignored.
+  const at = dirtyRepository();
+  git(at, "add", "-f", "ignored.log");
+  git(at, "commit", "--quiet", "-m", "track it");
+  git(at, "rm", "--quiet", "--cached", "ignored.log");
+  writeFileSync(join(at, "ignored.log"), "local edits\n");
+  expect(await discardUncommitted(at, await listedIn(at))).toEqual({
     why: "discardRefusedIgnored",
     note: "ignored.log",
   });
-  expect(readFileSync(join(same, "ignored.log"), "utf8")).toBe("local edits\n");
+  expect(readFileSync(join(at, "ignored.log"), "utf8")).toBe("local edits\n");
 
-  // At a folder the branch has files in: the folder replaced by an ignored file.
+  // Above: a tracked folder replaced by an ignored file.
   const above = dirtyRepository();
   mkdirSync(join(above, "docs"));
   writeFileSync(join(above, "docs", "a.txt"), "tracked\n");
   git(above, "add", "docs");
   git(above, "commit", "--quiet", "-m", "docs");
-  git(above, "rm", "--quiet", "-r", "--cached", "docs");
   rmSync(join(above, "docs"), { recursive: true });
   writeFileSync(join(above, ".gitignore"), "ignored.log\ndocs\n");
   writeFileSync(join(above, "docs"), "not shown\n");
-  expect(await discardUncommitted(above)).toEqual({ why: "discardRefusedIgnored", note: "docs" });
+  expect(await discardUncommitted(above, await listedIn(above))).toEqual({
+    why: "discardRefusedIgnored",
+    note: "docs",
+  });
   expect(readFileSync(join(above, "docs"), "utf8")).toBe("not shown\n");
 });
 
@@ -199,6 +241,28 @@ test("with nobody named as approver there is no port, no list and no press", asy
   expect(page).not.toContain('action="/discard');
   const pressed = await post(base, { token: "t", iteration: "i-0001", shown: "x" }, {}, "/discard");
   expect(pressed.status).toBe(403);
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("after a press, what the list did not cover is said as still there, not as matching the branch", async () => {
+  const repo = dirtyRepository();
+  writeFileSync(join(repo, ".gitignore"), "ignored.log\nlocal.env\n");
+  writeFileSync(join(repo, "local.env"), "not shown\n");
+  const world = fresh();
+  await reserve(world, "i-0001", "add a retry budget");
+  const store = storeAt(world.store, repo);
+  const discard = new DiscardPort(store, planOver(repo));
+  const { base, stop, served } = await serving({ ...portsOver(world, "ada", []), store, discard });
+  const page = (await get(base, "/?discard=i-0001&lang=en")).body;
+  const token = tokenIn(page);
+  const shown = /name="shown" value="([^"]+)"/.exec(page)?.[1] ?? "";
+  const pressed = await post(base, { token, iteration: "i-0001", shown }, {}, "/discard");
+  expect(pressed.status).toBe(303);
+  const after = (await get(base, pressed.location ?? "")).body.replaceAll("&#39;", "'");
+  expect(after).toContain(EN.discardDonePartly);
+  expect(after).not.toContain(EN.discardDone);
+  expect(after).toContain('<li class="wrap-anywhere">local.env</li>');
   stop.abort();
   expect(await served).toBe(0);
 });

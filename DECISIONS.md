@@ -232,7 +232,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0195 | A lap only a person can end -- stalled, held by a start that threw, or a row that will not decode -- is ended from the page with their reason, gives back what it held and asks whether to carry on; a lap before its gate whose driver is gone is lost | accepted |
 | D-0196 | A host started with nobody named as the approver lets the page name them, once, and builds its write ports for that name without a restart | accepted |
 | D-0197 | The readers of rondo#659 say when a falsifier is breached: a share of triage's raised-or-decided reading at or above its line over enough to judge, and K4 tripped by one thing asked about twice | accepted |
-| D-0198 | The uncommitted changes that hold a lap's publish are discarded from the page, on a screen that lists them, by a press that discards only that list | accepted |
+| D-0198 | The uncommitted changes that hold a lap's publish are discarded from the page, on a screen that lists them, by a press that discards only that list | accepted, amended |
 | D-0199 | Asking across every request also says the decisions recorded on a request since the person last looked, in the same section as what ended | accepted |
 | D-0201 | A widening onto another open line's files waits as a row and is written by the order tick once they are free, and inside an approved scope the gate widens a drafted claim onto what its lap changed and records it against that approval | accepted |
 
@@ -31865,3 +31865,20 @@ as a page press with a confirmation step, and to leave committing and excluding 
 - **A path discarded that the screen did not list**: rule 3's digest did not cover what git acted on.
 - **A discard offered on a lap that was still running**: rule 1's plan let a lap that is not closed
   through.
+
+> **Annotation (2026-10-14, rondo#676).** Added after review, and **not additive**, by the owner's
+> answer on rondo#676 to a review that kept finding something the blanket commands reached and the
+> list did not show: an ignored file a restored `.gitignore` uncovered, a change `assume-unchanged`
+> hides from `git status`, a submodule that `submodule.recurse` pulls in. **The press acts on the
+> listed paths and on nothing else.** Untracked files on the list are removed one by one (`git
+> clean -f -- <files>`, no `-d`, no `-x`); tracked paths on the list, with a rename's source, are
+> put back with `git restore --source=HEAD --staged --worktree --no-recurse-submodules -- <paths>`;
+> both read their paths literally (`--literal-pathspecs`). The refusal before anything runs is
+> narrowed to what that can still reach: an ignored file at a listed tracked path, below one or at
+> a folder above one. And because something the list did not name can stay, the screen the press
+> lands on says the listed files are discarded and lists what is still there whenever the
+> workspace does not read clean; it says the workspace matches the branch only where it does.
+> Rules 1 to 3 and 6 are unchanged.
+>
+> - Amends: D-0198 rule 4
+> - Amends: D-0198 rule 5
