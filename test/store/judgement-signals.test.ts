@@ -12,6 +12,7 @@ import { expect, test } from "vitest";
 import { main } from "../../src/access/cli.js";
 import { parseCommand } from "../../src/access/cli-parse.js";
 import { consoleSeams } from "../../src/access/console.js";
+import { breached, FALSIFIER_THRESHOLDS } from "../../src/access/decisions-cli.js";
 import { flowBody } from "../../src/access/flow-host.js";
 import { asDecision } from "../../src/access/page/triage.js";
 import type { OpenPoint, Ranked } from "../../src/advisory/triage.js";
@@ -282,16 +283,36 @@ test("rondo raises and rondo explains print a line each and one over them all", 
     "1970-01-01T00:00:00.020Z reading=p2 repository=o/n candidates=1 raising=0 raised=0 decided=1 " +
       "asks=0 answered=0 answered_points=0 as_recommended=0 sent_decided=1 replied=0",
     "readings=2 candidates=4 raised=2 decided=3 raising_share=0.50 as_recommended_share=0.67 " +
-      "replied_share=0.33",
+      "replied_share=0.33 raising_breached=- as_recommended_breached=- replied_breached=-",
   ]);
   expect(await run(["explains", "--since", "1970-01-01T00:00:00.110Z"], path)).toEqual([
     'about={"form":"message","messageId":"m1"} asked=1 button=0 text=1 ' +
       "first=1970-01-01T00:00:00.110Z last=1970-01-01T00:00:00.110Z",
     "about=- asked=1 button=0 text=1 first=1970-01-01T00:00:00.120Z last=1970-01-01T00:00:00.120Z",
-    "things=2 asked=2",
+    "things=2 asked=2 repeated=0 k4_tripped=no",
   ]);
+  expect((await run(["explains"], path)).at(-1)).toBe("things=3 asked=4 repeated=1 k4_tripped=yes");
   expect(await run(["raises"], freshStore())).toEqual([
-    "readings=0 candidates=0 raised=0 decided=0 raising_share=- as_recommended_share=- replied_share=-",
+    "readings=0 candidates=0 raised=0 decided=0 raising_share=- as_recommended_share=- " +
+      "replied_share=- raising_breached=- as_recommended_breached=- replied_breached=-",
   ]);
-  expect(await run(["explains"], freshStore())).toEqual(["things=0 asked=0"]);
+  expect(await run(["explains"], freshStore())).toEqual([
+    "things=0 asked=0 repeated=0 k4_tripped=no",
+  ]);
+});
+
+test("D-0197: each falsifier breaches at its share, not below it, and not with too few", () => {
+  const { raising, asRecommended, replied } = FALSIFIER_THRESHOLDS;
+  // raising: 0.80 over at least 20 candidates
+  expect(breached(16, 20, raising)).toBe("yes");
+  expect(breached(15, 20, raising)).toBe("no");
+  expect(breached(19, 19, raising)).toBe("-");
+  // as recommended: 0.90 over at least 10 answered points
+  expect(breached(9, 10, asRecommended)).toBe("yes");
+  expect(breached(8, 10, asRecommended)).toBe("no");
+  expect(breached(9, 9, asRecommended)).toBe("-");
+  // replied: 0.50 over at least 10 sent requests
+  expect(breached(5, 10, replied)).toBe("yes");
+  expect(breached(4, 10, replied)).toBe("no");
+  expect(breached(9, 9, replied)).toBe("-");
 });

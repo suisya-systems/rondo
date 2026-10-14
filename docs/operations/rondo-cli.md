@@ -1502,7 +1502,7 @@ the person's to decide (rondo#659). Read-only and ids and counts only, like `ask
 ```console
 $ node bin/rondo.mjs raises --since 2026-10-11
 2026-10-11T09:00:00.000Z reading=p-0040 repository=o/n candidates=3 raising=2 raised=2 decided=2 asks=3 answered=2 answered_points=3 as_recommended=2 sent_decided=2 replied=1
-readings=1 candidates=3 raised=2 decided=2 raising_share=0.67 as_recommended_share=0.67 replied_share=0.50
+readings=1 candidates=3 raised=2 decided=2 raising_share=0.67 as_recommended_share=0.67 replied_share=0.50 raising_breached=- as_recommended_breached=- replied_breached=-
 ```
 
 - **One line per triage reading** (a `triage` proposal row), oldest first. `raised` and `decided`
@@ -1520,6 +1520,10 @@ readings=1 candidates=3 raised=2 decided=2 raising_share=0.67 as_recommended_sha
   changed after the fact), `raising_share` (asks on almost every candidate) and
   `as_recommended_share` (raised points always answered as recommended). Each is `-` with nothing
   to divide by.
+- **Each share's `_breached` is `D-0197` rule 1's line**: `yes` at or above it, `no` below it, `-`
+  under its minimum. `raising_share` breaches at 0.80 over 20 candidates or more,
+  `as_recommended_share` at 0.90 over 10 answered points or more, `replied_share` at 0.50 over 10
+  sent requests or more. A breach asks the owner to look at `D-0193` again; it changes nothing.
 
 ### 8.4 Explains -- what the person asked the explainer about
 
@@ -1530,7 +1534,7 @@ asked about, most asked first, then one over them all (rondo#659).
 $ node bin/rondo.mjs explains --since 2026-10-11
 about={"form":"message","messageId":"m-0040"} asked=2 button=1 text=1 first=2026-10-11T09:00:00.000Z last=2026-10-11T10:00:00.000Z
 about=- asked=1 button=0 text=1 first=2026-10-11T11:00:00.000Z last=2026-10-11T11:00:00.000Z
-things=2 asked=3
+things=2 asked=3 repeated=1 k4_tripped=yes
 ```
 
 - **The thing is the basis the "?" was pressed beside**, ids only; `about=-` is a question typed into
@@ -1538,6 +1542,8 @@ things=2 asked=3
 - **It counts answered questions.** The signal is written with each explanation, so a question no
   answer was written for is not counted, and a person who did not ask is not counted either.
 - **`--since` bounds when the answer was written.**
+- **`k4_tripped=yes` when one thing was asked about twice or more** in the window (`D-0197` rule 2);
+  `repeated` counts those things. A typed question (`about=-`) is counted and never trips it.
 
 ---
 
