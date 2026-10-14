@@ -227,10 +227,11 @@ C-NN`, so the spaces can never be read as one.
 | D-0190 | An ask-back's options are stored beside its words and each one is a press, the option pressed is kept on the answer, a stop on the drafter's own ask is not drafted again, and one reader lists every decision the store holds | accepted, amended |
 | D-0191 | A request with no template gets a plan rondo assembles and a person approves with one press: the drafter proposes the work and its repository, deterministic code fills every host fact from what setup recorded or wrote, and a store with no plan records the one setup wrote beside it | accepted |
 | D-0192 | An open question of the goal flow is a row under *your turn* in the list, on every view, leading to the questions' form; like a paused flow, it is a row there that is not a request | accepted |
-| D-0193 | Triage raises only the open points that are real decisions: each point says whether it is in dispute, irreversible or against a standing policy, rondo decides the rest as it recommends and writes each one where the person can change it, and the goal flow asks only the raised ones | accepted |
+| D-0193 | Triage raises only the open points that are real decisions: each point says whether it is in dispute, irreversible or against a standing policy, rondo decides the rest as it recommends and writes each one where the person can change it, and the goal flow asks only the raised ones | accepted, amended |
 | D-0194 | The conflict fix of a line started with no claim is started by rondo, once, under an approval that starts work by itself; a try that started nothing is the press again, with why | accepted |
 | D-0195 | A lap only a person can end -- stalled, held by a start that threw, or a row that will not decode -- is ended from the page with their reason, gives back what it held and asks whether to carry on; a lap before its gate whose driver is gone is lost | accepted |
 | D-0196 | A host started with nobody named as the approver lets the page name them, once, and builds its write ports for that name without a restart | accepted |
+| D-0197 | The readers of rondo#659 say when a falsifier is breached: a share of triage's raised-or-decided reading at or above its line over enough to judge, and K4 tripped by one thing asked about twice | accepted |
 | D-0199 | Asking across every request also says the decisions recorded on a request since the person last looked, in the same section as what ended | accepted |
 
 ---
@@ -29935,6 +29936,14 @@ review for rondo#318).
 > `D-0173` K4 is still the later entry the residual names. A question no answer was written for
 > carries no signal, so it is not counted. Nothing below is edited.
 
+> **Annotation (2026-10-14, from D-0197).** Added after this entry was accepted. The residual
+> *what the K4 signals are read for* is answered by `D-0197` rule 2: `rondo explains` says
+> `k4_tripped=yes` when, in its `--since` window, one thing pressed beside was asked about twice or
+> more. A question typed about nothing pressed is counted and never trips it. Nothing below is
+> edited.
+>
+> - Amends: D-0177 Residuals
+
 ### Context
 
 A person reading the page meets a gate, a lap's status, a check that went red or a word that is
@@ -31209,6 +31218,17 @@ rule 10, `D-0063` rule 2.2, `D-0064` P2-P5, O8 and rule 4.1, `D-0067` rule 6, `D
 > falsifies this entry is the owner's to say. *Nothing deterministic checks* a point's `null`
 > still holds: this counts what would show it wrong after the fact. Nothing below is edited.
 
+> **Annotation (2026-10-14, from D-0197).** Added after this entry was accepted. *What would
+> falsify it* now has a line for each of its three falsifiers, and `rondo raises` says on its last
+> line whether each is breached (`D-0197` rule 1): *asks that still arrive on almost every
+> candidate* at `raising_share` 0.80 or more over 20 candidates or more; *a raised point the person
+> always answers as recommended* at `as_recommended_share` 0.90 or more over 10 answered points or
+> more; *a person who changes a decided point after the fact as a rule* at `replied_share` 0.50 or
+> more over 10 sent requests or more. A breach says the entry is to be looked at again by the owner,
+> and does not reverse it by itself. Nothing below is edited.
+>
+> - Amends: D-0193 What would falsify it
+
 ### Context
 
 `D-0097` section 1 rule 5 makes every candidate carry its open points, each with a recommendation,
@@ -31543,6 +31563,66 @@ by hand did not have it.
   environment disagree.
 - **Work started twice after a naming**: a host built for no approver was running something in
   an approver's name.
+
+## D-0197 — The readers of rondo#659 say when a falsifier is breached: a share of triage's raised-or-decided reading at or above its line over enough to judge, and K4 tripped by one thing asked about twice
+
+**Status:** accepted (2026-10-14, rondo#659; the owner asked for the lines to be drafted and reviewed
+them in the pull request). Amends `D-0177` (its residual on the K4 signals) and `D-0193` (*What
+would falsify it*), by their annotations from this entry. Supersedes nothing. Refs `D-0173` K4,
+`D-0189` rule 4, rondo#487.
+
+### Context
+
+rondo#659 gave `D-0193`'s three falsifiers and `D-0177`'s K4 signal a reader each, `rondo raises` and
+`rondo explains`, and set no line: what share falsifies `D-0193` was left to the owner, and what
+the K4 signals are read for to a later entry. Read on the live store on 2026-10-14 (lap 19), the
+readings since `D-0193` (from 2026-10-11T04:46Z: 26 readings, 91 candidates) have
+`raising_share=0.41`; every reading before it had 1.00, which is rondo#487's measurement. No ask
+over a raised point has been answered since `D-0193`; the 16 points answered before it were all
+answered as recommended (1.00). No request has been sent with decided points, so `replied_share`
+has nothing to divide. The explainer has answered one question, typed, about nothing pressed.
+
+### Decision
+
+1. **Each of `D-0193`'s falsifiers is breached at a share over a minimum.** `rondo raises` adds
+   `raising_breached`, `as_recommended_breached` and `replied_breached` to its last line: `yes`
+   at or above the share, `no` below it, `-` under the minimum, where one answer moves the share
+   too far to read.
+
+   | Falsifier (`D-0193`) | Share | Breached at | Minimum | Why there |
+   |---|---|---|---|---|
+   | *Asks that still arrive on almost every candidate* | `raising_share` | 0.80 | 20 candidates | *Almost every* is four in five; the reading before `D-0193` was 1.00 and today's is 0.41, so the line sits between them, near the old one |
+   | *A raised point the person always answers as recommended* | `as_recommended_share` | 0.90 | 10 answered points | *Always* with one slip in ten allowed; before `D-0193` it was 1.00 over 16 |
+   | *A person who changes a decided point after the fact as a rule* | `replied_share` | 0.50 | 10 sent requests | *As a rule, not an exception* is more often than not; the share is an upper bound (any reply counts), so the line is not drawn lower |
+
+2. **K4 trips when one thing is asked about twice or more in the window.** `rondo explains` adds
+   `repeated` (the things pressed beside that were asked about at least twice) and `k4_tripped`
+   (`yes` when `repeated` is one or more) to its last line. `D-0173` K4 is unmet when *a word on
+   screen has to be asked about*; a single question may be about what happened rather than what a
+   word means (`D-0177` answers both), and asking about the same thing again is the reading that a
+   word there has to be asked about. A question typed into the reply box carries no thing, so
+   it is counted and never trips K4. The window is `--since`; with none, it is all time.
+
+3. **A breach or a trip asks the owner to look again; it changes nothing by itself.** No reader
+   writes a row or moves a line, and `D-0173`'s definition stays the operator's (`D-0173` rule 4).
+
+### What it costs
+
+- **A line drawn before the data**: no falsifier has enough since `D-0193` except `raising_share`,
+  so two lines are the owner's judgement of the words rather than a measured spread.
+- **The minimum hides an early signal**: nine answered points all as recommended print `-`.
+- **K4 by repetition misses a word asked about once**, which `D-0173` K4 counts as unmet.
+
+### What would falsify it
+
+- A share the owner reads as falsifying `D-0193` while its reader says `no`, or the reverse.
+- A word the person had to ask about that never trips K4 because each ask pressed beside a
+  different row.
+
+### Annotations this entry adds
+
+- `D-0193`, **not additive**: *What would falsify it* gains its lines (rule 1).
+- `D-0177`, **not additive**: the residual on what the K4 signals are read for is answered (rule 2).
 
 ## D-0199 — Asking across every request also says the decisions recorded on a request since the person last looked, in the same section as what ended
 

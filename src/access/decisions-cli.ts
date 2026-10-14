@@ -61,6 +61,27 @@ async function commandDecisions(
 const ratio = (n: number, d: number): string => (d === 0 ? "-" : (n / d).toFixed(2));
 
 /**
+ * `D-0197`'s thresholds: each of `D-0193`'s falsifiers is breached when its
+ * share is at least `share` over at least `minimum` of its denominator.
+ */
+export const FALSIFIER_THRESHOLDS = {
+  raising: { share: 0.8, minimum: 20 },
+  asRecommended: { share: 0.9, minimum: 10 },
+  replied: { share: 0.5, minimum: 10 },
+} as const;
+
+/** `D-0197` rule 2: a thing asked about this often in the window trips K4. */
+export const K4_REPEAT = 2;
+
+/** `yes` or `no` against a threshold, or `-` with too little to judge (`D-0197` rule 1). */
+export function breached(n: number, d: number, at: { share: number; minimum: number }): string {
+  if (d < at.minimum) {
+    return "-";
+  }
+  return n / d >= at.share ? "yes" : "no";
+}
+
+/**
  * `rondo asks`: how often the drafter asked back, one line per request it wrote
  * in, then one line over them all (rondo#637, `D-0189`'s A2). Read-only and
  * body-free, `commandDecisions`'s rule; ids and counts only.
@@ -109,7 +130,8 @@ function print(lines: readonly string[]): number {
 /**
  * `rondo raises`: per triage reading, what would falsify its raised-or-decided
  * reading (rondo#659, `D-0193`): a line per reading, then one over them all
- * whose three shares are the three falsifiers. Ids and counts only.
+ * whose three shares are the three falsifiers, each with whether it breaches
+ * `D-0197`'s threshold. Ids and counts only.
  */
 async function commandRaises(storePath: string, sinceMs: number | null): Promise<number> {
   const rows = openJudgementSignals(storePath).triageJudgement(sinceMs, asDecision);
@@ -149,6 +171,9 @@ async function commandRaises(storePath: string, sinceMs: number | null): Promise
       `raising_share=${ratio(raising, candidates)}`,
       `as_recommended_share=${ratio(asRecommended, answeredPoints)}`,
       `replied_share=${ratio(replied, sentDecided)}`,
+      `raising_breached=${breached(raising, candidates, FALSIFIER_THRESHOLDS.raising)}`,
+      `as_recommended_breached=${breached(asRecommended, answeredPoints, FALSIFIER_THRESHOLDS.asRecommended)}`,
+      `replied_breached=${breached(replied, sentDecided, FALSIFIER_THRESHOLDS.replied)}`,
     ].join(" "),
   ]);
 }
@@ -157,9 +182,12 @@ async function commandRaises(storePath: string, sinceMs: number | null): Promise
  * `rondo explains`: the K4 signals, one line per thing asked about, most asked
  * first, then one over them all (rondo#659, `D-0177`). The thing is its basis,
  * ids only; `-` is a question typed into the reply box about nothing pressed.
+ * The last line says whether K4 tripped by `D-0197` rule 2.
  */
 async function commandExplains(storePath: string, sinceMs: number | null): Promise<number> {
   const rows = openJudgementSignals(storePath).explainSignals(sinceMs);
+  // A typed question (`about` null) is about nothing pressed, so it never repeats a thing.
+  const repeated = rows.filter((row) => row.about !== null && row.asked >= K4_REPEAT).length;
   return print([
     ...rows.map((row) =>
       [
@@ -171,7 +199,12 @@ async function commandExplains(storePath: string, sinceMs: number | null): Promi
         `last=${new Date(row.lastAtMs).toISOString()}`,
       ].join(" "),
     ),
-    `things=${String(rows.length)} asked=${String(rows.reduce((total, row) => total + row.asked, 0))}`,
+    [
+      `things=${String(rows.length)}`,
+      `asked=${String(rows.reduce((total, row) => total + row.asked, 0))}`,
+      `repeated=${String(repeated)}`,
+      `k4_tripped=${repeated > 0 ? "yes" : "no"}`,
+    ].join(" "),
   ]);
 }
 
