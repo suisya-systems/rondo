@@ -388,3 +388,61 @@ test("a fix pushed onto an open pull request is not said as one opened, and a la
   expect(material.results?.forMs).toBe(5_000 - 3_001);
   expect(material.results?.items.map((item) => item.kind)).toEqual(["merged"]);
 });
+
+test("a decision since the mark is said in the same section, and one before it is not (rondo#656)", async () => {
+  const w = await asked();
+  // Before the mark (3001): bob stopped rondo's ask.
+  const asks = await w.record.recordThreadMessage({
+    messageId: "ask-split",
+    body: "Split it in two?",
+    authorKind: "drafter",
+    authorId: DETERMINISTIC_DRAFTER,
+    inReplyTo: REQUEST,
+    atMs: 2_750,
+    bases: [{ form: "message", messageId: REQUEST }],
+    asks: true,
+  });
+  if (asks.kind !== "recorded") throw new Error(JSON.stringify(asks));
+  const stop = await w.record.recordThreadMessage({
+    messageId: "answer-old",
+    body: "No.",
+    authorKind: "operator",
+    authorId: "bob",
+    inReplyTo: "ask-split",
+    atMs: 2_800,
+    bases: [],
+    asks: false,
+    answerOutcome: "stop",
+  });
+  if (stop.kind !== "recorded") throw new Error(JSON.stringify(stop));
+  // Since the mark: rondo approved the lap at its gate.
+  await w.store.recordGateAnswer(LAP, `gate-${LAP}`, "approve", "rondo/gate", 3_500);
+  await askAcross(w);
+  const material = await gatherExplainerMaterial(w, ACROSS, 5_000);
+  expect(material.results?.items.filter((item) => item.kind === "decision")).toEqual([
+    {
+      kind: "decision",
+      locator: `iteration:${LAP}`,
+      by: "rondo",
+      outcome: "approve",
+      option: null,
+      request: { messageId: REQUEST, title: "Fix the flaky test." },
+    },
+  ]);
+  expect(material.locators).toContain(`iteration:${LAP}`);
+  const { answer, claims } = deterministicAnswer(material, EN, { kind: "acrossRequests" });
+  expect(claims).toContainEqual({
+    label: '"Fix the flaky test"',
+    value: "rondo approved at the gate",
+    basis: { form: "iteration", iterationId: LAP },
+  });
+  const { page } = answerBody(EN, material, answer, claims, { kind: "free" });
+  const section = page.slice(page.indexOf(EN.explainResultsLead(EN.age(ago(0, 1_999)))));
+  expect(section).toContain('- "Fix the flaky test": rondo approved at the gate');
+  expect(section).not.toContain("answered: stop");
+  const ja = chromeFor("ja");
+  const inJa = deterministicAnswer(material, ja, { kind: "acrossRequests" });
+  expect(answerBody(ja, material, inJa.answer, inJa.claims, { kind: "free" }).page).toContain(
+    "- 「Fix the flaky test」: rondoがゲートで承認しました",
+  );
+});
