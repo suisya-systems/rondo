@@ -1239,8 +1239,26 @@ export const JA: Chrome = Object.freeze({
   publishPlanField: (field) =>
     `この回の計画に${PLAN_FIELD_WORDS[field] ?? field}が記録されていないため、公開できません。`,
   publishNoRepo:
-    "この作業のプルリクエストをどのリポジトリに出すか、rondo に記録がありません。" +
-    "このコンピュータで rondo を管理する人に、リポジトリを記録してもらってください。",
+    "この作業のプルリクエストをどの GitHub リポジトリに出すか、rondo には分かりません。下に入力してください。",
+  publishRepoLabel: "リポジトリ（OWNER/NAME）",
+  publishRepoAction: "このリポジトリに出す",
+  publishRepoRefusedNoApprover:
+    "何も記録していません。承認する人がまだ決まっていません。前の画面に戻り、上部で名前を入れてから、もう一度押してください。",
+  publishRepoRefusedPress:
+    "何も記録していません。この操作は、人がこのページのボタンを押したときだけ受け付けます。",
+  publishRepoRefusedForm:
+    "何も記録していません。そのフォームはこのページのものではありません。読み込み直してから" +
+    "押してください。",
+  publishRepoRefusedShape:
+    "何も記録していません。リポジトリは suisya-systems/rondo のように OWNER/NAME の形で入力してください。",
+  publishRepoRefusedChanged:
+    "何も記録していません。この作業には、もう公開先のリポジトリがあります。前の画面に戻って確かめてください。",
+  publishRepoRefusedMismatch:
+    "何も記録していません。この作業のワークスペースは、そのリポジトリに push しません。名前を確かめて、もう一度入力してください。",
+  publishRepoRefusedNoPlan:
+    "何も記録していません。この作業のリポジトリは、このコンピュータの rondo のセットアップに含まれていないため、名前を保存する先がありません。",
+  publishRepoRefusedFailed:
+    "何も記録していません。今回は名前を保存できませんでした。もう一度押しても問題ありません。",
   publishTargetRefused:
     "push 先が正しいか確認できないため、公開しません。このコンピュータで rondo を管理する人に確かめてもらってください。",
   publishUncommitted: (paths) =>
@@ -1518,8 +1536,7 @@ export const JA: Chrome = Object.freeze({
   publishRefusedNoRun: "公開していません。この回の作業の記録が見つかりません。",
   publishRefusedPlanField: "公開していません。この回の計画に、公開に必要な情報が足りません。",
   publishRefusedNoRepo:
-    "何も公開していません。プルリクエストをどのリポジトリに出すか、rondo に記録がありません。" +
-    "このコンピュータで rondo を管理する人に記録してもらってください。",
+    "何も公開していません。プルリクエストをどの GitHub リポジトリに出すか、rondo には分かりません。前の画面に戻って入力してください。",
   publishRefusedTarget: () => "何も公開していません。push 先が正しいか確認できませんでした。",
   publishRefusedUncommitted: (detail) =>
     `公開していません。作業場所に、コミットされていない変更が残っています（${detail}）。`,

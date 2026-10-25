@@ -522,6 +522,10 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   "src/access/github-sign-in-route.ts": {
     hono: ["Context", "Hono"],
   },
+  // rondo#676 (D-0202): naming a lap's pull-request repository, for the same reason.
+  "src/access/publish-repository.ts": {
+    hono: ["Context", "Hono"],
+  },
   // The manifest read once at load, moved out of `web-app.ts` with the map it
   // builds (rondo#674).
   "src/access/served.ts": {
@@ -1360,6 +1364,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/github-sign-in-route.ts": [HUMAN],
   // rondo#676 (D-0198): a lap's uncommitted changes thrown away, on the person's press.
   "src/access/discard.ts": [HUMAN],
+  // rondo#676 (D-0202): the repository a lap's pull request goes to, named on the person's press.
+  "src/access/publish-repository.ts": [HUMAN, "Publishing"],
   "src/access/framing.ts": [SPLITTING, "Reviewer"],
   // D-0125: whether the readings would let a gate be approved without the person.
   "src/access/gate-auto.ts": ["Reviewer"],

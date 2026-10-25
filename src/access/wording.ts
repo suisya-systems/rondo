@@ -1483,8 +1483,19 @@ export interface Chrome
   readonly publishAnswerNotApproval: (answer: "approve" | "revise" | null) => string;
   readonly publishNoRun: string;
   readonly publishPlanField: (field: string) => string;
-  /** Nowhere to open a pull request: neither the lap nor the host names one. */
+  /** Nowhere to open a pull request yet: nothing names the repository (D-0202). */
   readonly publishNoRepo: string;
+  /** The box the person names it in, and its press (rondo#676, D-0202). */
+  readonly publishRepoLabel: string;
+  readonly publishRepoAction: string;
+  readonly publishRepoRefusedNoApprover: string;
+  readonly publishRepoRefusedPress: string;
+  readonly publishRepoRefusedForm: string;
+  readonly publishRepoRefusedShape: string;
+  readonly publishRepoRefusedChanged: string;
+  readonly publishRepoRefusedMismatch: string;
+  readonly publishRepoRefusedNoPlan: string;
+  readonly publishRepoRefusedFailed: string;
   /** Its reason is git's or the preflight's English, so it goes in the maintainer fold. */
   readonly publishTargetRefused: string;
   readonly publishUncommitted: (paths: string) => string;

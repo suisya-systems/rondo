@@ -235,6 +235,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0198 | The uncommitted changes that hold a lap's publish are discarded from the page, on a screen that lists them, by a press that discards only that list | accepted, amended |
 | D-0199 | Asking across every request also says the decisions recorded on a request since the person last looked, in the same section as what ended | accepted |
 | D-0201 | A widening onto another open line's files waits as a row and is written by the order tick once they are free, and inside an approved scope the gate widens a drafted claim onto what its lap changed and records it against that approval | accepted |
+| D-0202 | A lap whose plan and host name no forge repository has it named on the publish screen, checked against the push and recorded as a setup plan of its repository | accepted |
 
 ---
 
@@ -20206,6 +20207,13 @@ binding to one repository lives in installation and in publishing, which is wher
    then takes the slug from the lap's own plan, and its push-URL preflight compares against that.
    It was put to the gate as point 2, because it reverses `D-0059` section 5a's *"the forge repository
    is the host's, not a field"*, and the gate took it.
+   > **Annotation (2026-10-26, from D-0202).** Added after this entry was accepted, and **widening**:
+   > the slug is also recorded from the publish screen, where a lap's plan and the host name none. A
+   > person types it, the push-URL preflight checks it before anything is kept, and it is recorded as
+   > a setup plan of that repository. Rule 3.3 is untouched: nothing is inferred. Nothing below is
+   > edited.
+   >
+   > - Amends: D-0081 rule 3.2
 3. **What it does not become: rondo inferring a slug.** `forge.ts`'s own reason stands -- the
    workspace is a worktree cut from a local path, and an inferred slug is whatever that clone
    happened to point at. `D-0075` rule 3.1 refuses it a second time. A slug is told to setup by a
@@ -31882,3 +31890,53 @@ as a page press with a confirmation step, and to leave committing and excluding 
 >
 > - Amends: D-0198 rule 4
 > - Amends: D-0198 rule 5
+
+---
+
+## D-0202 — A lap whose plan and host name no forge repository has it named on the publish screen, checked against the push and recorded as a setup plan of its repository
+
+**Status:** accepted (2026-10-26, rondo#676, the owner's answer through the window). Amends `D-0081`
+rule 3.2. Refs `D-0081` rules 3.3 and 6.3, `D-0075` rule 3.1, `D-0090`, `D-0059` section 5a.
+
+### Context
+
+Setup records the forge repository only when it is given `--forge-repo OWNER/NAME`, which is
+optional. A store set up on a real repository without it refuses every publish: no slug on the
+lap's plan and no `--repo` on the host. The publish screen said to ask whoever maintains rondo on
+this computer to record it, which is a terminal. rondo#676 removes the terminal from that path.
+Reading the slug off the workspace's push remote was put to the owner and declined: `D-0081` rule
+3.3 (no inferred slug) stands.
+
+### Decision
+
+1. **Offered only where publishing is refused because nothing names a repository.** The publish
+   screen's refusal card holds one box (`OWNER/NAME`) and one press, `POST /publish-repository`, a
+   native form minted like every press. A host with no approver draws neither.
+2. **The press keeps the name only where it is where the push goes.** It runs the same preflight a
+   publish runs (`publishPreflight` over `inspectPushTarget`) with the typed name, and refuses,
+   recording nothing, when the workspace's remote pushes somewhere else. The host's
+   `--allow-remote-mismatch` does not apply: it is permission for one publish, and this name is
+   kept for every later one.
+3. **The name is recorded as a setup plan of the lap's local repository**: that repository's newest
+   setup plan with `forge_repository` set, recorded by the approver. A repository setup recorded no
+   plan for has nothing to copy, and the press refuses.
+4. **The order a publish reads is the lap's plan, then the host's `--repo`, then the newest slug a
+   setup plan records for the lap's repository.** `D-0081` rule 6.3 is unchanged: a host's flag
+   still answers first for a store set up before `D-0081`. Later laps of that repository are drafted
+   from the new setup plan and carry the slug in their own plan.
+5. **Only while nothing names one.** A press over a lap that has a repository by any of rule 4's
+   three is refused, so a stale screen does not record a second name. Presses run one at a time,
+   and the setup plans are read again after git answers, so a plan recorded meanwhile refuses it.
+
+### What it costs
+
+- **A pasted or hand-written plan's repository with no setup plan** cannot be named here; the press
+  says so.
+- **A bare `#N` is still read by `D-0137`'s rule**, which reads the same setup plans, so it reads in
+  the named repository once the plan is recorded.
+
+### What would falsify it
+
+- **A name kept that the push does not go to**: rule 2's preflight did not run over it.
+- **A publish that went to a recorded name while the lap's plan or the host named another**: rule
+  4's order was not kept.

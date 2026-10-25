@@ -176,11 +176,10 @@ test("a lap that names no repository to publish to says so on its own screen (D-
   );
   const screen = html.slice(html.indexOf('id="publish"'));
 
-  // What is missing, whose it is to set, and nothing the person is expected to
-  // do here: the repository is recorded when the place the work happens is set
-  // up, which is not an act on this page (D-0076 rule 4.1).
-  expect(screen).toContain("no record of which repository this work");
-  expect(screen).toContain("whoever maintains rondo on this computer");
+  // What is missing, and nobody sent elsewhere for it (rondo#676, D-0202). The
+  // box it is named in is drawn only beside its port, which this host has not.
+  expect(screen).toContain("which GitHub repository this work");
+  expect(screen).not.toContain("maintains rondo");
   expect(screen).not.toContain("<form");
   // Not a flag, not a field name, and not the host-wide sentence that used to
   // stand in for this.
@@ -1068,6 +1067,35 @@ test(
     expect(left.block).toEqual({ why: "uncommitted", paths: ["left-behind.txt"], elsewhere: null });
     expect(left.reason).toContain("left-behind.txt");
     expect(left.reason).toContain("--despite-review does not change that");
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "rondo#676: a lap naming no repository publishes to the one a person named for its repository (D-0202)",
+  async () => {
+    const world = await publishableWorld("clear");
+    const record = await world.store.read(world.iterationId);
+    if (record.kind !== "read") {
+      throw new Error("the fixture row would not read");
+    }
+    const asked = (named: string | null) => ({
+      ...world.asked,
+      repo: null,
+      recorded: async () => named,
+    });
+    const told = await publishPlanFor(
+      record.record,
+      asked("suisya-systems/rondo-not-real"),
+      {},
+      world.store,
+      null,
+    );
+    expect(told.kind === "ready" && told.plan.forgeRepo).toBe(
+      "github.com/suisya-systems/rondo-not-real",
+    );
+    const none = await publishPlanFor(record.record, asked(null), {}, world.store, null);
+    expect(none.kind === "refused" && none.block).toEqual({ why: "noRepo" });
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );

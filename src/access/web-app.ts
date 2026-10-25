@@ -80,6 +80,7 @@ import {
   resolveLanguage,
 } from "./page-logic/language.js";
 import { viewHref, viewOf } from "./page-logic/routes.js";
+import { publishRepositoryRoute } from "./publish-repository.js";
 import { answeredRevise, questionRevise } from "./question.js";
 import { TAB_OUTCOMES } from "./reach.js";
 import { heldAnchor, pressable } from "./read-in.js";
@@ -1686,8 +1687,8 @@ function said(c: Context<PageEnv>, status: 400 | 403 | 404 | 409 | 413 | 421 | 5
  * scope screen's two presses, `POST /scope` and `POST /start`, the gate's
  * other answer, `POST /revise`, the one write that leaves this machine,
  * `POST /publish`, the release of a finished line's files, `POST /release`,
- * `POST /end-lap` (rondo#655), `POST /merge` (`D-0091`), `POST /github-sign-in` and `POST /discard`
- * (rondo#676). `test/access/web-app.test.ts` fails on any other non-`GET` entry of `app.routes`.
+ * `POST /end-lap` (rondo#655), `POST /merge` (`D-0091`), `POST /github-sign-in`, `POST /discard`
+ * and `POST /publish-repository` (rondo#676). `test/access/web-app.test.ts` fails on any other non-`GET` entry of `app.routes`.
  */
 export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   // The writer is taken off before anything reading is handed the rest, so
@@ -2643,13 +2644,12 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     );
   });
 
-  // **The release press** (D-0073 rule 4.3, rondo#288): the files a finished
-  // line holds, given up on the person's judgement that its work is done. The
-  // claim and laps the screen was drawn over are carried, so a line that moved
-  // under the screen releases nothing (the store's own staleness test).
   signInRoute(app, reading.signIn ?? null, wordingOf);
   discardRoute(app, reading.discard ?? null, wordingOf);
-
+  publishRepositoryRoute(app, reading.publishRepository ?? null, wordingOf);
+  // **The release press** (D-0073 rule 4.3, rondo#288): the files a finished line holds, given up
+  // on the person's judgement that its work is done. The claim and laps the screen was drawn over
+  // are carried, so a line that moved under the screen releases nothing (the store's staleness test).
   app.post(RELEASE_ROUTE, async (c) => {
     if (release === null) {
       return releaseRefused(c, 403, "releaseRefusedNoApprover", null);
