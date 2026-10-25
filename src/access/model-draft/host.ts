@@ -269,19 +269,8 @@ export async function gatherDrafterMaterial(
   // Templates: one per choice, newest first (rule 2.1.3 as D-0075 rule 2.3
   // groups it), from the 20 most recent rows, the setup rows and the plans
   // pasted into this thread.
-  const templates = new Map<string, DraftTemplate>();
   const ungrouped = await heldTemplates(ports, records, read.messages, inThread);
-  for (const template of ungrouped) {
-    // `delete` first, so a later occurrence also takes the later place: on a
-    // tie in time, the one the store wrote later is the newer.
-    const choice = choiceOf(template.plan);
-    const known = templates.get(choice);
-    if (known === undefined || template.heldAtMs >= known.heldAtMs) {
-      templates.delete(choice);
-      templates.set(choice, template);
-    }
-  }
-  const everyChoice = [...templates.values()].reverse().sort((a, b) => b.heldAtMs - a.heldAtMs);
+  const everyChoice = oneEachChoice(ungrouped);
   // **The repository the person named is where the work runs** (rondo#383,
   // D-0090): only its plans are offered, so the drafter, the scope screen and a
   // bare `#N`'s read all pick among the same ones. An unheld one offers every
@@ -563,6 +552,22 @@ function choiceOf(plan: JsonRecord): string {
   );
 }
 
+/** One template per choice, newest first (D-0075 rule 2.3). */
+function oneEachChoice(ungrouped: readonly DraftTemplate[]): DraftTemplate[] {
+  const templates = new Map<string, DraftTemplate>();
+  for (const template of ungrouped) {
+    // `delete` first, so a later occurrence also takes the later place: on a
+    // tie in time, the one the store wrote later is the newer.
+    const choice = choiceOf(template.plan);
+    const known = templates.get(choice);
+    if (known === undefined || template.heldAtMs >= known.heldAtMs) {
+      templates.delete(choice);
+      templates.set(choice, template);
+    }
+  }
+  return [...templates.values()].reverse().sort((a, b) => b.heldAtMs - a.heldAtMs);
+}
+
 /**
  * Every plan rondo holds as a template, **ungrouped**: each of `records`' 20
  * most recent rows, every setup row, and every operator message in `thread`
@@ -575,11 +580,12 @@ async function heldTemplates(
   records: readonly IterationRecord[],
   messages: readonly { messageId: string; authorKind: string; body: string; atMs: number }[],
   thread: ReadonlySet<string>,
+  rows: number = TEMPLATE_ROWS,
 ): Promise<DraftTemplate[]> {
   const held: DraftTemplate[] = [];
   const recent = [...records]
     .sort((a, b) => b.createdAtMs - a.createdAtMs || (a.id < b.id ? 1 : -1))
-    .slice(0, TEMPLATE_ROWS)
+    .slice(0, rows)
     // Oldest first, as the setup rows and the messages below are: the caller
     // reads a later place as a later write when two share a time.
     .reverse();
@@ -724,6 +730,30 @@ export async function heldPlans(
 ): Promise<readonly HeldPlan[]> {
   const material = await gatherDrafterMaterial(ports, requestMessageId, null);
   return material.templates.flatMap((template) => asHeldPlan(template) ?? []);
+}
+
+/**
+ * Every plan rondo holds for one request, **past the twenty rows
+ * {@link heldPlans} reads** (rondo#718): one per choice, newest first, from
+ * every lap row as well as the setup rows and the plans pasted into its thread.
+ * What the scope screen falls back on when no plan it offers is one an approved
+ * scope allows: the lap plan a scope was drawn over outlives the window, and an
+ * address that names no plan would otherwise leave nothing to start.
+ */
+export async function everyHeldPlan(
+  ports: Pick<DrafterPorts, "store" | "record" | "now">,
+  requestMessageId: string,
+): Promise<readonly HeldPlan[]> {
+  const records = [
+    ...(await ports.store.readLive()),
+    ...(await ports.store.terminalIterations()),
+  ].flatMap((outcome) => (outcome.kind === "read" ? [outcome.record] : []));
+  const read = await ports.record.threadMessages();
+  const messages = read.kind === "read" ? read.messages : [];
+  const thread = threadOf(messages, requestMessageId);
+  return oneEachChoice(
+    await heldTemplates(ports, records, messages, thread, records.length),
+  ).flatMap((template) => asHeldPlan(template) ?? []);
 }
 
 /**

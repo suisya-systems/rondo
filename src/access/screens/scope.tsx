@@ -25,7 +25,7 @@ import { goalOutwardActs } from "../goal-scope.js";
 import { hostFailure } from "../host-failure.js";
 import { ago } from "../inbox.js";
 import { latestReads } from "../issue-read.js";
-import { type HeldPlan, heldPlanByDigest, heldPlans } from "../model-draft/host.js";
+import { everyHeldPlan, type HeldPlan, heldPlanByDigest, heldPlans } from "../model-draft/host.js";
 import type { MintIterationId, MintScopeId, WebPorts } from "../page/contract.js";
 import { maintainerFold } from "../page/gate-material.js";
 import {
@@ -566,6 +566,22 @@ async function plansFor(
     // already failed the whole page. What arrives here is a decode this screen
     // can say as it always did.
     return { note: wording.scopePlansUnread(hostFailure(error).text) };
+  }
+}
+
+/** Every plan rondo holds for this request ({@link everyHeldPlan}), or none when they will not read. */
+async function plansBeyond(
+  ports: WebPorts,
+  messageId: string,
+  nowMs: number,
+): Promise<readonly HeldPlan[]> {
+  try {
+    return await everyHeldPlan(
+      { store: ports.store, record: ports.record, now: () => nowMs },
+      messageId,
+    );
+  } catch {
+    return [];
   }
 }
 
@@ -1683,7 +1699,16 @@ async function scopeApproved(
   // and a sentence where there are none, rather than a button that would be
   // refused at the scope's own tests.
   const plans = await plansFor(ports, wording, view.messageId, nowMs);
-  const allowed = "plans" in plans ? plans.plans.filter((plan) => allowedBy(payload, plan)) : [];
+  const offered = "plans" in plans ? plans.plans.filter((plan) => allowedBy(payload, plan)) : [];
+  // **Never a dead end for want of the window** (rondo#718): none offered is
+  // one this scope allows, so every plan rondo holds is read -- a lap plan the
+  // scope was drawn over is held past the twenty newest rows the list reads.
+  const allowed =
+    offered.length > 0
+      ? offered
+      : (await plansBeyond(ports, view.messageId, nowMs)).filter((plan) =>
+          allowedBy(payload, plan),
+        );
   // The plan the scope was drawn over is looked up among every plan rondo
   // holds, not only the one of each kind the list offers: a newer lap of the
   // same kind since must not swap it for another without a word.
