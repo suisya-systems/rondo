@@ -13,6 +13,7 @@ import { readDrafterResult } from "../../../src/access/forge.js";
 import {
   type DrafterPorts,
   draftRequest,
+  everyHeldPlan,
   gatherDrafterMaterial,
   heldPlanByDigest,
   heldPlans,
@@ -327,6 +328,30 @@ test("the plans a person picks from: one per place and agent type, newest first,
   const material = await gatherDrafterMaterial(ports, "r1", null);
   expect(material.templates.map((t) => t.planDigest)).not.toContain(planDigest(revised));
   expect(await heldPlanByDigest(ports, "r1", `sha256:${"0".repeat(64)}`)).toBeNull();
+});
+
+test("every plan rondo holds reads past the twenty newest rows, and only the repository the request names (rondo#718)", async () => {
+  const w = await world();
+  await w.say("r1", "Fix it in owner/a.", null, 1_000);
+  const a = { ...planDocument(), forge_repository: "owner/a" };
+  const b = { ...planDocument(), forge_repository: "owner/b" };
+  const c = { ...planDocument(), forge_repository: "owner/c" };
+  const ended = async (id: string, plan: JsonRecord, atMs: number) => {
+    await reserveLap(w, id, plan, atMs);
+    // Ended, so the store has room for the next one.
+    w.connection.prepare("UPDATE iteration SET status = 'closed' WHERE id = ?").run(id);
+  };
+  await ended("lap-a", a, 1_000);
+  await ended("lap-b", b, 1_500);
+  for (let i = 0; i < 20; i++) {
+    await ended(`lap-c-${i}`, c, 2_000 + i);
+  }
+  const ports = { store: w.store, record: w.record, now: () => 5_000 };
+
+  // The list reads the newest twenty, which are all owner/c's.
+  expect((await heldPlans(ports, "r1")).map((p) => p.planDigest)).toEqual([planDigest(c)]);
+  // Past them, owner/a's is held -- and owner/b's, named by nobody, is not offered.
+  expect((await everyHeldPlan(ports, "r1")).map((p) => p.planDigest)).toEqual([planDigest(a)]);
 });
 
 test("a plan pasted again is the latest paste: A, then B, then A again offers A, as the message that carries it now", async () => {
