@@ -1466,6 +1466,8 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/scope.ts": [SPLITTING],
   // D-0191 (rondo#636): the plan setup left beside the store, as a template.
   "src/access/setup-files.ts": [SPLITTING],
+  // D-0203 (rondo#676): a held plan as the setup plan it stands for.
+  "src/access/setup-plan.ts": [SPLITTING],
   // D-0128 (rondo#471): a goal scope is drafted from the goal and the held
   // plans, and it is the one approval over the requests work discovery draws.
   "src/access/goal-scope.ts": [SPLITTING, WORK_DISCOVERY],

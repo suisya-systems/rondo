@@ -13,7 +13,8 @@
  * rule 3.2). The row is the repository's newest setup plan with
  * `forge_repository` set; a lap whose own plan names none publishes by that
  * row (`recordedRepository`), and so does every lap after it. A repository
- * setup recorded no plan for has no row to copy, and is refused.
+ * setup recorded no plan for is given one from the lap's own plan, as the
+ * setup plan it stands for (D-0203 rule 1).
  */
 import type { Context, Hono } from "hono";
 import { readRunPlan } from "../refrain/plan.js";
@@ -31,6 +32,7 @@ import {
 } from "./forge-preflight.js";
 import { viewHref } from "./page-logic/routes.js";
 import { refusedPage } from "./screens/refused.js";
+import { setupPlanOf } from "./setup-plan.js";
 import { mintPress, type PageEnv, type Press, spendPress } from "./web-app.js";
 import type { Chrome } from "./wording.js";
 
@@ -116,8 +118,11 @@ export class PublishRepositoryPort {
     ) {
       return refused("publishRepoRefusedChanged");
     }
+    // **Setup's newest plan of the repository, or the lap's own as one**
+    // (D-0203 rule 1): a lap run on a pasted plan has no setup row to copy.
     const newest = plans[0];
-    if (newest === undefined) {
+    const template = newest?.plan ?? setupPlanOf(lap.plan);
+    if (template === null) {
       return refused("publishRepoRefusedNoPlan", `no setup plan records ${repository}`);
     }
     const mismatch = await pushesElsewhere(lap, repo, this.#asked, this.#environment);
@@ -125,10 +130,10 @@ export class PublishRepositoryPort {
       return refused("publishRepoRefusedMismatch", mismatch);
     }
     // Read again after git answered: setup may have recorded a plan meanwhile.
-    if ((await plansOf(this.#record, repository))[0]?.setupId !== newest.setupId) {
+    if ((await plansOf(this.#record, repository))[0]?.setupId !== newest?.setupId) {
       return refused("publishRepoRefusedChanged");
     }
-    const plan = { ...newest.plan, forge_repository: repo };
+    const plan = { ...template, forge_repository: repo };
     const planned = readRunPlan(plan);
     if (planned.kind !== "planned") {
       return refused("publishRepoRefusedFailed", planned.reason);

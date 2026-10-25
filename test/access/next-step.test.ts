@@ -539,6 +539,10 @@ test("a repository rondo proposed, and a store with no plan, are each one press 
   // Setup never ran: said, with nothing to press.
   const none = await operatorPage(over({ planless: true }), "t", threadOf("req-1"));
   expect(none).toContain(plain(EN.nextStepRunSetup));
+  // Running setup is installation: the command is in the host's log, not on the page (D-0203).
+  for (const said of [EN.nextStepRunSetup, chromeFor("ja").nextStepRunSetup]) {
+    expect(said).not.toMatch(/scripts\/|dogfood|\.sh/);
+  }
   expect(none).not.toContain('id="add-repository-req-1"');
   expect(none).not.toContain('id="scope-req-1"');
 });

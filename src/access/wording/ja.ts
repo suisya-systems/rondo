@@ -1256,7 +1256,7 @@ export const JA: Chrome = Object.freeze({
   publishRepoRefusedMismatch:
     "何も記録していません。この作業のワークスペースは、そのリポジトリに push しません。名前を確かめて、もう一度入力してください。",
   publishRepoRefusedNoPlan:
-    "何も記録していません。この作業のリポジトリは、このコンピュータの rondo のセットアップに含まれていないため、名前を保存する先がありません。",
+    "何も記録していません。この作業で使った計画を、このリポジトリの計画として残せないため、名前を保存する先がありません。",
   publishRepoRefusedFailed:
     "何も記録していません。今回は名前を保存できませんでした。もう一度押しても問題ありません。",
   publishTargetRefused:
@@ -1338,9 +1338,8 @@ export const JA: Chrome = Object.freeze({
     `このコンピュータのセットアップで、計画が ${String(files)} 件書かれています。` +
     "記録すると、rondo がこの依頼を下書きして、あなたの承認を待ちます。",
   nextStepRunSetup:
-    "このコンピュータでは rondo のセットアップがまだ実行されていないため、この依頼の下書きはありません。" +
-    "rondo を管理する人がセットアップ（rondo のフォルダの scripts/dogfood-env.sh）を一度実行すると、" +
-    "rondo がこの依頼を下書きします。",
+    "このコンピュータでは rondo のセットアップがまだ済んでいないため、この依頼の下書きはありません。" +
+    "rondo をこのコンピュータに入れた人に伝えてください。セットアップが済むと、rondo がこの依頼を下書きします。",
   recordSetupPlanAction: "セットアップの計画を記録する",
   addRepositoryAction: "このリポジトリを追加する",
   addRepositoryBack: "依頼に戻る",
@@ -1420,8 +1419,10 @@ export const JA: Chrome = Object.freeze({
     "この依頼にリポジトリを追加する必要はなくなりました。" +
     "依頼に戻って、いまの状態を確認してください。",
   addRepositoryRefusedNoSetup:
-    "このコンピュータでは rondo のセットアップが済んでいません。" +
-    "rondo を管理する人にセットアップを実施してもらってください。",
+    "リポジトリを追加していません。rondo が持っている計画のどれからも、このリポジトリの計画を作れませんでした。",
+  recordSetupPlanRefusedGone:
+    "何も記録していません。使えるセットアップの計画ファイルが見つかりません。" +
+    "依頼に戻って、いまの状態を確認してください。",
   approveBusy: "承認を記録しています…",
   startBusy: "作業を始めています…",
   reviseBusy: "変更を依頼しています…",

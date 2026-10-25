@@ -148,6 +148,15 @@ export async function serveWeb(
   // (rondo#675, D-0196), which rebuilds the ports and the hosts below.
   const approver = environment[APPROVER_ENV];
   const record = openAdvisoryRecord(storePath);
+  // **Setup that never ran is said where a terminal already is** (D-0203 rule
+  // 3): the page says only that it has not, since running it is installation.
+  if ((await record.setupPlans()).length === 0 && setupPlanFiles(storePath).length === 0) {
+    say(
+      `No setup plan is recorded in ${storePath} and no usable one is beside it: rondo's ` +
+        "setup has not run for this store. Run scripts/dogfood-env.sh from rondo's checkout " +
+        "once; the page drafts requests after it.",
+    );
+  }
   // **The sender is the approver, through the same allowlist `request` and
   // `reply` use** (D-0061 rule 4, D-0059 section 5a): no approver, or one the
   // allowlist refuses, is no say port, and so no forms.
@@ -779,6 +788,7 @@ export async function serveWeb(
                       environment,
                       { store, record },
                       sender.actorId,
+                      storePath,
                       input,
                     );
               if (added.ok) {

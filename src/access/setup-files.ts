@@ -48,3 +48,12 @@ export function setupPlanFiles(
       : [{ file, plan: read.document }];
   });
 }
+
+/**
+ * **Setup's root, where the store is the only thing to read it off** (D-0203
+ * rule 2): setup puts the store in its root, so the store's directory is where
+ * a repository added from a plan setup did not record is cloned.
+ */
+export function setupRootBeside(storePath: string): string {
+  return dirname(storePath);
+}

@@ -18,6 +18,7 @@
  */
 
 import type { JsonRecord } from "../store/records.js";
+import { PLACEHOLDER_PROMPT } from "./setup-plan.js";
 import { type Press, spendPress } from "./web-app.js";
 
 /** `OWNER/NAME` split, or null when it is not one a path may be made of. */
@@ -62,10 +63,6 @@ export function setupRootOf(template: JsonRecord): string | null {
 export function cloneDirectory(root: string, owner: string, name: string): string {
   return `${root}/repositories/${owner}/${name}`;
 }
-
-/** What setup writes as the prompt of a repository it did not create. */
-const PLACEHOLDER_PROMPT =
-  "Replace this with the request. The page runs the request's own words, never this.";
 
 /** Setup's plan for the added repository: `template` with the repository's own facts. */
 export function planForRepository(
@@ -146,6 +143,7 @@ export type AddRepositoryRefusal =
   | "addRepositoryRefusedUnseen"
   | "addRepositoryRefusedFailed"
   | "addRepositoryRefusedNoSetup"
+  | "recordSetupPlanRefusedGone"
   | "addRepositoryRefusedChanged";
 
 /** What adding a repository did: added, or why not with rondo's own reason. */

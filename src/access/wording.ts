@@ -1568,7 +1568,11 @@ export interface Chrome
   readonly nextStepAddProposedRepository: (repo: string) => string;
   /** A store holding no plan, beside which setup left this many plan files (D-0191 rule 2.2). */
   readonly nextStepRecordSetupPlan: (files: number) => string;
-  /** A store holding no plan, and no setup output beside it (D-0191 rule 2.3). */
+  /**
+   * A store holding no plan, and no setup output beside it (D-0191 rule 2.3,
+   * as D-0203 rule 3 restates it): setup has not run, which is installation,
+   * so the command is in the host's log and not here.
+   */
   readonly nextStepRunSetup: string;
   /** The one press that records setup's plan files. */
   readonly recordSetupPlanAction: string;
@@ -1627,8 +1631,10 @@ export interface Chrome
   readonly addRepositoryRefusedUnseen: string;
   /** Anything else: the network, a timeout, a copy rondo could not read. */
   readonly addRepositoryRefusedFailed: string;
-  /** Setup never recorded a plan to add one beside. */
+  /** No plan rondo holds reads as a setup plan to add one beside (D-0203 rule 1). */
   readonly addRepositoryRefusedNoSetup: string;
+  /** No usable setup plan file is beside the store any more, at the record press. */
+  readonly recordSetupPlanRefusedGone: string;
   /** The request no longer names that repository, or rondo already works in it. */
   readonly addRepositoryRefusedChanged: string;
   readonly approveBusy: string;
