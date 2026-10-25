@@ -270,6 +270,9 @@ export const JA: Chrome = Object.freeze({
         "1 つのメッセージから rondo が読むイシューは 5 件までで、このイシューはそれを超えていました",
       failed: "rondo はこのイシューを読めませんでした",
     })[why] + "。そのためワーカーには、ここにあなたが書いたことだけが渡されます。",
+  issueReadAgain: (named) =>
+    `費用はかかっていません。サインインしたあとで、このスレッドに「${named}」と書いて送ると、` +
+    "rondo が読み直します。",
   issueNotReadTail:
     "費用はかかっていません。イシューにしか書いていないことがあれば、別のメッセージで" +
     "書き足してください。",
@@ -1355,7 +1358,7 @@ export const JA: Chrome = Object.freeze({
     "押してください。",
   addRepositoryRefusedInstall:
     "リポジトリを追加していません。このコンピュータに GitHub CLI が入っていません。" +
-    "このコンピュータで rondo を管理する人に入れてもらってください。ボタンはそのまま残っているので、あとでもう一度押せます。",
+    "下の「GitHub にサインインする」の画面で入れてから、「このリポジトリを追加する」をもう一度押してください。",
   addRepositoryRefusedSignedOut:
     "リポジトリを追加していません。このコンピュータの rondo が GitHub にサインインしていません。" +
     "サインインしてから、「このリポジトリを追加する」をもう一度押してください。",
@@ -1404,11 +1407,17 @@ export const JA: Chrome = Object.freeze({
     "サインインは一度だけで済みます。",
   signInWaiting: "GitHub のサインインページを開き、次のコードを入力してください。",
   signInWaitingNote: "GitHub でサインインが済むと、このページは自動で切り替わります。",
-  signInDone: "GitHub にサインインしました。元のページに戻って、ボタンをもう一度押してください。",
+  signInDone: "GitHub にサインインしました。元のページに戻って、もう一度お試しください。",
   signInNoGh:
-    "このコンピュータに GitHub CLI が入っていないため、サインインできません。" +
-    "このコンピュータで rondo を管理する人に入れてもらってください。",
+    "このコンピュータに GitHub CLI が入っていません。rondo が自分で入れられるのは Linux だけです。" +
+    "rondo を入れた人に GitHub CLI を入れてもらってください。",
   signInFailed: "サインインが終わりませんでした。ボタンを押すと、もう一度試せます。",
+  signInInstallable:
+    "このコンピュータに GitHub CLI が入っていません。ボタンを押すと、rondo が GitHub から GitHub CLI を" +
+    "取ってきてこのコンピュータに入れ、続けてサインインを始めます。",
+  signInInstallAction: "GitHub CLI を入れてサインインする",
+  signInInstallFailed:
+    "GitHub CLI を入れられませんでした。何も入れていません。ボタンを押すと、もう一度試せます。",
   addRepositoryRefusedUnseen:
     "何も追加していません。GitHub にそのリポジトリが無いか、あなたのアカウントからは見えません。" +
     "依頼に書いた名前が違っていれば、返信で正しい名前を伝えてください。",

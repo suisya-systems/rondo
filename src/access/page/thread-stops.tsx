@@ -45,12 +45,15 @@ export function forgeView(wording: Chrome, message: ThreadMessageDraft) {
     );
   }
   if ("failed" in read) {
+    // Both are repaired from the sign-in screen, which fetches a missing `gh` (D-0204).
+    const signIn = read.failed.why === "signed_out" || read.failed.why === "no_gh";
     return (
       <div class="issue-read space-y-2" data-issue="not-read">
         <p class="text-body leading-6">
-          {issueNameLink(read)} {wording.issueNotRead(read.failed.why)} {wording.issueNotReadTail}
+          {issueNameLink(read)} {wording.issueNotRead(read.failed.why)}{" "}
+          {signIn ? wording.issueReadAgain(read.named) : wording.issueNotReadTail}
         </p>
-        {read.failed.why === "signed_out" ? (
+        {signIn ? (
           <p class="text-body leading-6">
             <a
               href={viewHref({ kind: "signIn" }, wording.lang)}

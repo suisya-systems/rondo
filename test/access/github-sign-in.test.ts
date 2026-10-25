@@ -64,3 +64,45 @@ test("a computer without gh says so, not a failure", async () => {
   const signIn = gitHubSignIn("github.com", join(tmpdir(), "rondo-no-such-gh"));
   expect(await signIn.start()).toEqual({ kind: "noGh" });
 });
+
+const PRINTS_CODE =
+  'echo "! First copy your one-time code: AB12-CD34" >&2\n' +
+  'echo "Open this URL to continue in your web browser: https://github.com/login/device" >&2\n' +
+  "sleep 1\nexit 0";
+
+posix(
+  "a missing gh rondo can fetch shows its press before any, and the press fetches then signs in (D-0204)",
+  async () => {
+    let there = false;
+    let installs = 0;
+    const signIn = gitHubSignIn("github.com", standIn(PRINTS_CODE), {
+      found: () => there,
+      install: async () => {
+        installs += 1;
+        there = true;
+        return await Promise.resolve(null);
+      },
+    });
+    expect(signIn.now()).toEqual({ kind: "installable" });
+    expect(await signIn.start()).toEqual({
+      kind: "waiting",
+      code: "AB12-CD34",
+      url: "https://github.com/login/device",
+    });
+    expect(installs).toBe(1);
+  },
+);
+
+test("a fetch that fails says why and offers the press again; where rondo fetches none it says so", async () => {
+  const failing = gitHubSignIn("github.com", "gh", {
+    found: () => false,
+    install: async () => await Promise.resolve("github.com answered 503"),
+  });
+  const failed = { kind: "installFailed", reason: "github.com answered 503" };
+  expect(await failing.start()).toEqual(failed);
+  expect(failing.now()).toEqual(failed);
+
+  const elsewhere = gitHubSignIn("github.com", "gh", { found: () => false, install: null });
+  expect(elsewhere.now()).toEqual({ kind: "noGh" });
+  expect(await elsewhere.start()).toEqual({ kind: "noGh" });
+});

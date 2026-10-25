@@ -84,7 +84,7 @@ import { publishRepositoryRoute } from "./publish-repository.js";
 import { answeredRevise, questionRevise } from "./question.js";
 import { TAB_OUTCOMES } from "./reach.js";
 import { heldAnchor, pressable } from "./read-in.js";
-import type { AddRepositoryRefusal } from "./repository-add.js";
+import { type AddRepositoryRefusal, SIGN_IN_REPAIRS } from "./repository-add.js";
 import { budgetsOf, scopeDraftOf, scopeValuesOf, wholeNumber } from "./scope-form.js";
 import { refusedPage } from "./screens/refused.js";
 import { SERVED, TOKEN_ROUTE, tokenEvents } from "./served.js";
@@ -3621,14 +3621,14 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       wording.addRepositoryAction,
       wording[why],
       viewHref(
-        why === "addRepositoryRefusedSignedOut"
+        SIGN_IN_REPAIRS.has(why)
           ? { kind: "signIn" }
           : request === ""
             ? { kind: "summary" }
             : { kind: "thread", messageId: request, to: null },
         wording.lang,
       ),
-      why === "addRepositoryRefusedSignedOut" ? wording.signInAction : wording.addRepositoryBack,
+      SIGN_IN_REPAIRS.has(why) ? wording.signInAction : wording.addRepositoryBack,
       note,
     );
   }

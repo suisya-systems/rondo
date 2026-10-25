@@ -417,6 +417,29 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
     "node:os": ["tmpdir"],
     "node:path": ["join"],
   },
+  // D-0204: the GitHub CLI for a computer without one. `get` fetches the pinned
+  // release over HTTPS on the person's press, and nothing else reaches the
+  // network; the archive is hashed against the digest written in the module
+  // before a byte of it is written, and the one file taken out is written into
+  // a directory of the module's own and renamed into place. `accessSync` asks
+  // whether a `gh` is there to run. It starts no process: the `gh` it fetched
+  // is run by `forge.ts`.
+  "src/access/gh-install.ts": {
+    "node:crypto": ["createHash"],
+    "node:fs": [
+      "accessSync",
+      "constants",
+      "mkdirSync",
+      "mkdtempSync",
+      "renameSync",
+      "rmSync",
+      "writeFileSync",
+    ],
+    "node:https": ["get"],
+    "node:os": ["homedir"],
+    "node:path": ["delimiter", "join"],
+    "node:zlib": ["gunzipSync"],
+  },
   // The renderer and D-0056's negotiation. **Since D-0059 it serves nothing**:
   // the socket, the served files and the token moved to `src/access/web-app.ts`,
   // and what is left is one parser. `hono/utils/accept` splits
@@ -1360,6 +1383,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/forge-preflight.ts": ["Publishing"],
   "src/access/forge.ts": ["Publishing"],
   // rondo#676: signing this computer's `gh` in to GitHub, on the person's press.
+  "src/access/gh-install.ts": [HUMAN],
   "src/access/github-sign-in.ts": [HUMAN],
   "src/access/github-sign-in-route.ts": [HUMAN],
   // rondo#676 (D-0198): a lap's uncommitted changes thrown away, on the person's press.

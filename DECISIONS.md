@@ -121,9 +121,9 @@ C-NN`, so the spaces can never be read as one.
 | D-0073 | Which lines may run together: a lane ledger that allocates paths to a line from its admission until its work lands, refuses an admission that would share one, and releases it by reading the default branch; `D-0067` rule 1 gives way for two authorities, approving and every judgement no row settles stay with the person, and it is not a bigger capacity number | accepted, amended |
 | D-0074 | Raising a running lap's budget: a raise is a successor scope that changes only its budgets, the lap in flight follows its approval's approved successor, and the person presses it from the gate that refused them | accepted, amended |
 | D-0075 | A fresh store's first plan is the last thing setup does: setup hands the plan it composed to the store and not to the person, the host reads no path and composes nothing, and naming a repository stays installation | accepted, amended |
-| D-0076 | Who the page is written for: the person who asked for the work and judges it, who knows their own repository and not rondo; rondo's own words, identifiers and failures never reach them as themselves, and what they cannot use is not shown | accepted |
+| D-0076 | Who the page is written for: the person who asked for the work and judges it, who knows their own repository and not rondo; rondo's own words, identifiers and failures never reach them as themselves, and what they cannot use is not shown | accepted, amended |
 | D-0077 | The organisation drafts the revise instruction: the model drafter runs once a model reading with findings lands, its draft quotes every finding because rondo renders the quotes from the reading and only the drafter's words are the model's, and an unavailable draft leaves the person an empty box and a sentence, never a deterministic fallback | accepted, amended |
-| D-0078 | What a lap knows of the issue it is sent to fix: rondo reads the issue outside the lap when the person's message names it, records what it read in the request thread, and carries it into the prompt quoted, so the lap stays closed to the forge and the person never has to copy an issue into a request | accepted |
+| D-0078 | What a lap knows of the issue it is sent to fix: rondo reads the issue outside the lap when the person's message names it, records what it read in the request thread, and carries it into the prompt quoted, so the lap stays closed to the forge and the person never has to copy an issue into a request | accepted, amended |
 | D-0079 | Composed in the language, not translated into it: every wording set is a whole catalogue and none is another's diff, what a lap and its drafter write for the person is asked for as composed in the person's language, and English is written only where the repository requires it | accepted |
 | D-0080 | Starting rondo is one word with nothing in it to remember: setup writes the command that carries every host fact, the thing the person typed is what speaks when rondo cannot start, and starting runs no setup | accepted, amended |
 | D-0081 | One store and one host, many repositories: a repository is named by the plan a request is drafted from, the forge slug stops being a host fact, and `D-0075` rule 1.1 is withdrawn | accepted, amended |
@@ -237,6 +237,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0201 | A widening onto another open line's files waits as a row and is written by the order tick once they are free, and inside an approved scope the gate widens a drafted claim onto what its lap changed and records it against that approval | accepted |
 | D-0202 | A lap whose plan and host name no forge repository has it named on the publish screen, checked against the push and recorded as a setup plan of its repository | accepted, amended |
 | D-0203 | Where setup recorded no plan to build on, a plan rondo already holds is recorded as the setup plan it stands for on the person's press; setup that never ran stays installation, said on the page and commanded in the host's log | accepted |
+| D-0204 | A computer without the GitHub CLI gets a pinned one from rondo on the person's press on the sign-in screen, which then signs it in; the person's own `gh` on the host's `PATH` still comes first | accepted |
 
 ---
 
@@ -18227,6 +18228,13 @@ number.
    > is edited.
    >
    > - Amends: D-0075 rule 1.1
+   > **Annotation (2026-10-26, from D-0204).** Added after this entry was accepted, and **not
+   > additive**, by the owner's answer on rondo#676. **The GitHub CLI is not installation**: a
+   > computer without `gh` gets a pinned one from rondo on the person's press, on the page, and
+   > rondo#688's call that installing it stays setup's job is reversed. Installing rondo's own
+   > program is still installation. Nothing below is edited.
+   >
+   > - Amends: D-0075 rule 1.1
 2. **Installation ends when the store holds a plan a lap can run on.** That is the change. Today setup
    ends one step short of that: it has composed the plan, and hands it to a person instead of to
    rondo. rondo#265 is right that the paste is past installation. **The plan's content is not**: every
@@ -18313,6 +18321,13 @@ number.
    > setup plan it stands for, its host facts byte for byte, on the person's press. It discovers and
    > composes nothing more, and reads setup's plan files at its own start as well, to say in its log
    > that setup has not run. Nothing below is edited.
+   >
+   > - Amends: D-0075 rule 3.1
+   > **Annotation (2026-10-26, from D-0204).** Added after this entry was accepted, and **not
+   > additive**, by the owner's answer on rondo#676. **The host asks whether a `gh` is there to
+   > run**, on its `PATH` and then in rondo's own copy, and on the person's press writes that copy
+   > under the user's data directory. It decides nothing of a fence by it: no lap is given `gh`,
+   > its path or the network. Nothing below is edited.
    >
    > - Amends: D-0075 rule 3.1
 2. **Setup discovers what it discovers today** (`claude` on `PATH`, `node`'s real path, the target's
@@ -18655,6 +18670,13 @@ running page on the same date. Line numbers drift; re-measure the claim, not the
    stopped working, and what it stops**, and nothing about how: `D-0075` rule 4.1's form for "nothing
    held", applied to every host fact. `RONDO_APPROVER is not set` becomes "rondo on this machine does
    not yet know who you are, so nothing here can be sent as you".
+   > **Annotation (2026-10-26, from D-0204).** Added after this entry was accepted, and **not
+   > additive**, by the owner's answer on rondo#676. **A missing `gh` and a signed-out one are no
+   > longer breaks only installation repairs**: both are said as themselves and link to the
+   > sign-in screen, which signs `gh` in (rondo#688) and, on Linux, fetches it first. Where rondo
+   > fetches none, the screen says to ask whoever installed rondo here. Nothing below is edited.
+   >
+   > - Amends: D-0076 rule 4.3
 4. **A break in the person's own world is theirs and is shown as itself**: a test that fails, a
    conflict with their branch, the forge refusing their credentials. Those are what the person acts on.
 5. **rondo's own reason is kept in one closed fold beside the person's sentence** (the gate's answer
@@ -19269,6 +19291,13 @@ closed fold (rule 4.5), and the issue shown as the person's own identifier, as a
    on this machine cannot read issues yet. A failure in the person's world (the issue does not exist,
    the forge refuses their access) is theirs and is said as itself (rule 4.4). Over the bound says the
    issue was too long to hand over whole.
+   > **Annotation (2026-10-26, from D-0204).** Added after this entry was accepted, and **not
+   > additive**, by the owner's answer on rondo#676. **No `gh` and not signed in are said as
+   > themselves** (rondo#688 changed the words without this entry): the line links to the
+   > sign-in screen and, in place of its last sentence, says to send the same name again in this
+   > thread, since a read is replaced only by one under the same name. Nothing below is edited.
+   >
+   > - Amends: D-0078 rule 4.2
 3. **With no host running**, the line says the issue will be read when rondo is running here, as the
    drafter's absence is said today.
 4. **On the scope screen, before the approval**: which issues the worker will be given and which it
@@ -32064,3 +32093,96 @@ by a Codex review of the design. Line numbers drift: re-measure the claim, not t
 - **A drafter proposal the press then refuses for want of a template**, or a press that could add
   one where no proposal is allowed.
 - **A host started by setup's service whose page shows `nextStepRunSetup`.**
+
+## D-0204 — A computer without the GitHub CLI gets a pinned one from rondo on the person's press on the sign-in screen, which then signs it in; the person's own `gh` on the host's `PATH` still comes first
+
+**Status:** accepted (2026-10-26, rondo#676, the owner's answer through the window on three points,
+each the recommended option). Amends `D-0075` rules 1.1 and 3.1, `D-0076` rule 4.3 and `D-0078` rule
+4.2. Reverses the owner's call on rondo#688 that installing `gh` stays setup's job, which no entry
+recorded. Refs `D-0010`, `D-0091`, `D-0095`, `D-0203`.
+
+### Context
+
+rondo#676 lists the messages a person can answer only in a terminal. rondo#688 took the signed-out
+ones to a sign-in screen on the page. Three messages were left, all for a computer with no `gh`:
+`addRepositoryRefusedInstall`, the issue line's `no_gh` (rondo#676's `environment@243`; `@244` is
+`signed_out`, the same sentence before rondo#663) and the sign-in screen's `signInNoGh`. Each could
+only say to ask whoever maintains rondo to install it.
+
+### What was measured, and how
+
+At rondo `2dfb4e9` on **2026-10-26**, by reading `src/`, `scripts/dogfood-env.sh` and this file, and
+by a Codex review of the design. Line numbers drift: re-measure the claim, not the number.
+
+- **The host's `PATH` is setup's.** Setup resolves the directories of `claude`, `git`, `gh` and
+  `codex` and hands them, with the system directories, to the service. A missing `gh` is a note and
+  setup goes on. So a `gh` installed later outside the system directories is not found until setup
+  runs again: "install it and it works" could not be said, whatever the page showed.
+- **Every `gh` rondo runs goes through `runCommand`** in `src/access/forge.ts`, by the name `gh`:
+  publish, the page's merge, the checks, the add-repository clone, the issue read and the sign-in.
+  Missing is told by the spawn's ENOENT alone.
+- **The sign-in screen knew of a missing `gh` only after a press** had run one and failed.
+- **A failed read is answered, so it is not read again.** A later message naming the same reference,
+  by the same spelling, in the same thread, is read and replaces it (`latestReads`).
+- **`fetch` is refused across `src/`**; a module may be granted `node:https` by binding.
+- The release archive for Linux holds the binary at `gh_<version>_linux_<arch>/bin/gh`; cli/cli
+  publishes a sha256 for each archive.
+
+### Decision
+
+1. **A missing `gh` is said before any press.** The sign-in screen asks at each look whether a `gh` is
+   there to run. Where rondo can fetch one, it says so and its one press, "Install the GitHub CLI and
+   sign in", fetches it and then starts the sign-in rondo#688 built, so the code is on screen after
+   one press. A fetch that fails says that nothing was installed, keeps rondo's reason in the
+   maintainer's fold, and offers the press again.
+2. **The person's own `gh` comes first.** A `gh` on the host's `PATH` is run as before; rondo's copy is
+   run only where there is none. `runCommand` asks at each run, so every `gh` operation and the
+   command line use a copy fetched a moment ago, with no restart.
+3. **What is trusted is the repository, not the network.** The version and each archive's sha256 are
+   written in `src/access/gh-install.ts` and change only by a reviewed change. The archive is fetched
+   over HTTPS from the release's fixed address, following at most five redirects and only to HTTPS;
+   one that does not hash to its pin is dropped before anything is written. The one file taken out is
+   `bin/gh` by its exact name, written into a directory of its own and renamed into place, so no path
+   in the archive decides where anything lands and a half-written copy is never the one run.
+   `node:https` is granted to that module alone; `fetch` stays refused.
+4. **Per user, as `gh`'s own sign-in is**: the copy is under `$XDG_DATA_HOME/rondo/gh/<version>/`, or
+   `~/.local/share` where that is unset. Every store and the command line find the same one. The
+   credential stays `gh`'s, in `gh`'s own configuration (`D-0010`, `D-0091`, `D-0095`). No lap is given
+   `gh`, its path or the network (`D-0078` section 1.2).
+5. **Linux on amd64 and arm64 only** (the owner's answer 2). Elsewhere the screen says that rondo
+   installs it itself only on Linux and to ask whoever installed rondo here, with no press.
+6. **Each message leads to the screen.** The add-repository refusal for a missing `gh` links to the
+   sign-in screen, as the signed-out one does. The issue line for `no_gh` and `signed_out` links there
+   and says to send the same name again in this thread once rondo is signed in.
+
+### Options considered
+
+| Option | Taken? | What it loses |
+|---|---|---|
+| A. The words only, installing `gh` stays installation | No | A terminal and maybe setup again; and with setup's `PATH` the page cannot say that installing it is enough |
+| B. Install steps on the page | No | Still a terminal and `sudo`; puts a command on the page (`D-0076` rule 4.2); the same `PATH` problem |
+| C. rondo fetches a pinned `gh` on the press, then signs in | Yes | See below |
+| D. Setup fetches `gh` | No | A host already set up still needs setup again; with C there is nothing left for it |
+| E. GitHub's API without `gh` | No | rondo would hold the person's token, against `D-0010`'s and `D-0091`'s premise, and every `gh` use rewritten |
+
+### What it costs
+
+- **The pin ages.** A security fix in `gh` reaches rondo's copy only through a bump here. A `gh` the
+  person installs on the `PATH` wins.
+- **Signing `gh` in is not shown to set up git's credentials.** The sign-in runs with no terminal,
+  and the Codex review of the design read `gh`'s login flow as skipping its git credential helper
+  then; it was not measured here. Publishing's `git push` over HTTPS needs a credential git already
+  has, as before. This entry does not change that.
+- **The sign-in is to the host's forge host.** An issue on another host is not repaired by it.
+- **The press waits while the archive is fetched** (about 15 MB), with no progress on screen.
+- **The fetch does not go through a proxy.** `node:https` does not read `HTTPS_PROXY`, so a host
+  that reaches github.com only through one gets the fetch's failure, said as such, and installs `gh`
+  as before.
+- **macOS and Windows still need a terminal** for `gh`.
+
+### What would falsify it
+
+- **rondo's copy run while the host's `PATH` has a `gh`.**
+- **A copy written whose archive did not hash to its pin**, or a file written outside rondo's copy.
+- **A Linux host with no `gh` whose sign-in screen shows no press** before one has been pressed.
+- **A `gh` operation that still reports `gh` missing right after a fetch that said it installed.**
