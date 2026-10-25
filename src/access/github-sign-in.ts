@@ -12,8 +12,9 @@
  * **`gh` runs through `forge.ts`**, where rondo runs `git` and `gh` on the
  * operator's behalf (AGENTS.md section 2): this module starts no process.
  *
- * **Installing `gh` stays setup's job** (the owner's call on rondo#676): a
- * computer without it is said so on the page, for whoever maintains rondo.
+ * **A computer without `gh` is told so before any press** (D-0204): where rondo
+ * can fetch one, the press fetches it and then signs it in, so it is one press;
+ * where it cannot, the page says to ask whoever installed rondo here.
  */
 import { runCommand } from "./forge.js";
 
@@ -23,6 +24,9 @@ export type SignIn =
   | { readonly kind: "waiting"; readonly code: string; readonly url: string }
   | { readonly kind: "signedIn" }
   | { readonly kind: "noGh" }
+  /** No `gh`, and rondo can fetch one: the press does, then signs it in. */
+  | { readonly kind: "installable" }
+  | { readonly kind: "installFailed"; readonly reason: string }
   | { readonly kind: "failed"; readonly reason: string };
 
 export interface GitHubSignIn {
@@ -34,6 +38,19 @@ export interface GitHubSignIn {
    */
   start(): Promise<SignIn>;
 }
+
+/**
+ * Whether there is a `gh` to run, and how to fetch one where there is not
+ * (`./gh-install.ts`). The default is the one before D-0204: always there,
+ * nothing to fetch, so a missing one is learnt from the run.
+ */
+export interface GhCli {
+  found(): boolean;
+  /** Null where rondo fetches none; else null when fetched, or why it was not. */
+  readonly install: (() => Promise<string | null>) | null;
+}
+
+const ASSUMED: GhCli = { found: () => true, install: null };
 
 /** How long `gh` may take to print its code before the press is answered without one. */
 const CODE_WAIT_MS = 30_000;
@@ -48,8 +65,10 @@ const SIGN_IN_BOUND_MS = 16 * 60_000;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: `gh` colours its output.
 const ESCAPES = /\u001b\[[0-9;]*m/g;
 
-export function gitHubSignIn(host: string, executable = "gh"): GitHubSignIn {
+export function gitHubSignIn(host: string, executable = "gh", cli: GhCli = ASSUMED): GitHubSignIn {
   let state: SignIn = { kind: "none" };
+  const missing = (): SignIn | null =>
+    cli.found() ? null : cli.install === null ? { kind: "noGh" } : { kind: "installable" };
   let running: Promise<SignIn> | null = null;
   const run = () =>
     new Promise<SignIn>((resolve) => {
@@ -91,10 +110,23 @@ export function gitHubSignIn(host: string, executable = "gh"): GitHubSignIn {
         );
       });
     });
+  const begin = async (): Promise<SignIn> => {
+    const absent = missing();
+    const failed = absent === null || cli.install === null ? null : await cli.install();
+    if (absent?.kind === "noGh" || failed !== null) {
+      state = failed === null ? { kind: "noGh" } : { kind: "installFailed", reason: failed };
+      running = null;
+      return state;
+    }
+    return await run();
+  };
   return {
-    now: () => state,
+    // Read at each look (Codex on rondo#676's design): a missing `gh` shows its
+    // press before any is pressed, and one installed since shows the sign-in's.
+    now: () =>
+      state.kind === "none" || state.kind === "noGh" ? (missing() ?? { kind: "none" }) : state,
     start: () => {
-      running ??= run();
+      running ??= begin();
       return running;
     },
   };

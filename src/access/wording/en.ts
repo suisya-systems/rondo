@@ -267,6 +267,9 @@ explanation you pressed on and then answers the gate.`,
       too_many: "rondo reads at most five issues from one message, and this one was past them",
       failed: "rondo could not read this issue",
     })[why] + ", so the worker will have only what you wrote here.",
+  issueReadAgain: (named) =>
+    `Nothing was spent. Once rondo is signed in, send "${named}" in this thread and rondo ` +
+    "reads it again.",
   issueNotReadTail:
     "Nothing was spent. If the issue says something your request does not, say it in another " +
     "message.",
@@ -1416,8 +1419,8 @@ explanation you pressed on and then answers the gate.`,
   addRepositoryRefusedForm:
     "Nothing was added: that form did not come from this page. Reload it and press again.",
   addRepositoryRefusedInstall:
-    "Nothing was added: the GitHub CLI is not installed on this computer. Ask whoever maintains " +
-    "rondo on this computer to install it; the button is still there to press again.",
+    "Nothing was added: the GitHub CLI is not installed on this computer. Install it from the " +
+    '"Sign in to GitHub" screen below, then press "Add this repository" again.',
   addRepositoryRefusedSignedOut:
     'Nothing was added: rondo on this computer is not signed in to GitHub. Sign in, then press "Add this repository" again.',
   signInAction: "Sign in to GitHub",
@@ -1475,12 +1478,17 @@ explanation you pressed on and then answers the gate.`,
     "repositories for you. Sign in once and rondo keeps using it.",
   signInWaiting: "Open GitHub's sign-in page and enter this code:",
   signInWaitingNote: "This page changes by itself once GitHub has signed you in.",
-  signInDone:
-    "rondo is signed in to GitHub. Go back to the page you came from and press the button again.",
+  signInDone: "rondo is signed in to GitHub. Go back to the page you came from and try again.",
   signInNoGh:
-    "The GitHub CLI is not installed on this computer, so rondo cannot sign in. Ask whoever " +
-    "maintains rondo on this computer to install it.",
+    "The GitHub CLI is not installed on this computer, and rondo installs it itself only on " +
+    "Linux. Ask whoever installed rondo here to install it.",
   signInFailed: "The sign-in did not finish. Press the button to try again.",
+  signInInstallable:
+    "The GitHub CLI is not installed on this computer. Press the button and rondo fetches it " +
+    "from GitHub, installs it on this computer, and starts signing in.",
+  signInInstallAction: "Install the GitHub CLI and sign in",
+  signInInstallFailed:
+    "The GitHub CLI was not installed, and nothing was changed. Press the button to try again.",
   addRepositoryRefusedUnseen:
     "Nothing was added: GitHub has no such repository, or your account cannot see it. If the " +
     "name in your request is wrong, say the right one in a reply.",

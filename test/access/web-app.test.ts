@@ -3940,11 +3940,7 @@ test("(add-repository) no press, no form or no approver adds nothing; a failed c
   // Each refusal a person answers differently reaches them as its own sentence,
   // rondo's reason kept in the fold, and the way back is the request's thread
   // where the button still is.
-  for (const why of [
-    "addRepositoryRefusedInstall",
-    "addRepositoryRefusedUnseen",
-    "addRepositoryRefusedFailed",
-  ] as const) {
+  for (const why of ["addRepositoryRefusedUnseen", "addRepositoryRefusedFailed"] as const) {
     const failing = await served(
       createApp(addPorts([], { ok: false, why, note: "gh: exited 1" }), TOKEN),
     );
@@ -3963,25 +3959,25 @@ test("(add-repository) no press, no form or no approver adds nothing; a failed c
     expect(await failing.closed).toBe(0);
   }
 
-  // Signed out is answered on the page (rondo#676): its one link is the sign-in.
-  const signedOut = await served(
-    createApp(
-      addPorts([], { ok: false, why: "addRepositoryRefusedSignedOut", note: "gh: exited 4" }),
-      TOKEN,
-    ),
-  );
-  const answered = await send(
-    signedOut.base,
-    "/add-repository",
-    "POST",
-    pressHeaders(signedOut.base),
-    ADD_FORM,
-  );
-  expect(answered.status).toBe(409);
-  expect(answered.body).toContain("/?github=sign-in&amp;lang=en");
-  expect(answered.body).toContain(EN.signInAction);
-  signedOut.stop.abort();
-  expect(await signedOut.closed).toBe(0);
+  // Signed out, and no CLI (D-0204), are answered on the page (rondo#676):
+  // the one link is the sign-in screen, which also fetches a missing CLI.
+  for (const why of ["addRepositoryRefusedSignedOut", "addRepositoryRefusedInstall"] as const) {
+    const refused = await served(
+      createApp(addPorts([], { ok: false, why, note: "gh: exited 4" }), TOKEN),
+    );
+    const answered = await send(
+      refused.base,
+      "/add-repository",
+      "POST",
+      pressHeaders(refused.base),
+      ADD_FORM,
+    );
+    expect(answered.status).toBe(409);
+    expect(answered.body).toContain("/?github=sign-in&amp;lang=en");
+    expect(answered.body).toContain(EN.signInAction);
+    refused.stop.abort();
+    expect(await refused.closed).toBe(0);
+  }
 });
 
 test("(release) the port refuses anything but a minted, unspent press", async () => {

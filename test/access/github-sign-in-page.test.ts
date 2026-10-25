@@ -63,11 +63,19 @@ test("the sign-in screen says where this computer stands and offers the press on
   // Signed in again from here if GitHub later lets the sign-in go.
   expect(done).toContain('action="/github-sign-in?lang=en"');
 
-  // Installing gh is setup's: said for whoever maintains rondo, and pressed
-  // again once it is installed.
+  // A missing gh rondo can fetch is one press that fetches it and signs in
+  // (D-0204); where it fetches none there is nothing to press.
+  const installable = await screen({ kind: "installable" });
+  expect(installable).toContain(EN.signInInstallable);
+  expect(installable).toContain(EN.signInInstallAction);
+  expect(installable).toContain('action="/github-sign-in?lang=en"');
+  const installFailed = await screen({ kind: "installFailed", reason: "github.com answered 503" });
+  expect(installFailed).toContain(EN.signInInstallFailed);
+  expect(installFailed).toContain("github.com answered 503");
+  expect(installFailed).toContain(EN.signInInstallAction);
   const noGh = await screen({ kind: "noGh" });
   expect(noGh).toContain(EN.signInNoGh);
-  expect(noGh).toContain('action="/github-sign-in?lang=en"');
+  expect(noGh).not.toContain("<form");
 
   const failed = await screen({ kind: "failed", reason: "error connecting to github.com" });
   expect(failed).toContain(EN.signInFailed);
@@ -106,17 +114,29 @@ test("a person's press starts the sign-in and lands on the screen with the code;
   expect(await served).toBe(0);
 });
 
-test("an issue rondo could not read because it is signed out links to the sign-in; a missing gh does not", async () => {
-  const fold = async (why: "signed_out" | "no_gh") =>
-    await (
-      forgeView(EN, {
-        body: forgeBody({ named: "#12", atMs: 0, failed: { why, detail: "gh: exited 4" } }),
-      } as ThreadMessageDraft) as { toString(): Promise<string> | string }
-    ).toString();
-  const signedOut = await fold("signed_out");
-  expect(signedOut).toContain('href="/?github=sign-in&amp;lang=en"');
-  expect(signedOut).toContain(EN.signInAction);
-  const noGh = await fold("no_gh");
-  expect(noGh).not.toContain("github=sign-in");
-  expect(noGh).toContain("the GitHub CLI is not installed on this computer");
+test("an issue rondo could not read for want of gh or a sign-in links to the sign-in and says to name it again", async () => {
+  const fold = async (why: "signed_out" | "no_gh" | "missing") =>
+    (
+      await (
+        forgeView(EN, {
+          body: forgeBody({
+            named: "acme/app#12",
+            atMs: 0,
+            failed: { why, detail: "gh: exited 4" },
+          }),
+        } as ThreadMessageDraft) as { toString(): Promise<string> | string }
+      ).toString()
+    ).replaceAll("&quot;", '"');
+  for (const why of ["signed_out", "no_gh"] as const) {
+    const html = await fold(why);
+    expect(html).toContain('href="/?github=sign-in&amp;lang=en"');
+    expect(html).toContain(EN.signInAction);
+    // The same spelling, since a read is replaced by the name it was read under.
+    expect(html).toContain(EN.issueReadAgain("acme/app#12"));
+    expect(html).not.toContain(EN.issueNotReadTail);
+  }
+  expect(await fold("no_gh")).toContain("the GitHub CLI is not installed on this computer");
+  const missing = await fold("missing");
+  expect(missing).not.toContain("github=sign-in");
+  expect(missing).toContain(EN.issueNotReadTail);
 });

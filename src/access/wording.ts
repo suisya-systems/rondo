@@ -185,6 +185,8 @@ export interface Chrome
    */
   readonly issueNotRead: (why: IssueReadFailure) => string;
   readonly issueNotReadTail: string;
+  /** The tail where signing in repairs the read (D-0204): the same name, again, in this thread. */
+  readonly issueReadAgain: (named: string) => string;
   /** Not read yet (section 4.3): it will be, while rondo runs here. */
   readonly issuePending: string;
   /** The scope screen's lines (section 4.4): which issues the worker is given. */
@@ -1627,6 +1629,10 @@ export interface Chrome
   readonly signInDone: string;
   readonly signInNoGh: string;
   readonly signInFailed: string;
+  /** No `gh`, and rondo can fetch it (D-0204): the note, the press that fetches then signs in, and its failure. */
+  readonly signInInstallable: string;
+  readonly signInInstallAction: string;
+  readonly signInInstallFailed: string;
   /** The forge has no such repository, or this account cannot see it. */
   readonly addRepositoryRefusedUnseen: string;
   /** Anything else: the network, a timeout, a copy rondo could not read. */

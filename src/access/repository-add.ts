@@ -133,8 +133,8 @@ export interface AddRepositoryInput {
 /**
  * Why an add-repository press added nothing, as the wording key the page says
  * it in (D-0090 rule 4): the ones a person answers differently -- `gh` not
- * installed (this computer's setup), not signed in (the sign-in screen,
- * rondo#676), what the account can see, and anything else, which a press
+ * installed or not signed in (both the sign-in screen, rondo#676 and D-0204),
+ * what the account can see, and anything else, which a press
  * again may clear -- and a store setup never finished, which no press repairs.
  */
 export type AddRepositoryRefusal =
@@ -145,6 +145,12 @@ export type AddRepositoryRefusal =
   | "addRepositoryRefusedNoSetup"
   | "recordSetupPlanRefusedGone"
   | "addRepositoryRefusedChanged";
+
+/** The refusals the sign-in screen repairs, which their page links to. */
+export const SIGN_IN_REPAIRS: ReadonlySet<string> = new Set<AddRepositoryRefusal>([
+  "addRepositoryRefusedInstall",
+  "addRepositoryRefusedSignedOut",
+]);
 
 /** What adding a repository did: added, or why not with rondo's own reason. */
 export type AddedRepository =

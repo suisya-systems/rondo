@@ -50,6 +50,7 @@ import {
 } from "./forge.js";
 import { forgeHost, recordedRepository } from "./forge-preflight.js";
 import { type GateHostPorts, gateHost } from "./gate-host.js";
+import { ghAsset, ghExecutable, installGh } from "./gh-install.js";
 import { gitHubSignIn } from "./github-sign-in.js";
 import { SignInPort } from "./github-sign-in-route.js";
 import { bareIssueRepository, issueReader } from "./issue-read.js";
@@ -738,7 +739,13 @@ export async function serveWeb(
   };
   // **One sign-in for the host's life** (rondo#676), outside the ports a
   // naming rebuilds, so a code on screen outlives the approver being named.
-  const signIn = new SignInPort(gitHubSignIn(forgeHost(environment)));
+  // A missing `gh` is fetched on the press where rondo can (D-0204).
+  const signIn = new SignInPort(
+    gitHubSignIn(forgeHost(environment), "gh", {
+      found: () => ghExecutable() !== null,
+      install: ghAsset() === null ? null : () => installGh(),
+    }),
+  );
   // **The page's ports for one approver**, rebuilt by {@link naming}.
   const pagePorts = (sender: Sender, approver: string | undefined): ServedPorts => {
     const { order, flow, publisher, fixer } = approved;

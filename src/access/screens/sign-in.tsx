@@ -16,6 +16,8 @@ const SIGN_IN_WAIT_SECONDS = 3;
 export function signInView(ports: WebPorts, wording: Chrome, token: string | null): unknown {
   const port = ports.signIn ?? null;
   const state = port === null ? { kind: "none" as const } : port.now();
+  // Where `gh` is missing and rondo can fetch it, the one press does both (D-0204).
+  const fetches = state.kind === "installable" || state.kind === "installFailed";
   const press =
     port === null || token === null ? null : (
       <form method="post" action={`${SIGN_IN_ROUTE}?lang=${encodeURIComponent(wording.lang)}`}>
@@ -25,7 +27,7 @@ export function signInView(ports: WebPorts, wording: Chrome, token: string | nul
           data-row=""
           class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
         >
-          {wording.signInAction}
+          {fetches ? wording.signInInstallAction : wording.signInAction}
         </button>
       </form>
     );
@@ -48,21 +50,24 @@ export function signInView(ports: WebPorts, wording: Chrome, token: string | nul
         </p>
         <p class="text-meta leading-5 text-muted-foreground">{wording.signInWaitingNote}</p>
       </section>
-    ) : // The press stays after either (Codex round 1): a sign-in GitHub later
-    // revoked, or a CLI installed since, is signed in again without a restart.
+    ) : // The press stays after a sign-in (Codex round 1): one GitHub later
+    // revoked is signed in again without a restart.
     state.kind === "signedIn" ? (
       <>
         {note(wording.signInDone)}
         {press}
       </>
     ) : state.kind === "noGh" ? (
+      // Nothing rondo can fetch here, so no press: it would only say this again.
+      note(wording.signInNoGh)
+    ) : state.kind === "installable" ? (
       <>
-        {note(wording.signInNoGh)}
+        {note(wording.signInInstallable)}
         {press}
       </>
-    ) : state.kind === "failed" ? (
+    ) : state.kind === "failed" || state.kind === "installFailed" ? (
       <>
-        {note(wording.signInFailed)}
+        {note(state.kind === "failed" ? wording.signInFailed : wording.signInInstallFailed)}
         <details class="group text-meta text-muted-foreground">
           <summary class="flex cursor-pointer list-none items-center gap-2 select-none [&::-webkit-details-marker]:hidden">
             {chevron()}

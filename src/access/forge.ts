@@ -44,6 +44,7 @@ import { recordNumber, recordNumbers } from "../store/lanes.js";
 import { contentDigest } from "../store/plan.js";
 import type { ReadingEvidence } from "../store/records.js";
 import { FINDING_SEVERITIES } from "../store/records.js";
+import { ghExecutable } from "./gh-install.js";
 import { hostFailure } from "./host-failure.js";
 import { type DrafterRun, drafterFailed } from "./model-draft/judgement.js";
 import type { ReviewerRun } from "./model-review/judgement.js";
@@ -94,11 +95,10 @@ export async function runCommand(
     // (D-0065 1.1: the reviewer's document), so every other command keeps the
     // closed stdin it always had and cannot sit waiting on a terminal.
     //
-    // **Windows.** Without a shell, `spawn` does not resolve an npm `.cmd`
-    // shim, so a `codex` installed that way fails to start (ENOENT). That is a
-    // `spawnError`, which every caller turns into an unreadable query or a
-    // failed reviewer run -- an unavailable reading, never a clear one.
-    const child = spawn(executable, [...argv], {
+    // **Windows.** Without a shell, `spawn` does not resolve an npm `.cmd` shim, so a `codex`
+    // installed that way fails to start (ENOENT): a `spawnError`, which every caller turns
+    // into an unavailable reading, never a clear one. `gh` is the PATH's, else rondo's (D-0204).
+    const child = spawn(executable === "gh" ? (ghExecutable() ?? "gh") : executable, [...argv], {
       stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
       // Absent is the caller's directory; only the drafter names one (it has no `-C`).
       ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
