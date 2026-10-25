@@ -692,6 +692,42 @@ function planChoice(
   );
 }
 
+/**
+ * **The press that records setup's plan files, here too** (D-0203 rule 3): the
+ * thread's card's, on the condition its press checks -- rondo holds no plan
+ * for this request, and setup left one beside the store -- so a screen that
+ * says no plan is held is not a dead end where one press would fix it.
+ */
+async function setupPlanForm(
+  ports: WebPorts,
+  wording: Chrome,
+  requestMessageId: string,
+  token: string | null,
+): Promise<unknown> {
+  if (token === null || ports.addable !== true || (ports.setupPlanFiles?.() ?? []).length === 0) {
+    return null;
+  }
+  const where = await ports.repositoryFor?.(requestMessageId).catch(() => null);
+  if (where?.planless !== true) {
+    return null;
+  }
+  return (
+    <form method="post" action={`/add-repository?lang=${encodeURIComponent(wording.lang)}`}>
+      <input type="hidden" name="token" value={token} />
+      <input type="hidden" name="request" value={requestMessageId} />
+      <input type="hidden" name="repository" value="" />
+      <input type="hidden" name="setup" value="1" />
+      <button
+        type="submit"
+        id={`record-setup-plan-${requestMessageId}`}
+        class={`${PRIMARY} mt-3 h-10 justify-center px-6 text-sm`}
+      >
+        {wording.recordSetupPlanAction}
+      </button>
+    </form>
+  );
+}
+
 /** State A: the scope the person writes, and the one press that records it and approves it. */
 async function scopeForm(
   ports: WebPorts,
@@ -717,6 +753,7 @@ async function scopeForm(
         {lead}
         {view.plan !== null ? note(wording.scopePlanGone) : null}
         {"note" in held ? note(held.note) : planChoice(wording, view, offered, null)}
+        {"note" in held ? await setupPlanForm(ports, wording, view.messageId, token) : null}
       </>
     );
   }

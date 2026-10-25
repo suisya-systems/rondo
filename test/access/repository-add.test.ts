@@ -18,10 +18,15 @@ import {
   sameForgeRepository,
 } from "../../src/access/forge.js";
 import { workRepository } from "../../src/access/issue-read.js";
-import { heldPlans, requestRepository } from "../../src/access/model-draft/host.js";
+import {
+  gatherDrafterMaterial,
+  heldPlans,
+  requestRepository,
+} from "../../src/access/model-draft/host.js";
 import { REPOSITORY_PROPOSAL_AUTHOR } from "../../src/access/model-draft/judgement.js";
 import { addRepositoryFromPage, recordSetupPlansFromPage } from "../../src/access/page-actions.js";
 import { projectNameOf, repositoryParts } from "../../src/access/repository-add.js";
+import { PLACEHOLDER_PROMPT, setupPlanOf } from "../../src/access/setup-plan.js";
 import { allowedCommandsFor, COMMON_BASH } from "../../src/cadenza/facade.js";
 import { readRunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
@@ -176,6 +181,8 @@ function setupDocument(repo: string | null, repository = "/srv/repo"): JsonRecor
 }
 
 const ENV = { RONDO_APPROVER: "ada" };
+/** Where the store is: setup's root, which a plan setup did not record is cloned under. */
+const STORE = "/srv/setup/rondo-iterations.sqlite3";
 
 function ran(
   stdout: string,
@@ -219,6 +226,7 @@ test("an added repository is setup's plan with the repository's own facts, and t
     ENV,
     w,
     "ada",
+    STORE,
     { requestMessageId: "r1", repo: "owner/other" },
     async (repo, into) => {
       asked.push([repo, into]);
@@ -276,6 +284,7 @@ test("a repository whose build rondo cannot tell is added with the common comman
     ENV,
     w,
     "ada",
+    STORE,
     { requestMessageId: "r1", repo: "owner/docs" },
     cloned("README.md\nMakefile\n"),
   );
@@ -287,25 +296,82 @@ test("a repository whose build rondo cannot tell is added with the common comman
     unbuilt: ["owner/docs"],
     proposed: false,
     planless: false,
+    buildsOn: expect.any(Object),
   });
 });
 
-test("a clone that fails records nothing and says which of three things went wrong; no setup is its own refusal", async () => {
+test("where setup recorded no plan, a pasted one is built on, cloned beside the store (D-0203)", async () => {
+  const w = await world();
+  await w.say("r1", "Do owner/other#12.", null, 1_000);
+  // A plan pasted into the thread, in a layout that is not setup's.
+  const pasted: JsonRecord = { ...setupDocument("owner/a"), workspace_root: "/srv/runs" };
+  await w.say("r1-plan", JSON.stringify(pasted), "r1", 1_500);
+  const asked: string[] = [];
+  const added = await addRepositoryFromPage(
+    ENV,
+    w,
+    "ada",
+    STORE,
+    { requestMessageId: "r1", repo: "owner/other" },
+    async (_repo, into) => {
+      asked.push(into);
+      return await cloned("go.mod\n")();
+    },
+  );
+  expect(added).toEqual({ ok: true });
+  // Under the store's directory, which is setup's root, not beside the pasted workspace root.
+  expect(asked).toEqual(["/srv/setup/repositories/owner/other"]);
+  const [row] = await w.record.setupPlans();
+  const plan = row?.plan ?? {};
+  expect(readRunPlan(plan).kind).toBe("planned");
+  expect(plan["forge_repository"]).toBe("owner/other");
+  expect(plan["workspace_root"]).toBe("/srv/runs");
+  for (const key of ["db", "claude_command", "agent_type_input", "node"]) {
+    expect(plan[key], key).toEqual(pasted[key]);
+  }
+});
+
+test("a pasted plan alone lets the drafter propose a repository, as the press can then build on it (D-0203)", async () => {
+  const w = await world();
+  await w.say("r1", "Fix the typo on the docs site.", null, 1_000);
+  await w.say("r1-plan", JSON.stringify(setupDocument("owner/a")), "r1", 1_500);
+  const ports = { store: w.store, record: w.record, now: () => 5_000 };
+  expect((await gatherDrafterMaterial(ports, "r1", null)).repositoryProposable).toBe(true);
+  // A plan naming no forge repository still holds the proposal off (D-0191 rule 3.1).
+  await w.say("r2", "Fix the typo on the docs site.", null, 2_000);
+  await w.say("r2-plan", JSON.stringify(setupDocument(null)), "r2", 2_500);
+  expect((await gatherDrafterMaterial(ports, "r2", null)).repositoryProposable).toBe(false);
+});
+
+test("a lap's plan reads as the setup plan it stands for, a revise lap's on its pull request's base (D-0203)", () => {
+  const lap = planDocument();
+  const setup = setupPlanOf(lap);
+  if (setup === null) throw new Error("a lap's plan reads as a setup plan");
+  for (const key of ["run_id", "lease_claimant_id", "workspace", "topic_branch"]) {
+    expect(setup, key).not.toHaveProperty(key);
+  }
+  expect(setup["prompt"]).toBe(PLACEHOLDER_PROMPT);
+  expect((setup["parties"] as JsonRecord)["grantee"]).toBe("rondo-allocates-this");
+  expect(readRunPlan(setup).kind).toBe("planned");
+  expect(setup["db"]).toEqual(lap["db"]);
+  const revise = { ...lap, base_branch: "rondo/earlier-lap", pull_request_base_branch: "main" };
+  const fromRevise = setupPlanOf(revise);
+  expect(fromRevise?.["base_branch"]).toBe("main");
+  expect(fromRevise?.["pull_request_base_branch"]).toBeNull();
+  expect(setupPlanOf({ ...lap, db: "relative" })).toBeNull();
+});
+
+test("a clone that fails records nothing and says which of three things went wrong", async () => {
   const w = await world();
   const input = { requestMessageId: "r1", repo: "owner/other" };
   await w.say("r1", "Do owner/other#12.", null, 1_000);
   // Nothing held: the request names no repository to add, whatever the form says.
-  expect(await addRepositoryFromPage(ENV, w, "ada", input, cloned("go.mod\n"))).toMatchObject({
+  expect(
+    await addRepositoryFromPage(ENV, w, "ada", STORE, input, cloned("go.mod\n")),
+  ).toMatchObject({
     ok: false,
     why: "addRepositoryRefusedChanged",
   });
-  // A plan pasted into the thread is held, but setup gave no root to clone under.
-  await w.say("r1-plan", JSON.stringify(setupDocument("owner/a")), "r1", 1_500);
-  expect(await addRepositoryFromPage(ENV, w, "ada", input, cloned("go.mod\n"))).toMatchObject({
-    ok: false,
-    why: "addRepositoryRefusedNoSetup",
-  });
-
   await w.record.recordSetupPlan({
     setupId: "setup-1",
     plan: setupDocument("owner/a"),
@@ -326,13 +392,13 @@ test("a clone that fails records nothing and says which of three things went wro
     ],
     [ran("", 128, "fatal: unable to access: Could not resolve host"), "addRepositoryRefusedFailed"],
   ] as const) {
-    const answered = await addRepositoryFromPage(ENV, w, "ada", input, failing(outcome));
+    const answered = await addRepositoryFromPage(ENV, w, "ada", STORE, input, failing(outcome));
     expect(answered, outcome.stderr).toMatchObject({ ok: false, why });
   }
   // Only the repository the request names: not another, and not a path.
   for (const repo of ["owner/else", "../escape"]) {
     expect(
-      await addRepositoryFromPage(ENV, w, "ada", { ...input, repo }, cloned("go.mod\n")),
+      await addRepositoryFromPage(ENV, w, "ada", STORE, { ...input, repo }, cloned("go.mod\n")),
       repo,
     ).toMatchObject({ ok: false, why: "addRepositoryRefusedChanged" });
   }
@@ -341,12 +407,15 @@ test("a clone that fails records nothing and says which of three things went wro
       ENV,
       w,
       "ada",
+      STORE,
       { requestMessageId: "no-such-request", repo: "owner/other" },
       cloned("go.mod\n"),
     ),
   ).toMatchObject({ ok: false, why: "addRepositoryRefusedChanged" });
   // Not the approver: nothing is recorded as anyone else.
-  expect(await addRepositoryFromPage(ENV, w, "mallory", input, cloned("go.mod\n"))).toMatchObject({
+  expect(
+    await addRepositoryFromPage(ENV, w, "mallory", STORE, input, cloned("go.mod\n")),
+  ).toMatchObject({
     ok: false,
   });
   expect(await w.record.setupPlans()).toHaveLength(1);
@@ -437,6 +506,7 @@ test("work in a repository no plan is for: the drafter proposes it, the press ad
       ENV,
       w,
       "ada",
+      STORE,
       { requestMessageId: "r1", repo: "owner/site" },
       cloned("README.md\n"),
     ),
@@ -496,7 +566,7 @@ test("a store with no plan records the one setup left beside it, on one press, a
   // Nothing beside the store: setup has not run, and the press records nothing.
   expect(await recordSetupPlansFromPage(ENV, w, "ada", storePath, "r1")).toMatchObject({
     ok: false,
-    why: "addRepositoryRefusedNoSetup",
+    why: "recordSetupPlanRefusedGone",
   });
   writeFileSync(join(directory, "plan-owner-a.json"), JSON.stringify(setupDocument("owner/a")));
   // Not setup's name, and not a plan: neither is offered.

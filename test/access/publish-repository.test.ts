@@ -40,7 +40,7 @@ function workspace(url: string): string {
 }
 
 /** The world's store, with the lap's plan pushing from `repo`. */
-function storeAt(store: IterationStore, repo: string): IterationStore {
+function storeAt(store: IterationStore, repo: string, more: JsonRecord = {}): IterationStore {
   return new Proxy(store, {
     get(target, key) {
       if (key === "read") {
@@ -52,7 +52,7 @@ function storeAt(store: IterationStore, repo: string): IterationStore {
                 ...found,
                 record: {
                   ...found.record,
-                  plan: { ...found.record.plan, workspace: repo, topic_branch: "topic" },
+                  plan: { ...found.record.plan, workspace: repo, topic_branch: "topic", ...more },
                 },
               };
         };
@@ -113,11 +113,6 @@ test("the person names the repository; rondo checks it against the push and keep
   const shape = await press("widget");
   expect(shape.status).toBe(400);
   expect(say(shape.body)).toContain(EN.publishRepoRefusedShape);
-  // No setup plan for the repository yet: nowhere to keep it.
-  const unset = await press("acme/widget");
-  expect(unset.status).toBe(409);
-  expect(say(unset.body)).toContain(EN.publishRepoRefusedNoPlan);
-
   await world.record.recordSetupPlan({
     setupId: "setup-1",
     plan: setupDocument(),
@@ -138,6 +133,46 @@ test("the person names the repository; rondo checks it against the push and keep
   const again = await press("acme/widget");
   expect(again.status).toBe(409);
   expect(say(again.body)).toContain(EN.publishRepoRefusedChanged);
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("a revise lap run on a plan setup did not record keeps the name in a setup plan of its own, on its pull request's base (D-0203)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "add a retry budget");
+  const repo = workspace("git@github.com:acme/widget.git");
+  // A revise lap: cut from the lap it revised, its pull request against main.
+  const store = storeAt(world.store, repo, {
+    base_branch: "rondo/earlier",
+    pull_request_base_branch: "main",
+    // An agent type that builds a record, as every lap's does.
+    agent_type_input: planDocument()["agent_type_input"] ?? null,
+  });
+  const port = new PublishRepositoryPort(
+    store,
+    world.record,
+    "ada",
+    { RONDO_APPROVER: "ada" },
+    ASKED,
+  );
+  const { base, stop, served } = await serving({
+    ...portsOver(world, "ada", [], null, null, noRepo),
+    store,
+    publishRepository: port,
+  });
+  const token = tokenIn((await get(base, "/?publish=i-0001&lang=en")).body);
+  const pressed = await post(
+    base,
+    { token, iteration: "i-0001", repository: "acme/widget" },
+    {},
+    "/publish-repository",
+  );
+  expect(pressed.status).toBe(303);
+  expect(await recordedRepository(world.record, PLAN.repository)).toBe("acme/widget");
+  const [row] = await world.record.setupPlans();
+  expect(row?.plan["base_branch"]).toBe("main");
+  expect(row?.plan["pull_request_base_branch"]).toBeNull();
+  expect(row?.plan).not.toHaveProperty("run_id");
   stop.abort();
   expect(await served).toBe(0);
 });

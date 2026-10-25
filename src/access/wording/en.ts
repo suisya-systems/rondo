@@ -733,7 +733,7 @@ explanation you pressed on and then answers the gate.`,
   planUndecidable: "rondo could not check this plan against the scope just now.",
   scopeNoPlanForScope:
     "rondo holds no plan for the place and the agent type this scope allows, so there is " +
-    "nothing to start under it yet. Reply in the request's thread with a plan for them.",
+    "nothing to start under it.",
   scopeNoApprover:
     "Nobody is named as the approver yet. Name them at the top of the page to approve this.",
   // The place is said only where it is what tells two of these apart (D-0081
@@ -1305,8 +1305,8 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was recorded: this work's workspace does not push to that repository. Check the " +
     "name and try again.",
   publishRepoRefusedNoPlan:
-    "Nothing was recorded: this work's repository is not one rondo was set up with on this " +
-    "computer, so there is nowhere to keep the name.",
+    "Nothing was recorded: the plan this work ran on cannot be kept as a plan of its " +
+    "repository, so there is nowhere to keep the name.",
   publishRepoRefusedFailed:
     "Nothing was recorded: rondo could not keep the name this time. Pressing again is safe.",
   publishTargetRefused:
@@ -1400,8 +1400,8 @@ explanation you pressed on and then answers the gate.`,
     "left; rondo then drafts this request for you to approve.",
   nextStepRunSetup:
     "rondo has no plan to run this on yet, so nothing has been drafted: its setup has not run " +
-    "on this computer. Whoever installed rondo here runs it once (scripts/dogfood-env.sh in " +
-    "rondo's folder); rondo then drafts this request by itself.",
+    "on this computer. Tell whoever installed rondo here; once setup has run, rondo drafts " +
+    "this request by itself.",
   recordSetupPlanAction: "Record setup's plan",
   addRepositoryAction: "Add this repository",
   addRepositoryBack: "Back to the request",
@@ -1491,8 +1491,11 @@ explanation you pressed on and then answers the gate.`,
     "Nothing was added: this request no longer names a repository rondo does not work in. Go " +
     "back to see where it stands now.",
   addRepositoryRefusedNoSetup:
-    "Nothing was added: rondo's setup on this computer has not given it anywhere to put a " +
-    "repository. Whoever installed rondo here is the one who can look.",
+    "Nothing was added: none of the plans rondo holds can be the start of a plan for this " +
+    "repository.",
+  recordSetupPlanRefusedGone:
+    "Nothing was recorded: no usable setup plan file is there any more. Go back to the request " +
+    "to see where it stands now.",
   approveBusy: "Recording your approval...",
   startBusy: "Starting the work...",
   reviseBusy: "Asking for the change...",

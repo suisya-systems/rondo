@@ -88,7 +88,7 @@ import {
   setupRootOf,
 } from "./repository-add.js";
 import { admitUnderScope, agentTypeRecordOf, approvalTip } from "./scope.js";
-import { setupPlanFiles } from "./setup-files.js";
+import { setupPlanFiles, setupRootBeside } from "./setup-files.js";
 import type {
   ConflictFixed,
   ConflictFixInput,
@@ -1746,6 +1746,7 @@ export async function addRepositoryFromPage(
     readonly record: DrafterPorts["record"] & Pick<AdvisoryRecord, "recordSetupPlan">;
   },
   approver: string,
+  storePath: string,
   input: AddRepositoryInput,
   clone: typeof cloneRepository = cloneRepository,
 ): Promise<AddedRepository> {
@@ -1762,7 +1763,8 @@ export async function addRepositoryFromPage(
   // **Only the repository the request names now, and only while rondo holds
   // none for it** (D-0090 rule 1.4): the form carries a name, and a stale page
   // or a hand-written post must not add one the request does not ask for.
-  const where = (await requestRepository({ ...ports, now: Date.now }, input.requestMessageId)).work;
+  const request = await requestRepository({ ...ports, now: Date.now }, input.requestMessageId);
+  const where = request.work;
   if (where.kind !== "unheld" || where.repo !== input.repo) {
     return {
       ok: false,
@@ -1776,16 +1778,24 @@ export async function addRepositoryFromPage(
   }
   // **Setup's newest plan is the one this host's facts are read from**: the
   // plan it recorded last is the one a person repaired last (D-0075 rule 2.3).
-  const template = (await record.setupPlans()).toReversed().find((setup) => {
+  const fromSetup = (await record.setupPlans()).toReversed().find((setup) => {
     const planned = readRunPlan(setup.plan);
     return planned.kind === "planned" && planned.plan.pullRequestBaseBranch === null;
   })?.plan;
-  const root = template === undefined ? null : setupRootOf(template);
-  if (template === undefined || root === null) {
+  // **Where setup recorded none, the newest plan rondo holds** (D-0203 rule
+  // 1), cloned beside the store, which is in setup's root (rule 2).
+  const template = fromSetup ?? request.buildsOn;
+  const root =
+    fromSetup !== undefined
+      ? setupRootOf(fromSetup)
+      : template === null
+        ? null
+        : setupRootBeside(storePath);
+  if (template === null || root === null) {
     return {
       ok: false,
       why: "addRepositoryRefusedNoSetup",
-      note: "the store holds no setup plan to add a repository beside",
+      note: "the store holds no plan to add a repository beside",
     };
   }
   const into = cloneDirectory(root, parts.owner, parts.name);
@@ -1879,7 +1889,7 @@ export async function recordSetupPlansFromPage(
   if (files.length === 0) {
     return {
       ok: false,
-      why: "addRepositoryRefusedNoSetup",
+      why: "recordSetupPlanRefusedGone",
       note: `no plan setup wrote is beside ${storePath}`,
     };
   }

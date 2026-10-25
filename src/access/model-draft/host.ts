@@ -40,6 +40,7 @@ import type { readRepositoryPaths, runDrafter } from "../forge.js";
 import { hostFailure } from "../host-failure.js";
 import { issueForDrafter, type WorkRepository, workRepository } from "../issue-read.js";
 import { agentTypeRecordOf, planRepository } from "../scope.js";
+import { setupPlanOf } from "../setup-plan.js";
 import {
   type DraftAgentType,
   type DrafterMaterial,
@@ -394,16 +395,17 @@ export async function gatherDrafterMaterial(
   );
 
   // **Whether the drafter may propose a repository** (D-0191 rule 3.1): only
-  // where `D-0090`'s press could then add it (setup recorded a plan to build
-  // on) and the request would wait for that press (every plan names its forge
-  // repository, and the person's words name none).
+  // where `D-0090`'s press could then add it (a plan to build on: setup's, or
+  // since D-0203 any held plan that reads as one) and the request would wait
+  // for that press (every plan names its forge repository, and the person's
+  // words name none).
   const repositoryProposable =
     work.kind === "open" &&
     everyChoice.length > 0 &&
     everyChoice.every((t) => forgeRepositoryOf(t.plan) !== null) &&
     // Before grouping: a choice a later lap ran keeps the lap's provenance,
     // and setup's row under it is still what the press builds on.
-    ungrouped.some((t) => t.from.kind === "setup");
+    ungrouped.some((t) => setupPlanOf(t.plan) !== null);
 
   return {
     requestMessageId,
@@ -491,6 +493,12 @@ export async function requestRepository(
   readonly proposed: boolean;
   /** Whether rondo holds no plan at all, so nothing can be drafted yet (D-0191 rule 2). */
   readonly planless: boolean;
+  /**
+   * The newest held plan, as the setup plan it stands for (D-0203 rule 1):
+   * what a repository added for this request is built from where setup
+   * recorded none. Null when no held plan reads as one.
+   */
+  readonly buildsOn: JsonRecord | null;
 }> {
   const read = await ports.record.threadMessages();
   if (read.kind !== "read") {
@@ -525,6 +533,7 @@ export async function requestRepository(
       work.kind === "unheld" &&
       address.toLowerCase().endsWith(`/${work.repo.toLowerCase()}`),
     planless: held.length === 0,
+    buildsOn: held.reduce<JsonRecord | null>((found, t) => found ?? setupPlanOf(t.plan), null),
   };
 }
 

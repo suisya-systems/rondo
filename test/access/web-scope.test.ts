@@ -1181,6 +1181,39 @@ test("with no plan held, the scope screen says how one comes to be held, on the 
   for (const said of [EN.scopeNoPlanHeld, chromeFor("ja").scopeNoPlanHeld]) {
     expect(said).not.toMatch(/JSON|paste|plan\.json|貼/);
   }
+  expect(en).not.toContain(`id="record-setup-plan-${requestId}"`);
+
+  // Setup left its plan beside the store: the thread's press, here too (D-0203 rule 3),
+  // on the condition that press checks, and not where rondo holds a plan for the request.
+  const beside = (planless: boolean) => ({
+    ...ports,
+    addable: true,
+    setupPlanFiles: () => ["/srv/state/plan-owner-a.json"],
+    repositoryFor: async () =>
+      await Promise.resolve({ work: { kind: "open" as const }, unbuilt: [], planless }),
+  });
+  const offered = await operatorPage(
+    beside(true),
+    "t",
+    view,
+    EN,
+    mint,
+    () => "x",
+    () => "y",
+  );
+  expect(offered).toContain(`id="record-setup-plan-${requestId}"`);
+  expect(offered).toContain('name="setup" value="1"');
+  expect(offered).toContain(EN.recordSetupPlanAction);
+  const held = await operatorPage(
+    beside(false),
+    "t",
+    view,
+    EN,
+    mint,
+    () => "x",
+    () => "y",
+  );
+  expect(held).not.toContain(`id="record-setup-plan-${requestId}"`);
 });
 
 test("a fresh store setup finished offers setup's plan, and two setups alike on the line say when each was held (D-0075)", async () => {
@@ -1515,6 +1548,10 @@ test("the approved scope's start runs on a held plan it allows, and says so wher
   );
   expect(nowhere).not.toContain('id="start-form"');
   expect(nowhere).toContain(EN.scopeNoPlanForScope);
+  // A paste is never recommended (D-0191 rule 5).
+  for (const said of [EN.scopeNoPlanForScope, chromeFor("ja").scopeNoPlanForScope]) {
+    expect(said).not.toMatch(/paste|Reply|貼/);
+  }
 });
 
 test("a drafter run that drafted nothing is said as what happened, with the way to set the scope; its words are folded (rondo#238)", async () => {

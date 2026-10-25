@@ -225,7 +225,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0188 | A request whose only wait is the goal flow's stop says the flow waits, not the request, though it stays under *your turn* | accepted |
 | D-0189 | The secretary-like role rondo#626 asks for is the one `D-0063`, `D-0064`, `D-0067`, `D-0068` and `D-0177` already split across parts: no new role and no wider advisory, the gaps between the parts listed with where each is closed, and a question asked from the new request box answered across every request | accepted, amended |
 | D-0190 | An ask-back's options are stored beside its words and each one is a press, the option pressed is kept on the answer, a stop on the drafter's own ask is not drafted again, and one reader lists every decision the store holds | accepted, amended |
-| D-0191 | A request with no template gets a plan rondo assembles and a person approves with one press: the drafter proposes the work and its repository, deterministic code fills every host fact from what setup recorded or wrote, and a store with no plan records the one setup wrote beside it | accepted |
+| D-0191 | A request with no template gets a plan rondo assembles and a person approves with one press: the drafter proposes the work and its repository, deterministic code fills every host fact from what setup recorded or wrote, and a store with no plan records the one setup wrote beside it | accepted, amended |
 | D-0192 | An open question of the goal flow is a row under *your turn* in the list, on every view, leading to the questions' form; like a paused flow, it is a row there that is not a request | accepted |
 | D-0193 | Triage raises only the open points that are real decisions: each point says whether it is in dispute, irreversible or against a standing policy, rondo decides the rest as it recommends and writes each one where the person can change it, and the goal flow asks only the raised ones | accepted, amended |
 | D-0194 | The conflict fix of a line started with no claim is started by rondo, once, under an approval that starts work by itself; a try that started nothing is the press again, with why | accepted |
@@ -235,7 +235,8 @@ C-NN`, so the spaces can never be read as one.
 | D-0198 | The uncommitted changes that hold a lap's publish are discarded from the page, on a screen that lists them, by a press that discards only that list | accepted, amended |
 | D-0199 | Asking across every request also says the decisions recorded on a request since the person last looked, in the same section as what ended | accepted |
 | D-0201 | A widening onto another open line's files waits as a row and is written by the order tick once they are free, and inside an approved scope the gate widens a drafted claim onto what its lap changed and records it against that approval | accepted |
-| D-0202 | A lap whose plan and host name no forge repository has it named on the publish screen, checked against the push and recorded as a setup plan of its repository | accepted |
+| D-0202 | A lap whose plan and host name no forge repository has it named on the publish screen, checked against the push and recorded as a setup plan of its repository | accepted, amended |
+| D-0203 | Where setup recorded no plan to build on, a plan rondo already holds is recorded as the setup plan it stands for on the person's press; setup that never ran stays installation, said on the page and commanded in the host's log | accepted |
 
 ---
 
@@ -18306,6 +18307,14 @@ number.
    > composes nothing from them and reads nothing else from its environment. Nothing below is edited.
    >
    > - Amends: D-0075 rule 3.1
+   > **Annotation (2026-10-26, from D-0203).** Added after this entry was accepted, and **not
+   > additive**, by the owner's answer on rondo#676. **The host may copy one more plan**: where setup
+   > recorded none to build on, a plan it already holds (a lap's or a pasted one) is recorded as the
+   > setup plan it stands for, its host facts byte for byte, on the person's press. It discovers and
+   > composes nothing more, and reads setup's plan files at its own start as well, to say in its log
+   > that setup has not run. Nothing below is edited.
+   >
+   > - Amends: D-0075 rule 3.1
 2. **Setup discovers what it discovers today** (`claude` on `PATH`, `node`'s real path, the target's
    own base branch) **and is told what it is told today** (the target repository, the fence roots, the
    review criterion, the approver). This entry moves where its output goes, not how it is made.
@@ -21817,6 +21826,12 @@ On **2026-09-22**, at rondo `47ea4bd`, by reading. Line numbers drift; re-measur
    remembered.
 2. **Where it is cloned:** under the same root as setup's other output,
    `ROOT/repositories/OWNER/NAME`, where `ROOT` is the directory setup cut its workspaces under.
+   > **Annotation (2026-10-26, from D-0203).** Added after this entry was accepted, and **not
+   > additive**: where no setup plan is the template (rule 2.5, as amended), `ROOT` is the store's
+   > directory, which setup's root is, and not the template's workspace root's parent. Nothing below
+   > is edited.
+   >
+   > - Amends: D-0090 rule 2.2
 3. **Where it publishes:** the repository the issue is in (or the one the person named as the
    place), recorded on the plan as `forge_repository` (`D-0081` rule 3.2).
 4. **Its branch:** the branch the clone's HEAD is on, as setup takes a target's.
@@ -21825,6 +21840,12 @@ On **2026-09-22**, at rondo `47ea4bd`, by reading. Line numbers drift; re-measur
    is **setup's newest plan's, copied unchanged**. So the host still chooses no fence root and
    resolves no program of its own; what it composes is only the repository's own facts, read off
    the clone.
+   > **Annotation (2026-10-26, from D-0203).** Added after this entry was accepted, and **not
+   > additive**: where setup recorded no plan, the template is the newest plan rondo holds for the
+   > request (a lap's or a pasted one), read as the setup plan it stands for. Its host facts are
+   > still copied unchanged, so the host still chooses no fence root. Nothing below is edited.
+   >
+   > - Amends: D-0090 rule 2.5
 6. **What the worker may run is read off the repository.** Its top-level files say which of four
    families it builds with, and the worker's commands are composed for each found, together with
    the commands every worker has (`echo`, and the two exact `git switch` moves): **TypeScript and
@@ -31179,8 +31200,20 @@ At rondo `3e65034` on **2026-10-11**, by reading `DECISIONS.md`, `src/`, `test/`
       failed last step prints, and it is the same check: the plan reads, is no revise lap's, and its
       agent type builds a record. The host reads only that directory, only those names, and only on
       the page's render and the press.
+      > **Annotation (2026-10-26, from D-0203).** Added after this entry was accepted, and **not
+      > additive**: the host also reads that directory once at its start, to say in its log that
+      > setup has not run (`D-0203` rule 3). The press is also drawn on the scope screen, on the
+      > same condition. Nothing below is edited.
+      >
+      > - Amends: D-0191 rule 2.2
    3. Where there are none, setup has not run on this machine, and the page shows the one command
       that runs it. rondo does not run it itself (measurement).
+      > **Annotation (2026-10-26, from D-0203).** Added after this entry was accepted, and **not
+      > additive**: the page says only that setup has not run and who can act on it; the command
+      > is in the host's log, where whoever started the host by hand already has a terminal.
+      > rondo still does not run it. Nothing below is edited.
+      >
+      > - Amends: D-0191 rule 2.3
    4. Once a plan is held, the timer's rescan finds the request due and drafts it.
 3. **Case F: the drafter proposes the repository, and `D-0090`'s press assembles the plan.**
    1. A drafter answer may be `"act": "repository"` with `"repository": "OWNER/NAME"`, when no
@@ -31920,6 +31953,12 @@ Reading the slug off the workspace's push remote was put to the owner and declin
 3. **The name is recorded as a setup plan of the lap's local repository**: that repository's newest
    setup plan with `forge_repository` set, recorded by the approver. A repository setup recorded no
    plan for has nothing to copy, and the press refuses.
+   > **Annotation (2026-10-26, from D-0203).** Added after this entry was accepted, and **not
+   > additive**: a repository setup recorded no plan for copies the lap's own plan instead, read as
+   > the setup plan it stands for (a revise lap's on its pull request's base). The press refuses only
+   > where that plan does not read as one. Nothing below is edited.
+   >
+   > - Amends: D-0202 rule 3
 4. **The order a publish reads is the lap's plan, then the host's `--repo`, then the newest slug a
    setup plan records for the lap's repository.** `D-0081` rule 6.3 is unchanged: a host's flag
    still answers first for a store set up before `D-0081`. Later laps of that repository are drafted
@@ -31940,3 +31979,88 @@ Reading the slug off the workspace's push remote was put to the owner and declin
 - **A name kept that the push does not go to**: rule 2's preflight did not run over it.
 - **A publish that went to a recorded name while the lap's plan or the host named another**: rule
   4's order was not kept.
+
+## D-0203 — Where setup recorded no plan to build on, a plan rondo already holds is recorded as the setup plan it stands for on the person's press; setup that never ran stays installation, said on the page and commanded in the host's log
+
+**Status:** accepted (2026-10-26, rondo#676, the owner's answer through the window on three points,
+each the recommended option). Amends `D-0075` rule 3.1, `D-0090` rules 2.2 and 2.5, `D-0191` rules
+2.2 and 2.3, and `D-0202` rule 3. Refs `D-0019`, `D-0063`, `D-0071`, `D-0080`, `D-0081`, `D-0137`.
+
+### Context
+
+rondo#676 lists the messages a person can answer only in a terminal. Four of them, and the limit
+`D-0202` left, are about setup: `nextStepRunSetup`, `addRepositoryRefusedNoSetup`, the scope
+screen's `scopeNoPlanHeld` and `scopeNoPlanForScope`, and the publish screen's
+`publishRepoRefusedNoPlan`. They are three different states.
+
+### What was measured, and how
+
+At rondo `d2a5caf` on **2026-10-26**, by reading `src/`, `scripts/dogfood-env.sh` and this file, and
+by a Codex review of the design. Line numbers drift: re-measure the claim, not the number.
+
+- **A host started the way setup installs it always has setup's plan file beside its store.** Setup's
+  *Plan* step writes `plan-<project>.json` into its root before its *Start command* step installs
+  and restarts the service, and its *Store* step records the plan after that. So a page served by
+  that service shows `D-0191` rule 2.2's press, not rule 2.3's command. Rule 2.3's case is a host
+  started by hand, a store outside setup's root, or a plan file that is gone or no longer reads.
+- **A repository setup recorded no plan for is a lap's or a paste's.** `addRepositoryRefusedNoSetup`
+  is reached only by a request whose held plans are all laps' or pasted (the card needs a held plan
+  to be drawn), and `publishRepoRefusedNoPlan` only by a lap whose repository has no setup row. In
+  both, rondo already holds a plan with every host fact a setup plan would carry.
+- **A held plan is not a setup plan as it stands.** A lap's carries the four allocated fields, its
+  own prompt, the allocated grantee and maybe a deadline or a take-in; a revise lap's bases on the
+  lap it revised and names its pull request's base apart (`revisionPlan`). The plan reader refuses
+  an empty prompt.
+- **The drafter's repository proposal was gated on a setup row** (`repositoryProposable`), so with
+  only laps' or pasted plans no repository could be proposed even where the press could add it.
+
+### Decision
+
+1. **A held plan is recorded as the setup plan it stands for, where setup recorded none to build
+   on.** One function reads it through the plan reader, drops the allocated run id, lease claimant,
+   workspace and topic branch, sets the prompt to setup's placeholder, the grantee to setup's, and no
+   deadline and no take-in, bases a revise lap's plan on its pull request's base, and keeps every
+   other field byte for byte; the result must read and its agent type must build a record, or there
+   is none.
+   1. **Adding a repository** (`D-0090`): setup's newest plan is still the template where there is
+      one. Otherwise it is the newest plan rondo holds for the request, so read.
+   2. **Naming a lap's repository** (`D-0202`): the repository's newest setup plan is still copied
+      where there is one. Otherwise the lap's own plan, so read, is.
+   3. **Proposing a repository** (`D-0191` rule 3.1) is allowed where any held plan reads as one, so
+      the proposal and the press agree.
+2. **A repository added from such a template is cloned under the store's directory**, which is
+   setup's root by setup's own layout, and not under the template's workspace root's parent: a
+   pasted plan's workspace root need not follow setup's layout.
+3. **Setup that never ran stays installation** (`D-0075` rule 1.1, `D-0191` rule 2.3). The page says
+   that setup has not run and that whoever installed rondo here can act on it, with no command and
+   no path. The host says the command once in its own log at start, when the store holds no setup
+   plan and no usable one is beside it. The scope screen draws `D-0191` rule 2.2's press where the
+   thread's card does, on the condition the press checks.
+4. **A record press that finds no usable plan file says so in its own words**, not as setup never
+   having run: a file can be gone, unreadable or no longer accepted.
+5. **`scopeNoPlanForScope` recommends no paste** (`D-0191` rule 5). Why a scope can come to match no
+   held plan is left to its own issue.
+
+### Options considered
+
+| Option | Taken? | What it loses |
+|---|---|---|
+| A screen that runs setup's steps from the page | No | It is `D-0075` option D: the host would compose a fence's geometry and ask for paths, and no person on the intended path reaches it |
+| The host runs setup on a press | No | `D-0191`'s measurement stands: setup rebuilds the host's checkout and restarts its service before recording the plan |
+| The slug kept outside setup plans | No | `D-0081` rule 3.2's one home for repository facts, and `D-0137`'s reading of a bare `#N`, which reads setup plans |
+| A held plan read as a setup plan (rules 1 and 2) | Yes | See below |
+
+### What it costs
+
+- **A pasted plan's host facts become a setup plan's.** They were a person's paste, and laps may have
+  run on them; a stale one fails in the fence as the lap would have. Re-running setup is still the
+  repair.
+- **Setup that never ran still needs a terminal once.** That is installation, and the page says so.
+
+### What would falsify it
+
+- **A setup row recorded from a held plan that differs from it in a host fact.**
+- **An added repository cloned outside the store's directory where no setup plan was the template.**
+- **A drafter proposal the press then refuses for want of a template**, or a press that could add
+  one where no proposal is allowed.
+- **A host started by setup's service whose page shows `nextStepRunSetup`.**
