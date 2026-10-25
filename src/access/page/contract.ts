@@ -25,6 +25,7 @@ import type { SignInPort } from "../github-sign-in-route.js";
 import type { InboxReadPorts } from "../inbox.js";
 import type { NamedIssue, WorkRepository } from "../issue-read.js";
 import type { EndPort, HoldsPort, ReleasePort } from "../line-ports.js";
+import type { PublishRepositoryPort } from "../publish-repository.js";
 import type { TabOutcome } from "../reach.js";
 import type { AddRepositoryPort } from "../repository-add.js";
 import type {
@@ -187,6 +188,8 @@ export interface WebPorts extends InboxReadPorts {
   readonly signIn?: SignInPort | null;
   /** Discarding a lap's uncommitted changes (rondo#676, D-0198); null without an approver. Absent is null. */
   readonly discard?: DiscardPort | null;
+  /** Naming a lap's pull-request repository (rondo#676, D-0202); null without an approver. Absent is null. */
+  readonly publishRepository?: PublishRepositoryPort | null;
   /**
    * Whether the host holds a merge press (rondo#380, `D-0091`): true exactly
    * where the merge port is not null, so no merge button is drawn where every

@@ -16,6 +16,7 @@ import {
 import { type PageView, viewHref } from "../page-logic/routes.js";
 import type { Threads } from "../page-logic/threads.js";
 import type { Chrome } from "../wording.js";
+import { BOX } from "./scope.js";
 
 /** The publish's three legs in the past tense, the pull request as a link. */
 
@@ -247,6 +248,12 @@ export async function publishView(
               {wording.publishDiscardLink}
             </a>
           ) : null}
+          {/* Named by the person, never guessed from the remote (D-0202). */}
+          {shown.block.why === "noRepo" &&
+          token !== null &&
+          (ports.publishRepository ?? null) !== null
+            ? repositoryForm(wording, record, token)
+            : null}
           {/* git's or the preflight's own words, beside the sentence and shut
               (D-0076 rule 4.5): the sentence says it in the person's terms. */}
           {shown.block.why === "target" || shown.block.why === "statusUnreadable"
@@ -437,6 +444,42 @@ function publishBlockLines(wording: Chrome, block: PublishBlock): readonly strin
         wording.publishUncommittedRemedies,
       ];
   }
+}
+
+/** The box a lap's pull-request repository is named in, and its press (D-0202). */
+function repositoryForm(wording: Chrome, record: IterationRecord, token: string) {
+  return (
+    <form
+      id="publish-repository-form"
+      method="post"
+      action={`/publish-repository?lang=${encodeURIComponent(wording.lang)}`}
+      class="mt-2 flex flex-col gap-2"
+    >
+      <input type="hidden" name="token" value={token} />
+      <input type="hidden" name="iteration" value={record.id} />
+      <label for="publish-repository" class="text-meta leading-5 font-medium">
+        {wording.publishRepoLabel}
+      </label>
+      <input
+        type="text"
+        id="publish-repository"
+        name="repository"
+        required
+        pattern="[A-Za-z0-9._\-]+/[A-Za-z0-9._\-]+"
+        placeholder="OWNER/NAME"
+        autocomplete="off"
+        spellcheck={false}
+        class={`${BOX} font-mono sm:max-w-sm`}
+      />
+      <button
+        type="submit"
+        data-row=""
+        class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+      >
+        {wording.publishRepoAction}
+      </button>
+    </form>
+  );
 }
 
 /** Why the reading does not cover what would be pushed, in the page's words. */

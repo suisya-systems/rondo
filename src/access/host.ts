@@ -88,6 +88,7 @@ import {
   startSplitFromPage,
 } from "./page-scope-actions.js";
 import { publishHost } from "./publish-host.js";
+import { PublishRepositoryPort, recordedRepository } from "./publish-repository.js";
 import { notifierAt, reachThePerson, recordTabNotice } from "./reach.js";
 import { readIn } from "./read-in.js";
 import { AddRepositoryPort } from "./repository-add.js";
@@ -167,6 +168,7 @@ export async function serveWeb(
     repo: parsed.repo,
     remote: parsed.remote ?? DEFAULT_REMOTE,
     allowRemoteMismatch: parsed.allowRemoteMismatch,
+    recorded: async (repository) => await recordedRepository(record, repository),
   };
   // **The model drafter runs in this process** (D-0071 rule 3.2, with the
   // `rondo web` process as the resident host until D-0068's patrol exists):
@@ -1012,6 +1014,11 @@ export async function serveWeb(
               store,
               async (row) => await publishingForPage(environment, store, asked, row),
             ),
+      // rondo#676 (D-0202): naming the repository a lap's pull request goes to.
+      publishRepository:
+        sender === null || "refusal" in sender
+          ? null
+          : new PublishRepositoryPort(store, record, sender.actorId, environment, asked),
       // **The workers this host is equipped for** (rondo#462): read here,
       // where the host's other settings are read, and handed to the page as
       // names so the start form can offer the choice and say which worker

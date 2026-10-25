@@ -4568,10 +4568,11 @@ export interface PublishAsked {
    * **The fallback and not the answer** (D-0081 rule 3.2, rule 6.3). The
    * repository is the lap's plan's, so this is read only where that plan
    * carries no slug -- which is every plan written before `D-0081` and every
-   * plan an operator hand-wrote without one. A host with neither publishes
-   * nothing, and says so per lap rather than per host.
+   * plan an operator hand-wrote without one.
    */
   readonly repo: string | null;
+  /** The slug a setup plan records for a local repository: read where neither names one (D-0202). */
+  readonly recorded?: (repository: string) => Promise<string | null>;
   readonly remote: string;
   readonly allowRemoteMismatch: boolean;
 }
@@ -4943,21 +4944,18 @@ export async function publishPlanFor(
   // where the real thing would fail is the failure it was meant to prevent
   // (see `publishPreflight`).
   const host = forgeHost(environment);
-  // **The repository is the lap's own plan's, and the host's flag is what a
-  // plan without one falls back to** (D-0081 rule 3.2, rule 6.3). The plan is
-  // read first because that is where the fact now lives; `--repo` answers for a
-  // store set up before `D-0081`, whose rows carry no slug and which must keep
-  // publishing exactly as it did. A lap with neither is refused here, per lap,
-  // rather than by a host that drew no button at all.
-  const repo = publishRepository(record, asked);
+  // **The lap's own plan's, then the host's flag** (D-0081 rules 3.2, 6.3): the
+  // flag answers for a store set up before `D-0081`. Then the slug a person
+  // told the page for this repository (D-0202); with none, refused per lap.
+  const told = asked.recorded ?? (async () => null);
+  const repo = publishRepository(record, asked) ?? (await told(planField(record, "repository")));
   if (repo === null) {
     return {
       kind: "refused",
       block: { why: "noRepo" },
       reason:
-        `iteration '${record.id}' names no repository to publish to: its plan carries none, and ` +
-        "this rondo was given no --repo OWNER/NAME either. Setup records the repository onto the " +
-        "plans it composes; --repo publishes a plan written before it did.",
+        `iteration '${record.id}' names no repository to publish to: its plan carries none, ` +
+        "this rondo was given no --repo OWNER/NAME, and nobody named one on the page.",
     };
   }
   // **Kept rather than discarded**: the preflight answers whether this may run,

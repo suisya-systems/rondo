@@ -1,6 +1,6 @@
 {
   "src/access/advisory.ts": 2915,
-  "src/access/cli.ts": 5561,
+  "src/access/cli.ts": 5559,
   "src/access/conductor.ts": 2235,
   "src/access/forge.ts": 2791,
   "src/access/web-app.ts": 3857,

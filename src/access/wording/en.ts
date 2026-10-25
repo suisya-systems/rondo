@@ -1287,8 +1287,28 @@ explanation you pressed on and then answers the gate.`,
     `This lap's plan records no ${field}, and publishing is built from it. It cannot be ` +
     "published as it stands.",
   publishNoRepo:
-    "rondo has no record of which repository this work's pull request goes to. Ask whoever " +
-    "maintains rondo on this computer to record it.",
+    "rondo does not know which GitHub repository this work's pull request goes to. Name it below.",
+  publishRepoLabel: "Repository (OWNER/NAME)",
+  publishRepoAction: "Use this repository",
+  publishRepoRefusedNoApprover:
+    "Nothing was recorded: nobody is named as the approver yet. Go back, name the approver at the top of the page, then try again.",
+  publishRepoRefusedPress:
+    "Nothing was recorded: this is done by a person pressing this page's button, and a script " +
+    "cannot.",
+  publishRepoRefusedForm:
+    "Nothing was recorded: that form did not come from this page. Reload it and press again.",
+  publishRepoRefusedShape:
+    "Nothing was recorded: a repository is written OWNER/NAME, as in suisya-systems/rondo.",
+  publishRepoRefusedChanged:
+    "Nothing was recorded: this work already has a repository to publish to. Go back to see it.",
+  publishRepoRefusedMismatch:
+    "Nothing was recorded: this work's workspace does not push to that repository. Check the " +
+    "name and try again.",
+  publishRepoRefusedNoPlan:
+    "Nothing was recorded: this work's repository is not one rondo was set up with on this " +
+    "computer, so there is nowhere to keep the name.",
+  publishRepoRefusedFailed:
+    "Nothing was recorded: rondo could not keep the name this time. Pressing again is safe.",
   publishTargetRefused:
     "The push has nowhere to go that rondo can vouch for, so this is not published. Ask whoever " +
     "maintains rondo on this computer to check where it goes.",
@@ -1602,8 +1622,8 @@ explanation you pressed on and then answers the gate.`,
   publishRefusedPlanField:
     "Nothing was published: this lap's plan is missing something publishing is built from.",
   publishRefusedNoRepo:
-    "Nothing was published: rondo has no record of which repository the pull request goes to. " +
-    "Ask whoever maintains rondo on this computer to record it.",
+    "Nothing was published: rondo does not know which GitHub repository the pull request goes " +
+    "to. Go back and name it.",
   publishRefusedTarget: (detail) =>
     `Nothing was published: the push has nowhere to go that rondo can vouch for. ${detail}`,
   publishRefusedUncommitted: (detail) =>
