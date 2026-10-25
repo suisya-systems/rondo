@@ -31914,7 +31914,9 @@ Reading the slug off the workspace's push remote was put to the owner and declin
    native form minted like every press. A host with no approver draws neither.
 2. **The press keeps the name only where it is where the push goes.** It runs the same preflight a
    publish runs (`publishPreflight` over `inspectPushTarget`) with the typed name, and refuses,
-   recording nothing, when the workspace's remote pushes somewhere else.
+   recording nothing, when the workspace's remote pushes somewhere else. The host's
+   `--allow-remote-mismatch` does not apply: it is permission for one publish, and this name is
+   kept for every later one.
 3. **The name is recorded as a setup plan of the lap's local repository**: that repository's newest
    setup plan with `forge_repository` set, recorded by the approver. A repository setup recorded no
    plan for has nothing to copy, and the press refuses.
@@ -31923,7 +31925,8 @@ Reading the slug off the workspace's push remote was put to the owner and declin
    still answers first for a store set up before `D-0081`. Later laps of that repository are drafted
    from the new setup plan and carry the slug in their own plan.
 5. **Only while nothing names one.** A press over a lap that has a repository by any of rule 4's
-   three is refused, so a stale screen does not record a second name.
+   three is refused, so a stale screen does not record a second name. Presses run one at a time,
+   and the setup plans are read again after git answers, so a plan recorded meanwhile refuses it.
 
 ### What it costs
 

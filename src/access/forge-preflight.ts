@@ -11,6 +11,9 @@
  * URL can carry a token, and every surface that prints one -- the preflight's
  * refusals and the plan `cli.ts` shows -- has to print it the same way.
  */
+import { readRunPlan } from "../refrain/plan.js";
+import type { JsonRecord } from "../store/records.js";
+import type { AdvisoryRecord } from "../store/sqlite.js";
 import type { PushTargetInspection } from "./forge.js";
 
 /** A forge repository as `gh` names one: `owner/name`. */
@@ -149,6 +152,34 @@ export function publishesTo(planSlug: string | null, hostRepo: string | null): P
     return { repo: planSlug, named: "plan" };
   }
   return hostRepo === null ? { repo: null, named: "nothing" } : { repo: hostRepo, named: "flag" };
+}
+
+/** The setup plans one local repository is recorded in, newest first. */
+export async function plansOf(
+  record: Pick<AdvisoryRecord, "setupPlans">,
+  repository: string,
+): Promise<
+  readonly { readonly setupId: string; readonly plan: JsonRecord; readonly slug: string | null }[]
+> {
+  return (await record.setupPlans()).toReversed().flatMap((setup) => {
+    const planned = readRunPlan(setup.plan);
+    return planned.kind === "planned" &&
+      planned.plan.pullRequestBaseBranch === null &&
+      planned.plan.repository === repository
+      ? [{ setupId: setup.setupId, plan: setup.plan, slug: planned.plan.forgeRepository }]
+      : [];
+  });
+}
+
+/**
+ * The slug a setup plan records for a local repository, newest first: what a
+ * lap whose own plan and host name none publishes to. Null where none does.
+ */
+export async function recordedRepository(
+  record: Pick<AdvisoryRecord, "setupPlans">,
+  repository: string,
+): Promise<string | null> {
+  return (await plansOf(record, repository)).find((one) => one.slug !== null)?.slug ?? null;
 }
 
 /**

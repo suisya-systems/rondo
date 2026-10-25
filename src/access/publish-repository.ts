@@ -17,44 +17,24 @@
  */
 import type { Context, Hono } from "hono";
 import { readRunPlan } from "../refrain/plan.js";
-import { type IterationRecord, type JsonRecord, planField } from "../store/records.js";
+import { type IterationRecord, planField } from "../store/records.js";
 import type { AdvisoryRecord, IterationStore } from "../store/sqlite.js";
 import { approvedActor } from "./approver.js";
 import type { PublishAsked } from "./cli.js";
 import { inspectPushTarget } from "./forge.js";
-import { forgeHost, parseForgeSlug, publishesTo, publishPreflight } from "./forge-preflight.js";
+import {
+  forgeHost,
+  parseForgeSlug,
+  plansOf,
+  publishesTo,
+  publishPreflight,
+} from "./forge-preflight.js";
 import { viewHref } from "./page-logic/routes.js";
 import { refusedPage } from "./screens/refused.js";
 import { mintPress, type PageEnv, type Press, spendPress } from "./web-app.js";
 import type { Chrome } from "./wording.js";
 
 export const PUBLISH_REPOSITORY_ROUTE = "/publish-repository";
-
-/** The setup plans one local repository is recorded in, newest first. */
-async function plansOf(
-  record: Pick<AdvisoryRecord, "setupPlans">,
-  repository: string,
-): Promise<readonly { readonly plan: JsonRecord; readonly slug: string | null }[]> {
-  return (await record.setupPlans()).toReversed().flatMap((setup) => {
-    const planned = readRunPlan(setup.plan);
-    return planned.kind === "planned" &&
-      planned.plan.pullRequestBaseBranch === null &&
-      planned.plan.repository === repository
-      ? [{ plan: setup.plan, slug: planned.plan.forgeRepository }]
-      : [];
-  });
-}
-
-/**
- * The slug a setup plan records for a local repository, newest first: what a
- * lap whose own plan and host name none publishes to. Null where none does.
- */
-export async function recordedRepository(
-  record: Pick<AdvisoryRecord, "setupPlans">,
-  repository: string,
-): Promise<string | null> {
-  return (await plansOf(record, repository)).find((one) => one.slug !== null)?.slug ?? null;
-}
 
 /** Why a press recorded nothing, as the wording key the page says it in. */
 export type PublishRepositoryRefusal =
@@ -75,6 +55,12 @@ export class PublishRepositoryPort {
   readonly #approver: string;
   readonly #environment: Readonly<Record<string, string | undefined>>;
   readonly #asked: PublishAsked;
+  /**
+   * One press at a time, so two presses cannot both find the repository
+   * unnamed. ponytail: one host process; a setup run beside it is caught by
+   * the re-read before the write, not locked out.
+   */
+  #queue: Promise<unknown> = Promise.resolve();
 
   constructor(
     store: Pick<IterationStore, "read">,
@@ -98,6 +84,15 @@ export class PublishRepositoryPort {
     if (!spendPress(press)) {
       return null;
     }
+    const told = this.#queue.then(async () => await this.#tell(input));
+    this.#queue = told.catch(() => undefined);
+    return await told;
+  }
+
+  async #tell(input: {
+    readonly iterationId: string;
+    readonly repo: string;
+  }): Promise<PublishRepositoryTold> {
     const repo = input.repo.trim();
     if (parseForgeSlug(repo) === null) {
       return refused("publishRepoRefusedShape");
@@ -121,15 +116,19 @@ export class PublishRepositoryPort {
     ) {
       return refused("publishRepoRefusedChanged");
     }
-    const template = plans[0]?.plan;
-    if (template === undefined) {
+    const newest = plans[0];
+    if (newest === undefined) {
       return refused("publishRepoRefusedNoPlan", `no setup plan records ${repository}`);
     }
     const mismatch = await pushesElsewhere(lap, repo, this.#asked, this.#environment);
     if (mismatch !== null) {
       return refused("publishRepoRefusedMismatch", mismatch);
     }
-    const plan = { ...template, forge_repository: repo };
+    // Read again after git answered: setup may have recorded a plan meanwhile.
+    if ((await plansOf(this.#record, repository))[0]?.setupId !== newest.setupId) {
+      return refused("publishRepoRefusedChanged");
+    }
+    const plan = { ...newest.plan, forge_repository: repo };
     const planned = readRunPlan(plan);
     if (planned.kind !== "planned") {
       return refused("publishRepoRefusedFailed", planned.reason);
@@ -163,7 +162,8 @@ async function pushesElsewhere(
     workspace,
     topicBranch,
     forgeHost: forgeHost(environment),
-    allowRemoteMismatch: asked.allowRemoteMismatch,
+    // Never the host's override: a name kept for good is where the push goes.
+    allowRemoteMismatch: false,
     inspection: await inspectPushTarget({ workspace, remote: asked.remote, topicBranch }),
   });
   return checked.kind === "refused" ? checked.reason : null;

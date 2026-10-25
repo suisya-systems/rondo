@@ -153,7 +153,7 @@ import {
   readRecordFloor,
   runDrafter,
 } from "./forge.js";
-import { forgeHost, publishesTo, publishPreflight } from "./forge-preflight.js";
+import { forgeHost, publishesTo, publishPreflight, recordedRepository } from "./forge-preflight.js";
 import { serveWeb } from "./host.js";
 import { hostFailure } from "./host-failure.js";
 import { type InboxOutcome, showInbox, type TranscriptLocation } from "./inbox.js";
@@ -5267,6 +5267,7 @@ async function commandPublish(
       repo: parsed.repo,
       remote: parsed.remote ?? DEFAULT_REMOTE,
       allowRemoteMismatch: parsed.allowRemoteMismatch,
+      recorded: async (repository) => await recordedRepository(advisory, repository),
     },
     environment,
     store,

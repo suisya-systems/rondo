@@ -7,9 +7,9 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-
+import { recordedRepository } from "../../src/access/forge-preflight.js";
 import type { PublishShown } from "../../src/access/page/contract.js";
-import { PublishRepositoryPort, recordedRepository } from "../../src/access/publish-repository.js";
+import { PublishRepositoryPort } from "../../src/access/publish-repository.js";
 import { chromeFor } from "../../src/access/wording.js";
 import type { JsonRecord } from "../../src/store/records.js";
 import type { IterationStore } from "../../src/store/sqlite.js";
@@ -138,6 +138,40 @@ test("the person names the repository; rondo checks it against the push and keep
   const again = await press("acme/widget");
   expect(again.status).toBe(409);
   expect(say(again.body)).toContain(EN.publishRepoRefusedChanged);
+  stop.abort();
+  expect(await served).toBe(0);
+});
+
+test("a host that allows a remote mismatch still keeps only where the push goes, and two presses keep one name", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "add a retry budget");
+  await world.record.recordSetupPlan({
+    setupId: "setup-1",
+    plan: setupDocument(),
+    recordedBy: "ada",
+    recordedAtMs: 500,
+  });
+  const store = storeAt(world.store, workspace("https://github.com/acme/widget.git"));
+  const port = new PublishRepositoryPort(
+    store,
+    world.record,
+    "ada",
+    { RONDO_APPROVER: "ada" },
+    { ...ASKED, allowRemoteMismatch: true },
+  );
+  const { base, stop, served } = await serving({
+    ...portsOver(world, "ada", [], null, null, noRepo),
+    store,
+    publishRepository: port,
+  });
+  const token = tokenIn((await get(base, "/?publish=i-0001&lang=en")).body);
+  const press = (repository: string) =>
+    post(base, { token, iteration: "i-0001", repository }, {}, "/publish-repository");
+
+  expect((await press("upstream/widget")).status).toBe(409);
+  const both = await Promise.all([press("acme/widget"), press("acme/widget")]);
+  expect(both.map((one) => one.status).sort()).toEqual([303, 409]);
+  expect((await world.record.setupPlans()).length).toBe(2);
   stop.abort();
   expect(await served).toBe(0);
 });

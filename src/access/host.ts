@@ -48,7 +48,7 @@ import {
   rerunFailedJobs,
   runDrafter,
 } from "./forge.js";
-import { forgeHost } from "./forge-preflight.js";
+import { forgeHost, recordedRepository } from "./forge-preflight.js";
 import { type GateHostPorts, gateHost } from "./gate-host.js";
 import { gitHubSignIn } from "./github-sign-in.js";
 import { SignInPort } from "./github-sign-in-route.js";
@@ -88,7 +88,7 @@ import {
   startSplitFromPage,
 } from "./page-scope-actions.js";
 import { publishHost } from "./publish-host.js";
-import { PublishRepositoryPort, recordedRepository } from "./publish-repository.js";
+import { PublishRepositoryPort } from "./publish-repository.js";
 import { notifierAt, reachThePerson, recordTabNotice } from "./reach.js";
 import { readIn } from "./read-in.js";
 import { AddRepositoryPort } from "./repository-add.js";
