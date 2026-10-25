@@ -1554,6 +1554,84 @@ test("the approved scope's start runs on a held plan it allows, and says so wher
   }
 });
 
+test("an approved scope whose lap plan has aged out of the newest twenty rows still starts on it, from an address that names no plan (rondo#718)", async () => {
+  const world = fresh();
+  const requestId = "request-scope-aged";
+  await seedScopeRequest(world, requestId, "Fix it, please.");
+  const document = scopePlanDocument();
+  const planned = readRunPlan(document);
+  if (planned.kind !== "planned") throw new Error(planned.reason);
+  const recorded = agentTypeRecordOf(planned.plan, document);
+  if ("refusal" in recorded) throw new Error(recorded.refusal);
+  const agentTypeDigest = recorded.record.agentTypeDigest;
+  // The lap the scope was drawn over, then twenty newer ones elsewhere: on a
+  // tie in time the later id is the newer row, so `a-` is the oldest.
+  await seedEndedLap(world, "a-scope-lap", { agentTypeDigest, costUsd: 1, durationMs: 1 });
+  for (let i = 10; i < 30; i++) {
+    await reserve(world, `z-lap-${i}`, "other work", null, undefined, "/srv/other");
+    // Ended, so the store has room for the next one.
+    world.connection
+      .prepare("UPDATE iteration SET status = 'closed' WHERE id = ?")
+      .run(`z-lap-${i}`);
+  }
+  await world.record.recordScope({
+    scopeId: "scope-aged",
+    payload: scopePayloadWithDefaults({
+      requests: [requestId],
+      workspaces: [{ repository: SCOPE_PLAN.repository, workspace_root: SCOPE_PLAN.workspaceRoot }],
+      agent_types: [agentTypeDigest],
+      budgets: {
+        laps: 1,
+        review_rounds: 1,
+        cost_usd: 5,
+        cost_reserve_usd: 1,
+        expires_at_ms: 9_999_999_999,
+      },
+      severity_threshold: "major",
+      outward_acts: [],
+      irreversible_additions: [],
+    }),
+    supersedesScopeId: null,
+    authorKind: "operator",
+    authorId: "ada",
+    bases: [],
+    createdAtMs: 1_000,
+    agentTypeRecords: [],
+  });
+  const stored = await world.record.readScope("scope-aged");
+  if (stored.kind !== "read") throw new Error(JSON.stringify(stored));
+  await world.record.recordScopeDecision({
+    scopeDecisionId: "decision-scope-aged",
+    scopeId: "scope-aged",
+    scopeDigest: stored.scope.scopeDigest,
+    outcome: "approved",
+    actorId: "ada",
+    recordedBy: "rondo/page",
+    decidedAtMs: 1_500,
+  });
+  // The thread's link to an approved scope names no plan (`thread-acts.tsx`).
+  const page = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    {
+      kind: "scope",
+      messageId: requestId,
+      rounds: null,
+      decisionId: "decision-scope-aged",
+      plan: null,
+    },
+    EN,
+    mint,
+    () => "x",
+    () => "y",
+  );
+  // Neither dead end: the newest twenty rows hold no plan this scope allows.
+  expect(page).not.toContain(EN.scopeNoPlanForScope);
+  expect(page).not.toContain(EN.scopeNoPlanHeld);
+  expect(page).toContain('id="start-form"');
+  expect(page).toContain(`<input type="hidden" name="plan" value="${planDigest(document)}"/>`);
+});
+
 test("a drafter run that drafted nothing is said as what happened, with the way to set the scope; its words are folded (rondo#238)", async () => {
   const world = fresh();
   const requestId = "request-nodraft";
