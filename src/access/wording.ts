@@ -1139,6 +1139,14 @@ export interface Chrome
    * (D-0076 rule 4.2, D-0203 rule 3).
    */
   readonly startRefusedContinuoNotLocated: string;
+  /**
+   * The host was told where that part is, and what it was told cannot be it
+   * (D-0205 rule 1). Said as the fact it is -- the place this computer was
+   * given could not be used -- and never as "nobody said where it is", which
+   * is a different thing about this computer. **Nothing here can put it
+   * right** either, so it says who can, with no command and no path in it.
+   */
+  readonly startRefusedContinuoLocationUnusable: string;
   /** The host's own worker settings name a worker it cannot run (D-0205 rule 1). */
   readonly startRefusedContinuoWorkerSettings: string;
   /**
@@ -1147,7 +1155,18 @@ export interface Chrome
    * on the screen beside it (D-0205 rule 2).
    */
   readonly startRefusedContinuoNotAnswering: string;
-  /** It answered, and it is not a build rondo drives (D-0205 rule 1). */
+  /**
+   * It could not be run, or it ran and exited without printing its version
+   * (D-0205 rule 1): **the only thing known is that rondo could not read which
+   * version is here**, so the sentence says that and says nothing about whose
+   * build it is.
+   */
+  readonly startRefusedContinuoVersionUnconfirmed: string;
+  /**
+   * It ran, it answered, and the version it printed is not one rondo drives
+   * (D-0205 rule 1): the one kind where "it is not the one rondo expects" is a
+   * fact rondo observed rather than a guess.
+   */
   readonly startRefusedContinuoNotIdentified: string;
   /** The press on that refusal: this same start, kept until that part answers. */
   readonly startWhenReadyAction: string;

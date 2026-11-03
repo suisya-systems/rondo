@@ -3,7 +3,7 @@
   "src/access/cli.ts": 5560,
   "src/access/conductor.ts": 2235,
   "src/access/forge.ts": 2791,
-  "src/access/web-app.ts": 3857,
+  "src/access/web-app.ts": 3847,
   "src/refrain/interpreter.ts": 2190,
   "src/store/records.ts": 2470
 }

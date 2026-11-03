@@ -13,6 +13,7 @@
  */
 
 import type { ContinuoUnusable } from "../../continuo/invoker.js";
+import { viewHref } from "../page-logic/routes.js";
 import type { Refused } from "../screens/refused.js";
 import type { Chrome } from "../wording.js";
 
@@ -142,10 +143,14 @@ function continuoLine(wording: Chrome, unusable: ContinuoUnusable | null): strin
   switch (unusable) {
     case "notLocated":
       return wording.startRefusedContinuoNotLocated;
+    case "locationUnusable":
+      return wording.startRefusedContinuoLocationUnusable;
     case "workerSettings":
       return wording.startRefusedContinuoWorkerSettings;
     case "notAnswering":
       return wording.startRefusedContinuoNotAnswering;
+    case "versionUnconfirmed":
+      return wording.startRefusedContinuoVersionUnconfirmed;
     case "notIdentified":
       return wording.startRefusedContinuoNotIdentified;
     default:
@@ -189,4 +194,75 @@ function waitPress(
       { name: "when_ready", value: "1" },
     ],
   };
+}
+
+/**
+ * Why a send into a request thread, or a gate answer posted beside one, said
+ * nothing (rondo#220 S1 review): one catalogue sentence and never the store's
+ * or the mint's internal line -- no ids and no D-numbers in front of a person.
+ */
+export type SendRefusal =
+  | "sendRefusedNoApprover"
+  | "sendRefusedForm"
+  | "sendRefusedNoWords"
+  | "sendRefusedNotTaken"
+  | "sendRefusedAsk"
+  | "sendRefusedTooLong"
+  | "answerRefusedPress"
+  | "answerRefusedRaise"
+  | "answerRefusedNoWords";
+
+/**
+ * What a refused send's own small page says: the sentence, and the way back to
+ * the thread it was sent in (`back`, the message replied to) or to the
+ * requests.
+ *
+ * Here beside {@link startRefusedScreen} because it is the same half of the
+ * work -- words and a screen's fields, composed from nothing a request
+ * supplied -- and because `web-app.ts` is at its size cap. The htmx answer
+ * stays there: it is one fragment of markup that route writes, not a screen.
+ */
+export function sendRefusedScreen(wording: Chrome, why: SendRefusal, back: string | null): Refused {
+  return {
+    title: wording.sendAction,
+    id: "send-refused",
+    line: wording.notSent(wording[why]),
+    href: viewHref(
+      back === null || back === ""
+        ? { kind: "requests" }
+        : { kind: "thread", messageId: back, to: null },
+      wording.lang,
+    ),
+    back: wording.sendBack,
+    note: null,
+    holders: [],
+    releasable: false,
+    press: null,
+  };
+}
+
+/**
+ * The address a refused scope press or start sends a person back to: the
+ * screen they pressed on, with the review-rounds choice and the plan the form
+ * was drawn over, which the address carries and the form does not post.
+ */
+export function backToScope(
+  wording: Chrome,
+  request: string | null,
+  decision: string | null = null,
+  rounds: number | null = null,
+  plan: string | null = null,
+): string {
+  return viewHref(
+    request === null || request === ""
+      ? { kind: "requests" }
+      : {
+          kind: "scope",
+          messageId: request,
+          rounds,
+          decisionId: decision === null || decision === "" ? null : decision,
+          plan,
+        },
+    wording.lang,
+  );
 }

@@ -72,7 +72,10 @@ import type { EndRefusal, HoldsRefusal, ReleaseRefusal } from "./line-ports.js";
 import type { ServedPorts } from "./page/contract.js";
 import {
   type ApproveRefusal,
+  backToScope,
   type ClaimRefusal,
+  type SendRefusal,
+  sendRefusedScreen,
   startRefusedScreen,
 } from "./page/refusal-words.js";
 import { postedAnswers, postedClauses } from "./page/triage.js";
@@ -94,7 +97,6 @@ import { budgetsOf, scopeDraftOf, scopeValuesOf, wholeNumber } from "./scope-for
 import { type Refused as RefusedScreen, refusedPage } from "./screens/refused.js";
 import { SERVED, TOKEN_ROUTE, tokenEvents } from "./served.js";
 import { APPROVE_BODY, operatorPage } from "./web.js";
-import type { Chrome } from "./wording.js";
 
 /**
  * What the socket said about one request, as `@hono/node-server` hands it to
@@ -3178,42 +3180,17 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   function refused(
     c: Context<PageEnv>,
     status: 400 | 403 | 409 | 413,
-    why:
-      | "sendRefusedNoApprover"
-      | "sendRefusedForm"
-      | "sendRefusedNoWords"
-      | "sendRefusedNotTaken"
-      | "sendRefusedAsk"
-      | "sendRefusedTooLong"
-      | "answerRefusedPress"
-      | "answerRefusedRaise"
-      | "answerRefusedNoWords",
+    why: SendRefusal,
     back: string | null,
   ) {
     const wording = wordingOf(c);
-    const line = wording.notSent(wording[why]);
     if (c.req.header("hx-request") === "true") {
-      return c.html(`<p id="send-refused">${escapeHtml(line)}</p>`, status);
+      return c.html(
+        `<p id="send-refused">${escapeHtml(wording.notSent(wording[why]))}</p>`,
+        status,
+      );
     }
-    return c.html(
-      refusedPage(wording, {
-        title: wording.sendAction,
-        id: "send-refused",
-        line,
-        href: viewHref(
-          back === null || back === ""
-            ? { kind: "requests" }
-            : { kind: "thread", messageId: back, to: null },
-          wording.lang,
-        ),
-        back: wording.sendBack,
-        note: null,
-        holders: [],
-        releasable: false,
-        press: null,
-      }),
-      status,
-    );
+    return c.html(refusedPage(wording, sendRefusedScreen(wording, why, back)), status);
   }
 
   /**
@@ -3661,28 +3638,6 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       ),
       SIGN_IN_REPAIRS.has(why) ? wording.signInAction : wording.addRepositoryBack,
       note,
-    );
-  }
-
-  /** The address the two refusals send a person back to: the screen they pressed on. */
-  function backToScope(
-    wording: Chrome,
-    request: string | null,
-    decision: string | null = null,
-    rounds: number | null = null,
-    plan: string | null = null,
-  ): string {
-    return viewHref(
-      request === null || request === ""
-        ? { kind: "requests" }
-        : {
-            kind: "scope",
-            messageId: request,
-            rounds,
-            decisionId: decision === null || decision === "" ? null : decision,
-            plan,
-          },
-      wording.lang,
     );
   }
 
