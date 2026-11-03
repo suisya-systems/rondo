@@ -55,6 +55,7 @@ export function signInRoute(
           note: null,
           holders: [],
           releasable: false,
+          press: null,
         }),
         403,
       );

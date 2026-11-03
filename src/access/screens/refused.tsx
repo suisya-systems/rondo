@@ -39,6 +39,23 @@ export interface Refused {
     readonly inFlight: boolean;
   }[];
   readonly releasable: boolean;
+  /**
+   * The one press this refusal offers, where the cause is one rondo can act on
+   * itself (D-0205 rule 2), and null where it is not: a refusal a person can
+   * only take to whoever installed rondo says so in words and offers nothing to
+   * press, because a press that could not work on the cause is worse than no
+   * press at all.
+   *
+   * A native form and not htmx, as this page carries no script: the fields are
+   * the ones the refused press itself posted, including this process's token,
+   * so the press is the same press -- which is why pressing it twice is as safe
+   * as pressing the first one twice.
+   */
+  readonly press: {
+    readonly action: string;
+    readonly label: string;
+    readonly fields: readonly { readonly name: string; readonly value: string }[];
+  } | null;
 }
 
 /** How far back a refusal's fold reaches into what rondo printed (rondo#676). */
@@ -95,6 +112,20 @@ export async function refusedPage(wording: Chrome, refused: Refused): Promise<st
               ) : null}
             </section>
           ))}
+          {refused.press === null ? null : (
+            <form id="refused-press" method="post" action={refused.press.action}>
+              {refused.press.fields.map(({ name, value }) => (
+                <input type="hidden" name={name} value={value} />
+              ))}
+              <button
+                type="submit"
+                data-row=""
+                class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto`}
+              >
+                {refused.press.label}
+              </button>
+            </form>
+          )}
           {refused.note === null || refused.note === "" ? null : (
             <details id="refused-reason" class="text-meta text-muted-foreground">
               <summary class="cursor-pointer">{wording.forMaintainer}</summary>

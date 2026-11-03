@@ -73,6 +73,7 @@ export {
   admitRun,
   answerGate,
   type CloseRunRequest,
+  type ContinuoUnusable,
   closeRun,
   type DeliverGateRequest,
   deliverGate,

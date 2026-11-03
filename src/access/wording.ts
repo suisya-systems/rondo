@@ -1126,7 +1126,36 @@ export interface Chrome
   readonly startRefusedForm: string;
   readonly startRefusedNoPlan: string;
   readonly startRefusedNoRequest: string;
+  /**
+   * The part that runs the work would not start, and rondo was not told which
+   * kind it was: the sentence this screen said before the kinds (D-0205).
+   */
   readonly startRefusedNoContinuo: string;
+  /**
+   * It was never located: the host was not told where that part is, or was
+   * told something that cannot be it (D-0205 rule 1). **Nothing on this page
+   * can put it right**, so the sentence says that and says who can -- whoever
+   * installed rondo on this computer -- with no command and no path in it
+   * (D-0076 rule 4.2, D-0203 rule 3).
+   */
+  readonly startRefusedContinuoNotLocated: string;
+  /** The host's own worker settings name a worker it cannot run (D-0205 rule 1). */
+  readonly startRefusedContinuoWorkerSettings: string;
+  /**
+   * It did not answer in time: the one kind that may pass by itself, so the
+   * sentence says rondo can keep the start and {@link startWhenReadyAction} is
+   * on the screen beside it (D-0205 rule 2).
+   */
+  readonly startRefusedContinuoNotAnswering: string;
+  /** It answered, and it is not a build rondo drives (D-0205 rule 1). */
+  readonly startRefusedContinuoNotIdentified: string;
+  /** The press on that refusal: this same start, kept until that part answers. */
+  readonly startWhenReadyAction: string;
+  /**
+   * A start kept for the part that runs the work to answer (D-0205 rule 2):
+   * the press's answer, said as {@link startWaitsHeld} says the files' wait.
+   */
+  readonly startWaitsContinuo: string;
   /** The `test` token is the `ScopeTest` name, ASCII in both sets (rule 3). */
   readonly startRefusedOutside: (test: string) => string;
   readonly startRefusedNotAdmitted: string;

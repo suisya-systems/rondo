@@ -290,6 +290,7 @@ export function discardRoute(
           note,
           holders: [],
           releasable: false,
+          press: null,
         }),
         status,
       );

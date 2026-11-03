@@ -279,10 +279,28 @@ function resolveCodexWorker(
  */
 const verifiedHandles = new WeakSet<VerifiedContinuo>();
 
+/**
+ * Which kind of unusable one refused startup is, so a caller can say what the
+ * next move is without reading the sentence (AGENTS section 1, rondo#348: a
+ * refusal whose next move differs travels as a field and not as prose).
+ *
+ * - `notLocated`: the host was never told where the built CLI is, or was told
+ *   something that cannot be one. Nothing was run.
+ * - `workerSettings`: the host's own worker settings name a worker it cannot
+ *   run, so no lap on it could run. Nothing was run.
+ * - `notAnswering`: the located build was run and did not answer inside
+ *   {@link VERSION_TIMEOUT_MS}. It may answer the next time it is asked, which
+ *   is the one kind of this refusal that passes by itself.
+ * - `notIdentified`: it answered, and what it answered is not a build rondo
+ *   drives -- it could not be run at all, it exited non-zero, or its revision
+ *   is unknown, dirty or not the pinned one.
+ */
+export type ContinuoUnusable = "notLocated" | "workerSettings" | "notAnswering" | "notIdentified";
+
 /** Whether rondo may start at all. */
 export type StartupResult =
   | { readonly kind: "ready"; readonly continuo: VerifiedContinuo }
-  | { readonly kind: "refused"; readonly reason: string };
+  | { readonly kind: "refused"; readonly reason: string; readonly why: ContinuoUnusable };
 
 /**
  * How long `--version` may take.
@@ -386,19 +404,28 @@ export async function startContinuo(
 ): Promise<StartupResult> {
   const located = resolveCliPath(environment);
   if (located.path === null) {
-    return { kind: "refused", reason: located.reason };
+    return { kind: "refused", reason: located.reason, why: "notLocated" };
   }
   const workers = resolveWorkers(environment);
   if (workers.kind === "refused") {
-    return { kind: "refused", reason: workers.reason };
+    return { kind: "refused", reason: workers.reason, why: "workerSettings" };
   }
   const output = await runProcess(located.path, ["--version"], VERSION_TIMEOUT_MS);
   if (output.kind === "failed" || output.kind === "timedOut") {
-    // The two are one answer here, and only here: `--version` starts no child
-    // of its own, so a timed-out `--version` orphans nothing and there is no
-    // running lap for the distinction to protect. rondo simply did not learn
-    // which build it was pointed at, and refuses to start.
-    return { kind: "refused", reason: output.reason };
+    // The two are one refusal and one sentence here, and only here: `--version`
+    // starts no child of its own, so a timed-out `--version` orphans nothing
+    // and there is no running lap for the distinction to protect. rondo simply
+    // did not learn which build it was pointed at, and refuses to start.
+    //
+    // **The kind is where they part** (rondo#348's rule): a build that did not
+    // answer inside the bound is one that may answer the next time it is asked,
+    // and a spawn that failed is a build nothing here will repair. The two next
+    // moves differ, so they travel as different fields of the same arm.
+    return {
+      kind: "refused",
+      reason: output.reason,
+      why: output.kind === "timedOut" ? "notAnswering" : "notIdentified",
+    };
   }
   if (output.value.status !== 0) {
     return {
@@ -406,11 +433,12 @@ export async function startContinuo(
       reason:
         `continuo --version exited ${String(output.value.status)}. rondo cannot identify ` +
         `the build at '${located.path}'. stderr: ${output.value.stderr.trim()}`,
+      why: "notIdentified",
     };
   }
   const verdict: PinVerdict = verifyVersionLine(output.value.stdout);
   if (verdict.kind === "refused") {
-    return { kind: "refused", reason: verdict.reason };
+    return { kind: "refused", reason: verdict.reason, why: "notIdentified" };
   }
   const continuo: VerifiedContinuo = {
     cliPath: located.path,

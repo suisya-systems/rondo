@@ -918,6 +918,31 @@ explanation you pressed on and then answers the gate.`,
     "work to do.",
   startRefusedNoContinuo:
     "Nothing was started: the part of rondo that runs the work will not start.",
+  startRefusedContinuoNotLocated:
+    "Nothing was started, and nothing was spent. This computer has not been told where the part " +
+    "that runs the work is, so rondo could not start it. Nothing on this page can put that " +
+    "right: ask whoever installed rondo on this computer to set it up again. The approval " +
+    "stands, and starting again once they have is safe.",
+  startRefusedContinuoWorkerSettings:
+    "Nothing was started, and nothing was spent. This computer is set to run the work on a " +
+    "worker it cannot run, so rondo would not start it. Nothing on this page can put that " +
+    "right: ask whoever installed rondo on this computer either to make that worker usable " +
+    "here or to change that setting. The approval stands, and starting again once they have " +
+    "is safe.",
+  startRefusedContinuoNotAnswering:
+    "Nothing was started, and nothing was spent. The part of rondo that runs the work did not " +
+    "answer in time. It may answer the next time it is asked, so rondo can keep this start and " +
+    "begin it as soon as it does. The approval stands either way, and starting again is safe.",
+  startRefusedContinuoNotIdentified:
+    "Nothing was started, and nothing was spent. The part that runs the work on this computer " +
+    "is not the one rondo expects, so rondo would not run it. Nothing on this page can put " +
+    "that right: ask whoever installed rondo on this computer to install the one it expects. " +
+    "The approval stands, and starting again once they have is safe.",
+  startWhenReadyAction: "Start it as soon as that part answers",
+  startWaitsContinuo:
+    "Waiting: the part of rondo that runs the work has not answered yet. Nothing has started " +
+    "and nothing was spent. rondo starts this by itself as soon as that part answers; there is " +
+    "nothing to press.",
   startRefusedOutside: (test) =>
     // Said in words, never the test's name (rondo#431): `asks` is a word to ask about.
     `Nothing was started and nothing was spent: this work is outside the scope you approved: ` +
