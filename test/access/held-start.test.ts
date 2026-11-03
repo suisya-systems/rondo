@@ -27,6 +27,7 @@ import { viewHref } from "../../src/access/page-logic/routes.js";
 import { heldStartPort, scopedStartPress } from "../../src/access/page-scope-actions.js";
 import { type ScopedStartInput, ScopePort } from "../../src/access/web-app.js";
 import { EN } from "../../src/access/wording.js";
+import type { ContinuoUnusable } from "../../src/continuo/invoker.js";
 import { allocate } from "../../src/refrain/allocator.js";
 import { admittedPlan, planPayload, type RunPlan, readRunPlan } from "../../src/refrain/plan.js";
 import { planDigest } from "../../src/store/plan.js";
@@ -52,10 +53,22 @@ const seams = vi.hoisted(() => ({
   admitted: [] as string[],
   /** What an admission with no drafted claim is handed: `/`, as before D-0160, or nothing. */
   unclaimed: null as { paths: string[]; authorKind: "drafter"; authorId: string; bases: [] } | null,
+  /**
+   * What the stood-in `startContinuo` answers: ready, or which kind of
+   * unusable it refuses with (D-0205 rule 1). Ready for every test but the
+   * one that puts the refusal on the screen.
+   */
+  continuo: "ready" as "ready" | ContinuoUnusable,
 }));
 vi.mock("../../src/continuo/invoker.js", async (original) => {
   const real = await original<typeof import("../../src/continuo/invoker.js")>();
-  return { ...real, startContinuo: async () => ({ kind: "ready", continuo: {} as never }) };
+  return {
+    ...real,
+    startContinuo: async () =>
+      seams.continuo === "ready"
+        ? { kind: "ready", continuo: {} as never }
+        : { kind: "refused", reason: "stood in for", why: seams.continuo },
+  };
 });
 vi.mock("../../src/access/conductor.js", async (original) => {
   const real = await original<typeof import("../../src/access/conductor.js")>();
@@ -285,7 +298,11 @@ async function lines() {
 }
 
 /** Press the scope screen's start form, as a person's click posts it. */
-async function pressStart(w: Awaited<ReturnType<typeof lines>>) {
+async function pressStart(
+  w: Awaited<ReturnType<typeof lines>>,
+  /** What the refusal screen's own press adds to the same form (D-0205 rule 2). */
+  extra: Record<string, string> = {},
+) {
   const page = await w.screen();
   expect(page).toContain('id="start-form"');
   const form = page.slice(page.indexOf('id="start-form"'));
@@ -301,6 +318,7 @@ async function pressStart(w: Awaited<ReturnType<typeof lines>>) {
       scope_decision: field("scope_decision"),
       plan: field("plan"),
       iteration,
+      ...extra,
     },
     {},
     "/start?lang=en",
@@ -406,6 +424,61 @@ async function startsByItself(w: Awaited<ReturnType<typeof lines>>, iteration: s
   expect(await w.thread()).not.toContain(EN.startWaitsHeld);
   expect(w.presses()).toBe(1);
 }
+
+test(
+  "D-0205: a start the part that runs the work would not start says which kind, and only the press that waits keeps it",
+  async () => {
+    const w = await lines();
+    try {
+      // No drafted claim, so no files hold this start (rondo#554, D-0160) and
+      // the only thing refusing it is the part that runs the work.
+      seams.unclaimed = null;
+      // **The ordinary press keeps nothing** (rule 2): a cause only whoever
+      // installed rondo here can act on is said in words, and a wait for it
+      // would be a wait nothing ends.
+      seams.continuo = "notIdentified";
+      const refused = await pressStart(w);
+      expect(refused.pressed.status).toBe(409);
+      expect(refused.pressed.body).toContain(EN.startRefusedContinuoNotIdentified);
+      expect(refused.pressed.body).not.toContain(EN.startWhenReadyAction);
+      expect(await w.store.heldStarts()).toEqual([]);
+      expect(seams.admitted).toEqual([]);
+      expect((await w.store.read(refused.iteration)).kind).toBe("absent");
+
+      // The one kind a wait works on: the screen's press sends the same form
+      // again, and the start is kept as the row the tick already attempts.
+      seams.continuo = "notAnswering";
+      const said = await pressStart(w);
+      expect(said.pressed.status).toBe(409);
+      expect(said.pressed.body).toContain(EN.startRefusedContinuoNotAnswering);
+      expect(said.pressed.body).toContain(EN.startWhenReadyAction);
+      expect(await w.store.heldStarts()).toEqual([]);
+      const kept = await pressStart(w, { when_ready: "1" });
+      expect(kept.pressed.status).toBe(202);
+      expect(kept.pressed.body).toContain(EN.startWaitsContinuo);
+      // Nothing started and nothing admitted, pressed either way.
+      expect(seams.admitted).toEqual([]);
+      expect((await w.store.read(kept.iteration)).kind).toBe("absent");
+      expect((await w.store.heldStarts()).map((held) => held.iterationId)).toEqual([
+        kept.iteration,
+      ]);
+      // **The screen says it waits and offers nothing to press**: the kept
+      // start is the row rondo#284's screen already reads. Which of the two
+      // waits it says is the files' holders' -- a line holding them here, so
+      // the files' sentence is true of this wait too, and where none does the
+      // sentence is the part that runs the work's.
+      const waiting = await w.screen();
+      expect(waiting).toContain('id="start-waits"');
+      expect(waiting).not.toContain('id="start-form"');
+      // The thread says rondo is on it, and no longer sends them to start it.
+      expect(await w.thread()).not.toContain(EN.nextStepStart);
+    } finally {
+      seams.continuo = "ready";
+      await w.stop();
+    }
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
 
 test(
   "a start another line's files hold waits, and starts by itself once that line's pull request opens (rondo#284)",
