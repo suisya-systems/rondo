@@ -467,19 +467,33 @@ test("D-0205 rule 1: each refused startup says which kind of unusable it is, as 
     expect({ environment, ...started }).toMatchObject({ kind: "refused", why });
   }
 
-  // **A real build that exits without a version line is the same fact** (rule
-  // 1): it ran, it said nothing rondo could read, and the next move is whoever
-  // installed rondo here.
-  expect(await startContinuo({ [CLI_PATH_ENV]: entryPrinting("process.exit(3);") })).toMatchObject({
-    kind: "refused",
-    why: "versionUnconfirmed",
-  });
+  // **A real build that answers without a version rondo can read is the same
+  // fact** (rule 1), and **a clean exit does not make it another one**: it
+  // ran, nothing it said carried a revision, and all that is known is that
+  // rondo could not read which build is here. A non-zero exit, no output at
+  // all, output of another shape, and a build that says it does not know which
+  // commit it came from are four ways to learn exactly that.
+  for (const body of [
+    "process.exit(3);",
+    "process.exit(0);",
+    'console.log("continuo v0.0.0");',
+    'console.log("@suisya-systems/continuo 0.0.0 (rev unknown)");',
+  ]) {
+    expect({
+      body,
+      ...(await startContinuo({ [CLI_PATH_ENV]: entryPrinting(body) })),
+    }).toMatchObject({ kind: "refused", why: "versionUnconfirmed" });
+  }
 
   // **A real build that answers with a version rondo does not drive**: the one
-  // kind where "not the one rondo expects" is observed rather than guessed.
+  // kind where "not the one rondo expects" is observed rather than guessed,
+  // because a revision was read and compared.
+  const other = "0123456789abcdef0123456789abcdef01234567";
   expect(
     await startContinuo({
-      [CLI_PATH_ENV]: entryPrinting('console.log("continuo 0.0.0 (rev unknown)");'),
+      [CLI_PATH_ENV]: entryPrinting(
+        `console.log("@suisya-systems/continuo 0.0.0 (rev ${other})");`,
+      ),
     }),
   ).toMatchObject({ kind: "refused", why: "notIdentified" });
 });

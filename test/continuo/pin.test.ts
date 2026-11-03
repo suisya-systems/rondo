@@ -81,6 +81,7 @@ describe("what rondo refuses to drive", () => {
     expect(verdict).toEqual({
       kind: "refused",
       reason: expect.stringContaining(other),
+      why: "versionRejected",
     });
     expect(verdict.kind === "refused" && verdict.reason).toContain(CONTINUO_REVISION);
   });
@@ -90,6 +91,9 @@ describe("what rondo refuses to drive", () => {
     expect(verdict).toEqual({
       kind: "refused",
       reason: expect.stringContaining("CONTINUO_REQUIRE_REVISION=1"),
+      // A build that says it does not know its commit gave rondo no revision
+      // to compare, so nothing here observed whose build it is (D-0205 rule 1).
+      why: "versionUnread",
     });
   });
 
@@ -100,6 +104,7 @@ describe("what rondo refuses to drive", () => {
     expect(verdict).toEqual({
       kind: "refused",
       reason: expect.stringContaining("modified"),
+      why: "versionRejected",
     });
   });
 
@@ -117,5 +122,32 @@ describe("what rondo refuses to drive", () => {
   test("the right revision under a different package is refused", () => {
     const verdict = verifyVersionLine(`@someone-else/continuo 9.9.9 (rev ${CONTINUO_REVISION})`);
     expect(verdict.kind).toBe("refused");
+    expect(verdict.kind === "refused" && verdict.why).toBe("versionRejected");
+  });
+
+  test("D-0205 rule 1: a refusal that read no revision says so, and is not one that read one", () => {
+    // **The field and not the sentence** (rondo#348): the caller turns these
+    // into two different things a person is told -- "rondo could not read
+    // which version is here" and "the version it reported is not the one rondo
+    // expects" -- and the second must never be said of an answer that carried
+    // no revision at all.
+    for (const printed of [
+      // Nothing came back; `trim` makes the empty answer the empty line.
+      "",
+      "   \n",
+      // Something came back and it is not the shape `--version` promises, so
+      // there is no revision in it to read.
+      "continuo v0.0.0",
+      "Error: cannot find module",
+      // The shape is right and the revision is not a revision.
+      "@suisya-systems/continuo 0.0.0 (rev HEAD)",
+      // The build answered that it does not know which commit it came from.
+      "@suisya-systems/continuo 0.0.0 (rev unknown)",
+    ]) {
+      expect({ printed, ...verifyVersionLine(printed) }).toMatchObject({
+        kind: "refused",
+        why: "versionUnread",
+      });
+    }
   });
 });

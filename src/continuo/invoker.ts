@@ -300,11 +300,14 @@ const verifiedHandles = new WeakSet<VerifiedContinuo>();
  * - `notAnswering`: the located build was run and did not answer inside the
  *   bound. It may answer the next time it is asked, which is the one kind of
  *   this refusal that passes by itself.
- * - `versionUnconfirmed`: it could not be run at all, or it ran and exited
- *   non-zero. **All rondo learned is that it could not read the build's
- *   version** -- not whose build it is, which nothing here observed.
- * - `notIdentified`: it ran, it answered, and the version it printed is not a
- *   build rondo drives: unreadable, unknown, dirty or not the pinned revision.
+ * - `versionUnconfirmed`: it could not be run at all, or it ran and no revision
+ *   came back -- a non-zero exit, an empty answer, an answer of another shape,
+ *   or the literal `unknown` of a build with no git information. **All rondo
+ *   learned is that it could not read the build's version** -- not whose build
+ *   it is, which nothing here observed.
+ * - `notIdentified`: it ran, it answered, **rondo read a revision**, and that
+ *   revision is not a build rondo drives: a modified tree, another commit, or
+ *   the pinned revision under a line the pin was not measured against.
  */
 export type ContinuoUnusable =
   | "notLocated"
@@ -479,7 +482,16 @@ export async function startContinuo(
   }
   const verdict: PinVerdict = verifyVersionLine(output.value.stdout);
   if (verdict.kind === "refused") {
-    return { kind: "refused", reason: verdict.reason, why: "notIdentified" };
+    return {
+      kind: "refused",
+      reason: verdict.reason,
+      // **Exit 0 is not a version read** (D-0205 rule 1): a build that printed
+      // nothing, printed something of another shape, or said its revision is
+      // `unknown` exited cleanly and still left rondo knowing only that it
+      // could not read which build this is. The verdict carries which of the
+      // two it is, so this is not read back out of its sentence.
+      why: verdict.why === "versionUnread" ? "versionUnconfirmed" : "notIdentified",
+    };
   }
   const continuo: VerifiedContinuo = {
     cliPath: located.path,

@@ -1156,16 +1156,17 @@ export interface Chrome
    */
   readonly startRefusedContinuoNotAnswering: string;
   /**
-   * It could not be run, or it ran and exited without printing its version
-   * (D-0205 rule 1): **the only thing known is that rondo could not read which
-   * version is here**, so the sentence says that and says nothing about whose
-   * build it is.
+   * It could not be run, or it ran and no version came back -- an exit without
+   * one, an empty answer, an answer of another shape, or a build that says it
+   * does not know which commit it came from (D-0205 rule 1): **the only thing
+   * known is that rondo could not read which version is here**, so the
+   * sentence says that and says nothing about whose build it is.
    */
   readonly startRefusedContinuoVersionUnconfirmed: string;
   /**
-   * It ran, it answered, and the version it printed is not one rondo drives
-   * (D-0205 rule 1): the one kind where "it is not the one rondo expects" is a
-   * fact rondo observed rather than a guess.
+   * It ran, it answered, rondo read a version, and that version is not one
+   * rondo drives (D-0205 rule 1): the one kind where "it is not the one rondo
+   * expects" is a fact rondo observed rather than a guess.
    */
   readonly startRefusedContinuoNotIdentified: string;
   /** The press on that refusal: this same start, kept until that part answers. */
