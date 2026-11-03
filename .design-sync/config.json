@@ -1,0 +1,95 @@
+{
+  "projectId": "abec09ec-276c-47a9-a58d-5ae62ec5a4db",
+  "shape": "package",
+  "pkg": "@suisya-systems/rondo-page",
+  "globalName": "RondoPage",
+  "buildCmd": "npm run build && node_modules/.bin/tsc -p .design-sync/pkg/tsconfig.json && mkdir -p .design-sync/pkg/dist/page && cp dist/page/app.css dist/page/*.woff2 .design-sync/pkg/dist/page/",
+  "entry": ".design-sync/pkg/dist/.design-sync/pkg/index.js",
+  "srcDir": "../../src/access/page",
+  "cssEntry": "dist/page/app.css",
+  "componentSrcMap": {
+    "EmptyCentre": "../../src/access/page/empty.tsx",
+    "EmptySide": "../../src/access/page/empty-side.tsx",
+    "EventLine": "../../src/access/page/events.tsx",
+    "EventLines": "../../src/access/page/events.tsx",
+    "FoldedLine": "../../src/access/page/events.tsx",
+    "LastLookedLine": "../../src/access/page/events.tsx",
+    "Faces": "../../src/access/page/faces.tsx",
+    "GovernanceLine": "../../src/access/page/governance.tsx",
+    "RequestsFace": "../../src/access/page/list.tsx",
+    "ResultLine": "../../src/access/page/result.tsx",
+    "Raw": "../../src/access/page/shell.tsx",
+    "Shell": "../../src/access/page/shell.tsx",
+    "SideSteps": "../../src/access/page/steps.tsx",
+    "ThreadSide": "../../src/access/page/thread-side.tsx",
+    "ScopeSide": "../../src/access/page/thread-side.tsx",
+    "PartsSide": "../../src/access/page/thread-side.tsx",
+    "ThreadFace": "../../src/access/page/thread.tsx"
+  },
+  "runtimeFontPrefixes": [
+    "Yu Gothic UI",
+    "Hiragino Sans",
+    "Noto Sans JP",
+    "Noto Sans CJK JP",
+    "Noto Sans Mono CJK JP"
+  ],
+  "overrides": {
+    "Faces": {
+      "cardMode": "column"
+    },
+    "Shell": {
+      "cardMode": "column"
+    },
+    "ThreadFace": {
+      "cardMode": "column"
+    },
+    "ThreadSide": {
+      "cardMode": "column"
+    },
+    "EmptySide": {
+      "cardMode": "column"
+    },
+    "RequestsFace": {
+      "cardMode": "column"
+    },
+    "ResultLine": {
+      "cardMode": "column"
+    },
+    "GovernanceLine": {
+      "cardMode": "column"
+    },
+    "SideSteps": {
+      "cardMode": "column"
+    },
+    "ScopeSide": {
+      "cardMode": "column"
+    },
+    "PartsSide": {
+      "cardMode": "column"
+    },
+    "EventLines": {
+      "cardMode": "column"
+    },
+    "FoldedLine": {
+      "cardMode": "column"
+    },
+    "EmptyCentre": {
+      "cardMode": "column"
+    }
+  },
+  "dtsPropsFor": {
+    "EmptySide": "  /** The wording set: always chromeFor(\"ja\") or chromeFor(\"en\"), exported by this library. */\n  wording: Chrome;\n  /** The week's figures; allowance null hides spend (no approval read). */\n  figures: { asked: number; finished: number; answered: number; decidedWithoutAsking: number; allowance: ({ spentUsd: number; heldUsd: number; heldTries: number; heldInProgress: boolean; approvedUsd: number } & { leftUsd: number }) | null };\n  /** Requests under way, each with its five steps. */\n  running: readonly { messageId: string; title: string; repository: string | null; goingSaid: string; allowance: { spentUsd: number; heldUsd: number; heldTries: number; heldInProgress: boolean; approvedUsd: number } | null; tries: { at: number; of: number } | null; steps: readonly { name: \"scope\" | \"work\" | \"checks\" | \"reading\" | \"approval\" | \"publish\" | \"landing\"; state: \"done\" | \"waiting\" | \"ahead\" | \"yours\" }[] }[];\n  hrefOf: (messageId: string) => string;\n",
+    "EventLine": "  /** One line of the thread's record. `yours: true` marks the one line a person must act on. */\n  event: { id: string; kind: \"person\" | \"passed\" | \"failed\" | \"decided\" | \"other\"; said: string; at: string; atMs: number; tryAt?: number | null; yours?: boolean; href?: string; linkSaid?: string };\n",
+    "EventLines": "  events: readonly { id: string; kind: \"person\" | \"passed\" | \"failed\" | \"decided\" | \"other\"; said: string; at: string; atMs: number; tryAt?: number | null; yours?: boolean; href?: string; linkSaid?: string }[];\n  /** Id of the event the last-looked line sits above, or null for no line. */\n  lastLookedAbove: string | null;\n  lastLookedSaid: string;\n",
+    "FoldedLine": "  /** A shut run of event lines (a native <details>). Items are { kind: \"event\"; event } or a nested fold. */\n  fold: { kind: \"fold\"; id: string; said: string; at: string; lines: number; inside: readonly ({ kind: \"event\"; event: { id: string; kind: \"person\" | \"passed\" | \"failed\" | \"decided\" | \"other\"; said: string; at: string; atMs: number; tryAt?: number | null; yours?: boolean; href?: string; linkSaid?: string } } | { kind: \"fold\"; [k: string]: unknown })[] };\n  /** The word the fold offers, e.g. \"開く\". */\n  open: string;\n",
+    "GovernanceLine": "  /** The wording set: always chromeFor(\"ja\") or chromeFor(\"en\"), exported by this library. */\n  wording: Chrome;\n  /** What was agreed for the request: allowance, tries, reach, the remaining chain. */\n  governance: {\n    repository: string | null;\n    askedAtMs: number;\n    allowance: { spentUsd: number; heldUsd: number; heldTries: number; heldInProgress: boolean; approvedUsd: number } | null;\n    byTry: readonly { costUsd: number | null; running: boolean }[];\n    atBudgetCap: { costUsd: number; capUsd: number } | null;\n    tries: { at: number; of: number } | null;\n    chain: readonly { step: \"answer\" | \"proposal\" | \"merge\"; state: \"done\" | \"waiting\" | \"ahead\" | \"yours\" }[];\n    worker: { provider: string; chosen: boolean } | null;\n    touches: { places: readonly { repository: string; root: string }[]; acts: readonly string[] } | null;\n    decided: { count: number; byRule: readonly unknown[] };\n  };\n  askedSaid: string;\n  others?: string;\n",
+    "PartsSide": "  /** The wording set: always chromeFor(\"ja\") or chromeFor(\"en\"), exported by this library. */\n  wording: Chrome;\n  /** One step per part of a request split into several lines; `yours` draws the one amber row. */\n  parts: readonly { name: string; said: string; yours: boolean; links: readonly { href: string; said: string; ask?: true }[] }[];\n",
+    "ScopeSide": "  /** The wording set: always chromeFor(\"ja\") or chromeFor(\"en\"), exported by this library. */\n  wording: Chrome;\n  steps: readonly { name: \"scope\" | \"work\" | \"checks\" | \"reading\" | \"approval\" | \"publish\" | \"landing\"; state: \"done\" | \"waiting\" | \"ahead\" | \"yours\" }[];\n",
+    "SideSteps": "  /** The wording set: always chromeFor(\"ja\") or chromeFor(\"en\"), exported by this library. */\n  wording: Chrome;\n  /** The steps to the end, in order: work, checks, reading, approval, landing (scope first on a scope screen). */\n  steps: readonly { name: \"scope\" | \"work\" | \"checks\" | \"reading\" | \"approval\" | \"publish\" | \"landing\"; state: \"done\" | \"waiting\" | \"ahead\" | \"yours\" }[];\n",
+    "ResultLine": "  /** The wording set: always chromeFor(\"ja\") or chromeFor(\"en\"), exported by this library. */\n  wording: Chrome;\n  /** What became of an approved lap's pull request. */\n  result: {\n    url: string | null; number: string | null; atMs: number; pushedOnto: boolean;\n    checks: { kind: \"running\" } | { kind: \"green\"; counted: number | null; passed: number | null; skipped: number | null } | { kind: \"red\"; failed: readonly string[]; cancelled: readonly string[]; timedOut: readonly string[] } | { kind: \"none\" } | { kind: \"conflict\" } | { kind: \"rerunning\" };\n    checksAtMs: number | null; checksCommit: string | null;\n    merged: { into: string; method: string | null; outside: boolean; by: string | null; atMs: number } | null;\n    closedAtMs: number | null;\n    closedOut: { deleted: number; refused: number; worktreesGone: number; worktreesKept: number } | null;\n    conflictsWith: string | null;\n    withheld: { head: string; why: string; askId: string | null; gateLapId: string | null; atMs: number } | null;\n    rerun: { head: string; ran: boolean; why: string | null; checkRunIds: readonly number[]; atMs: number } | null;\n    moved: { from: string; to: string; commits: readonly { sha: string; subject: string }[]; more: number } | null;\n  };\n  conflictFix?: \"offered\" | \"running\" | \"waits\" | null;\n  mergesOnGreen?: boolean;\n",
+    "RequestsFace": "  /** The wording set: always chromeFor(\"ja\") or chromeFor(\"en\"), exported by this library. */\n  wording: Chrome;\n  /** The left face: \"your turn\" rows first, then rows cut by day. */\n  list: { yourTurn: readonly { messageId: string; title: string; repository: string | null; state: \"waitingOnYou\" | \"running\" | \"approved\" | \"finished\" | \"stopped\" | \"drafting\" | \"notStarted\" | \"question\"; published?: unknown | null; flowStop?: boolean; press?: boolean; atMs: number }[]; days: readonly { cut: \"today\" | \"yesterday\" | \"lastWeek\" | \"month\" | \"older\"; rows: readonly { messageId: string; title: string; repository: string | null; state: \"waitingOnYou\" | \"running\" | \"approved\" | \"finished\" | \"stopped\" | \"drafting\" | \"notStarted\" | \"question\"; published?: unknown | null; flowStop?: boolean; press?: boolean; atMs: number }[] }[]; lastLookedAbove: string | null; paused?: readonly string[]; asking?: readonly { repository: string; request: string; points: number; askedAtMs: number }[] };\n  hrefOf: (messageId: string) => string;\n  agoOf: (atMs: number) => string;\n  /** Already-formatted money, or null where no allowance is approved. */\n  allowance: { spent: string; approved: string; left: string } | null;\n  newRequestHref: string | null;\n  lastLookedSaid: string;\n  openId: string | null;\n",
+    "ThreadSide": "  /** The wording set: always chromeFor(\"ja\") or chromeFor(\"en\"), exported by this library. */\n  wording: Chrome;\n  governance: {\n    repository: string | null;\n    askedAtMs: number;\n    allowance: { spentUsd: number; heldUsd: number; heldTries: number; heldInProgress: boolean; approvedUsd: number } | null;\n    byTry: readonly { costUsd: number | null; running: boolean }[];\n    atBudgetCap: { costUsd: number; capUsd: number } | null;\n    tries: { at: number; of: number } | null;\n    chain: readonly { step: \"answer\" | \"proposal\" | \"merge\"; state: \"done\" | \"waiting\" | \"ahead\" | \"yours\" }[];\n    worker: { provider: string; chosen: boolean } | null;\n    touches: { places: readonly { repository: string; root: string }[]; acts: readonly string[] } | null;\n    decided: { count: number; byRule: readonly unknown[] };\n  };\n  steps: readonly { name: \"scope\" | \"work\" | \"checks\" | \"reading\" | \"approval\" | \"publish\" | \"landing\"; state: \"done\" | \"waiting\" | \"ahead\" | \"yours\" }[];\n  /** The material for the confirmation, already drawn; null where there is none. */\n  material: React.ReactNode;\n  /** Whether a question is standing; decides tier order and the material's heading. */\n  asking: boolean;\n  parts?: readonly { name: string; said: string; yours: boolean; links: readonly { href: string; said: string; ask?: true }[] }[];\n  ask?: { href: string; said: string; ask?: true } | null;\n",
+    "ThreadFace": "  /** The request's own first words, as its title. */\n  title: string;\n  /** Usually a <GovernanceLine>; null where nothing is known. */\n  governance: React.ReactNode;\n  /** Usually a <ResultLine>; null where nothing is approved. */\n  result: React.ReactNode;\n  /** \"your turn 1 / 3, next\" line, or null. */\n  walk: { said: string; nextHref: string | null; nextSaid: string } | null;\n  /** The thread oldest-first (drawn newest-first): messages, event lines and folds. */\n  items: readonly ({ kind: \"message\"; message: { id: string; who: \"person\" | \"rondo\"; voice: string; said: string; body: string; drawn: React.ReactNode | null; at: string; atTitle: string; waiting: string | null; answered: string | null; bases: readonly { said: string; href: string | null; title?: string }[]; basesLabel: string; pending: readonly string[]; pendingSaid: string; inReplyTo: { said: string; href: string | null } | null; reply: { href: string; said: string } | null } } | { kind: \"event\"; event: { id: string; kind: \"person\" | \"passed\" | \"failed\" | \"decided\" | \"other\"; said: string; at: string; atMs: number; tryAt?: number | null; yours?: boolean; href?: string; linkSaid?: string } } | { kind: \"fold\"; id: string; said: string; at: string; lines: number; inside: readonly unknown[] })[];\n  foldOpen: string;\n  lastLookedAbove: string | null;\n  lastLookedSaid: string;\n  /** The box to answer in, drawn above the record; null where nothing is asked. */\n  answering: React.ReactNode;\n  answeringLead?: { id: string; kind: \"person\" | \"passed\" | \"failed\" | \"decided\" | \"other\"; said: string; at: string; atMs: number; tryAt?: number | null; yours?: boolean; href?: string; linkSaid?: string } | null;\n  adding: React.ReactNode;\n  acts: React.ReactNode;\n  /** The person's next step, drawn once above the messages, or null. */\n  next: React.ReactNode;\n"
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}

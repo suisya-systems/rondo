@@ -1,0 +1,8 @@
+{
+  "name": "@suisya-systems/rondo-page",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "module": "dist/.design-sync/pkg/index.js",
+  "types": "dist/.design-sync/pkg/index.d.ts"
+}
