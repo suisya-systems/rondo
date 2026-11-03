@@ -49,6 +49,7 @@ import {
   startContinuo,
   unusableArgument,
   type VerifiedContinuo,
+  WORKER_PROVIDER_ENV,
 } from "../../src/continuo/invoker.js";
 import { CONTINUO_REVISION } from "../../src/continuo/pin.js";
 import {
@@ -431,4 +432,33 @@ test("a relative or wrongly-named CLI path is refused before a process is starte
   expect((await startContinuo({ [CLI_PATH_ENV]: "dist/cli.js" })).kind).toBe("refused");
   expect((await startContinuo({ [CLI_PATH_ENV]: "/somewhere/continuo" })).kind).toBe("refused");
   expect((await startContinuo({})).kind).toBe("refused");
+});
+
+test("D-0205 rule 1: each refused startup says which kind of unusable it is, as a field", async () => {
+  // **The field is what the page branches on** (AGENTS section 1): a screen
+  // that read these sentences to tell "nobody said where it is" from "it is
+  // not the build rondo expects" would be parsing rondo's own prose, and the
+  // two have different next moves -- one is whoever installed rondo here, the
+  // other is a press.
+  for (const [environment, why] of [
+    [{}, "notLocated"],
+    [{ [CLI_PATH_ENV]: "dist/cli.js" }, "notLocated"],
+    [{ [CLI_PATH_ENV]: "/somewhere/continuo" }, "notLocated"],
+    // Located, so the worker settings are read next, and a host that says
+    // every lap runs on a worker it has no home for cannot run one.
+    [
+      { [CLI_PATH_ENV]: "/nowhere/at/all/dist/cli.js", [WORKER_PROVIDER_ENV]: "kazoo" },
+      "workerSettings",
+    ],
+    [
+      { [CLI_PATH_ENV]: "/nowhere/at/all/dist/cli.js", [WORKER_PROVIDER_ENV]: "codex" },
+      "workerSettings",
+    ],
+    // Run, and it answered with no version rondo could accept: whoever
+    // installed rondo here is the next move, so it is not `notAnswering`.
+    [{ [CLI_PATH_ENV]: "/nowhere/at/all/dist/cli.js" }, "notIdentified"],
+  ] as const) {
+    const started = await startContinuo(environment);
+    expect({ environment, ...started }).toMatchObject({ kind: "refused", why });
+  }
 });

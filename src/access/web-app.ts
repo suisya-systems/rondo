@@ -732,7 +732,7 @@ export interface ScopedStartInput {
   readonly workerProvider?: string | null;
   /**
    * This press is the one the refusal screen offers where the part that runs
-   * the work did not answer (rondo#719's screen, D-0205): rondo attempts the
+   * the work did not answer (D-0205): rondo attempts the
    * start as any press does, and where it is refused for that one reason again
    * it **keeps** the start, so the resident host's tick begins it as soon as
    * that part answers. Absent and false are the ordinary press, which keeps
@@ -2440,6 +2440,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         // The reason in the person's own words here too (D-0205 rule 1), and
         // no press: a drafted split's start is not one the tick keeps.
         started.unusable ?? null,
+        null,
+        started.note,
       );
     }
     // The request's thread, where the lap just started draws its event lines
@@ -2505,6 +2507,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         started.holders,
         started.unusable ?? null,
         { iteration: iterationId, worker: chosenWorker(form["worker_provider"]) },
+        started.note,
       );
     }
     // Into the request's thread, where the lap just started draws its event
@@ -3289,6 +3292,12 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
      * tick does not keep.
      */
     waitable: { readonly iteration: string; readonly worker: string | null } | null = null,
+    /**
+     * rondo's own reason for a continuo that would not start, for the fold the
+     * sentence above says is whoever maintains rondo's (D-0076 rule 4.2): the
+     * person acts on the sentence, and this is what the maintainer looks at.
+     */
+    note: string | null = null,
   ) {
     const wording = wordingOf(c);
     const line =
@@ -3304,7 +3313,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       line,
       backToScope(wording, request, decision, null, plan),
       undefined,
-      null,
+      why === "startRefusedNoContinuo" ? note : null,
       // **Which work holds the files, and its release, where the press was
       // refused** (rondo#439, K3), so a person never needs a terminal to go on.
       holders,
