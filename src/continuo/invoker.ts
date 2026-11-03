@@ -279,10 +279,48 @@ function resolveCodexWorker(
  */
 const verifiedHandles = new WeakSet<VerifiedContinuo>();
 
+/**
+ * Which kind of unusable one refused startup is, so a caller can say what the
+ * next move is without reading the sentence (AGENTS section 1, rondo#348: a
+ * refusal whose next move differs travels as a field and not as prose).
+ *
+ * **One kind per fact rondo actually learned**, which is why there are six and
+ * not four: a kind is what a caller may say happened, so two causes may share
+ * one kind only where the same thing is known of both. A startup that never
+ * ran is not a startup whose answer was read, and a build whose version rondo
+ * could not read is not a build rondo read and rejected.
+ *
+ * - `notLocated`: the host was never told where the built CLI is. Nothing was
+ *   run.
+ * - `locationUnusable`: the host was told where it is, and what it was told
+ *   cannot be a built CLI -- a relative path, or a path that is not the built
+ *   entry point. Nothing was run.
+ * - `workerSettings`: the host's own worker settings name a worker it cannot
+ *   run, so no lap on it could run. Nothing was run.
+ * - `notAnswering`: the located build was run and did not answer inside the
+ *   bound. It may answer the next time it is asked, which is the one kind of
+ *   this refusal that passes by itself.
+ * - `versionUnconfirmed`: it could not be run at all, or it ran and no revision
+ *   came back -- a non-zero exit, an empty answer, an answer of another shape,
+ *   or the literal `unknown` of a build with no git information. **All rondo
+ *   learned is that it could not read the build's version** -- not whose build
+ *   it is, which nothing here observed.
+ * - `notIdentified`: it ran, it answered, **rondo read a revision**, and that
+ *   revision is not a build rondo drives: a modified tree, another commit, or
+ *   the pinned revision under a line the pin was not measured against.
+ */
+export type ContinuoUnusable =
+  | "notLocated"
+  | "locationUnusable"
+  | "workerSettings"
+  | "notAnswering"
+  | "versionUnconfirmed"
+  | "notIdentified";
+
 /** Whether rondo may start at all. */
 export type StartupResult =
   | { readonly kind: "ready"; readonly continuo: VerifiedContinuo }
-  | { readonly kind: "refused"; readonly reason: string };
+  | { readonly kind: "refused"; readonly reason: string; readonly why: ContinuoUnusable };
 
 /**
  * How long `--version` may take.
@@ -327,6 +365,13 @@ export const SERVED_ENDPOINT_RECIPIENTS = Object.freeze([
 export function resolveCliPath(environment: Readonly<Record<string, string | undefined>>): {
   readonly path: string | null;
   readonly reason: string;
+  /**
+   * Which of the two it is, where there is no path (D-0205 rule 1): nothing
+   * was said, or what was said cannot be a build. A caller that read the
+   * sentence to tell them apart would be parsing rondo's own prose, and the
+   * two are not the same fact about this computer.
+   */
+  readonly why: "notLocated" | "locationUnusable" | null;
 } {
   const raw = environment[CLI_PATH_ENV];
   if (raw === undefined || raw.trim() === "") {
@@ -336,6 +381,7 @@ export function resolveCliPath(environment: Readonly<Record<string, string | und
         `${CLI_PATH_ENV} is not set. It must be the absolute path of a built continuo ` +
         `dist/cli.js at revision ${CONTINUO_REVISION}; it locates a build and never ` +
         "replaces the pin.",
+      why: "notLocated",
     };
   }
   const path = raw.trim();
@@ -343,6 +389,7 @@ export function resolveCliPath(environment: Readonly<Record<string, string | und
     return {
       path: null,
       reason: `${CLI_PATH_ENV} is '${path}', which is not an absolute path.`,
+      why: "locationUnusable",
     };
   }
   if (!endsWithCliEntry(path)) {
@@ -351,9 +398,10 @@ export function resolveCliPath(environment: Readonly<Record<string, string | und
       reason:
         `${CLI_PATH_ENV} is '${path}', and rondo drives continuo's built entry point, ` +
         "which is dist/cli.js.",
+      why: "locationUnusable",
     };
   }
-  return { path, reason: "" };
+  return { path, reason: "", why: null };
 }
 
 /**
@@ -383,22 +431,42 @@ function endsWithCliEntry(path: string): boolean {
  */
 export async function startContinuo(
   environment: Readonly<Record<string, string | undefined>> = process.env,
+  /**
+   * How long `--version` may take, for a caller that cannot wait
+   * {@link VERSION_TIMEOUT_MS}.
+   *
+   * A parameter and not a constant read here for the same reason `run` takes
+   * `options.timeoutMs` (D-0019 rule 12 part 1): the bound belongs to the
+   * caller's patience, and rondo's own tests are the caller that must be able
+   * to see a build that does not answer without waiting a minute for it.
+   */
+  versionTimeoutMs: number = VERSION_TIMEOUT_MS,
 ): Promise<StartupResult> {
   const located = resolveCliPath(environment);
   if (located.path === null) {
-    return { kind: "refused", reason: located.reason };
+    return { kind: "refused", reason: located.reason, why: located.why ?? "notLocated" };
   }
   const workers = resolveWorkers(environment);
   if (workers.kind === "refused") {
-    return { kind: "refused", reason: workers.reason };
+    return { kind: "refused", reason: workers.reason, why: "workerSettings" };
   }
-  const output = await runProcess(located.path, ["--version"], VERSION_TIMEOUT_MS);
+  const output = await runProcess(located.path, ["--version"], versionTimeoutMs);
   if (output.kind === "failed" || output.kind === "timedOut") {
-    // The two are one answer here, and only here: `--version` starts no child
-    // of its own, so a timed-out `--version` orphans nothing and there is no
-    // running lap for the distinction to protect. rondo simply did not learn
-    // which build it was pointed at, and refuses to start.
-    return { kind: "refused", reason: output.reason };
+    // The two are one refusal and one sentence here, and only here: `--version`
+    // starts no child of its own, so a timed-out `--version` orphans nothing
+    // and there is no running lap for the distinction to protect. rondo simply
+    // did not learn which build it was pointed at, and refuses to start.
+    //
+    // **The kind is where they part** (rondo#348's rule): a build that did not
+    // answer inside the bound is one that may answer the next time it is asked,
+    // and a spawn that failed is one whose version rondo could not read at all.
+    // The two next moves differ -- a press, and whoever installed rondo here --
+    // so they travel as different fields of the same arm.
+    return {
+      kind: "refused",
+      reason: output.reason,
+      why: output.kind === "timedOut" ? "notAnswering" : "versionUnconfirmed",
+    };
   }
   if (output.value.status !== 0) {
     return {
@@ -406,11 +474,24 @@ export async function startContinuo(
       reason:
         `continuo --version exited ${String(output.value.status)}. rondo cannot identify ` +
         `the build at '${located.path}'. stderr: ${output.value.stderr.trim()}`,
+      // **Not `notIdentified`**: a build that exited non-zero printed no
+      // version line, so nothing was observed about whose build it is. All
+      // that is known is that rondo could not read it (D-0205 rule 1).
+      why: "versionUnconfirmed",
     };
   }
   const verdict: PinVerdict = verifyVersionLine(output.value.stdout);
   if (verdict.kind === "refused") {
-    return { kind: "refused", reason: verdict.reason };
+    return {
+      kind: "refused",
+      reason: verdict.reason,
+      // **Exit 0 is not a version read** (D-0205 rule 1): a build that printed
+      // nothing, printed something of another shape, or said its revision is
+      // `unknown` exited cleanly and still left rondo knowing only that it
+      // could not read which build this is. The verdict carries which of the
+      // two it is, so this is not read back out of its sentence.
+      why: verdict.why === "versionUnread" ? "versionUnconfirmed" : "notIdentified",
+    };
   }
   const continuo: VerifiedContinuo = {
     cliPath: located.path,

@@ -238,6 +238,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0202 | A lap whose plan and host name no forge repository has it named on the publish screen, checked against the push and recorded as a setup plan of its repository | accepted, amended |
 | D-0203 | Where setup recorded no plan to build on, a plan rondo already holds is recorded as the setup plan it stands for on the person's press; setup that never ran stays installation, said on the page and commanded in the host's log | accepted |
 | D-0204 | A computer without the GitHub CLI gets a pinned one from rondo on the person's press on the sign-in screen, which then signs it in; the person's own `gh` on the host's `PATH` still comes first | accepted |
+| D-0205 | A start refused because the part that runs the work would not start says which kind of unusable it was, in the person's own words; the one kind that may pass by itself gets one press, which keeps the start for the host's tick | accepted, amended |
 
 ---
 
@@ -32186,3 +32187,117 @@ by a Codex review of the design. Line numbers drift: re-measure the claim, not t
 - **A copy written whose archive did not hash to its pin**, or a file written outside rondo's copy.
 - **A Linux host with no `gh` whose sign-in screen shows no press** before one has been pressed.
 - **A `gh` operation that still reports `gh` missing right after a fetch that said it installed.**
+
+## D-0205 — A start refused because the part that runs the work would not start says which kind of unusable it was, in the person's own words; the one kind that may pass by itself gets one press, which keeps the start for the host's tick
+
+**Status:** accepted (2026-11-04, the owner's request on this lap). Refs `D-0015`, `D-0017`,
+`D-0076`, `D-0158`, `D-0203`, `D-0204`.
+
+### Context
+
+The scope screen's *start work* press is refused with `startRefusedNoContinuo` where
+`startContinuo` will not start. The refusal screen said one sentence for every cause of it, told
+the person to try again later, and carried neither rondo's own reason nor a next move. Four
+different states were one sentence: nobody told this computer where the part that runs the work is,
+the host's worker settings name a worker it cannot run, it did not answer in time, and it answered
+and is not the build rondo drives. Three of the four are whoever installed rondo's; one passes by
+itself.
+
+### What was measured, and how
+
+At rondo `1cb5c00` on **2026-11-04**, by reading `src/`:
+
+- **`startContinuo` had one refusal arm, `{ kind: "refused", reason }`**, composed in five places:
+  `resolveCliPath`'s three refusals, `resolveWorkers`', a failed or timed-out `--version`, a
+  non-zero exit, and a revision verdict. A caller could tell them apart only by reading the
+  sentence, which is rondo's own prose and is for whoever maintains it.
+- **`startRefused` passed `note: null`**, so the maintainer's fold the screen already draws for
+  other refusals (`D-0076` rule 4.2) was absent from every start refusal.
+- **A start refused by other work's files is already kept and attempted again** (`D-0158`,
+  rondo#284): `recordHeldStart` keeps the row under the id the form minted, and `orderHost`'s tick
+  attempts each one. Its `WAITS_THROUGH` already **waits through** `startRefusedNoContinuo`, so the
+  mechanism that starts a kept start as soon as that part answers existed and nothing reached it.
+- **Nothing in rondo can repair the other three**: the CLI's location and the worker settings are
+  the host's environment, written by setup into the unit (`D-0203` rule 3's reading), and the pinned
+  build is installation's (`D-0015`, `D-0017`: `RONDO_CONTINUO_CLI` only locates a build someone
+  else made).
+
+### Decision
+
+1. **The kind travels as a field, and the screen says one sentence per kind.** `StartupResult`'s
+   refusal carries `why: ContinuoUnusable` -- `notLocated`, `workerSettings`, `notAnswering`,
+   `notIdentified` -- which the start's outcome carries on as `unusable` and the screen branches on.
+   The sentence is the person's: no command, no path, no environment variable and no identifier
+   (`D-0076` rule 4.2). The three kinds rondo cannot repair say so and say that whoever installed
+   rondo on this computer can, as `D-0203` rule 3 says setup. rondo's own reason goes to the
+   maintainer's fold under it, with what the host printed, as every other refusal's does.
+2. **One press, and only for `notAnswering`.** The press is this same start, posted again with
+   `when_ready`: it admits exactly what the press without it admits -- so a part that has come back
+   starts the work there and then -- and only a second refusal of the same kind **keeps** the start,
+   as the row rondo#284 already built. The tick then starts it as soon as that part answers. A kept
+   start answers `startWaitsContinuo` at `202`: a wait and not a refusal, with nothing to press. The
+   other three kinds get no press, because a press rondo has no operation behind would say the same
+   thing again.
+3. **The refusal still starts nothing, and the press is still safe twice.** The kept wait is keyed
+   by the id the form minted, so a second press keeps one row and starts one lap, which is
+   `scopedStartPress`'s existing argument. A row rondo could not write leaves the refusal as it was.
+4. **A wait nobody holds the files of is said as this wait.** The scope screen's and the thread's
+   waiting card say the files' sentence where a line holds them -- which is true of a kept start
+   too, since the tick waits on the files as well -- and this wait's sentence where none does.
+
+### Options considered
+
+| Option | Taken? | What it loses |
+|---|---|---|
+| A. The sentence only, no press | No | The one kind that passes by itself still needs a person to sit and press again |
+| B. One sentence, with the reason read out of rondo's prose | No | Parsing rondo's own refusal to decide a next move, which is what the field exists for |
+| C. Kinds as fields, one press for the kind a wait works on | Yes | See below |
+| D. A press that retries immediately | No | A `--version` that timed out times out again; the person waits twice for nothing |
+| E. rondo fetches or builds the pinned continuo on a press, as `D-0204` does `gh` | No | A build, a clone and a network in the host's own process; it needs its own entry and its own measurement |
+
+### What it costs
+
+- **A kept start can wait forever** where the part that runs the work never answers again. It is
+  said as waiting and the approval it waits under retires it, which is `D-0158`'s own bound.
+- **`notIdentified` holds two states**: a build that could not be run at all and one that answered
+  something rondo would not drive. Both are whoever installed rondo's, so the next move is the same
+  sentence; a caller that needs them apart splits the field.
+- **The wait's screens cannot say which of the two waits came first** where both are true.
+
+### What would falsify it
+
+- **A start refused for one of these causes whose screen says a command, a path or a variable name.**
+- **A press offered for a kind rondo has no operation for**, or no press offered for `notAnswering`.
+- **A refused start that admitted, spent or started anything**, or a second press that started a
+  second lap or kept a second wait.
+- **A kept start the tick never attempts**, or one it attempts after the approval it waited under
+  retired.
+
+> **Annotation (2026-11-04, from the owner's answers on this lap).** Added after this entry was
+> accepted, and **not additive**: the kinds above were measured again against what rondo actually
+> learns in each case, and two of them each carried two different facts. **A kind is one fact
+> rondo learned, and a sentence says only that fact**, so two causes share a kind only where the
+> same thing is known of both -- which makes the field six kinds and not four, and the kinds rondo
+> cannot repair five and not three.
+>
+> - A place nobody gave is not a place that cannot be one. `notLocated` stays the first; the
+>   second is `locationUnusable`, said as the fact it is -- the place this computer was given could
+>   not be used -- and never as "nobody said where it is".
+> - A build whose version rondo could not read is not a build whose version rondo read and
+>   refused. `versionUnconfirmed` is **every way no revision came back**: it could not be run, it
+>   exited non-zero, it exited cleanly and printed nothing, it printed an answer of another shape,
+>   or it answered that it does not know which commit it came from. `notIdentified` is only a
+>   revision rondo **read** and compared: a modified tree, another commit, or the pinned revision
+>   under a line the pin was not measured against. An exit 0 is not a version read.
+>
+> Each of the six has its own sentence in every language the page speaks, and the field the screen
+> branches on carries which it is, so no screen reads a kind back out of rondo's prose. Rule 2's
+> one press is unchanged and is still `notAnswering`'s alone; rules 3 and 4 are unchanged. One
+> falsifier is added by this note: **a kind whose sentence states something rondo did not observe**
+> -- a version called wrong where none was read, or a place called missing where one was given --
+> or two causes known by different facts folded into one kind.
+>
+> - Amends: D-0205 rule 1
+> - Amends: D-0205 rule 2
+> - Amends: D-0205 "Four different states were one sentence"
+> - Amends: D-0205 "`notIdentified` holds two states"

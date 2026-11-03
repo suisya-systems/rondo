@@ -436,7 +436,12 @@ export async function threadActs(
   const waitsCard = (
     <section class="next-step mb-4 rounded-lg border border-run/35 bg-run-wash px-4 py-3">
       <h2 class="text-meta leading-5 font-semibold text-run-ink">{wording.nextStepRondoHeading}</h2>
-      <p class="mt-1 text-body leading-6">{wording.startWaitsHeld}</p>
+      {/* **A wait nobody holds the files of is not the files' wait** (D-0205
+          rule 2): it is a start kept until the part that runs the work
+          answers, and the files' sentence would say what is not so. */}
+      <p class="mt-1 text-body leading-6">
+        {waitHolding.length === 0 ? wording.startWaitsContinuo : wording.startWaitsHeld}
+      </p>
       {waitHolding.map((holder) => heldByLine(wording, holder, ports.releasable === true))}
     </section>
   );

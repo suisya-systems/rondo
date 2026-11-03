@@ -1784,7 +1784,10 @@ async function scopeApproved(
         </>
       ) : waits !== undefined ? (
         <div id="start-waits" class="space-y-1.5">
-          {note(wording.startWaitsHeld)}
+          {/* **A wait nobody holds the files of is not the files' wait**
+              (D-0205 rule 2): it is a start kept until the part that runs the
+              work answers, and the files' sentence would say what is not so. */}
+          {note(holding.length === 0 ? wording.startWaitsContinuo : wording.startWaitsHeld)}
           {holding.map((holder) => heldByLine(wording, holder, ports.releasable === true))}
         </div>
       ) : (

@@ -1126,7 +1126,56 @@ export interface Chrome
   readonly startRefusedForm: string;
   readonly startRefusedNoPlan: string;
   readonly startRefusedNoRequest: string;
+  /**
+   * The part that runs the work would not start, and rondo was not told which
+   * kind it was: the sentence this screen said before the kinds (D-0205).
+   */
   readonly startRefusedNoContinuo: string;
+  /**
+   * It was never located: the host was not told where that part is, or was
+   * told something that cannot be it (D-0205 rule 1). **Nothing on this page
+   * can put it right**, so the sentence says that and says who can -- whoever
+   * installed rondo on this computer -- with no command and no path in it
+   * (D-0076 rule 4.2, D-0203 rule 3).
+   */
+  readonly startRefusedContinuoNotLocated: string;
+  /**
+   * The host was told where that part is, and what it was told cannot be it
+   * (D-0205 rule 1). Said as the fact it is -- the place this computer was
+   * given could not be used -- and never as "nobody said where it is", which
+   * is a different thing about this computer. **Nothing here can put it
+   * right** either, so it says who can, with no command and no path in it.
+   */
+  readonly startRefusedContinuoLocationUnusable: string;
+  /** The host's own worker settings name a worker it cannot run (D-0205 rule 1). */
+  readonly startRefusedContinuoWorkerSettings: string;
+  /**
+   * It did not answer in time: the one kind that may pass by itself, so the
+   * sentence says rondo can keep the start and {@link startWhenReadyAction} is
+   * on the screen beside it (D-0205 rule 2).
+   */
+  readonly startRefusedContinuoNotAnswering: string;
+  /**
+   * It could not be run, or it ran and no version came back -- an exit without
+   * one, an empty answer, an answer of another shape, or a build that says it
+   * does not know which commit it came from (D-0205 rule 1): **the only thing
+   * known is that rondo could not read which version is here**, so the
+   * sentence says that and says nothing about whose build it is.
+   */
+  readonly startRefusedContinuoVersionUnconfirmed: string;
+  /**
+   * It ran, it answered, rondo read a version, and that version is not one
+   * rondo drives (D-0205 rule 1): the one kind where "it is not the one rondo
+   * expects" is a fact rondo observed rather than a guess.
+   */
+  readonly startRefusedContinuoNotIdentified: string;
+  /** The press on that refusal: this same start, kept until that part answers. */
+  readonly startWhenReadyAction: string;
+  /**
+   * A start kept for the part that runs the work to answer (D-0205 rule 2):
+   * the press's answer, said as {@link startWaitsHeld} says the files' wait.
+   */
+  readonly startWaitsContinuo: string;
   /** The `test` token is the `ScopeTest` name, ASCII in both sets (rule 3). */
   readonly startRefusedOutside: (test: string) => string;
   readonly startRefusedNotAdmitted: string;

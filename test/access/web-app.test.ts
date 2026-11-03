@@ -89,6 +89,7 @@ import {
   type TriageWritten,
 } from "../../src/access/web-app.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
+import type { ContinuoUnusable } from "../../src/continuo/invoker.js";
 import type { AskOptions } from "../../src/store/ask-options.js";
 import { advisoryRecord, asRefusal } from "../../src/store/sqlite.js";
 
@@ -710,6 +711,8 @@ test("(start) a person's native press starts one lap under the scope, once", asy
       // rondo#462: the form posted no provider, so the request chose none and
       // the host's default runs it.
       workerProvider: null,
+      // D-0205 rule 2: this is the ordinary press, which keeps no wait.
+      whenReady: false,
     },
   ]);
 
@@ -3310,6 +3313,103 @@ test("(answer) every shape that is not a person's press is refused, and the ques
 
   expect(await waitingAsks()).toEqual(["ask"]);
   expect(operatorRows()).toEqual({ n: 1 });
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(start) D-0205: a start refused because the part that runs the work would not start says which kind, and only the kind that may pass by itself has a press", async () => {
+  const notThis = async () => await Promise.resolve({ ok: false, note: "not this route" });
+  const sent: ScopedStartInput[] = [];
+  const refusing = (unusable: ContinuoUnusable): ServedPorts =>
+    ({
+      ...draftedPorts([], []),
+      scope: new ScopePort(notThis, async (input) => {
+        sent.push(input);
+        return await Promise.resolve({
+          ok: false,
+          // rondo's own line, which the screen never says to the person.
+          note: `continuo is not usable: ${unusable}`,
+          why: "startRefusedNoContinuo" as const,
+          unusable,
+        });
+      }),
+    }) as unknown as ServedPorts;
+  const ja = chromeFor("ja");
+  /** Every kind, and the one sentence it is said in: no two share one. */
+  const kinds = [
+    ["notLocated", ja.startRefusedContinuoNotLocated],
+    ["locationUnusable", ja.startRefusedContinuoLocationUnusable],
+    ["workerSettings", ja.startRefusedContinuoWorkerSettings],
+    ["notAnswering", ja.startRefusedContinuoNotAnswering],
+    ["versionUnconfirmed", ja.startRefusedContinuoVersionUnconfirmed],
+    ["notIdentified", ja.startRefusedContinuoNotIdentified],
+  ] as const;
+  for (const [unusable, line] of kinds) {
+    const { base, stop, closed } = await served(createApp(refusing(unusable), TOKEN));
+    const form = startForm();
+    const refused = await send(base, "/start?lang=ja", "POST", pressHeaders(base), form);
+    expect(refused.status).toBe(409);
+    const body = refused.body.replaceAll("&#39;", "'");
+    // The reason, in the page's language, and not the one sentence every kind
+    // used to share.
+    expect(body).toContain(line);
+    expect(body).not.toContain(ja.startRefusedNoContinuo);
+    // **And no other kind's sentence** (D-0205 rule 1): the screen says what
+    // rondo learned, so a kind that was not this one must not be said of it.
+    for (const [other, otherLine] of kinds) {
+      if (other !== unusable) {
+        expect(body, `${unusable} said ${other}'s sentence`).not.toContain(otherLine);
+      }
+    }
+    // What rondo knows stays in the maintainer's fold, where it was (D-0076
+    // rule 4.2): the person reads words, not continuo's own line.
+    expect(body).toContain(`>${ja.forMaintainer}</summary>`);
+    // **One press, and only for the kind a wait works on** (rule 2): it is
+    // this same start, with the id the refused form minted, so pressing it is
+    // pressing the same press again.
+    const press = body.includes('<form id="refused-press"')
+      ? body.slice(body.indexOf('<form id="refused-press"'))
+      : null;
+    if (unusable === "notAnswering") {
+      expect(press).toContain(`>${ja.startWhenReadyAction}</button>`);
+      expect(press).toContain('action="/start?lang=ja"');
+      expect(press).toContain('name="when_ready" value="1"');
+      expect(press).toContain(`name="iteration" value="${form["iteration"] ?? ""}"`);
+      expect(press).toContain(`name="plan" value="${PLAN_DIGEST}"`);
+      expect(press).toContain(`name="token" value="${TOKEN}"`);
+    } else {
+      // Nothing to press: a press rondo has no operation for would say this
+      // again, and the sentence has already said whom to ask.
+      expect(press).toBe(null);
+    }
+    stop.abort();
+    expect(await closed).toBe(0);
+  }
+  // The press that waits reaches the port as the same start, `whenReady` set
+  // and nothing else changed, and the start it is kept for is told as a wait.
+  expect(sent.map((input) => input.whenReady ?? false)).toEqual(kinds.map(() => false));
+  const waiting = {
+    ...draftedPorts([], []),
+    scope: new ScopePort(notThis, async (input) => {
+      sent.push(input);
+      return await Promise.resolve({
+        ok: false,
+        note: "kept until continuo answers",
+        why: "startWaitsContinuo" as const,
+      });
+    }),
+  } as unknown as ServedPorts;
+  const { base, stop, closed } = await served(createApp(waiting, TOKEN));
+  const kept = await send(base, "/start?lang=ja", "POST", pressHeaders(base), {
+    ...startForm(),
+    when_ready: "1",
+  });
+  // Accepted, not refused: nothing was refused for good, and there is nothing
+  // left to press.
+  expect(kept.status).toBe(202);
+  expect(kept.body).toContain(ja.startWaitsContinuo);
+  expect(kept.body).not.toContain('<form id="refused-press"');
+  expect(sent.at(-1)?.whenReady).toBe(true);
   stop.abort();
   expect(await closed).toBe(0);
 });

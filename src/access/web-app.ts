@@ -48,6 +48,7 @@ import { setCookie } from "hono/cookie";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
 import type { Basis } from "../advisory/proposal.js";
+import type { ContinuoUnusable } from "../continuo/invoker.js";
 import {
   // Aliased: this module already exports an `AnswerOutcome` of its own, for
   // what one *gate* answer came to (D-0041). The store's is what a person's
@@ -69,7 +70,14 @@ import { basisOf } from "./explainer/material.js";
 import { signInRoute } from "./github-sign-in-route.js";
 import type { EndRefusal, HoldsRefusal, ReleaseRefusal } from "./line-ports.js";
 import type { ServedPorts } from "./page/contract.js";
-import type { ApproveRefusal, ClaimRefusal } from "./page/refusal-words.js";
+import {
+  type ApproveRefusal,
+  backToScope,
+  type ClaimRefusal,
+  type SendRefusal,
+  sendRefusedScreen,
+  startRefusedScreen,
+} from "./page/refusal-words.js";
 import { postedAnswers, postedClauses } from "./page/triage.js";
 import { MAX_END_REASON_CHARS } from "./page-logic/end-lap.js";
 import {
@@ -86,10 +94,9 @@ import { TAB_OUTCOMES } from "./reach.js";
 import { heldAnchor, pressable } from "./read-in.js";
 import { type AddRepositoryRefusal, SIGN_IN_REPAIRS } from "./repository-add.js";
 import { budgetsOf, scopeDraftOf, scopeValuesOf, wholeNumber } from "./scope-form.js";
-import { refusedPage } from "./screens/refused.js";
+import { type Refused as RefusedScreen, refusedPage } from "./screens/refused.js";
 import { SERVED, TOKEN_ROUTE, tokenEvents } from "./served.js";
 import { APPROVE_BODY, operatorPage } from "./web.js";
-import type { Chrome } from "./wording.js";
 
 /**
  * What the socket said about one request, as `@hono/node-server` hands it to
@@ -729,6 +736,8 @@ export interface ScopedStartInput {
    * that an empty field is null and not the empty string.
    */
   readonly workerProvider?: string | null;
+  /** The refusal screen's press that keeps this start until the work's runner answers (D-0205 rule 2). */
+  readonly whenReady?: boolean;
 }
 
 /** Why a scoped start admitted nothing, as the wording key the page says it in. */
@@ -741,6 +750,9 @@ export type StartRefusal =
   // Refused by held files, and attempted again by the host's tick (rondo#284):
   // not a refusal to the person, who is told it waits.
   | "startWaitsHeld"
+  // Kept by the person's press until the work's runner answers (D-0205 rule
+  // 2): a wait and not a refusal, for `startWaitsHeld`'s reason.
+  | "startWaitsContinuo"
   | "startRefusedNotAdmitted";
 
 /** What one scoped start came to; `test` is the `ScopeTest` that refused, on `startRefusedOutside`. */
@@ -749,6 +761,8 @@ export interface Started {
   readonly note: string;
   readonly why?: StartRefusal;
   readonly test?: string;
+  /** On `startRefusedNoContinuo`: which kind of unusable it was (D-0205 rule 1). */
+  readonly unusable?: ContinuoUnusable;
   /** On a start held by files: each line holding them, by its first lap and its request's words. */
   readonly holders?: readonly {
     readonly lineageId: string;
@@ -1667,7 +1681,8 @@ function escapeHtml(text: string): string {
  * start that ended.
  */
 function heldStatus(started: Started): 202 | 409 {
-  return started.why === "startWaitsHeld" ? 202 : 409;
+  // A wait is not a refusal, whichever of the two it waits on (D-0205 rule 2).
+  return started.why === "startWaitsHeld" || started.why === "startWaitsContinuo" ? 202 : 409;
 }
 
 /** A plain-text response a person can read, for every refusal. */
@@ -2415,6 +2430,10 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         started.test ?? null,
         null,
         started.holders,
+        // No press: a drafted split's start is not one the tick keeps.
+        started.unusable ?? null,
+        null,
+        started.note,
       );
     }
     // The request's thread, where the lap just started draws its event lines
@@ -2462,6 +2481,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       // is the seam's fact, and a route that checked it would be a second
       // answer to the host's readiness.
       workerProvider: chosenWorker(form["worker_provider"]),
+      // D-0205 rule 2: admits what the press without it admits, and keeps the
+      // start only where it is refused again for the one kind rondo waits out.
+      whenReady: form["when_ready"] === "1",
     });
     if (!started.ok) {
       return startRefused(
@@ -2473,6 +2495,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         started.test ?? null,
         runsOn,
         started.holders,
+        started.unusable ?? null,
+        { iteration: iterationId, worker: chosenWorker(form["worker_provider"]) },
+        started.note,
       );
     }
     // Into the request's thread, where the lap just started draws its event
@@ -3155,41 +3180,17 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
   function refused(
     c: Context<PageEnv>,
     status: 400 | 403 | 409 | 413,
-    why:
-      | "sendRefusedNoApprover"
-      | "sendRefusedForm"
-      | "sendRefusedNoWords"
-      | "sendRefusedNotTaken"
-      | "sendRefusedAsk"
-      | "sendRefusedTooLong"
-      | "answerRefusedPress"
-      | "answerRefusedRaise"
-      | "answerRefusedNoWords",
+    why: SendRefusal,
     back: string | null,
   ) {
     const wording = wordingOf(c);
-    const line = wording.notSent(wording[why]);
     if (c.req.header("hx-request") === "true") {
-      return c.html(`<p id="send-refused">${escapeHtml(line)}</p>`, status);
+      return c.html(
+        `<p id="send-refused">${escapeHtml(wording.notSent(wording[why]))}</p>`,
+        status,
+      );
     }
-    return c.html(
-      refusedPage(wording, {
-        title: wording.sendAction,
-        id: "send-refused",
-        line,
-        href: viewHref(
-          back === null || back === ""
-            ? { kind: "requests" }
-            : { kind: "thread", messageId: back, to: null },
-          wording.lang,
-        ),
-        back: wording.sendBack,
-        note: null,
-        holders: [],
-        releasable: false,
-      }),
-      status,
-    );
+    return c.html(refusedPage(wording, sendRefusedScreen(wording, why, back)), status);
   }
 
   /**
@@ -3243,21 +3244,28 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     test: string | null = null,
     plan: string | null = null,
     holders: Started["holders"] = [],
+    unusable: ContinuoUnusable | null = null,
+    waitable: { readonly iteration: string; readonly worker: string | null } | null = null,
+    note: string | null = null,
   ) {
     const wording = wordingOf(c);
-    const line =
-      why === "startRefusedOutside" ? wording.startRefusedOutside(test ?? "") : wording[why];
-    return pressRefused(
-      c,
+    return c.html(
+      refusedPage(
+        wording,
+        startRefusedScreen(wording, why, {
+          test,
+          unusable,
+          note,
+          holders,
+          releasable: release !== null,
+          href: backToScope(wording, request, decision, null, plan),
+          press:
+            waitable === null
+              ? null
+              : { ...waitable, token, request, decision, plan, action: START_ROUTE },
+        }),
+      ),
       status,
-      wording.startAction,
-      line,
-      backToScope(wording, request, decision, null, plan),
-      undefined,
-      null,
-      // **Which work holds the files, and its release, where the press was
-      // refused** (rondo#439, K3), so a person never needs a terminal to go on.
-      holders,
     );
   }
 
@@ -3633,28 +3641,6 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     );
   }
 
-  /** The address the two refusals send a person back to: the screen they pressed on. */
-  function backToScope(
-    wording: Chrome,
-    request: string | null,
-    decision: string | null = null,
-    rounds: number | null = null,
-    plan: string | null = null,
-  ): string {
-    return viewHref(
-      request === null || request === ""
-        ? { kind: "requests" }
-        : {
-            kind: "scope",
-            messageId: request,
-            rounds,
-            decisionId: decision === null || decision === "" ? null : decision,
-            plan,
-          },
-      wording.lang,
-    );
-  }
-
   /** One refusal page: what it is, why nothing happened, and the one link back. */
   function pressRefused(
     c: Context<PageEnv>,
@@ -3672,6 +3658,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     note: string | null = null,
     /** On a start held by files (rondo#439): the lines holding them. */
     holders: Started["holders"] = [],
+    /** The one press this refusal offers, where rondo has one (D-0205). */
+    press: RefusedScreen["press"] = null,
   ) {
     // **The page's own frame** (rondo#439): the one screen a refused press
     // leaves a person on is where they find their way on.
@@ -3685,6 +3673,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         note,
         holders,
         releasable: release !== null,
+        press,
       }),
       status,
     );
@@ -3720,6 +3709,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         note,
         holders: [],
         releasable: false,
+        press: null,
       }),
       status,
     );

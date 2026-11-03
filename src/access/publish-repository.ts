@@ -211,6 +211,7 @@ export function publishRepositoryRoute(
           note,
           holders: [],
           releasable: false,
+          press: null,
         }),
         status,
       );

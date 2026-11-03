@@ -135,13 +135,33 @@ const VERSION_LINE_PATTERN = /^(\S+) (\S+) \(rev (\S+)\)$/;
  */
 export type PinVerdict =
   | { readonly kind: "verified"; readonly revision: string }
-  | { readonly kind: "refused"; readonly reason: string };
+  | {
+      readonly kind: "refused";
+      readonly reason: string;
+      /**
+       * Which fact the refusal is, so the caller can say it without reading
+       * the sentence (rondo#348, D-0205 rule 1).
+       *
+       * `versionUnread` is every way this answer carries no revision at all:
+       * a line of another shape -- including no line, which is what an empty
+       * answer trims to -- a revision outside continuo's own alphabet, and the
+       * literal `unknown` a build with no git information prints. **Nothing is
+       * then known about whose build it is**, so a caller that said "it is not
+       * the one rondo expects" would be stating something nothing observed.
+       * `versionRejected` is the rest: rondo read a revision, and it is not the
+       * pinned build's -- a modified tree, another commit, or the pinned
+       * revision under a line the pin was not measured against.
+       */
+      readonly why: "versionUnread" | "versionRejected";
+    };
 
 /**
  * Check an observed `--version` line against the pin.
  *
  * Four ways this says no, and they are deliberately separate sentences rather
  * than one "unexpected version": each names a different thing to go and do.
+ * The first two read no revision and the last two read one, which is what
+ * {@link PinVerdict}'s `why` carries to the caller.
  *
  *  - the line does not have the shape `--version` promises, so what rondo is
  *    driving may not be continuo at all;
@@ -166,6 +186,9 @@ export function verifyVersionLine(observed: string): PinVerdict {
       reason:
         `continuo --version printed ${quoted(line)}, which is not the shape ` +
         `'<name> <version> (rev <revision>)'. rondo cannot identify this build.`,
+      // An answer rondo could not read a revision out of, which an empty one
+      // is too: `line` is then "" and no shape matches it.
+      why: "versionUnread",
     };
   }
   const revision = match[3] ?? "";
@@ -175,6 +198,8 @@ export function verifyVersionLine(observed: string): PinVerdict {
       reason:
         `continuo --version reported the revision ${quoted(revision)}, which is neither ` +
         "a full 40-hex commit, that commit with a '-dirty' suffix, nor 'unknown'.",
+      // Whatever this word is, it is not a revision, so rondo read none.
+      why: "versionUnread",
     };
   }
   if (revision === REVISION_UNKNOWN) {
@@ -184,6 +209,11 @@ export function verifyVersionLine(observed: string): PinVerdict {
         "continuo --version reported 'unknown': this build does not know which commit it " +
         "came from. Build the pinned checkout with CONTINUO_REQUIRE_REVISION=1, which makes " +
         "an unidentifiable build fail at build time rather than here.",
+      // **Not `versionRejected`**: the build said it has no revision to give,
+      // which is not the same as giving one rondo does not drive. It may even
+      // be the pinned commit, built without CONTINUO_REQUIRE_REVISION=1 -- so
+      // all that is known is that rondo could not read which build this is.
+      why: "versionUnread",
     };
   }
   if (revision.endsWith("-dirty")) {
@@ -193,6 +223,7 @@ export function verifyVersionLine(observed: string): PinVerdict {
         `continuo --version reported ${quoted(revision)}: the build was made from a modified ` +
         "tree, so it names a commit it is not. Build a clean checkout at " +
         `${CONTINUO_REVISION}.`,
+      why: "versionRejected",
     };
   }
   if (revision !== CONTINUO_REVISION) {
@@ -202,6 +233,7 @@ export function verifyVersionLine(observed: string): PinVerdict {
         `continuo --version reported revision ${quoted(revision)}, and rondo is pinned to ` +
         `${CONTINUO_REVISION}. Either the provisioned checkout or the pin in ` +
         "continuo.pin.json is stale; rondo never drives a build it did not pin.",
+      why: "versionRejected",
     };
   }
   if (line !== CONTINUO_VERSION_LINE) {
@@ -211,6 +243,9 @@ export function verifyVersionLine(observed: string): PinVerdict {
         `continuo --version printed ${quoted(line)}, and the pin records ` +
         `${quoted(CONTINUO_VERSION_LINE)}. The revision matches and the rest of the line does ` +
         "not, so this is not the build the pin was measured against.",
+      // A revision was read here, and the pin is the whole line: what rondo
+      // read is not the pinned build's answer.
+      why: "versionRejected",
     };
   }
   return { kind: "verified", revision };

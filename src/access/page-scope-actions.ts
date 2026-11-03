@@ -1186,6 +1186,21 @@ async function startScoped(
     null,
     null,
   );
+  // **The refusal screen's one press** (D-0205 rule 2): the start was attempted
+  // exactly as any press attempts it -- so a part that has come back since
+  // starts the work here and now -- and only a second refusal for the one kind
+  // rondo can wait out is kept. The wait is the row rondo#284 already built and
+  // the tick already waits through for this refusal (`WAITS_THROUGH`), so
+  // nothing new decides when the work starts.
+  if (started.why === "startRefusedNoContinuo") {
+    if (input.whenReady !== true || started.unusable !== "notAnswering") {
+      return started;
+    }
+    const kept = await keepStart(store, input, planned.plan);
+    // A row rondo could not write would be a wait nothing ends, so the press
+    // is told what it was told without it, and pressing again is safe.
+    return kept ? { ...started, why: "startWaitsContinuo" } : started;
+  }
   if (started.why !== "startWaitsHeld") {
     return started;
   }
@@ -1205,24 +1220,43 @@ async function startScoped(
   // a wait nothing ends, so that press is told to start again, as it was --
   // and so is one no row waits for: another form of this plan already started
   // it (Codex round 2), and the tick would not start it again.
+  return (await keepStart(store, input, planned.plan))
+    ? started
+    : { ...started, why: "startRefusedHeld" };
+}
+
+/**
+ * Keep this start as a wait the resident host's tick attempts again (rondo#284,
+ * D-0205 rule 2), and say whether it waits.
+ *
+ * One function for both waits -- the files another line holds, and a part that
+ * runs the work and did not answer -- because the row, its id and its worker
+ * are the same facts and the tick reads one table. It is the store's own
+ * uniqueness that makes a second press of either keep one row, which is what
+ * makes pressing twice safe.
+ */
+async function keepStart(
+  store: IterationStore,
+  input: ScopedStartInput,
+  plan: RunPlan,
+): Promise<boolean> {
   try {
-    const waits = await store.recordHeldStart({
+    return await store.recordHeldStart({
       iterationId: input.iterationId,
       requestMessageId: input.requestMessageId,
       scopeDecisionId: input.scopeDecisionId,
       planDigest: input.planDigest,
-      repository: repositoryKey(planned.plan.repository) ?? planned.plan.repository,
+      repository: repositoryKey(plan.repository) ?? plan.repository,
       heldAtMs: Date.now(),
       // rondo#462: kept with the wait, so the tick's attempt starts the lap on
       // the worker this press chose and not on the host's default.
       workerProvider: input.workerProvider ?? null,
     });
-    return waits ? started : { ...started, why: "startRefusedHeld" };
   } catch (error) {
     consoleSeams.writeError(
       `${asciiEscape(`lap '${input.iterationId}': its wait was not kept: ${error instanceof Error ? error.message : String(error)}`)}\n`,
     );
-    return { ...started, why: "startRefusedHeld" };
+    return false;
   }
 }
 
@@ -1263,6 +1297,11 @@ async function admitScopedPlan(
     return {
       ok: false,
       why: "startRefusedNoContinuo",
+      // **Which kind of unusable, as a field** (D-0205 rule 1, rondo#348's
+      // rule): the screen says the reason in the person's own words off this,
+      // and never by reading the sentence beside it, which is rondo's own and
+      // for whoever maintains it.
+      unusable: startup.why,
       note: `continuo is not usable: ${startup.reason}`,
     };
   }
