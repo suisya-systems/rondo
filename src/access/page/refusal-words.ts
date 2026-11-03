@@ -12,6 +12,10 @@
  * press token of a restarted host, so a fresh press is the way on.
  */
 
+import type { ContinuoUnusable } from "../../continuo/invoker.js";
+import type { Refused } from "../screens/refused.js";
+import type { Chrome } from "../wording.js";
+
 /**
  * Why a press carrying a claim answered nothing, as the wording key the page
  * says it in (rondo#220 S2 review). A person causes these by typing or by
@@ -73,3 +77,116 @@ export const REFUSAL_JA: RefusalWords = {
   notThisMachine:
     "rondo はこの画面を 127.0.0.1 または localhost でだけ表示します。そちらのアドレスで開いてください。",
 };
+
+/**
+ * What a refused start says, and what it offers to press (D-0205).
+ *
+ * Here and not in `web-app.ts` because it is words and a form's fields, which
+ * is this module's half, and because that file is at its size cap. It composes
+ * nothing it is not given: the token, the ids and the digest are the refused
+ * form's own, so the press it describes is the same press.
+ */
+export function startRefusedScreen(
+  wording: Chrome,
+  why: string,
+  said: {
+    /** The lines holding the files, and whether this host offers their release (rondo#439). */
+    readonly holders: Refused["holders"];
+    readonly releasable: boolean;
+    /** The way back to the screen it was pressed on. */
+    readonly href: string;
+    /** The `ScopeTest` that refused, on `startRefusedOutside`. */
+    readonly test: string | null;
+    /** Which kind of unusable the part that runs the work was, where that is why. */
+    readonly unusable: ContinuoUnusable | null;
+    /** rondo's own reason, for the maintainer's fold: kept only where the sentence says who looks. */
+    readonly note: string | null;
+    /** The refused form, for the press that waits; null where there is none to send again. */
+    readonly press: {
+      readonly token: string;
+      readonly action: string;
+      readonly request: string | null;
+      readonly decision: string | null;
+      readonly plan: string | null;
+      readonly iteration: string;
+      readonly worker: string | null;
+    } | null;
+  },
+): Refused {
+  const continuo = why === "startRefusedNoContinuo";
+  const line =
+    why === "startRefusedOutside"
+      ? wording.startRefusedOutside(said.test ?? "")
+      : continuo
+        ? continuoLine(wording, said.unusable)
+        : wording[why as keyof Chrome & "startRefusedForm"];
+  return {
+    title: wording.startAction,
+    id: "scope-refused",
+    line,
+    href: said.href,
+    back: wording.scopeBack,
+    note: continuo ? said.note : null,
+    holders: said.holders,
+    releasable: said.releasable,
+    press: continuo ? waitPress(wording, said.unusable, said.press) : null,
+  };
+}
+
+/**
+ * Which sentence a part that would not start is said in: one per kind of
+ * unusable (D-0205 rule 1), because the next move differs by kind. The kind
+ * rondo was not told stays the sentence this screen said before.
+ */
+function continuoLine(wording: Chrome, unusable: ContinuoUnusable | null): string {
+  switch (unusable) {
+    case "notLocated":
+      return wording.startRefusedContinuoNotLocated;
+    case "workerSettings":
+      return wording.startRefusedContinuoWorkerSettings;
+    case "notAnswering":
+      return wording.startRefusedContinuoNotAnswering;
+    case "notIdentified":
+      return wording.startRefusedContinuoNotIdentified;
+    default:
+      return wording.startRefusedNoContinuo;
+  }
+}
+
+/**
+ * **The one press, and only where the cause is the one rondo can act on**
+ * (D-0205 rule 2): this very start, sent again and kept until that part
+ * answers. Every other kind gets none, because a press rondo has no operation
+ * behind would say what the sentence has just said.
+ */
+function waitPress(
+  wording: Chrome,
+  unusable: ContinuoUnusable | null,
+  press: Parameters<typeof startRefusedScreen>[2]["press"],
+): Refused["press"] {
+  if (
+    unusable !== "notAnswering" ||
+    press === null ||
+    press.request === null ||
+    press.request === "" ||
+    press.decision === null ||
+    press.decision === "" ||
+    press.plan === null ||
+    press.plan === ""
+  ) {
+    return null;
+  }
+  return {
+    action: `${press.action}?lang=${encodeURIComponent(wording.lang)}`,
+    label: wording.startWhenReadyAction,
+    fields: [
+      { name: "token", value: press.token },
+      { name: "request", value: press.request },
+      { name: "scope_decision", value: press.decision },
+      { name: "plan", value: press.plan },
+      { name: "iteration", value: press.iteration },
+      { name: "worker_provider", value: press.worker ?? "" },
+      { name: "when_ready", value: "1" },
+    ],
+  };
+}

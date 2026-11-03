@@ -70,7 +70,11 @@ import { basisOf } from "./explainer/material.js";
 import { signInRoute } from "./github-sign-in-route.js";
 import type { EndRefusal, HoldsRefusal, ReleaseRefusal } from "./line-ports.js";
 import type { ServedPorts } from "./page/contract.js";
-import type { ApproveRefusal, ClaimRefusal } from "./page/refusal-words.js";
+import {
+  type ApproveRefusal,
+  type ClaimRefusal,
+  startRefusedScreen,
+} from "./page/refusal-words.js";
 import { postedAnswers, postedClauses } from "./page/triage.js";
 import { MAX_END_REASON_CHARS } from "./page-logic/end-lap.js";
 import {
@@ -730,14 +734,7 @@ export interface ScopedStartInput {
    * that an empty field is null and not the empty string.
    */
   readonly workerProvider?: string | null;
-  /**
-   * This press is the one the refusal screen offers where the part that runs
-   * the work did not answer (D-0205): rondo attempts the
-   * start as any press does, and where it is refused for that one reason again
-   * it **keeps** the start, so the resident host's tick begins it as soon as
-   * that part answers. Absent and false are the ordinary press, which keeps
-   * nothing.
-   */
+  /** The refusal screen's press that keeps this start until the work's runner answers (D-0205 rule 2). */
   readonly whenReady?: boolean;
 }
 
@@ -751,9 +748,8 @@ export type StartRefusal =
   // Refused by held files, and attempted again by the host's tick (rondo#284):
   // not a refusal to the person, who is told it waits.
   | "startWaitsHeld"
-  // Refused because the part that runs the work did not answer, and kept by
-  // the person's press for the same tick to attempt (D-0205): told as a wait
-  // and not as a refusal, for `startWaitsHeld`'s reason.
+  // Kept by the person's press until the work's runner answers (D-0205 rule
+  // 2): a wait and not a refusal, for `startWaitsHeld`'s reason.
   | "startWaitsContinuo"
   | "startRefusedNotAdmitted";
 
@@ -763,11 +759,7 @@ export interface Started {
   readonly note: string;
   readonly why?: StartRefusal;
   readonly test?: string;
-  /**
-   * On `startRefusedNoContinuo`: which kind of unusable it was (D-0205), so
-   * the screen says the reason in the person's own words and offers the one
-   * press that works on it. Absent on every other refusal.
-   */
+  /** On `startRefusedNoContinuo`: which kind of unusable it was (D-0205 rule 1). */
   readonly unusable?: ContinuoUnusable;
   /** On a start held by files: each line holding them, by its first lap and its request's words. */
   readonly holders?: readonly {
@@ -1687,8 +1679,7 @@ function escapeHtml(text: string): string {
  * start that ended.
  */
 function heldStatus(started: Started): 202 | 409 {
-  // A wait is not a refusal, whichever of the two it waits on (D-0205 rule 2):
-  // nothing was refused for good, so the status says it was accepted.
+  // A wait is not a refusal, whichever of the two it waits on (D-0205 rule 2).
   return started.why === "startWaitsHeld" || started.why === "startWaitsContinuo" ? 202 : 409;
 }
 
@@ -2437,8 +2428,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         started.test ?? null,
         null,
         started.holders,
-        // The reason in the person's own words here too (D-0205 rule 1), and
-        // no press: a drafted split's start is not one the tick keeps.
+        // No press: a drafted split's start is not one the tick keeps.
         started.unusable ?? null,
         null,
         started.note,
@@ -2489,10 +2479,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       // is the seam's fact, and a route that checked it would be a second
       // answer to the host's readiness.
       workerProvider: chosenWorker(form["worker_provider"]),
-      // **The refusal screen's one press, sent as this same start** (D-0205
-      // rule 2): it admits exactly what the press without it admits, and only
-      // where it is refused again for the one reason rondo can wait out does it
-      // keep the start for the host's tick.
+      // D-0205 rule 2: admits what the press without it admits, and keeps the
+      // start only where it is refused again for the one kind rondo waits out.
       whenReady: form["when_ready"] === "1",
     });
     if (!started.ok) {
@@ -3279,90 +3267,29 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     test: string | null = null,
     plan: string | null = null,
     holders: Started["holders"] = [],
-    /**
-     * Where the part that runs the work would not start: which kind of
-     * unusable it was (D-0205), which is what decides the sentence and whether
-     * there is a press. Null on every other refusal.
-     */
     unusable: ContinuoUnusable | null = null,
-    /**
-     * The start this refusal was pressed for, where it can be pressed again as
-     * the press that waits (D-0205 rule 2). Null where the refusal happened
-     * before the form was read, and on the drafted split's start, which the
-     * tick does not keep.
-     */
     waitable: { readonly iteration: string; readonly worker: string | null } | null = null,
-    /**
-     * rondo's own reason for a continuo that would not start, for the fold the
-     * sentence above says is whoever maintains rondo's (D-0076 rule 4.2): the
-     * person acts on the sentence, and this is what the maintainer looks at.
-     */
     note: string | null = null,
   ) {
     const wording = wordingOf(c);
-    const line =
-      why === "startRefusedOutside"
-        ? wording.startRefusedOutside(test ?? "")
-        : why === "startRefusedNoContinuo"
-          ? continuoLine(wording, unusable)
-          : wording[why];
-    return pressRefused(
-      c,
+    return c.html(
+      refusedPage(
+        wording,
+        startRefusedScreen(wording, why, {
+          test,
+          unusable,
+          note,
+          holders,
+          releasable: release !== null,
+          href: backToScope(wording, request, decision, null, plan),
+          press:
+            waitable === null
+              ? null
+              : { ...waitable, token, request, decision, plan, action: START_ROUTE },
+        }),
+      ),
       status,
-      wording.startAction,
-      line,
-      backToScope(wording, request, decision, null, plan),
-      undefined,
-      why === "startRefusedNoContinuo" ? note : null,
-      // **Which work holds the files, and its release, where the press was
-      // refused** (rondo#439, K3), so a person never needs a terminal to go on.
-      holders,
-      // **The one press, where the cause is the one rondo can act on**
-      // (D-0205 rule 2): it is this very start, sent again and kept, so the
-      // fields are the form's own and the token is this process's.
-      unusable !== "notAnswering" ||
-        waitable === null ||
-        request === null ||
-        request === "" ||
-        decision === null ||
-        decision === "" ||
-        plan === null ||
-        plan === ""
-        ? null
-        : {
-            action: `${START_ROUTE}?lang=${encodeURIComponent(wording.lang)}`,
-            label: wording.startWhenReadyAction,
-            fields: [
-              { name: "token", value: token },
-              { name: "request", value: request },
-              { name: "scope_decision", value: decision },
-              { name: "plan", value: plan },
-              { name: "iteration", value: waitable.iteration },
-              { name: "worker_provider", value: waitable.worker ?? "" },
-              { name: "when_ready", value: "1" },
-            ],
-          },
     );
-  }
-
-  /**
-   * Which sentence a continuo that would not start is said in: one per kind of
-   * unusable (D-0205 rule 1), because the next move differs by kind. The kind
-   * rondo was not told stays the sentence this screen said before.
-   */
-  function continuoLine(wording: Chrome, unusable: ContinuoUnusable | null): string {
-    switch (unusable) {
-      case "notLocated":
-        return wording.startRefusedContinuoNotLocated;
-      case "workerSettings":
-        return wording.startRefusedContinuoWorkerSettings;
-      case "notAnswering":
-        return wording.startRefusedContinuoNotAnswering;
-      case "notIdentified":
-        return wording.startRefusedContinuoNotIdentified;
-      default:
-        return wording.startRefusedNoContinuo;
-    }
   }
 
   /**
