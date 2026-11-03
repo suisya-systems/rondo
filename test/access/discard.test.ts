@@ -27,6 +27,8 @@ function dirtyRepository(): string {
   git(repo, "init", "--quiet", "--initial-branch=topic");
   git(repo, "config", "user.email", "t@example.com");
   git(repo, "config", "user.name", "t");
+  // Windows checkouts default to core.autocrlf=true, which turns what a restore writes into CRLF.
+  git(repo, "config", "core.autocrlf", "false");
   writeFileSync(join(repo, "kept.txt"), "committed\n");
   writeFileSync(join(repo, ".gitignore"), "ignored.log\n");
   git(repo, "add", ".");
@@ -109,13 +111,13 @@ test("only the listed paths are put back or removed; what the list did not name 
 test("a rename comes back whole, and a path that looks like a pattern is only itself", async () => {
   const repo = dirtyRepository();
   git(repo, "mv", "kept.txt", "moved.txt");
-  writeFileSync(join(repo, "*.txt"), "a name, not a pattern\n");
+  writeFileSync(join(repo, "[k]ept.txt"), "a name, not a pattern\n");
   const listed = await listedIn(repo);
   expect(listed.find((one) => one.path === "moved.txt")?.from).toBe("kept.txt");
   expect(await discardUncommitted(repo, listed)).toBeNull();
   expect(readFileSync(join(repo, "kept.txt"), "utf8")).toBe("committed\n");
   expect(existsSync(join(repo, "moved.txt"))).toBe(false);
-  expect(existsSync(join(repo, "*.txt"))).toBe(false);
+  expect(existsSync(join(repo, "[k]ept.txt"))).toBe(false);
   expect(status(repo)).toBe("");
 });
 
