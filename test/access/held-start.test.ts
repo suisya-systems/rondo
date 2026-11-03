@@ -340,8 +340,8 @@ async function pressRefusedForm(w: Awaited<ReturnType<typeof lines>>, body: stri
   const form = body.slice(open, body.indexOf("</form>", open));
   expect(form).toContain('action="/start?lang=en"');
   const fields: Record<string, string> = {};
-  for (const [, name, value] of form.matchAll(/name="([^"]+)" value="([^"]*)"/g)) {
-    fields[name] = value;
+  for (const field of form.matchAll(/name="([^"]+)" value="([^"]*)"/g)) {
+    fields[field[1] ?? ""] = field[2] ?? "";
   }
   expect(fields["when_ready"]).toBe("1");
   const iteration = fields["iteration"] ?? "";
