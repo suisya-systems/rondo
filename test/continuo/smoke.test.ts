@@ -33,7 +33,7 @@
  * directory is open when it is removed -- which is not a nicety on Windows,
  * where an open handle makes the removal fail outright.
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, expect, test } from "vitest";
@@ -441,9 +441,13 @@ test("D-0205 rule 1: each refused startup says which kind of unusable it is, as 
   // two have different next moves -- one is whoever installed rondo here, the
   // other is a press.
   for (const [environment, why] of [
+    // Nothing was said about where that part is.
     [{}, "notLocated"],
-    [{ [CLI_PATH_ENV]: "dist/cli.js" }, "notLocated"],
-    [{ [CLI_PATH_ENV]: "/somewhere/continuo" }, "notLocated"],
+    // Something was said, and it cannot be a build: a relative path and a path
+    // that is not the built entry point. **Not `notLocated`**, which would
+    // tell a person nobody had said where it is when somebody had.
+    [{ [CLI_PATH_ENV]: "dist/cli.js" }, "locationUnusable"],
+    [{ [CLI_PATH_ENV]: "/somewhere/continuo" }, "locationUnusable"],
     // Located, so the worker settings are read next, and a host that says
     // every lap runs on a worker it has no home for cannot run one.
     [
@@ -454,11 +458,65 @@ test("D-0205 rule 1: each refused startup says which kind of unusable it is, as 
       { [CLI_PATH_ENV]: "/nowhere/at/all/dist/cli.js", [WORKER_PROVIDER_ENV]: "codex" },
       "workerSettings",
     ],
-    // Run, and it answered with no version rondo could accept: whoever
-    // installed rondo here is the next move, so it is not `notAnswering`.
-    [{ [CLI_PATH_ENV]: "/nowhere/at/all/dist/cli.js" }, "notIdentified"],
+    // Spawned, and there is nothing at that path to run: rondo could not read
+    // the version, and learned nothing at all about whose build it is -- so
+    // not `notIdentified`, which claims a version was read and rejected.
+    [{ [CLI_PATH_ENV]: "/nowhere/at/all/dist/cli.js" }, "versionUnconfirmed"],
   ] as const) {
     const started = await startContinuo(environment);
     expect({ environment, ...started }).toMatchObject({ kind: "refused", why });
   }
+
+  // **A real build that exits without a version line is the same fact** (rule
+  // 1): it ran, it said nothing rondo could read, and the next move is whoever
+  // installed rondo here.
+  expect(await startContinuo({ [CLI_PATH_ENV]: entryPrinting("process.exit(3);") })).toMatchObject({
+    kind: "refused",
+    why: "versionUnconfirmed",
+  });
+
+  // **A real build that answers with a version rondo does not drive**: the one
+  // kind where "not the one rondo expects" is observed rather than guessed.
+  expect(
+    await startContinuo({
+      [CLI_PATH_ENV]: entryPrinting('console.log("continuo 0.0.0 (rev unknown)");'),
+    }),
+  ).toMatchObject({ kind: "refused", why: "notIdentified" });
 });
+
+test("D-0205 rule 2: a build that does not answer inside the bound is notAnswering, which is the kind a press waits out", async () => {
+  // **Driven against a real child that hangs**, and not against a stand-in:
+  // `notAnswering` is the one kind the refusal screen offers a press for, so
+  // if a timed-out `--version` arrived as any other kind the person would be
+  // sent to whoever installed rondo for something a second press fixes. The
+  // bound is this caller's, which is what lets the case be a quarter of a
+  // second rather than the minute a host waits.
+  const started = await startContinuo(
+    { [CLI_PATH_ENV]: entryPrinting("setInterval(() => {}, 1000);") },
+    250,
+  );
+  expect(started).toMatchObject({ kind: "refused", why: "notAnswering" });
+
+  // The same build under a bound it cannot answer in either, spelled as the
+  // host spells it: the kind is the timer's, never the script's content.
+  const again = await startContinuo(
+    { [CLI_PATH_ENV]: entryPrinting("setInterval(() => {}, 1000);") },
+    250,
+  );
+  expect(again).toMatchObject({ kind: "refused", why: "notAnswering" });
+});
+
+/**
+ * A scratch `dist/cli.js` whose body is the given JavaScript, so a startup
+ * refusal can be driven by a real child across the real process boundary.
+ *
+ * The name matters: `resolveCliPath` only hands an absolute path ending in
+ * `dist/cli.js` to a spawn, so a stand-in has to be one.
+ */
+function entryPrinting(body: string): string {
+  const directory = join(scratch(), "dist");
+  mkdirSync(directory, { recursive: true });
+  const entry = join(directory, "cli.js");
+  writeFileSync(entry, `${body}\n`, "utf8");
+  return entry;
+}

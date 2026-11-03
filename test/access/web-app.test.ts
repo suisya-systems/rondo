@@ -3335,12 +3335,16 @@ test("(start) D-0205: a start refused because the part that runs the work would 
       }),
     }) as unknown as ServedPorts;
   const ja = chromeFor("ja");
-  for (const [unusable, line] of [
+  /** Every kind, and the one sentence it is said in: no two share one. */
+  const kinds = [
     ["notLocated", ja.startRefusedContinuoNotLocated],
+    ["locationUnusable", ja.startRefusedContinuoLocationUnusable],
     ["workerSettings", ja.startRefusedContinuoWorkerSettings],
     ["notAnswering", ja.startRefusedContinuoNotAnswering],
+    ["versionUnconfirmed", ja.startRefusedContinuoVersionUnconfirmed],
     ["notIdentified", ja.startRefusedContinuoNotIdentified],
-  ] as const) {
+  ] as const;
+  for (const [unusable, line] of kinds) {
     const { base, stop, closed } = await served(createApp(refusing(unusable), TOKEN));
     const form = startForm();
     const refused = await send(base, "/start?lang=ja", "POST", pressHeaders(base), form);
@@ -3350,6 +3354,13 @@ test("(start) D-0205: a start refused because the part that runs the work would 
     // used to share.
     expect(body).toContain(line);
     expect(body).not.toContain(ja.startRefusedNoContinuo);
+    // **And no other kind's sentence** (D-0205 rule 1): the screen says what
+    // rondo learned, so a kind that was not this one must not be said of it.
+    for (const [other, otherLine] of kinds) {
+      if (other !== unusable) {
+        expect(body, `${unusable} said ${other}'s sentence`).not.toContain(otherLine);
+      }
+    }
     // What rondo knows stays in the maintainer's fold, where it was (D-0076
     // rule 4.2): the person reads words, not continuo's own line.
     expect(body).toContain(`>${ja.forMaintainer}</summary>`);
@@ -3376,7 +3387,7 @@ test("(start) D-0205: a start refused because the part that runs the work would 
   }
   // The press that waits reaches the port as the same start, `whenReady` set
   // and nothing else changed, and the start it is kept for is told as a wait.
-  expect(sent.map((input) => input.whenReady ?? false)).toEqual([false, false, false, false]);
+  expect(sent.map((input) => input.whenReady ?? false)).toEqual(kinds.map(() => false));
   const waiting = {
     ...draftedPorts([], []),
     scope: new ScopePort(notThis, async (input) => {
