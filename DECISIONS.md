@@ -10362,7 +10362,8 @@ lap, plus one escape reproduced directly.
 > **Liveness is pushed by the host instead of polled by the page** (`D-0209`, the owner's decision
 > of 2026-11-04). What moved under rule 2 is the cost it was priced against: composing one page now
 > takes about five seconds on the owner's host, so a five-second poll spends the host entirely on
-> documents nobody's screen needed again.
+> documents nobody's screen needed again. The falsifier of this entry's own that fired is
+> *"the five-second poll turning out to cost something measurable"*.
 > - **Rule 1 keeps its per-view decision and loses its scriptless mechanism.** Which views are live
 >   is still decided per view and never globally; the `<noscript>` five-second meta refresh goes
 >   with the poll, and a browser that runs no script is read by reloading it (`D-0209` rule 6).
@@ -32651,7 +32652,9 @@ At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
 is already on and the answer is merged in place -- and `D-0059` R3 made htmx's `every 5s` the
 mechanism. Both were priced on 2026-09-12 against a cost nobody had measured: `D-0054` says in as
 many words that it *"does not reduce the work the server does per redraw"*, and left a conditional
-request as a residual because *"nothing has yet measured the read as expensive"*.
+request as a residual because *"nothing has measured the current read as expensive"*. It also named
+*"the five-second poll turning out to cost something measurable"* as its own falsifier. That
+falsifier has now fired.
 
 It has now been measured, and it is expensive. Composing one page takes about as long as the gap
 between two polls, so the host spends itself rebuilding documents that a person's screen already
@@ -32672,8 +32675,10 @@ host, reported with the request this entry answers; the rest are read off the tr
   `node` process held about **45% of a CPU and about 1.2 GB** of memory continuously.
 - **The cadence is one constant and one attribute.** `src/access/page/document.tsx` holds
   `REFRESH_SECONDS = 5` for the `<noscript>` refresh and writes `hx-trigger="every 5s"` on
-  `#ledger`, on the views that keep themselves current and on no others. Two screens of their own
-  poll on their own waits (`src/access/screens/sign-in.tsx`, `src/access/screens/plan-start.tsx`).
+  `#ledger`, on the views that keep themselves current and on no others. Two screens poll their own
+  waits besides: `src/access/screens/sign-in.tsx` re-reads its waiting line every **3 s** and
+  `src/access/screens/plan-start.tsx` every **5 s**, each fetching the view's own address to swap
+  one element. Rule 1 below takes all of them.
 - **A poll composes the whole view to replace one element.** The request is the view's own address,
   so the server renders the whole document and the browser keeps `#ledger` and `#waiting-count`
   (`hx-select`, `hx-select-oob`). Nothing in that path asks whether anything changed.
@@ -32689,12 +32694,18 @@ host, reported with the request this entry answers; the rest are read off the tr
 
 ### Decision
 
-1. **The five-second poll goes.** No view re-reads and re-draws itself on a timer. `every 5s`
-   leaves the views that carry it, and nothing replaces it with a slower number.
-2. **The host pushes.** Where a view keeps itself current, liveness is the host telling the open
-   page that something changed, over an event stream the page holds open on one address of this
-   host. It is a read: the stream carries no write, and the page constructs no address and no
-   `POST` from anything it was sent.
+1. **Every timed re-fetch goes, and there is no exception.** Nothing the page draws re-reads and
+   re-draws itself on a timer: `every 5s` leaves the views that carry it, and the two screens that
+   poll their own waits lose theirs with it -- sign-in's `every 3s` and plan start's `every 5s`
+   (`src/access/screens/sign-in.tsx`, `src/access/screens/plan-start.tsx`) are the same clock on a
+   narrower element, and they go for the same reason. Nothing replaces any of them with a slower
+   number.
+2. **The host pushes, over server-sent events.** Where a view or a waiting screen keeps itself
+   current, liveness is the host telling the open page that something changed, over a
+   `text/event-stream` the page holds open on one address of this host. It is a read: the stream carries no write, and the page constructs no
+   address and no `POST` from anything it was sent. A screen that waits on one fact -- the sign-in
+   it cannot complete itself, the room a start needs -- is told when that fact moves, like every
+   other live thing on the page.
 3. **A notice is sent only when what that page shows has changed.** The host does not announce
    everything that happens; it announces a change to what that page is showing. A change that
    touches no open page is sent to nobody, and a page showing something else is not told about it.
@@ -32703,8 +32714,9 @@ host, reported with the request this entry answers; the rest are read off the tr
    part. The reader's scroll, focus, caret, opened folds and unsent drafts survive it exactly as
    they survive today's redraw, and `page/changed.js`'s wash stays what tells a person what moved.
 5. **While nothing changes, neither side works.** With nothing moving, the host composes no
-   document and the page runs no timer: an idle host with an open page is idle. That is the property
-   this entry is for, and the one a falsifier below measures.
+   document and the page runs no timer: an idle host with an open page is idle, whatever that page
+   is -- a live view, a thread, or one of the screens that waits on a single fact. That is the
+   property this entry is for, and the one a falsifier below measures.
 6. **With script off, the page is read by reloading it.** Every view stays a whole document the
    server renders complete -- content and presses included (`D-0054` rule 7's kept half, `D-0084`
    rule 3(a)) -- so a browser that runs no script reads everything it reads today and answers with
@@ -32745,7 +32757,9 @@ can still be read off its own text. Three things are deliberately not re-argued 
   event and costs the host nothing between reconnects.
 - **The host has to know what each open page shows.** Rule 3 is the whole value of this entry and
   the whole of its new difficulty: a comparison scoped too narrowly is a page that silently stops
-  updating, which is a failure a poll could not have.
+  updating, which is a failure a poll could not have. The two waiting screens are where that bites
+  first: each waited on a fact nothing told the host it had to watch, and rule 1 leaves them
+  nothing to ask with, so the host owes each of them a notice.
 - **Freshness stops being a number anyone can read off one constant.** "Within five seconds" is
   replaced by "when it changed", which is better when the notice arrives and unbounded when it does
   not.
@@ -32758,7 +32772,6 @@ can still be read off its own text. Three things are deliberately not re-argued 
 | Residual | Why not here | Who decides |
 |---|---|---|
 | Whether htmx is still worth its bytes once nothing polls | `D-0059` R2 and R3 priced it for a vocabulary this entry narrows; re-pricing it is that entry's to reopen | whoever re-prices `D-0059` |
-| The two screens that poll their own waits (sign-in, plan start) | They wait on one fact each and are not the page's live views; they are cheap for the same reason they are narrow | whoever measures them |
 | How the host detects a change to what a page shows | This entry decides that it must, and that nothing is sent otherwise; the mechanism is the implementing change's | the implementing change |
 | A test that fails when a page's response gets slow | Asked for as its own part of this request | that part |
 
@@ -32766,8 +32779,8 @@ can still be read off its own text. Three things are deliberately not re-argued 
 
 - **A change to what an open page shows that the page does not draw**, or draws only after the
   person reloads.
-- **Any timed re-fetch of a whole view coming back to the page**, under any cadence, or a
-  `<noscript>` refresh returning.
+- **Any timed re-fetch coming back to the page**, under any cadence and on any element -- a whole
+  view, a ledger, or a waiting screen's own line -- or a `<noscript>` refresh returning.
 - **A host composing a document, or a page doing work, while nothing a page shows has changed** --
   measurably, as an idle host with an open page whose CPU is not near zero.
 - **A notice sent to every open page regardless of what it shows**, which is rule 3 lost and the
