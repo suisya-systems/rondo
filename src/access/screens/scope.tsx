@@ -39,6 +39,7 @@ import {
   note,
   PILL,
   PRIMARY,
+  SECONDARY,
   TONE,
 } from "../page/vocabulary.js";
 import { placeSaid } from "../page-logic/list.js";
@@ -288,6 +289,181 @@ export const BOX =
   "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-body leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /**
+ * **What the work will do and what it will not, in three sentences**: the first
+ * thing this screen shows, and one of the five things it always shows.
+ *
+ * rondo's own words over the scope itself -- where it runs, that it stops and
+ * asks rather than going further, and which outward acts it is allowed. Never a
+ * paraphrase of the request: the request's own words are at the head of the
+ * screen, and the words the worker is sent are a press away ({@link
+ * promptFold}).
+ */
+function whatBlock(
+  wording: Chrome,
+  repositories: readonly string[],
+  outward: readonly ScopeOutwardAct[],
+) {
+  return (
+    <section id="scope-what" class={`${CARD} space-y-1`}>
+      <h3 class={CARD_HEADING}>{wording.scopeWhatHeading}</h3>
+      <p class="text-body leading-6">
+        {wording.scopeWhatDoes(
+          repositories.length === 0 ? wording.scopeOutwardNone : repositories.join(", "),
+        )}
+      </p>
+      <p class="text-body leading-6">{wording.scopeWhatStops}</p>
+      <p class="text-body leading-6">
+        {wording.scopeWhatNot(outward.map((act) => wording.scopeOutwardAct(act)))}
+      </p>
+    </section>
+  );
+}
+
+/**
+ * **The three caps a person reads before pressing**: the cost, the redos, and
+ * what is left to the worker. Drawn as the approved state's record is, so the
+ * screen before the press and the screen after it read the same way.
+ *
+ * The other two budgets a scope holds -- the laps and the expiry -- are in the
+ * fold with their boxes: they are derived from these two, and a screen that
+ * showed five numbers to approve was five numbers to check.
+ */
+function limitsBlock(
+  wording: Chrome,
+  costUsd: number,
+  reviewRounds: number,
+  outward: readonly ScopeOutwardAct[],
+) {
+  return (
+    <section id="scope-limits" class={`${CARD} space-y-1`}>
+      <h3 class={CARD_HEADING}>{wording.scopeLimitsHeading}</h3>
+      <dl class="grid gap-x-4 gap-y-1 text-body leading-6 sm:grid-cols-2">
+        {(
+          [
+            [wording.scopeCostLabel, money(costUsd)],
+            [wording.scopeRoundsLabel, whole(reviewRounds)],
+            [
+              wording.scopeOutwardLabel,
+              outward.length === 0
+                ? wording.scopeOutwardNone
+                : outward.map((act) => wording.scopeOutwardAct(act)).join(", "),
+            ],
+          ] as const
+        ).map(([label, value]) => (
+          <div class="flex min-w-0 items-baseline justify-between gap-3 border-b border-border/60 py-0.5">
+            <dt class="text-meta text-muted-foreground">{label}</dt>
+            <dd class="text-meta tabular-nums">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+/**
+ * **One press approves and starts; a second, quieter one only approves.**
+ *
+ * Approving and starting used to be two presses on two states of this screen: a
+ * person read the caps, approved, and then had to find the start on the state
+ * the `303` landed them on. The main press does both now, and the one that
+ * stops after the approval is the secondary -- still there, because an approval
+ * given now and spent later is a thing a person does.
+ *
+ * **Both are the same form's submits, and the main one is told apart by its own
+ * field** (`start=1`): a browser posts the name and value of the button that
+ * was pressed and of no other, so which of the two acts this is cannot be
+ * forged by a hand-written body into the *wider* one -- the wider act is the
+ * one that needs the field, and a body without it only approves.
+ *
+ * **Neither starts twice.** The scope id and the lap id are minted when the
+ * form is drawn, so a second press of either carries the same two ids: the
+ * store refuses the second scope, and `startScopedFromPage` joins a second
+ * start of one lap id to the first (D-0061 rule 2.1, rondo#244).
+ */
+function approvePresses(wording: Chrome, plainId: string, onlyPlainId: string) {
+  return (
+    <div class="flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3">
+      <button
+        type="submit"
+        name="start"
+        value="1"
+        data-row=""
+        aria-describedby={plainId}
+        data-busy={wording.scopeStartBusy}
+        class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+      >
+        {wording.scopeStartAction}
+      </button>
+      <span id={plainId} class="note sr-only">
+        {wording.scopeStartPlain}
+      </span>
+      <button
+        type="submit"
+        data-row=""
+        aria-describedby={onlyPlainId}
+        data-busy={wording.scopeBusy}
+        class={`${SECONDARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
+      >
+        {wording.scopeOnlyAction}
+      </button>
+      <span id={onlyPlainId} class="note sr-only">
+        {wording.scopeOnlyPlain}
+      </span>
+      <p
+        data-busy-note=""
+        hidden
+        role="status"
+        class="note text-meta leading-5 text-muted-foreground"
+      >
+        {wording.startBusyNote}
+      </p>
+      {/* **The one press that spends money, saying what the refusals already
+          say** (rondo#244): the join is real, and a guarantee nobody is told
+          about is paid for in suspicion. */}
+      <p class="note text-meta leading-5 text-muted-foreground">{wording.startAgainSafe}</p>
+    </div>
+  );
+}
+
+/**
+ * **The caps' own boxes and their bases, behind one press.** Editing a cap and
+ * reading where its number came from are both work a person does *sometimes*;
+ * the number itself is above, unfolded, on every visit.
+ *
+ * Folded is not dropped (D-0029 rule 2): every box and every basis is in the
+ * document, and with script off `page/app.css` draws the fold open.
+ */
+function numbersFold(wording: Chrome, inside: unknown) {
+  return (
+    <details id="scope-numbers" class="group rounded-md border border-border">
+      <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+        {chevron()}
+        {wording.scopeNumbersFold}
+      </summary>
+      <div class="space-y-4 border-t border-border p-3">{inside}</div>
+    </details>
+  );
+}
+
+/**
+ * **The whole of what the side doing the work is sent, behind one press**: the
+ * drafter's prompt for a part, the rule files a lap is pointed at, rondo's own
+ * definition of done, and the exact words of it. It used to be unfolded, which
+ * put three screens of instructions between the caps and the press.
+ */
+function promptFold(wording: Chrome, inside: unknown, id?: string) {
+  return (
+    <details class="group rounded-md border border-border" {...(id === undefined ? {} : { id })}>
+      <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+        {chevron()}
+        {wording.scopePromptFold}
+      </summary>
+      <div class="space-y-2 border-t border-border p-3">{inside}</div>
+    </details>
+  );
+}
+
+/**
  * The scope screen (rondo#233 S3, D-0066 rule 1): the form rondo drafted, or
  * the approval it recorded with the scoped start beside it.
  *
@@ -405,7 +581,18 @@ export async function scopeView(
       ? (answerFirst ?? (
           <section class="space-y-4 border-b border-border pb-4">
             {note(wording.scopeRedrafted)}
-            {await draftedForm(ports, wording, view, standing.newer, threads, token, newScopeId)}
+            {
+              await draftedForm(
+                ports,
+                wording,
+                view,
+                standing.newer,
+                threads,
+                token,
+                newScopeId,
+                newIterationId,
+              )
+            }
           </section>
         ))
       : null;
@@ -429,9 +616,18 @@ export async function scopeView(
     ) : answerFirst !== null ? (
       answerFirst
     ) : standing.kind === "drafted" ? (
-      await draftedForm(ports, wording, view, standing.drafted, threads, token, newScopeId)
+      await draftedForm(
+        ports,
+        wording,
+        view,
+        standing.drafted,
+        threads,
+        token,
+        newScopeId,
+        newIterationId,
+      )
     ) : (
-      await scopeForm(ports, wording, view, token, newScopeId, nowMs)
+      await scopeForm(ports, wording, view, token, newScopeId, newIterationId, nowMs)
     );
   return (
     <div id="scope" class="space-y-4">
@@ -504,12 +700,18 @@ function scopeIssues(wording: Chrome, threads: Threads, requestMessageId: string
 function scopeDone(wording: Chrome) {
   return (
     <section class="scope-done ml-9 space-y-1 text-body leading-5">
-      <h3 class="text-meta font-medium text-muted-foreground">{wording.scopeDoneHeading}</h3>
-      <ul class="space-y-1">
-        {wording.scopeDoneAsks.map((ask) => (
-          <li>{ask}</li>
-        ))}
-      </ul>
+      {promptFold(
+        wording,
+        <>
+          <h3 class="text-meta font-medium text-muted-foreground">{wording.scopeDoneHeading}</h3>
+          <ul class="space-y-1">
+            {wording.scopeDoneAsks.map((ask) => (
+              <li>{ask}</li>
+            ))}
+          </ul>
+        </>,
+        "scope-done-fold",
+      )}
     </section>
   );
 }
@@ -751,6 +953,8 @@ async function scopeForm(
   view: Extract<PageView, { kind: "scope" }>,
   token: string | null,
   newScopeId: MintScopeId | null,
+  /** The lap the combined press starts, minted at render as the scope id is. */
+  newIterationId: MintIterationId | null,
   nowMs: number,
 ): Promise<unknown> {
   const lead = <p class="text-body leading-6">{wording.scopeLead}</p>;
@@ -788,7 +992,7 @@ async function scopeForm(
       new Map([[chosen.agentTypeDigest, chosen.agentTypeInput]]),
     ),
   };
-  if (token === null || newScopeId === null) {
+  if (token === null || newScopeId === null || newIterationId === null) {
     return (
       <>
         {lead}
@@ -820,33 +1024,12 @@ async function scopeForm(
         {wording.scopeMaybeApproved}
       </p>
       {planChoice(wording, view, offered, chosen.planDigest)}
-      {/*
-       * **Explicit links, and not a `method="get"` form** (rondo#233 S3). This
-       * view carries no htmx to fight; a `get` form would need every other
-       * query as a hidden input to survive a submit, which is a second home for
-       * state the address already holds (D-0054); and a link works identically
-       * with script off, with no second submit button beside the one that
-       * writes. The residual -- choosing a number redraws the boxes from the
-       * plan -- is said on the screen rather than discovered.
-       */}
-      <p id="rounds" class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-body leading-6">
-        <span class="font-medium">{wording.scopeRoundsAsk}</span>
-        {REVIEW_ROUND_CHOICES.map((n) =>
-          n === (rounds ?? DEFAULT_REVIEW_ROUNDS) ? (
-            <span aria-current="page" class={`${PILL} font-sans ${TONE.ok}`}>
-              {String(n)}
-            </span>
-          ) : (
-            <a
-              href={viewHref({ ...view, rounds: n }, wording.lang)}
-              class="rounded-md px-1.5 text-link underline-offset-2 hover:underline"
-            >
-              {String(n)}
-            </a>
-          ),
-        )}
-        <span class="note w-full text-meta leading-5 text-faint">{wording.scopeRoundsRedraw}</span>
-      </p>
+      {whatBlock(
+        wording,
+        drafted.workspaces.map((workspace) => workspace.repository),
+        inherited,
+      )}
+      {limitsBlock(wording, budgets.cost_usd.value, budgets.review_rounds.value, inherited)}
       <form
         id="scope-form"
         method="post"
@@ -873,40 +1056,54 @@ async function scopeForm(
          */}
         <input type="hidden" name="plan_digest" value={drafted.planDigest} />
         <input type="hidden" name="agent_type" value={drafted.agentTypeDigest} />
-        <div class="flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3">
-          <p class="note text-meta leading-5 text-muted-foreground">{wording.scopePressNote}</p>
-          <button
-            type="submit"
-            data-row=""
-            aria-describedby="scope-plain"
-            data-busy={wording.scopeBusy}
-            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
-          >
-            {wording.scopeAction}
-          </button>
-          <span id="scope-plain" class="note sr-only">
-            {wording.scopePlain}
-          </span>
-        </div>
-        {sampleCaveat(wording, budgets.cost_reserve_usd.bases)}
-        {budgetBoxes(wording, budgets, true)}
-        {defaultsSection(wording, "major", inherited, inherited.length > 0)}
-        {/* D-0066's first gate answer, on the screen and not only in a terminal. */}
-        <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
-        {/* **The same press again under the last box** (D-0106, the owner's answer
-            to point 2): a person who changed a number at the foot presses here
-            rather than scrolling back up; the goal page does the same. */}
-        <div class="flex flex-col">
-          <button
-            type="submit"
-            data-row=""
-            aria-describedby="scope-plain"
-            data-busy={wording.scopeBusy}
-            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
-          >
-            {wording.scopeAction}
-          </button>
-        </div>
+        {/* **The lap the combined press starts, minted at render** (D-0023, and
+            a double press is one lap): carried by the approve-only press too and
+            simply unused by it, so the two presses post one form. */}
+        <input type="hidden" name="iteration" value={newIterationId()} />
+        {approvePresses(wording, "scope-plain", "scope-only-plain")}
+        {numbersFold(
+          wording,
+          <>
+            {/*
+             * **Explicit links, and not a `method="get"` form** (rondo#233 S3).
+             * This view carries no htmx to fight; a `get` form would need every
+             * other query as a hidden input to survive a submit, which is a
+             * second home for state the address already holds (D-0054); and a
+             * link works identically with script off. The residual -- choosing a
+             * number redraws the boxes from the plan -- is said on the screen
+             * rather than discovered. The number itself is above the fold, in
+             * {@link limitsBlock}; this is where it is changed.
+             */}
+            <p
+              id="rounds"
+              class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-body leading-6"
+            >
+              <span class="font-medium">{wording.scopeRoundsAsk}</span>
+              {REVIEW_ROUND_CHOICES.map((n) =>
+                n === (rounds ?? DEFAULT_REVIEW_ROUNDS) ? (
+                  <span aria-current="page" class={`${PILL} font-sans ${TONE.ok}`}>
+                    {String(n)}
+                  </span>
+                ) : (
+                  <a
+                    href={viewHref({ ...view, rounds: n }, wording.lang)}
+                    class="rounded-md px-1.5 text-link underline-offset-2 hover:underline"
+                  >
+                    {String(n)}
+                  </a>
+                ),
+              )}
+              <span class="note w-full text-meta leading-5 text-faint">
+                {wording.scopeRoundsRedraw}
+              </span>
+            </p>
+            {budgetBoxes(wording, budgets, true)}
+            {defaultsSection(wording, "major", inherited, inherited.length > 0)}
+            {/* Which worker runs the work (rondo#462): a value this press
+                carries, so it is changed where the other values are. */}
+            {workerChoice(wording, ports.workers)}
+          </>,
+        )}
       </form>
       {/* The plan card is what the form runs on, and long: under the form
           and its press rather than above them (D-0106, rondo#408). */}
@@ -921,7 +1118,7 @@ async function scopeForm(
             {workspace.repository}
           </p>
         ))}
-        {planDone(wording, chosen.document)}
+        {promptFold(wording, planDone(wording, chosen.document))}
         {recordedFold(wording, [
           ...drafted.workspaces.map((workspace) =>
             wording.scopeWorkspace(workspace.repository, workspace.workspace_root),
@@ -1256,10 +1453,12 @@ async function draftedForm(
   threads: Threads,
   token: string | null,
   newScopeId: MintScopeId | null,
+  /** The lap the combined press starts, minted at render as the scope id is. */
+  newIterationId: MintIterationId | null,
 ): Promise<unknown> {
   const lead = <p class="text-body leading-6">{wording.scopeDraftedLead}</p>;
   const plans = await draftedPlansList(ports, wording, drafted, threads, view.messageId);
-  if (token === null || newScopeId === null) {
+  if (token === null || newScopeId === null || newIterationId === null) {
     return (
       <>
         {lead}
@@ -1307,9 +1506,152 @@ async function draftedForm(
     field: "laps" | "review_rounds" | "cost_usd" | "expires_at_ms",
     shown: string,
   ) => cite(field === "expires_at_ms" ? "expires_at" : field, wording.scopeNarrowed(shown));
+  const boxes = (
+    <>
+      <div class={`${CARD} grid gap-4 sm:grid-cols-2`}>
+        <div class="min-w-0 space-y-1">
+          {budgetField(
+            wording,
+            "laps",
+            wording.scopeLapsLabel,
+            <input
+              type="number"
+              name="laps"
+              id="laps"
+              min="0"
+              step="1"
+              value={whole(payload.budgets.laps)}
+              class={BOX}
+            />,
+            computed.laps,
+          )}
+          {narrowed("laps", whole(computed.laps.value))}
+        </div>
+        <div class="min-w-0 space-y-1">
+          {budgetField(
+            wording,
+            "review_rounds",
+            wording.scopeRoundsLabel,
+            <input
+              type="number"
+              name="review_rounds"
+              id="review_rounds"
+              min="0"
+              step="1"
+              value={whole(payload.budgets.review_rounds)}
+              class={BOX}
+            />,
+            computed.review_rounds,
+          )}
+          {narrowed("review_rounds", whole(computed.review_rounds.value))}
+        </div>
+        <div class="min-w-0 space-y-1">
+          {budgetField(
+            wording,
+            "cost_usd",
+            wording.scopeCostLabel,
+            <input
+              type="number"
+              name="cost_usd"
+              id="cost_usd"
+              min="0"
+              step="0.01"
+              value={money(payload.budgets.cost_usd)}
+              class={BOX}
+            />,
+            computed.cost_usd,
+            payload.budgets.cost_usd,
+          )}
+          {narrowed("cost_usd", money(computed.cost_usd.value))}
+        </div>
+        {budgetField(
+          wording,
+          "cost_reserve_usd",
+          wording.scopeReserveLabel,
+          <input
+            type="number"
+            name="cost_reserve_usd"
+            id="cost_reserve_usd"
+            min="0"
+            step="0.01"
+            value={money(payload.budgets.cost_reserve_usd)}
+            class={BOX}
+          />,
+          computed.cost_reserve_usd,
+          payload.budgets.cost_reserve_usd,
+        )}
+        <div class="min-w-0 space-y-1">
+          {budgetField(
+            wording,
+            "expires_at_ms",
+            wording.scopeExpiresLabel,
+            <input
+              type="datetime-local"
+              name="expires_at_ms"
+              id="expires_at_ms"
+              value={localTime(payload.budgets.expires_at_ms)}
+              class={BOX}
+            />,
+            computed.expires_at_ms,
+            payload.budgets.expires_at_ms,
+          )}
+          {narrowed("expires_at_ms", localTime(computed.expires_at_ms.value))}
+        </div>
+      </div>
+      <section class={`${CARD} space-y-3`}>
+        <h3 class={CARD_HEADING}>{wording.scopeDefaultsHeading}</h3>
+        <label class="flex flex-col gap-1">
+          <span class="text-meta leading-5 font-medium text-muted-foreground">
+            {wording.scopeSeverityLabel}
+          </span>
+          <select name="severity_threshold" class={BOX}>
+            {FINDING_SEVERITIES.map((severity) => (
+              <option
+                value={severity}
+                {...(severity === payload.severity_threshold ? { selected: true } : {})}
+              >
+                {wording.severityWord(severity)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {cite("severity_threshold", wording.scopeNarrowedStricter)}
+        <fieldset class="space-y-1">
+          <legend class="text-meta leading-5 font-medium text-muted-foreground">
+            {wording.scopeOutwardLabel}
+          </legend>
+          {SCOPE_OUTWARD_ACTS.map((act) => (
+            <label class="flex items-center gap-2 text-body leading-6">
+              <input
+                type="checkbox"
+                name="outward_acts"
+                value={act}
+                class="size-3.5"
+                {...(outward.includes(act) ? { checked: true } : {})}
+              />
+              <span>{wording.scopeOutwardAct(act)}</span>
+            </label>
+          ))}
+          {inherited.length > 0 ? outwardFromGoal(wording) : null}
+        </fieldset>
+        <p class="text-body leading-6">
+          {payload.irreversible_additions.length === 0
+            ? wording.scopeIrreversibleNone
+            : payload.irreversible_additions.join(", ")}
+        </p>
+        {cite("irreversible_additions", wording.scopeNarrowedAdded)}
+      </section>
+    </>
+  );
   return (
     <>
       {lead}
+      {whatBlock(
+        wording,
+        payload.workspaces.map((workspace) => workspace.repository),
+        outward,
+      )}
+      {limitsBlock(wording, payload.budgets.cost_usd, payload.budgets.review_rounds, outward)}
       <form
         id="scope-draft-form"
         method="post"
@@ -1324,172 +1666,14 @@ async function draftedForm(
         <input type="hidden" name="draft_digest" value={drafted.scope.scopeDigest} />
         {/* Minted at draw for the person's version, should they change a value. */}
         <input type="hidden" name="scope_id" value={newScopeId()} />
-        <div class="flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3">
-          <p class="note text-meta leading-5 text-muted-foreground">
-            {wording.scopeDraftedPressNote}
-          </p>
-          <button
-            type="submit"
-            data-row=""
-            aria-describedby="scope-draft-plain"
-            data-busy={wording.scopeBusy}
-            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
-          >
-            {wording.scopeDraftedAction}
-          </button>
-          <span id="scope-draft-plain" class="note sr-only">
-            {wording.scopeDraftedPlain}
-          </span>
-        </div>
-        {sampleCaveat(wording, computed.cost_reserve_usd.bases)}
-        <div class={`${CARD} grid gap-4 sm:grid-cols-2`}>
-          <div class="min-w-0 space-y-1">
-            {budgetField(
-              wording,
-              "laps",
-              wording.scopeLapsLabel,
-              <input
-                type="number"
-                name="laps"
-                id="laps"
-                min="0"
-                step="1"
-                value={whole(payload.budgets.laps)}
-                class={BOX}
-              />,
-              computed.laps,
-            )}
-            {narrowed("laps", whole(computed.laps.value))}
-          </div>
-          <div class="min-w-0 space-y-1">
-            {budgetField(
-              wording,
-              "review_rounds",
-              wording.scopeRoundsLabel,
-              <input
-                type="number"
-                name="review_rounds"
-                id="review_rounds"
-                min="0"
-                step="1"
-                value={whole(payload.budgets.review_rounds)}
-                class={BOX}
-              />,
-              computed.review_rounds,
-            )}
-            {narrowed("review_rounds", whole(computed.review_rounds.value))}
-          </div>
-          <div class="min-w-0 space-y-1">
-            {budgetField(
-              wording,
-              "cost_usd",
-              wording.scopeCostLabel,
-              <input
-                type="number"
-                name="cost_usd"
-                id="cost_usd"
-                min="0"
-                step="0.01"
-                value={money(payload.budgets.cost_usd)}
-                class={BOX}
-              />,
-              computed.cost_usd,
-              payload.budgets.cost_usd,
-            )}
-            {narrowed("cost_usd", money(computed.cost_usd.value))}
-          </div>
-          {budgetField(
-            wording,
-            "cost_reserve_usd",
-            wording.scopeReserveLabel,
-            <input
-              type="number"
-              name="cost_reserve_usd"
-              id="cost_reserve_usd"
-              min="0"
-              step="0.01"
-              value={money(payload.budgets.cost_reserve_usd)}
-              class={BOX}
-            />,
-            computed.cost_reserve_usd,
-            payload.budgets.cost_reserve_usd,
-          )}
-          <div class="min-w-0 space-y-1">
-            {budgetField(
-              wording,
-              "expires_at_ms",
-              wording.scopeExpiresLabel,
-              <input
-                type="datetime-local"
-                name="expires_at_ms"
-                id="expires_at_ms"
-                value={localTime(payload.budgets.expires_at_ms)}
-                class={BOX}
-              />,
-              computed.expires_at_ms,
-              payload.budgets.expires_at_ms,
-            )}
-            {narrowed("expires_at_ms", localTime(computed.expires_at_ms.value))}
-          </div>
-        </div>
-        <section class={`${CARD} space-y-3`}>
-          <h3 class={CARD_HEADING}>{wording.scopeDefaultsHeading}</h3>
-          <label class="flex flex-col gap-1">
-            <span class="text-meta leading-5 font-medium text-muted-foreground">
-              {wording.scopeSeverityLabel}
-            </span>
-            <select name="severity_threshold" class={BOX}>
-              {FINDING_SEVERITIES.map((severity) => (
-                <option
-                  value={severity}
-                  {...(severity === payload.severity_threshold ? { selected: true } : {})}
-                >
-                  {wording.severityWord(severity)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {cite("severity_threshold", wording.scopeNarrowedStricter)}
-          <fieldset class="space-y-1">
-            <legend class="text-meta leading-5 font-medium text-muted-foreground">
-              {wording.scopeOutwardLabel}
-            </legend>
-            {SCOPE_OUTWARD_ACTS.map((act) => (
-              <label class="flex items-center gap-2 text-body leading-6">
-                <input
-                  type="checkbox"
-                  name="outward_acts"
-                  value={act}
-                  class="size-3.5"
-                  {...(outward.includes(act) ? { checked: true } : {})}
-                />
-                <span>{wording.scopeOutwardAct(act)}</span>
-              </label>
-            ))}
-            {inherited.length > 0 ? outwardFromGoal(wording) : null}
-          </fieldset>
-          <p class="text-body leading-6">
-            {payload.irreversible_additions.length === 0
-              ? wording.scopeIrreversibleNone
-              : payload.irreversible_additions.join(", ")}
-          </p>
-          {cite("irreversible_additions", wording.scopeNarrowedAdded)}
-        </section>
-        <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
-        {/* **The same press again under the last box** (D-0106, the owner's answer
-            to point 2): a person who changed a number at the foot presses here
-            rather than scrolling back up; the goal page does the same. */}
-        <div class="flex flex-col">
-          <button
-            type="submit"
-            data-row=""
-            aria-describedby="scope-draft-plain"
-            data-busy={wording.scopeBusy}
-            class={`${PRIMARY} h-10 w-full justify-center px-6 text-sm sm:h-9 sm:w-auto sm:self-start`}
-          >
-            {wording.scopeDraftedAction}
-          </button>
-        </div>
+        {/* **The split's first part, which the combined press starts** (D-0098
+            rule 1): the parts after it are ordered behind it and start by
+            themselves, so one press is the whole split under way. The proposal
+            is the draft's own and is re-read in the port, never trusted here. */}
+        <input type="hidden" name="proposal" value={drafted.proposalId} />
+        <input type="hidden" name="iteration" value={newIterationId()} />
+        {approvePresses(wording, "scope-draft-plain", "scope-draft-only-plain")}
+        {numbersFold(wording, boxes)}
       </form>
       {/* The drafted plans under the form and its press (D-0106, rondo#408):
           the lead above still says the work is below. */}
@@ -1524,14 +1708,20 @@ async function draftedPlansList(
             ? wording.scopeDraftedTemplateGone
             : plan.repository}
         </p>
-        {/* The drafter's words for the worker, as it wrote them: their
-            language is the template's, not the page's (D-0055 rule 8). */}
-        <p
-          class="rounded-md border border-border bg-muted/40 px-3 py-2 text-body leading-6 wrap-anywhere whitespace-pre-wrap"
-          lang=""
-        >
-          {plan.split.prompt}
-        </p>
+        {/* **The drafter's words for the worker, behind one press**: the whole
+            of what the side doing the work is sent, as it wrote them -- their
+            language is the template's, not the page's (D-0055 rule 8). Unfolded
+            it put the instructions between the caps and the press. */}
+        {promptFold(
+          wording,
+          <p
+            class="rounded-md border border-border bg-muted/40 px-3 py-2 text-body leading-6 wrap-anywhere whitespace-pre-wrap"
+            lang=""
+          >
+            {plan.split.prompt}
+          </p>,
+          `plan-prompt-${String(plan.index)}`,
+        )}
         {tierBlock(
           wording,
           plan,
@@ -1539,7 +1729,9 @@ async function draftedPlansList(
           line?.kind === "read" ? line.line.laps : [],
           (basis) => basisChip(wording, basis, threads, null, ports.actorId),
         )}
-        {plan.templatePlan === null ? null : planDone(wording, plan.templatePlan)}
+        {plan.templatePlan === null
+          ? null
+          : promptFold(wording, planDone(wording, plan.templatePlan))}
         {recordedFold(wording, [
           ...(plan.repository === null || plan.workspaceRoot === null
             ? []
@@ -1804,7 +1996,7 @@ async function scopeApproved(
           <p class="text-body leading-5 wrap-anywhere text-muted-foreground">
             {`${wording.scopePlanAsk}: ${planLine(wording, runsOn, allowed)}`}
           </p>
-          {planDone(wording, runsOn.document)}
+          {promptFold(wording, planDone(wording, runsOn.document))}
           {workerChoice(wording, ports.workers)}
           {/* Minted at render, as the scope id is, and for its reason: rondo
               names the lap (D-0023) and a double press is one lap. */}
@@ -1889,7 +2081,6 @@ async function scopeApproved(
           {await predecessorLine(ports, wording, scope)}
         </p>
       )}
-      <p class="note text-meta leading-5 text-muted-foreground">{wording.scopeCostCaveat}</p>
     </>
   );
 }

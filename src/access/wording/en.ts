@@ -851,6 +851,26 @@ explanation you pressed on and then answers the gate.`,
     "One press records this scope and approves it, under your name. Nothing is spent by " +
     "approving it: every act is tested against it at the moment it is taken.",
   scopePlain: "Records this scope and approves it",
+  scopeWhatHeading: "What this does, and what it does not",
+  scopeWhatDoes: (repository) =>
+    `rondo works on your request in ${repository}, within the caps below, and brings the work ` +
+    "back to you to read.",
+  scopeWhatStops:
+    "It stops by itself at the cost cap, the last redo or the expiry, and asks you rather than " +
+    "going further.",
+  scopeWhatNot: (acts) =>
+    acts.length === 0
+      ? "Outward it does nothing by itself: it pushes no branch, opens no pull request and " +
+        "merges nothing until you press for it."
+      : `Outward it may only ${acts.join(", ")}; anything else waits for your press.`,
+  scopeLimitsHeading: "The caps this approval sets",
+  scopeStartAction: "Approve and start",
+  scopeStartPlain: "Approves this scope and starts the work, on this one press",
+  scopeStartBusy: "Approving and starting...",
+  scopeOnlyAction: "Approve only, start later",
+  scopeOnlyPlain: "Records this approval and starts nothing yet",
+  scopeNumbersFold: "Change the caps, and see where each number came from",
+  scopePromptFold: "The whole of what the side doing the work is sent",
   scopeApproved: (since) => `Approved ${since} ago`,
   scopeDigest: (digest) => `digest ${digest}`,
   scopeNotThisRequest: "That approval is not this request's, so nothing of it is shown here.",
