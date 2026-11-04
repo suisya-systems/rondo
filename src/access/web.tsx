@@ -147,7 +147,13 @@ import { basisWord, note, publishedReport, whoWrote } from "./page/vocabulary.js
 import { folds } from "./page-logic/event-fold.js";
 import { governanceOf } from "./page-logic/governance.js";
 import { repositoryOf } from "./page-logic/list.js";
-import { approvalOf, type PageModel, pageModel, triageModel } from "./page-logic/model.js";
+import {
+  approvalOf,
+  type PageModel,
+  pageModel,
+  readOncePerDraw,
+  triageModel,
+} from "./page-logic/model.js";
 import { holdsLap, partCounts, takeInFrom } from "./page-logic/parts.js";
 import { askOverLine, resultOf } from "./page-logic/result.js";
 import { isLive, type PageView, viewHref } from "./page-logic/routes.js";
@@ -1526,7 +1532,7 @@ async function threadSideOf(
  * from, in the order the reads and the minted ids have always been taken.
  */
 export async function operatorPage(
-  ports: WebPorts,
+  given: WebPorts,
   token: string | null = null,
   view: PageView = { kind: "summary" },
   // **The set this request resolved to, and not a property of the process**
@@ -1552,6 +1558,15 @@ export async function operatorPage(
   newScopeId: MintScopeId | null = null,
   newIterationId: MintIterationId | null = null,
 ): Promise<string> {
+  /**
+   * **One draw, one reading of the rows** ({@link readOncePerDraw}), wrapped
+   * here because a draw is what this function is: the readers below ask the
+   * store the same questions many times over -- the whole ended ledger once
+   * per request's split, a request's scopes three times -- and the wrapper
+   * goes out of reach with the page it drew, so the only thing it asserts is
+   * that one page is drawn off one reading. Nothing here writes (D-0041).
+   */
+  const ports = readOncePerDraw(given);
   const model = await pageModel(ports, token, view, wording, newId);
   const {
     nowMs,

@@ -129,6 +129,161 @@ function lookedFromPage(ports: WebPorts): WebPorts {
   return { ...ports, record };
 }
 
+/**
+ * The reads the page is handed, as the names {@link WebPorts} picks.
+ *
+ * **Typed as keys of the ports and not as strings**, which is what keeps
+ * {@link readOncePerDraw} from ever holding an answer it must not hold: the
+ * reading half of the two ports is the whole of what this interface grants the
+ * page (D-0041), so a name that is not one of these reads -- a write, or a read
+ * the page is not given -- does not compile.
+ */
+const STORE_READS: readonly (keyof WebPorts["store"])[] = [
+  "read",
+  "readLive",
+  "readingsFor",
+  "occupancy",
+  "terminalIterations",
+  "verificationClaimsFor",
+  "laneLedger",
+  "heldWidenings",
+  "landingOf",
+  "closingLapOf",
+  "heldStarts",
+  "laneLine",
+];
+const RECORD_READS: readonly (keyof WebPorts["record"])[] = [
+  "lastView",
+  "lastActed",
+  "openProposals",
+  "attentionBreakdown",
+  "unconsumedDecisions",
+  "changedSince",
+  "admissionRefusals",
+  "threadMessages",
+  "heldAgentType",
+  "heldAgentTypeDigests",
+  "setupPlans",
+  "standingPolicies",
+  "scopesFor",
+  "readProposal",
+  "openAsksIn",
+  "lineageOf",
+  "withheldFor",
+  "readScope",
+  "readScopeDecision",
+  "scopeDecisionOf",
+  "scopeSpent",
+  "scopeSupersededByApproved",
+  "requestOpener",
+  "scopeDecisionAdmitting",
+  "scopeTip",
+  "reviseDraftFor",
+  "goals",
+  "latestTriage",
+  "approvalsInForce",
+  "flowStops",
+  "flowAsks",
+  "triageDeclines",
+  "translations",
+];
+
+/**
+ * One port, answering each of the named reads once for as long as this wrapper
+ * lives.
+ *
+ * **Over the port rather than a copy of it**, for the reason
+ * {@link lookedFromPage} is: a record may keep its methods on a prototype,
+ * which a spread would leave behind. Each override calls the port itself, so a
+ * read this wrapper does not name reaches the store exactly as before.
+ *
+ * **Only arguments a key can be composed from.** An argument that is not a
+ * primitive is handed straight through to the port: two objects that read the
+ * same are not the same answer to ask for, and guessing which is which is how
+ * a cache starts answering a question nobody asked.
+ */
+/** Whether an argument spells itself in a key: a value `JSON.stringify` keeps whole. */
+function isKeyable(argument: unknown): boolean {
+  return (
+    // `undefined` is left out because `JSON.stringify` writes it as `null`:
+    // one key for two arguments is one answer for two questions.
+    argument === null ||
+    typeof argument === "string" ||
+    typeof argument === "number" ||
+    typeof argument === "boolean"
+  );
+}
+
+function answeredOnce<Port extends object>(
+  port: Port,
+  reads: readonly (keyof Port & string)[],
+): Port {
+  const answers = new Map<string, unknown>();
+  const over = Object.create(port) as Record<string, unknown>;
+  for (const name of reads) {
+    const method = (port as Record<string, unknown>)[name];
+    if (typeof method !== "function") {
+      continue;
+    }
+    const read = method as (...args: unknown[]) => unknown;
+    over[name] = (...args: unknown[]): unknown => {
+      if (!args.every(isKeyable)) {
+        return read.apply(port, args);
+      }
+      const asked = `${name}(${JSON.stringify(args)})`;
+      if (answers.has(asked)) {
+        return answers.get(asked);
+      }
+      const answer = read.apply(port, args);
+      answers.set(asked, answer);
+      return answer;
+    };
+  }
+  return over as Port;
+}
+
+/**
+ * **The page's reads, answered once for the page they are drawing.**
+ *
+ * One draw asked the store the same questions many times over: the rows every
+ * ended lap is read from were read once for the list and then again for each
+ * request's split, because the readers that answer *has this plan already been
+ * started* and *where does this scope stand* take the whole ledger and are
+ * asked per request (`startedFrom` in `../drafted-start.ts`,
+ * `scopeBudgetsFromStore` in `../scope.ts`), and one request's scopes were read
+ * three times.
+ *
+ * **Measured before it was changed**, on the dogfood store of 2026-11-04 -- 70
+ * iteration rows, 68 of them ended, 415 messages, 269 proposals: one draw of
+ * the summary made 485 port calls, 38 of them `terminalIterations`, which
+ * decodes and re-digests every ended lap's plan at about 90 ms a call. That is
+ * 3.8 to 4.7 s of page over http, almost all of it the same rows read 38 times;
+ * twelve draws cost 48.9 s of cpu and reached 629 MB resident. Through this
+ * wrapper the same page over the same store is 0.25 to 0.33 s, and twelve draws
+ * cost 3.5 s of cpu at 273 MB. The page's bytes are the same either way, to the
+ * character, but for the id minted into the composer -- which differs on every
+ * draw whatever reads it.
+ *
+ * **This is a wrapper and not a store cache, and the difference is its life.**
+ * It is built for one draw and goes out of reach with the page it drew, so no
+ * draw is ever answered out of an older draw's reading: what it asserts is only
+ * that one page is drawn off one reading of the rows, which is what a page
+ * drawn from several reads of the same rows was already claiming to be.
+ * Nothing on this surface writes (D-0041), so there is no write of this
+ * process's own that a held answer could fall behind.
+ *
+ * `test/access/page-logic/read-once.test.ts` holds its contract down; that the
+ * page is unchanged is held down by every page suite beside it, since they all
+ * draw through `operatorPage` (`../web.tsx`) and so through this.
+ */
+export function readOncePerDraw(ports: WebPorts): WebPorts {
+  return {
+    ...ports,
+    store: answeredOnce(ports.store, STORE_READS),
+    record: answeredOnce(ports.record, RECORD_READS),
+  };
+}
+
 /** What every view reads, once per draw (rondo#341). */
 export interface PageModel {
   readonly nowMs: number;
