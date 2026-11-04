@@ -156,7 +156,11 @@ const frame = (event: string, data: string): string => `event: ${event}\ndata: $
  *
  * A bound rather than a loop that waits for quiet: a host being written to
  * without pause must still answer this reader, and an unsettled draw is read
- * as *possibly behind*, which costs one redraw and never a stale screen.
+ * as *possibly behind*, which costs one redraw and never a stale screen. What
+ * reaching it means is in {@link PageEvents.shown}'s caller: the bytes are
+ * kept as this reader's standing draw and **one more look is taken straight
+ * away**, so the store is given the chance to hold still and the version it
+ * holds still at is the one the last word is about.
  */
 const PASSES = 3;
 
@@ -195,7 +199,10 @@ const PASSES = 3;
  * whose page was current as the stream opened could have been left holding a
  * screen nothing would ever ring about again. And the mark it is compared with
  * is the draw the page *finished*, so a reader that was told to redraw and did
- * not manage it is told again.
+ * not manage it is told again. A store that will not hold still for
+ * {@link PASSES} draws ends that look on bytes of no one moment: the reader
+ * hears about them, and the host looks once more of its own accord rather than
+ * leaving them as the version every later comparison is against.
  *
  * `retry` is still named, so a browser that reconnects a dropped stream of its
  * own accord waits rather than hammers; `page/live.js` reopens on the same
@@ -246,15 +253,22 @@ export function pageEvents({ token, changes, shown, held, signal }: PageEvents):
        * two reads agree is what makes the pair honest -- and where the store
        * will not hold still for {@link PASSES} of them, the later mark is
        * returned, which is a mark no page can be holding and so is read as one
-       * redraw.
+       * redraw, with `still` false to say the pair is of no one moment.
        */
-      const settled = async (): Promise<{ readonly at: string; readonly now: string }> => {
+      const settled = async (): Promise<{
+        readonly at: string;
+        readonly now: string;
+        readonly still: boolean;
+      }> => {
         let at = changes.mark();
         for (let pass = 1; ; pass += 1) {
           const now = await shown();
           const after = changes.mark();
-          if (after === at || pass === PASSES) {
-            return { at: after, now };
+          if (after === at) {
+            return { at: after, now, still: true };
+          }
+          if (pass === PASSES) {
+            return { at: after, now, still: false };
           }
           at = after;
         }
@@ -266,7 +280,7 @@ export function pageEvents({ token, changes, shown, held, signal }: PageEvents):
         }
         drawing = true;
         try {
-          const { at, now } = await settled();
+          const { at, now, still } = await settled();
           if (!open) {
             return;
           }
@@ -279,6 +293,20 @@ export function pageEvents({ token, changes, shown, held, signal }: PageEvents):
             controller.enqueue(bytes.encode(frame("change", "1")));
           }
           standing = now;
+          // **A draw that never settled is not where this reader is left.**
+          // Its bytes are of no one moment, so taking them as the standing
+          // draw and waiting for the next ring would compare the version
+          // after it against a version the host never held -- and the ring
+          // that would correct it is the bell's to send, which this module
+          // does not get to assume: the real bell counts a write the moment
+          // it is seen and rings a settle later, so a mark can move here with
+          // no listener called yet. One more look is taken instead, until a
+          // draw does settle; while the store holds still that is one extra
+          // draw, and while it does not there is a change to tell about
+          // anyway.
+          if (!still) {
+            again = true;
+          }
         } catch {
           // **A draw that failed is not a change.** The page the reader has is
           // still the page the host last drew, and the next ring tries again.

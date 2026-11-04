@@ -51,6 +51,7 @@ export const fresh = () => {
  */
 export function handBell(): PageChanges & {
   readonly ring: () => void;
+  readonly wrote: () => void;
   readonly holding: () => number;
 } {
   const listeners = new Set<() => void>();
@@ -68,6 +69,17 @@ export function handBell(): PageChanges & {
       for (const listener of listeners) {
         listener();
       }
+    },
+    /**
+     * A write this bell has seen, whose ring has not come yet.
+     *
+     * The real bell counts a write the moment the operating system reports it
+     * and rings a settle later (`SETTLE_MS`), so the mark moves while no
+     * listener has been called -- which is the half of it a host must not
+     * depend on a ring to recover from.
+     */
+    wrote: () => {
+      seen += 1;
     },
     holding: () => listeners.size,
   };

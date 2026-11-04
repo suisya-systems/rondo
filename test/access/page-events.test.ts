@@ -168,6 +168,71 @@ test("a write during the open draw is one change, not a page left behind (rondo#
   expect(await said()).toBe(true);
 });
 
+test("a draw the store would not hold still for is looked at again, not kept (rondo#742)", async () => {
+  // **The bound on one look, and what reaching it must not cost.** A draw is
+  // taken again where the mark moved under it, up to three times, so a host
+  // being written to without pause still answers this reader -- and the draw
+  // that bound ends on is of no one moment: the bytes are the ones this draw
+  // read, the store is already past them. Keeping those bytes as the version
+  // every later comparison is against, and then waiting, is how a reader ends
+  // up holding a screen the host would not draw: the version after them is
+  // compared against something the host never held, and the ring that would
+  // have corrected it is not this module's to assume. The real bell counts a
+  // write the moment the operating system reports it and rings a settle
+  // afterwards, so the mark here moves with no listener called at all.
+  const bell = handBell();
+  // How many of this reader's draws the store moves under: the host's own
+  // bound, so the look it is spent on is the one that does not settle.
+  const UNSETTLED = 3;
+  let drawn = "the page";
+  let writes = 0;
+  let draws = 0;
+  const stream = pageEvents({
+    token: null,
+    changes: bell,
+    shown: async () => {
+      draws += 1;
+      // The bytes this draw is of, read before the write that lands in it.
+      const bytes = drawn;
+      if (writes < UNSETTLED) {
+        writes += 1;
+        drawn = `the page, written to ${String(writes)} times`;
+        bell.wrote();
+      }
+      return await Promise.resolve(bytes);
+    },
+    // Current as the stream opened: the writes all land inside the draws.
+    held: bell.mark(),
+    signal: null,
+  });
+  const said = listening((stream.body as ReadableStream<Uint8Array>).getReader());
+  expect(await said()).toBe("retry: 5000\n\n");
+
+  // **The unsettled look is a word**, because the mark it ended at is not the
+  // one this page says it is holding: this reader is behind, and the host
+  // cannot say by how much.
+  expect(await said()).toBe(CHANGE_FRAME);
+  // **And the version the store settles at is the word after it.** The host
+  // looked again without being rung, found a draw whose mark held still, and
+  // its bytes are not the ones the bound left behind -- so the last thing this
+  // reader is told about is the page the host would actually draw now.
+  expect(await said()).toBe(CHANGE_FRAME);
+  expect(draws).toBe(UNSETTLED + 1);
+  expect(writes).toBe(UNSETTLED);
+
+  // **Then it stops.** A settled draw is kept, so the extra look is one and
+  // not a loop a quiet host runs for the life of the stream.
+  expect(await said()).toBe(true);
+  expect(draws).toBe(UNSETTLED + 1);
+
+  // And nothing is stuck behind it: the next real change is one word, judged
+  // against the settled version rather than the one the bound ended on.
+  drawn = "the page, with the answer on it";
+  bell.ring();
+  expect(await said()).toBe(CHANGE_FRAME);
+  expect(await said()).toBe(true);
+});
+
 test("a reader told to redraw that could not is told again when it opens again (rondo#742)", async () => {
   // **What a page holds is what it finished showing.** A `change` says a word
   // arrived, and a redraw is a `GET` of this page's own address that can fail

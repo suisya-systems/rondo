@@ -38,6 +38,16 @@
 // again after the host's own backoff, on an address built from `#ledger` as it
 // stands at that moment.
 //
+// **And only a drop is reopened, never an answer that ended the asking.** A
+// host with no form to draw and nothing to watch answers `/events` with a
+// `204`, which is how it says there is nothing here to listen to; the browser
+// then puts the source in `CLOSED` and would never ask again. Reopening that
+// on a backoff of this script's own would be the very thing rondo#742
+// removed -- a page and a host doing work every five seconds while nothing
+// changes -- so the error that carries `CLOSED` is the end of listening, and
+// a drop, which leaves the source reconnecting, is what waits and opens
+// again.
+//
 // **It decides nothing a press is checked on.** The press is still a person's
 // click on a form this origin drew, minted on the server (D-0059 section 5a);
 // this only keeps the token in that form the one the server now holds, which
@@ -56,6 +66,11 @@
   // browser: a dropped stream is reopened on this spacing, saying where the
   // page is by then.
   const AGAIN_MS = 5000;
+  // `EventSource.CLOSED`, by its value rather than off the constructor: a
+  // source in this state is one the browser will not reconnect, which is the
+  // difference between a host that said there is nothing to listen to and a
+  // stream that dropped.
+  const ENDED = 2;
   let source = null;
   let again = null;
   const changed = () => {
@@ -86,10 +101,18 @@
     source.addEventListener("change", changed);
     // The browser would reconnect this itself, at the address it was given and
     // with the id it last received; closing it here is what keeps the next
-    // stream's `at` the draw this page is really showing.
+    // stream's `at` the draw this page is really showing. What it would *not*
+    // do is ask again after an answer that ended the asking, and neither does
+    // this: `CLOSED` on the source is the browser saying it has given up on
+    // this address -- a `204` from a host with no token and no bell -- and
+    // only a stream left reconnecting is one this page reopens.
     source.addEventListener("error", () => {
+      const ended = source === null || source.readyState === ENDED;
       source?.close();
       source = null;
+      if (ended) {
+        return;
+      }
       again ??= setTimeout(listen, AGAIN_MS);
     });
   };

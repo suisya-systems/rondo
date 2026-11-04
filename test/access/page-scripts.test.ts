@@ -1038,17 +1038,27 @@ test("the host's word is one redraw, and the token keeps every form current (ron
   ledger.setAttribute("data-drawn-at", "seen-1");
   const fired: string[] = [];
   const onWindow = new Map<string, (event: { persisted: boolean }) => void>();
+  // The source this page is holding, so a case can put it in the state the
+  // browser would have put it in before it fired `error`: `CONNECTING` where
+  // the stream dropped and the browser means to ask again, `CLOSED` where the
+  // answer ended the asking.
+  const sources: { readyState: number }[] = [];
+  const CONNECTING = 0;
+  const CLOSED = 2;
   runInNewContext(bytesOf("page/live.js").toString("utf8"), {
     EventSource: class {
+      readyState = CONNECTING;
       constructor(to: string) {
         opened = to;
         opens += 1;
+        sources.push(this);
       }
       addEventListener(type: string, listener: (event: { data: string }) => void) {
         listeners.set(type, listener);
       }
       close() {
         closed += 1;
+        this.readyState = CLOSED;
       }
     },
     CustomEvent: class {
@@ -1137,5 +1147,23 @@ test("the host's word is one redraw, and the token keeps every form current (ron
   expect(opens).toBe(3);
   expect(opened).toBe("/events?thread=req-i-0001&lang=en&at=seen-4");
   // Nothing was redrawn by reconnecting: the host is the one that decides.
+  expect(fired).toEqual(["rondo:change", "rondo:change"]);
+  // And the drop is what the wait is for: the source the browser left
+  // `CONNECTING` is the one this page reopens.
+  expect(sources.at(-1)?.readyState).toBe(CONNECTING);
+
+  // **An answer that ended the asking is not reopened** (rondo#742). A host
+  // with no form to draw and nothing to watch answers `/events` with a `204`:
+  // the browser puts the source in `CLOSED` -- it will never ask that address
+  // again of its own accord -- and fires `error` like any other. Waiting five
+  // seconds and asking again would put back the clock this issue removed, so
+  // this page stops listening too.
+  const ended = sources.at(-1);
+  if (ended !== undefined) {
+    ended.readyState = CLOSED;
+  }
+  listeners.get("error")?.({ data: "" });
+  expect(waiting).toEqual([]);
+  expect(opens).toBe(3);
   expect(fired).toEqual(["rondo:change", "rondo:change"]);
 });
