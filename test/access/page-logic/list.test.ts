@@ -9,10 +9,12 @@
 import { expect, test } from "vitest";
 import type { RequestRow, ThingDrawn } from "../../../src/access/page-logic/list.js";
 import {
+  DONE_IN_PLACE,
   placeSaid,
   repositoryOf,
   requestList,
   rowStateOf,
+  standingOf,
 } from "../../../src/access/page-logic/list.js";
 import type { IterationRecord } from "../../../src/store/records.js";
 
@@ -53,6 +55,71 @@ test("what waits on the person is lifted out of the time order, oldest first", (
   expect(list.days.flatMap((group) => group.rows.map((each) => each.messageId))).toEqual([
     "today-done",
   ]);
+  // Nothing is behind the press: one request has finished, and three keep
+  // their place.
+  expect(list.folded).toEqual([]);
+});
+
+/*
+ * **A row says one of three things about itself** (rondo#745): the person's
+ * turn, work going on, work over. What the list draws is that word, so the
+ * states a lap can be in have to land in one of the three -- and which one is
+ * also what decides whether a row is kept in place or counted on the press.
+ */
+
+test("every state a lap can be in is the person's turn, work going on, or work over", () => {
+  expect(standingOf("waitingOnYou")).toBe("yourTurn");
+  // Asked and not finished with: rondo's turn, which the person reads as work
+  // going on rather than as nothing happening.
+  expect(standingOf("running")).toBe("running");
+  expect(standingOf("notStarted")).toBe("running");
+  expect(standingOf("drafting")).toBe("running");
+  // Over, in the sense the word carries on a list: nothing more will happen
+  // under it unless the person asks again.
+  expect(standingOf("finished")).toBe("done");
+  expect(standingOf("approved")).toBe("done");
+  expect(standingOf("stopped")).toBe("done");
+  expect(standingOf("question")).toBe("done");
+});
+
+test("only the newest three finished requests keep their place; the rest are counted on one press", () => {
+  const list = requestList(
+    [
+      row({ messageId: "done-1", atMs: at(2026, 9, 20, 9) }),
+      row({ messageId: "done-2", atMs: at(2026, 9, 19) }),
+      row({ messageId: "done-3", atMs: at(2026, 9, 18) }),
+      row({ messageId: "done-4", atMs: at(2026, 9, 17) }),
+      row({ messageId: "done-5", atMs: at(2026, 9, 16) }),
+      // A request still running keeps its place however old it is: the press
+      // holds what is over, and only that.
+      row({ messageId: "running-old", atMs: at(2026, 9, 15), state: "running" }),
+    ],
+    null,
+    NOW,
+  );
+  expect(DONE_IN_PLACE).toBe(3);
+  expect(list.days.flatMap((group) => group.rows.map((each) => each.messageId))).toEqual([
+    "done-1",
+    "done-2",
+    "done-3",
+    "running-old",
+  ]);
+  // Newest first inside the press, and the press counts what is hidden.
+  expect(list.folded.map((each) => each.messageId)).toEqual(["done-4", "done-5"]);
+});
+
+test("three or fewer finished requests leave nothing behind the press", () => {
+  const rows = [
+    row({ messageId: "done-1", atMs: at(2026, 9, 20, 9) }),
+    row({ messageId: "done-2", atMs: at(2026, 9, 19) }),
+    row({ messageId: "done-3", atMs: at(2026, 9, 18) }),
+    row({ messageId: "waiting", atMs: at(2026, 9, 17), state: "waitingOnYou" }),
+    row({ messageId: "running", atMs: at(2026, 9, 16), state: "running" }),
+  ];
+  expect(requestList(rows, null, NOW).folded).toEqual([]);
+  // And neither does one, nor none at all.
+  expect(requestList(rows.slice(0, 1), null, NOW).folded).toEqual([]);
+  expect(requestList(rows.slice(3), null, NOW).folded).toEqual([]);
 });
 
 test("everything else is cut by day and not by what it is doing", () => {

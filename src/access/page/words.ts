@@ -95,7 +95,25 @@ export interface PageWords extends DayWords {
   readonly weekSpent: (spent: string, approved: string, left: string) => string;
   /** Where no allowance has been approved, so no spend may be shown beside it (rule 6). */
   readonly weekNoAllowance: string;
-  /** A request's state, in one sentence, on its row in the list (rule 5). */
+  /**
+   * **What a row says about its state, and the whole of it** (rondo#745): one
+   * of three words -- the person's turn, work going on, work over.
+   *
+   * The list draws these and nothing else of a row's state, so three requests
+   * a person is not needed by read the same there. The sentence that says
+   * *which* kind of wait, or what the publish came to, is the hover's and the
+   * thread's; a row is a name, a state and an age.
+   */
+  readonly rowStateYourTurn: string;
+  readonly rowStateRunning: string;
+  readonly rowStateDone: string;
+  /**
+   * The press the finished requests past the newest few are shut behind
+   * (rondo#745), counting them: `count` is how many are hidden, never how
+   * many there are.
+   */
+  readonly listMoreDone: (count: number) => string;
+  /** A request's state, in one sentence, on its row's hover and nowhere else (rule 5). */
   readonly rowWaitingOnYou: string;
   /** A row whose only wait is the goal flow's stop asked in its thread (rondo#611). */
   readonly rowFlowStopped: string;
@@ -698,6 +716,11 @@ export const PAGE_EN: PageWords = Object.freeze({
   weekAllowance: "This week's allowance",
   weekSpent: (spent, approved, left) => `${spent} of ${approved}, ${left} left`,
   weekNoAllowance: "No allowance approved yet",
+  rowStateYourTurn: "Your turn",
+  rowStateRunning: "In progress",
+  rowStateDone: "Done",
+  listMoreDone: (count) =>
+    count === 1 ? "1 more finished request" : `${String(count)} more finished requests`,
   rowWaitingOnYou: "Waiting on your answer",
   rowFlowStopped: "rondo stopped working toward the goal and asks you here",
   rowPressWaits: "Waiting on your next step",
@@ -1364,6 +1387,10 @@ export const PAGE_JA: PageWords = Object.freeze({
   weekAllowance: "今週の予算",
   weekSpent: (spent, approved, left) => `${spent} ／ ${approved}　残り ${left}`,
   weekNoAllowance: "予算はまだ承認されていません",
+  rowStateYourTurn: "あなたの番",
+  rowStateRunning: "進行中",
+  rowStateDone: "完了",
+  listMoreDone: (count) => `ほかに終わった依頼 ${String(count)} 件`,
   rowWaitingOnYou: "あなたの返事を待っています",
   rowFlowStopped: "目標に向けた依頼を止めて、rondo がこのスレッドで聞いています",
   rowPressWaits: "あなたの次の一手を待っています",

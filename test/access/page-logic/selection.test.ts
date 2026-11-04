@@ -23,6 +23,7 @@ const row = (messageId: string, atMs: number): RequestRow => ({
 const listOf = (yourTurn: readonly RequestRow[]): RequestList => ({
   yourTurn,
   days: [],
+  folded: [],
   lastLookedAbove: null,
 });
 

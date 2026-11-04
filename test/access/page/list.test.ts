@@ -1,17 +1,26 @@
 /**
- * The left face's marks (rondo#589).
+ * The left face's rows (rondo#589, rondo#745).
  *
- * A row's state was said by colour alone, and four states shared one grey
- * dot. The claim held here is that **every state a row can be in that the
- * colour does not already split is a shape of its own**, and that running
- * turns -- `D-0082` rule 3 keeps the turning mark, and the list had lost it.
+ * What these cases hold down is **what a row is allowed to say**: a short
+ * name, its state in one of three words, and how long since it moved. A row's
+ * state was said by colour alone (rondo#589), then by a sentence per state
+ * which grew with every kind of wait rondo learned to have; the claim now is
+ * that the face says the three words and keeps the sentence for the hover, and
+ * that the requests already over do not fill it -- the newest three keep their
+ * place and the rest are counted on one press.
  */
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "vitest";
 import { RequestsFace } from "../../../src/access/page/list.js";
-import type { RequestRow, RowState } from "../../../src/access/page-logic/list.js";
-import { EN } from "../../../src/access/wording.js";
+import type { RequestList, RequestRow, RowState } from "../../../src/access/page-logic/list.js";
+import type { ChecksState } from "../../../src/access/page-logic/result.js";
+import { chromeFor, EN } from "../../../src/access/wording.js";
+
+const JA = chromeFor("ja");
+
+/** The checks, having said green: the one reading these cases name. */
+const GREEN = { kind: "green" } as ChecksState;
 
 const row = (state: RowState, over: Partial<RequestRow> = {}): RequestRow => ({
   messageId: state,
@@ -22,12 +31,12 @@ const row = (state: RowState, over: Partial<RequestRow> = {}): RequestRow => ({
   ...over,
 });
 
-/** Each row's mark, in the order drawn. */
-const marks = (rows: readonly RequestRow[]): string[] => {
-  const html = renderToStaticMarkup(
+/** The face, over a list given in part: what is not named is empty. */
+const face = (list: Partial<RequestList>, wording = EN): string =>
+  renderToStaticMarkup(
     RequestsFace({
-      wording: EN,
-      list: { yourTurn: [], days: [{ cut: "today", rows }], lastLookedAbove: null },
+      wording,
+      list: { yourTurn: [], days: [], folded: [], lastLookedAbove: null, ...list },
       hrefOf: (id) => `/?thread=${id}`,
       agoOf: () => "now",
       allowance: null,
@@ -36,10 +45,20 @@ const marks = (rows: readonly RequestRow[]): string[] => {
       openId: null,
     }),
   );
+
+/** Each row's mark, in the order drawn. */
+const marks = (rows: readonly RequestRow[]): string[] => {
+  const html = face({ days: [{ cut: "today", rows }] });
   return [...html.matchAll(/data-mark="([a-z]+)"/g)].map((m) => m[1] ?? "");
 };
 
-test("running, finished, stopped and not started are four shapes, not one grey dot", () => {
+/** What each row draws inside itself, with its tags taken out. */
+const bodies = (html: string): string[] =>
+  [...html.matchAll(/<a class="list-row[^"]*"[^>]*>([\s\S]*?)<\/a>/g)].map((m) =>
+    (m[1] ?? "").replace(/<svg[\s\S]*?<\/svg>/g, "").replace(/<[^>]+>/g, "|"),
+  );
+
+test("the person's turn, work going on and work over are three shapes, and nothing else is a shape", () => {
   expect(
     marks([
       row("waitingOnYou"),
@@ -48,19 +67,21 @@ test("running, finished, stopped and not started are four shapes, not one grey d
       row("stopped"),
       row("notStarted"),
     ]),
-  ).toEqual(["wait", "run", "done", "stopped", "idle"]);
-  // Drafting has not started either, and an approval not yet published is done.
-  expect(marks([row("drafting"), row("approved")])).toEqual(["idle", "done"]);
+  ).toEqual(["wait", "run", "done", "done", "run"]);
+  // Drafting is work going on, and an approval is work over.
+  expect(marks([row("drafting"), row("approved")])).toEqual(["run", "done"]);
 });
 
-test("a published request's checks give the tick or the cross, and only they do", () => {
+test("a published request's checks are no longer a mark of their own (rondo#745)", () => {
   const published = (kind: "green" | "red" | "pending") =>
     row("approved", {
       published: { checks: { kind } } as unknown as NonNullable<RequestRow["published"]>,
     });
+  // The mark says what the word beside it says and no more: the checks are the
+  // thread's to report, and a green tick on this face was a second vocabulary.
   expect(marks([published("green"), published("red"), published("pending")])).toEqual([
-    "ok",
-    "fail",
+    "done",
+    "done",
     "done",
   ]);
 });
@@ -73,52 +94,95 @@ test("the running mark turns, and holds still where motion is reduced", () => {
   );
 });
 
-test("a row that needs nobody is one line, its sentence stays for a reader, and hover reads it whole (rondo#592)", () => {
+test("a row draws a short name, one word of state and an age, and nothing else (rondo#745)", () => {
   const css = readFileSync(new URL("../../../page/list.css", import.meta.url), "utf8");
   const rule = (selector: string): string =>
     new RegExp(`${selector.replace(/[.()]/g, "\\$&")} \\{([^}]*)\\}`).exec(css)?.[1] ?? "";
-  expect(rule(".list-row:not(.list-row-mine) b")).toMatch(/white-space: nowrap/);
-  const sentence = rule(".list-row:not(.list-row-mine) p");
-  expect(sentence).toMatch(/clip-path: inset\(50%\)/);
-  expect(sentence).not.toMatch(/display: none/);
-  // A waiting row is not cut: nothing narrows `.list-row-mine` back to one line.
-  expect(rule(".list-row-mine p")).not.toMatch(/nowrap|clip/);
-  const html = renderToStaticMarkup(
-    RequestsFace({
-      wording: EN,
-      list: {
-        yourTurn: [row("waitingOnYou")],
-        days: [{ cut: "today", rows: [row("finished", { repository: "org/repo" })] }],
-        lastLookedAbove: null,
+  // Every row is one line now, the waiting one included: the name is cut where
+  // the column ends rather than wrapped, and the state is drawn beside it
+  // rather than hidden from the eye the way the sentence had to be.
+  expect(rule(".list-row b")).toMatch(/white-space: nowrap/);
+  expect(rule(".list-row b")).toMatch(/text-overflow: ellipsis/);
+  expect(rule(".list-row p")).not.toMatch(/clip-path/);
+
+  const html = face({
+    yourTurn: [row("waitingOnYou", { title: "Fix the invoice total" })],
+    days: [
+      {
+        cut: "today",
+        rows: [
+          row("approved", {
+            title: "Fix the invoice total",
+            repository: "shop-app",
+            published: {
+              checks: GREEN,
+              merged: null,
+              closedAtMs: null,
+              conflictsWith: null,
+              number: "617",
+            } as unknown as NonNullable<RequestRow["published"]>,
+          }),
+        ],
       },
-      hrefOf: (id) => `/?thread=${id}`,
-      agoOf: () => "now",
-      allowance: null,
-      newRequestHref: null,
-      lastLookedSaid: "",
-      openId: null,
-    }),
-  );
-  const [mine, cut] = html.match(/<a class="list-row[^>]*>/g) ?? [];
-  expect(mine).not.toContain("title=");
-  // Two requests with one title are told apart on hover by repository and state.
-  expect(cut).toContain(`title="finished\norg/repo\n${EN.rowFinished}"`);
-  expect(html).toContain(`<span class="list-repo">org/repo</span>${EN.rowFinished}</p>`);
+    ],
+  });
+  // Three things drawn on each: the name, the state in one word, the age --
+  // and, on the one row two could be mistaken for, its place (D-0081 rule 4.2).
+  expect(bodies(html)).toEqual([
+    "||Fix the invoice total||Your turn|||now|",
+    "||Fix the invoice total|||shop-app|Done|||now|",
+  ]);
+  // What the publish came to is not drawn at all: it is the thread's to say.
+  expect(bodies(html).join("")).not.toContain("617");
+  // The sentence of state is what the row cut, so it is on the hover, whole,
+  // and with it the name uncut and the place.
+  expect([...html.matchAll(/ title="([\s\S]*?)"/g)].map((m) => m[1] ?? "")).toEqual([
+    `Fix the invoice total\n${EN.rowWaitingOnYou}`,
+    `Fix the invoice total\nshop-app\n${EN.rowPublished(
+      EN.pullRequest("617"),
+      EN.checksWord(GREEN),
+    )}`,
+  ]);
+});
+
+test("the finished requests past the newest three are counted on one press (rondo#745)", () => {
+  const done = (id: string) => row("finished", { messageId: id, title: id });
+  const html = face({
+    days: [{ cut: "today", rows: [done("one"), done("two"), done("three")] }],
+    folded: [done("four"), done("five")],
+  });
+  // One press, counting what is hidden behind it and not what there is.
+  expect(html).toContain(`<details class="list-fold">`);
+  expect(html).toContain(EN.listMoreDone(2));
+  expect(html).toContain(EN.foldOpen);
+  // The rows are in the page, shut: the press is the browser's own act, so a
+  // redraw cannot lose them and nothing of the list's state holds them.
+  const fold = /<details class="list-fold">([\s\S]*?)<\/details>/.exec(html)?.[1] ?? "";
+  expect(fold).toContain("/?thread=four");
+  expect(fold).toContain("/?thread=five");
+  expect(fold).not.toContain("/?thread=one");
+  // Said in the language in force, as every word on the face is (D-0079).
+  expect(face({ folded: [done("four"), done("five")] }, JA)).toContain(JA.listMoreDone(2));
+});
+
+test("three or fewer finished requests leave no press at all (rondo#745)", () => {
+  const html = face({
+    days: [
+      {
+        cut: "today",
+        rows: [row("finished"), row("approved"), row("stopped"), row("running")],
+      },
+    ],
+  });
+  expect(html).not.toContain("list-fold");
+  expect(html).not.toContain(EN.listMoreDone(0));
+  expect(html).not.toContain(EN.listMoreDone(1));
+  // And the list is not read as empty because nothing is folded.
+  expect(html).not.toContain(EN.noRequestsYet);
 });
 
 test("a paused goal flow stands with your turn and leads to the screen that resumes it (rondo#606)", () => {
-  const html = renderToStaticMarkup(
-    RequestsFace({
-      wording: EN,
-      list: { yourTurn: [], days: [], lastLookedAbove: null, paused: ["org/repo"] },
-      hrefOf: (id) => `/?thread=${id}`,
-      agoOf: () => "now",
-      allowance: null,
-      newRequestHref: null,
-      lastLookedSaid: "",
-      openId: null,
-    }),
-  );
+  const html = face({ paused: ["org/repo"] });
   // Drawn under *your turn* even with no request waiting, at its weight.
   expect(html).toContain(`<h6 class="list-heading list-heading-mine">${EN.yourTurn}</h6>`);
   expect(html).toMatch(
@@ -128,47 +192,22 @@ test("a paused goal flow stands with your turn and leads to the screen that resu
   expect(html).toContain(EN.triageGoalScopePaused);
 });
 
-test("a row where only the goal flow's stop waits says so, under your turn (rondo#611)", () => {
-  const html = renderToStaticMarkup(
-    RequestsFace({
-      wording: EN,
-      list: {
-        yourTurn: [row("waitingOnYou", { title: "Fix issue 194", flowStop: true })],
-        days: [],
-        lastLookedAbove: null,
-      },
-      hrefOf: (id) => `/?thread=${id}`,
-      agoOf: () => "now",
-      allowance: null,
-      newRequestHref: null,
-      lastLookedSaid: "",
-      openId: null,
-    }),
-  );
+test("a row where only the goal flow's stop waits says so on its hover (rondo#611)", () => {
+  const html = face({
+    yourTurn: [row("waitingOnYou", { title: "Fix issue 194", flowStop: true })],
+  });
   expect(html).toContain('data-mark="wait"');
-  expect(html).toContain(EN.rowFlowStopped);
+  // The row draws the one word, and which kind of wait it is stays readable.
+  expect(html).toContain(`<p>${EN.rowStateYourTurn}</p>`);
+  expect(html).toContain(`title="Fix issue 194\n${EN.rowFlowStopped}"`);
   expect(html).not.toContain(EN.rowWaitingOnYou);
 });
 
 test("a goal flow waiting on answers stands with your turn and leads to its questions (rondo#633)", () => {
-  const html = renderToStaticMarkup(
-    RequestsFace({
-      wording: EN,
-      list: {
-        yourTurn: [],
-        days: [],
-        lastLookedAbove: null,
-        paused: ["org/paused"],
-        asking: [{ repository: "org/repo", request: "Fix the setup", points: 3, askedAtMs: 1 }],
-      },
-      hrefOf: (id) => `/?thread=${id}`,
-      agoOf: () => "now",
-      allowance: null,
-      newRequestHref: null,
-      lastLookedSaid: "",
-      openId: null,
-    }),
-  );
+  const html = face({
+    paused: ["org/paused"],
+    asking: [{ repository: "org/repo", request: "Fix the setup", points: 3, askedAtMs: 1 }],
+  });
   expect(html).toContain(`<h6 class="list-heading list-heading-mine">${EN.yourTurn}</h6>`);
   expect(html).toMatch(/<a class="list-row list-row-mine" href="\/\?[^"#]*#flow-ask-org-repo"/);
   expect(html).toContain('data-mark="wait"');

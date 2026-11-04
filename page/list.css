@@ -58,6 +58,12 @@
 }
 
 /*
+ * **Every row is one line: a short name, a state in one word, an age**
+ * (rondo#745, and rondo#592 for the cut itself). The name is cut where the
+ * column ends -- the whole of it is on the hover -- and the state is beside it
+ * rather than hidden from the eye, because three words fit where a sentence
+ * did not.
+ *
  * **A request is `--text-title` at every weight** (D-0082 rule 4, in those
  * words): it was 14px against the state sentence's 13px, and a pixel is not a
  * difference anything on this face was making. What tells a waiting row from a
@@ -70,34 +76,18 @@
   font-weight: 400;
   line-height: 1.5;
   color: var(--color-muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .list-row p {
   font-size: var(--text-meta);
   line-height: 1.5;
   color: var(--color-muted-foreground);
-}
-
-/*
- * **A row that needs nobody is one line: its title, cut, and its time**
- * (rondo#592, D-0183). Two lines a row put few requests above the fold of a
- * 300px face; its state is the mark's shape (rondo#589), so the sentence and
- * the repository go from the eye and stay for a reader, who has no mark --
- * hidden the way a screen reader still reads, not `display: none`.
- */
-.list-row:not(.list-row-mine) b {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.list-row:not(.list-row-mine) p {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 .list-row time {
@@ -107,8 +97,8 @@
 }
 
 /*
- * Waiting on the person: bold, in full ink, not cut short -- and standing on
- * its own ground, with the amber down its edge.
+ * Waiting on the person: bold, in full ink -- and standing on its own ground,
+ * with the amber down its edge.
  *
  * **Bold and one dot was not enough weight** (rondo#314): three ordinary rows
  * of two lines each carry more ink between them than one bold row does, so the
@@ -198,13 +188,38 @@
   }
 }
 
-/* A published request's checks, where they have said green or red (rondo#376). */
-.list-dot-ok {
-  color: var(--color-ok);
+/*
+ * **The finished requests past the newest three, on one press** (rondo#745):
+ * the line the fold is shut as reads as one more line of the list, not as a
+ * control beside it, and it says how many it is keeping back beside the word
+ * that opens it.
+ */
+.list-fold > summary {
+  display: flex;
+  gap: 12px;
+  padding: 8px 24px;
+  font-size: var(--text-meta);
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  list-style: none;
 }
 
-.list-dot-fail {
-  color: var(--color-fail);
+.list-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.list-fold > summary:hover {
+  background: var(--color-accent);
+}
+
+.list-fold > summary:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: -2px;
+}
+
+.list-fold-open {
+  font-size: var(--text-id);
+  color: var(--color-faint);
 }
 
 /*
