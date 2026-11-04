@@ -384,12 +384,15 @@ test("the presses that start a lap carry their busy label and what a lap waits o
   // The plan's own start is drawn in `screens/plan-start.tsx` (rondo#674).
   const scope =
     source("src/access/screens/scope.tsx") + source("src/access/screens/plan-start.tsx");
-  // Both starts -- the plan's own and the one under an approval -- and every
-  // scope press, each of the three drawn twice: at the form's top and again
-  // under its last box (D-0106 rule 7).
+  // Both starts -- the plan's own and the one under an approval -- say they are
+  // working, and so does the screen's own press that approves *and* starts; the
+  // three presses that only record say the shorter thing. Each is drawn once:
+  // the screen holds one press of each kind now, not one at the form's top and
+  // a second under its last box.
   expect(scope.match(/data-busy=\{wording\.startBusy\}/g)).toHaveLength(2);
-  expect(scope.match(/\{wording\.startBusyNote\}/g)).toHaveLength(2);
-  expect(scope.match(/data-busy=\{wording\.scopeBusy\}/g)).toHaveLength(6);
+  expect(scope.match(/data-busy=\{wording\.scopeStartBusy\}/g)).toHaveLength(1);
+  expect(scope.match(/\{wording\.startBusyNote\}/g)).toHaveLength(3);
+  expect(scope.match(/data-busy=\{wording\.scopeBusy\}/g)).toHaveLength(3);
 });
 
 test("setup's last word is the one that opens the page, and no terminal step comes after it", () => {

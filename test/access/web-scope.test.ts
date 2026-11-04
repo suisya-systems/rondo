@@ -194,14 +194,23 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   expect(html).toContain(`${SCOPE_PLAN.repository} at ${SCOPE_PLAN.workspaceRoot}`);
   expect(html).toContain("tier standard, granted command.run");
 
-  // **What the draft assumed, above the numbers** (rondo#247): which laps it
-  // measured, how far apart they were, and that their size was never recorded.
-  expect(html).toContain("This draft assumes your request is the size of past laps");
-  expect(html).toContain(
-    "Drafted from 2 recorded first laps of this agent type, which cost 0.40 to 1.20 USD",
-  );
-  expect(html).toContain("you can still raise it when the work comes back to you");
-  expect(html.indexOf("This draft assumes")).toBeLessThan(html.indexOf('name="cost_usd"'));
+  // **What this does and what it does not, in three sentences, first on the
+  // screen**: where the work happens, that it stops and asks rather than going
+  // further, and that nothing outward happens without a press.
+  expect(html).toContain("rondo works on your request in");
+  expect(html).toContain("It stops by itself at the cost cap, the last redo or the expiry");
+  expect(html).toContain("Outward it does nothing by itself");
+  // **Then the caps, and nothing else of the budgets**: the cost, the redos and
+  // what is left to the worker. The long sample caveat and the cost caveat the
+  // screen used to carry are gone -- what the numbers rest on is in the fold.
+  expect(html).toContain(EN.scopeLimitsHeading);
+  expect(html).not.toContain("This draft assumes your request is the size of past laps");
+  expect(html).not.toContain(EN.scopeCostCaveat);
+  expect(html.indexOf('id="scope-what"')).toBeLessThan(html.indexOf('id="scope-limits"'));
+  // **Editing a cap, and where each number came from, are one press away.**
+  expect(html).toContain(EN.scopeNumbersFold);
+  expect(html.indexOf('id="scope-limits"')).toBeLessThan(html.indexOf(EN.scopeNumbersFold));
+  expect(html.indexOf(EN.scopeNumbersFold)).toBeLessThan(html.indexOf('name="cost_usd"'));
   // Measured values carry no cold-start note (rondo#378).
   expect(html).not.toContain(EN.scopeColdStartNote(true));
   expect(html).not.toContain(EN.scopeColdStartNote(false));
@@ -269,8 +278,10 @@ test("with no lap recorded, the scope screen says in Japanese that the reserve w
     () => "MINT-SCOPE-1",
     () => "MINT-LAP-1",
   );
-  expect(html).toContain("依頼の大きさが過去の回と同じくらいだとして、予算を出しています");
-  expect(html).toContain("取っておく額 10.00 USD は、rondo の見込みです。");
+  // The sample's own caveat is off this screen (it was the long budget prose);
+  // what each number rests on is in the numbers' fold, in Japanese.
+  expect(html).not.toContain("依頼の大きさが過去の回と同じくらいだとして、予算を出しています");
+  expect(html).toContain(chromeFor("ja").scopeNumbersFold);
   // **And next to each value that rests on it, not only in its formula**
   // (rondo#378): lap 11's owner read $7.50 as a measured figure. The cost, the
   // reserve and the expiry each say so; the laps and rounds are given, not
@@ -517,8 +528,9 @@ test("the approval reads what its predecessor spent, and repeats that the review
   // successor's own screen, in laps and read dollars, with unread laps named.
   expect(html).toContain("has spent 1 laps and $4.50 read");
   expect(html).toContain("with 0 laps whose cost is not read yet holding their reserve");
-  // D-0066's first gate answer, said again beside the approval and not only on the form.
-  expect(html).toContain(
+  // The long budget caveat is off this screen in both of its states: what the
+  // approval set is the record above, and the five numbers say it.
+  expect(html).not.toContain(
     "the model review's cost is not counted, and a lap whose cost is not read yet holds the reserve",
   );
   expect(html).toContain('id="start-form"');
@@ -1388,7 +1400,9 @@ for (const wording of [EN, chromeFor("ja")]) {
   /** The plans' section alone: below it the recorded fold holds rondo's own paths. */
   const plansPart = (drawn: string): string => {
     const from = drawn.indexOf('id="plans"');
-    const to = drawn.indexOf('id="rounds"');
+    // The block after the choice, which is what the screen always shows now:
+    // the rounds' own links moved into the numbers' fold below it.
+    const to = drawn.indexOf('id="scope-what"');
     expect(from).toBeGreaterThan(-1);
     expect(to).toBeGreaterThan(from);
     return drawn.slice(from, to);
