@@ -581,10 +581,7 @@ export async function requestRepository(
       work.kind === "unheld" &&
       address.toLowerCase().endsWith(`/${work.repo.toLowerCase()}`),
     planless: held.length === 0,
-    buildsOn: held.reduce<JsonRecord | null>(
-      (found, t) => found ?? beyond.setupPlan(t.plan),
-      null,
-    ),
+    buildsOn: held.reduce<JsonRecord | null>((found, t) => found ?? beyond.setupPlan(t.plan), null),
   };
 }
 
@@ -674,10 +671,7 @@ async function heldTemplates(
   thread: ReadonlySet<string>,
   rows: number = TEMPLATE_ROWS,
 ): Promise<DraftTemplate[]> {
-  return [
-    ...(await heldBeyondAThread(ports, records, rows)),
-    ...heldInAThread(messages, thread),
-  ];
+  return [...(await heldBeyondAThread(ports, records, rows)), ...heldInAThread(messages, thread)];
 }
 
 /**

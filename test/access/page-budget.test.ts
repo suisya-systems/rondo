@@ -35,14 +35,22 @@
  * what the second test in this file pins.
  *
  * **The headroom, measured.** On this machine on 2026-11-05 the measured draws
- * are 285 to 339 ms against the 500 ms budget. They were 104 to 157 ms while
- * the draw was handed none of the host's reading ports (the paragraph below):
- * what the rest is, is 78 reckonings of where a request's work runs --
- * one per request, off one reading of the rows, which is what
- * `test/access/page-logic/read-once.test.ts` holds down. So the headroom is
- * about half the budget rather than three quarters of it, and this is a floor
- * under runner variance rather than a target to grow into. The number to
- * change when the page gets slower is the page.
+ * are 142 to 206 ms against the 500 ms budget (median 147 to 154 ms over three
+ * runs of this suite), and 104 to
+ * 157 ms while the draw was handed none of the host's reading ports (the
+ * paragraph below). What the difference is, is 78 reckonings of where a
+ * request's work runs -- one per request, off one reading of the rows, which is
+ * what `test/access/page-logic/read-once.test.ts` holds down.
+ *
+ * **It was 285 to 339 ms here and 528 ms on the runner**, which is over budget,
+ * for as long as each of those 78 reckonings read the whole of what it answers:
+ * almost all of that is the same answer whichever request is asked about -- the
+ * twenty rows' plans, setup's agent types and the plan each held plan stands
+ * for -- and a draw holds it once now (`heldByOneDraw` in
+ * `src/access/model-draft/host.ts`). So the budget's headroom is a factor of
+ * three on this machine, and this is a floor under runner variance rather than
+ * a target to grow into. The number to change when the page gets slower is the
+ * page.
  *
  * **The draw is the host's draw** (rondo#757). A page is only as expensive as
  * what it is asked for, and this suite's first version measured a draw that was
