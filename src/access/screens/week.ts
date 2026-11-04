@@ -85,10 +85,13 @@ export async function weekSide(
       .filter(([, laps]) => laps.some((lap) => !isTerminal(lap.record.status)))
       .map(([requestMessageId]) => requestMessageId),
   );
-  /** Of the approvals in force, the ones with no room left for another lap. */
+  /** Each touched lap's approval, read as one batch, as it was before. */
+  const touchedApprovals = await Promise.all(
+    touched.map(async (lap) => ({ lap, approval: await approvalOf(ports, lap.record) })),
+  );
+  /** Of the approvals in force, whether any has no room left for another lap. */
   let noRoomLeft = false;
-  for (const lap of touched) {
-    const approval = await approvalOf(ports, lap.record);
+  for (const { lap, approval } of touchedApprovals) {
     if (approval === null) continue;
     const allowance = allowanceOf(approval);
     weekApprovals.set(approval.decisionId, allowance);
@@ -105,11 +108,18 @@ export async function weekSide(
   /*
    * **Why the week's budget is on this face, or that it is not** (`D-0207`
    * rule 1). Two facts make it worth drawing: a budget that is stopping work
-   * now -- a lap its own spend cap stopped (`D-0121`) with nothing running
-   * after it, or an approval with no room left under a request still being
-   * worked on -- and a scope waiting for the person, which is where a budget is
-   * set or raised. With neither, the figures are withheld and nothing stands in
-   * their place.
+   * now -- a lap its own spend cap stopped (`D-0121`), or an approval with no
+   * room left for another lap -- and a scope waiting for the person, which is
+   * where a budget is set or raised. With neither, the figures are withheld and
+   * nothing stands in their place (rule 4).
+   *
+   * **"Now" is read from the request and not from the lap alone.** A cap that
+   * stopped a lap is a fact that stays on its row for ever: a request raised
+   * after it and since finished would keep this face drawing the week's money
+   * for the rest of the window. So a capped lap counts only where its request
+   * is still unfinished and nothing is running under it -- stopped, and not yet
+   * taken anywhere -- which is `D-0207`'s own "holding work up" rather than
+   * "was held up at some point this week".
    */
   const workingNow = new Set(running.map((record) => record.requestMessageId));
   const bearing = budgetBearing({
@@ -118,6 +128,7 @@ export async function weekSide(
       touched.some(
         (lap) =>
           reachedBudgetCap(lap.record.lapCostUsd, lap.record.lapBudgetCapUsd) &&
+          unfinished.has(lap.record.requestMessageId) &&
           !workingNow.has(lap.record.requestMessageId),
       ),
     yours: scopeAwaits(waits),
