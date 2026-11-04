@@ -32344,11 +32344,13 @@ At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
   `planOutside` for each scope test, `planBusy` and `planFull` for a host with no room, and
   `startRefusedNoContinuo` with `D-0205`'s six kinds of unusable. `D-0158` adds the wait where
   another line holds the files, for which "the page offers no second press".
-- **The start is already safe pressed twice.** `startScopedFromPage` holds a start in flight in a
-  per-process map keyed by the iteration id the form minted, so an overlapping second press joins
-  the first; `scopedStartPress` then joins a wait already kept for the same request, scope decision
-  and plan digest, so a second tab's own minted id does not become a second lap. `D-0109` settles
-  when the press is answered: once the lap's row is there.
+- **The start is safe pressed twice within one approval, and that is the range of it.**
+  `startScopedFromPage` holds a start in flight in a per-process map keyed by the iteration id the
+  form minted, so an overlapping second press carrying that id joins the first; `scopedStartPress`
+  then joins a wait already kept for the same request, **scope decision** and plan digest, so
+  another tab's own minted id does not become a second lap *under an approval already recorded*.
+  Both keys name an approval that exists, so neither joins two presses that would each record one.
+  `D-0109` settles when the press is answered: once the lap's row is there.
 
 ### Decision
 
@@ -32370,12 +32372,21 @@ At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
    (`D-0205` rule 2's one press, and no press where `D-0158` offers none). A start rondo could not
    attempt is never reported as an approval withheld, and a refused start still admits, spends and
    starts nothing.
-4. **It does not start twice.** The main press is the existing start path, so it inherits the
-   in-flight map keyed by the minted iteration id and the join of a kept wait: a double click, a
-   reload, a resubmission or a second tab keeps one row and starts one lap. The approval half is
-   not made idempotent by this entry and does not need to be: the recorded approval travels in the
-   address (`decisionId`), so the screen a person is returned to is the one showing what was
-   recorded rather than the draft offering to record it again.
+4. **It approves once and starts once, however many times the press arrives.** One act of approving
+   keeps one approval and one lap. Two ranges have to be told apart, because the joins that exist
+   today reach only the first. **What they reach**: presses carrying the same minted iteration id,
+   and starts belonging to an approval already recorded -- the same request, scope decision and
+   plan digest. So a double click on one form, and the existing start pressed again on the screen
+   an approval came back on, keep one row and start one lap, as they do today. **What they do not
+   reach**: a press resent before its first answer came back, and a second tab's press on the same
+   drafted scope -- both would record an approval of their own, and both keys above name a scope
+   decision such a press has not recorded yet. This entry requires that second range too: a repeat
+   of the same act of approving records no second approval and starts no second lap, so a reload,
+   a resubmission and a second tab each end with the one approval and the one lap rather than two
+   of either. The recorded approval travelling back in the address (`decisionId`) is part of this
+   and not the whole of it: it keeps a person who has been answered from pressing a draft again,
+   and says nothing about a press whose answer has not arrived. What carries the rest is the
+   screen's to settle; that it holds is this entry's.
 5. **Nothing about what is approved changes.** The record, its digest, its tests and when they are
    spent are `D-0066`'s, and the budgets are `D-0074`'s. This entry moves a press; it widens no
    scope and tests nothing differently.
@@ -32399,6 +32410,10 @@ At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
   as secondary, which is the cost of making the common act the main one.
 - **A host with no room turns the main press into rule 2's press plus a sentence.** Nothing is
   lost, but the press did not do what its words said it would.
+- **The approval half now has to hold against a repeated press, where before it did not.** The
+  start path already joins what it can key on; the approval does not, and making the common press
+  the one that also starts work puts a second approval behind the same reload. Rule 4 asks for that
+  guarantee without saying what provides it, which is a question left for the screen to answer.
 - **Two presses on one form means the form's two submits must stay told apart** where a browser
   sends neither name; the screen's own test is what holds that, and this entry does not.
 
@@ -32508,8 +32523,8 @@ At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
 
 ## D-0208 — The list that stands requests side by side draws the three newest finished requests and folds the rest into one line that says how many, opened by a press that works with script off
 
-**Status:** accepted (2026-11-04, the owner's request on this lap). Refs `D-0041`, `D-0056`,
-`D-0076`, `D-0082`, `D-0083`, `D-0175`, `D-0176`, `D-0183`, `D-0185`.
+**Status:** accepted (2026-11-04, the owner's request on this lap). Refs `D-0041`, `D-0076`,
+`D-0082`, `D-0083`, `D-0175`, `D-0176`, `D-0183`, `D-0185`.
 
 ### Context
 
@@ -32541,10 +32556,6 @@ At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
 - **A fold is the page's own device and it needs no script.** `D-0076` rule 4.2's maintainer fold
   is drawn as a disclosure a person opens with a press, on a page whose presses are real form
   submissions and whose script is an addition rather than a requirement (`D-0041`).
-- **View state lives in the address.** `page-logic/routes.ts` keeps each view's members in the URL
-  for `D-0056` rule 11's reason -- the language switch re-renders from the view it is on, so a
-  member kept anywhere else is lost by it -- and the list re-renders from that same address on the
-  poll.
 
 ### Decision
 
@@ -32557,14 +32568,10 @@ At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
 3. **A press opens them.** The line is a disclosure: pressing it shows the remaining finished
    requests, in the same order and in the same one-line shape `D-0183` gives them. It is drawn as
    a fold and not as a link to another screen, and it works with no script.
-4. **An opened fold survives a re-render**, because its state travels in the address like every
-   other member of the view (`D-0056` rule 11): the poll and the language switch both re-render
-   from that address, and a fold that closed itself under a person every few seconds would be
-   worse than no fold.
-5. **Only finished requests are bounded by this.** A request under *your turn*, one still running,
+4. **Only finished requests are bounded by this.** A request under *your turn*, one still running,
    one drafting and one stopped are not finished and are not counted, folded or cut by this entry.
    The amber row `D-0083` rule 2 lifts out of the time order is untouched.
-6. **Nothing is removed.** Every finished request stays in the store and stays readable -- through
+5. **Nothing is removed.** Every finished request stays in the store and stays readable -- through
    the fold, through its own thread, and on every other screen that counts it, including the
    seven-day figures. This is a drawing rule, as `D-0175`'s is.
 
@@ -32588,8 +32595,9 @@ At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
   view.
 - **The count moves when nothing happened to it.** A fourth request finishing pushes the
   third-newest into the fold, so a row a person saw yesterday is behind a press today.
-- **The fold's state in the address is another member the language switch and the poll both have to
-  carry**, which is a cost `D-0056` rule 11 already pays for every other member.
+- **How an opened fold behaves across a re-render is left open here.** This entry settles the bound,
+  the count and the press; where that state is kept, and whether a poll or a language switch carries
+  it, is the screen's question and not this one's.
 
 ### What would falsify it
 
@@ -32597,7 +32605,6 @@ At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
   exist.
 - **A folded finished request that cannot be reached with script off.**
 - **A waiting, running, drafting or stopped request folded or counted by this rule.**
-- **A fold that closes itself on the poll or on the language switch.**
 - **A finished request missing from the count and from the fold**, or dropped from any other
   screen that counts it.
 - **A column whose three rows do not fit the widths `D-0185` names**, or which leaves obvious empty
