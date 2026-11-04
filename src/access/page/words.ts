@@ -80,14 +80,7 @@ export interface PageWords extends DayWords {
   readonly writeNewRequest: string;
   /** The list's own empty state: no request has been made yet. */
   readonly noRequestsYet: string;
-  /**
-   * The line drawn in the list (rule 7). The thread drew one too until this
-   * lap: a reader who has opened a request is reading it now, and the stretch
-   * they had read is already one folded line there.
-   *
-   * It takes when the person last looked, already said as a person reads it,
-   * because the sentence differs in shape between the sets.
-   */
+  /** The list's line (rule 7); the thread drew one too until this lap. */
   readonly lastLookedHere: (when: string) => string;
   /** The same line, where this actor has never looked before. */
   readonly lastLookedNever: string;
@@ -225,13 +218,7 @@ export interface PageWords extends DayWords {
   readonly foldSeen: (lines: number) => string;
   /** What the fold offers, on the line itself: the same word open or shut. */
   readonly foldOpen: string;
-  /**
-   * What the press on a message's own line offers: the words themselves.
-   *
-   * A thread draws every message as one line and keeps its text behind this
-   * press, so the word says *the words*, not *more*: a person pressing it is
-   * reading what was said and not expanding a summary.
-   */
+  /** The press on a message's line: its words, and not *more*. */
   readonly msgOpen: string;
   /** What a person wrote, and what rondo said, as the name on a message. */
   readonly saidByYou: string;
