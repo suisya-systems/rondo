@@ -549,6 +549,12 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   "src/access/publish-repository.ts": {
     hono: ["Context", "Hono"],
   },
+  // rondo#742: `GET /events`, out of `web-app.ts` for the same reason -- the
+  // one read that is held open rather than answered and ended. The app type
+  // only: what it registers is a `GET`, and nothing on it writes.
+  "src/access/events-route.ts": {
+    hono: ["Hono"],
+  },
   // The manifest read once at load, moved out of `web-app.ts` with the map it
   // builds (rondo#674).
   "src/access/served.ts": {
@@ -1527,6 +1533,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/web-app.ts": [HUMAN],
   "src/access/served.ts": [HUMAN],
   "src/access/page-changes.ts": [HUMAN],
+  "src/access/events-route.ts": [HUMAN],
   "src/access/scope-form.ts": [HUMAN],
   "src/access/scope-port.ts": [HUMAN],
   "src/access/web.tsx": [HUMAN],
