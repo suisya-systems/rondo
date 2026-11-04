@@ -80,12 +80,7 @@ export interface PageWords extends DayWords {
   readonly writeNewRequest: string;
   /** The list's own empty state: no request has been made yet. */
   readonly noRequestsYet: string;
-  /**
-   * The line drawn once in the list and once in the thread (rule 7).
-   *
-   * It takes when the person last looked, already said as a person reads it,
-   * because the sentence differs in shape between the sets.
-   */
+  /** The list's line (rule 7); the thread drew one too until this lap. */
   readonly lastLookedHere: (when: string) => string;
   /** The same line, where this actor has never looked before. */
   readonly lastLookedNever: string;
@@ -223,6 +218,8 @@ export interface PageWords extends DayWords {
   readonly foldSeen: (lines: number) => string;
   /** What the fold offers, on the line itself: the same word open or shut. */
   readonly foldOpen: string;
+  /** The press on a message's line: its words, and not *more*. */
+  readonly msgOpen: string;
   /** What a person wrote, and what rondo said, as the name on a message. */
   readonly saidByYou: string;
   readonly saidByRondo: string;
@@ -812,6 +809,7 @@ export const PAGE_EN: PageWords = Object.freeze({
   foldSeen: (lines) =>
     lines === 1 ? "1 line you had already read" : `${String(lines)} lines you had already read`,
   foldOpen: "show",
+  msgOpen: "read the words",
   saidByYou: "You",
   saidByRondo: "rondo",
   emptyAsk: "What would you like to ask for?",
@@ -1474,6 +1472,7 @@ export const PAGE_JA: PageWords = Object.freeze({
   foldTry: (said, lines) => `${said}（${String(lines)} 行）`,
   foldSeen: (lines) => `既読 ${String(lines)} 行`,
   foldOpen: "ひらく",
+  msgOpen: "文面を読む",
   saidByYou: "あなた",
   saidByRondo: "rondo",
   emptyAsk: "何を頼みますか",

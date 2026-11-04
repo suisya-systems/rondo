@@ -164,13 +164,20 @@ test("a stored reading stands in place, the original is the fold under it, and w
   const ja = chromeFor("ja");
   // Drawn for a viewer who never pressed, and with no port at all: it costs nothing now.
   const html = await operatorPage(portsOver(world), "t", THREAD, ja);
-  expect(readableWithoutOpening(html, "パスで鍵にする？")).toBe(true);
+  // **The reading stands in place of the original, both behind the message's
+  // own press.** A message is one line in the record and its words open with
+  // it, so what the thread shows unpressed is the line and not the prose; what
+  // this test holds down is which of the two texts the reading replaces, and
+  // that the original is one more fold under it rather than beside it.
+  expect(html).toContain("パスで鍵にする？");
   expect(html).toContain(`${ja.readInOriginal}</summary>`);
+  expect(html.indexOf("パスで鍵にする？")).toBeLessThan(html.indexOf(ja.readInOriginal));
   expect(readableWithoutOpening(html, "Should the cache be keyed by path?")).toBe(false);
   expect(html).toContain(ja.readInRead(ja.age("1s"), "0.01"));
   expect(pressOf(html)).toEqual([]);
   // The English page draws the original, as it was.
   const en = await operatorPage(portsOver(world), "t", THREAD, EN);
-  expect(readableWithoutOpening(en, "Should the cache be keyed by path?")).toBe(true);
+  expect(en).toContain("Should the cache be keyed by path?");
+  expect(en).not.toContain(EN.readInOriginal);
   expect(en).not.toContain("パスで");
 });

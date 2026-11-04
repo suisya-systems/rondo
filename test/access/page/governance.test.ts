@@ -14,6 +14,7 @@ import {
   openRequest,
   operatorPage,
   portsOver,
+  readableWithoutOpening,
   reserve,
 } from "../page-world.js";
 
@@ -81,15 +82,19 @@ test("with no approval to read, the line says so instead of a spend nobody agree
   const headAt = html.indexOf('class="thread-head"');
   const head = html.slice(headAt, html.indexOf("</header>", headAt));
   expect(head).toContain("No allowance approved yet");
+  // **Always there, whatever it says**: the progress of the work and its money
+  // are read on arrival and never behind a press.
+  expect(readableWithoutOpening(html, "No allowance approved yet")).toBe(true);
+  expect(readableWithoutOpening(html, 'class="gov-chain"')).toBe(true);
   expect(head).not.toContain("$");
   expect(head).not.toMatch(/try \d+ of/);
 });
 
-test("the line where the reading stopped is drawn once, above the first thing that is new", async () => {
+test("the thread lays out nothing again: no line saying where the reading stopped", async () => {
   const world = fresh();
   await openRequest(world, "req-old", "the first thing", 1_000);
   await reserve(world, "i-0001", "the first thing", null, "req-old");
-  // A second message, after the mark: the line belongs above it and nowhere else.
+  // A second message, after the mark: this is where the line used to be.
   await openRequest(world, "m-new", "and one more thing", 4_000);
   const connection = world.connection;
   connection
@@ -108,24 +113,17 @@ test("the line where the reading stopped is drawn once, above the first thing th
     to: null,
   });
 
-  // **Once** (rule 7): one in the thread and one in the list, and no row
-  // carries a *new* mark of its own.
-  const lines = [...html.matchAll(/class="thread-since"/g)];
-  expect(lines).toHaveLength(1);
-  // Newest first (D-0106): under the message that arrived after the look, and
-  // above the one before it.
-  const at = html.indexOf('class="thread-since"');
-  expect(html.indexOf('id="m-new"')).toBeLessThan(at);
-  expect(at).toBeLessThan(html.indexOf('id="req-old"'));
-});
-
-test("a person who has never looked gets no line, because nothing is below it", async () => {
-  const world = fresh();
-  await gateWithChecks(world);
-  // Somebody who has neither looked nor pressed anything: the fixture's
-  // request is ada's, and her own press would count as having looked (rondo#631).
-  const html = await operatorPage(portsOver(world, "bo", []), "t", { kind: "summary" });
+  // **Nothing on this screen lays out again what the person saw last time.**
+  // The thread drew a line saying *below here is what you saw last time*,
+  // which split the record into two stretches a reader had to tell apart; a
+  // thread they have opened is one they are reading now. The mark is still
+  // read -- it folds the stretch they have read into one line -- and the list
+  // keeps its own line, for finding the request that moved.
   expect(html).not.toContain('class="thread-since"');
+  expect(html).not.toContain("you saw last time");
+  // Both messages are still in the record, each as its own line.
+  expect(html).toContain('id="m-new"');
+  expect(html).toContain('id="req-old"');
 });
 
 test("the walk says where this request stands among the ones waiting, and leads to the next", async () => {
