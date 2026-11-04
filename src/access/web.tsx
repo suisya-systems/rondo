@@ -600,6 +600,9 @@ async function threadModel(
           who: message.authorKind === "operator" ? "person" : "rondo",
           voice: message.authorKind,
           said: whoWrote(wording, message, ports.actorId),
+          // The one line the record shows unpressed: the message's own first
+          // line, never a summary of rondo's.
+          line: lineOf(message),
           body: message.body,
           drawn: (() => {
             const markup = drawnBodies.get(message.messageId);
@@ -688,6 +691,7 @@ async function threadModel(
           who: "person",
           voice: "operator",
           said: asked.actor === ports.actorId ? wording.you : asked.actor,
+          line: firstLine(asked.words),
           body: asked.words,
           drawn: null,
           at: wording.age(ago(asked.atMs, nowMs)),
@@ -746,15 +750,18 @@ async function threadModel(
     .toSorted((left, right) => left.atMs - right.atMs || left.at - right.at)
     .map((sorted) => sorted.item);
   /*
-   * **One line, once in the thread** (D-0083 rule 7, D-0061 rule 2.5). The
-   * items are already in the order they happened, so the line sits above the
-   * first one that arrived after the person last looked. There is no line
-   * where they have never looked, and none where everything is older than
-   * the mark: both mean nothing is below it, and a line with nothing under
-   * it says something false.
+   * **Where the person's reading stopped, among the items** (D-0083 rule 7,
+   * D-0061 rule 2.5). The items are already in the order they happened, so
+   * this is the first one that arrived after the person last looked; there is
+   * nothing to mark where they have never looked, and nothing where
+   * everything is older than the mark.
    *
-   * **No row carries a *new* mark of its own** (rule 7): the list face draws
-   * the other one, and between them that is two lines on the page.
+   * **It folds, and it no longer draws a line.** The thread said *below here
+   * is what you saw last time* under this item until this lap, which laid the
+   * reading out again in a second stretch a reader had to tell apart; what is
+   * left is the one job the mark does well, which is `foldSeen`'s -- the read
+   * stretch becomes one folded line (`page-logic/event-fold.ts`). The list
+   * face keeps its own line, for finding the request that moved.
    */
   const lastLookedMs = inbox?.sinceMs ?? null;
   const marks = threadItems.map((item) =>
@@ -783,7 +790,6 @@ async function threadModel(
     fixRunning,
     selectedGovernance,
     threadItems,
-    lastLookedMs,
     lastLookedAbove,
   };
 }
@@ -1168,7 +1174,6 @@ async function threadCentre(
     fixRunning,
     selectedGovernance,
     threadItems,
-    lastLookedMs,
     lastLookedAbove,
   }: ThreadModel,
   { askBox, addBox, questionLead, answeringBox, acts, actsMarkup, nextMarkup }: ThreadBoxes,
@@ -1310,13 +1315,11 @@ async function threadCentre(
                               ? "waits"
                               : null,
                     }),
+              // The mark still folds away the stretch the person has read
+              // (D-0086); the thread no longer draws a line saying so.
               items: folds(wording, threadItems, lastLookedAbove),
               foldOpen: wording.foldOpen,
-              lastLookedAbove,
-              lastLookedSaid:
-                lastLookedMs === null
-                  ? wording.lastLookedNever
-                  : wording.lastLookedHere(wording.age(ago(lastLookedMs, nowMs))),
+              wordsOpen: wording.msgOpen,
               acts: actsMarkup === null ? null : Raw({ html: actsMarkup }),
               next: nextMarkup === null ? null : Raw({ html: nextMarkup }),
               answering: answeringBox === null ? null : Raw({ html: answeringBox }),
