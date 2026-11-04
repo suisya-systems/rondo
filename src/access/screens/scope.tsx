@@ -47,7 +47,14 @@ import { firstLine, requestWords, type Threads, waitingAsk } from "../page-logic
 import { approvalTip, heldAgentTypeLines, scopeBudgetsFromStore, scopeCovers } from "../scope.js";
 import type { Chrome } from "../wording.js";
 import { planStart } from "./plan-start.js";
-import { approvePresses, limitsBlock, numbersFold, promptFold, whatBlock } from "./scope-press.js";
+import {
+  approvePresses,
+  detailsFold,
+  limitsBlock,
+  numbersFold,
+  promptFold,
+  whatBlock,
+} from "./scope-press.js";
 import { tierBlock } from "./tier.js";
 
 /** A locator drawn as a chip: quiet, one line, the whole of it in `title`. */
@@ -839,16 +846,11 @@ async function scopeForm(
       draftedAtMs: nowMs,
     },
   );
+  // Null where there is nothing to choose: an empty fold is a press that opens
+  // onto nothing, which is worse than no fold at all.
+  const choice = planChoice(wording, view, offered, chosen.planDigest);
   return (
     <>
-      {lead}
-      {/* What this screen cannot check, said rather than left to be discovered
-          (rondo#233 S3 screen review): there is no listing of a request's
-          scopes to look in, so a blank draft is not evidence there is none. */}
-      <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
-        {wording.scopeMaybeApproved}
-      </p>
-      {planChoice(wording, view, offered, chosen.planDigest)}
       {whatBlock(
         wording,
         drafted.workspaces.map((workspace) => workspace.repository),
@@ -886,9 +888,25 @@ async function scopeForm(
             simply unused by it, so the two presses post one form. */}
         <input type="hidden" name="iteration" value={newIterationId()} />
         {approvePresses(wording, "scope-plain", "scope-only-plain")}
+        {/* **Which plan this runs on, behind one press** (the gate's reading of
+            the five things this screen always shows): a plan chosen here is a
+            plan rondo already holds, so the choice is work a person does
+            sometimes and not a thing to read before approving. */}
+        {choice === null ? null : detailsFold(wording, choice, "scope-plan")}
         {numbersFold(
           wording,
           <>
+            {/* The prose that says where these numbers came from, with the
+                numbers: it was above the press, and it is explanation, which
+                this screen shows only to a person who asked for it. */}
+            {lead}
+            {/* What this screen cannot check, said rather than left to be
+                discovered (rondo#233 S3 screen review): there is no listing of
+                a request's scopes to look in, so a blank draft is not evidence
+                there is none. */}
+            <p class="note rounded-md border border-border bg-muted/60 px-3 py-2 text-body leading-5">
+              {wording.scopeMaybeApproved}
+            </p>
             {/*
              * **Explicit links, and not a `method="get"` form** (rondo#233 S3).
              * This view carries no htmx to fight; a `get` form would need every
@@ -1470,7 +1488,6 @@ async function draftedForm(
   );
   return (
     <>
-      {lead}
       {whatBlock(
         wording,
         payload.workspaces.map((workspace) => workspace.repository),
@@ -1498,10 +1515,18 @@ async function draftedForm(
         <input type="hidden" name="proposal" value={drafted.proposalId} />
         <input type="hidden" name="iteration" value={newIterationId()} />
         {approvePresses(wording, "scope-draft-plain", "scope-draft-only-plain")}
-        {numbersFold(wording, boxes)}
+        {/* The prose that says whose draft this is and where its numbers came
+            from, with the numbers it explains: explanation this screen shows to
+            a person who asked for it, and not above the press. */}
+        {numbersFold(
+          wording,
+          <>
+            {lead}
+            {boxes}
+          </>,
+        )}
       </form>
-      {/* The drafted plans under the form and its press (D-0106, rondo#408):
-          the lead above still says the work is below. */}
+      {/* The drafted plans under the form and its press (D-0106, rondo#408). */}
       {plans}
     </>
   );
@@ -1547,12 +1572,19 @@ async function draftedPlansList(
           </p>,
           `plan-prompt-${String(plan.index)}`,
         )}
-        {tierBlock(
+        {/* **Which model does this part, behind one press**: the tier, its
+            basis and the laps it was read off are where a number came from, and
+            this screen shows those to a person who opened the fold. */}
+        {detailsFold(
           wording,
-          plan,
-          ports.workers?.fallback ?? null,
-          line?.kind === "read" ? line.line.laps : [],
-          (basis) => basisChip(wording, basis, threads, null, ports.actorId),
+          tierBlock(
+            wording,
+            plan,
+            ports.workers?.fallback ?? null,
+            line?.kind === "read" ? line.line.laps : [],
+            (basis) => basisChip(wording, basis, threads, null, ports.actorId),
+          ),
+          `plan-tier-${String(plan.index)}`,
         )}
         {plan.templatePlan === null
           ? null

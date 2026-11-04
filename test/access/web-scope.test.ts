@@ -320,6 +320,19 @@ test("the scope screen always shows the five things, with one press that approve
     expect(html.indexOf(wording.scopePromptFold)).toBeLessThan(
       html.indexOf(wording.scopeDoneHeading),
     );
+    // **And the explanation, and which plan it runs on** (the gate's reading of
+    // the five): the lead prose and the caveat about an approval this screen
+    // cannot see are inside the numbers' fold, not above the press; nothing but
+    // the five is between the top of the screen and the main button.
+    const press = html.indexOf(`>${wording.scopeStartAction}</button>`);
+    expect(html.indexOf(wording.scopeNumbersFold)).toBeLessThan(html.indexOf(wording.scopeLead));
+    expect(html.indexOf(wording.scopeNumbersFold)).toBeLessThan(
+      html.indexOf(wording.scopeMaybeApproved),
+    );
+    expect(html.indexOf(wording.scopeLead)).toBeGreaterThan(press);
+    expect(html.indexOf(wording.scopeMaybeApproved)).toBeGreaterThan(press);
+    // The only headings above the press are the two blocks the five live in.
+    expect(html.slice(0, press).match(/<h3 /g)).toHaveLength(2);
     // **Gone: the long budget prose, and the second approve press.**
     expect(html).not.toContain(wording.scopeCostCaveat);
     expect(html).not.toContain(wording.scopeSampleHeading);
@@ -1462,9 +1475,10 @@ for (const wording of [EN, chromeFor("ja")]) {
   /** The plans' section alone: below it the recorded fold holds rondo's own paths. */
   const plansPart = (drawn: string): string => {
     const from = drawn.indexOf('id="plans"');
-    // The block after the choice, which is what the screen always shows now:
-    // the rounds' own links moved into the numbers' fold below it.
-    const to = drawn.indexOf('id="scope-what"');
+    // The choice is behind the plan fold now (the gate's reading of the five
+    // things this screen always shows), and the numbers' fold follows it.
+    expect(drawn.indexOf('id="scope-plan"')).toBeLessThan(from);
+    const to = drawn.indexOf('id="scope-numbers"');
     expect(from).toBeGreaterThan(-1);
     expect(to).toBeGreaterThan(from);
     return drawn.slice(from, to);

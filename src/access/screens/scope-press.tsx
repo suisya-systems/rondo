@@ -169,6 +169,27 @@ export function numbersFold(wording: Chrome, inside: unknown) {
 }
 
 /**
+ * **The plan the work runs on and the model that does it, behind one press.**
+ *
+ * Both are *which* of rondo's own things this approval reaches for, not a cap
+ * the approval sets: a person who approves reads the caps and presses, and a
+ * person who wants to run this on another plan, or to see which model a part
+ * was given and why, opens the fold. They were unfolded until the screen was
+ * narrowed to the five things it always shows.
+ */
+export function detailsFold(wording: Chrome, inside: unknown, id?: string) {
+  return (
+    <details class="group rounded-md border border-border" {...(id === undefined ? {} : { id })}>
+      <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+        {chevron()}
+        {wording.scopeDetailsFold}
+      </summary>
+      <div class="space-y-2 border-t border-border p-3">{inside}</div>
+    </details>
+  );
+}
+
+/**
  * **The whole of what the side doing the work is sent, behind one press**: the
  * drafter's prompt for a part, the rule files a lap is pointed at, rondo's own
  * definition of done, and the exact words of it. It used to be unfolded, which

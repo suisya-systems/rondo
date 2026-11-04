@@ -868,6 +868,7 @@ export const JA: Chrome = Object.freeze({
   scopeOnlyPlain: "承認を記録します。作業はまだ開始しません",
   scopeNumbersFold: "上限を変える・それぞれの数値の出どころを見る",
   scopePromptFold: "作業を実行する側に渡す指示の全文",
+  scopeDetailsFold: "これを実行する計画と、担当するモデル",
   scopeApproved: (since) => `${since}前に承認済み`,
   scopeDigest: (digest) => `識別子 ${digest}`,
   scopeNotThisRequest: "その承認はこの依頼のものではないので、ここには何も表示しません。",
