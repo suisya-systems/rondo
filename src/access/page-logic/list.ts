@@ -17,6 +17,13 @@
  * **The last-looked line is a position, not a mark per row** (rule 7). This
  * answers *which row does the line sit above*, once, and no row carries a
  * *new* of its own.
+ *
+ * **A row says three things and the done ones fold** (rondo#746). What a row
+ * always shows is the person's own short name for the request, one of
+ * {@link RowWord}'s three words, and how long ago it last moved; the
+ * {@link DONE_SHOWN} newest done requests keep their place in the time order
+ * and the older ones are handed over as {@link RequestList.moreDone}, for the
+ * one press at the foot of the list.
  */
 import { approvedForPublication, type IterationRecord } from "../../store/records.js";
 import { byDay, type DayCut } from "./days.js";
@@ -73,6 +80,61 @@ export interface RequestRow {
   readonly atMs: number;
 }
 
+/**
+ * The one word a row says about where its request stands (rondo#746).
+ *
+ * **Three words are the whole vocabulary**: the person's turn, in progress,
+ * done. Nothing here is words -- each is a name the wording set says, as
+ * `./days.ts` says of its cuts -- and `done` is what the list folds by, so
+ * which states fall under it is a fact about the list and not about markup.
+ */
+export type RowWord = "yourTurn" | "running" | "done";
+
+/**
+ * The word for one row.
+ *
+ * **Done is where nothing further happens**: a request finished, one given up
+ * on, and a thread that asked rondo a question rather than for work. In
+ * progress is the rest of what is open, which includes a request rondo has not
+ * begun and one whose plan is still being drafted: the person has asked, and
+ * what they asked for has not happened yet.
+ *
+ * **A request run as several lines is read from its parts** (D-0098 rule 8.1),
+ * not from the one lap under it: it is the person's turn if any part is, in
+ * progress while any part is still to run, and done only once every part has
+ * ended.
+ */
+export function rowWord(row: RequestRow): RowWord {
+  if (row.state === "waitingOnYou") {
+    return "yourTurn";
+  }
+  const parts = row.parts ?? null;
+  if (parts !== null) {
+    return parts.yours > 0
+      ? "yourTurn"
+      : parts.running + parts.waiting + parts.toStart > 0
+        ? "running"
+        : "done";
+  }
+  switch (row.state) {
+    case "running":
+    case "drafting":
+    case "notStarted":
+      return "running";
+    default:
+      return "done";
+  }
+}
+
+/**
+ * How many done requests the list always shows, newest first (rondo#746).
+ *
+ * The rest are behind one press. A list where every request that ever ended
+ * stays drawn grows without bound, and what a person reads it for is the work
+ * that is still moving.
+ */
+export const DONE_SHOWN = 3;
+
 /** The list, as the left face draws it top to bottom. */
 export interface RequestList {
   /** Lifted out of the time order; empty when nothing waits on the person. */
@@ -80,9 +142,22 @@ export interface RequestList {
   /** Everything else, cut by day, newest group first. */
   readonly days: readonly { readonly cut: DayCut; readonly rows: readonly RequestRow[] }[];
   /**
+   * The done requests older than the {@link DONE_SHOWN} newest, newest first:
+   * what the one press at the foot of the list gives back (rondo#746). Empty
+   * where there are no more than that many, and then no press is drawn.
+   */
+  readonly moreDone: readonly RequestRow[];
+  /**
    * The row the "you last looked down to here" line sits above, or null when
    * there is no line to draw -- which is either that this actor has never
    * looked, or that they have seen everything.
+   *
+   * **The position is the time order's and not the drawn order's**
+   * (rondo#746): it is read off every request of the list sorted by when it
+   * last moved, so the fold -- which draws what it took at the foot, under
+   * requests older than they are -- moves no line. It may therefore name one
+   * of {@link moreDone}'s rows, and the face then draws the line inside the
+   * fold and opens it, as it opens it for the request the centre is showing.
    */
   readonly lastLookedAbove: string | null;
   /**
@@ -231,16 +306,36 @@ export function requestList(
     .filter((row) => row.state === "waitingOnYou")
     .toSorted((left, right) => left.atMs - right.atMs);
   const rest = rows.filter((row) => row.state !== "waitingOnYou");
-  const days = byDay(rest, (row) => row.atMs, nowMs);
-  // The first row, in drawing order, that had already been seen. Only the rows
-  // in the day groups are considered: what is lifted under *your turn* is
-  // waiting on the person now, whenever it arrived, so a line above it would
-  // say something false about it.
-  const inOrder = days.flatMap((group) => group.rows);
+  // **The newest done requests keep their place in the time order** and the
+  // older ones are gathered behind one press. They are chosen over the whole
+  // list rather than per day group, because *the three most recent* is a fact
+  // about the list and a day heading would otherwise hold three of its own.
+  const done = rest.filter((row) => rowWord(row) === "done");
+  const newest = done.toSorted((left, right) => right.atMs - left.atMs);
+  const kept = new Set(newest.slice(0, DONE_SHOWN).map((row) => row.messageId));
+  const moreDone = newest.slice(DONE_SHOWN);
+  const shown = rest.filter((row) => rowWord(row) !== "done" || kept.has(row.messageId));
+  const days = byDay(shown, (row) => row.atMs, nowMs);
+  // **The line's position is a fact about the time order, read off every
+  // request in that order** (rule 7, rondo#746) -- the done ones the fold took
+  // included, and never off the order the list happens to draw. The fold draws
+  // the rows it took at the foot, under requests older than they are, so the
+  // drawn order is not the time order: reading the position off it would find
+  // the first *drawn* row already seen, which where a running request is older
+  // than a folded done one is the running row -- putting unread done requests
+  // below the line. Reading it off the shown rows alone loses the line
+  // entirely where every request already seen is one the fold took.
+  //
+  // What is lifted under *your turn* is left out, as rule 2's lift takes it out
+  // of the time order altogether: it waits on the person now, whenever it
+  // arrived, so a line above it would say something false about it -- and the
+  // face draws it where no line of the order belongs.
+  const inOrder = rest.toSorted((left, right) => right.atMs - left.atMs);
   const seen = sinceMs === null ? undefined : inOrder.find((row) => row.atMs <= sinceMs);
   return {
     yourTurn,
     days,
+    moreDone,
     // No line where everything is new, or where nothing is: in both cases it
     // would sit at one end and divide nothing.
     lastLookedAbove:

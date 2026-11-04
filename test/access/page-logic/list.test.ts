@@ -9,11 +9,14 @@
 import { expect, test } from "vitest";
 import type { RequestRow, ThingDrawn } from "../../../src/access/page-logic/list.js";
 import {
+  DONE_SHOWN,
   placeSaid,
   repositoryOf,
   requestList,
   rowStateOf,
+  rowWord,
 } from "../../../src/access/page-logic/list.js";
+import type { PartCounts } from "../../../src/access/page-logic/parts.js";
 import type { IterationRecord } from "../../../src/store/records.js";
 
 const at = (y: number, m: number, d: number, h = 12): number => new Date(y, m - 1, d, h).getTime();
@@ -72,6 +75,87 @@ test("everything else is cut by day and not by what it is doing", () => {
   expect(list.days[1]?.cut).toBe("yesterday");
 });
 
+test("every state a row can be in says one of three words, and done is where nothing happens next", () => {
+  const wordOf = (over: Partial<RequestRow>) => rowWord(row({ messageId: "r", atMs: 1, ...over }));
+  // The person's turn outranks everything, as the lift does.
+  expect(wordOf({ state: "waitingOnYou" })).toBe("yourTurn");
+  // Open work, whether rondo has begun it or is still drafting its plan: the
+  // person has asked, and what they asked for has not happened yet.
+  expect(wordOf({ state: "running" })).toBe("running");
+  expect(wordOf({ state: "drafting" })).toBe("running");
+  expect(wordOf({ state: "notStarted" })).toBe("running");
+  // Done is everything nothing further happens to: finished, given up on,
+  // approved and awaiting its publication, and a thread that asked rondo a
+  // question rather than for work.
+  expect(wordOf({ state: "finished" })).toBe("done");
+  expect(wordOf({ state: "approved" })).toBe("done");
+  expect(wordOf({ state: "stopped" })).toBe("done");
+  expect(wordOf({ state: "question" })).toBe("done");
+});
+
+test("a request run as several lines takes its word from its parts (D-0098 rule 8.1)", () => {
+  const counts = (over: Partial<PartCounts>): PartCounts => ({
+    total: 3,
+    running: 0,
+    yours: 0,
+    waiting: 0,
+    waitingOn: null,
+    toStart: 0,
+    finished: 0,
+    stopped: 0,
+    ...over,
+  });
+  const wordOf = (parts: PartCounts) =>
+    rowWord(row({ messageId: "r", atMs: 1, state: "running", parts }));
+  // One part at its gate is the person's turn, whatever the rest are doing.
+  expect(wordOf(counts({ yours: 1, running: 2 }))).toBe("yourTurn");
+  // Any part still to run keeps the request in progress -- including one held
+  // until an earlier part is merged, which is a wait rondo clears itself.
+  expect(wordOf(counts({ running: 1, finished: 2 }))).toBe("running");
+  expect(wordOf(counts({ waiting: 1, finished: 2 }))).toBe("running");
+  expect(wordOf(counts({ toStart: 1, finished: 2 }))).toBe("running");
+  // Done only once every part has ended, however each one ended.
+  expect(wordOf(counts({ finished: 2, stopped: 1 }))).toBe("done");
+});
+
+test("the three newest done requests keep their place and the older ones are handed over", () => {
+  const list = requestList(
+    [
+      row({ messageId: "running-older", atMs: at(2026, 9, 1), state: "running" }),
+      row({ messageId: "done-1", atMs: at(2026, 9, 20, 9) }),
+      row({ messageId: "done-2", atMs: at(2026, 9, 19) }),
+      row({ messageId: "done-3", atMs: at(2026, 9, 18) }),
+      row({ messageId: "done-4", atMs: at(2026, 9, 17) }),
+      row({ messageId: "done-5", atMs: at(2026, 8, 20) }),
+    ],
+    null,
+    NOW,
+  );
+  expect(DONE_SHOWN).toBe(3);
+  // The three newest stay where the day cut put them, each under its own
+  // heading: the fold does not gather them into a group of their own.
+  expect(list.days.map((group) => [group.cut, group.rows.map((each) => each.messageId)])).toEqual([
+    ["today", ["done-1"]],
+    ["yesterday", ["done-2"]],
+    ["lastWeek", ["done-3"]],
+    ["month", ["running-older"]],
+  ]);
+  // The rest are handed over newest first, and a request still running is
+  // never among them however old it is.
+  expect(list.moreDone.map((each) => each.messageId)).toEqual(["done-4", "done-5"]);
+});
+
+test("no more than three done requests leaves nothing to fold", () => {
+  for (const count of [0, 1, 2, 3]) {
+    const rows = Array.from({ length: count }, (_, index) =>
+      row({ messageId: `done-${String(index)}`, atMs: at(2026, 9, 20 - index) }),
+    );
+    const list = requestList(rows, null, NOW);
+    expect(list.moreDone).toEqual([]);
+    expect(list.days.flatMap((group) => group.rows)).toHaveLength(count);
+  }
+});
+
 test("the last-looked line sits above the newest row already seen", () => {
   const list = requestList(
     [
@@ -83,6 +167,56 @@ test("the last-looked line sits above the newest row already seen", () => {
     NOW,
   );
   expect(list.lastLookedAbove).toBe("seen-before");
+});
+
+test("the line is read off the whole list, the done requests the fold took included", () => {
+  // Five done requests, so two are behind the press, and the person last
+  // looked while the oldest two were already there. The line's position is
+  // among those two -- reading it off the shown rows alone would find no row
+  // already seen and draw no line, which would say they had never looked.
+  const rows = [
+    row({ messageId: "done-1", atMs: at(2026, 9, 20, 9) }),
+    row({ messageId: "done-2", atMs: at(2026, 9, 19) }),
+    row({ messageId: "done-3", atMs: at(2026, 9, 18) }),
+    row({ messageId: "done-4", atMs: at(2026, 9, 17) }),
+    row({ messageId: "done-5", atMs: at(2026, 8, 20) }),
+  ];
+  const list = requestList(rows, at(2026, 9, 17, 18), NOW);
+  expect(list.moreDone.map((each) => each.messageId)).toEqual(["done-4", "done-5"]);
+  expect(list.lastLookedAbove).toBe("done-4");
+  // And where only the oldest of all was seen, the line is still the fold's,
+  // on the row it belongs above rather than on the press.
+  expect(requestList(rows, at(2026, 8, 21), NOW).lastLookedAbove).toBe("done-5");
+  // A row the fold did not take is still where the line goes when the
+  // position is its: the fold moves no line it does not hold.
+  expect(requestList(rows, at(2026, 9, 18, 18), NOW).lastLookedAbove).toBe("done-3");
+});
+
+test("the line's position is the time order's, not the order the fold draws in", () => {
+  // Five done requests and one still running that is older than every one of
+  // them, so the fold draws two done requests *under* the running row. The
+  // person last looked when the oldest done request had just arrived.
+  const rows = [
+    row({ messageId: "done-1", atMs: at(2026, 9, 20, 9) }),
+    row({ messageId: "done-2", atMs: at(2026, 9, 19) }),
+    row({ messageId: "done-3", atMs: at(2026, 9, 18) }),
+    row({ messageId: "done-4", atMs: at(2026, 9, 17) }),
+    row({ messageId: "done-5", atMs: at(2026, 9, 16) }),
+    row({ messageId: "running-oldest", atMs: at(2026, 9, 10), state: "running" }),
+  ];
+  const list = requestList(rows, at(2026, 9, 16, 18), NOW);
+  expect(list.moreDone.map((each) => each.messageId)).toEqual(["done-4", "done-5"]);
+  // In time order the oldest row already seen is `done-5`, and that is where
+  // the line goes. Walking the drawn rows instead -- the day groups, then the
+  // rows behind the press -- would reach `running-oldest` first and leave
+  // `done-4`, which the person has never seen, below the line.
+  expect(list.lastLookedAbove).toBe("done-5");
+  // And the running row is still where the line goes when the position is its
+  // own: the mix is read by time, not by which section a row is drawn in.
+  expect(requestList(rows, at(2026, 9, 10, 18), NOW).lastLookedAbove).toBe("running-oldest");
+  // A reading between the two folded rows puts the line on the newer of them,
+  // with the running row -- older than both -- still under it.
+  expect(requestList(rows, at(2026, 9, 17, 18), NOW).lastLookedAbove).toBe("done-4");
 });
 
 test("no line is drawn where it would divide nothing", () => {

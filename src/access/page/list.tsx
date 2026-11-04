@@ -9,13 +9,24 @@
  * amber is the only amber in the list, because amber means *a person must
  * act* and nothing else on this face does.
  *
- * **What a row says**: the person's own words as its title, the repository the
- * work is in (`D-0081`), one sentence of state, and when it last moved. No
- * identifier of rondo's (`D-0076`) -- no lap id, no status enum.
+ * **What a row says, always, is three things** (rondo#746): the person's own
+ * short name for the request -- their first line, cut to the row -- one word of
+ * state (`rowWord`), and when it last moved. Never the request's text, and no
+ * identifier of rondo's (`D-0076`) -- no lap id, no status enum. The sentences
+ * a row used to carry are kept on its hover, and the account they summarised is
+ * on the request's own thread. The repository is still said where two requests
+ * would otherwise read the same (`D-0081` rule 4.2), which is not one of the
+ * three because it is not always shown.
+ *
+ * **The done requests fold** (rondo#746). The three newest keep their place in
+ * the time order and the rest are behind one press that names how many it
+ * holds, so a list a person reads for what is still moving does not grow with
+ * everything that has ever ended.
  *
  * **One line, not a mark per row** (rule 7): "below here is what you saw last
  * time" is drawn once, between the rows that arrived since and the rows that
- * did not.
+ * did not -- inside the fold where that position is one of the rows the fold
+ * took, which opens it, because a line nobody can see is no line.
  *
  * **The week's allowance is no longer a line under the list** (`D-0207`
  * rules 1 and 5). Rule 5 of `D-0083` put one here and it stood on every view:
@@ -29,7 +40,14 @@
  */
 
 import type { DayCut } from "../page-logic/days.js";
-import type { FlowAskRow, RequestList, RequestRow, RowState } from "../page-logic/list.js";
+import {
+  type FlowAskRow,
+  type RequestList,
+  type RequestRow,
+  type RowState,
+  type RowWord,
+  rowWord,
+} from "../page-logic/list.js";
 import { flowAskAnchor, viewHref } from "../page-logic/routes.js";
 import type { Chrome } from "../wording.js";
 
@@ -122,47 +140,33 @@ export interface ListProps {
   readonly openId: string | null;
 }
 
-/** Which shape a row's mark is drawn in: one per thing a row can be. */
-type Mark = "wait" | "run" | "ok" | "fail" | "done" | "stopped" | "idle";
+/** Which shape a row's mark is drawn in: one per word a row can say. */
+type Mark = "wait" | "run" | "done";
 
 /**
- * A row's mark, from its state and, once published, its checks.
+ * A row's mark, which is its word drawn (rondo#746).
  *
  * **The shape says the state and the colour only adds to it** (rondo#589,
- * WCAG 1.4.1). Running, done, stopped and not started were one grey dot, so
- * they could not be told apart, and running had lost the turning mark
- * `D-0082` rule 3 keeps for it.
+ * WCAG 1.4.1), and what it says is now exactly what the word beside it says.
+ * There were seven shapes against three words, so the mark went on claiming
+ * differences the row no longer makes -- the checks' tick and cross, a slashed
+ * ring for a request given up on. Those belong to the account on the thread.
  */
-function markOf(row: RequestRow): Mark {
-  const checks = row.published?.checks.kind;
-  if (row.state === "waitingOnYou") {
-    return "wait";
-  }
-  if (checks === "green") {
-    return "ok";
-  }
-  if (checks === "red") {
-    return "fail";
-  }
-  switch (row.state) {
+function markOf(word: RowWord): Mark {
+  switch (word) {
+    case "yourTurn":
+      return "wait";
     case "running":
       return "run";
-    case "approved":
-    case "finished":
-      return "done";
-    case "stopped":
-      return "stopped";
     default:
-      return "idle";
+      return "done";
   }
 }
 
 /**
  * The shapes are the page's own status glyphs (`glyph` in `vocabulary.tsx`),
- * drawn here in React: a ring round a dot for *your turn*, a turning arc for
- * running, a tick and a cross for the checks, a slashed ring for stopped. A
- * finished row is a plain disc and one not started yet a dashed ring -- the
- * shape with nothing in it.
+ * drawn here in React: a ring round a dot for *your turn*, a turning arc for in
+ * progress, and a plain disc for done.
  */
 function MarkShape({ mark }: { readonly mark: Mark }) {
   switch (mark) {
@@ -180,31 +184,21 @@ function MarkShape({ mark }: { readonly mark: Mark }) {
           <path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" />
         </>
       );
-    case "ok":
-      return (
-        <>
-          <circle cx="8" cy="8" r="6.2" />
-          <path d="m5.4 8.2 1.8 1.8 3.4-3.6" />
-        </>
-      );
-    case "fail":
-      return (
-        <>
-          <circle cx="8" cy="8" r="6.2" />
-          <path d="m5.8 5.8 4.4 4.4m0-4.4-4.4 4.4" />
-        </>
-      );
-    case "done":
-      return <circle cx="8" cy="8" r="5" fill="currentColor" stroke="none" />;
-    case "stopped":
-      return (
-        <>
-          <circle cx="8" cy="8" r="6.2" />
-          <path d="m3.8 12.2 8.4-8.4" />
-        </>
-      );
     default:
-      return <circle cx="8" cy="8" r="6.2" strokeDasharray="2.6 2.3" />;
+      return <circle cx="8" cy="8" r="5" fill="currentColor" stroke="none" />;
+  }
+}
+
+/** The word a row says, from the set in force (rondo#746). */
+function wordFor(wording: Chrome, word: RowWord): string {
+  switch (word) {
+    case "yourTurn":
+      // The heading's own word, said once in the catalogue.
+      return wording.yourTurn;
+    case "running":
+      return wording.listRunning;
+    default:
+      return wording.listDone;
   }
 }
 
@@ -222,7 +216,8 @@ function Row({
   readonly open: boolean;
 }) {
   const waiting = row.state === "waitingOnYou";
-  const mark = markOf(row);
+  const word = rowWord(row);
+  const mark = markOf(word);
   const said = stateFor(wording, row);
   return (
     // **The open request is marked, and every row is a `j`/`k` stop**
@@ -233,13 +228,14 @@ function Row({
       href={hrefOf(row.messageId)}
       data-row=""
       aria-current={open ? "page" : undefined}
-      // A row cut to one line (rondo#592) keeps what it cut on hover: two
-      // requests with one title are told apart by their repository and state.
-      title={
-        waiting
-          ? undefined
-          : [row.title, row.repository, said].filter((line) => line !== null).join("\n")
-      }
+      // **Every row is one line now (rondo#746), so every row keeps what it
+      // cut on hover** (rondo#592, which gave the hover to the cut rows only).
+      // The whole of the person's first line is here, the repository where the
+      // row does not draw it, and the one sentence of state the row no longer
+      // says: which kind of wait is in play (rondo#611, #643), what became of
+      // the publication (rondo#376, #411) and the parts counted (D-0098 rule
+      // 8.1). The authoritative account is on the request's own thread.
+      title={[row.title, row.repository, said].filter((line) => line !== null).join("\n")}
     >
       {/*
        * One mark, amber only where a person must act (D-0082 rule 2), green
@@ -260,16 +256,58 @@ function Row({
         <MarkShape mark={mark} />
       </svg>
       <div className="list-row-body">
-        {/* The person's own words. `lang=""` because rondo does not know what
-            language they wrote in (D-0055 rule 8). */}
+        {/* The person's own words, their first line and cut to the row's own
+            (rondo#746). `lang=""` because rondo does not know what language
+            they wrote in (D-0055 rule 8). */}
         <b lang="">{row.title}</b>
-        <p>
-          {row.repository === null ? null : <span className="list-repo">{row.repository}</span>}
-          {said}
-        </p>
+        {/* Said only where two requests would otherwise read the same
+            (D-0081 rule 4.2), so it is not one of the row's three things. */}
+        {row.repository === null ? null : <span className="list-repo">{row.repository}</span>}
       </div>
+      {/* The second of the three: one word, never a sentence. */}
+      <p>{wordFor(wording, word)}</p>
       <time>{agoOf(row.atMs)}</time>
     </a>
+  );
+}
+
+/**
+ * One row of the time order, with the last-looked line above it where the line
+ * falls there (rule 7).
+ *
+ * The line is one position in the whole order and the fold hides part of that
+ * order (rondo#746), so the rows behind the press are drawn through this too:
+ * the line is the same line wherever it falls, and the alternative is a reading
+ * position that vanishes whenever the fold happens to hold it.
+ */
+function RowInOrder({
+  wording,
+  row,
+  hrefOf,
+  agoOf,
+  openId,
+  lastLookedAbove,
+  lastLookedSaid,
+}: {
+  readonly wording: Chrome;
+  readonly row: RequestRow;
+  readonly hrefOf: (messageId: string) => string;
+  readonly agoOf: (atMs: number) => string;
+  readonly openId: string | null;
+  readonly lastLookedAbove: string | null;
+  readonly lastLookedSaid: string;
+}) {
+  return (
+    <div>
+      {row.messageId === lastLookedAbove ? <p className="list-since">{lastLookedSaid}</p> : null}
+      <Row
+        wording={wording}
+        row={row}
+        hrefOf={hrefOf}
+        agoOf={agoOf}
+        open={row.messageId === openId}
+      />
+    </div>
   );
 }
 
@@ -307,7 +345,7 @@ function PausedRow({
         <circle cx="8" cy="8" r="6.2" />
         <path d="M6.4 5.6v4.8m3.2-4.8v4.8" />
       </svg>
-      <div className="list-row-body">
+      <div className="list-row-note">
         <b>{wording.triageGoalScopePaused}</b>
         <p>
           <span className="list-repo">{repository}</span>
@@ -353,7 +391,7 @@ function AskingRow({
       >
         <MarkShape mark="wait" />
       </svg>
-      <div className="list-row-body">
+      <div className="list-row-note">
         <b>{wording.rowFlowAsks(row.points)}</b>
         <p>
           <span className="list-repo">{row.repository}</span>
@@ -390,7 +428,7 @@ function UnreadableRow({ wording, id }: { readonly wording: Chrome; readonly id:
       >
         <MarkShape mark="wait" />
       </svg>
-      <div className="list-row-body">
+      <div className="list-row-note">
         <b>{wording.endUnnamed}</b>
         <p>{wording.unreadableHolds}</p>
       </div>
@@ -450,21 +488,56 @@ export function RequestsFace({
         <div key={group.cut}>
           <h6 className="list-heading">{headingFor(wording, group.cut)}</h6>
           {group.rows.map((row) => (
-            <div key={row.messageId}>
-              {row.messageId === list.lastLookedAbove ? (
-                <p className="list-since">{lastLookedSaid}</p>
-              ) : null}
-              <Row
-                wording={wording}
-                row={row}
-                hrefOf={hrefOf}
-                agoOf={agoOf}
-                open={row.messageId === openId}
-              />
-            </div>
+            <RowInOrder
+              key={row.messageId}
+              wording={wording}
+              row={row}
+              hrefOf={hrefOf}
+              agoOf={agoOf}
+              openId={openId}
+              lastLookedAbove={list.lastLookedAbove}
+              lastLookedSaid={lastLookedSaid}
+            />
           ))}
         </div>
       ))}
+      {/*
+       * **The done requests older than the newest three, behind one press**
+       * (rondo#746). The rows are in the page, shut, and opening is the
+       * browser's own act -- `<details>` and nothing else, as the thread's
+       * folds are (`page/events.tsx`): no state of the page's and no address
+       * of its own, so neither grows with a reading position. Nothing at all
+       * is drawn where there are no more than three.
+       */}
+      {list.moreDone.length === 0 ? null : (
+        <details
+          className="list-fold"
+          // Open where the request the centre is showing is one of these
+          // (rondo#587): a person reading a request must be able to find it on
+          // the list, and the mark that says which row it is cannot be seen
+          // through a shut fold. The same holds of the last-looked line: where
+          // the position it marks is in here -- which is where every request
+          // the person had already seen is one the fold took -- a shut fold
+          // would be the line not being drawn at all.
+          open={list.moreDone.some(
+            (row) => row.messageId === openId || row.messageId === list.lastLookedAbove,
+          )}
+        >
+          <summary>{wording.listMoreDone(list.moreDone.length)}</summary>
+          {list.moreDone.map((row) => (
+            <RowInOrder
+              key={row.messageId}
+              wording={wording}
+              row={row}
+              hrefOf={hrefOf}
+              agoOf={agoOf}
+              openId={openId}
+              lastLookedAbove={list.lastLookedAbove}
+              lastLookedSaid={lastLookedSaid}
+            />
+          ))}
+        </details>
+      )}
     </div>
   );
 }
