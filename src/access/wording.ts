@@ -1021,27 +1021,20 @@ export interface Chrome
   readonly scopePlain: string;
   /**
    * **What the work will do and what it will not, in three sentences** (the
-   * scope screen's own axis): rondo's words over the scope itself -- where it
-   * runs, that it stops at a gate rather than going further, and which outward
-   * acts it is allowed. Never a paraphrase of the request, whose own words are
-   * at the head of the screen.
+   * scope screen's own axis, `screens/scope-press.tsx`): rondo's words over the
+   * scope itself, never a paraphrase of the request.
    */
   readonly scopeWhatHeading: string;
   readonly scopeWhatDoes: (repository: string) => string;
   readonly scopeWhatStops: string;
-  /** The acts as a person reads them, already said in their words, or none of them. */
+  /** The acts as a person reads them, already in their words, or none of them. */
   readonly scopeWhatNot: (acts: readonly string[]) => string;
   /** The caps a person reads before pressing: the cost, the redos, the acts. */
   readonly scopeLimitsHeading: string;
   /**
-   * **The one press that approves and starts** (this screen's main press), and
-   * the approval that starts nothing yet beside it.
-   *
-   * Approving and starting were two presses on two screens; the person read the
-   * caps, approved, and then had to find a second screen to press *start* on.
-   * One press does both now, and the second press is the one that stops after
-   * the approval. Both are safe to repeat: the scope id and the lap id are
-   * minted when the form is drawn, so a double press records one scope and
+   * **The one press that approves and starts**, and the approval that starts
+   * nothing yet beside it. Both are safe to repeat: the scope id and the lap id
+   * are minted when the form is drawn, so a double press records one scope and
    * starts one lap (see {@link startAgainSafe}).
    */
   readonly scopeStartAction: string;

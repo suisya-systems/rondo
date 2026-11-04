@@ -212,14 +212,69 @@ test("a drafted request's scope screen is the draft: its plans, its values in th
       `<input type="hidden" name="draft_digest" value="${w.draft.scopeDigest}"/>`,
     );
     expect(page).toContain('id="drafted-plans"');
+    // The words each part is sent are on the screen, behind the one press that
+    // holds the whole of what the worker is told.
     for (const prompt of DRAFTED_PROMPTS) {
       expect(page).toContain(prompt);
+      expect(page.indexOf(wording.scopePromptFold)).toBeLessThan(page.indexOf(prompt));
     }
     expect(page).toContain(`value="${String(budgets.laps)}"`);
     expect(page).toContain(`value="${budgets.cost_usd.toFixed(2)}"`);
-    expect(page).toContain(wording.scopeDraftedAction);
+    expect(page).toContain(wording.scopeStartAction);
+    expect(page).toContain(wording.scopeOnlyAction);
     // Nothing narrowed, so nothing says it was.
     expect(page).not.toContain(wording.scopeNarrowed(budgets.cost_usd.toFixed(2)));
+  }
+});
+
+test("the drafted scope screen always shows the five things and nothing else of the budgets, with the rest one press away", async () => {
+  const w = await draftedRequest();
+  const ports = portsOver(w, "ada", []);
+  const budgets = w.draft.payload.budgets;
+  for (const wording of [EN, chromeFor("ja")]) {
+    const page = await operatorPage(
+      ports,
+      "t",
+      scopeScreen(null),
+      wording,
+      mint,
+      () => "scope-x",
+      () => "lap-y",
+    );
+    // **1-3: what it does and what it does not, in three sentences of rondo's
+    // own, before anything else of the decision.**
+    expect(page).toContain('id="scope-what"');
+    expect(page).toContain(wording.scopeWhatStops);
+    expect(page).toContain(wording.scopeWhatNot([]));
+    // **4-5: the cost cap, the redos and what is left to the worker.**
+    expect(page).toContain('id="scope-limits"');
+    expect(page).toContain(wording.scopeLimitsHeading);
+    expect(page).toContain(budgets.cost_usd.toFixed(2));
+    expect(page).toContain(wording.scopeOutwardNone);
+    expect(page.indexOf('id="scope-what"')).toBeLessThan(page.indexOf('id="scope-limits"'));
+    // **6: the one press, and the quieter one beside it.** One form, two
+    // submits: only the main one carries the field that widens the act.
+    expect(page).toContain('name="start" value="1"');
+    expect(page.match(/name="start" value="1"/g)).toHaveLength(1);
+    expect(page).toContain(`<input type="hidden" name="proposal" value="${w.proposalId}"/>`);
+    // **One minted lap id and one minted scope id for both presses**, which is
+    // what makes a double press one scope and one lap.
+    expect(page.match(/name="iteration" value="lap-y"/g)).toHaveLength(1);
+    expect(page.match(/name="scope_id" value="scope-x"/g)).toHaveLength(1);
+    expect(page).toContain(wording.startAgainSafe);
+
+    // **Behind one press: editing the caps and where each number came from.**
+    expect(page).toContain(wording.scopeNumbersFold);
+    expect(page.indexOf(wording.scopeNumbersFold)).toBeLessThan(page.indexOf('name="cost_usd"'));
+    expect(page).toContain(wording.scopeBasesFold(2));
+    // **Gone from the screen: the long budget prose and the second approve
+    // press.** There is one press of each kind, not one at the top of the form
+    // and another under its last box.
+    expect(page).not.toContain(wording.scopeCostCaveat);
+    expect(page).not.toContain(wording.scopeSampleHeading);
+    const label = (said: string) => page.split(`>${said}</button>`).length - 1;
+    expect(label(wording.scopeStartAction)).toBe(1);
+    expect(label(wording.scopeOnlyAction)).toBe(1);
   }
 });
 

@@ -264,6 +264,68 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   expect(html).not.toContain('http-equiv="refresh"');
 });
 
+test("the scope screen always shows the five things, with one press that approves and starts and a quieter one that only approves, in both languages", async () => {
+  const world = fresh();
+  await seedScopeRequest(world, "request-scope-one", "Fix the flaky test, please.");
+  const { agentTypeDigest } = await seedScopePlan(world.record, "request-scope-one");
+  await seedEndedLap(world, "i-one-0", { agentTypeDigest, costUsd: 1.5, durationMs: 4 * 60_000 });
+  const ports = portsOver(world, "ada", []);
+
+  for (const wording of [EN, chromeFor("ja")]) {
+    const html = await operatorPage(
+      ports,
+      "t",
+      { kind: "scope", messageId: "request-scope-one", rounds: null, decisionId: null, plan: null },
+      wording,
+      mint,
+      () => "MINT-SCOPE-1",
+      () => "MINT-LAP-1",
+    );
+    // **1-3: what the work does and what it does not, in three sentences of
+    // rondo's own words, first of the decision's material.**
+    expect(html).toContain('id="scope-what"');
+    expect(html).toContain(wording.scopeWhatStops);
+    expect(html).toContain(wording.scopeWhatNot([]));
+    expect(html).toContain(wording.scopeWhatDoes(SCOPE_PLAN.repository));
+    // **4-5: the cost cap, the redos, and what is left to the worker.**
+    expect(html).toContain('id="scope-limits"');
+    expect(html).toContain(wording.scopeLimitsHeading);
+    expect(html).toContain(wording.scopeRoundsLabel);
+    expect(html.indexOf('id="scope-what"')).toBeLessThan(html.indexOf('id="scope-limits"'));
+    // **6: one press that approves and starts, and the quieter one beside it.**
+    const label = (said: string) => html.split(`>${said}</button>`).length - 1;
+    expect(label(wording.scopeStartAction)).toBe(1);
+    expect(label(wording.scopeOnlyAction)).toBe(1);
+    expect(html.match(/name="start" value="1"/g)).toHaveLength(1);
+    expect(html.indexOf('id="scope-limits"')).toBeLessThan(
+      html.indexOf(`>${wording.scopeStartAction}</button>`),
+    );
+    // **Both presses are the one form's**, with one minted scope id and one
+    // minted lap id between them: a double press records one scope and starts
+    // one lap, which is what it did before the two presses became one.
+    expect(html.match(/<form[^>]*id="scope-form"/g)).toHaveLength(1);
+    expect(html.match(/name="scope_id" value="MINT-SCOPE-1"/g)).toHaveLength(1);
+    expect(html.match(/name="iteration" value="MINT-LAP-1"/g)).toHaveLength(1);
+    expect(html).toContain(wording.startAgainSafe);
+
+    // **Behind one press: the caps' own boxes, where each number came from, and
+    // the whole of what the worker is sent.**
+    expect(html).toContain(wording.scopeNumbersFold);
+    expect(html).toContain(wording.scopePromptFold);
+    for (const name of ["laps", "cost_usd", "cost_reserve_usd", "expires_at_ms"]) {
+      expect(html.indexOf(wording.scopeNumbersFold), name).toBeLessThan(
+        html.indexOf(`name="${name}"`),
+      );
+    }
+    expect(html.indexOf(wording.scopePromptFold)).toBeLessThan(
+      html.indexOf(wording.scopeDoneHeading),
+    );
+    // **Gone: the long budget prose, and the second approve press.**
+    expect(html).not.toContain(wording.scopeCostCaveat);
+    expect(html).not.toContain(wording.scopeSampleHeading);
+  }
+});
+
 test("with no lap recorded, the scope screen says in Japanese that the reserve was measured by nobody", async () => {
   const world = fresh();
   await seedScopeRequest(world, "request-scope-cold", "表示の崩れを直してください。");
