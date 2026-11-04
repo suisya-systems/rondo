@@ -788,8 +788,12 @@ export async function serveWeb(
       // request on a page that had already read it once -- 19 readings of the
       // ledger, and 1.3 to 1.5 s of page. The store it holds is the fallback
       // for a caller outside a draw, and the rows are the same rows either way.
+      //
+      // The reads are handed on twice over: as the ports this reckoning reads
+      // through, and as the draw's own identity, which is what it holds the
+      // part of its answer that is the same for every request against.
       repositoryFor: async (id, reads) =>
-        await requestRepository({ ...(reads ?? { store, record }), now: Date.now }, id),
+        await requestRepository({ ...(reads ?? { store, record }), now: Date.now }, id, reads),
       setupPlanFiles: () => setupPlanFiles(storePath).map((one) => one.file),
       addable: sender !== null && !("refusal" in sender),
       addRepository:

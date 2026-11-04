@@ -573,6 +573,9 @@ export function portsOver(
       await requestRepository(
         { ...(reads ?? { store: world.store, record }), now: () => 5_000 },
         requestMessageId,
+        // The draw's identity, as the host hands it: what a reckoning asked
+        // once per request holds its request-blind half against (rondo#757).
+        reads,
       ),
     hostLanguage,
     now: () => 5_000,

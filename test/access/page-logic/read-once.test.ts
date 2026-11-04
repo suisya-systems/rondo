@@ -28,10 +28,25 @@ import {
   openGate,
   openRequest,
   operatorPage,
+  planFor,
   portsOver,
   recordAnswer,
   reserve,
 } from "../page-world.js";
+
+/**
+ * An agent type a build of cadenza knows, as `press-path.test.ts` writes it:
+ * the world's own plans carry `{}`, which builds no record, so a setup plan of
+ * one stands for no plan `rondo setup-plan` would accept.
+ */
+const AGENT_TYPE_INPUT = {
+  agentTypeId: "worker-basic",
+  vocabularyVersion: 1,
+  granted: ["command.run"],
+  askable: ["branch.push"],
+  loopPolicy: { maxReviewRounds: 2, noProgressWindow: 3, noProgressRepeat: 2 },
+  executorPolicy: { roleName: "worker", modelTier: "standard", reportingDuties: [] },
+};
 
 /** A world with the three shapes a draw re-reads the rows for. */
 async function world() {
@@ -222,6 +237,72 @@ test("one request asked for many times in a draw is reckoned once, and two are r
   expect(reckoned).toHaveLength(2);
   // And the same answer, not merely an equal one.
   expect(second).toBe(first);
+});
+
+/**
+ * **And what the reckoning reads that is not about the request** is read once
+ * for the draw that asks (rondo#757, `heldByOneDraw` in
+ * `src/access/model-draft/host.ts`).
+ *
+ * All but one part of `requestRepository` is the same answer whichever request
+ * it is asked about: the twenty rows' plans, the setup plans and the agent type
+ * each builds, and `buildsOn`'s reading of each held plan back into the plan
+ * setup would have written. Only the templates the asking thread carries differ.
+ * Read per request over the store at hand that was about a third of a draw --
+ * 78 readings of the same rows, inside one reading of them -- so the reckoning
+ * takes the object the draw hands it as the draw's identity and holds that half
+ * against it.
+ *
+ * **Counted here as runs of that half and not as reads of the store**, because
+ * `setupPlans` is one of the reads {@link readOncePerDraw} already answers
+ * once: a count taken through the wrapper would be 1 whether or not this half
+ * is held, which is the shape of a test that says nothing. So the reckoning is
+ * asked directly, over a port that counts, and the half's own reading of the
+ * setup plans is what is counted. `buildsOn` is the other half of the claim:
+ * the same plan is read into the same answer once, and a second draw reads it
+ * again.
+ */
+test("a draw reads what a reckoning does not take from the thread once, not once per request", async () => {
+  const made = await world();
+  const over = portsOver(made, "ada", []);
+  // A setup plan whose agent type builds a record, so `buildsOn` is a plan
+  // rather than null: the world's own rows carry an agent type no vocabulary
+  // version this build knows, and a null answer would pin nothing.
+  const setup = { ...planFor("i-setup"), agent_type_input: AGENT_TYPE_INPUT };
+  const asked: string[] = [];
+  const record = Object.assign(Object.create(over.record), {
+    setupPlans: async () => {
+      asked.push("setupPlans");
+      return await Promise.resolve([{ setupId: "s-1", plan: setup, recordedAtMs: 1_000 }]);
+    },
+  }) as WebPorts["record"];
+  const ports = { store: over.store, record, now: over.now };
+
+  // One draw, two requests: the half is read once, and the plan it stands for
+  // is the one answer rather than two readings of the same bytes.
+  const draw = {};
+  const waiting = await requestRepository(ports, "req-lap-waiting", draw);
+  const other = await requestRepository(ports, "req-asked", draw);
+  expect(count(asked, "setupPlans")).toBe(1);
+  expect(waiting.buildsOn).not.toBeNull();
+  expect(other.buildsOn).toBe(waiting.buildsOn);
+
+  // And a caller outside a draw reads it for the one request it asks about,
+  // which is what the host's own reckoning of whose turn it is does. What it
+  // answers is what the draw's reading answered, to the field.
+  asked.length = 0;
+  const alone = await requestRepository(ports, "req-lap-waiting");
+  const aloneToo = await requestRepository(ports, "req-asked");
+  expect(count(asked, "setupPlans")).toBe(2);
+  expect(alone).toEqual(waiting);
+  expect(aloneToo.buildsOn).toEqual(alone.buildsOn);
+  expect(aloneToo.buildsOn).not.toBe(alone.buildsOn);
+
+  // A second draw is a second object, so a row written between two draws is
+  // read: what is held lives as long as the reads it was taken from.
+  asked.length = 0;
+  await requestRepository(ports, "req-lap-waiting", {});
+  expect(count(asked, "setupPlans")).toBe(1);
 });
 
 test("a wrapper lives for one draw, so the next draw reads the rows again", async () => {
