@@ -242,6 +242,7 @@ C-NN`, so the spaces can never be read as one.
 | D-0206 | Approving a scope and starting the work are one press, and approving without starting stays as a second press beside it; the one press can be refused with the approval intact and starts at most one lap | accepted |
 | D-0207 | The week's budget is drawn on the page only where the budget is holding work up or a decision about it is the person's; a request's own allowance on its thread and its scope screen is not the week's and is unchanged | accepted |
 | D-0208 | The list that stands requests side by side draws the three newest finished requests and folds the rest into one line that says how many, opened by a press that works with script off | accepted |
+| D-0209 | A live view is pushed to rather than polled: the host tells an open page when what that page shows has changed, the page redraws only that part, and neither side works while nothing changes | accepted |
 
 ---
 
@@ -10355,6 +10356,35 @@ lap, plus one escape reproduced directly.
 > unchanged** -- an unattended redraw writes nothing, and 3(a)'s work did move to the server -- so
 > this is an annotation and not a supersession. `D-0057` rule 2(a) is written against the precise
 > version, and `D-0057`'s falsifier *"the render path calling `ports.answer`"* is the thing to watch.
+
+> **Annotation (2026-11-04, from D-0209).** Added after this entry was accepted, and **not
+> additive**: it withdraws the cadence and the request that carried it rather than qualifying them.
+> **Liveness is pushed by the host instead of polled by the page** (`D-0209`, the owner's decision
+> of 2026-11-04). What moved under rule 2 is the cost it was priced against: composing one page now
+> takes about five seconds on the owner's host, so a five-second poll spends the host entirely on
+> documents nobody's screen needed again.
+> - **Rule 1 keeps its per-view decision and loses its scriptless mechanism.** Which views are live
+>   is still decided per view and never globally; the `<noscript>` five-second meta refresh goes
+>   with the poll, and a browser that runs no script is read by reloading it (`D-0209` rule 6).
+> - **Rule 2's "the cadence stays five seconds" and "the request is the view's own address" are
+>   withdrawn.** The host tells an open page when what that page shows has changed, and the page
+>   redraws that part. *Merged in place*, with the reader's scroll, focus and open elements kept, is
+>   the half of rule 2 that is kept, and is why the morph of rule 5 is still here.
+> - **Rule 6 gains a stream and keeps its refusal.** The script's vocabulary is a read of one
+>   address of this host that the host answers when something changed -- the `text/event-stream`
+>   channel the tree already serves for the press token -- beside the reads that draw the view. It
+>   still constructs no `POST`, holds no address of its own, and composes nothing from a row, a
+>   message or a plan.
+> - **"It does not change the transport. No SSE, no WebSocket, no long-lived connection" is
+>   withdrawn**, and with it the residual that left server-sent events to "the entry that needs
+>   sub-second": `D-0209` takes them for the host's cost rather than for freshness.
+> - Rules 3, 4, 5, 7 and 8 stand as their annotations leave them, and `D-0209` re-argues none of
+>   them. Nothing below is edited.
+>
+> - Amends: D-0054 rule 1
+> - Amends: D-0054 rule 2
+> - Amends: D-0054 rule 6
+> - Amends: D-0054 "It does not change the transport"
 
 `D-0041` rule 3(a) carries rondo#95's constraint verbatim: *"there is no script on the page -- no
 `fetch`, no `XMLHttpRequest`, no client-side build"*, and it is load-bearing there as one of three
@@ -32609,3 +32639,141 @@ At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
   screen that counts it.
 - **A column whose three rows do not fit the widths `D-0185` names**, or which leaves obvious empty
   space where the fold's line is.
+
+## D-0209 — A live view is pushed to rather than polled: the host tells an open page when what that page shows has changed, the page redraws only that part, and neither side works while nothing changes
+
+**Status:** accepted (2026-11-04, the owner's decision on this lap). Amends `D-0054` rules 1, 2 and
+6 by the annotation written there. Refs `D-0041`, `D-0054`, `D-0059`, `D-0084`, `D-0007`.
+
+### Context
+
+`D-0054` rule 1 decided liveness per view, rule 2 set its shape -- the page asks for the address it
+is already on and the answer is merged in place -- and `D-0059` R3 made htmx's `every 5s` the
+mechanism. Both were priced on 2026-09-12 against a cost nobody had measured: `D-0054` says in as
+many words that it *"does not reduce the work the server does per redraw"*, and left a conditional
+request as a residual because *"nothing has yet measured the read as expensive"*.
+
+It has now been measured, and it is expensive. Composing one page takes about as long as the gap
+between two polls, so the host spends itself rebuilding documents that a person's screen already
+has and that mostly did not change. The cadence is doing the opposite of what rule 1 wanted: it was
+adopted so that *what is running* would read as current, and the thing it now produces is a host
+too busy composing to be current.
+
+So the direction of the request changes. The page stops asking on a clock, and the host says
+something when there is something to say. That is the owner's decision of **2026-11-04**.
+
+### What was measured, and how
+
+At rondo `86d19a3` on **2026-11-04**. The first item is the owner's measurement of their running
+host, reported with the request this entry answers; the rest are read off the tree.
+
+- **A page costs about five seconds to compose, and it was being composed every five seconds.**
+  Every view answered in **4.7-5.2 s** under `curl`, a small conversational view included, and the
+  `node` process held about **45% of a CPU and about 1.2 GB** of memory continuously.
+- **The cadence is one constant and one attribute.** `src/access/page/document.tsx` holds
+  `REFRESH_SECONDS = 5` for the `<noscript>` refresh and writes `hx-trigger="every 5s"` on
+  `#ledger`, on the views that keep themselves current and on no others. Two screens of their own
+  poll on their own waits (`src/access/screens/sign-in.tsx`, `src/access/screens/plan-start.tsx`).
+- **A poll composes the whole view to replace one element.** The request is the view's own address,
+  so the server renders the whole document and the browser keeps `#ledger` and `#waiting-count`
+  (`hx-select`, `hx-select-oob`). Nothing in that path asks whether anything changed.
+- **The host already answers a `text/event-stream` address, and the page already listens on it.**
+  `src/access/served.ts` serves the press token at `/events` and `page/token.js` holds an
+  `EventSource` on it, reconnecting on the `retry` the host names. So `D-0054`'s *"No SSE"* is
+  already not literally true at this commit: what this entry adds is what the channel carries and
+  how long it is held, not a transport the host has never spoken.
+- **The page can already tell what a redraw changed, and keeps the reader's place through one.**
+  `page/changed.js` compares the words of each element a person can act on across a swap and washes
+  the ones that moved; `page/composer.js` keeps an unsent draft and opened folds. Both are written
+  against a merge, not against a reload.
+
+### Decision
+
+1. **The five-second poll goes.** No view re-reads and re-draws itself on a timer. `every 5s`
+   leaves the views that carry it, and nothing replaces it with a slower number.
+2. **The host pushes.** Where a view keeps itself current, liveness is the host telling the open
+   page that something changed, over an event stream the page holds open on one address of this
+   host. It is a read: the stream carries no write, and the page constructs no address and no
+   `POST` from anything it was sent.
+3. **A notice is sent only when what that page shows has changed.** The host does not announce
+   everything that happens; it announces a change to what that page is showing. A change that
+   touches no open page is sent to nobody, and a page showing something else is not told about it.
+4. **The page redraws the part that changed.** A notice says which part moved, and the page draws
+   that part and merges it in place -- `D-0054` rule 2's merge, narrowed from the whole view to the
+   part. The reader's scroll, focus, caret, opened folds and unsent drafts survive it exactly as
+   they survive today's redraw, and `page/changed.js`'s wash stays what tells a person what moved.
+5. **While nothing changes, neither side works.** With nothing moving, the host composes no
+   document and the page runs no timer: an idle host with an open page is idle. That is the property
+   this entry is for, and the one a falsifier below measures.
+6. **With script off, the page is read by reloading it.** Every view stays a whole document the
+   server renders complete -- content and presses included (`D-0054` rule 7's kept half, `D-0084`
+   rule 3(a)) -- so a browser that runs no script reads everything it reads today and answers with
+   a real form. Its liveness is the person's own reload. The `<noscript>` five-second meta refresh
+   goes with the poll, because keeping it would keep, for exactly the browser that cannot be pushed
+   to, the five-second rebuild this entry exists to remove.
+7. **Nothing here widens what the page may write.** The stream is read-only and `GET`, the writes
+   stay the press kinds `D-0064` names, and `D-0041` rule 3's remaining defences -- the per-process
+   token and `frame-ancestors 'none'` -- are untouched and unrelied upon by anything new.
+
+### What this entry changes in earlier entries
+
+One entry, annotated in place: `D-0054` carries a dated annotation marked not additive, naming
+rules 1, 2 and 6 and the sentence *"It does not change the transport"*, so that entry's live rules
+can still be read off its own text. Three things are deliberately not re-argued here.
+
+- **`D-0059` R3 is cited, not reopened.** The polling `GET` it lists is removed by rule 1 above,
+  and it is removed where that vocabulary is set, in `D-0054` rule 6. Whether htmx is still worth
+  its 51 KB once nothing polls is a residual below, not a decision taken in passing.
+- **`D-0084` is untouched.** The page's faces are still React rendered on the server and hydrated;
+  this entry changes when a face is drawn again, not who draws it.
+- **`D-0041` rule 3 is untouched**, including the narrowing `D-0054` rule 4 accepted knowingly.
+
+### Options considered
+
+| Option | Taken? | What it loses |
+|---|---|---|
+| A. Keep the poll and make composing cheaper | No | Worth doing on its own, but a five-second cadence still spends the whole host on documents that did not change |
+| B. Keep the poll and slow it to 30 s or 60 s | No | Buys the host's time with the freshness rule 1 exists to protect, and still rebuilds on a clock |
+| C. `ETag` / `304` on the poll (`D-0054`'s own residual) | No | The host must compose the page to know it is unchanged, unless it holds a change token -- and once it holds one, pushing is strictly less work than being asked |
+| D. The host pushes on change, the page redraws that part | Yes | See below |
+| E. A WebSocket | No | A second protocol and a channel the browser can write on, for a page whose writes are forms (`D-0041` rule 3) |
+| F. Push on every host tick, change or no change | No | The poll with the clock moved to the server |
+
+### What it costs
+
+- **A connection held open per open page**, where the token channel ends its response after one
+  event and costs the host nothing between reconnects.
+- **The host has to know what each open page shows.** Rule 3 is the whole value of this entry and
+  the whole of its new difficulty: a comparison scoped too narrowly is a page that silently stops
+  updating, which is a failure a poll could not have.
+- **Freshness stops being a number anyone can read off one constant.** "Within five seconds" is
+  replaced by "when it changed", which is better when the notice arrives and unbounded when it does
+  not.
+- **A scriptless browser no longer updates by itself**, where today it gets a meta refresh on the
+  views that have one. It loses nothing it can read or press.
+- **A dropped stream looks exactly like a quiet one** until the browser reconnects.
+
+### Residuals
+
+| Residual | Why not here | Who decides |
+|---|---|---|
+| Whether htmx is still worth its bytes once nothing polls | `D-0059` R2 and R3 priced it for a vocabulary this entry narrows; re-pricing it is that entry's to reopen | whoever re-prices `D-0059` |
+| The two screens that poll their own waits (sign-in, plan start) | They wait on one fact each and are not the page's live views; they are cheap for the same reason they are narrow | whoever measures them |
+| How the host detects a change to what a page shows | This entry decides that it must, and that nothing is sent otherwise; the mechanism is the implementing change's | the implementing change |
+| A test that fails when a page's response gets slow | Asked for as its own part of this request | that part |
+
+### What would falsify it
+
+- **A change to what an open page shows that the page does not draw**, or draws only after the
+  person reloads.
+- **Any timed re-fetch of a whole view coming back to the page**, under any cadence, or a
+  `<noscript>` refresh returning.
+- **A host composing a document, or a page doing work, while nothing a page shows has changed** --
+  measurably, as an idle host with an open page whose CPU is not near zero.
+- **A notice sent to every open page regardless of what it shows**, which is rule 3 lost and the
+  cost back in a different place.
+- **A write arriving over the stream**, or a stream address the page composes from a row, a message
+  or a plan.
+- **A view that cannot be read or pressed with script off.**
+- **A redraw that takes the reader's scroll, focus or caret, closes an opened fold, or loses an
+  unsent draft.**
