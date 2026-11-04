@@ -981,6 +981,105 @@ test(
 );
 
 test(
+  "the combined press sent twice approves once and starts once, through the writes themselves",
+  async () => {
+    // **The real writes, not a spy that refuses for them.** The scope screen's
+    // main press is one press over two acts, so what makes a double click one
+    // approval and one lap is the store's own partial unique index on the
+    // minted scope id and `startScopedFromPage`'s own guard on the minted lap
+    // id -- never a check the route makes. So both halves run here for real,
+    // twice, with the two ids one drawn form carries.
+    //
+    // **The lap is reserved before the second half**, because that is what the
+    // first press's start leaves behind and there is no continuo in this file
+    // to leave it: the guard the replay meets is the row, and both presses go
+    // through it rather than through anything this test implements.
+    const dir = mkdtempSync(join(tmpdir(), "rondo-scope-twice-"));
+    const storePath = join(dir, "store.db");
+    const connection = new DatabaseSync(storePath);
+    const record = advisoryRecord(connection);
+    const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+    const requestId = "request-scope-twice";
+    await record.recordThreadMessage({
+      messageId: requestId,
+      body: "Please fix it.",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: null,
+      atMs: 1_000,
+      bases: [],
+      asks: false,
+    });
+    const plan = await seedScopePlan(record, requestId);
+    const environment = { RONDO_APPROVER: "ada" };
+    // One form, drawn once: one minted scope id and one minted lap id, whatever
+    // number of times the body arrives.
+    const draft: ScopeFormDraft = {
+      scopeId: newScopeId(),
+      requestMessageId: requestId,
+      planDigest: plan.planDigest,
+      agentTypeDigest: plan.agentTypeDigest,
+      budgets: {
+        laps: 3,
+        review_rounds: 1,
+        cost_usd: 5,
+        cost_reserve_usd: 1,
+        expires_at_ms: 9_999_999_999,
+      },
+      severityThreshold: "major",
+      outwardActs: [],
+    };
+    const iterationId = "lap-scope-twice";
+
+    const first = await recordScopeFromPage(environment, store, storePath, "ada", draft);
+    const again = await recordScopeFromPage(environment, store, storePath, "ada", draft);
+    // One approval: the second press lands on the one the first made, and the
+    // store holds one scope row and one decision row for the two.
+    expect(first.ok).toBe(true);
+    expect(again.ok).toBe(true);
+    expect(again.scopeDecisionId).toBe(first.scopeDecisionId);
+    expect(rows(connection, "scope")).toBe(1);
+    expect(rows(connection, "scope_decision")).toBe(1);
+
+    const reserved = await store.reserve({
+      numbers: null,
+      id: iterationId,
+      request: "Please fix it.",
+      plan: planFor(iterationId),
+      spend: null,
+      scopeSpend: null,
+      claim: ownLane(iterationId),
+      nowMs: 1_000,
+      supersedesIterationId: null,
+      requestMessageId: requestId,
+      runId: `rondo-${iterationId}`,
+      topicBranch: `rondo/${iterationId}`,
+      workspace: `/srv/work/${iterationId}`,
+    });
+    expect(reserved.kind).toBe("reserved");
+    const asked = rows(connection, "conversation_message");
+
+    const start = {
+      iterationId,
+      requestMessageId: requestId,
+      scopeDecisionId: first.scopeDecisionId ?? "",
+      planDigest: plan.planDigest,
+    };
+    const started = await startScopedFromPage(environment, store, storePath, "ada", start);
+    const startedAgain = await startScopedFromPage(environment, store, storePath, "ada", start);
+    // One lap: the replay is the start it repeats, not a refusal to show and
+    // not a second admission against a budget the first one spent.
+    expect(started.ok).toBe(true);
+    expect(startedAgain.ok).toBe(true);
+    expect(rows(connection, "iteration")).toBe(1);
+    // And nothing was asked of the request by either (D-0066 rule 4.4): a
+    // second press is safe, which is what the screen's fold says it is.
+    expect(rows(connection, "conversation_message")).toBe(asked);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
   "a scoped start press that names a row already there admits nothing, rather than asking the request a question nobody asked",
   async () => {
     // **The replay the minted id makes possible** (rondo#233 S3, the Codex review
