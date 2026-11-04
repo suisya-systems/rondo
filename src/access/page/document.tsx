@@ -48,6 +48,12 @@ export interface PageDocument {
   readonly token: string | null;
   /** Where nobody is named, the press token for the form that names them (rondo#675). */
   readonly namingToken: string | null;
+  /**
+   * Which draw of this page it is, in the host's own mark (rondo#742), or null
+   * where the caller keeps none -- the draw the host compares against, and
+   * every host with nothing watching for changes.
+   */
+  readonly drawnAt: string | null;
   readonly threads: Threads;
   readonly threadRead: PageModel["threadRead"];
   readonly reads: HeldReads | null;
@@ -69,6 +75,7 @@ export async function pageDocument({
   actorId,
   token,
   namingToken,
+  drawnAt,
   threads,
   threadRead,
   reads,
@@ -576,6 +583,18 @@ export async function pageDocument({
             data-title-turn={wording.tabTitleTurn}
             data-icon={tabIcon(waitingCount)}
             {...(token === null ? {} : { "data-notice-to": "/notice", "data-notice-token": token })}
+            {
+              // **Which draw of the page this is** (rondo#742), as the host's
+              // own mark of what it had seen written. `page/live.js` hands it
+              // back when it opens the stream, and the host answers a page
+              // whose mark is not its own with one redraw -- which is how a
+              // change made between this `GET` and that stream, or while the
+              // reader was away, or across a restart of the host, reaches a
+              // page that would otherwise never hear of it. On `#ledger`
+              // because the morph keeps it true: a redraw carries the mark of
+              // the draw it brought.
+              ...(drawnAt === null ? {} : { "data-drawn-at": drawnAt })
+            }
             {...(keepsCurrent
               ? {
                   "hx-get": here,

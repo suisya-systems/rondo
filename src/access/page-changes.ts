@@ -21,6 +21,12 @@
  * ring per file would draw the same view several times for one change. The
  * ring is therefore deferred by {@link SETTLE_MS}, which is far below what a
  * person reads as delay and far above what one commit takes.
+ *
+ * **Counted the moment a write is seen, and not when the bell rings.** The mark
+ * this bell hands out is what a page says it was drawn at, so it has to move
+ * ahead of the ring: a page served during the settle would otherwise carry a
+ * mark the host still agreed with and be told nothing about the write that was
+ * already in flight.
  */
 import { watch } from "node:fs";
 import { dirname } from "node:path";
@@ -49,6 +55,19 @@ export interface WatchedChanges extends PageChanges {
 export function watchedChanges(storePath: string, say: (line: string) => void): WatchedChanges {
   const directory = dirname(storePath);
   const listeners = new Set<() => void>();
+  /**
+   * This process, named by the moment it started watching.
+   *
+   * **So that a restarted host never agrees with a page it did not draw.** The
+   * count below starts at zero in every process, and a page drawn by the
+   * previous one carries a mark of its own; a page that reconnects across a
+   * restart is therefore behind by this half even where both counts read
+   * `0`, which is exactly what it is -- the new process knows nothing of what
+   * was written while it was down.
+   */
+  const born = Date.now().toString(36);
+  /** How many writes this process has seen, which is all a mark says. */
+  let seen = 0;
   let settling: ReturnType<typeof setTimeout> | null = null;
   const ring = (): void => {
     if (settling !== null) {
@@ -65,6 +84,7 @@ export function watchedChanges(storePath: string, say: (line: string) => void): 
   let watcher: ReturnType<typeof watch> | null = null;
   try {
     watcher = watch(directory, { persistent: false }, () => {
+      seen += 1;
       ring();
     });
     watcher.on("error", (error: unknown) => {
@@ -80,6 +100,7 @@ export function watchedChanges(storePath: string, say: (line: string) => void): 
     );
   }
   return {
+    mark: () => `${born}.${String(seen)}`,
     listen: (fn: () => void) => {
       listeners.add(fn);
       return () => {

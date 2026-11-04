@@ -6,8 +6,9 @@
  * registered on the app it built is the unit that moves. What the stream *is*
  * belongs to `src/access/served.ts`, which compares and holds; what the bell
  * *is* belongs to `src/access/page-changes.ts`, which watches. This module is
- * the seam between them and the renderer: it reads the view and the language
- * off the reader's own address and hands `pageEvents` a way to draw that page.
+ * the seam between them and the renderer: it reads the view, the language and
+ * the draw the page says it is holding off the reader's own request, and hands
+ * `pageEvents` a way to draw that page.
  *
  * Read-only, as every other `GET` is: nothing here writes, and the token it
  * passes on is the one `GET /` already serves to the same reader.
@@ -30,6 +31,36 @@ import type { PageEnv } from "./web-app.js";
  * `newIterationId`), so the compared bytes are the real page's but for these.
  */
 const WATCHED_UUID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Where a page says which draw of itself it is holding: the one query this
+ * route reads that no view of the page is named by (`page/live.js` writes it,
+ * `data-drawn-at` is where it got it).
+ */
+const DRAWN_AT_QUERY = "at";
+
+/**
+ * The reading ports a draw of the page is handed, in the two shapes the two
+ * routes want them.
+ *
+ * Shared because the two draws must differ in exactly these two fields and in
+ * nothing else: `GET /` serves a page, so it stamps it with the mark of the
+ * moment it was drawn and carries the token the naming form needs, and this
+ * route's draw is only ever compared, so it carries no mark at all -- a mark
+ * in those bytes would change on every write anywhere and make every ring a
+ * change to every open page.
+ */
+export function drawnPorts(
+  reading: WebPorts,
+  namingToken: string | null,
+  drawnAt: string | null,
+): WebPorts {
+  return {
+    ...reading,
+    ...(namingToken === null ? {} : { namingToken }),
+    ...(drawnAt === null ? {} : { drawnAt }),
+  };
+}
 
 /**
  * Register the route.
@@ -64,9 +95,14 @@ export function registerPageEvents(app: Hono<PageEnv>, ports: ServedPorts, proce
     return pageEvents({
       token,
       changes,
+      // **What draw of itself this page says it is holding**: the mark it was
+      // stamped with, or the id of the last frame it was sent where the
+      // browser is reconnecting a stream of its own accord -- which is the
+      // later of the two, since a page that was told to redraw has.
+      held: c.req.header("last-event-id") ?? query.get(DRAWN_AT_QUERY),
       shown: async () =>
         await operatorPage(
-          namingToken === null ? reading : { ...reading, namingToken },
+          drawnPorts(reading, namingToken, null),
           token,
           view,
           wording,

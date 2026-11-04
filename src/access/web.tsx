@@ -1678,6 +1678,8 @@ export async function operatorPage(
     actorId: ports.actorId,
     token,
     namingToken: ports.namingToken ?? null,
+    // Which draw of the page this is, where the caller knows (rondo#742).
+    drawnAt: ports.drawnAt ?? null,
     threads,
     threadRead,
     reads,

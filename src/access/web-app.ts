@@ -66,7 +66,7 @@ import {
 import type { ThreadMessagesReadOutcome } from "../store/sqlite.js";
 import { pressedAnswer } from "./answer-press.js";
 import { discardRoute } from "./discard.js";
-import { registerPageEvents } from "./events-route.js";
+import { drawnPorts, registerPageEvents } from "./events-route.js";
 import { basisOf } from "./explainer/material.js";
 import { signInRoute } from "./github-sign-in-route.js";
 import type { EndRefusal, HoldsRefusal, ReleaseRefusal } from "./line-ports.js";
@@ -1623,6 +1623,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     readIn = null,
     policies = null,
     naming = null,
+    // Off the reading half, though the mark it hands `GET /` is not (rondo#742).
+    changes = null,
     ...reading
   } = ports;
   const app = new Hono<PageEnv>();
@@ -1732,15 +1734,14 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     };
     const wording = resolveLanguage(asked);
     const view = viewOf(query);
-    // **The bytes and the redirect depend on two request headers**, and a
-    // shared cache is entitled to know.
+    // **The bytes and the redirect depend on two request headers**; a cache may know.
     c.header("vary", "accept-language, cookie");
     // **Rule 5's one cookie, on the one condition rule 5 names**: this URL
     // asked for a language the remaining steps would not have answered. The
-    // four attributes are rule 5's. **Only on a navigation**: htmx's redraw is a
-    // same-origin XHR that sends and stores cookies, so two tabs on two
-    // languages would otherwise overwrite each other's memory every five
-    // seconds with nobody switching anything.
+    // four attributes are rule 5's. **Only on a navigation**: htmx's redraw is
+    // a same-origin XHR that sends and stores cookies, so two tabs on two
+    // languages would otherwise overwrite each other's memory on a redraw
+    // nobody asked for by switching anything.
     const mode = c.req.header("sec-fetch-mode");
     const navigated =
       c.req.header("hx-request") !== "true" && (mode === undefined || mode === "navigate");
@@ -1759,7 +1760,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
       return c.redirect(viewHref(view, wording.lang), 303);
     }
     const html = await operatorPage(
-      naming === null ? reading : { ...reading, namingToken: token },
+      drawnPorts(reading, naming === null ? null : token, changes?.mark() ?? null),
       answer === null ? null : token,
       view,
       wording,
@@ -1772,7 +1773,6 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     return c.body(html, 200, { "content-type": "text/html; charset=utf-8" });
   });
 
-  // What the host tells an open page (rondo#674, rondo#742).
   registerPageEvents(app, ports, token);
 
   // **The one write route**: the lap-end `approve` press (D-0059 section 5a,
@@ -3821,8 +3821,8 @@ export function serveOperatorPage(
   signal?: AbortSignal,
 ): Promise<number> {
   // **Minted once, when this process starts serving** (D-0041 rule 3b): per
-  // process, because a token that changed under the five-second redraw would
-  // expire every form before anybody could press it.
+  // process, because a token that changed under a redraw would expire every
+  // form before anybody could press it.
   const token = randomUUID();
   let built = ports();
   let app = createApp(built, token);

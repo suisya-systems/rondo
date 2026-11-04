@@ -62,6 +62,14 @@ test("the page draws the request it selected, and says what a redraw does", asyn
   // host's word instead.
   expect(html).not.toContain('http-equiv="refresh"');
   expect(html).toContain('hx-trigger="rondo:change from:body"');
+  // **And it says which draw of itself it is** (rondo#742), where the host
+  // holds a bell to answer with: `page/live.js` hands this back when it opens
+  // the stream, which is how a change made before that stream existed reaches
+  // the page it was made behind. A host watching nothing claims nothing.
+  expect(html).not.toContain("data-drawn-at");
+  expect(await operatorPage({ ...portsOver(world), drawnAt: "k3b1c.7" })).toContain(
+    'data-drawn-at="k3b1c.7"',
+  );
 });
 
 test("looking at the page writes nothing", async () => {

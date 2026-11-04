@@ -1029,6 +1029,9 @@ test("the host's word is one redraw, and the token keeps every form current (ron
   const tokens = [{ value: "stale" }, { value: "stale" }];
   const notices = new Painted();
   notices.setAttribute("data-notice-token", "stale");
+  // The ledger, as the host stamped it with the draw this page is holding.
+  const ledger = new Painted();
+  ledger.setAttribute("data-drawn-at", "seen-1");
   const fired: string[] = [];
   const onWindow = new Map<string, (event: { persisted: boolean }) => void>();
   runInNewContext(bytesOf("page/live.js").toString("utf8"), {
@@ -1059,14 +1062,16 @@ test("the host's word is one redraw, and the token keeps every form current (ron
           fired.push(event.type);
         },
       },
+      getElementById: (id: string) => (id === "ledger" ? ledger : null),
       querySelectorAll: (selector: string) =>
         selector === 'input[name="token"]' ? tokens : [notices],
     },
   });
 
-  // **The view rides on the address** (rondo#742): the host compares the page
-  // this reader is on, so the stream carries this page's own query.
-  expect(opened).toBe("/events?thread=req-i-0001&lang=en");
+  // **The view rides on the address, and so does the draw** (rondo#742): the
+  // host compares the page this reader is on against the draw it says it is
+  // holding, so the stream carries this page's own query and its own mark.
+  expect(opened).toBe("/events?thread=req-i-0001&lang=en&at=seen-1");
 
   // **The token, written into every form and into the notice** (rondo#674).
   listeners.get("token")?.({ data: "fresh" });
@@ -1080,13 +1085,19 @@ test("the host's word is one redraw, and the token keeps every form current (ron
   listeners.get("change")?.({ data: "1" });
   expect(fired).toEqual(["rondo:change"]);
 
-  // **A page brought back from the browser's cache opens the stream again and
-  // redraws once**: what changed while it was away is on neither side of the
-  // host's first comparison, so without this it would never be told.
+  // **A page brought back from the browser's cache opens the stream again, and
+  // says where it actually is.** The redraw above morphed `#ledger` and
+  // brought the mark of the draw it carried, so the host is the one that
+  // decides whether anything changed while this page was away -- one redraw
+  // where something did, and none where nothing did. This fires nothing
+  // itself: it used to redraw on the way back because the host could not tell.
+  ledger.setAttribute("data-drawn-at", "seen-4");
   onWindow.get("pageshow")?.({ persisted: true });
   expect(closed).toBe(1);
-  expect(fired).toEqual(["rondo:change", "rondo:change"]);
+  expect(opened).toBe("/events?thread=req-i-0001&lang=en&at=seen-4");
+  expect(fired).toEqual(["rondo:change"]);
   // A page that was not cached was drawn by this host a moment ago.
   onWindow.get("pageshow")?.({ persisted: false });
-  expect(fired).toEqual(["rondo:change", "rondo:change"]);
+  expect(closed).toBe(1);
+  expect(fired).toEqual(["rondo:change"]);
 });

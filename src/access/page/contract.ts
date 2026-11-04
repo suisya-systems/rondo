@@ -136,6 +136,18 @@ export interface WebPorts extends InboxReadPorts {
   /** The press token, present only while the page may name the approver (rondo#675). */
   readonly namingToken?: string;
   /**
+   * The host's mark for what it had seen written when this page was drawn
+   * (rondo#742, {@link PageChanges.mark}), which the page hands back when it
+   * opens `GET /events` so the host can tell whether what it holds is current.
+   *
+   * **Carried and never read by a screen.** It is not a port and says nothing
+   * about the work; the document writes it on `#ledger` as `data-drawn-at`,
+   * which is where the morph keeps it true and where `page/live.js` reads it.
+   * Absent on the draw `GET /events` compares -- a mark in those bytes would
+   * differ on every write anywhere and make every ring a change.
+   */
+  readonly drawnAt?: string;
+  /**
    * Whether a *read in my language* press may be drawn (rondo#490): true
    * where the server holds the port that spends on it. Absent is false.
    */

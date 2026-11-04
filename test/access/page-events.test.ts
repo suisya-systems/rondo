@@ -20,43 +20,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { watchedChanges } from "../../src/access/page-changes.js";
-import { type PageChanges, pageEvents } from "../../src/access/served.js";
-
-/** A bell this file rings by hand, with the listeners it is holding. */
-function handBell(): PageChanges & { readonly ring: () => void; readonly held: () => number } {
-  const listeners = new Set<() => void>();
-  return {
-    listen: (fn) => {
-      listeners.add(fn);
-      return () => {
-        listeners.delete(fn);
-      };
-    },
-    ring: () => {
-      for (const listener of listeners) {
-        listener();
-      }
-    },
-    held: () => listeners.size,
-  };
-}
-
-/** The frames a reader has heard so far, as text. */
-async function heard(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  frames: number,
-): Promise<string> {
-  const bytes = new TextDecoder();
-  let said = "";
-  for (let at = 0; at < frames; at += 1) {
-    const read = await reader.read();
-    if (read.done) {
-      break;
-    }
-    said += bytes.decode(read.value);
-  }
-  return said;
-}
+import { pageEvents } from "../../src/access/served.js";
+import { handBell, listening } from "./page-world.js";
 
 test("a quiet host says nothing, and one change says one word (rondo#742)", async () => {
   const bell = handBell();
@@ -69,13 +34,16 @@ test("a quiet host says nothing, and one change says one word (rondo#742)", asyn
       draws += 1;
       return await Promise.resolve(drawn);
     },
+    // The page this reader holds was drawn at the mark the host still holds,
+    // so nothing was written between that draw and this stream.
+    held: bell.mark(),
     signal: null,
   });
   expect(stream.headers.get("content-type")).toBe("text/event-stream");
   expect(stream.headers.get("cache-control")).toBe("no-store");
-  const reader = (stream.body as ReadableStream<Uint8Array>).getReader();
+  const said = listening((stream.body as ReadableStream<Uint8Array>).getReader());
   // The token rides on the first frame, as it did when it was the whole answer.
-  expect(await heard(reader, 1)).toBe("retry: 5000\nevent: token\ndata: t\n\n");
+  expect(await said()).toBe("retry: 5000\nevent: token\ndata: t\n\n");
   // **The bytes the reader is standing on are drawn once**, as the page opens.
   await Promise.resolve();
   expect(draws).toBe(1);
@@ -93,7 +61,10 @@ test("a quiet host says nothing, and one change says one word (rondo#742)", asyn
   // than pass it.
   drawn = "the page, with the question on it";
   bell.ring();
-  expect(await heard(reader, 1)).toBe("event: change\ndata: 1\n\n");
+  // **And it carries the mark of the draw it is telling the page about**, which
+  // the browser hands back as `Last-Event-ID` when it reconnects a dropped
+  // stream: a change this reader has already drawn is not told to it twice.
+  expect(await said()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
 
   // **Nothing more until the next change**: the same bytes rung twice are two
   // draws and no word.
@@ -102,7 +73,59 @@ test("a quiet host says nothing, and one change says one word (rondo#742)", asyn
   await Promise.resolve();
   drawn = "the page, with the answer on it";
   bell.ring();
-  expect(await heard(reader, 1)).toBe("event: change\ndata: 1\n\n");
+  expect(await said()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
+});
+
+test("a page behind the host hears so as it opens, and a current one hears nothing (rondo#742)", async () => {
+  // **The three changes a comparison against the host's present view cannot
+  // see**, all of them the same shape: the page a reader holds was drawn
+  // before this stream opened, and something was written in between -- between
+  // that page's own `GET` and this stream, while the reader was disconnected,
+  // or by the process that went down and came back as this one. The host has
+  // no copy of what it served, so what it compares is the mark that page was
+  // drawn at.
+  const bell = handBell();
+  const open = (held: string | null): ((ms?: number) => Promise<true | string>) => {
+    const stream = pageEvents({
+      token: "t",
+      changes: bell,
+      shown: async () => await Promise.resolve("the page"),
+      held,
+      signal: null,
+    });
+    return listening((stream.body as ReadableStream<Uint8Array>).getReader());
+  };
+  const TOKEN_FRAME = "retry: 5000\nevent: token\ndata: t\n\n";
+
+  // **A page drawn at the mark the host still holds is current**, whatever is
+  // on it: nothing has been written since, so there is nothing to tell it.
+  const current = open(bell.mark());
+  expect(await current()).toBe(TOKEN_FRAME);
+  expect(await current()).toBe(true);
+
+  // **A write lands, and a page drawn before it is behind.** The reader hears
+  // one `change` as the stream opens, with no ring of its own: the bell rang
+  // while it had no stream to hear it on.
+  bell.ring();
+  const behind = open("seen-0");
+  expect(await behind()).toBe(TOKEN_FRAME);
+  expect(await behind()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
+  // And then it is a reader like any other: standing on the bytes it was just
+  // told to fetch, told nothing until they differ.
+  expect(await behind()).toBe(true);
+
+  // **A page that was drawn by a host that has since restarted claims a mark
+  // this process never handed out**, which is the same answer: one `change`.
+  const across = open("a-restart-ago.3");
+  expect(await across()).toBe(TOKEN_FRAME);
+  expect(await across()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
+
+  // **And a page that claims nothing is read as possibly behind**, not as
+  // current: one redraw costs a reader one `GET`, and being wrong the other
+  // way costs it a screen that is quietly out of date.
+  const claiming = open(null);
+  expect(await claiming()).toBe(TOKEN_FRAME);
+  expect(await claiming()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
 });
 
 test("a draw that failed is not a change, and a reader that goes away is dropped (rondo#742)", async () => {
@@ -118,13 +141,14 @@ test("a draw that failed is not a change, and a reader that goes away is dropped
       }
       return await Promise.resolve("the page");
     },
+    held: bell.mark(),
     signal: stop.signal,
   });
   const reader = (stream.body as ReadableStream<Uint8Array>).getReader();
   // No token to give: `retry` is a frame of its own, so the stream still says
   // how long the browser waits before it asks again.
-  expect(await heard(reader, 1)).toBe("retry: 5000\n\n");
-  expect(bell.held()).toBe(1);
+  expect(await listening(reader)()).toBe("retry: 5000\n\n");
+  expect(bell.holding()).toBe(1);
 
   // A draw that threw leaves the reader holding the page the host last drew.
   fail = true;
@@ -138,7 +162,7 @@ test("a draw that failed is not a change, and a reader that goes away is dropped
   // must not leave the host drawing its view on every write for the life of
   // the process.
   stop.abort();
-  expect(bell.held()).toBe(0);
+  expect(bell.holding()).toBe(0);
   expect((await reader.read()).done).toBe(true);
 });
 
@@ -147,6 +171,7 @@ test("with no bell the stream is the press token alone, as it was (rondo#674)", 
     token: "t",
     changes: null,
     shown: async () => await Promise.resolve(""),
+    held: null,
     signal: null,
   });
   expect(withToken.status).toBe(200);
@@ -157,6 +182,7 @@ test("with no bell the stream is the press token alone, as it was (rondo#674)", 
     token: null,
     changes: null,
     shown: async () => await Promise.resolve(""),
+    held: null,
     signal: null,
   });
   expect(neither.status).toBe(204);
@@ -181,10 +207,20 @@ test("the bell rings on a write beside the store, and stops when the host does (
         }
       }, 10);
     });
+    // **The mark holds still while the store does**, which is what makes two
+    // equal marks a proof that a page is current.
+    const quiet = bell.mark();
+    expect(bell.mark()).toBe(quiet);
+
     writeFileSync(join(directory, "rondo.db"), "a row");
     writeFileSync(join(directory, "rondo.db-journal"), "a commit");
     await rung;
     expect(rings).toBe(1);
+
+    // **And it moved with the write, not with the ring.** A page served during
+    // the settle carries this new mark, so the write already in flight is one
+    // the next stream it opens is told about.
+    expect(bell.mark()).not.toBe(quiet);
 
     // A listener that was dropped hears no more, and a bell that was stopped
     // holds none.

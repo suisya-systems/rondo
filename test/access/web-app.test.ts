@@ -92,6 +92,7 @@ import { chromeFor, EN } from "../../src/access/wording.js";
 import type { ContinuoUnusable } from "../../src/continuo/invoker.js";
 import type { AskOptions } from "../../src/store/ask-options.js";
 import { advisoryRecord, asRefusal } from "../../src/store/sqlite.js";
+import { fresh, handBell, listening, openRequest, portsOver, reserve } from "./page-world.js";
 
 const TOKEN = "the-process-token";
 
@@ -465,50 +466,121 @@ test("a page hears this process's press token, and a reading host hands out none
   expect(reading.status).toBe(204);
 });
 
-test("a page hears a change only where what it shows changed (rondo#742)", async () => {
-  // The bell the host rings; this one is rung by hand.
-  const listeners = new Set<() => void>();
-  const changes = {
-    listen: (fn: () => void) => {
-      listeners.add(fn);
-      return () => {
-        listeners.delete(fn);
-      };
-    },
-  };
+/**
+ * What this route says and does not say, over a real store (rondo#742).
+ *
+ * **Both strands are run through the app**, because the claim is about the
+ * route and not about `pageEvents`: the page the comparison is of is the one
+ * `GET /` served this reader, drawn by the same renderer off the same store, so
+ * a word that did not follow a change to the drawn page -- or a change that
+ * went unsaid -- is a failure here. `test/access/page-events.test.ts` is the
+ * same claims against a `shown` a test controls.
+ */
+async function liveReader(
+  world: ReturnType<typeof fresh>,
+  bell: ReturnType<typeof handBell>,
+): Promise<{
+  readonly page: () => Promise<string>;
+  readonly open: (at: string | null) => Promise<{
+    readonly said: (ms?: number) => Promise<true | string>;
+    readonly reader: ReadableStreamDefaultReader<Uint8Array>;
+  }>;
+  readonly stop: AbortController;
+}> {
+  const app = createApp({ ...portsOver(world, "ada", []), changes: bell }, TOKEN);
   const stop = new AbortController();
-  const heard = await createApp({ ...spyPorts([]), changes }, TOKEN).request(
-    "http://127.0.0.1/events?lang=en",
-    { headers: { host: "127.0.0.1" }, signal: stop.signal },
-  );
-  expect(heard.status).toBe(200);
-  expect(heard.headers.get("content-type")).toBe("text/event-stream");
-  const reader = (heard.body as ReadableStream<Uint8Array>).getReader();
-  const bytes = new TextDecoder();
+  return {
+    page: async () =>
+      await (
+        await app.request("http://127.0.0.1/?lang=en", { headers: { host: "127.0.0.1" } })
+      ).text(),
+    open: async (at) => {
+      const heard = await app.request(
+        `http://127.0.0.1/events?lang=en${at === null ? "" : `&at=${encodeURIComponent(at)}`}`,
+        { headers: { host: "127.0.0.1" }, signal: stop.signal },
+      );
+      expect(heard.status).toBe(200);
+      expect(heard.headers.get("content-type")).toBe("text/event-stream");
+      const reader = (heard.body as ReadableStream<Uint8Array>).getReader();
+      return { said: listening(reader), reader };
+    },
+    stop,
+  };
+}
+
+test("a page hears a change only where what the route draws changed (rondo#742)", async () => {
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const bell = handBell();
+  const { page, open, stop } = await liveReader(world, bell);
+
+  // The page this reader is standing on, and the draw it says it is holding.
+  const drawn = await page();
+  expect(drawn).toContain("do the thing");
+  expect(drawn).not.toContain("and then the other thing");
+  const at = /data-drawn-at="([^"]+)"/.exec(drawn)?.[1] ?? null;
+  expect(at).toBe(bell.mark());
+
+  const { said, reader } = await open(at);
   // The token, as every reader of this route has always heard first.
-  expect(bytes.decode((await reader.read()).value)).toBe(
-    `retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`,
-  );
-  // **The stream is held open and says nothing.** Rung over a store nothing
-  // wrote to, the page this reader is on is drawn again and is the same page,
-  // so there is no word for it -- which is the property `every 5s` could not
-  // have had, since a poll redraws whether anything changed or not. The draw
-  // is awaited by ringing twice and then closing: a `change` enqueued by
-  // either ring would be read below instead of the end of the stream.
-  for (const listener of listeners) {
-    listener();
-  }
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  for (const listener of listeners) {
-    listener();
-  }
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  expect(listeners.size).toBe(1);
+  expect(await said()).toBe(`retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`);
+
+  // **Nothing changed, so nothing is said.** The bell rings -- something
+  // beside the store was written -- and this route draws this reader's own
+  // view again off the store and finds the same page, so the reader is told
+  // nothing and makes no `GET`. That is the property `every 5s` could not
+  // have had: a poll redraws whether anything changed or not.
+  bell.ring();
+  expect(await said()).toBe(true);
+  expect(await page()).toContain("do the thing");
+
+  // **And a change the page shows is one word.** The write is a second
+  // request, which this view draws: the same `GET /` that served the reader
+  // now says something it did not say, and the reader hears exactly one
+  // `change` carrying the mark of that draw.
+  await openRequest(world, "req-0002", "and then the other thing", 2_000);
+  bell.ring();
+  expect(await said()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
+  expect(await page()).toContain("and then the other thing");
+
+  // **Then silence again**: the reader is standing on the page it was told to
+  // fetch, and a ring over a store nothing wrote to says nothing.
+  bell.ring();
+  expect(await said()).toBe(true);
+
   stop.abort();
   // The reader goes, and the bell loses its listener with it: a tab that was
   // closed must not leave the host drawing its view on every write.
   await new Promise((resolve) => setTimeout(resolve, 10));
-  expect(listeners.size).toBe(0);
+  expect(bell.holding()).toBe(0);
+  reader.cancel().catch(() => {});
+});
+
+test("a change made before the stream opened reaches the page it was made behind (rondo#742)", async () => {
+  // **The gap between a page's own `GET` and its stream**, which a comparison
+  // against the host's present view cannot see: both sides of that first
+  // comparison are already past the write. The page says which draw it is
+  // holding (`data-drawn-at`) and the host answers a page that is behind.
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const bell = handBell();
+  const { page, open, stop } = await liveReader(world, bell);
+
+  const drawn = await page();
+  const at = /data-drawn-at="([^"]+)"/.exec(drawn)?.[1] ?? null;
+  expect(drawn).not.toContain("and then the other thing");
+
+  // The write lands while this reader has no stream to hear it on.
+  await openRequest(world, "req-0002", "and then the other thing", 2_000);
+  bell.ring();
+
+  const { said, reader } = await open(at);
+  expect(await said()).toBe(`retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`);
+  // One `change`, with no ring of its own, and the redraw it asks for is the
+  // page that now says the other thing.
+  expect(await said()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
+  expect(await page()).toContain("and then the other thing");
+  stop.abort();
   reader.cancel().catch(() => {});
 });
 
