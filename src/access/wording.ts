@@ -266,6 +266,12 @@ export interface Chrome
    */
   readonly reviseDraftFold: string;
   /**
+   * The fold over the model review card's own findings, where a question is
+   * waiting: the right face's copy of the words the box above folds, so no
+   * face of the screen writes a reviewer out in full over a choice.
+   */
+  readonly modelFindingsFold: (findings: number) => string;
+  /**
    * A budget stop's first answer (D-0140 rule 3): a budgets-only successor of
    * the lap's approval, then *carry on*, on one press. `answerRaiseLabel` is
    * its amount's box; `answerRaiseLeft` what the rest of the approval allows,

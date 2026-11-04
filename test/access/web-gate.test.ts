@@ -24,6 +24,7 @@ import {
   reserve,
   reviseRows,
   seedScopeRequest,
+  shutFoldsOver,
   structured,
 } from "./page-world.js";
 
@@ -1573,12 +1574,6 @@ test("where a worker's question waits, what the review raised is one press away 
   expect(ja).toContain("見直しで挙がった点を見る");
 });
 
-/** Whether what is at `at` sits inside a fold a person has to open first. */
-const insideFold = (html: string, at: number): boolean => {
-  const opened = html.lastIndexOf("<details", at);
-  return opened > -1 && html.lastIndexOf("</details>", at) < opened;
-};
-
 /**
  * Where `said` is *drawn* on the page: between tags, and so read without a
  * press. An occurrence inside a tag is a field's value -- the hidden field an
@@ -1592,6 +1587,25 @@ const drawnAt = (html: string, said: string): readonly number[] => {
     }
   }
   return found;
+};
+
+/**
+ * Asserts that every place `said` is drawn on the screen is **behind a press**,
+ * and that there are `copies` of them.
+ *
+ * Two halves, and the second is the one a weaker check missed: that a drawn
+ * copy sits inside a `details` says nothing while that `details` carries
+ * `open`, which reveals its contents without a press -- so what is asked here
+ * is that a *shut* disclosure encloses each copy. The count is asserted too,
+ * because a word that went missing from the page would otherwise pass for
+ * having nothing left to hide.
+ */
+const everyCopyBehindAPress = (html: string, said: string, copies: number): void => {
+  const drawn = drawnAt(html, said);
+  expect(drawn).toHaveLength(copies);
+  for (const at of drawn) {
+    expect(shutFoldsOver(html, at)).toBeGreaterThan(0);
+  }
 };
 
 /** The gate's own change form, from its first field to its last line. */
@@ -1625,19 +1639,57 @@ test("where a worker's question waits, the gate's box folds the drafted change a
 
   // **And every drafted change drawn on the one screen is behind a press**:
   // the answer box's copy of these words as well as this box's, which is the
-  // requirement a fold on one of them alone did not meet. Both are drawn, so
-  // the check is of two folds and not of words that went missing.
-  const drawn = drawnAt(page, REVISE_ANSWER.lead);
-  expect(drawn).toHaveLength(2);
-  for (const at of drawn) {
-    expect(insideFold(page, at)).toBe(true);
-  }
+  // requirement a fold on one of them alone did not meet. Both are drawn and
+  // both of the folds over them are shut, which is what the words being
+  // hidden until a press means.
+  everyCopyBehindAPress(page, REVISE_ANSWER.lead, 2);
 
   // The same fold in Japanese, and the press it is drawn above is unchanged.
-  const ja = reviseOf(await questionPage(world, JA));
+  const jaPage = await questionPage(world, JA);
+  const ja = reviseOf(jaPage);
   expect(ja).toContain(JA.reviseDraftFold);
   expect(ja).toContain("この押しで渡す変更依頼の下書きを見る");
   expect(ja).toContain(">変更を依頼する</button>");
+  // The worker's drafted words are the worker's in either language, so the
+  // same two copies are hidden behind the same two shut folds here.
+  everyCopyBehindAPress(jaPage, REVISE_ANSWER.lead, 2);
+});
+
+test("where a worker's question waits, the model review's findings fold on the right face too (rondo#704)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+
+  // At the gate's own press the card is drawn open: `D-0082` rule 7's reading,
+  // material for the press above it, which is *approve*.
+  const plain = await questionPage(world);
+  const cardOf = (html: string): string =>
+    html.slice(html.indexOf('id="model-review"'), html.indexOf('id="model-coverage"'));
+  expect(cardOf(plain)).not.toContain("<details");
+  expect(readableWithoutOpening(plain, "the backoff is not capped")).toBe(true);
+
+  await workerAsksWithOptions(world);
+  const page = await questionPage(world);
+  const asked = cardOf(page);
+  // Now the press is the question, so the words are one press away here as
+  // they are in the box: the card, its heading and its verdict pill stay.
+  expect(asked).toContain('<details id="model-findings-fold"');
+  expect(asked).toContain(EN.modelFindingsFold(2));
+  expect(asked).toContain(EN.modelHeading);
+  expect(asked.indexOf("the backoff is not capped")).toBeGreaterThan(asked.indexOf("</summary>"));
+
+  // **Every copy of a reviewer's words on the screen is behind a press**: the
+  // card's, the box's, and the third one nobody reads for the finding's sake
+  // -- the claim the press records as having been shown (D-0042), which the
+  // records fold has always kept shut.
+  everyCopyBehindAPress(page, "the backoff is not capped", 3);
+  everyCopyBehindAPress(page, "the loop never stops", 3);
+
+  // The same two folds in Japanese, by this catalogue's own words.
+  const ja = await questionPage(world, JA);
+  expect(cardOf(ja)).toContain(JA.modelFindingsFold(2));
+  expect(cardOf(ja)).toContain("見直しで指摘された点を全文で見る");
+  everyCopyBehindAPress(ja, "the backoff is not capped", 3);
 });
 
 test("a worker's question with options names no Carry on press in its revise note (D-0190 rule 6)", async () => {

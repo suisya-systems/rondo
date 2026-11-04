@@ -568,6 +568,11 @@ function modelView(
   reload: string,
   retake: RetakePress | null = null,
   reads: HeldReads | null = null,
+  /**
+   * Whether a worker's question is waiting on this screen, which puts the
+   * findings behind a press ({@link materialView}'s `questionWaiting`).
+   */
+  questionWaiting = false,
 ) {
   // **Who read and where each finding points are rondo's names** (rondo#679):
   // the drafter, then one line per finding that named a place, numbered in the
@@ -583,6 +588,12 @@ function modelView(
               : [`${String(index + 1)}: ${graded.bases.map(findingBasisText).join(", ")}`],
           ),
         ];
+  const findingRows = reading === null ? null : modelFindingRows(wording, reading, reads);
+  // The summary the findings are shut behind, or null where they are drawn open.
+  const findingsShut =
+    findingRows !== null && questionWaiting && reading !== null
+      ? wording.modelFindingsFold(reading.findings.length)
+      : null;
   const later = (note: string) => (
     <p class="mt-1 text-body leading-5 text-muted-foreground">
       {note}{" "}
@@ -635,42 +646,29 @@ function modelView(
             </>
           ) : (
             <>
-              {reading.findings.length === 0 ? null : (
-                <ul class="mt-2 divide-y divide-border/70">
-                  {reading.findings.map((text, index) => {
-                    const graded = reading.graded?.[index];
-                    return (
-                      <li class="model-finding py-2 first:pt-1 last:pb-0">
-                        {/* A `div` where the finding is held: its fold is not phrasing content. */}
-                        {reads === null ? (
-                          <p class="flex items-start gap-2 text-body leading-5">
-                            {severityOf(wording, graded)}
-                            <span class="min-w-0 wrap-anywhere" lang="">
-                              {text}
-                            </span>
-                          </p>
-                        ) : (
-                          <div class="flex items-start gap-2 text-body leading-5">
-                            {severityOf(wording, graded)}
-                            {raw(heldMarkup({ wording, reads, text, className: "wrap-anywhere" }))}
-                          </div>
-                        )}
-                        {/* The bases themselves are paths, lines and commits, so
-                            they go in the maintainer fold below (rondo#679);
-                            what a person acts on -- that none was given, or
-                            none matched the work -- stays here. */}
-                        {graded === undefined ||
-                        (graded.bases.length > 0 && graded.basisResolved) ? null : (
-                          <p class="mt-1 text-meta leading-5 text-faint">
-                            {graded.bases.length === 0
-                              ? wording.basisNone
-                              : wording.basisUnresolved}
-                          </p>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+              {/*
+               * **Where a worker's question waits, the findings are one press
+               * away here too** (rondo#704, answered at the gate of this pass).
+               * `D-0082` rule 7 draws a reading open because the press it is
+               * material for is *approve*; a worker's question is a different
+               * press, and a reviewer's words written out in full beside a
+               * choice are evidence stacked in front of it. The box's copy of
+               * these words folds ({@link standingFindings} on `approve.tsx`),
+               * and this face's copy had stayed open -- so one screen said the
+               * same words twice, once behind a press and once not. The card,
+               * its verdict pill and its coverage stay in the open: those are
+               * the reading's shape, not its text.
+               */}
+              {findingsShut === null ? (
+                findingRows
+              ) : (
+                <details id="model-findings-fold" class="group mt-2">
+                  <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+                    {chevron()}
+                    {findingsShut}
+                  </summary>
+                  {findingRows}
+                </details>
               )}
               {coverageLine("model-coverage", wording, reading.drafter)}
               {maintainerFold("model-internals", wording, internals)}
@@ -679,6 +677,44 @@ function modelView(
         </>
       )}
     </section>
+  );
+}
+
+/** The model card's findings, one row each, or null where it raised none. */
+function modelFindingRows(wording: Chrome, reading: LapReading, reads: HeldReads | null) {
+  return reading.findings.length === 0 ? null : (
+    <ul class="mt-2 divide-y divide-border/70">
+      {reading.findings.map((text, index) => {
+        const graded = reading.graded?.[index];
+        return (
+          <li class="model-finding py-2 first:pt-1 last:pb-0">
+            {/* A `div` where the finding is held: its fold is not phrasing content. */}
+            {reads === null ? (
+              <p class="flex items-start gap-2 text-body leading-5">
+                {severityOf(wording, graded)}
+                <span class="min-w-0 wrap-anywhere" lang="">
+                  {text}
+                </span>
+              </p>
+            ) : (
+              <div class="flex items-start gap-2 text-body leading-5">
+                {severityOf(wording, graded)}
+                {raw(heldMarkup({ wording, reads, text, className: "wrap-anywhere" }))}
+              </div>
+            )}
+            {/* The bases themselves are paths, lines and commits, so
+                            they go in the maintainer fold below (rondo#679);
+                            what a person acts on -- that none was given, or
+                            none matched the work -- stays here. */}
+            {graded === undefined || (graded.bases.length > 0 && graded.basisResolved) ? null : (
+              <p class="mt-1 text-meta leading-5 text-faint">
+                {graded.bases.length === 0 ? wording.basisNone : wording.basisUnresolved}
+              </p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -809,6 +845,13 @@ export function materialView(
   /** The token for the *take the review again* press, or null where none may be drawn. */
   retakeToken: string | null = null,
   reads: HeldReads | null = null,
+  /**
+   * Whether a worker's question is what this screen is waiting on (rondo#704),
+   * which puts the model review's findings behind a press as the answering
+   * box's copy of them is. False at the gate's own press, where `D-0082` rule
+   * 7 draws a reading open.
+   */
+  questionWaiting = false,
 ) {
   const model = latestReading(readings, isModelReadingDrafter);
   const modelDue = modelPendingOnPage(readings, model);
@@ -885,6 +928,7 @@ export function materialView(
               requestMessageId: record.requestMessageId,
             },
         reads,
+        questionWaiting,
       )}
       <p class="note text-meta leading-5 text-faint">{wording.readingsNote}</p>
     </div>

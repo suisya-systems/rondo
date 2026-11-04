@@ -318,6 +318,7 @@ export const JA: Chrome = Object.freeze({
   answerRecommends: (option, why) => `ワーカーのおすすめは ${String(option)}: ${why}`,
   standingFold: (findings) => `見直しで挙がった点を見る（${String(findings)} 件）`,
   reviseDraftFold: "この押しで渡す変更依頼の下書きを見る・直す",
+  modelFindingsFold: (findings) => `見直しで指摘された点を全文で見る（${String(findings)} 件）`,
   answerRaiseLabel: "これからの予算（USD）",
   answerRaiseRoundsLabel: "この作業のレビュー回数",
   answerRaiseLeft: (left, reserve, enough) =>

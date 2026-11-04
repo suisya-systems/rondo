@@ -317,6 +317,7 @@ explanation you pressed on and then answers the gate.`,
   answerRecommends: (option, why) => `The worker recommends ${String(option)}: ${why}`,
   standingFold: (findings) => `What the review raised (${String(findings)})`,
   reviseDraftFold: "Read or edit the drafted change this press would send",
+  modelFindingsFold: (findings) => `Read what the review raised, in full (${String(findings)})`,
   answerRaiseLabel: "Budget from here on (USD)",
   answerRaiseRoundsLabel: "Review rounds for this line",
   answerRaiseLeft: (left, reserve, enough) =>

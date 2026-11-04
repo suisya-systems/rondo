@@ -1410,6 +1410,10 @@ async function threadSideOf(
             sideClosing,
             ports.retakesReviews === true ? token : null,
             reads,
+            // **The question waiting is what the whole screen folds for**
+            // (rondo#704): the answering box reads it from the same field, so
+            // both faces hide a reviewer's words for one reason and not two.
+            (gateFraming.workerQuestion?.waitedSaid ?? null) !== null,
           ).toString()
         : sideReadings.length > 0 || sideClosing !== null
           ? await materialView(
