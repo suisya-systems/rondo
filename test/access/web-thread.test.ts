@@ -100,16 +100,15 @@ const lineOf = (html: string, id: string): string =>
   /<summary>([\s\S]*?)<\/summary>/.exec(messageIn(html, id))?.[1] ?? "";
 
 /**
- * What one message's line puts in the row's columns: the class of each child
- * of its `<summary>`, the children of those children left out. A child more
- * than the row has tracks for is a child on a second line, which is what
- * `tracksOf` is read against.
+ * What a row of the record puts in its columns: the class of each child of the
+ * markup given, the children of those children left out. A child more than the
+ * row has tracks for is a child on a second line, which is what `tracksOf` is
+ * read against.
  */
-const columnsIn = (html: string, id: string): readonly string[] => {
-  const summary = lineOf(html, id);
+const columnsOf = (inside: string): readonly string[] => {
   const columns: string[] = [];
   let depth = 0;
-  for (const tag of summary.matchAll(/<(\/?)[a-z]+\b([^>]*)>/g)) {
+  for (const tag of inside.matchAll(/<(\/?)[a-z]+\b([^>]*)>/g)) {
     if (tag[1] === "/") {
       depth -= 1;
       continue;
@@ -121,6 +120,13 @@ const columnsIn = (html: string, id: string): readonly string[] => {
   }
   return columns;
 };
+
+/** What one message's line puts in the row's columns. */
+const columnsIn = (html: string, id: string): readonly string[] => columnsOf(lineOf(html, id));
+
+/** Inside one element's markup: what its own opening and closing tags hold. */
+const insideOf = (markup: string): string =>
+  markup.slice(markup.indexOf(">") + 1, markup.lastIndexOf("</"));
 
 /** The tracks a rule of `page/thread.css` lays its row out in, one per column. */
 const tracksOf = (selector: string): readonly string[] => {
@@ -861,5 +867,38 @@ test("a marked message is one line too: the row's tracks hold the summary's chil
     // words is last: the four say the same four things in both languages.
     expect(lineOf(html, "ask-e")).toContain('<span class="msg-line" lang="">');
     expect(lineOf(html, "ask-e")).toContain(`<span class="msg-open">${wording.msgOpen}</span>`);
+  }
+});
+
+test("an event line is one line too: the record's other kind fits its own row, in both languages", async () => {
+  // The record is messages and event lines together, so one line per thing is
+  // a claim about both kinds. An event's line is the dot, the sentence and the
+  // age -- three children in three tracks, in a language whose words are
+  // longer or shorter than English's either way.
+  const world = fresh();
+  await gateWithChecks(world);
+  const line = await reportToRequest(world, "i-0001", { kind: "gate" }, 4_500);
+  expect(line).toMatch(/^Reported to the request/);
+  const tracks = tracksOf(".ev");
+  expect(tracks).toEqual(["28px", "minmax(0, 1fr)", "auto"]);
+  for (const wording of [EN, chromeFor("ja")]) {
+    const html = await operatorPage(
+      portsOver(world),
+      "t",
+      { kind: "thread", messageId: "req-1", to: null },
+      wording,
+    );
+    const lines = [...html.matchAll(/<div class="ev [^"]*">[\s\S]*?<\/div>/g)].map(
+      (found) => found[0],
+    );
+    expect(lines.length, "the record draws event lines").toBeGreaterThan(0);
+    for (const drawn of lines) {
+      expect(columnsOf(insideOf(drawn)).length, drawn).toBe(tracks.length);
+      expect(columnsOf(insideOf(drawn))[0]).toBe("ev-dot");
+    }
+    // rondo's own reason for a failure hangs under the line rather than in it,
+    // so the line it belongs to keeps its three columns (D-0076 rule 4.5).
+    expect(html).toContain(`${wording.evBrokeReason}</summary>`);
+    expect(lines.join("")).not.toContain(wording.evBrokeReason);
   }
 });
