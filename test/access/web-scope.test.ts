@@ -1107,17 +1107,18 @@ test(
       asks: false,
     });
     const plan = await seedScopePlan(record, requestId);
+    const budgets = {
+      laps: 2,
+      review_rounds: 1,
+      cost_usd: 4,
+      cost_reserve_usd: 1,
+      expires_at_ms: 9_999_999_999,
+    };
     const payload = scopePayloadWithDefaults({
       requests: [requestId],
       workspaces: [{ repository: "/srv/repo", workspace_root: SCOPE_PLAN.workspaceRoot }],
       agent_types: [plan.agentTypeDigest],
-      budgets: {
-        laps: 2,
-        review_rounds: 1,
-        cost_usd: 4,
-        cost_reserve_usd: 1,
-        expires_at_ms: 9_999_999_999,
-      },
+      budgets,
       severity_threshold: "major",
       outward_acts: [],
       irreversible_additions: [],
@@ -1167,7 +1168,7 @@ test(
       draftScopeId: read.scope.scopeId,
       draftDigest: read.scope.scopeDigest,
       scopeId: newScopeId(),
-      budgets: payload.budgets,
+      budgets,
       severityThreshold: "major",
       outwardActs: [] as const,
     };
