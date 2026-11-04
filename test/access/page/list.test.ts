@@ -7,7 +7,9 @@
  * sentences a row used to carry are on its hover rather than in the list.
  * **The done requests fold**: the three newest keep their place and the rest
  * are behind one press that names how many it holds, with no press at all
- * where there are no more than three.
+ * where there are no more than three. And what the fold must not change: the
+ * last-looked line is still drawn once, wherever in the order it falls, which
+ * is inside the fold where the fold took that position.
  */
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -33,6 +35,7 @@ const face = (
   list: Partial<RequestList>,
   wording: Chrome = EN,
   openId: string | null = null,
+  lastLookedSaid = "",
 ): string =>
   renderToStaticMarkup(
     RequestsFace({
@@ -41,7 +44,7 @@ const face = (
       hrefOf: (id) => `/?thread=${id}`,
       agoOf: () => "now",
       newRequestHref: null,
-      lastLookedSaid: "",
+      lastLookedSaid,
       openId,
     }),
   );
@@ -204,6 +207,27 @@ test("the fold is open where the request the centre is showing is inside it (ron
   const open = face(list, EN, "d1");
   expect(open).toContain('<details class="list-fold" open="">');
   expect(open).toContain('aria-current="page"');
+});
+
+test("the last-looked line is drawn above the row it marks, the fold's rows included (rule 7)", () => {
+  const done = (n: number, atMs: number) =>
+    row("finished", { messageId: `d${n}`, title: `d${n}`, atMs });
+  const rows = [done(1, 5), done(2, 4), done(3, 3), done(4, 2), done(5, 1)];
+  const said = "you looked down to here";
+  // The position is one of the three done requests the list keeps: the line is
+  // in the time order above it, and above the press.
+  const shown = face(requestList(rows, 3, 5), EN, null, said);
+  expect([...shown.matchAll(/list-since/g)]).toHaveLength(1);
+  expect(shown.indexOf(said)).toBeLessThan(shown.indexOf("<details"));
+  // And where every request already seen is one the fold took, the line is
+  // drawn inside the fold, above the row it belongs above, and the fold is
+  // open -- a line behind a shut fold is a reading position lost, which is how
+  // the fold must not change rule 7.
+  const folded = face(requestList(rows, 2, 5), EN, null, said);
+  expect([...folded.matchAll(/list-since/g)]).toHaveLength(1);
+  const fold = /<details class="list-fold" open="">([\s\S]*?)<\/details>/.exec(folded)?.[1] ?? "";
+  expect(fold).toContain(said);
+  expect(fold.indexOf(said)).toBeLessThan(fold.indexOf(">d4<"));
 });
 
 test("a row that is still running is never folded away, however old it is", () => {

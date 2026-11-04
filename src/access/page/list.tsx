@@ -25,7 +25,8 @@
  *
  * **One line, not a mark per row** (rule 7): "below here is what you saw last
  * time" is drawn once, between the rows that arrived since and the rows that
- * did not.
+ * did not -- inside the fold where that position is one of the rows the fold
+ * took, which opens it, because a line nobody can see is no line.
  *
  * **The week's allowance is no longer a line under the list** (`D-0207`
  * rules 1 and 5). Rule 5 of `D-0083` put one here and it stood on every view:
@@ -271,6 +272,46 @@ function Row({
 }
 
 /**
+ * One row of the time order, with the last-looked line above it where the line
+ * falls there (rule 7).
+ *
+ * The line is one position in the whole order and the fold hides part of that
+ * order (rondo#746), so the rows behind the press are drawn through this too:
+ * the line is the same line wherever it falls, and the alternative is a reading
+ * position that vanishes whenever the fold happens to hold it.
+ */
+function RowInOrder({
+  wording,
+  row,
+  hrefOf,
+  agoOf,
+  openId,
+  lastLookedAbove,
+  lastLookedSaid,
+}: {
+  readonly wording: Chrome;
+  readonly row: RequestRow;
+  readonly hrefOf: (messageId: string) => string;
+  readonly agoOf: (atMs: number) => string;
+  readonly openId: string | null;
+  readonly lastLookedAbove: string | null;
+  readonly lastLookedSaid: string;
+}) {
+  return (
+    <div>
+      {row.messageId === lastLookedAbove ? <p className="list-since">{lastLookedSaid}</p> : null}
+      <Row
+        wording={wording}
+        row={row}
+        hrefOf={hrefOf}
+        agoOf={agoOf}
+        open={row.messageId === openId}
+      />
+    </div>
+  );
+}
+
+/**
  * **A paused goal flow is the person's turn** (rondo#606, D-0173 K3): nothing
  * but the person resumes it, and the screen that does was reached only by its
  * address. So it stands with the requests that wait on them, at their weight
@@ -447,18 +488,16 @@ export function RequestsFace({
         <div key={group.cut}>
           <h6 className="list-heading">{headingFor(wording, group.cut)}</h6>
           {group.rows.map((row) => (
-            <div key={row.messageId}>
-              {row.messageId === list.lastLookedAbove ? (
-                <p className="list-since">{lastLookedSaid}</p>
-              ) : null}
-              <Row
-                wording={wording}
-                row={row}
-                hrefOf={hrefOf}
-                agoOf={agoOf}
-                open={row.messageId === openId}
-              />
-            </div>
+            <RowInOrder
+              key={row.messageId}
+              wording={wording}
+              row={row}
+              hrefOf={hrefOf}
+              agoOf={agoOf}
+              openId={openId}
+              lastLookedAbove={list.lastLookedAbove}
+              lastLookedSaid={lastLookedSaid}
+            />
           ))}
         </div>
       ))}
@@ -476,18 +515,25 @@ export function RequestsFace({
           // Open where the request the centre is showing is one of these
           // (rondo#587): a person reading a request must be able to find it on
           // the list, and the mark that says which row it is cannot be seen
-          // through a shut fold.
-          open={list.moreDone.some((row) => row.messageId === openId)}
+          // through a shut fold. The same holds of the last-looked line: where
+          // the position it marks is in here -- which is where every request
+          // the person had already seen is one the fold took -- a shut fold
+          // would be the line not being drawn at all.
+          open={list.moreDone.some(
+            (row) => row.messageId === openId || row.messageId === list.lastLookedAbove,
+          )}
         >
           <summary>{wording.listMoreDone(list.moreDone.length)}</summary>
           {list.moreDone.map((row) => (
-            <Row
+            <RowInOrder
               key={row.messageId}
               wording={wording}
               row={row}
               hrefOf={hrefOf}
               agoOf={agoOf}
-              open={row.messageId === openId}
+              openId={openId}
+              lastLookedAbove={list.lastLookedAbove}
+              lastLookedSaid={lastLookedSaid}
             />
           ))}
         </details>

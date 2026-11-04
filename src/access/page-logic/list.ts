@@ -151,6 +151,11 @@ export interface RequestList {
    * The row the "you last looked down to here" line sits above, or null when
    * there is no line to draw -- which is either that this actor has never
    * looked, or that they have seen everything.
+   *
+   * It may be one of {@link moreDone}'s rows, because the line is a position
+   * in the whole time order and the fold hides part of that order (rondo#746).
+   * The face then draws the line inside the fold and opens it, as it opens it
+   * for the request the centre is showing.
    */
   readonly lastLookedAbove: string | null;
   /**
@@ -309,11 +314,16 @@ export function requestList(
   const moreDone = newest.slice(DONE_SHOWN);
   const shown = rest.filter((row) => rowWord(row) !== "done" || kept.has(row.messageId));
   const days = byDay(shown, (row) => row.atMs, nowMs);
-  // The first row, in drawing order, that had already been seen. Only the rows
-  // in the day groups are considered: what is lifted under *your turn* is
-  // waiting on the person now, whenever it arrived, so a line above it would
-  // say something false about it.
-  const inOrder = days.flatMap((group) => group.rows);
+  // The first row, in drawing order, that had already been seen. What is
+  // lifted under *your turn* is left out: it is waiting on the person now,
+  // whenever it arrived, so a line above it would say something false about
+  // it. **The folded done requests are not left out** (rondo#746): the line is
+  // a position in the whole time order, and reading it off the shown rows
+  // alone loses it entirely where every request the person had already seen is
+  // one the fold took -- the list would then say nothing was ever looked at.
+  // So the order read here is the order drawn: the day groups, then the rows
+  // behind the press, which is where the line falls when it falls there.
+  const inOrder = [...days.flatMap((group) => group.rows), ...moreDone];
   const seen = sinceMs === null ? undefined : inOrder.find((row) => row.atMs <= sinceMs);
   return {
     yourTurn,

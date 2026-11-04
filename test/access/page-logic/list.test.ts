@@ -169,6 +169,29 @@ test("the last-looked line sits above the newest row already seen", () => {
   expect(list.lastLookedAbove).toBe("seen-before");
 });
 
+test("the line is read off the whole list, the done requests the fold took included", () => {
+  // Five done requests, so two are behind the press, and the person last
+  // looked while the oldest two were already there. The line's position is
+  // among those two -- reading it off the shown rows alone would find no row
+  // already seen and draw no line, which would say they had never looked.
+  const rows = [
+    row({ messageId: "done-1", atMs: at(2026, 9, 20, 9) }),
+    row({ messageId: "done-2", atMs: at(2026, 9, 19) }),
+    row({ messageId: "done-3", atMs: at(2026, 9, 18) }),
+    row({ messageId: "done-4", atMs: at(2026, 9, 17) }),
+    row({ messageId: "done-5", atMs: at(2026, 8, 20) }),
+  ];
+  const list = requestList(rows, at(2026, 9, 17, 18), NOW);
+  expect(list.moreDone.map((each) => each.messageId)).toEqual(["done-4", "done-5"]);
+  expect(list.lastLookedAbove).toBe("done-4");
+  // And where only the oldest of all was seen, the line is still the fold's,
+  // on the row it belongs above rather than on the press.
+  expect(requestList(rows, at(2026, 8, 21), NOW).lastLookedAbove).toBe("done-5");
+  // A row the fold did not take is still where the line goes when the
+  // position is its: the fold moves no line it does not hold.
+  expect(requestList(rows, at(2026, 9, 18, 18), NOW).lastLookedAbove).toBe("done-3");
+});
+
 test("no line is drawn where it would divide nothing", () => {
   const rows = [
     row({ messageId: "a", atMs: at(2026, 9, 20, 9) }),
