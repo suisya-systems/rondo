@@ -313,6 +313,9 @@ explanation you pressed on and then answers the gate.`,
   answerReviseCallsSend:
     "Also send these judgment calls (where they differ from your answer, the answer wins)",
   answerReviseCallsRead: "Read the judgment calls",
+  questionWaitsOn: "Waiting on your answer",
+  answerRecommends: (option, why) => `The worker recommends ${String(option)}: ${why}`,
+  standingFold: (findings) => `What the review raised (${String(findings)})`,
   answerRaiseLabel: "Budget from here on (USD)",
   answerRaiseRoundsLabel: "Review rounds for this line",
   answerRaiseLeft: (left, reserve, enough) =>

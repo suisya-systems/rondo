@@ -675,12 +675,6 @@ export interface PageWords extends DayWords {
    */
   readonly evQuestionBuilt: (built: boolean, waits: string | null) => string;
   readonly evQuestionBuiltLink: string;
-  /** Heads the part of the work that waits on the answer, in the question's card. */
-  readonly questionWaitsOn: string;
-  /** Which option the worker recommends, and why, above the presses (rondo#704). */
-  readonly answerRecommends: (option: number, why: string) => string;
-  /** The fold over what a review raised, where a question is waiting (rondo#704). */
-  readonly standingFold: (findings: number) => string;
   /** What the revise press does once the question is answered (rule 8.4), and for which part. */
   readonly reviseAnswerStarts: (part: number | null) => string;
   /** The note under a revise box that holds the question and the answer (rule 4.5). */
@@ -1343,12 +1337,6 @@ export const PAGE_EN: PageWords = Object.freeze({
       : "The worker stopped to ask before committing anything.") +
     (waits === null ? "" : ` Waiting on your answer: ${waits}`),
   evQuestionBuiltLink: "What changed",
-  questionWaitsOn: "Waiting on your answer",
-  answerRecommends: (option, why) => `The worker recommends ${String(option)}: ${why}`,
-  standingFold: (findings) =>
-    findings === 1
-      ? "The one point the review raised"
-      : `The ${String(findings)} points the review raised`,
   reviseAnswerStarts: (part) =>
     part === null
       ? "Once the question is answered, this starts the next attempt with your answer in it."
@@ -1990,9 +1978,6 @@ export const PAGE_JA: PageWords = Object.freeze({
       : "ワーカーは何もコミットせずに質問しました。") +
     (waits === null ? "" : `返事を待っている部分: ${waits}`),
   evQuestionBuiltLink: "変更内容",
-  questionWaitsOn: "この回答を待っている作業",
-  answerRecommends: (option, why) => `ワーカーのおすすめは ${String(option)}: ${why}`,
-  standingFold: (findings) => `見直しで挙がった点を見る（${String(findings)} 件）`,
   reviseAnswerStarts: (part) =>
     part === null
       ? "質問に回答してからこのボタンを押すと、回答を渡して次の回を始めます。"

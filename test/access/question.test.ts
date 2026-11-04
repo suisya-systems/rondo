@@ -15,7 +15,9 @@ import {
   answeredQuestion,
   optionLines,
   type QuestionPorts,
+  questionBody,
   questionRevise,
+  questionShown,
   readWorkerQuestion,
   relayQuestion,
   storedOptions,
@@ -352,4 +354,31 @@ test("options are numbered once, whatever the writer numbered them with (rondo#4
     "",
     "→ 1: Keeping it is smaller.",
   ]);
+});
+
+test("the screen's reading of a question's body drops rondo's option list and the commit (rondo#704)", () => {
+  const read = readWorkerQuestion(report(QUESTION));
+  if (read.kind !== "question") throw new Error("the question did not read");
+  const options = storedOptions(
+    read.question.options,
+    read.question.recommended,
+    read.question.recommendation,
+  );
+  const body = questionBody(read.question, TIP);
+  // The question and what waits, byte for byte; neither the options rondo
+  // numbered into the body nor the commit it ends with.
+  expect(questionShown(body, options)).toEqual({
+    question: QUESTION.question,
+    waits: QUESTION.waits,
+  });
+  // A body this did not compose is the body, whole: an unreadable block's
+  // sentence, and a row stored before the options were kept beside it.
+  const said = "Lap 'i-1' ended with a question rondo could not read.";
+  expect(questionShown(said, null)).toEqual({ question: said, waits: "" });
+  expect(questionShown(said, options)).toEqual({ question: said, waits: "" });
+  // The commit is the only block dropped after the options: a last block
+  // rondo cannot read as one is kept, rather than guessed at.
+  expect(questionShown(questionBody(read.question, "the tip"), options).waits).toBe(
+    `${QUESTION.waits}\n\nthe tip`,
+  );
 });

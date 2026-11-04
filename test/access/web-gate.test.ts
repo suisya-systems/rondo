@@ -1566,7 +1566,7 @@ test("where a worker's question waits, what the review raised is one press away 
   const asked = standingOf(await questionPage(world));
   expect(asked).toContain("<details");
   expect(asked).not.toContain(EN.standingHeading);
-  expect(asked).toMatch(/points the review raised/);
+  expect(asked).toContain(EN.standingFold(3));
   // In full, and under the summary that opens them.
   expect(asked.indexOf("the backoff is not capped")).toBeGreaterThan(asked.indexOf("</summary>"));
   const ja = standingOf(await questionPage(world, JA));

@@ -314,6 +314,9 @@ export const JA: Chrome = Object.freeze({
   answerReviseDraftLead: "次の回に一緒に渡す変更依頼を見る",
   answerReviseCallsSend: "判断が必要な次の点も一緒に送る（回答と食い違う点は回答を優先します）",
   answerReviseCallsRead: "判断が必要な点を見る",
+  questionWaitsOn: "この回答を待っている作業",
+  answerRecommends: (option, why) => `ワーカーのおすすめは ${String(option)}: ${why}`,
+  standingFold: (findings) => `見直しで挙がった点を見る（${String(findings)} 件）`,
   answerRaiseLabel: "これからの予算（USD）",
   answerRaiseRoundsLabel: "この作業のレビュー回数",
   answerRaiseLeft: (left, reserve, enough) =>
