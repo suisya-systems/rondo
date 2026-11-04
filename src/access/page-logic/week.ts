@@ -92,9 +92,10 @@ export interface Allowance {
  *
  * - `holdingUp`: a budget is stopping work now -- a lap its spend cap stopped
  *   (`D-0121`), or one the `cost` scope test refused to send, with nothing
- *   running after it and its request neither taken in nor ended. An approval
+ *   since having carried that stop on or taken its work anywhere. An approval
  *   whose room is merely spoken for by laps that are running is not this: the
- *   caller tests for a stop that happened (`screens/week.ts`).
+ *   caller tests for a stop that happened, and asks of each stop whether
+ *   anything has answered it (`screens/week.ts`).
  * - `yours`: nothing is stopped, but a decision about a budget is the person's
  *   -- a raise (`D-0074` rule 4.2), or a scope of theirs to set or approve.
  *

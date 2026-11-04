@@ -66,6 +66,53 @@ function budgetStopped(record: IterationRecord): boolean {
   );
 }
 
+/** Whether a lap's work was taken in or dropped, which are the two ends a person gives it. */
+function takenSomewhere(record: IterationRecord): boolean {
+  return record.status === "closed" || record.status === "abandoned";
+}
+
+/**
+ * **Whether this stop is still the one in the way**, asked of the stop and not
+ * of its request.
+ *
+ * A request is not one thing that is either finished or not: it is a chain of
+ * laps, and a stop sits at one point in that chain. Reading *finished* over the
+ * whole chain -- every lap terminal, and one of them closed or settled by a
+ * person -- let a closing from earlier in the chain answer a stop that happened
+ * after it, so a request whose first lap was taken in and whose follow-up work
+ * then ran out of budget drew nothing at all. The budget was holding work up
+ * and the face said so for no request.
+ *
+ * So each stop is asked about on its own, and three things answer it:
+ *
+ * 1. *The lap is still going.* A lap whose cost has reached its cap but which
+ *    has not stopped on it yet is work in progress, not a stop: nothing is
+ *    waiting for the person, and `running` is where the page says so.
+ * 2. *This lap's own work was taken in or dropped.* A cap stays written on a
+ *    row for ever, so the lap a person approved at its gate having spent all
+ *    of its budget is history rather than an obstacle.
+ * 3. *Something later answered it* -- a lap of the same request still going,
+ *    which is the stop carried on from, or one taken somewhere no earlier than
+ *    this stop, which is the work having gone where it was meant to go. An
+ *    ending **before** the stop answers nothing, which is the whole of the
+ *    distinction this function exists for.
+ */
+function stopStillStanding(
+  stopped: IterationRecord,
+  laps: readonly IterationRecord[],
+  runningNow: ReadonlySet<string>,
+): boolean {
+  if (runningNow.has(stopped.id) || takenSomewhere(stopped)) {
+    return false;
+  }
+  return !laps.some(
+    (other) =>
+      other.id !== stopped.id &&
+      (!isTerminal(other.status) ||
+        (takenSomewhere(other) && other.updatedAtMs >= stopped.updatedAtMs)),
+  );
+}
+
 /** The week's face, read and composed. */
 export async function weekSide(
   ports: WebPorts,
@@ -103,37 +150,15 @@ export async function weekSide(
       weekApprovals.set(approval.decisionId, allowanceOf(approval));
     }
   }
-  /**
-   * **The requests whose work has been taken somewhere**: every lap under them
-   * has ended, and one of them either closed or was settled by a person. A
-   * budget cannot be holding such a request up -- there is nothing left of it
-   * to stop, and the stop the person already answered is this week's history
-   * rather than this week's obstacle.
-   *
-   * **A request whose every lap ended `failed` is not one of them.** That is
-   * exactly the state a budget stop leaves behind: the lap is terminal, nothing
-   * replaced it, and raising the budget is what starts the next one. Reading
-   * *finished* off "every lap is terminal" alone would have withheld the
-   * reading in the one case `D-0207` rule 1 names first.
-   */
-  const settled = new Set(
-    [...allLapsByRequest.entries()]
-      .filter(
-        ([, laps]) =>
-          laps.every((lap) => isTerminal(lap.record.status)) &&
-          laps.some((lap) => lap.record.status === "closed" || lap.record.status === "abandoned"),
-      )
-      .map(([requestMessageId]) => requestMessageId),
-  );
   /*
    * **Why the week's budget is on this face, or that it is not** (`D-0207`
    * rule 1). One fact makes it worth drawing as *holding work up*: a budget
-   * that stopped a lap and is still standing in the way of the request it
-   * stopped. Beside it is a scope waiting for the person, which is where a
-   * budget is set or raised. With neither, the figures are withheld and nothing
-   * stands in their place (rule 4).
+   * that stopped a lap, and that stop still standing where the work stopped.
+   * Beside it is a scope waiting for the person, which is where a budget is set
+   * or raised. With neither, the figures are withheld and nothing stands in
+   * their place (rule 4).
    *
-   * **Every path to "holding work up" goes through the same three tests**, and
+   * **Every path to "holding work up" goes through the same two tests**, and
    * that is this entry's own rule rather than a tidying: a budget is drawn only
    * where it is in the way of work and the person has a move to make.
    *
@@ -143,20 +168,20 @@ export async function weekSide(
    *    running is **not** one of these -- what has exhausted it is the reserve
    *    held for work that is going fine, and a person asked to raise a budget
    *    there would be answering a question nobody has been asked.
-   * 2. *Nothing is running under that request now*, so the stop is where the
-   *    work stands rather than something a later lap carried on from.
-   * 3. *The request has not been taken in or ended* ({@link settled}). A cap
-   *    that stopped a lap stays written on its row for ever, so a request
-   *    raised after it and since finished would otherwise keep this face
-   *    drawing the week's money for the rest of the window.
+   * 2. *Nothing has answered that stop* ({@link stopStillStanding}): the lap is
+   *    not still going, its own work was not taken in or dropped, and no lap of
+   *    the same request carried on from it or ended where it was meant to. The
+   *    question is asked of the stop, so a closing that happened before it
+   *    cannot answer it.
    */
-  const workingNow = new Set(running.map((record) => record.requestMessageId));
+  const workingNow = new Set(running.map((record) => record.id));
+  const lapsOf = (requestMessageId: string): readonly IterationRecord[] =>
+    (allLapsByRequest.get(requestMessageId) ?? []).map((lap) => lap.record);
   const bearing = budgetBearing({
     holdingUp: touched.some(
       (lap) =>
         budgetStopped(lap.record) &&
-        !workingNow.has(lap.record.requestMessageId) &&
-        !settled.has(lap.record.requestMessageId),
+        stopStillStanding(lap.record, lapsOf(lap.record.requestMessageId), workingNow),
     ),
     yours: scopeAwaits(waits),
   });

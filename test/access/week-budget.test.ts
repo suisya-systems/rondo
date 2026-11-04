@@ -125,6 +125,30 @@ async function working(w: ReturnType<typeof fresh>, id: string): Promise<void> {
 }
 
 /**
+ * A lap of the request whose work a person took in at its gate: reserved,
+ * admitted, walked to its gate and closed on *approve*.
+ *
+ * Nothing about its budget is written, so the one thing it is in these cases is
+ * an ending -- which is what a stop beside it is read against.
+ */
+async function takenIn(w: ReturnType<typeof fresh>, id: string, closedAtMs: number): Promise<void> {
+  await reserve(w, id, WORK, null, REQUEST);
+  admit(w, id);
+  await openGate(w, id);
+  expect(
+    (
+      await w.store.transition(
+        id,
+        "awaiting_human",
+        "closed",
+        { gateOutcome: "approve" },
+        closedAtMs,
+      )
+    ).kind,
+  ).toBe("transitioned");
+}
+
+/**
  * The page the week's face is on, with every lap read as admitted under the
  * approval -- which is `portsOver`'s own stand-in for the admitting row
  * (rondo#233 S4).
@@ -204,6 +228,68 @@ test("a lap the budget refused to send puts it there too, with every lap of its 
   const html = await page(w);
   expect(html).toContain(EN.weekBudgetHeldUp);
   expect(html).toContain(EN.weekBudgetHeldUpNext);
+});
+
+test("a budget refusal with no cost or cap read on the row is still a stop", async () => {
+  // The other spelling of D-0121 rule 5 on its own. The `cost` scope test can
+  // refuse to send a lap before anything of its own has been read, which
+  // leaves `failed` with `failureKind: "budget"` and no pair for
+  // `reachedBudgetCap` to compare -- so the kind of failure is the only thing
+  // this stop can be recognised by, and the person's next move is the same
+  // larger budget.
+  const w = await world(5);
+  await working(w, "i-0001");
+  expect(
+    (
+      await w.store.transition(
+        "i-0001",
+        "performing",
+        "failed",
+        { failureKind: "budget", reason: "LapBudgetExhausted" },
+        4_000,
+      )
+    ).kind,
+  ).toBe("transitioned");
+  const stopped = await w.store.read("i-0001");
+  expect(stopped.kind).toBe("read");
+  if (stopped.kind === "read") {
+    // The row the reading is derived from: neither figure is there to compare.
+    expect(stopped.record.lapCostUsd).toBeNull();
+    expect(stopped.record.lapBudgetCapUsd).toBeNull();
+  }
+  const html = await page(w);
+  expect(html).toContain(EN.weekBudgetHeldUp);
+  expect(html).toContain(EN.weekBudgetHeldUpNext);
+});
+
+test("a stop after an earlier lap was taken in stays on the face, and a later closing takes it off", async () => {
+  // Whether a stop has been answered is asked of the stop. A request whose
+  // first lap was taken in and whose follow-up work then ran out of budget is
+  // stopped now, and reading *finished* over the whole request would have let
+  // the older closing answer the newer stop -- the one state rule 1 names
+  // first, drawn for no request at all.
+  const w = await world(5);
+  await takenIn(w, "i-0001", 4_000);
+  expectWithheld(await page(w));
+  await working(w, "i-0002");
+  expect(
+    (
+      await w.store.transition(
+        "i-0002",
+        "performing",
+        "failed",
+        { failureKind: "budget", reason: "LapBudgetExhausted", lapCostUsd: 5, lapBudgetCapUsd: 5 },
+        5_000,
+      )
+    ).kind,
+  ).toBe("transitioned");
+  const html = await page(w);
+  expect(html).toContain(EN.weekBudgetHeldUp);
+  expect(html).toContain(EN.weekBudgetHeldUpNext);
+  // And an ending *after* the stop is what answers it: the raise was pressed,
+  // the next lap ran, and its work was taken in.
+  await takenIn(w, "i-0003", 6_000);
+  expectWithheld(await page(w));
 });
 
 test("an approval whose room is spoken for by a lap still running is no budget holding work up", async () => {
