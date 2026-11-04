@@ -46,6 +46,7 @@ import type { ReadingReach } from "../store/records.js";
 import type { GateAuto } from "./gate-auto.js";
 import type { IssueReadFailure } from "./issue-read.js";
 import type { ExplainWords } from "./page/explain-words.js";
+import type { ListWords } from "./page/list-words.js";
 import type { RefusalWords } from "./page/refusal-words.js";
 import type { ReportWords } from "./page/report-words.js";
 import type { ScopeWords } from "./page/scope-words.js";
@@ -79,6 +80,7 @@ export interface Chrome
   extends PageWords,
     ExplainWords,
     SinceWords,
+    ListWords,
     RefusalWords,
     ReportWords,
     TriageSourceWords,

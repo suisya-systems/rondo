@@ -29,9 +29,14 @@
   color: var(--color-muted-foreground);
 }
 
+/*
+ * **One line, three things** (rondo#746): the mark, then the name, then the
+ * word, then the age. The name's column is the only one that gives, so the
+ * word and the age are never pushed off the face by a long first line.
+ */
 .list-row {
   display: grid;
-  grid-template-columns: 16px 1fr auto;
+  grid-template-columns: 16px minmax(0, 1fr) auto auto;
   gap: 12px;
   padding: 8px 24px;
   color: inherit;
@@ -53,7 +58,24 @@
   color: var(--color-foreground);
 }
 
+/*
+ * The name's cell: the name, and after it the repository where two requests
+ * would otherwise read the same (D-0081 rule 4.2). The name gives and the
+ * place does not -- a name cut in half is a different name.
+ */
 .list-row-body {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.list-row-body .list-repo {
+  flex: none;
+}
+
+/* The three rows that are not requests: a line of their own and a sentence. */
+.list-row-note {
   min-width: 0;
 }
 
@@ -64,12 +86,22 @@
  * finished one is weight, ink and the cut, which is what a reader was reading
  * anyway.
  */
+/*
+ * **Every row's name is one line, cut** (rondo#746, carrying rondo#592 and
+ * `D-0183` to the rows that waited): two lines a row put few requests above
+ * the fold of a 300px face, and a row that has to be read to be counted is a
+ * row a person scans past. What the cut takes is on the hover, which is where
+ * #592 put it.
+ */
 .list-row b {
   display: block;
   font-size: var(--text-title);
   font-weight: 400;
   line-height: 1.5;
   color: var(--color-muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .list-row p {
@@ -79,24 +111,11 @@
 }
 
 /*
- * **A row that needs nobody is one line: its title, cut, and its time**
- * (rondo#592, D-0183). Two lines a row put few requests above the fold of a
- * 300px face; its state is the mark's shape (rondo#589), so the sentence and
- * the repository go from the eye and stay for a reader, who has no mark --
- * hidden the way a screen reader still reads, not `display: none`.
+ * The row's one word of state (rondo#746), beside the age and in the same
+ * recessive ink: it is read down the column rather than along the row, so it
+ * keeps its line whatever the name does.
  */
-.list-row:not(.list-row-mine) b {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.list-row:not(.list-row-mine) p {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
+.list-row > p {
   white-space: nowrap;
 }
 
@@ -107,8 +126,8 @@
 }
 
 /*
- * Waiting on the person: bold, in full ink, not cut short -- and standing on
- * its own ground, with the amber down its edge.
+ * Waiting on the person: bold, in full ink -- and standing on its own ground,
+ * with the amber down its edge.
  *
  * **Bold and one dot was not enough weight** (rondo#314): three ordinary rows
  * of two lines each carry more ink between them than one bold row does, so the
@@ -198,13 +217,21 @@
   }
 }
 
-/* A published request's checks, where they have said green or red (rondo#376). */
-.list-dot-ok {
-  color: var(--color-ok);
+/*
+ * **The done requests older than the newest three** (rondo#746): one press,
+ * drawn as the day headings are so that a shut fold reads as the foot of the
+ * list rather than as a control beside it. The rows inside are the same rows.
+ */
+.list-fold > summary {
+  padding: 12px 24px 4px;
+  font-size: var(--text-id);
+  color: var(--color-muted-foreground);
+  cursor: pointer;
 }
 
-.list-dot-fail {
-  color: var(--color-fail);
+.list-fold > summary:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: -2px;
 }
 
 /*
