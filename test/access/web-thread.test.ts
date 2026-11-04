@@ -95,6 +95,49 @@ const messageIn = (html: string, id: string): string =>
     html.slice(html.indexOf(`<article id="${id}"`)),
   )?.[0] ?? "";
 
+/** One message's line: its `<summary>`, which is what is drawn while it is shut. */
+const lineOf = (html: string, id: string): string =>
+  /<summary>([\s\S]*?)<\/summary>/.exec(messageIn(html, id))?.[1] ?? "";
+
+/**
+ * What a row of the record puts in its columns: the class of each child of the
+ * markup given, the children of those children left out. A child more than the
+ * row has tracks for is a child on a second line, which is what `tracksOf` is
+ * read against.
+ */
+const columnsOf = (inside: string): readonly string[] => {
+  const columns: string[] = [];
+  let depth = 0;
+  for (const tag of inside.matchAll(/<(\/?)[a-z]+\b([^>]*)>/g)) {
+    if (tag[1] === "/") {
+      depth -= 1;
+      continue;
+    }
+    if (depth === 0) {
+      columns.push(/class="([^"]*)"/.exec(tag[2] ?? "")?.[1] ?? "");
+    }
+    depth += 1;
+  }
+  return columns;
+};
+
+/** What one message's line puts in the row's columns. */
+const columnsIn = (html: string, id: string): readonly string[] => columnsOf(lineOf(html, id));
+
+/** Inside one element's markup: what its own opening and closing tags hold. */
+const insideOf = (markup: string): string =>
+  markup.slice(markup.indexOf(">") + 1, markup.lastIndexOf("</"));
+
+/** The tracks a rule of `page/thread.css` lays its row out in, one per column. */
+const tracksOf = (selector: string): readonly string[] => {
+  const css = bytesOf("page/thread.css").toString("utf8");
+  const at = css.indexOf(`${selector} {`);
+  expect(at, selector).toBeGreaterThan(-1);
+  const rule = css.slice(at, css.indexOf("}", at));
+  const value = /grid-template-columns:([^;]*);/.exec(rule)?.[1] ?? "";
+  return [...value.matchAll(/[a-z-]+\([^)]*\)|\S+/g)].map((found) => found[0]);
+};
+
 test("the thread runs in the order it happened, and a reply names the line it answers", async () => {
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
@@ -658,4 +701,204 @@ test("an ask with options is answered by one press per option, the recommended o
   const after = await operatorPage(portsOver(world, "ada", []), "t", view, EN, mint);
   expect(messageIn(after, "reply-c")).toContain("Chose 2");
   expect(messageIn(after, "reply-c")).not.toContain("Carried on");
+});
+
+test("the record is one line per thing, and the words of each are behind the press on that line", async () => {
+  const world = fresh();
+  await seedThread(world);
+  const html = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    { kind: "thread", messageId: "request-a", to: null },
+    EN,
+    mint,
+  );
+
+  // **Always there: the request's short name, and the progress of the work
+  // with what it spent against its cap.** The name is the request's own first
+  // line, at the head; the pair is the governance line, which is not a fold.
+  const headAt = html.indexOf('class="thread-head"');
+  const head = html.slice(headAt, html.indexOf("</header>", headAt));
+  expect(head).toContain('<h1 lang="">Please look at the flaky test.</h1>');
+  // Nothing in the head is behind a press: how far the work has got, and what
+  // it spent against its cap, are the governance line's, which is not a fold
+  // (`test/access/page/governance.test.ts` holds that pair down).
+  expect(head).not.toContain("<details");
+
+  // **Always there: one line per thing that happened.** Each message is a
+  // summary -- who said it, its first line, its age -- and the press that
+  // opens its words, in the person's language.
+  expect(messageIn(html, "request-a")).toContain(
+    '<span class="msg-line" lang="">Please look at the flaky test.</span>',
+  );
+  expect(messageIn(html, "ask-b")).toContain(
+    '<span class="msg-line" lang="">Which runner should I read first?</span>',
+  );
+  expect(html.match(/<span class="msg-open">read the words<\/span>/g)).toHaveLength(3);
+  // The mark that a question waits is on the line, not inside the fold.
+  expect(readableWithoutOpening(html, "Waiting on you")).toBe(true);
+
+  // **Behind the press: the request's whole text, and the whole of what was
+  // said.** Every byte is in the document (D-0029 rule 2) and none of it is
+  // readable until a fold is opened.
+  for (const body of [ROOT_BODY, ASK_BODY, LATER_BODY]) {
+    expect(unescaped(html)).toContain(body);
+  }
+  expect(readableWithoutOpening(html, "It fails &lt;b&gt;one run in five&lt;/b&gt;")).toBe(false);
+  expect(readableWithoutOpening(html, "The Linux one has the most failures.")).toBe(false);
+  // The bases under a message are the reading too, so they are inside with it.
+  expect(readableWithoutOpening(html, 'class="msg-bases-label"')).toBe(false);
+
+  // **The press does reveal them.** `<details>` is what the fold is, so what a
+  // person's press does is add `open` -- and then the words that were shut are
+  // read without opening anything else.
+  const pressed = html.replaceAll('<details class="msg-fold">', '<details class="msg-fold" open>');
+  expect(readableWithoutOpening(pressed, "It fails &lt;b&gt;one run in five&lt;/b&gt;")).toBe(true);
+  expect(readableWithoutOpening(pressed, "The Linux one has the most failures.")).toBe(true);
+  expect(readableWithoutOpening(pressed, 'class="msg-bases-label"')).toBe(true);
+
+  // **The request's text is not drawn twice on one screen.** The head says its
+  // first line as the name; the message that opened it says the same line in
+  // the record, and its text is in that one fold and nowhere else.
+  expect(unescaped(html).split(ROOT_BODY.trimEnd())).toHaveLength(2);
+
+  // **Nothing lays out again what was read last time** (the line this thread
+  // used to draw above the first new thing).
+  expect(html).not.toContain('class="thread-since"');
+  expect(html).not.toContain("you saw last time");
+
+  // The Japanese page says the press in Japanese, and draws the same fold.
+  const ja = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    { kind: "thread", messageId: "request-a", to: null },
+    chromeFor("ja"),
+    mint,
+  );
+  expect(ja).toContain('<span class="msg-open">文面を読む</span>');
+  expect(readableWithoutOpening(ja, "The Linux one has the most failures.")).toBe(false);
+});
+
+test("a marked message is one line too: the row's tracks hold the summary's children, in both languages", async () => {
+  const world = fresh();
+  await seedThread(world);
+  // One render carrying every state a line can be in: a message with no mark,
+  // a question still waiting on the person, and the answer that was given to
+  // another one. The marks are what a message has and an event line has not,
+  // so they are what could push the last column onto a second line.
+  for (const draft of [
+    {
+      messageId: "answer-d",
+      body: "The Linux one, then.",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: "ask-b",
+      atMs: 4_000,
+      bases: [],
+      asks: false,
+      answerOutcome: "carry_on",
+    },
+    {
+      messageId: "ask-e",
+      body: "Should I pin the runner?",
+      authorKind: "drafter",
+      authorId: "rondo-drafter",
+      inReplyTo: "request-a",
+      atMs: 5_000,
+      bases: [{ form: "iteration", iterationId: "i-0001" }],
+      asks: true,
+    },
+  ] as const) {
+    const outcome = await world.record.recordThreadMessage(draft);
+    expect(outcome.kind, JSON.stringify(outcome)).toBe("recorded");
+  }
+
+  // **The row's columns are `page/thread.css`'s, and there are four of them**:
+  // who said it, its first line, its age, and the press that opens its words.
+  // The flexible one is the line, so it is the line that is clipped when the
+  // window is narrow -- and clipped, not wrapped, which is the other half of
+  // one line per thing.
+  const tracks = tracksOf(".msg-fold > summary");
+  expect(tracks).toEqual(["auto", "minmax(0, 1fr)", "auto", "auto"]);
+  expect(bytesOf("page/thread.css").toString("utf8")).toMatch(
+    /\.msg-line \{[^}]*white-space: nowrap/,
+  );
+  // The marks sit in the leading column, which keeps its own words on one line.
+  expect(bytesOf("page/thread.css").toString("utf8")).toMatch(
+    /\.msg-said \{[^}]*white-space: nowrap/,
+  );
+
+  for (const wording of [EN, chromeFor("ja")]) {
+    const html = await operatorPage(
+      portsOver(world, "ada", []),
+      "t",
+      { kind: "thread", messageId: "request-a", to: null },
+      wording,
+      mint,
+    );
+
+    // **One child per track, marked or not.** A fifth child would be a fifth
+    // column the grid has not got, and the browser would put it on a second
+    // row -- so the words' press would leave the line it belongs to.
+    const lines = ["request-a", "ask-b", "answer-d", "ask-e"];
+    for (const id of lines) {
+      expect(columnsIn(html, id).length, `${id}: one child per track`).toBe(tracks.length);
+    }
+    for (const id of lines) {
+      expect(columnsIn(html, id), id).toEqual(["msg-said", "msg-line", "msg-at", "msg-open"]);
+    }
+
+    // The marks are inside that leading column, on the line itself rather than
+    // in the fold: where a message stands is always there, as its words are
+    // not. Each is said once, so neither is also drawn under the line.
+    expect(lineOf(html, "ask-e")).toContain(
+      `<span class="msg-said"><span class="msg-who">rondo</span><span class="msg-wait">${wording.askWaitingPill}</span></span>`,
+    );
+    expect(messageIn(html, "ask-e").split(wording.askWaitingPill)).toHaveLength(2);
+    expect(lineOf(html, "answer-d")).toContain(
+      `<span class="msg-answered">${wording.answerCarriedOnPill}</span>`,
+    );
+    expect(messageIn(html, "answer-d").split(wording.answerCarriedOnPill)).toHaveLength(2);
+    // ...and a message with neither mark has the name alone in that column.
+    expect(lineOf(html, "report-c")).toContain(
+      '<span class="msg-said"><span class="msg-who">rondo</span></span>',
+    );
+    // The line itself is the flexible column's, and the press that opens the
+    // words is last: the four say the same four things in both languages.
+    expect(lineOf(html, "ask-e")).toContain('<span class="msg-line" lang="">');
+    expect(lineOf(html, "ask-e")).toContain(`<span class="msg-open">${wording.msgOpen}</span>`);
+  }
+});
+
+test("an event line is one line too: the record's other kind fits its own row, in both languages", async () => {
+  // The record is messages and event lines together, so one line per thing is
+  // a claim about both kinds. An event's line is the dot, the sentence and the
+  // age -- three children in three tracks, in a language whose words are
+  // longer or shorter than English's either way.
+  const world = fresh();
+  await gateWithChecks(world);
+  const line = await reportToRequest(world, "i-0001", { kind: "gate" }, 4_500);
+  expect(line).toMatch(/^Reported to the request/);
+  const tracks = tracksOf(".ev");
+  expect(tracks).toEqual(["28px", "minmax(0, 1fr)", "auto"]);
+  for (const wording of [EN, chromeFor("ja")]) {
+    const html = await operatorPage(
+      portsOver(world),
+      "t",
+      { kind: "thread", messageId: "req-1", to: null },
+      wording,
+    );
+    const lines = [...html.matchAll(/<div class="ev [^"]*">[\s\S]*?<\/div>/g)].map(
+      (found) => found[0],
+    );
+    expect(lines.length, "the record draws event lines").toBeGreaterThan(0);
+    for (const drawn of lines) {
+      expect(columnsOf(insideOf(drawn)).length, drawn).toBe(tracks.length);
+      expect(columnsOf(insideOf(drawn))[0]).toBe("ev-dot");
+    }
+    // rondo's own reason for a failure hangs under the line rather than in it,
+    // so the line it belongs to keeps its three columns (D-0076 rule 4.5).
+    expect(html).toContain(`${wording.evBrokeReason}</summary>`);
+    expect(lines.join("")).not.toContain(wording.evBrokeReason);
+  }
 });

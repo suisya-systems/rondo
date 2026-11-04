@@ -102,9 +102,24 @@ test("both readings are drawn from the rows on the right face, with the warning 
   expect(html.slice(0, html.indexOf('id="model-internals"'))).not.toContain("src/notifier.ts:41");
   expect(html).toContain("none of these matched the delivered work");
   expect(html).toContain("no basis given");
-  // What changed, as rows, and the worker's own words.
+  // **What changed is one press, and the heading says a change was made.** The
+  // commits and the files were drawn open above the thing the person came to
+  // decide; the rows are all still here, behind the one summary.
   expect(html).toContain("feat: retry budget");
   expect(html).toContain(">+64</span>");
+  expect(html).toContain("the commits and the files");
+  const changedAt = html.indexOf('id="changed"');
+  const changed = html.slice(changedAt, html.indexOf("</section>", changedAt));
+  expect(readableWithoutOpening(changed, "feat: retry budget")).toBe(false);
+  expect(
+    readableWithoutOpening(
+      changed.replace('<details id="changed-rows"', '<details open id="changed-rows"'),
+      "feat: retry budget",
+    ),
+  ).toBe(true);
+  // The heading, the branch and what it is compared against are not folded:
+  // they are what says a change was made at all.
+  expect(changed.slice(0, changed.indexOf('id="changed-rows"'))).toContain(EN.workHeading);
   expect(html).toContain("I could not run the suite.");
   // **Named for what it is, and shut** (rondo#444): every gate is the worker's
   // turn ending, so the card is its report, not why it stopped, and the report
@@ -1117,10 +1132,14 @@ test("what a reading did not look at is beside its verdict and not behind a fold
   const model = html.slice(html.indexOf('id="model-review"'), html.indexOf(EN.readingsNote));
   // The label the summary carried is still there, and the sentences under it
   // are readable where the verdict is: neither card holds a fold of them. The
-  // model card's one fold is the maintainer's (rondo#679), after them.
+  // model card's other folds are the maintainer's (rondo#679) and the one the
+  // findings themselves are behind -- both after the coverage line, so what
+  // the reading did *not* look at is still read without pressing anything.
   for (const card of [
     checks,
-    model.replace(/<details id="model-internals"[\s\S]*?<\/details>/, ""),
+    model
+      .replace(/<details id="model-internals"[\s\S]*?<\/details>/, "")
+      .replace(/<details id="model-findings"[\s\S]*?<\/details>/, ""),
   ]) {
     expect(card).toContain(EN.whatItRead);
     expect(card).not.toContain("<details");
@@ -1128,6 +1147,19 @@ test("what a reading did not look at is beside its verdict and not behind a fold
   expect(checks).toContain("It built nothing, ran nothing and tested nothing");
   expect(checks).toContain("neither checked nor claimed here");
   expect(model).toContain("ran nothing itself");
+  // The findings are behind their own press, and the verdict pill that counts
+  // them is not: the count is what a person weighs, the findings are what they
+  // open to check it.
+  expect(model.indexOf("1 blocker")).toBeLessThan(model.indexOf('id="model-findings"'));
+  // On this card, that is: the answering box quotes every finding unfolded,
+  // which is rule 9.4's and is the box's business and not this face's.
+  expect(readableWithoutOpening(model, "the loop never stops")).toBe(false);
+  expect(
+    readableWithoutOpening(
+      model.replace('<details id="model-findings"', '<details open id="model-findings"'),
+      "the loop never stops",
+    ),
+  ).toBe(true);
   expect(model).toContain("that it was understood is not provable");
 });
 
@@ -1655,26 +1687,21 @@ test("where a worker's question waits, the gate's box folds the drafted change a
   everyCopyBehindAPress(jaPage, REVISE_ANSWER.lead, 2);
 });
 
-test("where a worker's question waits, the model review's findings fold on the right face too (rondo#704)", async () => {
+test("where a worker's question waits, the model review's findings are behind a press on the right face too (rondo#704)", async () => {
   const world = fresh();
   await gateWithChecks(world);
   await modelFindings(world);
-
-  // At the gate's own press the card is drawn open: `D-0082` rule 7's reading,
-  // material for the press above it, which is *approve*.
-  const plain = await questionPage(world);
-  const cardOf = (html: string): string =>
-    html.slice(html.indexOf('id="model-review"'), html.indexOf('id="model-coverage"'));
-  expect(cardOf(plain)).not.toContain("<details");
-  expect(readableWithoutOpening(plain, "the backoff is not capped")).toBe(true);
-
   await workerAsksWithOptions(world);
   const page = await questionPage(world);
+  const cardOf = (html: string): string =>
+    html.slice(html.indexOf('id="model-review"'), html.indexOf('id="model-coverage"'));
   const asked = cardOf(page);
-  // Now the press is the question, so the words are one press away here as
-  // they are in the box: the card, its heading and its verdict pill stay.
-  expect(asked).toContain('<details id="model-findings-fold"');
-  expect(asked).toContain(EN.modelFindingsFold(2));
+  // The press is the question, so the words are one press away here as they
+  // are in the box: the card, its heading and its verdict pill stay drawn, and
+  // the findings sit behind this face's own evidence fold, shut.
+  expect(asked).toContain('<details id="model-findings"');
+  expect(asked).not.toContain('<details open id="model-findings"');
+  expect(asked).toContain(EN.findingsFold);
   expect(asked).toContain(EN.modelHeading);
   expect(asked.indexOf("the backoff is not capped")).toBeGreaterThan(asked.indexOf("</summary>"));
 
@@ -1685,11 +1712,12 @@ test("where a worker's question waits, the model review's findings fold on the r
   everyCopyBehindAPress(page, "the backoff is not capped", 3);
   everyCopyBehindAPress(page, "the loop never stops", 3);
 
-  // The same two folds in Japanese, by this catalogue's own words.
+  // The same folds in Japanese, by this catalogue's own words.
   const ja = await questionPage(world, JA);
-  expect(cardOf(ja)).toContain(JA.modelFindingsFold(2));
-  expect(cardOf(ja)).toContain("見直しで指摘された点を全文で見る");
+  expect(cardOf(ja)).toContain('<details id="model-findings"');
+  expect(cardOf(ja)).toContain(JA.findingsFold);
   everyCopyBehindAPress(ja, "the backoff is not capped", 3);
+  everyCopyBehindAPress(ja, "the loop never stops", 3);
 });
 
 test("a worker's question with options names no Carry on press in its revise note (D-0190 rule 6)", async () => {

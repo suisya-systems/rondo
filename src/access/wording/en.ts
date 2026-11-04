@@ -317,7 +317,6 @@ explanation you pressed on and then answers the gate.`,
   answerRecommends: (option, why) => `The worker recommends ${String(option)}: ${why}`,
   standingFold: (findings) => `What the review raised (${String(findings)})`,
   reviseDraftFold: "Read or edit the drafted change this press would send",
-  modelFindingsFold: (findings) => `Read what the review raised, in full (${String(findings)})`,
   answerRaiseLabel: "Budget from here on (USD)",
   answerRaiseRoundsLabel: "Review rounds for this line",
   answerRaiseLeft: (left, reserve, enough) =>
@@ -389,6 +388,8 @@ explanation you pressed on and then answers the gate.`,
   reportFold: "In full, as the worker wrote it",
   reportNotRead: "The worker's report could not be read; it is in the text below if it was.",
   workHeading: "What changed",
+  changedFold: "the commits and the files",
+  findingsFold: "what the review raised",
   changedAgainst: (baseRef) => `against ${baseRef}`,
   changedUnreadable:
     "The workspace could not be read, so what this work changed cannot be shown here. Whoever " +

@@ -230,8 +230,12 @@
   background: var(--color-muted);
 }
 
-/* A waiting question is the one thing in the thread drawn at the waiting weight. */
-.msg[data-waiting] .msg-body {
+/*
+ * A waiting question is the one thing in the thread drawn at the waiting
+ * weight -- on its line, which is what is always there, and not only inside
+ * the fold a person has to press to reach.
+ */
+.msg[data-waiting] .msg-fold {
   border-left: 3px solid var(--color-wait);
   padding-left: 12px;
 }
@@ -1394,4 +1398,82 @@ a.ask {
 .msg-policy button:focus-visible {
   outline: 2px solid var(--color-ring);
   outline-offset: 2px;
+}
+
+/*
+ * **A message is one line, and its words are behind the press on it.**
+ *
+ * The record a person scrolls is lines: an event line, a folded run of them,
+ * and a message -- all one height, so forty messages read as forty lines and
+ * the words are a press per message rather than a scroll past all of them.
+ * The summary takes the same grid as `.ev-fold`'s so the three kinds line up
+ * in one column of record; the leading column holds the name instead of the
+ * dot, because who said it is what a message has in place of a kind.
+ *
+ * **Four tracks, and four children at every state.** The marks a message may
+ * carry -- that this question waits on the person, that this message was the
+ * answer -- are inside the leading column rather than beside it, so a marked
+ * message does not take a fifth track the grid has not got and send the press
+ * that opens the words onto a second line. `.msg-said` is where they sit, and
+ * `test/access/web-thread.test.ts` counts the two sides against each other.
+ *
+ * With script off every fold on the page is drawn open (`page/app.css`), so
+ * nothing here is reachable only by pressing.
+ */
+.msg-fold > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0;
+  min-height: 28px;
+  max-width: 780px;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+/* Who said it, and the marks that say where it stands: one column, one line. */
+.msg-said {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.msg-fold > summary .msg-who {
+  font-size: var(--text-meta);
+  font-weight: 700;
+}
+
+/* The first line as written: one line, clipped rather than wrapped. */
+.msg-line {
+  font-size: var(--text-body);
+  line-height: 1.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.msg-open {
+  font-size: var(--text-id);
+  color: var(--color-link);
+  white-space: nowrap;
+}
+
+/* Opened, the words sit under the line, indented as a folded run's lines are. */
+.msg-fold[open] > .msg-body {
+  border-left: 1px solid var(--color-border);
+  padding-left: 12px;
+  margin: 4px 0 8px;
+}
+
+/* The presses that point the box at this message, on their own line inside. */
+.msg-doing {
+  display: flex;
+  gap: 12px;
+  font-size: var(--text-meta);
+}
+
+.msg-doing:empty {
+  display: none;
 }

@@ -10,6 +10,19 @@
  * reports for what was produced, rondo's reading of the request, and at the
  * foot the person's own words that opened it.
  *
+ * **Four things are always here, and the words are not among them**: the
+ * request's short name, the one thing to do now with the press that does it,
+ * how far the work has got with what it has spent against its cap (the
+ * governance line), and the record as one line per thing that happened. The
+ * request's own text and the whole of what was said are behind a press -- one
+ * per line of the record -- so the screen is what a person does rather than
+ * what they have to read past.
+ *
+ * **The title is the request's words, so the thread does not say them twice.**
+ * The first line stands at the head as the name; the message at the foot that
+ * opened the request is one line like every other, with its full text in its
+ * own fold.
+ *
  * **Prose stays at 45 to 90 characters at every width** (rule 1). Width buys
  * faces, so the centre does not grow with the window; `page/thread.css` holds
  * the measure.
@@ -21,7 +34,7 @@
  */
 import type { ReactNode } from "react";
 import type { FoldedItem } from "../page-logic/event-fold.js";
-import { EventLine, FoldedLine, LastLookedLine, type ThreadEvent } from "./events.js";
+import { EventLine, FoldedLine, type ThreadEvent } from "./events.js";
 
 /** A word that leads somewhere, or -- with no address for it -- just the word. */
 export interface ThreadLink {
@@ -40,6 +53,15 @@ export interface ThreadMessage {
   readonly voice: string;
   /** The name to put on it, already said by the caller. */
   readonly said: string;
+  /**
+   * The one line this message is drawn as while its words are shut: its first
+   * line, as the caller reads one (`lineOf`), and never a summary rondo wrote.
+   *
+   * **It is the whole of what the record shows unpressed**: the thread always
+   * says what happened, one line per thing, and the words themselves are
+   * behind the press on that line.
+   */
+  readonly line: string;
   /** The words, as written: never trimmed, reflowed or paraphrased. */
   readonly body: string;
   /**
@@ -149,9 +171,8 @@ export interface ThreadProps {
   readonly items: readonly FoldedItem[];
   /** What a fold offers on its own line, in the person's language. */
   readonly foldOpen: string;
-  /** Where the reading stopped, among the items (rule 7). */
-  readonly lastLookedAbove: string | null;
-  readonly lastLookedSaid: string;
+  /** What the press on a message's line offers: its words, in the person's language. */
+  readonly wordsOpen: string;
   /**
    * The box to answer in, where a question is standing (rule 9), and the box
    * to add to the request, which is always there (rule 5).
@@ -207,7 +228,7 @@ function Word({ link, className }: { readonly link: ThreadLink; readonly classNa
   );
 }
 
-function Message({ message }: { readonly message: ThreadMessage }) {
+function Message({ message, open }: { readonly message: ThreadMessage; readonly open: string }) {
   return (
     <article
       id={message.id}
@@ -215,13 +236,48 @@ function Message({ message }: { readonly message: ThreadMessage }) {
       data-voice={message.voice}
       {...(message.waiting === null ? {} : { "data-waiting": "" })}
     >
-      <div className="msg-body">
-        <h5>
-          <span className="msg-who">{message.said}</span>
-          {message.waiting === null ? null : <span className="msg-wait">{message.waiting}</span>}
-          {message.answered === null ? null : (
-            <span className="msg-answered">{message.answered}</span>
-          )}
+      {/*
+       * **One line always, the words on a press.** The summary is the line the
+       * record shows: who said it, what still waits on it, its first line and
+       * its age. Everything that is the words themselves -- the prose, what
+       * rondo drew in its place, the bases under it, the issues it named -- is
+       * inside, so a thread of forty messages reads as forty lines and the
+       * reading is a press per message rather than a scroll past all of them.
+       *
+       * Folded is not dropped (D-0029 rule 2): every byte is in the document,
+       * and `page/thread.css` draws the fold open where script is off.
+       *
+       * `<details>` and nothing else, as `FoldedLine` uses it: opening one is
+       * the browser's own act, so it costs the page no state and no address,
+       * and `page/composer.js` leaves an open fold alone through the redraw.
+       */}
+      <details className="msg-fold">
+        <summary>
+          {/*
+           * **Who said it and where it stands are one column, not a column
+           * each.** The marks are what a message has that an event line does
+           * not, and they come and go: a question carries *waiting on you*, an
+           * answer carries which answer it was, and most messages carry
+           * neither. Drawn as children of the row they would be extra columns
+           * the row's grid has no track for, and the last column -- the press
+           * that opens the words -- would wrap to a second line, which is the
+           * one thing the record must not do. Inside this column the row is
+           * four children whatever the marks do.
+           */}
+          <span className="msg-said">
+            <span className="msg-who">{message.said}</span>
+            {message.waiting === null ? null : <span className="msg-wait">{message.waiting}</span>}
+            {message.answered === null ? null : (
+              <span className="msg-answered">{message.answered}</span>
+            )}
+          </span>
+          {/*
+           * **The first line, as written** (`lang=""`, as the words below it):
+           * rondo does not know what language it is in and never reflows it.
+           */}
+          <span className="msg-line" lang="">
+            {message.line}
+          </span>
           {/*
            * **The age is the message's link to itself** and the id is never
            * printed: an id is for a screen to link by, not for anyone to
@@ -230,67 +286,80 @@ function Message({ message }: { readonly message: ThreadMessage }) {
           <a className="msg-at" href={`#${encodeURIComponent(message.id)}`} title={message.atTitle}>
             <time>{message.at}</time>
           </a>
-          {message.reply === null ? null : (
-            <a
-              className="msg-reply"
-              id={`reply-${message.id}`}
-              href={message.reply.href}
-              data-open=""
-            >
-              {message.reply.said}
-            </a>
-          )}
-          {message.ask == null || message.ask.href === null ? null : (
-            <a className="msg-ask" href={message.ask.href} title={message.ask.title} data-open="">
-              {message.ask.said}
-            </a>
-          )}
-        </h5>
-        {message.band == null ? null : (
-          <p className="msg-band" role="note">
-            <b>{message.band.heading}</b>
-            <span>{message.band.cost}</span>
-          </p>
-        )}
-        {message.policy == null ? null : (
-          <div className="msg-band msg-policy" role="note">
-            <b>{message.policy.said}</b>
-            {message.policy.forget === null ? null : (
-              <form method="post" action={message.policy.forget.action}>
-                <input type="hidden" name="token" value={message.policy.forget.token} />
-                <input type="hidden" name="policy" value={message.policy.forget.policyId} />
-                <input type="hidden" name="back" value={message.policy.forget.back} />
-                <button type="submit" data-busy={message.policy.forget.busy}>
-                  {message.policy.forget.said}
-                </button>
-              </form>
+          <span className="msg-open">{open}</span>
+        </summary>
+        <div className="msg-body">
+          {/*
+           * **The presses are inside, and do what they always did.** Pointing
+           * the box at this message, and asking rondo what it means, are
+           * reading this message -- which is what the fold holds. The box they
+           * aim at is above the thread and is always there.
+           */}
+          <p className="msg-doing">
+            {message.reply === null ? null : (
+              <a
+                className="msg-reply"
+                id={`reply-${message.id}`}
+                href={message.reply.href}
+                data-open=""
+              >
+                {message.reply.said}
+              </a>
             )}
-          </div>
-        )}
-        {message.inReplyTo === null ? null : <Word link={message.inReplyTo} className="msg-back" />}
-        {/*
-         * `lang=""` is HTML's own way of saying *the language here is
-         * unknown* (D-0055 rule 8): rondo does not read the words to find
-         * out what language they are in, and an absent attribute would
-         * inherit the chrome's, which is a guess.
-         */}
-        {message.drawn ?? <p lang="">{message.band?.body ?? message.body}</p>}
-        {message.pending.map((named) => (
-          <p className="msg-pending" key={named}>
-            <b>{named}</b> {message.pendingSaid}
+            {message.ask == null || message.ask.href === null ? null : (
+              <a className="msg-ask" href={message.ask.href} title={message.ask.title} data-open="">
+                {message.ask.said}
+              </a>
+            )}
           </p>
-        ))}
-        {message.bases.length === 0 ? null : (
-          <p className="msg-bases">
-            <span className="msg-bases-label">{message.basesLabel}</span>
-            {/* By place as well as words: two bases of one kind now say the
+          {message.band == null ? null : (
+            <p className="msg-band" role="note">
+              <b>{message.band.heading}</b>
+              <span>{message.band.cost}</span>
+            </p>
+          )}
+          {message.policy == null ? null : (
+            <div className="msg-band msg-policy" role="note">
+              <b>{message.policy.said}</b>
+              {message.policy.forget === null ? null : (
+                <form method="post" action={message.policy.forget.action}>
+                  <input type="hidden" name="token" value={message.policy.forget.token} />
+                  <input type="hidden" name="policy" value={message.policy.forget.policyId} />
+                  <input type="hidden" name="back" value={message.policy.forget.back} />
+                  <button type="submit" data-busy={message.policy.forget.busy}>
+                    {message.policy.forget.said}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+          {message.inReplyTo === null ? null : (
+            <Word link={message.inReplyTo} className="msg-back" />
+          )}
+          {/*
+           * `lang=""` is HTML's own way of saying *the language here is
+           * unknown* (D-0055 rule 8): rondo does not read the words to find
+           * out what language they are in, and an absent attribute would
+           * inherit the chrome's, which is a guess.
+           */}
+          {message.drawn ?? <p lang="">{message.band?.body ?? message.body}</p>}
+          {message.pending.map((named) => (
+            <p className="msg-pending" key={named}>
+              <b>{named}</b> {message.pendingSaid}
+            </p>
+          ))}
+          {message.bases.length === 0 ? null : (
+            <p className="msg-bases">
+              <span className="msg-bases-label">{message.basesLabel}</span>
+              {/* By place as well as words: two bases of one kind now say the
                 same thing, since neither is named by its id (D-0076). */}
-            {message.bases.map((basis, at) => (
-              <Word key={`${String(at)}:${basis.said}`} link={basis} className="basis" />
-            ))}
-          </p>
-        )}
-      </div>
+              {message.bases.map((basis, at) => (
+                <Word key={`${String(at)}:${basis.said}`} link={basis} className="basis" />
+              ))}
+            </p>
+          )}
+        </div>
+      </details>
     </article>
   );
 }
@@ -302,8 +371,7 @@ export function ThreadFace({
   walk,
   items,
   foldOpen,
-  lastLookedAbove,
-  lastLookedSaid,
+  wordsOpen,
   answering,
   answeringLead = null,
   adding,
@@ -347,20 +415,24 @@ export function ThreadFace({
       {/*
        * **Newest first** (D-0106). The items arrive in the order they
        * happened, which is the order the folds are computed in, and are only
-       * drawn the other way up -- so the last-looked line, which marks the
-       * first thing that arrived after the mark, is drawn *under* it: what is
-       * new sits above the line and what was already read below it.
+       * drawn the other way up.
+       *
+       * **Nothing lays out again what the person read last time.** There was a
+       * line here saying *below here is what you saw last time*, which made the
+       * record two stretches a reader had to tell apart; the stretch they have
+       * read is already one folded line (`page-logic/event-fold.ts`), and the
+       * list keeps the mark for the one job it does -- finding the request that
+       * moved. A thread they opened is one they are reading now.
        */}
       {items.toReversed().map((item) => (
         <div key={idOf(item)}>
           {item.kind === "message" ? (
-            <Message message={item.message} />
+            <Message message={item.message} open={wordsOpen} />
           ) : item.kind === "fold" ? (
             <FoldedLine fold={item} open={foldOpen} />
           ) : (
             <EventLine event={item.event} />
           )}
-          {idOf(item) === lastLookedAbove ? <LastLookedLine said={lastLookedSaid} /> : null}
         </div>
       ))}
     </div>

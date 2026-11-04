@@ -266,12 +266,6 @@ export interface Chrome
    */
   readonly reviseDraftFold: string;
   /**
-   * The fold over the model review card's own findings, where a question is
-   * waiting: the right face's copy of the words the box above folds, so no
-   * face of the screen writes a reviewer out in full over a choice.
-   */
-  readonly modelFindingsFold: (findings: number) => string;
-  /**
    * A budget stop's first answer (D-0140 rule 3): a budgets-only successor of
    * the lap's approval, then *carry on*, on one press. `answerRaiseLabel` is
    * its amount's box; `answerRaiseLeft` what the rest of the approval allows,
@@ -390,6 +384,17 @@ export interface Chrome
   readonly reportFold: string;
   readonly reportNotRead: string;
   readonly workHeading: string;
+  /**
+   * What the press over the commits and the files offers, and what the press
+   * over the review's findings offers.
+   *
+   * Both are evidence a person reads *sometimes*: the heading already says a
+   * change was made and the pill already says what the review found and how
+   * much, so the rows and the findings sit behind one press each rather than
+   * standing between the person and the thing they came to decide.
+   */
+  readonly changedFold: string;
+  readonly findingsFold: string;
   readonly changedAgainst: (baseRef: string) => string;
   /** The work could not be read; git's own reason goes in the maintainer fold beside it (D-0076 rule 4.5). */
   readonly changedUnreadable: string;
