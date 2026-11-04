@@ -15,9 +15,9 @@ import { expect, test } from "vitest";
 import { RequestsFace } from "../../../src/access/page/list.js";
 import type { RequestList, RequestRow, RowState } from "../../../src/access/page-logic/list.js";
 import { requestList } from "../../../src/access/page-logic/list.js";
+import { JA } from "../../../src/access/wording/ja.js";
 import type { Chrome } from "../../../src/access/wording.js";
 import { EN } from "../../../src/access/wording.js";
-import { JA } from "../../../src/access/wording/ja.js";
 
 const row = (state: RowState, over: Partial<RequestRow> = {}): RequestRow => ({
   messageId: state,
@@ -29,7 +29,11 @@ const row = (state: RowState, over: Partial<RequestRow> = {}): RequestRow => ({
 });
 
 /** The face, drawn over a list the test states in full. */
-const face = (list: Partial<RequestList>, wording: Chrome = EN): string =>
+const face = (
+  list: Partial<RequestList>,
+  wording: Chrome = EN,
+  openId: string | null = null,
+): string =>
   renderToStaticMarkup(
     RequestsFace({
       wording,
@@ -38,7 +42,7 @@ const face = (list: Partial<RequestList>, wording: Chrome = EN): string =>
       agoOf: () => "now",
       newRequestHref: null,
       lastLookedSaid: "",
-      openId: null,
+      openId,
     }),
   );
 
@@ -117,9 +121,7 @@ test("a published request's checks are no longer a mark of their own", () => {
 });
 
 test("a row draws its name, its word and its age, and nothing else (rondo#746)", () => {
-  const html = today([
-    row("running", { title: "the invoice needs the tax broken out", atMs: 1 }),
-  ]);
+  const html = today([row("running", { title: "the invoice needs the tax broken out", atMs: 1 })]);
   const drawn = /<a class="list-row[^"]*"[^>]*>([\s\S]*?)<\/a>/.exec(html)?.[1] ?? "";
   // The mark, the name, the word, the age: the text of the row is those three.
   expect(drawn.replace(/<svg[\s\S]*?<\/svg>/, "")).toBe(
@@ -153,14 +155,11 @@ test("every row keeps on its hover what the cut took, the waiting ones too (rond
 });
 
 test("the done requests older than the newest three fold behind one press that counts them", () => {
-  const done = (n: number, atMs: number) => row("finished", { messageId: `d${n}`, title: `d${n}`, atMs });
+  const done = (n: number, atMs: number) =>
+    row("finished", { messageId: `d${n}`, title: `d${n}`, atMs });
   // Five done requests, read through the list's own assembly so the three the
   // list keeps and the two it folds are the ones a person would see.
-  const list = requestList(
-    [done(1, 5), done(2, 4), done(3, 3), done(4, 2), done(5, 1)],
-    null,
-    5,
-  );
+  const list = requestList([done(1, 5), done(2, 4), done(3, 3), done(4, 2), done(5, 1)], null, 5);
   const html = face(list);
   const summary = /<summary>([\s\S]*?)<\/summary>/.exec(html)?.[1];
   expect(summary).toBe(EN.listMoreDone(2));
@@ -191,11 +190,29 @@ test("three done requests or fewer leave no press at all", () => {
   }
 });
 
+test("the fold is open where the request the centre is showing is inside it (rondo#587)", () => {
+  const list = requestList(
+    [5, 4, 3, 2, 1].map((at) =>
+      row("finished", { messageId: `d${at}`, title: `d${at}`, atMs: at }),
+    ),
+    null,
+    5,
+  );
+  // Shut while the person is reading something else, and open where the mark
+  // that says *this is the one you have open* would otherwise be unseeable.
+  expect(face(list, EN, "d3")).toContain('<details class="list-fold">');
+  const open = face(list, EN, "d1");
+  expect(open).toContain('<details class="list-fold" open="">');
+  expect(open).toContain('aria-current="page"');
+});
+
 test("a row that is still running is never folded away, however old it is", () => {
   const list = requestList(
     [
       row("running", { messageId: "r", title: "r", atMs: 1 }),
-      ...[5, 4, 3, 2].map((at) => row("finished", { messageId: `d${at}`, title: `d${at}`, atMs: at })),
+      ...[5, 4, 3, 2].map((at) =>
+        row("finished", { messageId: `d${at}`, title: `d${at}`, atMs: at }),
+      ),
     ],
     null,
     5,

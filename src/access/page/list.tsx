@@ -471,7 +471,14 @@ export function RequestsFace({
        * is drawn where there are no more than three.
        */}
       {list.moreDone.length === 0 ? null : (
-        <details className="list-fold">
+        <details
+          className="list-fold"
+          // Open where the request the centre is showing is one of these
+          // (rondo#587): a person reading a request must be able to find it on
+          // the list, and the mark that says which row it is cannot be seen
+          // through a shut fold.
+          open={list.moreDone.some((row) => row.messageId === openId)}
+        >
           <summary>{wording.listMoreDone(list.moreDone.length)}</summary>
           {list.moreDone.map((row) => (
             <Row

@@ -170,13 +170,23 @@ const page = async (world: Parameters<typeof portsOver>[0], wording = EN) =>
     mint,
   );
 
-/** The list row's sentence of state for the one request. */
+/**
+ * The list row's sentence of state for the one request, which is on its hover
+ * since the row itself says one word (rondo#746): the last line of the row's
+ * `title`, after the person's first line and the place.
+ */
 function rowSaid(html: string): string {
+  const title = /<a class="list-row[^>]*title="([^"]*)"/.exec(html)?.[1] ?? "";
+  return title.split("\n").at(-1) ?? "";
+}
+
+/** The one word the row itself says. */
+function rowWord(html: string): string {
   const row = /<a class="list-row[^"]*"[^>]*>([\s\S]*?)<\/a>/.exec(html)?.[1] ?? "";
   return (/<p>([\s\S]*?)<\/p>/.exec(row)?.[1] ?? "").replace(/<[^>]+>/g, "");
 }
 
-test("a request run as several lines is one row, and its sentence counts the parts (D-0098 rule 8.1)", async () => {
+test("a request run as several lines is one row, which counts the parts on its hover (D-0098 rule 8.1)", async () => {
   const w = await split([undefined, undefined, 0]);
   expect(rowSaid(await page(w.world))).toBe(
     "3 parts: 1 waiting for another part to be merged, 2 not started",
@@ -186,18 +196,23 @@ test("a request run as several lines is one row, and its sentence counts the par
   await w.start(1, "lap-two");
   const html = await page(w.world);
   expect(html.match(/<a class="list-row/g)).toHaveLength(1);
+  // The row says one word, read from the parts (rondo#746), and keeps the
+  // count of them on its hover.
+  expect(rowWord(html)).toBe(EN.listRunning);
   expect(rowSaid(html)).toBe("2 of 3 parts running, 1 waiting for another part to be merged");
   // A wait rondo clears itself is not amber: only *your turn* is.
   expect(html).not.toContain("list-row-mine");
   expect(rowSaid(await page(w.world, JA))).toBe(
     "作業 3 件のうち 2 件が進行中、1 件はほかの作業のマージ待ち",
   );
+  expect(rowWord(await page(w.world, JA))).toBe(JA.listRunning);
 });
 
-test("a request run as one line keeps its one sentence of state", async () => {
+test("a request run as one line keeps its one sentence of state on its hover", async () => {
   const w = await split([undefined]);
   await w.start(0, "lap-one");
   expect(rowSaid(await page(w.world))).toBe(EN.rowRunning);
+  expect(rowWord(await page(w.world))).toBe(EN.listRunning);
 });
 
 /** The right face's steps, one per part, as text: name, then what it says. */
@@ -249,8 +264,9 @@ test("a part whose earlier part ended unmerged is the person's: amber, with the 
     "[yours] Part 2part 1 ended without being merged, so this one will not start by itself Answer the question",
   ]);
   expect(html).toContain(`href="#${askId}"`);
-  // The row is the person's turn, and says which part.
+  // The row is the person's turn, and says which part on its hover.
   expect(html).toContain("list-row-mine");
+  expect(rowWord(html)).toBe(EN.yourTurn);
   expect(rowSaid(html)).toBe("2 parts: 1 needs you, 1 stopped");
 });
 
@@ -754,6 +770,8 @@ test("a part the person dropped by answering stop is stopped, not the person's t
   const html = await page(w.world);
   expect(partSteps(html)).toEqual(["Part 1stopped", "Part 2stopped"]);
   expect(html).not.toContain("list-row-mine");
+  // Every part has ended, so the row is done -- and says how on its hover.
+  expect(rowWord(html)).toBe(EN.listDone);
   expect(rowSaid(html)).toBe("2 parts: 2 stopped");
 });
 

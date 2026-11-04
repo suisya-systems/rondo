@@ -70,10 +70,6 @@
   min-width: 0;
 }
 
-.list-row-body .list-repo {
-  flex: none;
-}
-
 /* The three rows that are not requests: a line of their own and a sentence. */
 .list-row-note {
   min-width: 0;
@@ -252,6 +248,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: bottom;
+}
+
+/*
+ * Beside a row's name it does not give at all (rondo#746): the name is what
+ * the cut takes, because a place cut in half is a different place and the
+ * margin the badge carries elsewhere is the row's own gap here.
+ */
+.list-row-body .list-repo {
+  flex: none;
+  margin-right: 0;
 }
 
 /* The line drawn once, between what arrived since and what did not (rule 7). */
