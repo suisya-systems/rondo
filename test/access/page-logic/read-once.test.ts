@@ -149,8 +149,10 @@ test("a request's repository is reckoned off the draw's reading, not off the sto
     EN,
   );
   // Asked for every request the store holds, and the ledger read once for all
-  // of them: the rows are the draw's, which is what the wrapper binds.
-  expect(new Set(reckoned)).toEqual(new Set(["req-lap-waiting", "req-lap-ended", "req-asked"]));
+  // of them: the rows are the draw's, which is what the wrapper binds. The
+  // calls are counted rather than gathered into a set, so a reckoning asked
+  // twice for one request would be read here and not folded away.
+  expect([...reckoned].sort()).toEqual(["req-asked", "req-lap-ended", "req-lap-waiting"]);
   expect(count(asked, "terminalIterations")).toBe(1);
   expect(drawn).toContain("The work that waits at its gate");
 
@@ -158,17 +160,68 @@ test("a request's repository is reckoned off the draw's reading, not off the sto
   // store of its own, ignoring the reads it is handed -- reads the ledger
   // again for each request it is asked about.
   asked.length = 0;
+  const again: string[] = [];
   await operatorPage(
     {
       ...ports,
-      repositoryFor: async (id) =>
-        await requestRepository({ store: ports.store, record: ports.record, now: ports.now }, id),
+      repositoryFor: async (id) => {
+        again.push(id);
+        return await requestRepository(
+          { store: ports.store, record: ports.record, now: ports.now },
+          id,
+        );
+      },
     },
     "t",
     { kind: "summary" },
     EN,
   );
-  expect(count(asked, "terminalIterations")).toBe(1 + new Set(reckoned).size);
+  expect(count(asked, "terminalIterations")).toBe(1 + again.length);
+});
+
+/**
+ * **And the reckoning itself is run once for a request** (rondo#757), which is
+ * the half of {@link reckonedOnce} the draw above does not pin down: the
+ * summary happens to ask for each request once, so a count over that page
+ * holds whether or not an answer is held. What a draw does do, on the views
+ * where the thread's card and the scope wait both ask, is ask about the same
+ * request more than once -- and the reckoning is not free even when every row
+ * it reads is already in hand, since it digests each held plan and reads each
+ * body. So the asking is done here directly, and what is counted is the runs
+ * of the reckoning rather than the reads underneath it: this case fails if
+ * `reckonedOnce` stops holding an answer, whatever the store is asked.
+ */
+test("one request asked for many times in a draw is reckoned once, and two are reckoned twice", async () => {
+  const made = await world();
+  const over = portsOver(made, "ada", []);
+  const reckon = over.repositoryFor;
+  if (reckon === undefined) {
+    throw new Error("the world's ports no longer reckon a request's repository");
+  }
+  const reckoned: string[] = [];
+  const ports = readOncePerDraw({
+    ...over,
+    repositoryFor: async (id, reads) => {
+      reckoned.push(id);
+      return await reckon(id, reads);
+    },
+  });
+  const ask = ports.repositoryFor;
+  if (ask === undefined) {
+    throw new Error("the wrapper no longer hands on the reckoning it was given");
+  }
+  const first = await ask("req-lap-waiting");
+  const second = await ask("req-lap-waiting");
+  await ask("req-lap-waiting");
+  await ask("req-asked");
+  // Once for the request asked for three times, once for the other: held
+  // under the request it was asked about, as a read is held under its
+  // arguments.
+  expect(count(reckoned, "req-lap-waiting")).toBe(1);
+  expect(count(reckoned, "req-asked")).toBe(1);
+  expect(reckoned).toHaveLength(2);
+  // And the same answer, not merely an equal one.
+  expect(second).toBe(first);
 });
 
 test("a wrapper lives for one draw, so the next draw reads the rows again", async () => {
