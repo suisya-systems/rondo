@@ -712,6 +712,95 @@ test("a write that lands inside the route's own open draw is one change (rondo#7
   drop();
 });
 
+test("a store written to right through the route's draws settles on the drawn page (rondo#742)", async () => {
+  // **The bound on one look, over the real renderer and the real store.** A
+  // draw is taken again where the mark moved under it, three times at most, so
+  // a host being written to without pause still answers this reader -- and the
+  // draw that bound ends on is of no one moment. Keeping those bytes as the
+  // version every later comparison is against, and then waiting to be rung, is
+  // how a reader is left holding a screen the host would not draw: the ring
+  // that would correct it is the bell's to send, and the real bell counts a
+  // write the moment the operating system reports it and rings a settle
+  // afterwards. So the writes here move the mark with no listener called, and
+  // what this case asks of the route is that the words stop on the page the
+  // host would actually draw.
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const bell = handBell();
+  const ports = portsOver(world, "ada", []);
+  const threads = ports.record.threadMessages.bind(ports.record);
+  // More writes than the host spends passes on one look, so the look the
+  // stream opens on cannot settle however many reads of the store a draw
+  // makes, and the bound is what ends it.
+  const STORM = 10;
+  let armed = false;
+  let writes = 0;
+  let reads = 0;
+  const { page, open } = await liveReader(world, bell, {
+    ...ports,
+    record: {
+      ...ports.record,
+      // A read of the store every draw of this view makes, which is where the
+      // writes are slipped in -- one per read while the storm is armed.
+      threadMessages: async (...args: Parameters<typeof threads>) => {
+        reads += 1;
+        if (armed && writes < STORM) {
+          writes += 1;
+          await openRequest(
+            world,
+            `req-10${String(writes)}`,
+            `thing number ${String(writes)}`,
+            2_000,
+          );
+          bell.wrote();
+        }
+        return await threads(...args);
+      },
+    },
+  });
+
+  // The page this reader is standing on, drawn before the storm and current.
+  const drawn = await page();
+  expect(drawn).not.toContain("thing number");
+  const current = /data-drawn-at="([^"]+)"/.exec(drawn)?.[1] ?? null;
+  expect(current).toBe(bell.mark());
+
+  armed = true;
+  const { said, drop } = await open(current);
+  expect(await said()).toBe(`retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`);
+
+  // **Every word is a change, and the words stop.** At least two of them: one
+  // for the look the bound ended, which can only say that this reader is
+  // behind, and one for the version the store finally held still at.
+  let words = 0;
+  for (let heard = await said(); heard !== true; heard = await said()) {
+    expect(heard).toBe(CHANGE_FRAME);
+    words += 1;
+  }
+  expect(words).toBeGreaterThanOrEqual(2);
+  expect(writes).toBe(STORM);
+
+  // **And the version they stopped on is the page the host would draw.** A
+  // ring with nothing written behind it is answered by a draw and is silence,
+  // which it could only be if what the host holds as this reader's draw is the
+  // one the store settled at: a host that had kept the bytes the bound ended
+  // on -- bytes it never served anybody -- would find them different and say
+  // so.
+  const quiet = reads;
+  bell.ring();
+  expect(await said()).toBe(true);
+  expect(reads).toBeGreaterThan(quiet);
+
+  // **And nothing is stuck behind the storm**: the next change this page shows
+  // is one word, and the redraw it asks for says the thing that was written.
+  armed = false;
+  await openRequest(world, "req-0002", "and then the other thing", 3_000);
+  bell.ring();
+  expect(await said()).toBe(CHANGE_FRAME);
+  expect(await page()).toContain("and then the other thing");
+  drop();
+});
+
 test("(a) a request that never crossed the socket mints nothing, whatever its headers say", async () => {
   // In-process a writer can build a request with every press header and the
   // token: `Sec-Fetch-*` are forbidden to a page, not to Node. It is refused
