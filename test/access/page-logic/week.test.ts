@@ -4,12 +4,14 @@
  *
  * The properties held here are the ones a drawn figure could quietly break:
  * the window is seven days and the clock is the caller's, the allowance pair
- * is drawn whole or not at all (rule 6), one approval counts once however many
- * tries spent it, and exactly one of the five steps is the one the work is on
- * -- with the last of them never rondo's.
+ * is drawn whole or not at all (rule 6), the budget is counted only where it
+ * bears on what the person can do (`D-0207` rule 1), one approval counts once
+ * however many tries spent it, and exactly one of the five steps is the one
+ * the work is on -- with the last of them never rondo's.
  */
 import { expect, test } from "vitest";
 import {
+  budgetBearing,
   finishedAt,
   GATE_ANSWERS_NOT_DATED,
   stepsOf,
@@ -23,12 +25,18 @@ const NOW = 10 * WEEK_MS;
 const lap = (over: Partial<IterationRecord>): IterationRecord =>
   ({ status: "performing", gateOutcome: null, plan: {}, ...over }) as IterationRecord;
 
+/**
+ * The reads the arithmetic is held over. `bearing` is set, because what the
+ * figures come to is a different question from whether they are drawn at all:
+ * the tests of the withholding name the bearing themselves.
+ */
 const reads = {
   askedAtMs: [],
   finishedAtMs: [],
   answeredAtMs: [],
   decidedWithoutAsking: 0,
   allowances: [],
+  bearing: "holdingUp",
 } as const;
 
 test("the window is seven days back from the caller's clock, inclusive of its edge", () => {
@@ -57,7 +65,53 @@ test("what rondo decided without asking is the store's count, passed through", (
 test("with no approval to read, the week draws no spend", () => {
   // Rule 6's refusal, on the week's figures: a spend without the figure it
   // was approved against would read as though somebody had agreed to it.
-  expect(weekFigures(reads, NOW).allowance).toBeNull();
+  expect(weekFigures(reads, NOW).budget?.allowance).toBeNull();
+});
+
+test("with room left and nothing for the person to decide, the budget is not counted at all", () => {
+  // D-0207 rule 1's ordinary case. Not a null allowance inside a drawn
+  // reading, which is rule 6's "no approval read" and says so on the face:
+  // the whole reading is withheld, and rule 4 puts nothing in its place.
+  const quiet = weekFigures(
+    {
+      ...reads,
+      bearing: null,
+      allowances: [
+        { spentUsd: 1, heldUsd: 0, heldTries: 0, heldInProgress: false, approvedUsd: 50 },
+      ],
+    },
+    NOW,
+  );
+  expect(quiet.budget).toBeNull();
+  // And the rest of the week is unchanged by the withholding.
+  expect(quiet.asked).toBe(0);
+  expect(quiet.decidedWithoutAsking).toBe(0);
+});
+
+test("a budget that is stopping work is said before one that is only waiting to be decided", () => {
+  // Both reasons can hold at once, and the words differ: one says what is
+  // stopped and the other says what is waiting (D-0207 rule 1).
+  expect(budgetBearing({ holdingUp: true, yours: true })).toBe("holdingUp");
+  expect(budgetBearing({ holdingUp: true, yours: false })).toBe("holdingUp");
+  expect(budgetBearing({ holdingUp: false, yours: true })).toBe("yours");
+  expect(budgetBearing({ holdingUp: false, yours: false })).toBeNull();
+});
+
+test("where it is drawn, it is drawn as it was", () => {
+  // D-0207 rule 3: the pair is the approvals in force summed, and this entry
+  // narrowed when they are drawn and nothing about what they say.
+  const held = weekFigures(
+    {
+      ...reads,
+      bearing: "yours",
+      allowances: [
+        { spentUsd: 3, heldUsd: 1, heldTries: 1, heldInProgress: false, approvedUsd: 9 },
+      ],
+    },
+    NOW,
+  );
+  expect(held.budget?.bearing).toBe("yours");
+  expect(held.budget?.allowance).toMatchObject({ spentUsd: 3, approvedUsd: 9, leftUsd: 5 });
 });
 
 test("the approvals are summed, and what is left is never a debt", () => {
@@ -71,7 +125,7 @@ test("the approvals are summed, and what is left is never a debt", () => {
     },
     NOW,
   );
-  expect(figures.allowance).toMatchObject({ spentUsd: 5.5, approvedUsd: 50, leftUsd: 44.5 });
+  expect(figures.budget?.allowance).toMatchObject({ spentUsd: 5.5, approvedUsd: 50, leftUsd: 44.5 });
   const over = weekFigures(
     {
       ...reads,
@@ -81,7 +135,7 @@ test("the approvals are summed, and what is left is never a debt", () => {
     },
     NOW,
   );
-  expect(over.allowance?.leftUsd).toBe(0);
+  expect(over.budget?.allowance?.leftUsd).toBe(0);
 });
 
 test("what is held is summed apart from what was spent, and is not left", () => {
@@ -98,7 +152,7 @@ test("what is held is summed apart from what was spent, and is not left", () => 
     },
     NOW,
   );
-  expect(figures.allowance).toEqual({
+  expect(figures.budget?.allowance).toEqual({
     spentUsd: 1.79,
     heldUsd: 2.5,
     heldTries: 1,
@@ -123,7 +177,7 @@ test("the pair is one approval's own, so a raise is not read as a total", () => 
     },
     NOW,
   );
-  expect(raised.allowance).toMatchObject({ spentUsd: 2, approvedUsd: 10, leftUsd: 8 });
+  expect(raised.budget?.allowance).toMatchObject({ spentUsd: 2, approvedUsd: 10, leftUsd: 8 });
 });
 
 test("a request still working is on its work, and nothing later is claimed", () => {

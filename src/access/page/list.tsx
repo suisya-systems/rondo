@@ -16,6 +16,16 @@
  * **One line, not a mark per row** (rule 7): "below here is what you saw last
  * time" is drawn once, between the rows that arrived since and the rows that
  * did not.
+ *
+ * **The week's allowance is no longer a line under the list** (`D-0207`
+ * rules 1 and 5). Rule 5 of `D-0083` put one here and it stood on every view:
+ * a figure a person reads, decides nothing about, and reads again tomorrow,
+ * which is what `D-0082` rule 1 keeps off a face. The week's reading is now
+ * drawn only where a budget is holding work up or a decision about one is the
+ * person's, and this face reads no budget at all -- the figures that answer
+ * for a *stopped* lap are on the screen where it stopped, and the week's pair
+ * is on the empty right face (`page/empty-side.tsx`). Nothing replaces the
+ * line (`D-0207` rule 4).
  */
 
 import type { DayCut } from "../page-logic/days.js";
@@ -97,12 +107,6 @@ export interface ListProps {
   readonly hrefOf: (messageId: string) => string;
   /** When each request last moved, said as a person reads it. */
   readonly agoOf: (atMs: number) => string;
-  /** The week's allowance, or null where none has been approved (rule 6). */
-  readonly allowance: {
-    readonly spent: string;
-    readonly approved: string;
-    readonly left: string;
-  } | null;
   /** The way into a new request, or null with no write port (D-0020 rule 2). */
   readonly newRequestHref: string | null;
   /**
@@ -399,7 +403,6 @@ export function RequestsFace({
   list,
   hrefOf,
   agoOf,
-  allowance,
   newRequestHref,
   lastLookedSaid,
   openId,
@@ -462,19 +465,6 @@ export function RequestsFace({
           ))}
         </div>
       ))}
-      {/*
-       * The week's allowance, under the list (rule 5). **A spent figure is
-       * never shown without the figure it was approved against** (rule 6), so
-       * where no allowance has been approved this says that and no number.
-       */}
-      <div className="list-allowance">
-        <span>{wording.weekAllowance}</span>
-        {allowance === null ? (
-          <b>{wording.weekNoAllowance}</b>
-        ) : (
-          <b>{wording.weekSpent(allowance.spent, allowance.approved, allowance.left)}</b>
-        )}
-      </div>
     </div>
   );
 }

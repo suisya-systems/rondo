@@ -244,19 +244,7 @@
   border-top: 1px solid var(--color-border);
 }
 
-.list-empty,
-.list-allowance {
+.list-empty {
   margin: 16px 24px 0;
   font-size: var(--text-meta);
-}
-
-.list-allowance {
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border);
-}
-
-.list-allowance span {
-  display: block;
-  font-size: var(--text-id);
-  color: var(--color-muted-foreground);
 }

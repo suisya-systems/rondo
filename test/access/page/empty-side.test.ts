@@ -36,13 +36,18 @@ const week = {
   finished: 4,
   answered: 3,
   decidedWithoutAsking: 31,
-  allowance: {
-    spentUsd: 18.63,
-    heldUsd: 0,
-    heldTries: 0,
-    heldInProgress: false,
-    approvedUsd: 50,
-    leftUsd: 31.37,
+  // A budget holding work up, which is one of the two states the week's money
+  // is drawn in at all (`D-0207` rule 1).
+  budget: {
+    bearing: "holdingUp" as const,
+    allowance: {
+      spentUsd: 18.63,
+      heldUsd: 0,
+      heldTries: 0,
+      heldInProgress: false,
+      approvedUsd: 50,
+      leftUsd: 31.37,
+    },
   },
 };
 
@@ -60,9 +65,56 @@ test("the week's six figures are all on the face", () => {
 test("with no approval read, the week says so instead of drawing a spend", () => {
   // Rule 6's refusal: the two figures travel together or neither is drawn,
   // and the sentence is the left face's own (`weekNoAllowance`).
-  const html = side({ ...week, allowance: null });
+  const html = side({ ...week, budget: { bearing: "holdingUp", allowance: null } });
   expect(html).toContain(EN.weekNoAllowance);
   expect(html).not.toContain("$");
+});
+
+test("the budget says what is holding work up and what to do, and nothing longer", () => {
+  // D-0207 rule 5: the reason it is on the face and the next thing the person
+  // does, beside the figures. Both language sets say both, because a screen
+  // does not ship until every shipped language says it (D-0079).
+  const html = side(week);
+  expect(html).toContain(EN.weekBudgetHeldUp);
+  expect(html).toContain(EN.weekBudgetHeldUpNext);
+  for (const said of [
+    JA.weekBudgetHeldUp,
+    JA.weekBudgetHeldUpNext,
+    JA.weekBudgetYours,
+    JA.weekBudgetYoursNext,
+  ])
+    expect(said.length).toBeGreaterThan(0);
+  // Short words, not an explanation of how a budget is computed.
+  for (const said of [EN.weekBudgetHeldUp, EN.weekBudgetHeldUpNext])
+    expect(said.length).toBeLessThan(80);
+});
+
+test("a decision of the person's draws the week's budget under its own words", () => {
+  const html = side({ ...week, budget: { ...week.budget, bearing: "yours" } });
+  expect(html).toContain(EN.weekBudgetYours);
+  expect(html).toContain(EN.weekBudgetYoursNext);
+  expect(html).not.toContain(EN.weekBudgetHeldUp);
+  // Rule 3: where it is drawn, the pair is drawn as it was.
+  expect(html).toContain("$18.63 of $50.00");
+});
+
+test("with room left and nothing to decide, no budget figure is on the face and nothing replaces it", () => {
+  // D-0207 rules 1 and 4: the reading is withheld, and no sentence, blank cell
+  // or zero stands where it was.
+  const html = side({ ...week, budget: null });
+  expect(html).not.toContain("$");
+  for (const said of [
+    EN.weekSpentFigure,
+    EN.weekLeft,
+    EN.weekAllowance,
+    EN.weekNoAllowance,
+    EN.weekBudgetHeldUp,
+    EN.weekBudgetYours,
+  ])
+    expect(html).not.toContain(said);
+  // The rest of the seven days is untouched: the face is shorter, not gone.
+  for (const said of [EN.sevenDays, EN.weekAsked, EN.weekFinished, EN.weekAnswered, EN.weekDecided])
+    expect(html).toContain(said);
 });
 
 test("a running request carries its allowance and the five steps to its end", () => {
@@ -145,8 +197,20 @@ test("the empty state's right face is on the page the server answers with", asyn
   // in once has finished once.
   expect(html).toContain(`${EN.weekAsked}</dt><dd>1</dd>`);
   expect(html).toContain(`${EN.weekFinished}</dt><dd>0</dd>`);
-  // No approval was written for this lap, so no spend is drawn beside it.
-  expect(html).toContain(EN.weekNoAllowance);
+  // Nothing is holding the budget up and no scope waits, so the week's money
+  // is not on the face at all (D-0207 rule 1) -- and nothing says it is fine.
+  for (const said of [
+    EN.weekAllowance,
+    EN.weekSpentFigure,
+    EN.weekLeft,
+    EN.weekBudgetHeldUp,
+    EN.weekBudgetYours,
+  ])
+    expect(html).not.toContain(said);
+  // The running request's own allowance is not the week's and is unchanged
+  // (rule 2): this lap was admitted under no approval, and its line says so
+  // where the week's withheld reading says nothing.
+  expect(html).toContain(`<span>${EN.weekNoAllowance}</span>`);
 });
 
 test("a thread's right face is still the slice that has not been built", async () => {

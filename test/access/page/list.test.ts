@@ -30,7 +30,6 @@ const marks = (rows: readonly RequestRow[]): string[] => {
       list: { yourTurn: [], days: [{ cut: "today", rows }], lastLookedAbove: null },
       hrefOf: (id) => `/?thread=${id}`,
       agoOf: () => "now",
-      allowance: null,
       newRequestHref: null,
       lastLookedSaid: "",
       openId: null,
@@ -38,6 +37,36 @@ const marks = (rows: readonly RequestRow[]): string[] => {
   );
   return [...html.matchAll(/data-mark="([a-z]+)"/g)].map((m) => m[1] ?? "");
 };
+
+test("the week's allowance is not a line under the list, and nothing stands in its place", () => {
+  // D-0207 rules 1 and 4: a figure a person reads and decides nothing about
+  // was under the list on every view. The week's reading is drawn where a
+  // budget bears on what the person can do, which this face reads nothing
+  // about -- and no sentence, blank cell or zero replaces the line.
+  const html = renderToStaticMarkup(
+    RequestsFace({
+      wording: EN,
+      list: {
+        yourTurn: [],
+        days: [{ cut: "today", rows: [row("running")] }],
+        lastLookedAbove: null,
+      },
+      hrefOf: (id) => `/?thread=${id}`,
+      agoOf: () => "now",
+      newRequestHref: null,
+      lastLookedSaid: "",
+      openId: null,
+    }),
+  );
+  expect(html).not.toContain("list-allowance");
+  expect(html).not.toContain(EN.weekAllowance);
+  expect(html).not.toContain(EN.weekNoAllowance);
+  expect(html).not.toContain("$");
+  // And the class it was drawn with is gone from the stylesheet too, so the
+  // cheap way back is not an unstyled line nobody notices.
+  const css = readFileSync(new URL("../../../page/list.css", import.meta.url), "utf8");
+  expect(css).not.toContain(".list-allowance");
+});
 
 test("running, finished, stopped and not started are four shapes, not one grey dot", () => {
   expect(
@@ -93,7 +122,6 @@ test("a row that needs nobody is one line, its sentence stays for a reader, and 
       },
       hrefOf: (id) => `/?thread=${id}`,
       agoOf: () => "now",
-      allowance: null,
       newRequestHref: null,
       lastLookedSaid: "",
       openId: null,
@@ -113,7 +141,6 @@ test("a paused goal flow stands with your turn and leads to the screen that resu
       list: { yourTurn: [], days: [], lastLookedAbove: null, paused: ["org/repo"] },
       hrefOf: (id) => `/?thread=${id}`,
       agoOf: () => "now",
-      allowance: null,
       newRequestHref: null,
       lastLookedSaid: "",
       openId: null,
@@ -139,7 +166,6 @@ test("a row where only the goal flow's stop waits says so, under your turn (rond
       },
       hrefOf: (id) => `/?thread=${id}`,
       agoOf: () => "now",
-      allowance: null,
       newRequestHref: null,
       lastLookedSaid: "",
       openId: null,
@@ -163,7 +189,6 @@ test("a goal flow waiting on answers stands with your turn and leads to its ques
       },
       hrefOf: (id) => `/?thread=${id}`,
       agoOf: () => "now",
-      allowance: null,
       newRequestHref: null,
       lastLookedSaid: "",
       openId: null,

@@ -11,8 +11,19 @@
  *
  * **No figure here is stored** (`D-0032` rule 3): the week is counted from
  * rows that already exist each time it is drawn.
+ *
+ * **The money is read whatever the bearing says, and drawn only where it
+ * bears** (`D-0207` rule 1). The approvals are already being walked to answer
+ * *is a budget holding anything up*, so reading the pair costs nothing more; it
+ * is the drawing that is narrowed, and the face is handed a null budget in the
+ * ordinary case rather than figures it would have to decide about itself.
  */
-import { type IterationRecord, isQuestion, isTerminal } from "../../store/records.js";
+import {
+  type IterationRecord,
+  isQuestion,
+  isTerminal,
+  reachedBudgetCap,
+} from "../../store/records.js";
 import { ago } from "../inbox.js";
 import type { WebPorts } from "../page/contract.js";
 import { EmptySide, type SideWork } from "../page/empty-side.js";
@@ -20,14 +31,22 @@ import { allowanceOf } from "../page-logic/governance.js";
 import { approvalOf, type PageModel } from "../page-logic/model.js";
 import { viewHref } from "../page-logic/routes.js";
 import { firstLine } from "../page-logic/threads.js";
-import { type Allowance, finishedAt, stepsOf, WEEK_MS, weekFigures } from "../page-logic/week.js";
+import { scopeAwaits } from "../page-logic/waits.js";
+import {
+  type Allowance,
+  budgetBearing,
+  finishedAt,
+  stepsOf,
+  WEEK_MS,
+  weekFigures,
+} from "../page-logic/week.js";
 import type { Chrome } from "../wording.js";
 
 /** The week's face, read and composed. */
 export async function weekSide(
   ports: WebPorts,
   wording: Chrome,
-  { nowMs, threads, running, allLapsByRequest, placeOf }: PageModel,
+  { nowMs, threads, running, waits, allLapsByRequest, placeOf }: PageModel,
 ) {
   const weekFromMs = nowMs - WEEK_MS;
   /*
@@ -55,11 +74,54 @@ export async function weekSide(
   const touched = [...allLapsByRequest.values()]
     .flat()
     .filter((lap) => Math.max(lap.record.createdAtMs, lap.record.updatedAtMs) >= weekFromMs);
-  for (const approval of await Promise.all(touched.map((lap) => approvalOf(ports, lap.record)))) {
-    if (approval !== null) {
-      weekApprovals.set(approval.decisionId, allowanceOf(approval));
+  /**
+   * **The requests still being worked on**: any lap under them that has not
+   * reached a terminal status, a gate included. A budget cannot be holding up a
+   * request whose every lap has ended -- there is no next lap for it to refuse
+   * (`page-logic/week.ts`'s {@link budgetBearing}).
+   */
+  const unfinished = new Set(
+    [...allLapsByRequest.entries()]
+      .filter(([, laps]) => laps.some((lap) => !isTerminal(lap.record.status)))
+      .map(([requestMessageId]) => requestMessageId),
+  );
+  /** Of the approvals in force, the ones with no room left for another lap. */
+  let noRoomLeft = false;
+  for (const lap of touched) {
+    const approval = await approvalOf(ports, lap.record);
+    if (approval === null) continue;
+    const allowance = allowanceOf(approval);
+    weekApprovals.set(approval.decisionId, allowance);
+    // The `cost` scope test's own arithmetic (`src/access/wording/en.ts`): what
+    // was read, plus what the laps whose cost is not read yet are held at,
+    // against what was approved.
+    if (
+      unfinished.has(lap.record.requestMessageId) &&
+      allowance.approvedUsd - allowance.spentUsd - allowance.heldUsd <= 0
+    ) {
+      noRoomLeft = true;
     }
   }
+  /*
+   * **Why the week's budget is on this face, or that it is not** (`D-0207`
+   * rule 1). Two facts make it worth drawing: a budget that is stopping work
+   * now -- a lap its own spend cap stopped (`D-0121`) with nothing running
+   * after it, or an approval with no room left under a request still being
+   * worked on -- and a scope waiting for the person, which is where a budget is
+   * set or raised. With neither, the figures are withheld and nothing stands in
+   * their place.
+   */
+  const workingNow = new Set(running.map((record) => record.requestMessageId));
+  const bearing = budgetBearing({
+    holdingUp:
+      noRoomLeft ||
+      touched.some(
+        (lap) =>
+          reachedBudgetCap(lap.record.lapCostUsd, lap.record.lapBudgetCapUsd) &&
+          !workingNow.has(lap.record.requestMessageId),
+      ),
+    yours: scopeAwaits(waits),
+  });
   const sideRunning: SideWork[] = await Promise.all(
     // Newest first, which is the order every other list on this page is in.
     running
@@ -124,6 +186,7 @@ export async function weekSide(
             .filter((count) => count.disposition === "withheld")
             .reduce((sum, count) => sum + count.count, 0),
           allowances: [...weekApprovals.values()],
+          bearing,
         },
         nowMs,
       ),
