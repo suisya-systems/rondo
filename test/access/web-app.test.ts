@@ -465,6 +465,53 @@ test("a page hears this process's press token, and a reading host hands out none
   expect(reading.status).toBe(204);
 });
 
+test("a page hears a change only where what it shows changed (rondo#742)", async () => {
+  // The bell the host rings; this one is rung by hand.
+  const listeners = new Set<() => void>();
+  const changes = {
+    listen: (fn: () => void) => {
+      listeners.add(fn);
+      return () => {
+        listeners.delete(fn);
+      };
+    },
+  };
+  const stop = new AbortController();
+  const heard = await createApp({ ...spyPorts([]), changes }, TOKEN).request(
+    "http://127.0.0.1/events?lang=en",
+    { headers: { host: "127.0.0.1" }, signal: stop.signal },
+  );
+  expect(heard.status).toBe(200);
+  expect(heard.headers.get("content-type")).toBe("text/event-stream");
+  const reader = (heard.body as ReadableStream<Uint8Array>).getReader();
+  const bytes = new TextDecoder();
+  // The token, as every reader of this route has always heard first.
+  expect(bytes.decode((await reader.read()).value)).toBe(
+    `retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`,
+  );
+  // **The stream is held open and says nothing.** Rung over a store nothing
+  // wrote to, the page this reader is on is drawn again and is the same page,
+  // so there is no word for it -- which is the property `every 5s` could not
+  // have had, since a poll redraws whether anything changed or not. The draw
+  // is awaited by ringing twice and then closing: a `change` enqueued by
+  // either ring would be read below instead of the end of the stream.
+  for (const listener of listeners) {
+    listener();
+  }
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  for (const listener of listeners) {
+    listener();
+  }
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(listeners.size).toBe(1);
+  stop.abort();
+  // The reader goes, and the bell loses its listener with it: a tab that was
+  // closed must not leave the host drawing its view on every write.
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(listeners.size).toBe(0);
+  reader.cancel().catch(() => {});
+});
+
 test("(a) a request that never crossed the socket mints nothing, whatever its headers say", async () => {
   // In-process a writer can build a request with every press header and the
   // token: `Sec-Fetch-*` are forbidden to a page, not to Node. It is refused

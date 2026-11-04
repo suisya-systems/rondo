@@ -1020,3 +1020,73 @@ test("every script the page loads is run in one global, and none of them stops a
   expect(page.acts.getAttribute("data-just-changed")).toBe("Updated");
   expect(page.document.title).toBe("rondo");
 });
+
+test("the host's word is one redraw, and the token keeps every form current (rondo#742, rondo#674)", () => {
+  // The stream this page opens, and the frames it is handed.
+  const listeners = new Map<string, (event: { data: string }) => void>();
+  let opened: string | null = null;
+  let closed = 0;
+  const tokens = [{ value: "stale" }, { value: "stale" }];
+  const notices = new Painted();
+  notices.setAttribute("data-notice-token", "stale");
+  const fired: string[] = [];
+  const onWindow = new Map<string, (event: { persisted: boolean }) => void>();
+  runInNewContext(bytesOf("page/live.js").toString("utf8"), {
+    EventSource: class {
+      constructor(to: string) {
+        opened = to;
+      }
+      addEventListener(type: string, listener: (event: { data: string }) => void) {
+        listeners.set(type, listener);
+      }
+      close() {
+        closed += 1;
+      }
+    },
+    CustomEvent: class {
+      constructor(
+        public type: string,
+        public init: unknown,
+      ) {}
+    },
+    location: { search: "?thread=req-i-0001&lang=en" },
+    addEventListener: (type: string, listener: (event: { persisted: boolean }) => void) => {
+      onWindow.set(type, listener);
+    },
+    document: {
+      body: {
+        dispatchEvent: (event: { type: string }) => {
+          fired.push(event.type);
+        },
+      },
+      querySelectorAll: (selector: string) =>
+        selector === 'input[name="token"]' ? tokens : [notices],
+    },
+  });
+
+  // **The view rides on the address** (rondo#742): the host compares the page
+  // this reader is on, so the stream carries this page's own query.
+  expect(opened).toBe("/events?thread=req-i-0001&lang=en");
+
+  // **The token, written into every form and into the notice** (rondo#674).
+  listeners.get("token")?.({ data: "fresh" });
+  expect(tokens.map((one) => one.value)).toEqual(["fresh", "fresh"]);
+  expect(notices.getAttribute("data-notice-token")).toBe("fresh");
+  // Nothing redrew: a new token is not a change to what the page shows.
+  expect(fired).toEqual([]);
+
+  // **One word from the host is one redraw**, fired on the body because that
+  // is where `#ledger` listens for it (`src/access/page/document.tsx`).
+  listeners.get("change")?.({ data: "1" });
+  expect(fired).toEqual(["rondo:change"]);
+
+  // **A page brought back from the browser's cache opens the stream again and
+  // redraws once**: what changed while it was away is on neither side of the
+  // host's first comparison, so without this it would never be told.
+  onWindow.get("pageshow")?.({ persisted: true });
+  expect(closed).toBe(1);
+  expect(fired).toEqual(["rondo:change", "rondo:change"]);
+  // A page that was not cached was drawn by this host a moment ago.
+  onWindow.get("pageshow")?.({ persisted: false });
+  expect(fired).toEqual(["rondo:change", "rondo:change"]);
+});
