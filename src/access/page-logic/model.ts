@@ -277,10 +277,53 @@ function answeredOnce<Port extends object>(
  * draw through `operatorPage` (`../web.tsx`) and so through this.
  */
 export function readOncePerDraw(ports: WebPorts): WebPorts {
+  const store = answeredOnce(ports.store, STORE_READS);
+  const record = answeredOnce(ports.record, RECORD_READS);
+  const reckon = ports.repositoryFor;
   return {
     ...ports,
-    store: answeredOnce(ports.store, STORE_READS),
-    record: answeredOnce(ports.record, RECORD_READS),
+    store,
+    record,
+    // **The one read that is not a port method** is bound here too
+    // (rondo#757): see {@link reckonedOnce}. Spread conditionally, because a
+    // host that reckons nothing hands no port and `exactOptionalPropertyTypes`
+    // keeps an absent port from being spelled as an `undefined` one.
+    ...(reckon === undefined ? {} : { repositoryFor: reckonedOnce(reckon, { store, record }) }),
+  };
+}
+
+/**
+ * **A request's repository, reckoned off the draw's own reading of the rows**
+ * (rondo#757).
+ *
+ * `repositoryFor` is a port and not a store method, and what it answers is
+ * read from the whole live and ended ledger, the thread and the setup plans
+ * (`requestRepository` in `../model-draft/host.ts`). The host builds it over
+ * the store it holds, so every call read those rows again: a page the wrapper
+ * above had already brought to one reading of the ledger read it nineteen
+ * times more, once per request the list draws, and the draw was back to 1.3 to
+ * 1.5 s. Handing the port the reads this wrapper is holding puts that path
+ * inside the same one reading -- the port is the same reckoning over the same
+ * rows, so the page's bytes do not move.
+ *
+ * **And once per request**, for {@link answeredOnce}'s reason rather than for
+ * the store's: the thread's card and the scope wait ask about the same request
+ * within one draw, and the reckoning itself (digesting each held plan, reading
+ * each body) is not free even when every row it reads is already in hand.
+ */
+function reckonedOnce(
+  reckon: NonNullable<WebPorts["repositoryFor"]>,
+  reads: Pick<WebPorts, "store" | "record">,
+): NonNullable<WebPorts["repositoryFor"]> {
+  const answers = new Map<string, ReturnType<NonNullable<WebPorts["repositoryFor"]>>>();
+  return (requestMessageId) => {
+    const held = answers.get(requestMessageId);
+    if (held !== undefined) {
+      return held;
+    }
+    const answer = reckon(requestMessageId, reads);
+    answers.set(requestMessageId, answer);
+    return answer;
   };
 }
 

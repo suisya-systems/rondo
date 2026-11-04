@@ -455,6 +455,66 @@ function catalogAllowedBash(plan: JsonRecord): readonly string[] | null {
 }
 
 /**
+ * **What one draw holds of this reckoning beyond the thread it asks about**
+ * (rondo#757): the rows' and setup's templates, and the setup plan each of
+ * their plans stands for.
+ *
+ * `requestRepository` is asked once per request a page draws -- 78 times over
+ * the store at hand -- and all but one part of what it reads is the same answer
+ * every time: the twenty rows' plans, setup's agent types, and `buildsOn`'s
+ * reading of each held plan back into the plan setup would have written. Read
+ * per request that was about a third of a draw. The draw hands every call the
+ * one object `readOncePerDraw` built its reads on (`../page-logic/model.ts`),
+ * so this is held against that object and lives exactly as long as the reads it
+ * was taken from: a later draw is a later object and reads the rows again. A
+ * caller outside a draw hands none, holds nothing, and reads as it always did.
+ */
+const BEYOND_A_THREAD = new WeakMap<object, Promise<HeldBeyondAThread>>();
+
+/** What {@link BEYOND_A_THREAD} holds for one draw. */
+interface HeldBeyondAThread {
+  readonly templates: readonly DraftTemplate[];
+  /**
+   * The setup plan a held plan stands for ({@link setupPlanOf}), read once per
+   * plan document: the same bytes read into the same answer, where reading it
+   * again reads a plan, writes its payload and builds its agent type again.
+   */
+  readonly setupPlan: (plan: JsonRecord) => JsonRecord | null;
+}
+
+/** {@link BEYOND_A_THREAD}'s answer for one draw, read once and held. */
+function heldByOneDraw(
+  ports: Pick<DrafterPorts, "record">,
+  records: readonly IterationRecord[],
+  draw: object | undefined,
+): Promise<HeldBeyondAThread> {
+  const held = draw === undefined ? undefined : BEYOND_A_THREAD.get(draw);
+  if (held !== undefined) {
+    return held;
+  }
+  const reading = (async (): Promise<HeldBeyondAThread> => {
+    const templates = await heldBeyondAThread(ports, records);
+    const plans = new WeakMap<JsonRecord, JsonRecord | null>();
+    return {
+      templates,
+      setupPlan: (plan) => {
+        const stood = plans.get(plan);
+        if (stood !== undefined || plans.has(plan)) {
+          return stood ?? null;
+        }
+        const stands = setupPlanOf(plan);
+        plans.set(plan, stands);
+        return stands;
+      },
+    };
+  })();
+  if (draw !== undefined) {
+    BEYOND_A_THREAD.set(draw, reading);
+  }
+  return reading;
+}
+
+/**
  * Which repository one request's work runs in (rondo#383, D-0090), with the
  * held repositories whose plan gives its worker no command to build or test
  * with (`unbuilt`): what the page says before a scope is drafted, and what
@@ -463,6 +523,14 @@ function catalogAllowedBash(plan: JsonRecord): readonly string[] | null {
 export async function requestRepository(
   ports: Pick<DrafterPorts, "store" | "record" | "now">,
   requestMessageId: string,
+  /**
+   * **The one object a draw hands every call it makes** (rondo#757): the reads
+   * `readOncePerDraw` is holding, which this takes as the draw's identity and
+   * holds what is the same for every request against ({@link BEYOND_A_THREAD}).
+   * Absent -- a caller outside a draw -- nothing is held and every part is read
+   * for the one request asked about.
+   */
+  draw?: object,
 ): Promise<{
   readonly work: WorkRepository;
   readonly unbuilt: readonly string[];
@@ -486,7 +554,10 @@ export async function requestRepository(
     ...(await ports.store.readLive()),
     ...(await ports.store.terminalIterations()),
   ].flatMap((outcome) => (outcome.kind === "read" ? [outcome.record] : []));
-  const held = (await heldTemplates(ports, records, read.messages, inThread)).sort(
+  // The two halves of {@link heldTemplates}, in its order, with the first the
+  // draw holds for every request it asks about (rondo#757).
+  const beyond = await heldByOneDraw(ports, records, draw);
+  const held = [...beyond.templates, ...heldInAThread(read.messages, inThread)].sort(
     (a, b) => b.heldAtMs - a.heldAtMs,
   );
   const { bodies, address } = placeBodies(read.messages, inThread);
@@ -510,7 +581,7 @@ export async function requestRepository(
       work.kind === "unheld" &&
       address.toLowerCase().endsWith(`/${work.repo.toLowerCase()}`),
     planless: held.length === 0,
-    buildsOn: held.reduce<JsonRecord | null>((found, t) => found ?? setupPlanOf(t.plan), null),
+    buildsOn: held.reduce<JsonRecord | null>((found, t) => found ?? beyond.setupPlan(t.plan), null),
   };
 }
 
@@ -585,12 +656,38 @@ function oneEachChoice(ungrouped: readonly DraftTemplate[]): DraftTemplate[] {
  * whose body is a plan. A revise lap's plan is none (its base is another
  * request's unmerged work), and neither is a pasted or setup plan whose agent
  * type builds no record.
+ *
+ * **In two halves, in this order**: what rondo holds whichever request is asked
+ * about ({@link heldBeyondAThread}) and what the asking thread carries
+ * ({@link heldInAThread}). A caller asked about many requests over one reading
+ * of the rows reads the first half once (rondo#757, {@link heldByOneDraw}); the
+ * halves are concatenated here in the order the one loop wrote them, so what
+ * this answers is unchanged.
  */
 async function heldTemplates(
   ports: Pick<DrafterPorts, "record">,
   records: readonly IterationRecord[],
   messages: readonly { messageId: string; authorKind: string; body: string; atMs: number }[],
   thread: ReadonlySet<string>,
+  rows: number = TEMPLATE_ROWS,
+): Promise<DraftTemplate[]> {
+  return [...(await heldBeyondAThread(ports, records, rows)), ...heldInAThread(messages, thread)];
+}
+
+/**
+ * **The templates that are the same whichever request is asked about**: the
+ * rows' and setup's, which is {@link heldTemplates} without the part that reads
+ * the asking thread.
+ *
+ * It is its own function because of what it costs and how often a draw wants
+ * it (rondo#757): reading it takes the plan of each of the twenty rows and the
+ * agent type of each setup plan, and `requestRepository` is asked once per
+ * request a page draws, where the answer to this half is one answer. See
+ * {@link heldByOneDraw}, which is where a draw holds it.
+ */
+async function heldBeyondAThread(
+  ports: Pick<DrafterPorts, "record">,
+  records: readonly IterationRecord[],
   rows: number = TEMPLATE_ROWS,
 ): Promise<DraftTemplate[]> {
   const held: DraftTemplate[] = [];
@@ -618,29 +715,6 @@ async function heldTemplates(
       heldAtMs: record.createdAtMs,
     });
   }
-  const written = (
-    document: JsonRecord,
-    from: DraftTemplate["from"],
-    heldAtMs: number,
-  ): DraftTemplate | null => {
-    const planned = readRunPlan(document);
-    if (planned.kind !== "planned" || planned.plan.pullRequestBaseBranch !== null) {
-      return null;
-    }
-    const recorded = agentTypeRecordOf(planned.plan, document);
-    if ("refusal" in recorded) {
-      return null;
-    }
-    return {
-      planDigest: planDigest(document),
-      plan: document,
-      repository: planned.plan.repository,
-      workspaceRoot: planned.plan.workspaceRoot,
-      agentTypeDigest: recorded.record.agentTypeDigest,
-      from,
-      heldAtMs,
-    };
-  };
   for (const setup of await ports.record.setupPlans()) {
     const template = written(
       setup.plan,
@@ -649,6 +723,19 @@ async function heldTemplates(
     );
     if (template !== null) held.push(template);
   }
+  return held;
+}
+
+/**
+ * **The templates a request's own thread carries**: every operator message in
+ * `thread` whose body is a plan, which is {@link heldTemplates}' last part and
+ * the only one that differs between two requests of one draw.
+ */
+function heldInAThread(
+  messages: readonly { messageId: string; authorKind: string; body: string; atMs: number }[],
+  thread: ReadonlySet<string>,
+): DraftTemplate[] {
+  const held: DraftTemplate[] = [];
   for (const message of messages) {
     if (
       message.authorKind !== "operator" ||
@@ -674,6 +761,35 @@ async function heldTemplates(
     if (template !== null) held.push(template);
   }
   return held;
+}
+
+/**
+ * A plan written as a document -- pasted into a thread or recorded by setup --
+ * as a template, or null when it is none: a revise lap's plan, one that does
+ * not read, or one whose agent type builds no record.
+ */
+function written(
+  document: JsonRecord,
+  from: DraftTemplate["from"],
+  heldAtMs: number,
+): DraftTemplate | null {
+  const planned = readRunPlan(document);
+  if (planned.kind !== "planned" || planned.plan.pullRequestBaseBranch !== null) {
+    return null;
+  }
+  const recorded = agentTypeRecordOf(planned.plan, document);
+  if ("refusal" in recorded) {
+    return null;
+  }
+  return {
+    planDigest: planDigest(document),
+    plan: document,
+    repository: planned.plan.repository,
+    workspaceRoot: planned.plan.workspaceRoot,
+    agentTypeDigest: recorded.record.agentTypeDigest,
+    from,
+    heldAtMs,
+  };
 }
 
 /**

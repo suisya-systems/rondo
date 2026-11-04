@@ -12,7 +12,7 @@ import { expect, test } from "vitest";
 import { type SinceReads, sinceLooked } from "../../../src/access/page-logic/since.js";
 import { JA } from "../../../src/access/wording/ja.js";
 import { EN } from "../../../src/access/wording.js";
-import { fresh, openRequest, operatorPage, portsOver } from "../page-world.js";
+import { fresh, holdsAPlan, openRequest, operatorPage, portsOver } from "../page-world.js";
 
 const MESSAGES: Record<string, { author: "you" | "other" | "rondo"; root: string }> = {
   "req-a": { author: "you", root: "req-a" },
@@ -165,6 +165,7 @@ async function openedBy(
 
 test("the empty centre says what moved since the mark, under the box", async () => {
   const world = fresh();
+  await holdsAPlan(world);
   await openRequest(world, "req-old", "Tidy the README", 500);
   await world.record.recordView("ada", 1_000);
   await openedBy(world, "bo", "req-new", "Add a dark theme", 2_000);
@@ -180,6 +181,7 @@ test("the empty centre says what moved since the mark, under the box", async () 
 
 test("a press on the page moves the mark, with no terminal and no write of its own", async () => {
   const world = fresh();
+  await holdsAPlan(world);
   // Never looked and never pressed: nothing is marked yet.
   const never = await operatorPage(portsOver(world, "ada", []), "t", { kind: "summary" });
   expect(never).toContain(EN.sinceNever);

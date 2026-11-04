@@ -13,7 +13,7 @@ import { endable } from "../../src/access/page-logic/end-lap.js";
 import { JA } from "../../src/access/wording/ja.js";
 import { EN } from "../../src/access/wording.js";
 import type { IterationRecord } from "../../src/store/records.js";
-import { fresh, operatorPage, portsOver, reserve } from "./page-world.js";
+import { fresh, holdsAPlan, operatorPage, portsOver, reserve } from "./page-world.js";
 
 const ENV = { RONDO_APPROVER: "ada" };
 
@@ -301,6 +301,11 @@ test("the thread's next step leads to the end screen, which names the work and h
 test("a row that will not decode is drawn on the list and in its request, leading to its end screen", async () => {
   const w = await stuck("admitted");
   w.connection.prepare("UPDATE iteration SET plan_digest = 'corrupt' WHERE id = 'lap-1'").run();
+  // The one readable plan this store held was that row's, so rondo holds
+  // none at all without this and the page says so before anything else
+  // (D-0191 rule 2): what this counts is the unreadable row, not a store
+  // setup has not run on.
+  await holdsAPlan(w);
   const ports = { ...portsOver(w), endsLaps: true };
   const page = await operatorPage(ports, "tok", { kind: "summary" }, EN);
   expect(page).toContain("data-unreadable");

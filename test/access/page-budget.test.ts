@@ -35,10 +35,32 @@
  * what the second test in this file pins.
  *
  * **The headroom, measured.** On this machine on 2026-11-05 the measured draws
- * are 104 to 157 ms, so the budget is some four times what a healthy page
- * costs. That is deliberate: this is a floor under runner variance, not a
- * target to grow into. The number to change when the page gets slower is the
+ * are 142 to 206 ms against the 500 ms budget (median 147 to 154 ms over three
+ * runs of this suite), and 104 to
+ * 157 ms while the draw was handed none of the host's reading ports (the
+ * paragraph below). What the difference is, is 78 reckonings of where a
+ * request's work runs -- one per request, off one reading of the rows, which is
+ * what `test/access/page-logic/read-once.test.ts` holds down.
+ *
+ * **It was 285 to 339 ms here and 528 ms on the runner**, which is over budget,
+ * for as long as each of those 78 reckonings read the whole of what it answers:
+ * almost all of that is the same answer whichever request is asked about -- the
+ * twenty rows' plans, setup's agent types and the plan each held plan stands
+ * for -- and a draw holds it once now (`heldByOneDraw` in
+ * `src/access/model-draft/host.ts`). So the budget's headroom is a factor of
+ * three on this machine, and this is a floor under runner variance rather than
+ * a target to grow into. The number to change when the page gets slower is the
  * page.
+ *
+ * **The draw is the host's draw** (rondo#757). A page is only as expensive as
+ * what it is asked for, and this suite's first version measured a draw that was
+ * handed no `repositoryFor` and no `draftsOwed` -- the two reading ports a host
+ * always hands the page. The first of them is the expensive one: it answers
+ * *where does this request's work run* off the whole live and ended ledger, and
+ * `scopesAwaitingYou` asks it once per request on every view, so leaving it out
+ * dropped 78 readings of this fixture's ledger out of the measurement.
+ * `portsOver` hands both of them over now, and this budget is over a draw that
+ * makes the reads a host's draw makes.
  *
  * **What the fixture is.** Its row counts and its two heaviest columns are the
  * store at hand's, read off `rondo-iterations.sqlite3` on 2026-11-05: 78
