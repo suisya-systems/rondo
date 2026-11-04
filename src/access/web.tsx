@@ -132,6 +132,8 @@ import {
   requestReportView,
   scopeStop,
   scopeStopView,
+  workerQuestionAsked,
+  workerQuestionView,
 } from "./page/thread-stops.js";
 import {
   currentGoals,
@@ -496,6 +498,7 @@ async function threadModel(
             lapReport(message) ||
             isRequestReport(message) ||
             scopeStop(message) ||
+            workerQuestionAsked(message) ||
             flowStopSays.has(message.messageId) ||
             (reads !== null && heldMessage(message)),
         )
@@ -516,11 +519,16 @@ async function threadModel(
                     )
                   : scopeStop(message)
                     ? scopeStopView(wording, message, reads)
-                    : stop !== undefined
-                      ? flowStopView(wording, message, stop)
-                      : noDraft(message) || redraftNote(message) || reads === null
-                        ? noDraftView(wording, message, reads)
-                        : raw(heldMarkup({ wording, reads, text: message.body, className: "" }))
+                    : // **The question, and what waits on it** (rondo#704): the
+                      // options are presses in the box below, so the body's own
+                      // list of them and the commit it ends with are not drawn.
+                      workerQuestionAsked(message)
+                      ? workerQuestionView(wording, message, reads)
+                      : stop !== undefined
+                        ? flowStopView(wording, message, stop)
+                        : noDraft(message) || redraftNote(message) || reads === null
+                          ? noDraftView(wording, message, reads)
+                          : raw(heldMarkup({ wording, reads, text: message.body, className: "" }))
             ).toString(),
           ] as const;
         }),
@@ -1011,8 +1019,11 @@ async function threadBoxes(
     return {
       id: `${askId}:built`,
       kind: "other" as const,
+      // **That it committed, not which commit** (D-0076, rondo#704): a sha is
+      // an identifier of rondo's, and what the lap built is on the card the
+      // link below opens.
       said: wording.evQuestionBuilt(
-        built?.slice(0, 7) ?? null,
+        built !== null,
         read?.kind === "question" ? read.question.waits : null,
       ),
       at: wording.age(ago(ask.atMs, nowMs)),

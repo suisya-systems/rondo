@@ -670,7 +670,7 @@ export interface PageWords extends DayWords {
    * committed before stopping (null: nothing, rondo#550), and what waits on the
    * answer, in its words.
    */
-  readonly evQuestionBuilt: (commit: string | null, waits: string | null) => string;
+  readonly evQuestionBuilt: (built: boolean, waits: string | null) => string;
   readonly evQuestionBuiltLink: string;
   /** What the revise press does once the question is answered (rule 8.4), and for which part. */
   readonly reviseAnswerStarts: (part: number | null) => string;
@@ -1329,10 +1329,10 @@ export const PAGE_EN: PageWords = Object.freeze({
   partThen: (said, more) => `${said}; ${more}`,
   reviseTakeIn:
     "Another part changed these files and was merged; the next attempt starts by merging it in.",
-  evQuestionBuilt: (commit, waits) =>
-    (commit === null
-      ? "The worker stopped to ask before committing anything."
-      : `The worker built and committed ${commit} before stopping to ask.`) +
+  evQuestionBuilt: (built, waits) =>
+    (built
+      ? "The worker committed what it had built before stopping to ask."
+      : "The worker stopped to ask before committing anything.") +
     (waits === null ? "" : ` Waiting on your answer: ${waits}`),
   evQuestionBuiltLink: "What changed",
   reviseAnswerStarts: (part) =>
@@ -1971,10 +1971,10 @@ export const PAGE_JA: PageWords = Object.freeze({
   partThen: (said, more) => `${said}。${more}`,
   reviseTakeIn:
     "ほかの作業がこのファイルを変更してマージされました。次の回は、まずその変更を取り込んでから始めます。",
-  evQuestionBuilt: (commit, waits) =>
-    (commit === null
-      ? "ワーカーは何もコミットせずに質問しました。"
-      : `ワーカーは質問の前に、ここまでの変更を ${commit} にコミットしました。`) +
+  evQuestionBuilt: (built, waits) =>
+    (built
+      ? "ワーカーは質問の前に、ここまでの変更をコミットしました。"
+      : "ワーカーは何もコミットせずに質問しました。") +
     (waits === null ? "" : `返事を待っている部分: ${waits}`),
   evQuestionBuiltLink: "変更内容",
   reviseAnswerStarts: (part) =>

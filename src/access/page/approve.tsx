@@ -317,6 +317,35 @@ function stepRound(wording: Chrome, record: IterationRecord) {
   };
 }
 
+/**
+ * What was raised, one line each (D-0083 rule 9.4): the collision first and in
+ * the page's own language, then each finding in the reading's words.
+ */
+function standingList(collision: string | null, standing: readonly string[]) {
+  return (
+    <ul class="mt-1.5 space-y-1.5">
+      {collision === null ? null : (
+        <li class="flex gap-2 text-body leading-5">
+          <span aria-hidden="true" class="text-fail">
+            &#8226;
+          </span>
+          <span class="min-w-0 wrap-anywhere">{collision}</span>
+        </li>
+      )}
+      {standing.map((said) => (
+        <li class="flex gap-2 text-body leading-5">
+          <span aria-hidden="true" class="text-fail">
+            &#8226;
+          </span>
+          <span class="min-w-0 wrap-anywhere" lang="">
+            {said}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function approveView(
   wording: Chrome,
   record: IterationRecord,
@@ -379,32 +408,31 @@ export function approveView(
        */}
       {standing.length === 0 && collision === null ? null : (
         <section id="standing" class={CARD}>
-          <h3 class={CARD_HEADING}>{wording.standingHeading}</h3>
-          <ul class="mt-1.5 space-y-1.5">
-            {/*
-             * First, and in the set's own language rather than `lang=""`: the
-             * findings below are a reading's own words and this sentence is
-             * the page's.
-             */}
-            {collision === null ? null : (
-              <li class="flex gap-2 text-body leading-5">
-                <span aria-hidden="true" class="text-fail">
-                  &#8226;
-                </span>
-                <span class="min-w-0 wrap-anywhere">{collision}</span>
-              </li>
-            )}
-            {standing.map((said) => (
-              <li class="flex gap-2 text-body leading-5">
-                <span aria-hidden="true" class="text-fail">
-                  &#8226;
-                </span>
-                <span class="min-w-0 wrap-anywhere" lang="">
-                  {said}
-                </span>
-              </li>
-            ))}
-          </ul>
+          {/*
+           * **One press away where a worker is waiting on an answer**
+           * (rondo#704). Rule 9.4 draws the findings unfolded because the
+           * press they are answered over is *approve*, and nothing may stand
+           * between a person and what they are approving. A worker's question
+           * is a different press: what is being answered is the question, and
+           * a reviewer's findings written out in full above it is evidence
+           * stacked in front of a choice. So the heading becomes a fold the
+           * words are one press behind -- a `details`, so a browser with no
+           * script opens it too -- and the gate's own box keeps rule 9.4.
+           */}
+          {framing.workerQuestion === null ? (
+            <>
+              <h3 class={CARD_HEADING}>{wording.standingHeading}</h3>
+              {standingList(collision, standing)}
+            </>
+          ) : (
+            <details class="group">
+              <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+                {chevron()}
+                {wording.standingFold(standing.length + (collision === null ? 0 : 1))}
+              </summary>
+              {standingList(collision, standing)}
+            </details>
+          )}
         </section>
       )}
       {/*
@@ -739,6 +767,46 @@ function reviseForm(
   const raising = rounds === null ? null : framing.budgets;
   const box = framing.revise;
   const draftKey = `revise:${record.id}:${record.gateId ?? ""}`;
+  /*
+   * **Where a worker's question waits, every draft on the screen is one press
+   * away** (rondo#704, the gate's reading of this pass). The answer box above
+   * folds the change it would send; this box holds the same drafted words, and
+   * drawn open it put them back on the screen the fold took them off. So while
+   * the question waits and a draft is what the box holds, the field goes behind
+   * a fold of its own -- a `details`, as the other folds are, so a browser with
+   * no script opens it too. A field inside a closed `details` is still the
+   * form's and still sent, so what the press sends is what it sent before.
+   *
+   * Only then: with nothing drafted the box is the person's empty field, which
+   * hides nothing, and at the gate's own press D-0083 rule 9.4 draws what a
+   * reading raised and what is asked for it in the open.
+   */
+  const folded = box.kind === "drafted" && (framing.workerQuestion?.waitedSaid ?? null) !== null;
+  const field = (
+    <label class="flex min-w-0 flex-col gap-1">
+      <span class="text-meta leading-5 font-medium text-muted-foreground">
+        {wording.reviseLabel}
+      </span>
+      {/* **The draft is the field's content and not a `placeholder`**: a
+          placeholder is not sent, and what the person presses with has to
+          be what they read. `data-draft` is the composer script's duty,
+          keyed per gate; an edit survives a refusal and a draft that lands
+          later (D-0077 rule 4.4), and an untouched box carries the draft.
+          The findings inside it are the reviewer's own words, so the box
+          states no language. */}
+      <textarea
+        name="body"
+        rows={4}
+        lang=""
+        data-draft={draftKey}
+        data-round-carry="body"
+        placeholder={wording.revisePlaceholder}
+        class="max-h-64 min-h-20 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-body leading-5 outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {box.kind === "drafted" ? box.text : ""}
+      </textarea>
+    </label>
+  );
   return (
     <div id="revise">
       <form
@@ -789,29 +857,17 @@ function reviseForm(
             </label>
           </div>
         )}
-        <label class="flex min-w-0 flex-col gap-1">
-          <span class="text-meta leading-5 font-medium text-muted-foreground">
-            {wording.reviseLabel}
-          </span>
-          {/* **The draft is the field's content and not a `placeholder`**: a
-              placeholder is not sent, and what the person presses with has to
-              be what they read. `data-draft` is the composer script's duty,
-              keyed per gate; an edit survives a refusal and a draft that lands
-              later (D-0077 rule 4.4), and an untouched box carries the draft.
-              The findings inside it are the reviewer's own words, so the box
-              states no language. */}
-          <textarea
-            name="body"
-            rows={4}
-            lang=""
-            data-draft={draftKey}
-            data-round-carry="body"
-            placeholder={wording.revisePlaceholder}
-            class="max-h-64 min-h-20 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-body leading-5 outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {box.kind === "drafted" ? box.text : ""}
-          </textarea>
-        </label>
+        {folded ? (
+          <details id="revise-draft-fold" class="group">
+            <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+              {chevron()}
+              {wording.reviseDraftFold}
+            </summary>
+            <div class="mt-1">{field}</div>
+          </details>
+        ) : (
+          field
+        )}
         {box.kind === "none" ? null : (
           <p
             id="revise-draft-state"

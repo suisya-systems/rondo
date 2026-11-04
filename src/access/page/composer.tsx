@@ -13,7 +13,7 @@ import type { Chrome } from "../wording.js";
 import type { MintMessageId, WebPorts } from "./contract.js";
 import { kbd } from "./document.js";
 import { scopeStop } from "./thread-stops.js";
-import { localTime, money, PRIMARY, SECONDARY, whoWrote } from "./vocabulary.js";
+import { chevron, localTime, money, PRIMARY, SECONDARY, whoWrote } from "./vocabulary.js";
 
 /**
  * The raise's fields in a budget stop's answering box (D-0140 rule 3): the
@@ -198,17 +198,30 @@ function answerReviseFields(wording: Chrome, revise: AnswerRevise, options: bool
       <p class="text-meta leading-5 text-muted-foreground">
         {options ? wording.answerReviseOptionsNote : wording.answerReviseNote}
       </p>
+      {/*
+       * **The draft is sent as it was drawn, and read on a press** (rondo#704):
+       * what the answer carries is said in one line above the buttons, and the
+       * words themselves -- a reviewer's findings, written out in full -- are
+       * behind the fold, because they are the evidence under the choice and not
+       * the choice. The field is hidden either way, so an unopened fold sends
+       * exactly what an opened one does.
+       */}
       {revise.draft === "" ? null : (
         <>
           <input type="hidden" name="revise_draft" value={revise.draft} />
-          <p class="text-meta leading-5 text-muted-foreground">{wording.answerReviseDraftLead}</p>
-          {/* The reviewer's words, so the block states no language. */}
-          <pre
-            lang=""
-            class="max-h-48 overflow-auto rounded-md border border-border bg-muted/60 px-3 py-2 text-meta leading-5 whitespace-pre-wrap"
-          >
-            {revise.draft}
-          </pre>
+          <details class="group">
+            <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+              {chevron()}
+              {wording.answerReviseDraftLead}
+            </summary>
+            {/* The reviewer's words, so the block states no language. */}
+            <pre
+              lang=""
+              class="mt-1 max-h-48 overflow-auto rounded-md border border-border bg-muted/60 px-3 py-2 text-meta leading-5 whitespace-pre-wrap"
+            >
+              {revise.draft}
+            </pre>
+          </details>
         </>
       )}
       {revise.calls === "" ? null : (
@@ -225,12 +238,18 @@ function answerReviseFields(wording: Chrome, revise: AnswerRevise, options: bool
             />
             <span>{wording.answerReviseCallsSend}</span>
           </label>
-          <pre
-            lang=""
-            class="max-h-48 overflow-auto rounded-md border border-border bg-muted/60 px-3 py-2 text-meta leading-5 whitespace-pre-wrap"
-          >
-            {revise.calls}
-          </pre>
+          <details class="group">
+            <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+              {chevron()}
+              {wording.answerReviseCallsRead}
+            </summary>
+            <pre
+              lang=""
+              class="mt-1 max-h-48 overflow-auto rounded-md border border-border bg-muted/60 px-3 py-2 text-meta leading-5 whitespace-pre-wrap"
+            >
+              {revise.calls}
+            </pre>
+          </details>
         </>
       )}
     </div>
@@ -503,10 +522,23 @@ export function composerView(
                 type="submit"
                 name="outcome"
                 value={`option:${String(index)}`}
-                class={`${index === choices.recommended ? PRIMARY : SECONDARY} min-h-9 w-full px-3 py-1.5 text-left text-sm leading-5`}
+                class={`${index === choices.recommended ? PRIMARY : SECONDARY} min-h-9 w-full items-start px-3 py-1.5 text-left text-sm leading-5`}
               >
                 <span class="shrink-0 tabular-nums opacity-70">{`${String(index + 1)}.`}</span>
-                <span class="min-w-0 flex-1 break-words">{choice.text}</span>
+                {/*
+                 * **The reason is on the press, and nowhere else** (rondo#704):
+                 * what an option gives up is what the choice turns on, and the
+                 * one place it belongs is the thing being pressed -- so the
+                 * question's card above draws no second list of these.
+                 */}
+                <span class="min-w-0 flex-1 break-words">
+                  <span class="block" lang="">
+                    {choice.text}
+                  </span>
+                  <span class="block text-meta leading-5 font-normal opacity-80" lang="">
+                    {choice.givesUp}
+                  </span>
+                </span>
                 {index === choices.recommended ? (
                   <span class="shrink-0 text-meta font-medium opacity-80">
                     {wording.answerRecommended}
@@ -514,6 +546,12 @@ export function composerView(
                 ) : null}
               </button>
             ))}
+            {/* Why that one, in the worker's words, under the presses it points at. */}
+            {choices.recommendation === undefined ? null : (
+              <p class="text-meta leading-5 text-muted-foreground">
+                {wording.answerRecommends(choices.recommended + 1, choices.recommendation)}
+              </p>
+            )}
           </div>
         )
       }

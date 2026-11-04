@@ -247,6 +247,24 @@ export interface Chrome
    * (rondo#670); unticked, the answer goes without them.
    */
   readonly answerReviseCallsSend: string;
+  /** The fold over the drafted judgment calls themselves (rondo#704). */
+  readonly answerReviseCallsRead: string;
+  /*
+   * The four words of the question screen (rondo#704). Here rather than in
+   * `page/words.ts` beside `standingHeading`, because that file is at its line
+   * budget; they are words of the same catalogue either way.
+   */
+  /** Heads the part of the work that waits on the answer, in the question's card. */
+  readonly questionWaitsOn: string;
+  /** Which option the worker recommends, and why, under the presses. */
+  readonly answerRecommends: (option: number, why: string) => string;
+  /** The fold over what a review raised, where a question is waiting. */
+  readonly standingFold: (findings: number) => string;
+  /**
+   * The fold over the gate's own revise box, where a question is waiting: the
+   * same drafted change the answer box folds, so one screen hides both.
+   */
+  readonly reviseDraftFold: string;
   /**
    * A budget stop's first answer (D-0140 rule 3): a budgets-only successor of
    * the lap's approval, then *carry on*, on one press. `answerRaiseLabel` is

@@ -664,6 +664,16 @@ function modelView(
             </>
           ) : (
             <>
+              {/*
+               * **Where a worker's question waits, this face's findings sit
+               * behind the same press as the rest of the evidence here**
+               * (rondo#704, answered at the gate of this pass). The answering
+               * box's copy of these words folds ({@link standingFindings} on
+               * `approve.tsx`) and this copy folds with {@link evidenceFold},
+               * so no face of a question screen writes a reviewer out in full
+               * over a choice. The card, its verdict pill and its coverage
+               * stay in the open: those are the reading's shape, not its text.
+               */}
               {reading.findings.length === 0
                 ? null
                 : evidenceFold(

@@ -456,9 +456,18 @@ export function portsOver(
  */
 export function readableWithoutOpening(html: string, text: string): boolean {
   const at = html.indexOf(text);
-  if (at === -1) {
-    return false;
-  }
+  return at === -1 ? false : shutFoldsOver(html, at) === 0;
+}
+
+/**
+ * How many *shut* disclosures enclose the position `at` -- the walk
+ * {@link readableWithoutOpening} answers from, taken at a position because a
+ * word the page draws twice has to be asked about at each of its places. A
+ * `details` carrying `open` encloses nothing a press has to reveal, so it is
+ * not counted: "inside a `details`" and "behind a press" are not the same
+ * question, and only the second one is what a fold was asked for.
+ */
+export function shutFoldsOver(html: string, at: number): number {
   let depth = 0;
   const shut: number[] = [];
   for (const found of html.slice(0, at).matchAll(/<details\b[^>]*>|<\/details>/g)) {
@@ -474,7 +483,7 @@ export function readableWithoutOpening(html: string, text: string): boolean {
       depth += 1;
     }
   }
-  return shut.length === 0;
+  return shut.length;
 }
 
 export const structured = async () =>

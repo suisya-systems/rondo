@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 
 import type {} from "../../src/access/inbox.js";
 import { viewHref } from "../../src/access/page-logic/routes.js";
+import { questionBody, storedOptions } from "../../src/access/question.js";
 import { JA } from "../../src/access/wording/ja.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import { revisionPlan } from "../../src/refrain/revision.js";
@@ -23,6 +24,7 @@ import {
   reserve,
   reviseRows,
   seedScopeRequest,
+  shutFoldsOver,
   structured,
 } from "./page-world.js";
 
@@ -1477,6 +1479,245 @@ test("the answer box at a worker's question carries the gate's revise, with the 
   const bare = unscoped.slice(unscoped.indexOf('id="composer"'));
   expect(bare).toContain('action="/answer-ask');
   expect(bare).not.toContain("revise_iteration");
+});
+
+/**
+ * A worker's question as its block offered it (rondo#704): one question, two
+ * ways on with what each gives up, the one it recommends, and the part of the
+ * work that waits on the answer.
+ */
+const BLOCK = {
+  question: "Should the retry budget be read from the config file?",
+  options: [
+    { text: "config.ts", givesUp: "gives up a file of the budget's own" },
+    { text: "budget.ts", givesUp: "gives up reading every setting in one place" },
+  ],
+  recommended: 0,
+  recommendation: "every other budget is read from the config file",
+  waits: "the retry budget's own tests, which cannot be written until this is settled",
+} as const;
+
+/** The commit the relay puts at the end of the ask's body, which no screen says. */
+const ASKED_COMMIT = "cafe1234cafe1234cafe1234cafe1234cafe1234";
+
+/** The question {@link BLOCK} put, recorded the way `relayQuestion` records it. */
+async function workerAsksWithOptions(world: ReturnType<typeof fresh>): Promise<void> {
+  const asked = await world.record.recordThreadMessage({
+    messageId: "question-i-0001",
+    body: questionBody(BLOCK, ASKED_COMMIT),
+    authorKind: "drafter",
+    authorId: "rondo/worker-question/1",
+    inReplyTo: "req-1",
+    atMs: 3_500,
+    bases: [
+      { form: "message", messageId: "req-1" },
+      { form: "iteration", iterationId: "i-0001" },
+    ],
+    asks: true,
+    askOptions: storedOptions(BLOCK.options, BLOCK.recommended, BLOCK.recommendation),
+  });
+  expect(asked.kind).toBe("recorded");
+}
+
+/** The thread the question waits in, as a person reads it. */
+const questionPage = async (world: ReturnType<typeof fresh>, wording = EN): Promise<string> =>
+  await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "thread", messageId: "req-1", to: null },
+    wording,
+    (kind) => `${kind}-00000000-0000-4000-8000-000000000009`,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000001",
+  );
+
+/** How many times `said` is on the page. */
+const times = (html: string, said: string): number => html.split(said).length - 1;
+
+test("a worker's question says the question and which work waits, and offers each option once, as a press (rondo#704)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await workerAsksWithOptions(world);
+  const html = await questionPage(world);
+
+  // Always on screen: the question in one sentence, and what waits on it.
+  expect(html).toContain(BLOCK.question);
+  expect(html).toContain(EN.questionWaitsOn);
+  expect(html).toContain(BLOCK.waits);
+  // Each way on once -- as a press, with the reason beside it -- and the
+  // recommended one said with the worker's reason for recommending it.
+  for (const [at, option] of BLOCK.options.entries()) {
+    expect(times(html, option.text)).toBe(1);
+    expect(times(html, option.givesUp)).toBe(1);
+    expect(html).toContain(`value="option:${String(at)}"`);
+  }
+  expect(html).toContain(EN.answerRecommended);
+  expect(html).toContain(EN.answerRecommends(1, BLOCK.recommendation));
+  // And what answering starts, where the press that starts it is.
+  expect(html).toContain(EN.answerReviseOptionsNote);
+
+  // Gone from the screen: rondo's numbered list of the same options inside
+  // the ask's body, and the commit the body ends with (D-0076).
+  expect(html).not.toContain("1. config.ts");
+  expect(html).not.toContain(ASKED_COMMIT);
+  expect(html).not.toContain(ASKED_COMMIT.slice(0, 7));
+});
+
+test("the drafted change under a worker's question is read on a press (rondo#704)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  await draftRevise(world, REVISE_ANSWER);
+  await workerAsksWithOptions(world);
+  const box = (await questionPage(world)).slice(
+    (await questionPage(world)).indexOf('id="composer"'),
+  );
+  // The words are behind the fold, and the field the press sends is not: an
+  // unopened fold answers with exactly what an opened one does.
+  const fold = box.indexOf("<details");
+  expect(fold).toBeGreaterThan(-1);
+  expect(box.slice(fold)).toContain(EN.answerReviseDraftLead);
+  expect(box.indexOf("<pre")).toBeGreaterThan(fold);
+  expect(box.lastIndexOf(REVISE_ANSWER.lead)).toBeGreaterThan(fold);
+  // What the press sends is the field above the fold, drawn either way.
+  expect(box.slice(0, fold)).toContain('name="revise_draft"');
+});
+
+test("where a worker's question waits, what the review raised is one press away (rondo#704)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  const plain = await questionPage(world);
+  const standingOf = (html: string): string =>
+    html.slice(html.indexOf('id="standing"'), html.indexOf('id="answer-bar"'));
+  // At the gate's own press, rule 9.4's findings are quoted unfolded.
+  expect(standingOf(plain)).toContain(EN.standingHeading);
+  expect(standingOf(plain)).not.toContain("<details");
+  expect(standingOf(plain)).toContain("the loop never stops");
+
+  await workerAsksWithOptions(world);
+  const asked = standingOf(await questionPage(world));
+  expect(asked).toContain("<details");
+  expect(asked).not.toContain(EN.standingHeading);
+  expect(asked).toContain(EN.standingFold(3));
+  // In full, and under the summary that opens them.
+  expect(asked.indexOf("the backoff is not capped")).toBeGreaterThan(asked.indexOf("</summary>"));
+  const ja = standingOf(await questionPage(world, JA));
+  expect(ja).toContain("見直しで挙がった点を見る");
+});
+
+/**
+ * Where `said` is *drawn* on the page: between tags, and so read without a
+ * press. An occurrence inside a tag is a field's value -- the hidden field an
+ * answer carries its draft in -- which is sent and never read.
+ */
+const drawnAt = (html: string, said: string): readonly number[] => {
+  const found: number[] = [];
+  for (let at = html.indexOf(said); at > -1; at = html.indexOf(said, at + 1)) {
+    if (html.indexOf(">", html.lastIndexOf("<", at)) < at) {
+      found.push(at);
+    }
+  }
+  return found;
+};
+
+/**
+ * Asserts that every place `said` is drawn on the screen is **behind a press**,
+ * and that there are `copies` of them.
+ *
+ * Two halves, and the second is the one a weaker check missed: that a drawn
+ * copy sits inside a `details` says nothing while that `details` carries
+ * `open`, which reveals its contents without a press -- so what is asked here
+ * is that a *shut* disclosure encloses each copy. The count is asserted too,
+ * because a word that went missing from the page would otherwise pass for
+ * having nothing left to hide.
+ */
+const everyCopyBehindAPress = (html: string, said: string, copies: number): void => {
+  const drawn = drawnAt(html, said);
+  expect(drawn).toHaveLength(copies);
+  for (const at of drawn) {
+    expect(shutFoldsOver(html, at)).toBeGreaterThan(0);
+  }
+};
+
+/** The gate's own change form, from its first field to its last line. */
+const reviseOf = (html: string): string =>
+  html.slice(html.indexOf('id="revise-form"'), html.indexOf('id="revise-plain"'));
+
+test("where a worker's question waits, the gate's box folds the drafted change as the answer box does (rondo#704)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  await draftRevise(world, REVISE_ANSWER);
+
+  // At the gate's own press the box is drawn open, as it always was: what is
+  // being pressed there is the change itself.
+  const plain = reviseOf(await questionPage(world));
+  expect(plain).toContain("<textarea");
+  expect(plain).toContain(REVISE_ANSWER.lead);
+  expect(plain).not.toContain("<details");
+
+  await workerAsksWithOptions(world);
+  const page = await questionPage(world);
+  const asked = reviseOf(page);
+  // Now the question is what is being answered, so this box's draft is behind
+  // a fold of its own, with the field inside it.
+  const fold = asked.indexOf('<details id="revise-draft-fold"');
+  expect(fold).toBeGreaterThan(-1);
+  expect(asked).toContain(EN.reviseDraftFold);
+  expect(asked.indexOf("<textarea")).toBeGreaterThan(asked.indexOf("</summary>"));
+  expect(asked.slice(0, fold)).not.toContain(REVISE_ANSWER.lead);
+  expect(asked.slice(fold)).toContain(REVISE_ANSWER.lead);
+
+  // **And every drafted change drawn on the one screen is behind a press**:
+  // the answer box's copy of these words as well as this box's, which is the
+  // requirement a fold on one of them alone did not meet. Both are drawn and
+  // both of the folds over them are shut, which is what the words being
+  // hidden until a press means.
+  everyCopyBehindAPress(page, REVISE_ANSWER.lead, 2);
+
+  // The same fold in Japanese, and the press it is drawn above is unchanged.
+  const jaPage = await questionPage(world, JA);
+  const ja = reviseOf(jaPage);
+  expect(ja).toContain(JA.reviseDraftFold);
+  expect(ja).toContain("この押しで渡す変更依頼の下書きを見る");
+  expect(ja).toContain(">変更を依頼する</button>");
+  // The worker's drafted words are the worker's in either language, so the
+  // same two copies are hidden behind the same two shut folds here.
+  everyCopyBehindAPress(jaPage, REVISE_ANSWER.lead, 2);
+});
+
+test("where a worker's question waits, the model review's findings are behind a press on the right face too (rondo#704)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  await workerAsksWithOptions(world);
+  const page = await questionPage(world);
+  const cardOf = (html: string): string =>
+    html.slice(html.indexOf('id="model-review"'), html.indexOf('id="model-coverage"'));
+  const asked = cardOf(page);
+  // The press is the question, so the words are one press away here as they
+  // are in the box: the card, its heading and its verdict pill stay drawn, and
+  // the findings sit behind this face's own evidence fold, shut.
+  expect(asked).toContain('<details id="model-findings"');
+  expect(asked).not.toContain('<details open id="model-findings"');
+  expect(asked).toContain(EN.findingsFold);
+  expect(asked).toContain(EN.modelHeading);
+  expect(asked.indexOf("the backoff is not capped")).toBeGreaterThan(asked.indexOf("</summary>"));
+
+  // **Every copy of a reviewer's words on the screen is behind a press**: the
+  // card's, the box's, and the third one nobody reads for the finding's sake
+  // -- the claim the press records as having been shown (D-0042), which the
+  // records fold has always kept shut.
+  everyCopyBehindAPress(page, "the backoff is not capped", 3);
+  everyCopyBehindAPress(page, "the loop never stops", 3);
+
+  // The same folds in Japanese, by this catalogue's own words.
+  const ja = await questionPage(world, JA);
+  expect(cardOf(ja)).toContain('<details id="model-findings"');
+  expect(cardOf(ja)).toContain(JA.findingsFold);
+  everyCopyBehindAPress(ja, "the backoff is not capped", 3);
+  everyCopyBehindAPress(ja, "the loop never stops", 3);
 });
 
 test("a worker's question with options names no Carry on press in its revise note (D-0190 rule 6)", async () => {
