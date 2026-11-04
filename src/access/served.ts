@@ -63,25 +63,132 @@ function typeOf(name: string): string {
   return name.endsWith(".woff2") ? "font/woff2" : "application/octet-stream";
 }
 
-/** Where a page hears this process's press token (rondo#674), and how often it asks again. */
-export const TOKEN_ROUTE = "/events";
-const TOKEN_RETRY_MS = 5000;
+/** Where a page hears this process's press token (rondo#674) and what has changed under it. */
+export const EVENTS_ROUTE = "/events";
+const RETRY_MS = 5000;
 
 /**
- * **This process's token, to a page drawn by an earlier one** (rondo#674). A
- * restarted host mints a new token (D-0041 rule 3b), and a screen drawn before
- * the restart would refuse the person's next press. The page listens here
- * (`page/token.js`) and writes the token into its forms. One event, then the
- * response ends and the browser reconnects after `retry`: a stream held open
- * would hold the server's close, and a host that is down is simply a reconnect
- * that waits. The token is what `GET /` already serves to the same reader,
- * under the same `Host` check; another origin cannot read it. `null` is a host
- * that draws no form, and a `204` tells the browser to stop asking.
+ * What tells this process that something a page may be showing has changed.
+ *
+ * **A thing the host rings, never a clock this module reads.** The host owns
+ * what counts as a change (`src/access/page-changes.ts` watches the store's
+ * files), and this module owns what a reader is told about it. While nothing
+ * rings, no callback runs and nothing here draws anything.
  */
-export function tokenEvents(token: string | null): Response {
-  return token === null
-    ? new Response(null, { status: 204 })
-    : new Response(`retry: ${String(TOKEN_RETRY_MS)}\nevent: token\ndata: ${token}\n\n`, {
-        headers: { "content-type": "text/event-stream", "cache-control": "no-store" },
+export interface PageChanges {
+  /** Calls `fn` on every change, until the function it returns is called. */
+  readonly listen: (fn: () => void) => () => void;
+}
+
+/** What a reader of {@link pageEvents} is answered with. */
+export interface PageEvents {
+  /** This process's press token, or null where this host draws no form. */
+  readonly token: string | null;
+  /** The bell, or null where this host has none: then the stream is the token alone. */
+  readonly changes: PageChanges | null;
+  /**
+   * The page this reader is on, as it would be drawn now.
+   *
+   * **Compared, never sent.** It is drawn on a ring of the bell and on nothing
+   * else, and the reader hears `change` only where the bytes differ from the
+   * ones it is standing on -- so a write that does not reach this view tells
+   * this page nothing, and a quiet host draws nothing at all.
+   */
+  readonly shown: () => Promise<string>;
+  /** Aborted when the reader goes away, so the bell loses its listener with it. */
+  readonly signal: AbortSignal | null;
+}
+
+/** One SSE frame. */
+const frame = (event: string, data: string): string => `event: ${event}\ndata: ${data}\n\n`;
+
+/**
+ * **What a page hears from the host** (D-0054 as rondo#742 leaves it): this
+ * process's token, and then a word every time what this page shows has
+ * changed.
+ *
+ * **The token** (rondo#674). A restarted host mints a new one (D-0041 rule
+ * 3b), and a screen drawn before the restart would refuse the person's next
+ * press, so the token is the stream's first frame and the page writes it into
+ * its forms (`page/live.js`). It is what `GET /` already serves to the same
+ * reader, under the same `Host` check; another origin cannot read it.
+ *
+ * **The change.** The stream is then held open and says nothing until the
+ * bell rings. On a ring this draws the reader's own view again and compares it
+ * with what the reader is standing on: equal bytes are silence, and different
+ * bytes are one `change` frame, which the page answers with one `GET` of its
+ * own address and a morph of `#ledger` (`src/access/page/document.tsx`). No
+ * timer runs on either side, which is the whole of what replaced `every 5s`.
+ *
+ * `retry` is still named, so a host that goes down is a reconnect that waits
+ * rather than a page that gives up. With no bell there is nothing to hold the
+ * stream open for: the token is sent and the response ends, as it did before.
+ * A `204` -- no token and no bell -- tells the browser to stop asking.
+ */
+export function pageEvents({ token, changes, shown, signal }: PageEvents): Response {
+  const headers = { "content-type": "text/event-stream", "cache-control": "no-store" };
+  const head = `retry: ${String(RETRY_MS)}\n\n` + (token === null ? "" : frame("token", token));
+  if (changes === null) {
+    return token === null ? new Response(null, { status: 204 }) : new Response(head, { headers });
+  }
+  const bytes = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let open = true;
+      let stop: (() => void) | null = null;
+      // **One pass at a time, and one more where a ring arrived during it**
+      // (rondo#742): the draw is `await`ed, and two passes over one view would
+      // race to say which bytes the reader is standing on.
+      let drawing = false;
+      let again = false;
+      let standing: string | null = null;
+      const close = (): void => {
+        if (!open) {
+          return;
+        }
+        open = false;
+        stop?.();
+        try {
+          controller.close();
+        } catch {
+          // A reader that has already gone needs no close.
+        }
+      };
+      const look = async (): Promise<void> => {
+        if (drawing) {
+          again = true;
+          return;
+        }
+        drawing = true;
+        try {
+          const now = await shown();
+          if (!open) {
+            return;
+          }
+          if (standing !== null && now !== standing) {
+            controller.enqueue(bytes.encode(frame("change", "1")));
+          }
+          standing = now;
+        } catch {
+          // **A draw that failed is not a change.** The page the reader has is
+          // still the page the host last drew, and the next ring tries again.
+        } finally {
+          drawing = false;
+          if (again && open) {
+            again = false;
+            void look();
+          }
+        }
+      };
+      controller.enqueue(bytes.encode(head));
+      stop = changes.listen(() => {
+        void look();
       });
+      // The bytes the reader is standing on, drawn once as the page opens and
+      // never on a clock.
+      void look();
+      signal?.addEventListener("abort", close);
+    },
+  });
+  return new Response(stream, { headers });
 }

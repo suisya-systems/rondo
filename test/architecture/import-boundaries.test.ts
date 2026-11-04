@@ -554,6 +554,16 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   "src/access/served.ts": {
     "node:fs": ["readFileSync"],
   },
+  // rondo#742: the bell the host rings when something a page shows has
+  // changed, which replaced the page's `every 5s` poll. **One watch, and
+  // nothing that reads or writes a file**: `watch` is the operating system
+  // saying that something under a directory was written, and `dirname` derives
+  // that directory from the store's path. No `readFileSync` here -- deciding
+  // what changed is `served.ts`'s, off a page it draws through the renderer.
+  "src/access/page-changes.ts": {
+    "node:fs": ["watch"],
+    "node:path": ["dirname"],
+  },
 };
 
 /**
@@ -1516,6 +1526,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/end-lap-host.ts": [HUMAN],
   "src/access/web-app.ts": [HUMAN],
   "src/access/served.ts": [HUMAN],
+  "src/access/page-changes.ts": [HUMAN],
   "src/access/scope-form.ts": [HUMAN],
   "src/access/scope-port.ts": [HUMAN],
   "src/access/web.tsx": [HUMAN],

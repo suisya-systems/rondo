@@ -195,7 +195,7 @@ export const JA: Chrome = Object.freeze({
   ...TRIAGE_SOURCE_JA,
   lang: "ja",
 
-  liveNote: () => "",
+  liveNote: "",
   stillNote: "",
   noApproverNote:
     "承認する人がまだ決まっていないため、このページからは承認も作業の開始もできません。下に名前を入れると使えるようになります。",
@@ -370,15 +370,16 @@ export const JA: Chrome = Object.freeze({
   replyNotAnswer: "返信しただけでは、このスレッドで待っている質問に答えたことになりません。",
   sendBack: "スレッドに戻る",
   sendBackNote: "ブラウザの「戻る」で、書いた文に戻れます。",
-  threadsLiveNote: (seconds) =>
-    `${String(seconds)}秒ごとに画面を更新します。記録されるのは送信した文だけで、` +
+  threadsLiveNote:
+    "表示しているものが変わったときに画面を更新します。script が動かない環境では、" +
+    "読み直すと最新になります。記録されるのは送信した文だけで、" +
     "あなたの名前でスレッドに残ります。メッセージを送っても、何かを承認したことにはなりません。",
   approvePlain: "この作業をこのまま受け入れます。",
   approveFace: "承認する",
   approveDespite: "指摘を残したまま承認する",
   approveDespitePlain: "モデルレビューが挙げた点に答えないまま、この作業をこのまま受け入れます。",
   undeterminedFold: (count) => `rondo が判定できなかった項目 ${String(count)} 件`,
-  liveShort: (seconds) => `ライブ · ${String(seconds)}秒ごとに更新`,
+  liveShort: "ライブ · 変わったときに更新",
   stillShort: "読んでいるあいだは更新しません",
   age: (ago) => {
     const unit = ago.slice(-1);

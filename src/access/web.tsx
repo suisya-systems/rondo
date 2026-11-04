@@ -1663,15 +1663,15 @@ export async function operatorPage(
     view.kind === "end"
       ? await endLapView(ports, wording, view, ports.endsLaps === true ? token : null, threads)
       : null;
-  /**
-   * **Whether a person may be writing on this view.** With script off a reload
-   * throws a half-written draft away, so a view with a box does not reload
-   * itself and says so (#220 S1). The box to answer a gate counts as one:
-   * since D-0083 rule 9 it holds the free-text field a press carries, and it
-   * is drawn wherever a question is standing rather than on a screen of its
-   * own that never reloaded.
+  /*
+   * **Whether a person may be writing on this view is no longer asked**
+   * (rondo#742). It existed for the `<noscript>` meta refresh: with script off
+   * a reload every five seconds threw a half-written draft away, so a view
+   * with a box did not reload itself and said so (#220 S1). Nothing reloads
+   * itself now -- the host says what changed and htmx redraws the ledger in
+   * place, which leaves a draft where it is (`page/rounds.js`) -- so there is
+   * no reload for a draft to survive and no condition to compute.
    */
-  const writingHere = onThreads && (forms || boxes.answeringBox !== null);
   return pageDocument({
     wording,
     view,
@@ -1686,7 +1686,6 @@ export async function operatorPage(
     onThreads,
     forms,
     keepsCurrent,
-    writingHere,
     faces: facesMarkup({
       list: listContent,
       side: sideContent,

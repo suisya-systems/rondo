@@ -165,10 +165,10 @@ export const EN: Chrome = Object.freeze({
   ...TRIAGE_SOURCE_EN,
   lang: "en",
 
-  liveNote: (seconds) =>
-    `Redraws every ${String(seconds)}s, and a redraw writes nothing: no last-look
-mark moves and no presentation is counted. The one thing that writes is the approve button, which
-records the explanation you pressed on and then answers the gate.`,
+  liveNote: `Redraws when something it shows has changed, and a redraw writes nothing: no last-look
+mark moves and no presentation is counted. With scripting off, reload to see the latest. The one
+thing that writes is the approve button, which records the explanation you pressed on and then
+answers the gate.`,
   stillNote: `This view does not update itself: what a press records is the framing you are
 reading, so it holds still while you read it. Reading it writes nothing -- no last-look mark moves
 and no presentation is counted. The one thing that writes is the approve button, which records the
@@ -368,10 +368,11 @@ explanation you pressed on and then answers the gate.`,
   replyNotAnswer: "This reply does not answer the question waiting in this thread.",
   sendBack: "Back to the thread",
   sendBackNote: "Your browser's Back button returns to what you wrote.",
-  threadsLiveNote: (seconds) =>
-    `Redraws every ${String(seconds)}s, and a redraw writes nothing. What writes here is Send: ` +
-    "your words, recorded exactly as written into the thread, under RONDO_APPROVER's name. A message approves nothing.",
-  liveShort: (seconds) => `Live, updates every ${String(seconds)}s`,
+  threadsLiveNote:
+    "Redraws when something it shows has changed, and a redraw writes nothing. With scripting off, " +
+    "reload to see the latest. What writes here is Send: your words, recorded exactly as written " +
+    "into the thread, under RONDO_APPROVER's name. A message approves nothing.",
+  liveShort: "Live, updates when something changes",
   stillShort: "Holds still while you read",
   age: (ago) => ago,
   waitingCount: (count) => `${String(count)} waiting`,

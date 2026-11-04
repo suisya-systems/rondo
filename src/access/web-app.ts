@@ -95,7 +95,7 @@ import { heldAnchor, pressable } from "./read-in.js";
 import { type AddRepositoryRefusal, SIGN_IN_REPAIRS } from "./repository-add.js";
 import { budgetsOf, scopeDraftOf, scopeValuesOf, wholeNumber } from "./scope-form.js";
 import { type Refused as RefusedScreen, refusedPage } from "./screens/refused.js";
-import { SERVED, TOKEN_ROUTE, tokenEvents } from "./served.js";
+import { EVENTS_ROUTE, pageEvents, SERVED } from "./served.js";
 import { APPROVE_BODY, operatorPage } from "./web.js";
 
 /**
@@ -657,6 +657,18 @@ export function newDraftId(
 ): string {
   return `${kind}-${randomUUID()}`;
 }
+
+/**
+ * The id every form carries in the draw `GET /events` compares against
+ * (rondo#742).
+ *
+ * **A fixed one, and it never reaches a browser.** That draw is never sent: it
+ * exists so the host can tell whether what this page shows has changed, and a
+ * minted id would differ on every draw and make every ring a change. The
+ * shapes are the minters' own, so the compared bytes are the real page's but
+ * for these fields.
+ */
+const WATCHED_UUID = "00000000-0000-0000-0000-000000000000";
 
 /** The shape {@link newScopeId} mints, and the only shape `POST /scope` accepts. */
 const PAGE_SCOPE_ID = /^scope-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -1622,6 +1634,9 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     readIn = null,
     policies = null,
     naming = null,
+    // **The bell, taken off the reading half too** (rondo#742): what tells a
+    // reader something changed is not something the renderer draws.
+    changes = null,
     ...reading
   } = ports;
   const app = new Hono<PageEnv>();
@@ -1771,9 +1786,40 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     return c.body(html, 200, { "content-type": "text/html; charset=utf-8" });
   });
 
-  // The press token, to a page drawn by an earlier process (rondo#674); none
-  // where `GET /` draws no form.
-  app.get(TOKEN_ROUTE, () => tokenEvents(answer === null ? null : token));
+  // **What the host tells an open page** (rondo#674, rondo#742): the press
+  // token, to a page drawn by an earlier process, and then one word each time
+  // what this page shows has changed. The view is the one the page carries in
+  // its own query, so the comparison is of the reader's own screen; the
+  // language is resolved by the same five steps `GET /` uses, because a page
+  // and the bytes it is compared against must be in one set.
+  app.get(EVENTS_ROUTE, (c) => {
+    const query = new URL(c.req.url).searchParams;
+    const wording = resolveLanguage({
+      query: query.get("lang"),
+      cookie: c.req.header("cookie"),
+      host: reading.hostLanguage,
+      header: c.req.header("accept-language"),
+    });
+    const view = viewOf(query);
+    return pageEvents({
+      token: answer === null ? null : token,
+      changes,
+      // **Drawn with fixed ids**, because a minted one differs on every draw
+      // and would make every ring a change. Nothing is sent to the reader, so
+      // no form of these ids ever reaches a browser.
+      shown: async () =>
+        await operatorPage(
+          naming === null ? reading : { ...reading, namingToken: token },
+          answer === null ? null : token,
+          view,
+          wording,
+          say === null ? null : (kind) => `${kind}-${WATCHED_UUID}`,
+          scope === null ? null : () => `scope-${WATCHED_UUID}`,
+          scope === null && revise === null ? null : () => `lap-${WATCHED_UUID}`,
+        ),
+      signal: c.req.raw.signal,
+    });
+  });
 
   // **The one write route**: the lap-end `approve` press (D-0059 section 5a,
   // first row). Everything that decides whether this request may write happens

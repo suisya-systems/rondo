@@ -28,6 +28,7 @@ import type { EndPort, HoldsPort, ReleasePort } from "../line-ports.js";
 import type { PublishRepositoryPort } from "../publish-repository.js";
 import type { TabOutcome } from "../reach.js";
 import type { AddRepositoryPort } from "../repository-add.js";
+import type { PageChanges } from "../served.js";
 import type {
   AnswerPort,
   ConflictFixed,
@@ -555,4 +556,13 @@ export interface ServedPorts extends WebPorts {
   readonly policies?: PolicyPort | null;
   /** Present only while nobody is named: the press that names the approver (rondo#675). */
   readonly naming?: NamingPort | null;
+  /**
+   * The bell that says something under this host has changed (rondo#742).
+   *
+   * Absent or null is a host with no bell: `GET /events` then answers with the
+   * press token alone, and a page keeps itself current only by being reloaded.
+   * The host builds it in `src/access/page-changes.ts`; the renderer never
+   * holds it, because telling a reader is not drawing a page.
+   */
+  readonly changes?: PageChanges | null;
 }
