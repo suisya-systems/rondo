@@ -20661,6 +20661,33 @@ in order to answer is on the page, and a fold holds only what they may want to c
 fold that has to be opened before a button can honestly be pressed is a layout bug, not a
 preference.
 
+> **Annotation (2026-11-04, from rondo#736), and not additive.** Added after this entry was
+> accepted, by the request that narrowed what each screen draws before a person acts. **A reading
+> is drawn open for the press it is material for, and that press is named rather than assumed.**
+> This rule had been read as *a reading stands open wherever a press stands over it*, which is how
+> `D-0083` rule 9.4 comes to quote the findings in the gate's box unfolded. Where the press is a
+> worker's own question, what is being answered is the question and its options; a reviewer's
+> findings written out above them are evidence stacked in front of a choice. So the line the rule
+> draws is drawn per press:
+>
+> - **On the screen that asks the person to decide something in the middle of the work, the review
+>   result is folded, and a press opens it.** The card keeps its place and its heading, its verdict
+>   and its coverage -- the reading's shape rather than its text -- and the findings themselves sit
+>   one press behind their own summary (`src/access/page/approve.tsx` for the copy quoted beside the
+>   question, `src/access/page/gate-material.tsx` for the material face's card). It is a `details`,
+>   so folded is not dropped: every word is in the document and `page/app.css` draws every fold open
+>   where script is off (`D-0029` rule 2).
+> - **On every other screen the review result stays open.** The gate's own approve press is answered
+>   over the findings quoted in its box, and they stay unfolded there, which is what this rule asks
+>   of that press. `D-0083` rule 9.4 is unchanged: it is about the box a gate is answered in, and a
+>   worker's question is not that box.
+>
+> What the first sentence of this rule still decides is both halves: a fold holds what a person may
+> want to check afterwards, and whether a reading is that or is what the press is answered over is
+> asked of *the press on the screen*. Nothing above is edited.
+>
+> - Amends: D-0082 rule 7
+
 **8. Dark is the reader's setting and rondo offers no switch.** Both palettes stay written out with
 the contrast floors already recorded, under `prefers-color-scheme` alone. A toggle would be a
 preference rondo would have to store, name to the person and restore, and `D-0076` rule 3 is what
