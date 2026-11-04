@@ -87,7 +87,6 @@ import {
   type LanguageAsked,
   resolveLanguage,
 } from "./page-logic/language.js";
-import { readOncePerDraw } from "./page-logic/model.js";
 import { viewHref, viewOf } from "./page-logic/routes.js";
 import { publishRepositoryRoute } from "./publish-repository.js";
 import { answeredRevise, questionRevise } from "./question.js";
@@ -1758,12 +1757,8 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (asked.query !== wording.lang) {
       return c.redirect(viewHref(view, wording.lang), 303);
     }
-    // **One draw, one reading of the rows** (`readOncePerDraw`): the wrapper is
-    // built here, with the request, and goes out of reach with the response, so
-    // the whole of what it holds is this page's own reads and no byte of the
-    // page changes.
     const html = await operatorPage(
-      readOncePerDraw(naming === null ? reading : { ...reading, namingToken: token }),
+      naming === null ? reading : { ...reading, namingToken: token },
       answer === null ? null : token,
       view,
       wording,
