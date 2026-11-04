@@ -19,6 +19,7 @@
  * reads reach the store, not how long they take.
  */
 import { expect, test } from "vitest";
+import { requestRepository } from "../../../src/access/model-draft/host.js";
 import type { WebPorts } from "../../../src/access/page/contract.js";
 import { pageModel, readOncePerDraw } from "../../../src/access/page-logic/model.js";
 import { EN } from "../../../src/access/wording.js";
@@ -107,6 +108,67 @@ test("a read is held under its own arguments, so two requests are two reads", as
   await ports.record.scopesFor("req-lap-waiting");
   await ports.record.scopesFor("req-asked");
   expect(asked).toEqual(["scopesFor(req-lap-waiting)", "scopesFor(req-asked)"]);
+});
+
+/**
+ * **The one read that is not a port method** (rondo#757).
+ *
+ * `repositoryFor` answers *where does this request's work run*, and it answers
+ * it off the whole live and ended ledger, the thread and the setup plans
+ * (`requestRepository`). `scopesAwaitingYou` asks it for **every request**, on
+ * every view, so a port that reads the store out of its own closure read the
+ * ledger once per request -- 19 times over the store at hand, on a page the
+ * wrapper above had already brought to one reading, and 1.3 to 1.5 s a draw.
+ *
+ * Both halves are held here: that the draw's reading is what answers it, and
+ * what a port reading a store of its own costs instead. The second is the
+ * `boundary-is-not-vacuous` habit pointed at a count -- a draw that stopped
+ * asking for the reckoning at all would also read the ledger once, and would
+ * pass the first assertion saying nothing -- so the test plants the shape that
+ * has to cost more and shows it costing more.
+ */
+test("a request's repository is reckoned off the draw's reading, not off the store again", async () => {
+  const made = await world();
+  const asked: string[] = [];
+  const ports = counting(portsOver(made, "ada", []), asked);
+  const reckon = ports.repositoryFor;
+  if (reckon === undefined) {
+    throw new Error("the world's ports no longer reckon a request's repository");
+  }
+  const reckoned: string[] = [];
+  const drawn = await operatorPage(
+    {
+      ...ports,
+      repositoryFor: async (id, reads) => {
+        reckoned.push(id);
+        return await reckon(id, reads);
+      },
+    },
+    "t",
+    { kind: "summary" },
+    EN,
+  );
+  // Asked for every request the store holds, and the ledger read once for all
+  // of them: the rows are the draw's, which is what the wrapper binds.
+  expect(new Set(reckoned)).toEqual(new Set(["req-lap-waiting", "req-lap-ended", "req-asked"]));
+  expect(count(asked, "terminalIterations")).toBe(1);
+  expect(drawn).toContain("The work that waits at its gate");
+
+  // And the port as the host used to hold it -- the same reckoning over a
+  // store of its own, ignoring the reads it is handed -- reads the ledger
+  // again for each request it is asked about.
+  asked.length = 0;
+  await operatorPage(
+    {
+      ...ports,
+      repositoryFor: async (id) =>
+        await requestRepository({ store: ports.store, record: ports.record, now: ports.now }, id),
+    },
+    "t",
+    { kind: "summary" },
+    EN,
+  );
+  expect(count(asked, "terminalIterations")).toBe(1 + new Set(reckoned).size);
 });
 
 test("a wrapper lives for one draw, so the next draw reads the rows again", async () => {
