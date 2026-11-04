@@ -25,6 +25,15 @@
  * slowest draw is reported in the message either way, so a run that was close
  * to the line says so.
  *
+ * **The judgement is on the durations as measured; rounding is for the eye
+ * only.** `performance.now()` answers in fractional milliseconds, and the issue
+ * asks for a failure when a page takes *more than* half a second, so the
+ * comparison is against the raw median: a median of 500.4 ms is over a 500 ms
+ * budget and fails. `Math.round` appears once, in the failure message, where a
+ * reader wants `117` and not `117.33299999999997`. Rounding before the
+ * comparison would read 500.4 ms as exactly on the line and pass it, which is
+ * what the second test in this file pins.
+ *
  * **The headroom, measured.** On this machine on 2026-11-05 the measured draws
  * are 104 to 157 ms, so the budget is some four times what a healthy page
  * costs. That is deliberate: this is a floor under runner variance, not a
@@ -292,13 +301,16 @@ test(
         durations.push(performance.now() - started);
         expect(page.status).toBe(200);
       }
-      const taken = durations.map((one) => Math.round(one));
       // The median, so that one draw the runner stalled is not a verdict; the
-      // slowest is in the message, so a run near the line can be read.
+      // slowest is in the message, so a run near the line can be read. What is
+      // compared is the median of the durations as measured -- the rounding
+      // below is the message's, because a budget of half a second that a
+      // 500.4 ms page passes is not the budget the issue asks for.
+      const shown = durations.map((one) => Math.round(one));
       expect(
-        median(taken),
-        `a page over ${AT_HAND.iterations} laps took ${taken.join(", ")} ms ` +
-          `(median ${median(taken)} ms, slowest ${Math.max(...taken)} ms), ` +
+        median(durations),
+        `a page over ${AT_HAND.iterations} laps took ${shown.join(", ")} ms ` +
+          `(median ${Math.round(median(durations))} ms, slowest ${Math.max(...shown)} ms), ` +
           `and the budget is ${BUDGET_MS} ms`,
       ).toBeLessThanOrEqual(BUDGET_MS);
     } finally {
@@ -312,3 +324,27 @@ test(
   // asserts about duration it asserts itself, in milliseconds.
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
+
+/**
+ * The half-second above is a budget a page may *not exceed*, and the test
+ * before this one spends a minute building a store before it can say so, which
+ * is the wrong place to discover that the comparison reads a slow page as a
+ * fast one. So the one arithmetic step between the measurements and the verdict
+ * -- take the median, compare it as measured -- is checked here over durations
+ * written by hand, where the interesting value can be put on the line on
+ * purpose.
+ *
+ * 500.4 ms is that value: a page that took longer than half a second, by less
+ * than a millisecond. It fails, and it fails because the median is compared
+ * before it is rounded -- the second expectation is the same five draws through
+ * the rounding the failure message uses, and it passes, which is what judging
+ * on rounded values would have done to a page over budget.
+ */
+test("a median over the budget by a fraction of a millisecond is over the budget", () => {
+  const draws = [117, 118, 500.4, 502, 640] as const;
+  expect(median(draws)).toBeGreaterThan(BUDGET_MS);
+  expect(median(draws.map((one) => Math.round(one)))).toBeLessThanOrEqual(BUDGET_MS);
+  // And the budget is a ceiling rather than a limit a page has to stay under:
+  // half a second exactly is inside half a second, so it passes.
+  expect(median([117, 118, BUDGET_MS, 502, 640])).toBeLessThanOrEqual(BUDGET_MS);
+});
