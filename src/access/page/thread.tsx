@@ -253,11 +253,24 @@ function Message({ message, open }: { readonly message: ThreadMessage; readonly 
        */}
       <details className="msg-fold">
         <summary>
-          <span className="msg-who">{message.said}</span>
-          {message.waiting === null ? null : <span className="msg-wait">{message.waiting}</span>}
-          {message.answered === null ? null : (
-            <span className="msg-answered">{message.answered}</span>
-          )}
+          {/*
+           * **Who said it and where it stands are one column, not a column
+           * each.** The marks are what a message has that an event line does
+           * not, and they come and go: a question carries *waiting on you*, an
+           * answer carries which answer it was, and most messages carry
+           * neither. Drawn as children of the row they would be extra columns
+           * the row's grid has no track for, and the last column -- the press
+           * that opens the words -- would wrap to a second line, which is the
+           * one thing the record must not do. Inside this column the row is
+           * four children whatever the marks do.
+           */}
+          <span className="msg-said">
+            <span className="msg-who">{message.said}</span>
+            {message.waiting === null ? null : <span className="msg-wait">{message.waiting}</span>}
+            {message.answered === null ? null : (
+              <span className="msg-answered">{message.answered}</span>
+            )}
+          </span>
           {/*
            * **The first line, as written** (`lang=""`, as the words below it):
            * rondo does not know what language it is in and never reflows it.
