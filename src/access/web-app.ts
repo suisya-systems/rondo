@@ -2070,11 +2070,10 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (draft === null) {
       return scopeRefused(c, 400, "scopeRefusedFields", request, rounds, drawnOver);
     }
-    // **Which of the screen's two presses this is** (the main one, or the one
-    // that only approves): the main button carries its own `start` field, and a
-    // browser posts the name and value of the button that was pressed and of no
-    // other. The field is what *widens* the act, so a body without it only
-    // approves -- which is the safe way round.
+    // **Which of the screen's two presses this is**: the main button carries
+    // its own `start` field, and a browser posts the name and value of the
+    // button pressed and of no other. The field is what *widens* the act, so a
+    // body without it only approves -- the safe way round.
     const alsoStarts = form["start"] === "1";
     const iterationId = form["iteration"];
     if (alsoStarts && (typeof iterationId !== "string" || !PAGE_ITERATION_ID.test(iterationId))) {
@@ -2089,8 +2088,7 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
         requestMessageId: request,
         scopeDecisionId,
         planDigest: draft.planDigest,
-        // rondo#462: the form's own field, empty for the host's default, and
-        // passed on rather than matched here.
+        // rondo#462: the form's own field, empty for the host's default.
         workerProvider: chosenWorker(form["worker_provider"]),
         whenReady: false,
       }));

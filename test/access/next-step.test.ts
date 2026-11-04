@@ -383,7 +383,9 @@ test("the presses that start a lap carry their busy label and what a lap waits o
   expect(revise.match(/\{wording\.lapBusyNote\}/g)).toHaveLength(2);
   // The plan's own start is drawn in `screens/plan-start.tsx` (rondo#674).
   const scope =
-    source("src/access/screens/scope.tsx") + source("src/access/screens/plan-start.tsx");
+    source("src/access/screens/scope.tsx") +
+    source("src/access/screens/scope-press.tsx") +
+    source("src/access/screens/plan-start.tsx");
   // Both starts -- the plan's own and the one under an approval -- say they are
   // working, and so does the screen's own press that approves *and* starts; the
   // three presses that only record say the shorter thing. Each is drawn once:
