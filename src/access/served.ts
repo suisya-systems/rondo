@@ -127,7 +127,10 @@ const frame = (event: string, data: string): string => `event: ${event}\ndata: $
  */
 export function pageEvents({ token, changes, shown, signal }: PageEvents): Response {
   const headers = { "content-type": "text/event-stream", "cache-control": "no-store" };
-  const head = `retry: ${String(RETRY_MS)}\n\n` + (token === null ? "" : frame("token", token));
+  // `retry` rides on the first frame, as it did when the token was the whole
+  // of the answer; with no token it is a frame of its own and needs its own
+  // blank line to close it.
+  const head = `retry: ${String(RETRY_MS)}\n` + (token === null ? "\n" : frame("token", token));
   if (changes === null) {
     return token === null ? new Response(null, { status: 204 }) : new Response(head, { headers });
   }

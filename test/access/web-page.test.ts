@@ -57,7 +57,11 @@ test("the page draws the request it selected, and says what a redraw does", asyn
   // The page says out loud what a redraw does, because a screen that moves a
   // last-look mark by being left open is worse than one that says it does not.
   expect(html).toContain("a redraw writes nothing");
-  expect(html).toContain('http-equiv="refresh"');
+  // **And nothing on it refreshes itself** (rondo#742): the poll and the
+  // `<noscript>` refresh beside it are gone, and the redraw waits on the
+  // host's word instead.
+  expect(html).not.toContain('http-equiv="refresh"');
+  expect(html).toContain('hx-trigger="rondo:change from:body"');
 });
 
 test("looking at the page writes nothing", async () => {
@@ -231,14 +235,17 @@ test("it serves the page on localhost, and only the one page", async () => {
 
   // **A request's thread is the same page at a second address**, and the
   // redraw it serves points back at that address -- so what an operator
-  // opened is still what is drawn five seconds later. This was the reading
-  // fold's property before D-0083 took the fold away; it is the same claim
-  // about the same mechanism, made where the page still has two addresses.
+  // opened is still what is drawn when the host says something changed. This
+  // was the reading fold's property before D-0083 took the fold away; it is
+  // the same claim about the same mechanism, made where the page still has two
+  // addresses. The address is the redraw's own `hx-get` now that nothing
+  // reloads the document (rondo#742).
   const withThread = await fetch(`${base}/?thread=req-i-0001`);
   expect(withThread.status).toBe(200);
   const threadHtml = await withThread.text();
   expect(threadHtml).toContain("do the thing");
-  expect(threadHtml).toContain('content="5;url=/?thread=req-i-0001&amp;lang=en"');
+  expect(threadHtml).toContain('hx-get="/?thread=req-i-0001&amp;lang=en"');
+  expect(threadHtml).not.toContain('http-equiv="refresh"');
 
   // One page and no router: a typo'd path says so rather than quietly showing
   // the only page there is.
@@ -543,8 +550,9 @@ test("liveness is per view: two views poll and swap, and the answer view updates
       '<script src="/keys.js" defer="">',
       '<script src="/composer.js" defer="">',
       '<script src="/chime.js" defer="">',
-      // The press token, kept current on every view (rondo#674).
-      '<script src="/token.js" defer="">',
+      // The one stream from the host: the press token, kept current on every
+      // view (rondo#674), and the word that this view changed (rondo#742).
+      '<script src="/live.js" defer="">',
       // What the redraw changed, said in colour (rondo#494 item 1): loaded
       // where the page keeps itself current, since that is what it listens to.
       '<script src="/changed.js" defer="">',
@@ -573,7 +581,9 @@ test("liveness is per view: two views poll and swap, and the answer view updates
         // Where the tab reports what its notice did, and only with a writer's
         // token (rondo#414).
         'data-notice-to="/notice" data-notice-token="t" ' +
-        `hx-get="${href}" hx-trigger="every 5s" hx-select="#ledger" hx-ext="morph" ` +
+        // **Pushed, not polled** (rondo#742): the trigger is the event
+        // `page/live.js` fires when the host says this view's bytes changed.
+        `hx-get="${href}" hx-trigger="rondo:change from:body" hx-select="#ledger" hx-ext="morph" ` +
         'hx-swap="morph:outerHTML" ' +
         'hx-select-oob="#waiting-count">',
     );
@@ -639,12 +649,11 @@ test("liveness is per view: two views poll and swap, and the answer view updates
         },
       ],
     });
-    // **No meta refresh where a person may be writing** (#220 S1): both of
-    // these carry a box, and with script off a reload would throw a
-    // half-written draft away. The page says which of the two it is, in the
-    // sentence at its foot.
+    // **No meta refresh anywhere** (rondo#742): nothing on this page reloads
+    // itself, so a half-written draft is never thrown away by a clock, and the
+    // page says what it does instead in the sentence at its foot.
     expect(html).not.toContain('http-equiv="refresh"');
-    expect(html).toContain("Redraws every 5s, and a redraw writes nothing");
+    expect(html).toContain("Redraws when something it shows has changed");
   }
   // **The faces are inside what the refresh swaps**, and the boxes inside
   // them say they survive it: counted by `<div>` depth from `#ledger`'s own
@@ -679,8 +688,9 @@ test("liveness is per view: two views poll and swap, and the answer view updates
     '<script src="/keys.js" defer="">',
     '<script src="/composer.js" defer="">',
     '<script src="/chime.js" defer="">',
-    // The press token is kept current on a still view too (rondo#674).
-    '<script src="/token.js" defer="">',
+    // The press token is kept current on a still view too (rondo#674); the
+    // change half of the same stream is what a still view does not act on.
+    '<script src="/live.js" defer="">',
   ]);
   expect(still).not.toMatch(/hx-[a-z]+=/);
   expect(still).not.toContain("htmx");
