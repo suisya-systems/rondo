@@ -40,7 +40,7 @@ export const fresh = () => {
 };
 
 /**
- * The bell the host rings when something beside the store is written
+ * The bell the host rings when the store is written
  * (rondo#742, `src/access/page-changes.ts`), rung by hand instead.
  *
  * Here rather than in one suite because two ask different things of it: what

@@ -85,7 +85,7 @@ export interface PageChanges {
    * the page it serves with the mark of that moment
    * (`data-drawn-at` on `#ledger`), the page hands it back when it opens the
    * stream, and two equal marks are a proof no caller has to take on trust:
-   * nothing beside the store has been written since that page was drawn, so
+   * the store has not been written since that page was drawn, so
    * what the reader is holding is what the host would draw now. Different
    * marks are the three cases a comparison against the host's *present* view
    * would miss -- a write between the page's own `GET` and this stream, a
