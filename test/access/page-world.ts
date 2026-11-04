@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { expect } from "vitest";
+import { requestRepository } from "../../src/access/model-draft/host.js";
 import type { PublishReading } from "../../src/access/page/contract.js";
 import { reviseDrafterHost } from "../../src/access/revise-draft/host.js";
 import type { PageChanges } from "../../src/access/served.js";
@@ -29,6 +30,7 @@ import { admittedPlan, planPayload, type RunPlan, runPlan } from "../../src/refr
 import type { JsonRecord } from "../../src/store/records.js";
 import { advisoryRecord, iterationStore } from "../../src/store/sqlite.js";
 import { ownLane } from "../lane-claims.js";
+import { AGENT_TYPE_INPUT } from "./fixtures/drafter.js";
 
 export const fresh = () => {
   const connection = new DatabaseSync(":memory:");
@@ -189,6 +191,37 @@ export async function openRequest(
   });
   if (outcome.kind !== "recorded") {
     throw new Error(`the fixture did not record the request: ${JSON.stringify(outcome)}`);
+  }
+}
+
+/**
+ * **A plan rondo holds** (D-0075 rule 2.3), as the row setup writes.
+ *
+ * A world whose only rows are requests is a world rondo holds no plan in, and
+ * `D-0191` rule 2 gives such a store one next step before any other: run
+ * setup. That was invisible while `portsOver` handed the page no reckoning of
+ * where a request's work runs; now that it hands the host's own
+ * (`repositoryFor`), a suite about the step *after* that one -- setting a
+ * scope, a question in the thread -- says here that rondo has a plan to run
+ * it on. A lap reserved in the world already is one, so a fixture with a lap
+ * in it needs none of this.
+ */
+export async function holdsAPlan(
+  world: ReturnType<typeof fresh>,
+  setupId = "setup-held",
+): Promise<void> {
+  const recorded = await world.record.recordSetupPlan({
+    setupId,
+    // **With an agent type that builds** (`agentTypeRecordOf`): a document
+    // whose bounds cannot be rebuilt to their digest is no plan rondo holds
+    // (D-0075 rule 2.4), and `PLAN`'s own input is the empty record every
+    // other fixture here is content with.
+    plan: { ...planFor("i-setup"), agent_type_input: AGENT_TYPE_INPUT },
+    recordedBy: "ada",
+    recordedAtMs: 500,
+  });
+  if (recorded.kind !== "recorded") {
+    throw new Error(`the fixture did not record a held plan: ${JSON.stringify(recorded)}`);
   }
 }
 
@@ -509,12 +542,38 @@ export function portsOver(
   // here, and the state the summary draws no publish link in.
   publishing: PublishReading | null = null,
 ): ServedPorts {
+  const record =
+    scopeDecision === null
+      ? world.record
+      : { ...world.record, scopeDecisionAdmitting: async () => scopeDecision };
   return {
     store: world.store,
-    record:
-      scopeDecision === null
-        ? world.record
-        : { ...world.record, scopeDecisionAdmitting: async () => scopeDecision },
+    record,
+    /**
+     * **The two reading ports a host always hands the page** (rondo#757),
+     * handed here so that a suite over this world draws the page the way the
+     * host draws it. They were the two the page was given over a real store
+     * and not over these rows, which is how the reckoning of a request's
+     * repository came to read the whole ledger once per request without a
+     * suite noticing: `page-budget.test.ts` was measuring a draw that never
+     * asked for it.
+     *
+     * **Nothing owes a draft here**, because no drafter runs in these suites.
+     * That is the answer `drafter.owed()` gives a host between its passes, and
+     * the same one the page took from the absent port, so the empty set
+     * changes no page.
+     */
+    draftsOwed: async () => await Promise.resolve(new Set<string>()),
+    /**
+     * And the host's own reckoning (`repositoryFor` in `src/access/host.ts`),
+     * over this world's rows: through the reads the draw hands it where it has
+     * them, and over the store itself where it does not.
+     */
+    repositoryFor: async (requestMessageId, reads) =>
+      await requestRepository(
+        { ...(reads ?? { store: world.store, record }), now: () => 5_000 },
+        requestMessageId,
+      ),
     hostLanguage,
     now: () => 5_000,
     // The page draws `inbox`'s lines, so it carries `inbox`'s one outward

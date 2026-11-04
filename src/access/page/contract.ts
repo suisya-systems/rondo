@@ -271,8 +271,21 @@ export interface WebPorts extends InboxReadPorts {
    * Which repository a request's work runs in (rondo#383, D-0090), with the
    * held ones whose worker can run no build or test (`requestRepository`), or
    * absent where nothing reckons it, and then the thread says nothing of it.
+   *
+   * **`reads` is the rows the asking draw has already read** (rondo#757). This
+   * reckoning takes the whole live and ended ledger, the thread and the setup
+   * plans, and it is asked once per request on the list -- so a port that
+   * reads the store out of its own closure reads it again for every request,
+   * however many times `readOncePerDraw` has answered those same reads for the
+   * page being drawn. `readOncePerDraw` binds this argument to the reads it is
+   * holding, and it is the only caller that passes it: absent, the port reads
+   * the store itself, which is what a caller outside a draw wants (the host's
+   * own reckoning of whose turn it is, `src/access/host.ts`).
    */
-  readonly repositoryFor?: (requestMessageId: string) => Promise<{
+  readonly repositoryFor?: (
+    requestMessageId: string,
+    reads?: Pick<WebPorts, "store" | "record">,
+  ) => Promise<{
     readonly work: WorkRepository;
     readonly unbuilt: readonly string[];
     /** The unheld repository is one rondo proposed (D-0191 rule 3.2). Absent is false. */

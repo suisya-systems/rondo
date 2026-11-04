@@ -22,6 +22,7 @@ import { type JsonRecord, scopePayloadWithDefaults } from "../../src/store/recor
 import {
   fresh,
   gateWithChecks,
+  holdsAPlan,
   mint,
   openGate,
   openRequest,
@@ -85,6 +86,7 @@ function drawnOnceOnTop(html: string, id: string) {
 test("a request with no work yet draws *set the scope* filled: it is the only way forward", async () => {
   const world = fresh();
   await openRequest(world, "req-1", "add a retry budget");
+  await holdsAPlan(world);
   const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
   expect(classOf(html, "scope-req-1")).toBe(NEXT);
   drawnOnceOnTop(html, "scope-req-1");
@@ -411,6 +413,7 @@ test("setup's last word is the one that opens the page, and no terminal step com
 test("a scope the person approved themselves is a start to go to, not a scope to set again (Codex)", async () => {
   const world = fresh();
   await openRequest(world, "req-1", "add a retry budget");
+  await holdsAPlan(world);
   const ports = portsOver(world);
   // The person's own scope, approved and in force: what the store answers is
   // all this reads, so the three reads are answered as the store would.
@@ -432,6 +435,7 @@ test("a scope the person approved themselves is a start to go to, not a scope to
 test("an approved draft of rondo's is reached without its decision, so a newer draft stays on its screen (Codex)", async () => {
   const world = fresh();
   await openRequest(world, "req-1", "add a retry budget");
+  await holdsAPlan(world);
   const ports = portsOver(world);
   const record = Object.assign(Object.create(ports.record), {
     scopesFor: async () => [
@@ -558,6 +562,7 @@ test("a question waiting in the thread is the next step, and no scope is offered
   // question it had not waited for.
   const world = fresh();
   await openRequest(world, "req-1", "Do #200, please.");
+  await holdsAPlan(world);
   const asked = await world.record.recordThreadMessage({
     messageId: "ask-1",
     body: "Which of the three options?",
@@ -656,6 +661,7 @@ test("a drafter that drafted nothing asks nothing: the person's own scope stays 
   // set the scope themselves; withholding the form there would leave no way on.
   const world = fresh();
   await openRequest(world, "req-1", "Do #200, please.");
+  await holdsAPlan(world);
   const said = await world.record.recordThreadMessage({
     messageId: "drafter-1",
     body: "rondo's drafter wrote no draft for this: claude -p exited 1",
@@ -680,6 +686,7 @@ test("a stopped lap's ask is answered first too: the band points to it, not back
   // until it is answered the line is held, so a scope is no way forward.
   const world = fresh();
   await openRequest(world, "req-1", "Do #200, please.");
+  await holdsAPlan(world);
   const asked = await world.record.recordThreadMessage({
     messageId: "lap-stopped-i-0001",
     body: chromeFor("ja").lapStoppedSaid(null),

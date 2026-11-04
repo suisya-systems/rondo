@@ -29,6 +29,7 @@ import { laneFor, ownLane } from "../lane-claims.js";
 import { openRequest, REQUEST } from "../request-fixture.js";
 import {
   fresh,
+  holdsAPlan,
   mint,
   openGate,
   operatorPage,
@@ -1949,6 +1950,7 @@ test("a drafter run that drafted nothing is said as what happened, with the way 
   const world = fresh();
   const requestId = "request-nodraft";
   await seedScopeRequest(world, requestId, "Fix it, please.");
+  await holdsAPlan(world);
   const said = async (messageId: string, body: string, bases: JsonRecord[]) => {
     const outcome = await world.record.recordThreadMessage({
       messageId,

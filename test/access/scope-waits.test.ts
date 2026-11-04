@@ -21,6 +21,7 @@ import { planDigest } from "../../src/store/plan.js";
 import { agentTypeDigestOf, world as drafterWorld, planDocument } from "./fixtures/drafter.js";
 import {
   fresh,
+  holdsAPlan,
   openGate,
   openRequest,
   operatorPage,
@@ -45,6 +46,7 @@ function nextCard(html: string): string {
 test("while rondo owes the draft, the thread says it is rondo's turn and offers no scope", async () => {
   const world = fresh();
   await openRequest(world, "req-1", "Do #200, please.");
+  await holdsAPlan(world);
   const html = await operatorPage(
     owing(world, async () => new Set(["req-1"])),
     "t",
@@ -69,6 +71,7 @@ test("while rondo owes the draft, the thread says it is rondo's turn and offers 
 test("once nothing is owed, the scope card appears, marked for the redraw's wash (rondo#494)", async () => {
   const world = fresh();
   await openRequest(world, "req-1", "add a retry budget");
+  await holdsAPlan(world);
   const html = await operatorPage(
     owing(world, async () => new Set()),
     "t",
@@ -88,6 +91,7 @@ test("once nothing is owed, the scope card appears, marked for the redraw's wash
 test("a drafter that drafted nothing hands the scope to the person, saying so (rondo#495 item 2)", async () => {
   const world = fresh();
   await openRequest(world, "req-1", "Do #200, please.");
+  await holdsAPlan(world);
   const said = await world.record.recordThreadMessage({
     messageId: "drafter-1",
     body: "rondo's drafter wrote no draft for this: claude -p exited 1",
@@ -113,6 +117,7 @@ test("a drafter that drafted nothing hands the scope to the person, saying so (r
 test("a read of what is owed that fails withholds the scope rather than offering it (Codex)", async () => {
   const world = fresh();
   await openRequest(world, "req-1", "add a retry budget");
+  await holdsAPlan(world);
   const html = await operatorPage(
     owing(world, async () => {
       throw new Error("the threads could not be read");
@@ -127,6 +132,7 @@ test("a read of what is owed that fails withholds the scope rather than offering
 test("with no drafter host, nothing is owed and the page is as it was", async () => {
   const world = fresh();
   await openRequest(world, "req-1", "add a retry budget");
+  await holdsAPlan(world);
   const html = await operatorPage(portsOver(world), "t", threadOf("req-1"));
   expect(nextCard(html)).toContain(EN.nextStepScope);
   expect(html).not.toContain(EN.nextStepDrafting);
