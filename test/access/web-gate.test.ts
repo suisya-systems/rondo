@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 
 import type {} from "../../src/access/inbox.js";
 import { viewHref } from "../../src/access/page-logic/routes.js";
+import { questionBody, storedOptions } from "../../src/access/question.js";
 import { JA } from "../../src/access/wording/ja.js";
 import { chromeFor, EN } from "../../src/access/wording.js";
 import { revisionPlan } from "../../src/refrain/revision.js";
@@ -1445,6 +1446,131 @@ test("the answer box at a worker's question carries the gate's revise, with the 
   const bare = unscoped.slice(unscoped.indexOf('id="composer"'));
   expect(bare).toContain('action="/answer-ask');
   expect(bare).not.toContain("revise_iteration");
+});
+
+/**
+ * A worker's question as its block offered it (rondo#704): one question, two
+ * ways on with what each gives up, the one it recommends, and the part of the
+ * work that waits on the answer.
+ */
+const BLOCK = {
+  question: "Should the retry budget be read from the config file?",
+  options: [
+    { text: "config.ts", givesUp: "gives up a file of the budget's own" },
+    { text: "budget.ts", givesUp: "gives up reading every setting in one place" },
+  ],
+  recommended: 0,
+  recommendation: "every other budget is read from the config file",
+  waits: "the retry budget's own tests, which cannot be written until this is settled",
+} as const;
+
+/** The commit the relay puts at the end of the ask's body, which no screen says. */
+const ASKED_COMMIT = "cafe1234cafe1234cafe1234cafe1234cafe1234";
+
+/** The question {@link BLOCK} put, recorded the way `relayQuestion` records it. */
+async function workerAsksWithOptions(world: ReturnType<typeof fresh>): Promise<void> {
+  const asked = await world.record.recordThreadMessage({
+    messageId: "question-i-0001",
+    body: questionBody(BLOCK, ASKED_COMMIT),
+    authorKind: "drafter",
+    authorId: "rondo/worker-question/1",
+    inReplyTo: "req-1",
+    atMs: 3_500,
+    bases: [
+      { form: "message", messageId: "req-1" },
+      { form: "iteration", iterationId: "i-0001" },
+    ],
+    asks: true,
+    askOptions: storedOptions(BLOCK.options, BLOCK.recommended, BLOCK.recommendation),
+  });
+  expect(asked.kind).toBe("recorded");
+}
+
+/** The thread the question waits in, as a person reads it. */
+const questionPage = async (world: ReturnType<typeof fresh>, wording = EN): Promise<string> =>
+  await operatorPage(
+    { ...portsOver(world, "ada", [], null, "decision-1"), material: structured },
+    "t",
+    { kind: "thread", messageId: "req-1", to: null },
+    wording,
+    (kind) => `${kind}-00000000-0000-4000-8000-000000000009`,
+    null,
+    () => "lap-00000000-0000-4000-8000-000000000001",
+  );
+
+/** How many times `said` is on the page. */
+const times = (html: string, said: string): number => html.split(said).length - 1;
+
+test("a worker's question says the question and which work waits, and offers each option once, as a press (rondo#704)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await workerAsksWithOptions(world);
+  const html = await questionPage(world);
+
+  // Always on screen: the question in one sentence, and what waits on it.
+  expect(html).toContain(BLOCK.question);
+  expect(html).toContain(EN.questionWaitsOn);
+  expect(html).toContain(BLOCK.waits);
+  // Each way on once -- as a press, with the reason beside it -- and the
+  // recommended one said with the worker's reason for recommending it.
+  for (const [at, option] of BLOCK.options.entries()) {
+    expect(times(html, option.text)).toBe(1);
+    expect(times(html, option.givesUp)).toBe(1);
+    expect(html).toContain(`value="option:${String(at)}"`);
+  }
+  expect(html).toContain(EN.answerRecommended);
+  expect(html).toContain(EN.answerRecommends(1, BLOCK.recommendation));
+  // And what answering starts, where the press that starts it is.
+  expect(html).toContain(EN.answerReviseOptionsNote);
+
+  // Gone from the screen: rondo's numbered list of the same options inside
+  // the ask's body, and the commit the body ends with (D-0076).
+  expect(html).not.toContain("1. config.ts");
+  expect(html).not.toContain(ASKED_COMMIT);
+  expect(html).not.toContain(ASKED_COMMIT.slice(0, 7));
+});
+
+test("the drafted change under a worker's question is read on a press (rondo#704)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  await draftRevise(world, REVISE_ANSWER);
+  await workerAsksWithOptions(world);
+  const box = (await questionPage(world)).slice(
+    (await questionPage(world)).indexOf('id="composer"'),
+  );
+  // The words are behind the fold, and the field the press sends is not: an
+  // unopened fold answers with exactly what an opened one does.
+  const fold = box.indexOf("<details");
+  expect(fold).toBeGreaterThan(-1);
+  expect(box.slice(fold)).toContain(EN.answerReviseDraftLead);
+  expect(box.indexOf("<pre")).toBeGreaterThan(fold);
+  expect(box.lastIndexOf(REVISE_ANSWER.lead)).toBeGreaterThan(fold);
+  // What the press sends is the field above the fold, drawn either way.
+  expect(box.slice(0, fold)).toContain('name="revise_draft"');
+});
+
+test("where a worker's question waits, what the review raised is one press away (rondo#704)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  const plain = await questionPage(world);
+  const standingOf = (html: string): string =>
+    html.slice(html.indexOf('id="standing"'), html.indexOf('id="answer-bar"'));
+  // At the gate's own press, rule 9.4's findings are quoted unfolded.
+  expect(standingOf(plain)).toContain(EN.standingHeading);
+  expect(standingOf(plain)).not.toContain("<details");
+  expect(standingOf(plain)).toContain("the loop never stops");
+
+  await workerAsksWithOptions(world);
+  const asked = standingOf(await questionPage(world));
+  expect(asked).toContain("<details");
+  expect(asked).not.toContain(EN.standingHeading);
+  expect(asked).toMatch(/points the review raised/);
+  // In full, and under the summary that opens them.
+  expect(asked.indexOf("the backoff is not capped")).toBeGreaterThan(asked.indexOf("</summary>"));
+  const ja = standingOf(await questionPage(world, JA));
+  expect(ja).toContain("見直しで挙がった点を見る");
 });
 
 test("a worker's question with options names no Carry on press in its revise note (D-0190 rule 6)", async () => {

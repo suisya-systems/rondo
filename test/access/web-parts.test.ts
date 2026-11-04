@@ -356,9 +356,12 @@ const gatePage = async (w: Awaited<ReturnType<typeof split>>, wording = EN) =>
 test("a worker's question: one line over the box says what was built and what waits, and the other parts keep their state under the title (D-0098 rule 8.3)", async () => {
   const w = await questioned();
   const html = await gatePage(w);
+  // **That it committed, and not which commit** (D-0076, rondo#704): the sha
+  // is an identifier of rondo's, and what it built is behind the link below.
   const lead =
-    "The worker built and committed bbbbbbb before stopping to ask. Waiting on your answer: the pin bump in package.json";
+    "The worker committed what it had built before stopping to ask. Waiting on your answer: the pin bump in package.json";
   expect(html).toContain(lead);
+  expect(html).not.toContain("bbbbbbb");
   // Directly above the box: nothing of the thread's record comes between.
   const at = html.indexOf(lead);
   const box = html.indexOf('id="answering"');
