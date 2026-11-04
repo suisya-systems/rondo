@@ -21,6 +21,7 @@ import { DatabaseSync } from "node:sqlite";
 import { expect } from "vitest";
 import type { PublishReading } from "../../src/access/page/contract.js";
 import { reviseDrafterHost } from "../../src/access/revise-draft/host.js";
+import type { PageChanges } from "../../src/access/served.js";
 import { operatorPage as renderPage } from "../../src/access/web.js";
 import { AnswerPort, type ServedPorts, serveOperatorPage } from "../../src/access/web-app.js";
 import { allocate } from "../../src/refrain/allocator.js";
@@ -37,6 +38,103 @@ export const fresh = () => {
     record: advisoryRecord(connection),
   };
 };
+
+/**
+ * The bell the host rings when something beside the store is written
+ * (rondo#742, `src/access/page-changes.ts`), rung by hand instead.
+ *
+ * Here rather than in one suite because two ask different things of it: what
+ * `pageEvents` says to a reader (`page-events.test.ts`) and what the `/events`
+ * route says over a real store (`web-app.test.ts`). The mark counts writes
+ * seen, as the real one does, so a page drawn before a ring is behind by the
+ * one fact a host that restarted is also behind by.
+ */
+export function handBell(
+  /**
+   * Which process this bell belongs to, as the real one's `born` is.
+   *
+   * The count starts at nothing in every process, so a mark says which host
+   * saw the writes it counts; a host that restarted therefore agrees with no
+   * page it did not draw, and a test of that case is a bell under another
+   * name.
+   */
+  born = "seen",
+): PageChanges & {
+  readonly ring: () => void;
+  readonly wrote: () => void;
+  readonly holding: () => number;
+} {
+  const listeners = new Set<() => void>();
+  let seen = 0;
+  return {
+    listen: (fn) => {
+      listeners.add(fn);
+      return () => {
+        listeners.delete(fn);
+      };
+    },
+    mark: () => `${born}-${String(seen)}`,
+    ring: () => {
+      seen += 1;
+      for (const listener of listeners) {
+        listener();
+      }
+    },
+    /**
+     * A write this bell has seen, whose ring has not come yet.
+     *
+     * The real bell counts a write the moment the operating system reports it
+     * and rings a settle later (`SETTLE_MS`), so the mark moves while no
+     * listener has been called -- which is the half of it a host must not
+     * depend on a ring to recover from.
+     */
+    wrote: () => {
+      seen += 1;
+    },
+    holding: () => listeners.size,
+  };
+}
+
+/**
+ * The one word the host says to an open page (rondo#742).
+ *
+ * **No `id` on it**, which is the half of this that is worth asserting: an id
+ * is what a browser hands back as `Last-Event-ID` on a reconnect of its own,
+ * and this host is never told which draw a page holds by the frames it sent --
+ * only by the draw the page says it is showing.
+ */
+export const CHANGE_FRAME = "event: change\ndata: 1\n\n";
+
+/**
+ * Listening to one event stream: each call answers with the next frame, or
+ * with `true` where nothing arrived for `ms` -- which is what a quiet host
+ * owes an open page (rondo#742).
+ *
+ * **One read at a time, kept across a quiet wait.** A `read()` that was
+ * started and then abandoned still takes the next frame off the stream when it
+ * eventually arrives, so a wait that heard nothing hands its read on to the
+ * next call instead of starting another. A test that got this wrong would
+ * swallow the one `change` it is asserting and pass for both answers.
+ */
+export function listening(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): (ms?: number) => Promise<true | string> {
+  const bytes = new TextDecoder();
+  const quiet = Symbol("quiet");
+  let pending: ReturnType<typeof reader.read> | null = null;
+  return async (ms = 250) => {
+    pending ??= reader.read();
+    const read = await Promise.race([
+      pending,
+      new Promise<typeof quiet>((resolve) => setTimeout(() => resolve(quiet), ms)),
+    ]);
+    if (read === quiet) {
+      return true;
+    }
+    pending = null;
+    return read.done ? "the stream ended" : bytes.decode(read.value);
+  };
+}
 
 /** Put one reserved row at the gate, which is the only state with a button. */
 export async function openGate(world: ReturnType<typeof fresh>, id: string): Promise<void> {

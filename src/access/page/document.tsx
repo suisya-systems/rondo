@@ -18,8 +18,14 @@ import type { HeldReads } from "./held.js";
 import { READ_IN_FORM } from "./held.js";
 import { PILL, PRIMARY, TONE } from "./vocabulary.js";
 
-/** How often a live view redraws itself, in seconds: the `<noscript>` refresh and htmx's `every 5s`. */
-const REFRESH_SECONDS = 5;
+/**
+ * The event `page/live.js` fires on the body when the host says this page's
+ * view has changed, and the trigger the ledger's redraw waits on (rondo#742).
+ *
+ * One name in one place: the attribute and the script have to agree, and a
+ * disagreement would be a page that never redraws and no error anywhere.
+ */
+export const CHANGE_EVENT = "rondo:change";
 
 /** The tab's icon: the plain mark, or the mark with the amber badge while anything waits (rondo#414). */
 const tabIcon = (waitingCount: number): string =>
@@ -42,6 +48,12 @@ export interface PageDocument {
   readonly token: string | null;
   /** Where nobody is named, the press token for the form that names them (rondo#675). */
   readonly namingToken: string | null;
+  /**
+   * Which draw of this page it is, in the host's own mark (rondo#742), or null
+   * where the caller keeps none -- the draw the host compares against, and
+   * every host with nothing watching for changes.
+   */
+  readonly drawnAt: string | null;
   readonly threads: Threads;
   readonly threadRead: PageModel["threadRead"];
   readonly reads: HeldReads | null;
@@ -52,8 +64,6 @@ export interface PageDocument {
   readonly forms: boolean;
   /** Whether the view keeps itself current (`isLive`). */
   readonly keepsCurrent: boolean;
-  /** Whether a person may be writing on this view (#220 S1). */
-  readonly writingHere: boolean;
   /** The three faces, as `facesMarkup` composed them. */
   readonly faces: string;
 }
@@ -65,6 +75,7 @@ export async function pageDocument({
   actorId,
   token,
   namingToken,
+  drawnAt,
   threads,
   threadRead,
   reads,
@@ -73,7 +84,6 @@ export async function pageDocument({
   onThreads,
   forms,
   keepsCurrent,
-  writingHere,
   faces,
 }: PageDocument): Promise<string> {
   const here = viewHref(view, wording.lang);
@@ -105,26 +115,18 @@ export async function pageDocument({
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         {
-          // **What keeps a live view current, in both modes** (D-0054 rules 1
-          // and 7, D-0059 R2). With scripting off, the meta refresh inside
-          // `<noscript>` throws the document away every five seconds, which is
-          // still better than a screen that goes stale without saying so. With
-          // scripting on, htmx polls this same address (below, on `#ledger`)
-          // and morphs the ledger in place, so the reader's scroll and focus
-          // survive. The `answer` view reaches none of this: it has no refresh
-          // in either mode, so there is nothing for it to degrade to.
+          // **What keeps a live view current** (D-0054 rules 1 and 7 as
+          // rondo#742 leaves them, D-0059 R2). With scripting on, the host
+          // tells this page over `GET /events` that what it shows has changed
+          // and htmx then `GET`s this same address once and morphs the ledger
+          // in place, so the reader's scroll and focus survive. **With
+          // scripting off there is nothing to degrade to and nothing is
+          // claimed**: the `<noscript>` meta refresh that used to throw the
+          // document away every five seconds is gone with the poll it belonged
+          // to, and the foot note says a reload is what shows the latest. The
+          // `answer` view reaches none of this either way.
           asksHtmx ? (
             <>
-              {
-                // **Not where a person may be writing** (#220 S1): with script
-                // off a reload would throw a half-written draft away, so a
-                // view with a composer does not reload itself and says so.
-                !keepsCurrent || writingHere ? null : (
-                  <noscript>
-                    <meta http-equiv="refresh" content={`${String(REFRESH_SECONDS)};url=${here}`} />
-                  </noscript>
-                )
-              }
               {/*
                * R2's substitute, as the library's own configuration: requests
                * to this origin only, no `eval`, no script out of a response, no
@@ -199,10 +201,13 @@ export async function pageDocument({
         <script src="/composer.js" defer />
         <script src="/chime.js" defer />
         {
-          // **The press token, kept current** (rondo#674): on every view, the
-          // ones that hold still included, so a press after a restart of the
-          // host is not refused for a token the page was drawn with.
-          token === null ? null : <script src="/token.js" defer />
+          // **The one stream from the host** (rondo#674, rondo#742), which
+          // carries two things and so is loaded where either is wanted: the
+          // press token, kept current on every view -- the ones that hold
+          // still included, so a press after a restart of the host is not
+          // refused for a token the page was drawn with -- and the word that
+          // this view has changed, which only a live view acts on.
+          token === null && !keepsCurrent ? null : <script src="/live.js" defer />
         }
         {
           // **What the redraw changed, said in colour** (rondo#494 item 1). It
@@ -578,10 +583,28 @@ export async function pageDocument({
             data-title-turn={wording.tabTitleTurn}
             data-icon={tabIcon(waitingCount)}
             {...(token === null ? {} : { "data-notice-to": "/notice", "data-notice-token": token })}
+            {
+              // **Which draw of the page this is** (rondo#742), as the host's
+              // own mark of what it had seen written. `page/live.js` hands it
+              // back when it opens the stream, and the host answers a page
+              // whose mark is not its own with one redraw -- which is how a
+              // change made between this `GET` and that stream, or while the
+              // reader was away, or across a restart of the host, reaches a
+              // page that would otherwise never hear of it. On `#ledger`
+              // because the morph keeps it true: a redraw carries the mark of
+              // the draw it brought.
+              ...(drawnAt === null ? {} : { "data-drawn-at": drawnAt })
+            }
             {...(keepsCurrent
               ? {
                   "hx-get": here,
-                  "hx-trigger": "every 5s",
+                  // **Pushed, not polled** (rondo#742). The trigger is the
+                  // event `page/live.js` fires on the body when the host says
+                  // this view's bytes have changed, so the one `GET` a redraw
+                  // costs happens exactly when there is something to redraw;
+                  // `from:body` because the stream is one page's and not one
+                  // element's.
+                  "hx-trigger": `${CHANGE_EVENT} from:body`,
                   "hx-select": "#ledger",
                   "hx-ext": "morph",
                   "hx-swap": "morph:outerHTML",
@@ -592,9 +615,10 @@ export async function pageDocument({
             {raw(faces)}
           </div>
           {
-            // **Each view says which of the two it is**, because "redraws
-            // every 5s" on a view that does not would be the page's own copy
-            // lying about the one property D-0054 rule 1 spends itself on.
+            // **Each view says which of the two it is**, because "redraws when
+            // something changes" on a view that does not would be the page's
+            // own copy lying about the one property D-0054 rule 1 spends
+            // itself on.
             // Both say the same thing about writing, which is the fact that
             // did not change: a read writes nothing, whoever or whatever
             // issued it. At the foot rather than the head (the design pass on
@@ -610,9 +634,9 @@ export async function pageDocument({
               <span
                 title={
                   onThreads
-                    ? wording.threadsLiveNote(REFRESH_SECONDS)
+                    ? wording.threadsLiveNote
                     : keepsCurrent
-                      ? wording.liveNote(REFRESH_SECONDS)
+                      ? wording.liveNote
                       : wording.stillNote
                 }
               >
@@ -621,7 +645,7 @@ export async function pageDocument({
                   // script off nothing redraws in place, and a thread with a
                   // box does not reload at all, so "live" would be false there.
                   keepsCurrent ? (
-                    <span class="js-only">{wording.liveShort(REFRESH_SECONDS)}</span>
+                    <span class="js-only">{wording.liveShort}</span>
                   ) : (
                     wording.stillShort
                   )

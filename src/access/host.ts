@@ -77,6 +77,7 @@ import {
   reviseUnderScope,
   startsByItself,
 } from "./page-actions.js";
+import { watchedChanges } from "./page-changes.js";
 import { publishFromPage, publishingForPage, publishUnderScope } from "./page-publish-actions.js";
 import {
   heldStartPort,
@@ -149,6 +150,11 @@ export async function serveWeb(
   // (rondo#675, D-0196), which rebuilds the ports and the hosts below.
   const approver = environment[APPROVER_ENV];
   const record = openAdvisoryRecord(storePath);
+  // **What tells an open page that something changed** (rondo#742): one watch
+  // of the files beside the store, for the life of this host. Opened here and
+  // not in `pagePorts`, because naming the approver rebuilds those and a watch
+  // is not a port of one approver's.
+  const changes = watchedChanges(storePath, say);
   // **Setup that never ran is said where a terminal already is** (D-0203 rule
   // 3): the page says only that it has not, since running it is installation.
   if ((await record.setupPlans()).length === 0 && setupPlanFiles(storePath).length === 0) {
@@ -752,6 +758,8 @@ export async function serveWeb(
     return {
       store,
       record,
+      // The bell, the same one whoever is named (rondo#742).
+      changes,
       naming: sender === null ? naming : null,
       policy: bounds.policy,
       // **The host's statement, as a tag, and one step of five** (D-0056
@@ -1242,5 +1250,6 @@ export async function serveWeb(
   if (rescan !== null) {
     clearInterval(rescan);
   }
+  changes.stop();
   return served;
 }

@@ -877,7 +877,7 @@ const LOADED = [
   "keys.js",
   "composer.js",
   "chime.js",
-  "token.js",
+  "live.js",
   "changed.js",
   "rounds.js",
 ];
@@ -1019,4 +1019,223 @@ test("every script the page loads is run in one global, and none of them stops a
   page.redraw("three points");
   expect(page.acts.getAttribute("data-just-changed")).toBe("Updated");
   expect(page.document.title).toBe("rondo");
+});
+
+test("the host's word is one redraw, and the token keeps every form current (rondo#742, rondo#674)", async () => {
+  // The stream this page opens, and the frames it is handed.
+  const listeners = new Map<string, (event: { data: string }) => void>();
+  let opened: string | null = null;
+  let opens = 0;
+  let closed = 0;
+  // The backoff this page now spends itself, instead of leaving the reconnect
+  // to the browser.
+  const waiting: [() => void, number][] = [];
+  // **What the address answers when this page asks why a stream failed.**
+  // `EventSource` fires one `error` whatever went wrong and puts the source in
+  // `CLOSED` for all of them, so the page reads the status itself: this is the
+  // answer that one request gets.
+  let status = 200;
+  const asked: string[] = [];
+  let dropped = 0;
+  const tokens = [{ value: "stale" }, { value: "stale" }];
+  const notices = new Painted();
+  notices.setAttribute("data-notice-token", "stale");
+  // The ledger, as the host stamped it with the draw this page is holding.
+  const ledger = new Painted();
+  ledger.setAttribute("data-drawn-at", "seen-1");
+  const fired: string[] = [];
+  const onWindow = new Map<string, (event: { persisted: boolean }) => void>();
+  runInNewContext(bytesOf("page/live.js").toString("utf8"), {
+    EventSource: class {
+      constructor(to: string) {
+        opened = to;
+        opens += 1;
+      }
+      addEventListener(type: string, listener: (event: { data: string }) => void) {
+        listeners.set(type, listener);
+      }
+      close() {
+        closed += 1;
+      }
+    },
+    // The one request this page makes of its own accord, and only after a
+    // failure: what the address answers is the whole of the ground it stops on.
+    fetch: async (to: string) => {
+      asked.push(to);
+      return await Promise.resolve({ status });
+    },
+    AbortController: class {
+      readonly signal = {};
+      abort() {
+        dropped += 1;
+      }
+    },
+    CustomEvent: class {
+      constructor(
+        public type: string,
+        public init: unknown,
+      ) {}
+    },
+    location: { search: "?thread=req-i-0001&lang=en" },
+    addEventListener: (type: string, listener: (event: { persisted: boolean }) => void) => {
+      onWindow.set(type, listener);
+    },
+    setTimeout: (fn: () => void, ms: number) => {
+      waiting.push([fn, ms]);
+      return waiting.length;
+    },
+    clearTimeout: (id: number) => {
+      waiting.splice(id - 1, 1);
+    },
+    document: {
+      body: {
+        dispatchEvent: (event: { type: string }) => {
+          fired.push(event.type);
+        },
+      },
+      getElementById: (id: string) => (id === "ledger" ? ledger : null),
+      querySelectorAll: (selector: string) =>
+        selector === 'input[name="token"]' ? tokens : [notices],
+    },
+  });
+
+  /**
+   * Lets the one request a failure makes come back.
+   *
+   * The ground this page stops on is the status that address answers, so the
+   * decision to wait or to stop is taken a turn after the `error` rather than
+   * inside it; this is the turn.
+   */
+  const answered = async (): Promise<void> => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  // **The view rides on the address, and so does the draw** (rondo#742): the
+  // host compares the page this reader is on against the draw it says it is
+  // holding, so the stream carries this page's own query and its own mark.
+  expect(opened).toBe("/events?thread=req-i-0001&lang=en&at=seen-1");
+
+  // **The token, written into every form and into the notice** (rondo#674).
+  listeners.get("token")?.({ data: "fresh" });
+  expect(tokens.map((one) => one.value)).toEqual(["fresh", "fresh"]);
+  expect(notices.getAttribute("data-notice-token")).toBe("fresh");
+  // Nothing redrew: a new token is not a change to what the page shows.
+  expect(fired).toEqual([]);
+
+  // **One word from the host is one redraw**, fired on the body because that
+  // is where `#ledger` listens for it (`src/access/page/document.tsx`).
+  listeners.get("change")?.({ data: "1" });
+  expect(fired).toEqual(["rondo:change"]);
+
+  // **A page brought back from the browser's cache opens the stream again, and
+  // says where it actually is.** The redraw above morphed `#ledger` and
+  // brought the mark of the draw it carried, so the host is the one that
+  // decides whether anything changed while this page was away -- one redraw
+  // where something did, and none where nothing did. This fires nothing
+  // itself: it used to redraw on the way back because the host could not tell.
+  ledger.setAttribute("data-drawn-at", "seen-4");
+  onWindow.get("pageshow")?.({ persisted: true });
+  expect(closed).toBe(1);
+  expect(opens).toBe(2);
+  expect(opened).toBe("/events?thread=req-i-0001&lang=en&at=seen-4");
+  expect(fired).toEqual(["rondo:change"]);
+  // A page that was not cached was drawn by this host a moment ago.
+  onWindow.get("pageshow")?.({ persisted: false });
+  expect(closed).toBe(1);
+  expect(fired).toEqual(["rondo:change"]);
+
+  // **A dropped stream is reopened by this page, and never by the browser.**
+  // The browser's own reconnect would ask the address it was given and send
+  // the id of the last frame it *received* -- and a word received is not a
+  // redraw shown: the `GET` it asks for can fail, or be cut off by the very
+  // drop that ended the stream, and `#ledger` then still carries the draw
+  // this page is displaying. So the source is closed here and opened again
+  // after a wait of this page's own, on an address built from `#ledger` as it
+  // stands at that moment, which is the only draw the host is told about.
+  listeners.get("change")?.({ data: "1" });
+  expect(fired).toEqual(["rondo:change", "rondo:change"]);
+  // What a failure is answered with: the host is up -- it is the connection
+  // that went away -- so the address answers a stream like any other.
+  status = 200;
+  // The redraw that word asked for does not land, so the mark does not move.
+  listeners.get("error")?.({ data: "" });
+  expect(closed).toBe(2);
+  // **Nothing is waited on until the answer is in**: the one request this
+  // failure makes is of the address the page would reopen, and the wait is set
+  // only once it has come back.
+  expect(waiting).toEqual([]);
+  expect(asked).toEqual(["/events?thread=req-i-0001&lang=en&at=seen-4"]);
+  await answered();
+  expect(opens).toBe(2);
+  expect(waiting.map(([, ms]) => ms)).toEqual([1000]);
+  // One wait, however many times it errors on the way down.
+  listeners.get("error")?.({ data: "" });
+  await answered();
+  expect(waiting.length).toBe(1);
+
+  waiting.shift()?.[0]();
+  expect(opens).toBe(3);
+  expect(opened).toBe("/events?thread=req-i-0001&lang=en&at=seen-4");
+  // Nothing was redrawn by reconnecting: the host is the one that decides.
+  expect(fired).toEqual(["rondo:change", "rondo:change"]);
+
+  // **A host that answers badly is a host to ask again, not an end** (owner,
+  // 2026-11-05). An HTTP `500` -- a host part-way through starting, or one
+  // whose store it could not read for a moment -- reaches this page as the
+  // same one `error`, with the source `CLOSED`, as every other failure. Giving
+  // up on it would leave this page on the draw it is holding for as long as it
+  // stays open, with nothing left to tell it otherwise, so the page keeps
+  // asking on a wait that grows and then holds at half a minute.
+  status = 500;
+  const waits: number[] = [];
+  for (let failure = 0; failure < 4; failure += 1) {
+    listeners.get("error")?.({ data: "" });
+    await answered();
+    const wait = waiting.shift();
+    waits.push(wait?.[1] ?? 0);
+    wait?.[0]();
+  }
+  expect(waits).toEqual([2000, 5000, 30000, 30000]);
+  expect(opens).toBe(7);
+  // Every one of those asked where this page actually is, so the host it
+  // finally reaches compares against the draw on the screen.
+  expect(new Set(asked)).toEqual(new Set(["/events?thread=req-i-0001&lang=en&at=seen-4"]));
+  // And every ask dropped the answer it read the status off, so a host that
+  // was up is not left holding a second stream for this page.
+  expect(dropped).toBe(asked.length);
+
+  // **And the host that came back redraws what was written while it was
+  // down.** The stream opens, which is what puts the wait back to its
+  // shortest; the host compares the draw this page said it is holding against
+  // what it would draw now, and the change made during the outage is one word
+  // and one redraw.
+  listeners.get("open")?.({ data: "" });
+  listeners.get("token")?.({ data: "restarted" });
+  expect(tokens.map((one) => one.value)).toEqual(["restarted", "restarted"]);
+  listeners.get("change")?.({ data: "1" });
+  expect(fired).toEqual(["rondo:change", "rondo:change", "rondo:change"]);
+  // **And while that stream is open and nothing changes, nothing is waiting.**
+  expect(waiting).toEqual([]);
+  // The next failure waits the shortest spacing again: what this page spent
+  // getting here was spent on a host that is now up.
+  status = 500;
+  listeners.get("error")?.({ data: "" });
+  await answered();
+  expect(waiting.map(([, ms]) => ms)).toEqual([1000]);
+  waiting.shift()?.[0]();
+  expect(opens).toBe(8);
+
+  // **An answer that ends the asking is not reopened** (rondo#742). A host
+  // with no form to draw and nothing to watch answers `/events` with a `204`,
+  // which is the one answer that says there is nothing here to listen to.
+  // Waiting and asking again would put back the clock this issue removed, so
+  // this page stops listening -- and it stops on that status and on nothing
+  // else, because the state of the source says `CLOSED` for the `500` above
+  // just the same.
+  status = 204;
+  listeners.get("error")?.({ data: "" });
+  await answered();
+  expect(waiting).toEqual([]);
+  expect(opens).toBe(8);
+  expect(fired).toEqual(["rondo:change", "rondo:change", "rondo:change"]);
 });

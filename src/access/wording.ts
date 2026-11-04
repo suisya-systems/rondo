@@ -89,7 +89,7 @@ export interface Chrome
   readonly lang: string;
 
   // -- The page's two standing notes (src/access/web.tsx) --
-  readonly liveNote: (seconds: number) => string;
+  readonly liveNote: string;
   readonly stillNote: string;
   readonly noApproverNote: string;
 
@@ -347,12 +347,12 @@ export interface Chrome
   readonly sendBackNote: string;
   /** With script off a view with a composer does not reload itself, so a draft survives. */
   /** The threads' account of themselves: the redraw writes nothing, and Send is what writes here. */
-  readonly threadsLiveNote: (seconds: number) => string;
+  readonly threadsLiveNote: string;
   /**
    * The S1 design pass on #220: the short lines drawn where the long notes
    * were (the notes stay, as the `title`), and the thread header's words.
    */
-  readonly liveShort: (seconds: number) => string;
+  readonly liveShort: string;
   readonly stillShort: string;
   /** An age as `ago` spells it (`59m`), in this set's units. */
   readonly age: (ago: string) => string;

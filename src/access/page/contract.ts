@@ -28,6 +28,7 @@ import type { EndPort, HoldsPort, ReleasePort } from "../line-ports.js";
 import type { PublishRepositoryPort } from "../publish-repository.js";
 import type { TabOutcome } from "../reach.js";
 import type { AddRepositoryPort } from "../repository-add.js";
+import type { PageChanges } from "../served.js";
 import type {
   AnswerPort,
   ConflictFixed,
@@ -134,6 +135,18 @@ export interface WebPorts extends InboxReadPorts {
   readonly actorId: string | null;
   /** The press token, present only while the page may name the approver (rondo#675). */
   readonly namingToken?: string;
+  /**
+   * The host's mark for what it had seen written when this page was drawn
+   * (rondo#742, {@link PageChanges.mark}), which the page hands back when it
+   * opens `GET /events` so the host can tell whether what it holds is current.
+   *
+   * **Carried and never read by a screen.** It is not a port and says nothing
+   * about the work; the document writes it on `#ledger` as `data-drawn-at`,
+   * which is where the morph keeps it true and where `page/live.js` reads it.
+   * Absent on the draw `GET /events` compares -- a mark in those bytes would
+   * differ on every write anywhere and make every ring a change.
+   */
+  readonly drawnAt?: string;
   /**
    * Whether a *read in my language* press may be drawn (rondo#490): true
    * where the server holds the port that spends on it. Absent is false.
@@ -555,4 +568,13 @@ export interface ServedPorts extends WebPorts {
   readonly policies?: PolicyPort | null;
   /** Present only while nobody is named: the press that names the approver (rondo#675). */
   readonly naming?: NamingPort | null;
+  /**
+   * The bell that says something under this host has changed (rondo#742).
+   *
+   * Absent or null is a host with no bell: `GET /events` then answers with the
+   * press token alone, and a page keeps itself current only by being reloaded.
+   * The host builds it in `src/access/page-changes.ts`; the renderer never
+   * holds it, because telling a reader is not drawing a page.
+   */
+  readonly changes?: PageChanges | null;
 }
