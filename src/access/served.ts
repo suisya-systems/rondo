@@ -115,8 +115,8 @@ export interface PageEvents {
    */
   readonly shown: () => Promise<string>;
   /**
-   * The mark the reader's own page was drawn at ({@link PageChanges.mark}), or
-   * null where it says none.
+   * The mark of the draw the reader has actually **finished showing**
+   * ({@link PageChanges.mark}), or null where it says none.
    *
    * **Where the first word of the stream comes from.** The page this reader is
    * standing on was drawn before this stream opened, and the host cannot
@@ -125,6 +125,14 @@ export interface PageEvents {
    * stamp, or a reader of rondo's own making), and it is read as *possibly
    * behind*: one `change`, one redraw, and from then on the comparison is of
    * bytes.
+   *
+   * **Finished, and not merely told.** It is the mark the page's own
+   * `#ledger` carries, which only moves when a redraw was fetched and swapped
+   * in (`src/access/page/document.tsx`, `page/live.js`) -- never the id of a
+   * frame this host sent, which says no more than that a word arrived. A
+   * reader told to redraw that then failed to fetch, or dropped off the
+   * network mid-fetch, still holds the older draw and says so, so the stream
+   * it opens next is told again rather than agreed with.
    */
   readonly held: string | null;
   /** Aborted when the reader goes away, so the bell loses its listener with it. */
@@ -134,13 +142,23 @@ export interface PageEvents {
 /**
  * One SSE frame.
  *
- * `id` is the mark of the page the reader will be holding once it has acted on
- * this frame, and the browser hands the last one back as `Last-Event-ID` when
- * it reconnects a stream of its own accord -- which is what keeps a reader that
- * dropped off the network from being told again about a change it already drew.
+ * **No `id`, deliberately.** An `id` is what a browser hands back as
+ * `Last-Event-ID` when it reconnects a stream of its own accord, and that is
+ * the wrong thing for this host to compare against: it says a word *arrived*,
+ * not that the redraw it asked for was fetched and shown. The draw a reader
+ * holds is the one its own `#ledger` carries, and the page sends it on the
+ * address of every stream it opens ({@link PageEvents.held}).
  */
-const frame = (event: string, data: string, id: string | null = null): string =>
-  `${id === null ? "" : `id: ${id}\n`}event: ${event}\ndata: ${data}\n\n`;
+const frame = (event: string, data: string): string => `event: ${event}\ndata: ${data}\n\n`;
+
+/**
+ * How many times one draw is taken again because the store moved under it.
+ *
+ * A bound rather than a loop that waits for quiet: a host being written to
+ * without pause must still answer this reader, and an unsettled draw is read
+ * as *possibly behind*, which costs one redraw and never a stale screen.
+ */
+const PASSES = 3;
 
 /**
  * **What a page hears from the host** (D-0054 as rondo#742 leaves it): this
@@ -166,14 +184,25 @@ const frame = (event: string, data: string, id: string | null = null): string =>
  * starting there silently would lose every change made between that page's own
  * `GET` and this stream, while the reader was away, or across a restart of the
  * host, because both sides of that first comparison are already past it. So
- * {@link PageEvents.held} is compared with {@link PageChanges.mark} instead:
- * equal is a page that holds what the host would draw, and anything else is
- * one `change` on the open draw and the page back in step.
+ * {@link PageEvents.held} is compared with the mark the open draw settled at
+ * instead: equal is a page that holds what the host would draw, and anything
+ * else is one `change` on that draw and the page back in step.
  *
- * `retry` is still named, so a host that goes down is a reconnect that waits
- * rather than a page that gives up. With no bell there is nothing to hold the
- * stream open for: the token is sent and the response ends, as it did before.
- * A `204` -- no token and no bell -- tells the browser to stop asking.
+ * **Both halves of that comparison are of the same moment.** The mark is read
+ * again after the draw and the draw is taken again where it moved, so a write
+ * that lands while the open draw is in flight is on one side of the comparison
+ * or the other and never lost between them -- which is the one way a reader
+ * whose page was current as the stream opened could have been left holding a
+ * screen nothing would ever ring about again. And the mark it is compared with
+ * is the draw the page *finished*, so a reader that was told to redraw and did
+ * not manage it is told again.
+ *
+ * `retry` is still named, so a browser that reconnects a dropped stream of its
+ * own accord waits rather than hammers; `page/live.js` reopens on the same
+ * spacing, and says on the address which draw it is holding by then. With no
+ * bell there is nothing to hold the stream open for: the token is sent and the
+ * response ends, as it did before. A `204` -- no token and no bell -- tells the
+ * browser to stop asking.
  */
 export function pageEvents({ token, changes, shown, held, signal }: PageEvents): Response {
   const headers = { "content-type": "text/event-stream", "cache-control": "no-store" };
@@ -195,10 +224,6 @@ export function pageEvents({ token, changes, shown, held, signal }: PageEvents):
       let drawing = false;
       let again = false;
       let standing: string | null = null;
-      // **Whether the page this reader holds may already be out of date**, read
-      // off its own mark as the stream opens. It decides the open draw alone:
-      // every word after that one is decided by the bytes.
-      const behind = held === null || held !== changes.mark();
       const close = (): void => {
         if (!open) {
           return;
@@ -211,6 +236,29 @@ export function pageEvents({ token, changes, shown, held, signal }: PageEvents):
           // A reader that has already gone needs no close.
         }
       };
+      /**
+       * One draw of this reader's view, and the mark it is a draw *of*.
+       *
+       * **Read before and after, and taken again where the two differ.** The
+       * draw is asynchronous, so a write can land in the middle of one: the
+       * bytes are then of neither moment, and a mark read before the draw
+       * would say they are of the earlier one. Taking the draw again until the
+       * two reads agree is what makes the pair honest -- and where the store
+       * will not hold still for {@link PASSES} of them, the later mark is
+       * returned, which is a mark no page can be holding and so is read as one
+       * redraw.
+       */
+      const settled = async (): Promise<{ readonly at: string; readonly now: string }> => {
+        let at = changes.mark();
+        for (let pass = 1; ; pass += 1) {
+          const now = await shown();
+          const after = changes.mark();
+          if (after === at || pass === PASSES) {
+            return { at: after, now };
+          }
+          at = after;
+        }
+      };
       const look = async (): Promise<void> => {
         if (drawing) {
           again = true;
@@ -218,16 +266,17 @@ export function pageEvents({ token, changes, shown, held, signal }: PageEvents):
         }
         drawing = true;
         try {
-          // **Read before the draw**, so a write that lands during it is left
-          // on the far side of the mark: the reader is then told again rather
-          // than told it holds bytes it has not seen.
-          const at = changes.mark();
-          const now = await shown();
+          const { at, now } = await settled();
           if (!open) {
             return;
           }
-          if (standing === null ? behind : now !== standing) {
-            controller.enqueue(bytes.encode(frame("change", "1", at)));
+          // **The open draw is judged by its mark and every later one by its
+          // bytes**, which is one comparison and not two: the host has no copy
+          // of the page this reader already holds, so the first pass can only
+          // ask whether the draw it just settled on is the draw the page says
+          // it is showing. From then on it has those bytes and compares them.
+          if (standing === null ? held === null || held !== at : now !== standing) {
+            controller.enqueue(bytes.encode(frame("change", "1")));
           }
           standing = now;
         } catch {

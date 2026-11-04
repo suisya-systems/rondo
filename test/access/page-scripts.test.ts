@@ -1025,7 +1025,11 @@ test("the host's word is one redraw, and the token keeps every form current (ron
   // The stream this page opens, and the frames it is handed.
   const listeners = new Map<string, (event: { data: string }) => void>();
   let opened: string | null = null;
+  let opens = 0;
   let closed = 0;
+  // The backoff this page now spends itself, instead of leaving the reconnect
+  // to the browser.
+  const waiting: [() => void, number][] = [];
   const tokens = [{ value: "stale" }, { value: "stale" }];
   const notices = new Painted();
   notices.setAttribute("data-notice-token", "stale");
@@ -1038,6 +1042,7 @@ test("the host's word is one redraw, and the token keeps every form current (ron
     EventSource: class {
       constructor(to: string) {
         opened = to;
+        opens += 1;
       }
       addEventListener(type: string, listener: (event: { data: string }) => void) {
         listeners.set(type, listener);
@@ -1055,6 +1060,13 @@ test("the host's word is one redraw, and the token keeps every form current (ron
     location: { search: "?thread=req-i-0001&lang=en" },
     addEventListener: (type: string, listener: (event: { persisted: boolean }) => void) => {
       onWindow.set(type, listener);
+    },
+    setTimeout: (fn: () => void, ms: number) => {
+      waiting.push([fn, ms]);
+      return waiting.length;
+    },
+    clearTimeout: (id: number) => {
+      waiting.splice(id - 1, 1);
     },
     document: {
       body: {
@@ -1094,10 +1106,36 @@ test("the host's word is one redraw, and the token keeps every form current (ron
   ledger.setAttribute("data-drawn-at", "seen-4");
   onWindow.get("pageshow")?.({ persisted: true });
   expect(closed).toBe(1);
+  expect(opens).toBe(2);
   expect(opened).toBe("/events?thread=req-i-0001&lang=en&at=seen-4");
   expect(fired).toEqual(["rondo:change"]);
   // A page that was not cached was drawn by this host a moment ago.
   onWindow.get("pageshow")?.({ persisted: false });
   expect(closed).toBe(1);
   expect(fired).toEqual(["rondo:change"]);
+
+  // **A dropped stream is reopened by this page, and never by the browser.**
+  // The browser's own reconnect would ask the address it was given and send
+  // the id of the last frame it *received* -- and a word received is not a
+  // redraw shown: the `GET` it asks for can fail, or be cut off by the very
+  // drop that ended the stream, and `#ledger` then still carries the draw
+  // this page is displaying. So the source is closed here and opened again
+  // after the host's own backoff, on an address built from `#ledger` as it
+  // stands at that moment, which is the only draw the host is told about.
+  listeners.get("change")?.({ data: "1" });
+  expect(fired).toEqual(["rondo:change", "rondo:change"]);
+  // The redraw that word asked for does not land, so the mark does not move.
+  listeners.get("error")?.({ data: "" });
+  expect(closed).toBe(2);
+  expect(opens).toBe(2);
+  expect(waiting.map(([, ms]) => ms)).toEqual([5000]);
+  // One wait, however many times it errors on the way down.
+  listeners.get("error")?.({ data: "" });
+  expect(waiting.length).toBe(1);
+
+  waiting.shift()?.[0]();
+  expect(opens).toBe(3);
+  expect(opened).toBe("/events?thread=req-i-0001&lang=en&at=seen-4");
+  // Nothing was redrawn by reconnecting: the host is the one that decides.
+  expect(fired).toEqual(["rondo:change", "rondo:change"]);
 });

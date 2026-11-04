@@ -92,7 +92,15 @@ import { chromeFor, EN } from "../../src/access/wording.js";
 import type { ContinuoUnusable } from "../../src/continuo/invoker.js";
 import type { AskOptions } from "../../src/store/ask-options.js";
 import { advisoryRecord, asRefusal } from "../../src/store/sqlite.js";
-import { fresh, handBell, listening, openRequest, portsOver, reserve } from "./page-world.js";
+import {
+  CHANGE_FRAME,
+  fresh,
+  handBell,
+  listening,
+  openRequest,
+  portsOver,
+  reserve,
+} from "./page-world.js";
 
 const TOKEN = "the-process-token";
 
@@ -479,32 +487,55 @@ test("a page hears this process's press token, and a reading host hands out none
 async function liveReader(
   world: ReturnType<typeof fresh>,
   bell: ReturnType<typeof handBell>,
+  /** The app's reading ports, where a test wants a write to land inside a draw. */
+  ports: ServedPorts = portsOver(world, "ada", []),
 ): Promise<{
   readonly page: () => Promise<string>;
-  readonly open: (at: string | null) => Promise<{
+  readonly open: (
+    at: string | null,
+    /**
+     * What a browser reconnecting a stream of its own accord would send. Given
+     * by a test to prove the host does not read it: the last frame a page
+     * *received* is not the draw it is showing.
+     */
+    lastEventId?: string,
+  ) => Promise<{
     readonly said: (ms?: number) => Promise<true | string>;
     readonly reader: ReadableStreamDefaultReader<Uint8Array>;
+    /** Drops this one stream, as a reader going away does. */
+    readonly drop: () => void;
   }>;
-  readonly stop: AbortController;
 }> {
-  const app = createApp({ ...portsOver(world, "ada", []), changes: bell }, TOKEN);
-  const stop = new AbortController();
+  const app = createApp({ ...ports, changes: bell }, TOKEN);
   return {
     page: async () =>
       await (
         await app.request("http://127.0.0.1/?lang=en", { headers: { host: "127.0.0.1" } })
       ).text(),
-    open: async (at) => {
+    open: async (at, lastEventId) => {
+      const gone = new AbortController();
       const heard = await app.request(
         `http://127.0.0.1/events?lang=en${at === null ? "" : `&at=${encodeURIComponent(at)}`}`,
-        { headers: { host: "127.0.0.1" }, signal: stop.signal },
+        {
+          headers: {
+            host: "127.0.0.1",
+            ...(lastEventId === undefined ? {} : { "last-event-id": lastEventId }),
+          },
+          signal: gone.signal,
+        },
       );
       expect(heard.status).toBe(200);
       expect(heard.headers.get("content-type")).toBe("text/event-stream");
       const reader = (heard.body as ReadableStream<Uint8Array>).getReader();
-      return { said: listening(reader), reader };
+      return {
+        said: listening(reader),
+        reader,
+        drop: () => {
+          gone.abort();
+          reader.cancel().catch(() => {});
+        },
+      };
     },
-    stop,
   };
 }
 
@@ -512,7 +543,7 @@ test("a page hears a change only where what the route draws changed (rondo#742)"
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
   const bell = handBell();
-  const { page, open, stop } = await liveReader(world, bell);
+  const { page, open } = await liveReader(world, bell);
 
   // The page this reader is standing on, and the draw it says it is holding.
   const drawn = await page();
@@ -521,9 +552,12 @@ test("a page hears a change only where what the route draws changed (rondo#742)"
   const at = /data-drawn-at="([^"]+)"/.exec(drawn)?.[1] ?? null;
   expect(at).toBe(bell.mark());
 
-  const { said, reader } = await open(at);
+  const { said, drop } = await open(at);
   // The token, as every reader of this route has always heard first.
   expect(await said()).toBe(`retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`);
+  // **And the draw the stream opens on is silence**: this page is holding the
+  // draw the host would make, so the comparison that settles it says nothing.
+  expect(await said()).toBe(true);
 
   // **Nothing changed, so nothing is said.** The bell rings -- something
   // beside the store was written -- and this route draws this reader's own
@@ -540,7 +574,7 @@ test("a page hears a change only where what the route draws changed (rondo#742)"
   // `change` carrying the mark of that draw.
   await openRequest(world, "req-0002", "and then the other thing", 2_000);
   bell.ring();
-  expect(await said()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
+  expect(await said()).toBe(CHANGE_FRAME);
   expect(await page()).toContain("and then the other thing");
 
   // **Then silence again**: the reader is standing on the page it was told to
@@ -548,12 +582,11 @@ test("a page hears a change only where what the route draws changed (rondo#742)"
   bell.ring();
   expect(await said()).toBe(true);
 
-  stop.abort();
   // The reader goes, and the bell loses its listener with it: a tab that was
   // closed must not leave the host drawing its view on every write.
+  drop();
   await new Promise((resolve) => setTimeout(resolve, 10));
   expect(bell.holding()).toBe(0);
-  reader.cancel().catch(() => {});
 });
 
 test("a change made before the stream opened reaches the page it was made behind (rondo#742)", async () => {
@@ -564,7 +597,7 @@ test("a change made before the stream opened reaches the page it was made behind
   const world = fresh();
   await reserve(world, "i-0001", "do the thing");
   const bell = handBell();
-  const { page, open, stop } = await liveReader(world, bell);
+  const { page, open } = await liveReader(world, bell);
 
   const drawn = await page();
   const at = /data-drawn-at="([^"]+)"/.exec(drawn)?.[1] ?? null;
@@ -574,14 +607,109 @@ test("a change made before the stream opened reaches the page it was made behind
   await openRequest(world, "req-0002", "and then the other thing", 2_000);
   bell.ring();
 
-  const { said, reader } = await open(at);
+  const { said, drop } = await open(at);
   expect(await said()).toBe(`retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`);
   // One `change`, with no ring of its own, and the redraw it asks for is the
   // page that now says the other thing.
-  expect(await said()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
+  expect(await said()).toBe(CHANGE_FRAME);
   expect(await page()).toContain("and then the other thing");
-  stop.abort();
-  reader.cancel().catch(() => {});
+  drop();
+});
+
+test("a reader whose redraw never landed is told again on the stream it opens (rondo#742)", async () => {
+  // **A word that arrived is not a page that was redrawn.** This reader was
+  // told its view had changed, and the `GET` that word asks for did not land --
+  // the fetch failed, or the network went away mid-fetch and the stream dropped
+  // with it. So what this page is showing is still the draw it was showing, its
+  // `#ledger` still carries that draw's mark, and the stream it opens next
+  // hands that mark back. Being agreed with here is the one failure a reader
+  // cannot see: a screen quietly out of date with nothing left to ring about
+  // it.
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const bell = handBell();
+  const { page, open } = await liveReader(world, bell);
+
+  const drawn = await page();
+  const showing = /data-drawn-at="([^"]+)"/.exec(drawn)?.[1] ?? null;
+  expect(drawn).not.toContain("and then the other thing");
+
+  const first = await open(showing);
+  expect(await first.said()).toBe(`retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`);
+  await openRequest(world, "req-0002", "and then the other thing", 2_000);
+  bell.ring();
+  expect(await first.said()).toBe(CHANGE_FRAME);
+  // The redraw is not made: no `page()` here. Then the network drops.
+  first.drop();
+
+  // **The reconnect says what this page is showing, and the host reads nothing
+  // else.** `Last-Event-ID` is what a browser would hand back on a reconnect of
+  // its own, and it is given here naming the very draw this reader failed to
+  // fetch: a host that read it would compare the mark against itself, find
+  // them equal and say nothing. The one `change` is the proof it is the page's
+  // own `at` that decides.
+  const again = await open(showing, bell.mark());
+  expect(await again.said()).toBe(`retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`);
+  expect(await again.said()).toBe(CHANGE_FRAME);
+  again.drop();
+
+  // And once the redraw does land, the mark it brought is this page's: the
+  // same reconnect is silence, so nothing is drawn twice for one change.
+  const redrawn = await page();
+  expect(redrawn).toContain("and then the other thing");
+  const now = await open(/data-drawn-at="([^"]+)"/.exec(redrawn)?.[1] ?? null);
+  expect(await now.said()).toBe(`retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`);
+  expect(await now.said()).toBe(true);
+  now.drop();
+});
+
+test("a write that lands inside the route's own open draw is one change (rondo#742)", async () => {
+  // **The narrowest gap of all**: this reader's page was current when its
+  // stream opened, and the write lands while the route is part-way through
+  // drawing the view it is about to compare it against. The draw answers with
+  // the new page, so there is nothing for a later ring to find different --
+  // which is why the mark is read again after the draw and the draw taken
+  // again where it moved. Judged by the mark it settles at, this reader is
+  // behind, and hears so.
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const bell = handBell();
+  const ports = portsOver(world, "ada", []);
+  const threads = ports.record.threadMessages.bind(ports.record);
+  // Armed by this test for exactly one draw: the one the stream makes.
+  let arm = false;
+  const { page, open } = await liveReader(world, bell, {
+    ...ports,
+    record: {
+      ...ports.record,
+      // A read of the store every draw of this view makes, which is where the
+      // write is slipped in -- the one ordering the host cannot arrange for
+      // itself and the reader would otherwise pay for.
+      threadMessages: async (...args: Parameters<typeof threads>) => {
+        if (arm) {
+          arm = false;
+          await openRequest(world, "req-0002", "and then the other thing", 2_000);
+          bell.ring();
+        }
+        return await threads(...args);
+      },
+    },
+  });
+
+  // The page this reader is standing on, drawn before the write and current.
+  const drawn = await page();
+  expect(drawn).not.toContain("and then the other thing");
+  const current = /data-drawn-at="([^"]+)"/.exec(drawn)?.[1] ?? null;
+  expect(current).toBe(bell.mark());
+
+  arm = true;
+  const { said, drop } = await open(current);
+  expect(await said()).toBe(`retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`);
+  // One word, and one only: the ring that arrived during the draw is answered
+  // by comparing bytes, and they are the bytes this reader was just sent for.
+  expect(await said()).toBe(CHANGE_FRAME);
+  expect(await said()).toBe(true);
+  drop();
 });
 
 test("(a) a request that never crossed the socket mints nothing, whatever its headers say", async () => {

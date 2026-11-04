@@ -74,6 +74,16 @@ export function handBell(): PageChanges & {
 }
 
 /**
+ * The one word the host says to an open page (rondo#742).
+ *
+ * **No `id` on it**, which is the half of this that is worth asserting: an id
+ * is what a browser hands back as `Last-Event-ID` on a reconnect of its own,
+ * and this host is never told which draw a page holds by the frames it sent --
+ * only by the draw the page says it is showing.
+ */
+export const CHANGE_FRAME = "event: change\ndata: 1\n\n";
+
+/**
  * Listening to one event stream: each call answers with the next frame, or
  * with `true` where nothing arrived for `ms` -- which is what a quiet host
  * owes an open page (rondo#742).

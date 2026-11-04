@@ -28,6 +28,16 @@
 // the redraw morphs `#ledger` and brings the mark of the draw it carried, so
 // a stream opened again later says where this page actually is.
 //
+// **Which is why this script reopens the stream itself.** A browser left to
+// reconnect a dropped `EventSource` asks the address it was given and sends
+// the id of the last frame it *received*, and neither of those says what this
+// page is showing now: a redraw that was asked for and then failed to fetch,
+// or was cut off mid-fetch, leaves `#ledger` on the older draw, and a
+// reconnect that claimed otherwise would be agreed with and the older draw
+// would stay on the screen. So a stream that errors is closed here and opened
+// again after the host's own backoff, on an address built from `#ledger` as it
+// stands at that moment.
+//
 // **It decides nothing a press is checked on.** The press is still a person's
 // click on a form this origin drew, minted on the server (D-0059 section 5a);
 // this only keeps the token in that form the one the server now holds, which
@@ -42,7 +52,12 @@
   if (typeof EventSource === "undefined") {
     return;
   }
+  // The host's own `retry`, which this script now spends instead of the
+  // browser: a dropped stream is reopened on this spacing, saying where the
+  // page is by then.
+  const AGAIN_MS = 5000;
   let source = null;
+  let again = null;
   const changed = () => {
     document.body.dispatchEvent(new CustomEvent("rondo:change", { bubbles: false }));
   };
@@ -54,6 +69,11 @@
     return `/events${search}${at}`;
   };
   const listen = () => {
+    if (again !== null) {
+      clearTimeout(again);
+      again = null;
+    }
+    source?.close();
     source = new EventSource(asking());
     source.addEventListener("token", (event) => {
       for (const input of document.querySelectorAll('input[name="token"]')) {
@@ -64,6 +84,14 @@
       }
     });
     source.addEventListener("change", changed);
+    // The browser would reconnect this itself, at the address it was given and
+    // with the id it last received; closing it here is what keeps the next
+    // stream's `at` the draw this page is really showing.
+    source.addEventListener("error", () => {
+      source?.close();
+      source = null;
+      again ??= setTimeout(listen, AGAIN_MS);
+    });
   };
   listen();
   // A page brought back from the browser's cache may have had its source
@@ -73,7 +101,6 @@
   // nothing moved.
   addEventListener("pageshow", (event) => {
     if (event.persisted) {
-      source?.close();
       listen();
     }
   });

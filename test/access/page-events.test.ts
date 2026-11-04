@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { expect, test } from "vitest";
 import { watchedChanges } from "../../src/access/page-changes.js";
 import { pageEvents } from "../../src/access/served.js";
-import { handBell, listening } from "./page-world.js";
+import { CHANGE_FRAME, handBell, listening } from "./page-world.js";
 
 test("a quiet host says nothing, and one change says one word (rondo#742)", async () => {
   const bell = handBell();
@@ -61,10 +61,9 @@ test("a quiet host says nothing, and one change says one word (rondo#742)", asyn
   // than pass it.
   drawn = "the page, with the question on it";
   bell.ring();
-  // **And it carries the mark of the draw it is telling the page about**, which
-  // the browser hands back as `Last-Event-ID` when it reconnects a dropped
-  // stream: a change this reader has already drawn is not told to it twice.
-  expect(await said()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
+  // **And it carries no id**: what draw a page holds is what that page says it
+  // is showing, never a frame this host remembers sending to it.
+  expect(await said()).toBe(CHANGE_FRAME);
 
   // **Nothing more until the next change**: the same bytes rung twice are two
   // draws and no word.
@@ -73,7 +72,7 @@ test("a quiet host says nothing, and one change says one word (rondo#742)", asyn
   await Promise.resolve();
   drawn = "the page, with the answer on it";
   bell.ring();
-  expect(await said()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
+  expect(await said()).toBe(CHANGE_FRAME);
 });
 
 test("a page behind the host hears so as it opens, and a current one hears nothing (rondo#742)", async () => {
@@ -109,7 +108,7 @@ test("a page behind the host hears so as it opens, and a current one hears nothi
   bell.ring();
   const behind = open("seen-0");
   expect(await behind()).toBe(TOKEN_FRAME);
-  expect(await behind()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
+  expect(await behind()).toBe(CHANGE_FRAME);
   // And then it is a reader like any other: standing on the bytes it was just
   // told to fetch, told nothing until they differ.
   expect(await behind()).toBe(true);
@@ -118,14 +117,94 @@ test("a page behind the host hears so as it opens, and a current one hears nothi
   // this process never handed out**, which is the same answer: one `change`.
   const across = open("a-restart-ago.3");
   expect(await across()).toBe(TOKEN_FRAME);
-  expect(await across()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
+  expect(await across()).toBe(CHANGE_FRAME);
 
   // **And a page that claims nothing is read as possibly behind**, not as
   // current: one redraw costs a reader one `GET`, and being wrong the other
   // way costs it a screen that is quietly out of date.
   const claiming = open(null);
   expect(await claiming()).toBe(TOKEN_FRAME);
-  expect(await claiming()).toBe(`id: ${bell.mark()}\nevent: change\ndata: 1\n\n`);
+  expect(await claiming()).toBe(CHANGE_FRAME);
+});
+
+test("a write during the open draw is one change, not a page left behind (rondo#742)", async () => {
+  // **The boundary between the page's own `GET` and its stream, taken at its
+  // narrowest**: the reader's page was current when the stream opened, and the
+  // write lands while the host is part-way through drawing the view it is
+  // about to compare against. Both sides of that comparison are then past the
+  // write -- the draw has the new bytes in it and there is nothing yet to
+  // compare them with -- so a host that read the mark once, before the draw,
+  // would store the new page as what this reader is standing on and say
+  // nothing, and the ring that follows would find the same bytes and say
+  // nothing either. The reader would sit on the old screen until the next
+  // unrelated write.
+  const bell = handBell();
+  let drawn = "the page";
+  let wrote = false;
+  const stream = pageEvents({
+    token: null,
+    changes: bell,
+    shown: async () => {
+      if (!wrote) {
+        wrote = true;
+        // The write lands inside the draw: the store moves, and the bytes this
+        // draw answers with are already the new ones.
+        drawn = "the page, with the question on it";
+        bell.ring();
+      }
+      return await Promise.resolve(drawn);
+    },
+    // Current as the stream opened, which is what makes this the hard case.
+    held: bell.mark(),
+    signal: null,
+  });
+  const said = listening((stream.body as ReadableStream<Uint8Array>).getReader());
+  expect(await said()).toBe("retry: 5000\n\n");
+  // **The draw is taken again because the mark moved under it**, and the mark
+  // it settles at is not the one this page says it is holding: one `change`.
+  expect(await said()).toBe(CHANGE_FRAME);
+  // And exactly one: the ring that arrived during the draw is answered by
+  // comparing bytes, and they are the bytes the reader was just sent for.
+  expect(await said()).toBe(true);
+});
+
+test("a reader told to redraw that could not is told again when it opens again (rondo#742)", async () => {
+  // **What a page holds is what it finished showing.** A `change` says a word
+  // arrived, and a redraw is a `GET` of this page's own address that can fail
+  // or be cut off part-way; the mark on `#ledger` moves only where it did not.
+  // So the stream a reader opens next is judged by that mark and never by the
+  // frames this host remembers sending -- which is why no frame carries an id
+  // for a browser to hand back as `Last-Event-ID`.
+  const bell = handBell();
+  const open = (held: string | null): ((ms?: number) => Promise<true | string>) => {
+    const stream = pageEvents({
+      token: null,
+      changes: bell,
+      shown: async () => await Promise.resolve(`the page, ${bell.mark()}`),
+      held,
+      signal: null,
+    });
+    return listening((stream.body as ReadableStream<Uint8Array>).getReader());
+  };
+  const holding = bell.mark();
+
+  const told = open(holding);
+  expect(await told()).toBe("retry: 5000\n\n");
+  bell.ring();
+  expect(await told()).toBe(CHANGE_FRAME);
+
+  // The redraw that word asked for never landed -- the fetch failed, or the
+  // network dropped during it -- so this page is still showing the draw it was
+  // showing, and the stream it opens says so. It is told again.
+  const reopened = open(holding);
+  expect(await reopened()).toBe("retry: 5000\n\n");
+  expect(await reopened()).toBe(CHANGE_FRAME);
+
+  // Where the redraw did land, the mark it brought with it is this page's, and
+  // the same reopen is silence: nothing is redrawn twice for one change.
+  const current = open(bell.mark());
+  expect(await current()).toBe("retry: 5000\n\n");
+  expect(await current()).toBe(true);
 });
 
 test("a draw that failed is not a change, and a reader that goes away is dropped (rondo#742)", async () => {

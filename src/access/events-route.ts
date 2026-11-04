@@ -95,11 +95,15 @@ export function registerPageEvents(app: Hono<PageEnv>, ports: ServedPorts, proce
     return pageEvents({
       token,
       changes,
-      // **What draw of itself this page says it is holding**: the mark it was
-      // stamped with, or the id of the last frame it was sent where the
-      // browser is reconnecting a stream of its own accord -- which is the
-      // later of the two, since a page that was told to redraw has.
-      held: c.req.header("last-event-id") ?? query.get(DRAWN_AT_QUERY),
+      // **What draw of itself this page says it is holding**, off the address
+      // and off nothing else. `Last-Event-ID` would be the cheaper read and is
+      // the wrong fact: it is the last frame the browser *received*, so a page
+      // told to redraw that then failed to fetch it, or dropped off the network
+      // during the fetch, would come back claiming a draw it never showed and
+      // be agreed with. The page writes this query from the `#ledger` it is
+      // actually displaying, and reopens its own stream so that what it says
+      // is current each time (`page/live.js`).
+      held: query.get(DRAWN_AT_QUERY),
       shown: async () =>
         await operatorPage(
           drawnPorts(reading, namingToken, null),
