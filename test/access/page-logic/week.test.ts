@@ -125,7 +125,11 @@ test("the approvals are summed, and what is left is never a debt", () => {
     },
     NOW,
   );
-  expect(figures.budget?.allowance).toMatchObject({ spentUsd: 5.5, approvedUsd: 50, leftUsd: 44.5 });
+  expect(figures.budget?.allowance).toMatchObject({
+    spentUsd: 5.5,
+    approvedUsd: 50,
+    leftUsd: 44.5,
+  });
   const over = weekFigures(
     {
       ...reads,
