@@ -834,9 +834,12 @@ test("a marked message is one line too: the row's tracks hold the summary's chil
     // **One child per track, marked or not.** A fifth child would be a fifth
     // column the grid has not got, and the browser would put it on a second
     // row -- so the words' press would leave the line it belongs to.
-    for (const id of ["request-a", "ask-b", "answer-d", "ask-e"]) {
+    const lines = ["request-a", "ask-b", "answer-d", "ask-e"];
+    for (const id of lines) {
+      expect(columnsIn(html, id).length, `${id}: one child per track`).toBe(tracks.length);
+    }
+    for (const id of lines) {
       expect(columnsIn(html, id), id).toEqual(["msg-said", "msg-line", "msg-at", "msg-open"]);
-      expect(columnsIn(html, id), id).toHaveLength(tracks.length);
     }
 
     // The marks are inside that leading column, on the line itself rather than
