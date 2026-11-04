@@ -593,6 +593,7 @@ async function threadModel(
       const waits = threads.waiting.has(message.messageId);
       const parent = message.inReplyTo === null ? undefined : threads.byId.get(message.inReplyTo);
       const previous = selectedMessages[at - 1];
+      const band = bands.get(message.messageId) ?? null;
       return {
         kind: "message",
         message: {
@@ -601,8 +602,10 @@ async function threadModel(
           voice: message.authorKind,
           said: whoWrote(wording, message, ports.actorId),
           // The one line the record shows unpressed: the message's own first
-          // line, never a summary of rondo's.
-          line: lineOf(message),
+          // line, never a summary of rondo's. Where a band stands over the
+          // words, the line is the first line of what is drawn under it -- the
+          // band already says in its own words what the band's text said.
+          line: band?.body == null ? lineOf(message) : firstLine(band.body),
           body: message.body,
           drawn: (() => {
             const markup = drawnBodies.get(message.messageId);
@@ -634,7 +637,7 @@ async function threadModel(
           bases: message.bases.map((basis) =>
             basisWord(wording, basis, threads, selectedRoot, ports.actorId, gates),
           ),
-          band: bands.get(message.messageId) ?? null,
+          band,
           policy: ((policyId) =>
             policyId === null
               ? null

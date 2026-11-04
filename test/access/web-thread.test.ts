@@ -659,3 +659,79 @@ test("an ask with options is answered by one press per option, the recommended o
   expect(messageIn(after, "reply-c")).toContain("Chose 2");
   expect(messageIn(after, "reply-c")).not.toContain("Carried on");
 });
+
+test("the record is one line per thing, and the words of each are behind the press on that line", async () => {
+  const world = fresh();
+  await seedThread(world);
+  const html = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    { kind: "thread", messageId: "request-a", to: null },
+    EN,
+    mint,
+  );
+
+  // **Always there: the request's short name, and the progress of the work
+  // with what it spent against its cap.** The name is the request's own first
+  // line, at the head; the pair is the governance line, which is not a fold.
+  const headAt = html.indexOf('class="thread-head"');
+  const head = html.slice(headAt, html.indexOf("</header>", headAt));
+  expect(head).toContain('<h1 lang="">Please look at the flaky test.</h1>');
+  // Nothing in the head is behind a press: how far the work has got, and what
+  // it spent against its cap, are the governance line's, which is not a fold
+  // (`test/access/page/governance.test.ts` holds that pair down).
+  expect(head).not.toContain("<details");
+
+  // **Always there: one line per thing that happened.** Each message is a
+  // summary -- who said it, its first line, its age -- and the press that
+  // opens its words, in the person's language.
+  expect(messageIn(html, "request-a")).toContain(
+    '<span class="msg-line" lang="">Please look at the flaky test.</span>',
+  );
+  expect(messageIn(html, "ask-b")).toContain(
+    '<span class="msg-line" lang="">Which runner should I read first?</span>',
+  );
+  expect(html.match(/<span class="msg-open">read the words<\/span>/g)).toHaveLength(3);
+  // The mark that a question waits is on the line, not inside the fold.
+  expect(readableWithoutOpening(html, "Waiting on you")).toBe(true);
+
+  // **Behind the press: the request's whole text, and the whole of what was
+  // said.** Every byte is in the document (D-0029 rule 2) and none of it is
+  // readable until a fold is opened.
+  for (const body of [ROOT_BODY, ASK_BODY, LATER_BODY]) {
+    expect(unescaped(html)).toContain(body);
+  }
+  expect(readableWithoutOpening(html, "It fails &lt;b&gt;one run in five&lt;/b&gt;")).toBe(false);
+  expect(readableWithoutOpening(html, "The Linux one has the most failures.")).toBe(false);
+  // The bases under a message are the reading too, so they are inside with it.
+  expect(readableWithoutOpening(html, 'class="msg-bases-label"')).toBe(false);
+
+  // **The press does reveal them.** `<details>` is what the fold is, so what a
+  // person's press does is add `open` -- and then the words that were shut are
+  // read without opening anything else.
+  const pressed = html.replaceAll('<details class="msg-fold">', '<details class="msg-fold" open>');
+  expect(readableWithoutOpening(pressed, "It fails &lt;b&gt;one run in five&lt;/b&gt;")).toBe(true);
+  expect(readableWithoutOpening(pressed, "The Linux one has the most failures.")).toBe(true);
+  expect(readableWithoutOpening(pressed, 'class="msg-bases-label"')).toBe(true);
+
+  // **The request's text is not drawn twice on one screen.** The head says its
+  // first line as the name; the message that opened it says the same line in
+  // the record, and its text is in that one fold and nowhere else.
+  expect(unescaped(html).split(ROOT_BODY.trimEnd())).toHaveLength(2);
+
+  // **Nothing lays out again what was read last time** (the line this thread
+  // used to draw above the first new thing).
+  expect(html).not.toContain('class="thread-since"');
+  expect(html).not.toContain("you saw last time");
+
+  // The Japanese page says the press in Japanese, and draws the same fold.
+  const ja = await operatorPage(
+    portsOver(world, "ada", []),
+    "t",
+    { kind: "thread", messageId: "request-a", to: null },
+    chromeFor("ja"),
+    mint,
+  );
+  expect(ja).toContain('<span class="msg-open">文面を読む</span>');
+  expect(readableWithoutOpening(ja, "The Linux one has the most failures.")).toBe(false);
+});
