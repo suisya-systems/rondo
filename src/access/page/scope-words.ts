@@ -280,6 +280,8 @@ export interface ScopeWords {
   readonly scopePromptFold: string;
   /** The fold holding which plan the work runs on and which model does it. */
   readonly scopeDetailsFold: string;
+  /** The fold holding what one press does, and what a second press does. */
+  readonly scopeSafeFold: string;
   /** The approval this screen's second state is showing, and the digest it was made over. */
   readonly scopeApproved: (since: string) => string;
   readonly scopeDigest: (digest: string) => string;

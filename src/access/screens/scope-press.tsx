@@ -237,10 +237,31 @@ export function approvePresses(wording: Chrome, plainId: string, onlyPlainId: st
         {wording.startBusyNote}
       </p>
       {/* **The one press that spends money, saying what the refusals already
-          say** (rondo#244): the join is real, and a guarantee nobody is told
-          about is paid for in suspicion. */}
-      <p class="note text-meta leading-5 text-muted-foreground">{wording.startAgainSafe}</p>
+          say** (rondo#244), behind one press of its own: the join is real, and
+          a guarantee nobody is told about is paid for in suspicion -- but it is
+          a reassurance about pressing, not one of the five things this screen
+          always shows, so a person who wonders opens it. */}
+      {safeFold(wording)}
     </div>
+  );
+}
+
+/**
+ * **That a second press is safe, behind one press.** It is what the refusals
+ * already say (rondo#244) said before anybody is refused, and it is read by a
+ * person who hesitates over the button rather than by everyone who approves.
+ */
+export function safeFold(wording: Chrome) {
+  return (
+    <details id="scope-safe" class="group rounded-md border border-border">
+      <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-meta leading-5 text-muted-foreground outline-none select-none hover:bg-accent focus-visible:bg-accent [&::-webkit-details-marker]:hidden">
+        {chevron()}
+        {wording.scopeSafeFold}
+      </summary>
+      <p class="border-t border-border px-3 py-2 text-meta leading-5 text-muted-foreground">
+        {wording.startAgainSafe}
+      </p>
+    </details>
   );
 }
 

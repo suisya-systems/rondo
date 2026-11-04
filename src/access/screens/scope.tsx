@@ -770,6 +770,32 @@ async function scopeForm(
   // Null where there is nothing to choose: an empty fold is a press that opens
   // onto nothing, which is worse than no fold at all.
   const choice = planChoice(wording, view, offered, chosen.planDigest);
+  // **The card that says which plan this runs on, behind the same one press as
+  // the choice of plan**: its heading and the repository it names were the last
+  // two lines of this screen still outside a fold, and *which* of rondo's own
+  // plans an approval reaches for is not one of the five things it always shows.
+  const planCard = (
+    <section id="scope-plan-card" class={`${CARD} space-y-1`}>
+      {/* **The card says what it holds**: the plan, where it runs, and what
+          its agent type is allowed. Its heading named only the last of those
+          until rondo#233 S3's screen review, so the plan rondo would run was
+          the one thing the card never said out loud. */}
+      <h3 class={CARD_HEADING}>{wording.scopePlanHeading}</h3>
+      {drafted.workspaces.map((workspace) => (
+        <p class="text-body leading-5 text-muted-foreground wrap-anywhere">
+          {workspace.repository}
+        </p>
+      ))}
+      {promptFold(wording, planDone(wording, chosen.document))}
+      {recordedFold(wording, [
+        ...drafted.workspaces.map((workspace) =>
+          wording.scopeWorkspace(workspace.repository, workspace.workspace_root),
+        ),
+        ...drafted.heldLines,
+        wording.scopePlanDigest(drafted.planDigest),
+      ])}
+    </section>
+  );
   return (
     <>
       {whatBlock(
@@ -813,7 +839,14 @@ async function scopeForm(
             the five things this screen always shows): a plan chosen here is a
             plan rondo already holds, so the choice is work a person does
             sometimes and not a thing to read before approving. */}
-        {choice === null ? null : detailsFold(wording, choice, "scope-plan")}
+        {detailsFold(
+          wording,
+          <>
+            {choice}
+            {planCard}
+          </>,
+          "scope-plan",
+        )}
         {numbersFold(
           wording,
           <>
@@ -869,28 +902,6 @@ async function scopeForm(
           </>,
         )}
       </form>
-      {/* The plan card is what the form runs on, and long: under the form
-          and its press rather than above them (D-0106, rondo#408). */}
-      <section class={`${CARD} space-y-1`}>
-        {/* **The card says what it holds**: the plan, where it runs, and what
-            its agent type is allowed. Its heading named only the last of those
-            until rondo#233 S3's screen review, so the plan rondo would run was
-            the one thing the card never said out loud. */}
-        <h3 class={CARD_HEADING}>{wording.scopePlanHeading}</h3>
-        {drafted.workspaces.map((workspace) => (
-          <p class="text-body leading-5 text-muted-foreground wrap-anywhere">
-            {workspace.repository}
-          </p>
-        ))}
-        {promptFold(wording, planDone(wording, chosen.document))}
-        {recordedFold(wording, [
-          ...drafted.workspaces.map((workspace) =>
-            wording.scopeWorkspace(workspace.repository, workspace.workspace_root),
-          ),
-          ...drafted.heldLines,
-          wording.scopePlanDigest(drafted.planDigest),
-        ])}
-      </section>
     </>
   );
 }
@@ -1447,8 +1458,12 @@ async function draftedForm(
           </>,
         )}
       </form>
-      {/* The drafted plans under the form and its press (D-0106, rondo#408). */}
-      {plans}
+      {/* **The drafted plans behind one press** (the five things this screen
+          always shows): the card's heading, each part's number and the
+          repository it runs in were outside a fold, and which of rondo's own
+          plans this approval reaches for -- and which model does each part --
+          is read by a person who opens the fold, not by everyone who approves. */}
+      {detailsFold(wording, plans, "scope-drafted-plans")}
     </>
   );
 }

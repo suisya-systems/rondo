@@ -306,7 +306,14 @@ test("the scope screen always shows the five things, with one press that approve
     expect(html.match(/<form[^>]*id="scope-form"/g)).toHaveLength(1);
     expect(html.match(/name="scope_id" value="MINT-SCOPE-1"/g)).toHaveLength(1);
     expect(html.match(/name="iteration" value="MINT-LAP-1"/g)).toHaveLength(1);
-    expect(html).toContain(wording.startAgainSafe);
+    // **That a second press is safe is behind a press of its own**: it is a
+    // reassurance about the button, not one of the five, so the sentence is in
+    // the fold and the fold's own words are what is always shown.
+    expect(html).toContain(wording.scopeSafeFold);
+    expect(html.indexOf(wording.scopeSafeFold)).toBeLessThan(html.indexOf(wording.startAgainSafe));
+    expect(html.indexOf('id="scope-safe"')).toBeGreaterThan(
+      html.indexOf(`>${wording.scopeStartAction}</button>`),
+    );
 
     // **Behind one press: the caps' own boxes, where each number came from, and
     // the whole of what the worker is sent.**
@@ -331,8 +338,13 @@ test("the scope screen always shows the five things, with one press that approve
     );
     expect(html.indexOf(wording.scopeLead)).toBeGreaterThan(press);
     expect(html.indexOf(wording.scopeMaybeApproved)).toBeGreaterThan(press);
-    // The only headings above the press are the two blocks the five live in.
+    // The only headings above the press are the two blocks the five live in:
+    // the plan card's heading and the repository it names are in the plan fold
+    // below it, where the choice of plan already was.
     expect(html.slice(0, press).match(/<h3 /g)).toHaveLength(2);
+    expect(html.indexOf('id="scope-plan"')).toBeGreaterThan(press);
+    expect(html.indexOf('id="scope-plan-card"')).toBeGreaterThan(html.indexOf('id="scope-plan"'));
+    expect(html.indexOf(wording.scopePlanHeading)).toBeGreaterThan(html.indexOf('id="scope-plan"'));
     // **Gone: the long budget prose, and the second approve press.**
     expect(html).not.toContain(wording.scopeCostCaveat);
     expect(html).not.toContain(wording.scopeSampleHeading);
@@ -1429,9 +1441,10 @@ test("with two plans held, the screen offers the choice, the first marked, and t
     () => "x",
     () => "y",
   );
-  // Bounded at the rounds, so what the recorded fold holds further down --
-  // where the paths are rondo's own record and stay paths -- is not read here.
-  const choice = drawn.slice(drawn.indexOf('id="plans"'), drawn.indexOf('id="rounds"'));
+  // Bounded at the plan card below it in the same fold, so what its recorded
+  // fold holds -- where the paths are rondo's own record and stay paths -- is
+  // not read here.
+  const choice = drawn.slice(drawn.indexOf('id="plans"'), drawn.indexOf('id="scope-plan-card"'));
   // **The two plans are in two repositories, so each line says which**
   // (rondo#305, D-0081 rule 4.2) -- and says it as the person names the place,
   // which is the last segment and not the path rondo holds it by.
@@ -1478,7 +1491,7 @@ for (const wording of [EN, chromeFor("ja")]) {
     // The choice is behind the plan fold now (the gate's reading of the five
     // things this screen always shows), and the numbers' fold follows it.
     expect(drawn.indexOf('id="scope-plan"')).toBeLessThan(from);
-    const to = drawn.indexOf('id="scope-numbers"');
+    const to = drawn.indexOf('id="scope-plan-card"');
     expect(from).toBeGreaterThan(-1);
     expect(to).toBeGreaterThan(from);
     return drawn.slice(from, to);

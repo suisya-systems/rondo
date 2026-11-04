@@ -261,12 +261,41 @@ test("the drafted scope screen always shows the five things and nothing else of 
     // what makes a double press one scope and one lap.
     expect(page.match(/name="iteration" value="lap-y"/g)).toHaveLength(1);
     expect(page.match(/name="scope_id" value="scope-x"/g)).toHaveLength(1);
-    expect(page).toContain(wording.startAgainSafe);
+    // **That a second press is safe is behind a press of its own**, here as on
+    // a person's own form: it is a reassurance about the button, not a cap.
+    expect(page).toContain(wording.scopeSafeFold);
+    expect(page.indexOf(wording.scopeSafeFold)).toBeLessThan(page.indexOf(wording.startAgainSafe));
 
     // **Behind one press: editing the caps and where each number came from.**
     expect(page).toContain(wording.scopeNumbersFold);
     expect(page.indexOf(wording.scopeNumbersFold)).toBeLessThan(page.indexOf('name="cost_usd"'));
     expect(page).toContain(wording.scopeBasesFold(2));
+    // **And behind one press: whose draft this is, which plan each part runs
+    // on, and which model does it** (the drafted screen's own reading of the
+    // five things, in both languages). Nothing of the plans card -- not its
+    // heading, not a part's number, not the prompt or the tier -- is above the
+    // main press, and the lead prose is inside the numbers' fold.
+    const press = page.indexOf(`>${wording.scopeStartAction}</button>`);
+    expect(page.indexOf(wording.scopeNumbersFold)).toBeLessThan(
+      page.indexOf(wording.scopeDraftedLead),
+    );
+    expect(page.indexOf(wording.scopeDraftedLead)).toBeGreaterThan(press);
+    expect(page.indexOf('id="scope-drafted-plans"')).toBeGreaterThan(press);
+    expect(page.indexOf('id="drafted-plans"')).toBeGreaterThan(
+      page.indexOf('id="scope-drafted-plans"'),
+    );
+    for (const said of [
+      wording.scopeDraftedPlansHeading,
+      wording.scopeDraftedPlan(1),
+      wording.tierHeading,
+    ]) {
+      expect(page.indexOf(said), said).toBeGreaterThan(page.indexOf('id="scope-drafted-plans"'));
+    }
+    for (const prompt of DRAFTED_PROMPTS) {
+      expect(page.indexOf(prompt)).toBeGreaterThan(page.indexOf('id="scope-drafted-plans"'));
+    }
+    // The only headings above the main press are the two blocks the five live in.
+    expect(page.slice(0, press).match(/<h3 /g)).toHaveLength(2);
     // **Gone from the screen: the long budget prose and the second approve
     // press.** There is one press of each kind, not one at the top of the form
     // and another under its last box.
