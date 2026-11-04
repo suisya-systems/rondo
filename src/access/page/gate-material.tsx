@@ -155,6 +155,31 @@ function coverageLine(id: string, wording: Chrome, drafter: string, who: string 
 }
 
 /**
+ * **Evidence behind one press** (this lap's narrowing of the request's faces).
+ *
+ * The right face said the whole of what changed and the whole of what the
+ * review raised, unfolded, above and below the thing a person came to decide.
+ * Both are now one press: the heading and the pill beside it still say *a
+ * change was made* and *the review found this much*, which is what a person
+ * weighs, and the rows and the findings are what they open when they want to
+ * check it.
+ *
+ * Folded is not dropped (D-0029 rule 2): everything is in the document, and
+ * `page/app.css` draws every fold open where script is off.
+ */
+function evidenceFold(id: string, said: string, inside: unknown) {
+  return (
+    <details id={id} class="group mt-2">
+      <summary class="flex cursor-pointer list-none items-center gap-1.5 text-meta leading-5 text-muted-foreground select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+        {chevron()}
+        {said}
+      </summary>
+      <div class="mt-1">{inside}</div>
+    </details>
+  );
+}
+
+/**
  * rondo's own reason for something the person was told in their own terms
  * (D-0076 rule 4.5): one closed fold beside that sentence, labelled for
  * whoever maintains rondo on this machine, holding the reason as rondo
@@ -209,47 +234,51 @@ function changedView(wording: Chrome, record: IterationRecord, work: LapWorkInsp
           {maintainerFold("changed-reason", wording, work.reason)}
         </>
       ) : (
-        <div class="mt-2 space-y-2">
-          {work.commits.length === 0 ? (
-            <p class="text-body leading-5 text-muted-foreground">{wording.noCommits}</p>
-          ) : (
-            <ul class={`commits ${ROWS}`}>
-              {work.commits.slice(0, LIST_LIMIT).map((commit) => (
-                <li class="flex gap-3 px-3 py-1.5 text-body leading-5">
-                  <span class="shrink-0 font-mono text-id leading-5 text-faint">
-                    {commit.abbreviatedSha}
-                  </span>
-                  <span class="min-w-0 wrap-anywhere" lang="">
-                    {commit.subject}
-                  </span>
-                </li>
-              ))}
-              {hidden(work.commits.length)}
-            </ul>
-          )}
-          {work.files.length === 0 ? (
-            <p class="text-body leading-5 text-muted-foreground">{wording.noFiles}</p>
-          ) : (
-            <ul class={`files ${ROWS}`}>
-              {work.files.slice(0, LIST_LIMIT).map((file) => (
-                <li class="flex items-baseline gap-3 px-3 py-1.5">
-                  <span class="min-w-0 flex-1 font-mono text-id leading-5 wrap-anywhere">
-                    {file.path}
-                  </span>
-                  {file.added === null || file.deleted === null ? (
-                    <span class="shrink-0 text-id text-faint">{wording.binaryFile}</span>
-                  ) : (
-                    <span class="shrink-0 font-mono text-id tabular-nums">
-                      <span class="text-ok">+{String(file.added)}</span>{" "}
-                      <span class="text-fail">-{String(file.deleted)}</span>
+        evidenceFold(
+          "changed-rows",
+          wording.changedFold,
+          <div class="space-y-2">
+            {work.commits.length === 0 ? (
+              <p class="text-body leading-5 text-muted-foreground">{wording.noCommits}</p>
+            ) : (
+              <ul class={`commits ${ROWS}`}>
+                {work.commits.slice(0, LIST_LIMIT).map((commit) => (
+                  <li class="flex gap-3 px-3 py-1.5 text-body leading-5">
+                    <span class="shrink-0 font-mono text-id leading-5 text-faint">
+                      {commit.abbreviatedSha}
                     </span>
-                  )}
-                </li>
-              ))}
-              {hidden(work.files.length)}
-            </ul>
-          )}
-        </div>
+                    <span class="min-w-0 wrap-anywhere" lang="">
+                      {commit.subject}
+                    </span>
+                  </li>
+                ))}
+                {hidden(work.commits.length)}
+              </ul>
+            )}
+            {work.files.length === 0 ? (
+              <p class="text-body leading-5 text-muted-foreground">{wording.noFiles}</p>
+            ) : (
+              <ul class={`files ${ROWS}`}>
+                {work.files.slice(0, LIST_LIMIT).map((file) => (
+                  <li class="flex items-baseline gap-3 px-3 py-1.5">
+                    <span class="min-w-0 flex-1 font-mono text-id leading-5 wrap-anywhere">
+                      {file.path}
+                    </span>
+                    {file.added === null || file.deleted === null ? (
+                      <span class="shrink-0 text-id text-faint">{wording.binaryFile}</span>
+                    ) : (
+                      <span class="shrink-0 font-mono text-id tabular-nums">
+                        <span class="text-ok">+{String(file.added)}</span>{" "}
+                        <span class="text-fail">-{String(file.deleted)}</span>
+                      </span>
+                    )}
+                  </li>
+                ))}
+                {hidden(work.files.length)}
+              </ul>
+            )}
+          </div>,
+        )
       )}
     </section>
   );
@@ -635,43 +664,49 @@ function modelView(
             </>
           ) : (
             <>
-              {reading.findings.length === 0 ? null : (
-                <ul class="mt-2 divide-y divide-border/70">
-                  {reading.findings.map((text, index) => {
-                    const graded = reading.graded?.[index];
-                    return (
-                      <li class="model-finding py-2 first:pt-1 last:pb-0">
-                        {/* A `div` where the finding is held: its fold is not phrasing content. */}
-                        {reads === null ? (
-                          <p class="flex items-start gap-2 text-body leading-5">
-                            {severityOf(wording, graded)}
-                            <span class="min-w-0 wrap-anywhere" lang="">
-                              {text}
-                            </span>
-                          </p>
-                        ) : (
-                          <div class="flex items-start gap-2 text-body leading-5">
-                            {severityOf(wording, graded)}
-                            {raw(heldMarkup({ wording, reads, text, className: "wrap-anywhere" }))}
-                          </div>
-                        )}
-                        {/* The bases themselves are paths, lines and commits, so
+              {reading.findings.length === 0
+                ? null
+                : evidenceFold(
+                    "model-findings",
+                    wording.findingsFold,
+                    <ul class="divide-y divide-border/70">
+                      {reading.findings.map((text, index) => {
+                        const graded = reading.graded?.[index];
+                        return (
+                          <li class="model-finding py-2 first:pt-1 last:pb-0">
+                            {/* A `div` where the finding is held: its fold is not phrasing content. */}
+                            {reads === null ? (
+                              <p class="flex items-start gap-2 text-body leading-5">
+                                {severityOf(wording, graded)}
+                                <span class="min-w-0 wrap-anywhere" lang="">
+                                  {text}
+                                </span>
+                              </p>
+                            ) : (
+                              <div class="flex items-start gap-2 text-body leading-5">
+                                {severityOf(wording, graded)}
+                                {raw(
+                                  heldMarkup({ wording, reads, text, className: "wrap-anywhere" }),
+                                )}
+                              </div>
+                            )}
+                            {/* The bases themselves are paths, lines and commits, so
                             they go in the maintainer fold below (rondo#679);
                             what a person acts on -- that none was given, or
                             none matched the work -- stays here. */}
-                        {graded === undefined ||
-                        (graded.bases.length > 0 && graded.basisResolved) ? null : (
-                          <p class="mt-1 text-meta leading-5 text-faint">
-                            {graded.bases.length === 0
-                              ? wording.basisNone
-                              : wording.basisUnresolved}
-                          </p>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+                            {graded === undefined ||
+                            (graded.bases.length > 0 && graded.basisResolved) ? null : (
+                              <p class="mt-1 text-meta leading-5 text-faint">
+                                {graded.bases.length === 0
+                                  ? wording.basisNone
+                                  : wording.basisUnresolved}
+                              </p>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>,
+                  )}
               {coverageLine("model-coverage", wording, reading.drafter)}
               {maintainerFold("model-internals", wording, internals)}
             </>

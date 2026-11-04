@@ -394,6 +394,8 @@ export const JA: Chrome = Object.freeze({
   reportNotRead:
     "ワーカーの報告を読み取れませんでした。報告があれば、下の「記録全文」の中にあります。",
   workHeading: "変わったもの",
+  changedFold: "コミットと変更ファイル",
+  findingsFold: "指摘された点",
   changedAgainst: (baseRef) => `${baseRef} との比較`,
   changedUnreadable:
     "作業場所が読み取れなかったため、この作業で何が変わったかをここには出せません。",

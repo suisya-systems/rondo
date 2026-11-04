@@ -383,6 +383,8 @@ explanation you pressed on and then answers the gate.`,
   reportFold: "In full, as the worker wrote it",
   reportNotRead: "The worker's report could not be read; it is in the text below if it was.",
   workHeading: "What changed",
+  changedFold: "the commits and the files",
+  findingsFold: "what the review raised",
   changedAgainst: (baseRef) => `against ${baseRef}`,
   changedUnreadable:
     "The workspace could not be read, so what this work changed cannot be shown here. Whoever " +

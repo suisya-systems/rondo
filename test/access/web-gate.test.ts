@@ -100,9 +100,24 @@ test("both readings are drawn from the rows on the right face, with the warning 
   expect(html.slice(0, html.indexOf('id="model-internals"'))).not.toContain("src/notifier.ts:41");
   expect(html).toContain("none of these matched the delivered work");
   expect(html).toContain("no basis given");
-  // What changed, as rows, and the worker's own words.
+  // **What changed is one press, and the heading says a change was made.** The
+  // commits and the files were drawn open above the thing the person came to
+  // decide; the rows are all still here, behind the one summary.
   expect(html).toContain("feat: retry budget");
   expect(html).toContain(">+64</span>");
+  expect(html).toContain("the commits and the files");
+  const changedAt = html.indexOf('id="changed"');
+  const changed = html.slice(changedAt, html.indexOf("</section>", changedAt));
+  expect(readableWithoutOpening(changed, "feat: retry budget")).toBe(false);
+  expect(
+    readableWithoutOpening(
+      changed.replace('<details id="changed-rows"', '<details open id="changed-rows"'),
+      "feat: retry budget",
+    ),
+  ).toBe(true);
+  // The heading, the branch and what it is compared against are not folded:
+  // they are what says a change was made at all.
+  expect(changed.slice(0, changed.indexOf('id="changed-rows"'))).toContain(EN.workHeading);
   expect(html).toContain("I could not run the suite.");
   // **Named for what it is, and shut** (rondo#444): every gate is the worker's
   // turn ending, so the card is its report, not why it stopped, and the report
@@ -1115,10 +1130,14 @@ test("what a reading did not look at is beside its verdict and not behind a fold
   const model = html.slice(html.indexOf('id="model-review"'), html.indexOf(EN.readingsNote));
   // The label the summary carried is still there, and the sentences under it
   // are readable where the verdict is: neither card holds a fold of them. The
-  // model card's one fold is the maintainer's (rondo#679), after them.
+  // model card's other folds are the maintainer's (rondo#679) and the one the
+  // findings themselves are behind -- both after the coverage line, so what
+  // the reading did *not* look at is still read without pressing anything.
   for (const card of [
     checks,
-    model.replace(/<details id="model-internals"[\s\S]*?<\/details>/, ""),
+    model
+      .replace(/<details id="model-internals"[\s\S]*?<\/details>/, "")
+      .replace(/<details id="model-findings"[\s\S]*?<\/details>/, ""),
   ]) {
     expect(card).toContain(EN.whatItRead);
     expect(card).not.toContain("<details");
@@ -1126,6 +1145,19 @@ test("what a reading did not look at is beside its verdict and not behind a fold
   expect(checks).toContain("It built nothing, ran nothing and tested nothing");
   expect(checks).toContain("neither checked nor claimed here");
   expect(model).toContain("ran nothing itself");
+  // The findings are behind their own press, and the verdict pill that counts
+  // them is not: the count is what a person weighs, the findings are what they
+  // open to check it.
+  expect(model.indexOf("1 blocker")).toBeLessThan(model.indexOf('id="model-findings"'));
+  // On this card, that is: the answering box quotes every finding unfolded,
+  // which is rule 9.4's and is the box's business and not this face's.
+  expect(readableWithoutOpening(model, "the loop never stops")).toBe(false);
+  expect(
+    readableWithoutOpening(
+      model.replace('<details id="model-findings"', '<details open id="model-findings"'),
+      "the loop never stops",
+    ),
+  ).toBe(true);
   expect(model).toContain("that it was understood is not provable");
 });
 
