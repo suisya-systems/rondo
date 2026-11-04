@@ -767,6 +767,46 @@ function reviseForm(
   const raising = rounds === null ? null : framing.budgets;
   const box = framing.revise;
   const draftKey = `revise:${record.id}:${record.gateId ?? ""}`;
+  /*
+   * **Where a worker's question waits, every draft on the screen is one press
+   * away** (rondo#704, the gate's reading of this pass). The answer box above
+   * folds the change it would send; this box holds the same drafted words, and
+   * drawn open it put them back on the screen the fold took them off. So while
+   * the question waits and a draft is what the box holds, the field goes behind
+   * a fold of its own -- a `details`, as the other folds are, so a browser with
+   * no script opens it too. A field inside a closed `details` is still the
+   * form's and still sent, so what the press sends is what it sent before.
+   *
+   * Only then: with nothing drafted the box is the person's empty field, which
+   * hides nothing, and at the gate's own press D-0083 rule 9.4 draws what a
+   * reading raised and what is asked for it in the open.
+   */
+  const folded = box.kind === "drafted" && (framing.workerQuestion?.waitedSaid ?? null) !== null;
+  const field = (
+    <label class="flex min-w-0 flex-col gap-1">
+      <span class="text-meta leading-5 font-medium text-muted-foreground">
+        {wording.reviseLabel}
+      </span>
+      {/* **The draft is the field's content and not a `placeholder`**: a
+          placeholder is not sent, and what the person presses with has to
+          be what they read. `data-draft` is the composer script's duty,
+          keyed per gate; an edit survives a refusal and a draft that lands
+          later (D-0077 rule 4.4), and an untouched box carries the draft.
+          The findings inside it are the reviewer's own words, so the box
+          states no language. */}
+      <textarea
+        name="body"
+        rows={4}
+        lang=""
+        data-draft={draftKey}
+        data-round-carry="body"
+        placeholder={wording.revisePlaceholder}
+        class="max-h-64 min-h-20 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-body leading-5 outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {box.kind === "drafted" ? box.text : ""}
+      </textarea>
+    </label>
+  );
   return (
     <div id="revise">
       <form
@@ -817,29 +857,17 @@ function reviseForm(
             </label>
           </div>
         )}
-        <label class="flex min-w-0 flex-col gap-1">
-          <span class="text-meta leading-5 font-medium text-muted-foreground">
-            {wording.reviseLabel}
-          </span>
-          {/* **The draft is the field's content and not a `placeholder`**: a
-              placeholder is not sent, and what the person presses with has to
-              be what they read. `data-draft` is the composer script's duty,
-              keyed per gate; an edit survives a refusal and a draft that lands
-              later (D-0077 rule 4.4), and an untouched box carries the draft.
-              The findings inside it are the reviewer's own words, so the box
-              states no language. */}
-          <textarea
-            name="body"
-            rows={4}
-            lang=""
-            data-draft={draftKey}
-            data-round-carry="body"
-            placeholder={wording.revisePlaceholder}
-            class="max-h-64 min-h-20 w-full resize-y rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-body leading-5 outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {box.kind === "drafted" ? box.text : ""}
-          </textarea>
-        </label>
+        {folded ? (
+          <details id="revise-draft-fold" class="group">
+            <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+              {chevron()}
+              {wording.reviseDraftFold}
+            </summary>
+            <div class="mt-1">{field}</div>
+          </details>
+        ) : (
+          field
+        )}
         {box.kind === "none" ? null : (
           <p
             id="revise-draft-state"

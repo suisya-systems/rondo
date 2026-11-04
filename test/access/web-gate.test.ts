@@ -1573,6 +1573,73 @@ test("where a worker's question waits, what the review raised is one press away 
   expect(ja).toContain("見直しで挙がった点を見る");
 });
 
+/** Whether what is at `at` sits inside a fold a person has to open first. */
+const insideFold = (html: string, at: number): boolean => {
+  const opened = html.lastIndexOf("<details", at);
+  return opened > -1 && html.lastIndexOf("</details>", at) < opened;
+};
+
+/**
+ * Where `said` is *drawn* on the page: between tags, and so read without a
+ * press. An occurrence inside a tag is a field's value -- the hidden field an
+ * answer carries its draft in -- which is sent and never read.
+ */
+const drawnAt = (html: string, said: string): readonly number[] => {
+  const found: number[] = [];
+  for (let at = html.indexOf(said); at > -1; at = html.indexOf(said, at + 1)) {
+    if (html.indexOf(">", html.lastIndexOf("<", at)) < at) {
+      found.push(at);
+    }
+  }
+  return found;
+};
+
+/** The gate's own change form, from its first field to its last line. */
+const reviseOf = (html: string): string =>
+  html.slice(html.indexOf('id="revise-form"'), html.indexOf('id="revise-plain"'));
+
+test("where a worker's question waits, the gate's box folds the drafted change as the answer box does (rondo#704)", async () => {
+  const world = fresh();
+  await gateWithChecks(world);
+  await modelFindings(world);
+  await draftRevise(world, REVISE_ANSWER);
+
+  // At the gate's own press the box is drawn open, as it always was: what is
+  // being pressed there is the change itself.
+  const plain = reviseOf(await questionPage(world));
+  expect(plain).toContain("<textarea");
+  expect(plain).toContain(REVISE_ANSWER.lead);
+  expect(plain).not.toContain("<details");
+
+  await workerAsksWithOptions(world);
+  const page = await questionPage(world);
+  const asked = reviseOf(page);
+  // Now the question is what is being answered, so this box's draft is behind
+  // a fold of its own, with the field inside it.
+  const fold = asked.indexOf('<details id="revise-draft-fold"');
+  expect(fold).toBeGreaterThan(-1);
+  expect(asked).toContain(EN.reviseDraftFold);
+  expect(asked.indexOf("<textarea")).toBeGreaterThan(asked.indexOf("</summary>"));
+  expect(asked.slice(0, fold)).not.toContain(REVISE_ANSWER.lead);
+  expect(asked.slice(fold)).toContain(REVISE_ANSWER.lead);
+
+  // **And every drafted change drawn on the one screen is behind a press**:
+  // the answer box's copy of these words as well as this box's, which is the
+  // requirement a fold on one of them alone did not meet. Both are drawn, so
+  // the check is of two folds and not of words that went missing.
+  const drawn = drawnAt(page, REVISE_ANSWER.lead);
+  expect(drawn).toHaveLength(2);
+  for (const at of drawn) {
+    expect(insideFold(page, at)).toBe(true);
+  }
+
+  // The same fold in Japanese, and the press it is drawn above is unchanged.
+  const ja = reviseOf(await questionPage(world, JA));
+  expect(ja).toContain(JA.reviseDraftFold);
+  expect(ja).toContain("この押しで渡す変更依頼の下書きを見る");
+  expect(ja).toContain(">変更を依頼する</button>");
+});
+
 test("a worker's question with options names no Carry on press in its revise note (D-0190 rule 6)", async () => {
   const world = fresh();
   await gateWithChecks(world);
