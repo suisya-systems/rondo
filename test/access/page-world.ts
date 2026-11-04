@@ -185,8 +185,16 @@ export function planFor(
   id: string,
   materialLanguage: string | null = null,
   repository: string = PLAN.repository,
+  /**
+   * The prompt the plan carries, which is the bulk of a real plan's payload
+   * (`test/access/page-budget.test.ts`): the page re-reads and re-digests every
+   * ended lap's plan, so what a draw costs over a ledger is a function of how
+   * many bytes those payloads are, and a fixture judged on a draw's duration
+   * has to be able to carry payloads the size of the ones a host holds.
+   */
+  prompt: string = PLAN.prompt,
 ): JsonRecord {
-  const validated = runPlan({ ...PLAN, materialLanguage, repository });
+  const validated = runPlan({ ...PLAN, materialLanguage, repository, prompt });
   if (validated.kind !== "planned") {
     throw new Error(`the fixture plan is not valid: ${validated.reason}`);
   }
