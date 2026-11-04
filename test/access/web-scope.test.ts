@@ -4,8 +4,13 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 import type {} from "../../src/access/inbox.js";
+import { MODEL_DRAFTER_PREFIX } from "../../src/access/model-draft/judgement.js";
 import { reviseFromPage } from "../../src/access/page-actions.js";
-import { recordScopeFromPage, startScopedFromPage } from "../../src/access/page-scope-actions.js";
+import {
+  recordDraftedScopeFromPage,
+  recordScopeFromPage,
+  startScopedFromPage,
+} from "../../src/access/page-scope-actions.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
 import { newScopeId, type ScopeFormDraft } from "../../src/access/web-app.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
@@ -1075,6 +1080,111 @@ test(
     // And nothing was asked of the request by either (D-0066 rule 4.4): a
     // second press is safe, which is what the screen's fold says it is.
     expect(rows(connection, "conversation_message")).toBe(asked);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "the drafted scope's combined press sent twice approves the draft once, through the writes themselves",
+  async () => {
+    // The drafted path's own double press, through `recordDraftedScopeFromPage`
+    // rather than through a spy that refuses for it: the draft is approved once
+    // however many times the form's body arrives, and what makes that so is the
+    // store's own refusal of a second decision over one scope.
+    const dir = mkdtempSync(join(tmpdir(), "rondo-scope-draft-twice-"));
+    const storePath = join(dir, "store.db");
+    const connection = new DatabaseSync(storePath);
+    const record = advisoryRecord(connection);
+    const requestId = "request-draft-twice";
+    await record.recordThreadMessage({
+      messageId: requestId,
+      body: "Two things, please.",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: null,
+      atMs: 1_000,
+      bases: [],
+      asks: false,
+    });
+    const plan = await seedScopePlan(record, requestId);
+    const payload = scopePayloadWithDefaults({
+      requests: [requestId],
+      workspaces: [{ repository: "/srv/repo", workspace_root: SCOPE_PLAN.workspaceRoot }],
+      agent_types: [plan.agentTypeDigest],
+      budgets: {
+        laps: 2,
+        review_rounds: 1,
+        cost_usd: 4,
+        cost_reserve_usd: 1,
+        expires_at_ms: 9_999_999_999,
+      },
+      severity_threshold: "major",
+      outward_acts: [],
+      irreversible_additions: [],
+    } as unknown as JsonRecord);
+    // **A drafter's scope lists only agent types rondo already holds** (D-0066
+    // rule 1.2.3), and nothing holds this one yet: a person's own unapproved
+    // scope over the pasted plan is what records it, as the page's own form
+    // would have.
+    const holding = await record.recordScope({
+      scopeId: "scope-holds-the-type",
+      payload,
+      supersedesScopeId: null,
+      authorKind: "operator",
+      authorId: "ada",
+      bases: [],
+      createdAtMs: 1_100,
+      agentTypeRecords: [
+        {
+          agentTypeDigest: plan.agentTypeDigest,
+          agentTypeInput: SCOPE_AGENT_TYPE_INPUT,
+          planDigest: plan.planDigest,
+        },
+      ],
+    });
+    expect(holding.kind, JSON.stringify(holding)).toBe("recorded");
+    const written = await record.recordScope({
+      scopeId: "scope-drafted-twice",
+      payload,
+      supersedesScopeId: null,
+      authorKind: "drafter",
+      authorId: `${MODEL_DRAFTER_PREFIX}1`,
+      // D-0066 rule 1.5: a drafter's scope names what it was drafted from.
+      bases: [{ form: "message", messageId: requestId }],
+      createdAtMs: 1_200,
+      // D-0071 section 6.2: a drafter's scope records no agent type of its own;
+      // it lists one the pasted plan above already holds.
+      agentTypeRecords: [],
+    });
+    expect(written.kind, JSON.stringify(written)).toBe("recorded");
+    const read = await record.readScope("scope-drafted-twice");
+    if (read.kind !== "read") {
+      throw new Error(`the drafted scope fixture did not read: ${JSON.stringify(read)}`);
+    }
+    // One form, drawn once: the draft by id and digest, and the minted scope id
+    // the person's own version would be recorded under.
+    const form = {
+      draftScopeId: read.scope.scopeId,
+      draftDigest: read.scope.scopeDigest,
+      scopeId: newScopeId(),
+      budgets: payload.budgets,
+      severityThreshold: "major",
+      outwardActs: [] as const,
+    };
+    const environment = { RONDO_APPROVER: "ada" };
+    const first = await recordDraftedScopeFromPage(environment, storePath, "ada", form);
+    const again = await recordDraftedScopeFromPage(environment, storePath, "ada", form);
+    expect(first.ok).toBe(true);
+    expect(again.ok).toBe(true);
+    // One approval of one draft: the second press lands on the decision the
+    // first made, and nothing of the person's own was recorded beside it.
+    expect(again.scopeDecisionId).toBe(first.scopeDecisionId);
+    // Two scope rows, both the fixture's: the draft, and the unapproved one
+    // that holds the agent type. Nothing was recorded under the form's own
+    // minted id, so the second press wrote no version of the person's either.
+    expect(rows(connection, "scope")).toBe(2);
+    expect(await record.readScope(form.scopeId)).toEqual({ kind: "absent" });
+    expect(rows(connection, "scope_decision")).toBe(1);
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
