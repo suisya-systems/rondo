@@ -851,6 +851,25 @@ export const JA: Chrome = Object.freeze({
     "1 回押すと、この範囲があなたの名前で記録され、承認されます。" +
     "承認しただけでは費用はかかりません。",
   scopePlain: "この範囲を記録して承認します",
+  scopeWhatHeading: "すること、しないこと",
+  scopeWhatDoes: (repository) =>
+    `rondo は ${repository} で依頼の作業を進めます。下の上限の内側で進め、できたものはあなたが読めるように持ち帰ります。`,
+  scopeWhatStops:
+    "費用の上限、最後のやり直し、期限のいずれかに達したら、先へ進まずに自分で止まり、あなたに尋ねます。",
+  scopeWhatNot: (acts) =>
+    acts.length === 0
+      ? "外に向けたことは自分では何もしません。ブランチの push も、pull request を開くことも、取り込みも、あなたが押すまで行いません。"
+      : `外に向けては${acts.join("、")}だけを任せます。それ以外はあなたが押すまで待ちます。`,
+  scopeLimitsHeading: "この承認が定める上限",
+  scopeStartAction: "承認して開始",
+  scopeStartPlain: "この 1 回の押下で、この範囲を承認し、作業を開始します",
+  scopeStartBusy: "承認して開始しています...",
+  scopeOnlyAction: "承認だけして後で開始",
+  scopeOnlyPlain: "承認を記録します。作業はまだ開始しません",
+  scopeNumbersFold: "上限を変える・それぞれの数値の出どころを見る",
+  scopePromptFold: "作業を実行する側に渡す指示の全文",
+  scopeDetailsFold: "これを実行する計画と、担当するモデル",
+  scopeSafeFold: "1 回押すと何が起きるか・もう 1 回押すとどうなるか",
   scopeApproved: (since) => `${since}前に承認済み`,
   scopeDigest: (digest) => `識別子 ${digest}`,
   scopeNotThisRequest: "その承認はこの依頼のものではないので、ここには何も表示しません。",

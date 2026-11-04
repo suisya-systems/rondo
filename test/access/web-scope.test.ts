@@ -4,8 +4,13 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test } from "vitest";
 import type {} from "../../src/access/inbox.js";
+import { MODEL_DRAFTER_PREFIX } from "../../src/access/model-draft/judgement.js";
 import { reviseFromPage } from "../../src/access/page-actions.js";
-import { recordScopeFromPage, startScopedFromPage } from "../../src/access/page-scope-actions.js";
+import {
+  recordDraftedScopeFromPage,
+  recordScopeFromPage,
+  startScopedFromPage,
+} from "../../src/access/page-scope-actions.js";
 import { agentTypeRecordOf, heldAgentTypeLines } from "../../src/access/scope.js";
 import { newScopeId, type ScopeFormDraft } from "../../src/access/web-app.js";
 import { type Chrome, chromeFor, EN } from "../../src/access/wording.js";
@@ -194,14 +199,23 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   expect(html).toContain(`${SCOPE_PLAN.repository} at ${SCOPE_PLAN.workspaceRoot}`);
   expect(html).toContain("tier standard, granted command.run");
 
-  // **What the draft assumed, above the numbers** (rondo#247): which laps it
-  // measured, how far apart they were, and that their size was never recorded.
-  expect(html).toContain("This draft assumes your request is the size of past laps");
-  expect(html).toContain(
-    "Drafted from 2 recorded first laps of this agent type, which cost 0.40 to 1.20 USD",
-  );
-  expect(html).toContain("you can still raise it when the work comes back to you");
-  expect(html.indexOf("This draft assumes")).toBeLessThan(html.indexOf('name="cost_usd"'));
+  // **What this does and what it does not, in three sentences, first on the
+  // screen**: where the work happens, that it stops and asks rather than going
+  // further, and that nothing outward happens without a press.
+  expect(html).toContain("rondo works on your request in");
+  expect(html).toContain("It stops by itself at the cost cap, the last redo or the expiry");
+  expect(html).toContain("Outward it does nothing by itself");
+  // **Then the caps, and nothing else of the budgets**: the cost, the redos and
+  // what is left to the worker. The long sample caveat and the cost caveat the
+  // screen used to carry are gone -- what the numbers rest on is in the fold.
+  expect(html).toContain(EN.scopeLimitsHeading);
+  expect(html).not.toContain("This draft assumes your request is the size of past laps");
+  expect(html).not.toContain(EN.scopeCostCaveat);
+  expect(html.indexOf('id="scope-what"')).toBeLessThan(html.indexOf('id="scope-limits"'));
+  // **Editing a cap, and where each number came from, are one press away.**
+  expect(html).toContain(EN.scopeNumbersFold);
+  expect(html.indexOf('id="scope-limits"')).toBeLessThan(html.indexOf(EN.scopeNumbersFold));
+  expect(html.indexOf(EN.scopeNumbersFold)).toBeLessThan(html.indexOf('name="cost_usd"'));
   // Measured values carry no cold-start note (rondo#378).
   expect(html).not.toContain(EN.scopeColdStartNote(true));
   expect(html).not.toContain(EN.scopeColdStartNote(false));
@@ -255,6 +269,93 @@ test("the scope screen drafts a form pre-filled from the request and the plan, e
   expect(html).not.toContain('http-equiv="refresh"');
 });
 
+test("the scope screen always shows the five things, with one press that approves and starts and a quieter one that only approves, in both languages", async () => {
+  const world = fresh();
+  await seedScopeRequest(world, "request-scope-one", "Fix the flaky test, please.");
+  const { agentTypeDigest } = await seedScopePlan(world.record, "request-scope-one");
+  await seedEndedLap(world, "i-one-0", { agentTypeDigest, costUsd: 1.5, durationMs: 4 * 60_000 });
+  const ports = portsOver(world, "ada", []);
+
+  for (const wording of [EN, chromeFor("ja")]) {
+    const html = await operatorPage(
+      ports,
+      "t",
+      { kind: "scope", messageId: "request-scope-one", rounds: null, decisionId: null, plan: null },
+      wording,
+      mint,
+      () => "MINT-SCOPE-1",
+      () => "MINT-LAP-1",
+    );
+    // **1-3: what the work does and what it does not, in three sentences of
+    // rondo's own words, first of the decision's material.**
+    expect(html).toContain('id="scope-what"');
+    expect(html).toContain(wording.scopeWhatStops);
+    expect(html).toContain(wording.scopeWhatNot([]));
+    expect(html).toContain(wording.scopeWhatDoes(SCOPE_PLAN.repository));
+    // **4-5: the cost cap, the redos, and what is left to the worker.**
+    expect(html).toContain('id="scope-limits"');
+    expect(html).toContain(wording.scopeLimitsHeading);
+    expect(html).toContain(wording.scopeRoundsLabel);
+    expect(html.indexOf('id="scope-what"')).toBeLessThan(html.indexOf('id="scope-limits"'));
+    // **6: one press that approves and starts, and the quieter one beside it.**
+    const label = (said: string) => html.split(`>${said}</button>`).length - 1;
+    expect(label(wording.scopeStartAction)).toBe(1);
+    expect(label(wording.scopeOnlyAction)).toBe(1);
+    expect(html.match(/name="start" value="1"/g)).toHaveLength(1);
+    expect(html.indexOf('id="scope-limits"')).toBeLessThan(
+      html.indexOf(`>${wording.scopeStartAction}</button>`),
+    );
+    // **Both presses are the one form's**, with one minted scope id and one
+    // minted lap id between them: a double press records one scope and starts
+    // one lap, which is what it did before the two presses became one.
+    expect(html.match(/<form[^>]*id="scope-form"/g)).toHaveLength(1);
+    expect(html.match(/name="scope_id" value="MINT-SCOPE-1"/g)).toHaveLength(1);
+    expect(html.match(/name="iteration" value="MINT-LAP-1"/g)).toHaveLength(1);
+    // **That a second press is safe is behind a press of its own**: it is a
+    // reassurance about the button, not one of the five, so the sentence is in
+    // the fold and the fold's own words are what is always shown.
+    expect(html).toContain(wording.scopeSafeFold);
+    expect(html.indexOf(wording.scopeSafeFold)).toBeLessThan(html.indexOf(wording.startAgainSafe));
+    expect(html.indexOf('id="scope-safe"')).toBeGreaterThan(
+      html.indexOf(`>${wording.scopeStartAction}</button>`),
+    );
+
+    // **Behind one press: the caps' own boxes, where each number came from, and
+    // the whole of what the worker is sent.**
+    expect(html).toContain(wording.scopeNumbersFold);
+    expect(html).toContain(wording.scopePromptFold);
+    for (const name of ["laps", "cost_usd", "cost_reserve_usd", "expires_at_ms"]) {
+      expect(html.indexOf(wording.scopeNumbersFold), name).toBeLessThan(
+        html.indexOf(`name="${name}"`),
+      );
+    }
+    expect(html.indexOf(wording.scopePromptFold)).toBeLessThan(
+      html.indexOf(wording.scopeDoneHeading),
+    );
+    // **And the explanation, and which plan it runs on** (the gate's reading of
+    // the five): the lead prose and the caveat about an approval this screen
+    // cannot see are inside the numbers' fold, not above the press; nothing but
+    // the five is between the top of the screen and the main button.
+    const press = html.indexOf(`>${wording.scopeStartAction}</button>`);
+    expect(html.indexOf(wording.scopeNumbersFold)).toBeLessThan(html.indexOf(wording.scopeLead));
+    expect(html.indexOf(wording.scopeNumbersFold)).toBeLessThan(
+      html.indexOf(wording.scopeMaybeApproved),
+    );
+    expect(html.indexOf(wording.scopeLead)).toBeGreaterThan(press);
+    expect(html.indexOf(wording.scopeMaybeApproved)).toBeGreaterThan(press);
+    // The only headings above the press are the two blocks the five live in:
+    // the plan card's heading and the repository it names are in the plan fold
+    // below it, where the choice of plan already was.
+    expect(html.slice(0, press).match(/<h3 /g)).toHaveLength(2);
+    expect(html.indexOf('id="scope-plan"')).toBeGreaterThan(press);
+    expect(html.indexOf('id="scope-plan-card"')).toBeGreaterThan(html.indexOf('id="scope-plan"'));
+    expect(html.indexOf(wording.scopePlanHeading)).toBeGreaterThan(html.indexOf('id="scope-plan"'));
+    // **Gone: the long budget prose, and the second approve press.**
+    expect(html).not.toContain(wording.scopeCostCaveat);
+    expect(html).not.toContain(wording.scopeSampleHeading);
+  }
+});
+
 test("with no lap recorded, the scope screen says in Japanese that the reserve was measured by nobody", async () => {
   const world = fresh();
   await seedScopeRequest(world, "request-scope-cold", "表示の崩れを直してください。");
@@ -269,8 +370,10 @@ test("with no lap recorded, the scope screen says in Japanese that the reserve w
     () => "MINT-SCOPE-1",
     () => "MINT-LAP-1",
   );
-  expect(html).toContain("依頼の大きさが過去の回と同じくらいだとして、予算を出しています");
-  expect(html).toContain("取っておく額 10.00 USD は、rondo の見込みです。");
+  // The sample's own caveat is off this screen (it was the long budget prose);
+  // what each number rests on is in the numbers' fold, in Japanese.
+  expect(html).not.toContain("依頼の大きさが過去の回と同じくらいだとして、予算を出しています");
+  expect(html).toContain(chromeFor("ja").scopeNumbersFold);
   // **And next to each value that rests on it, not only in its formula**
   // (rondo#378): lap 11's owner read $7.50 as a measured figure. The cost, the
   // reserve and the expiry each say so; the laps and rounds are given, not
@@ -517,8 +620,9 @@ test("the approval reads what its predecessor spent, and repeats that the review
   // successor's own screen, in laps and read dollars, with unread laps named.
   expect(html).toContain("has spent 1 laps and $4.50 read");
   expect(html).toContain("with 0 laps whose cost is not read yet holding their reserve");
-  // D-0066's first gate answer, said again beside the approval and not only on the form.
-  expect(html).toContain(
+  // The long budget caveat is off this screen in both of its states: what the
+  // approval set is the record above, and the five numbers say it.
+  expect(html).not.toContain(
     "the model review's cost is not counted, and a lap whose cost is not read yet holds the reserve",
   );
   expect(html).toContain('id="start-form"');
@@ -877,6 +981,211 @@ test(
     expect(repeated.ok).toBe(true);
     expect(repeated.scopeDecisionId).toBe(first.scopeDecisionId);
     expect(rows(new DatabaseSync(storePath), "scope_decision")).toBe(1);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "the combined press sent twice approves once and starts once, through the writes themselves",
+  async () => {
+    // **The real writes, not a spy that refuses for them.** The scope screen's
+    // main press is one press over two acts, so what makes a double click one
+    // approval and one lap is the store's own partial unique index on the
+    // minted scope id and `startScopedFromPage`'s own guard on the minted lap
+    // id -- never a check the route makes. So both halves run here for real,
+    // twice, with the two ids one drawn form carries.
+    //
+    // **The lap is reserved before the second half**, because that is what the
+    // first press's start leaves behind and there is no continuo in this file
+    // to leave it: the guard the replay meets is the row, and both presses go
+    // through it rather than through anything this test implements.
+    const dir = mkdtempSync(join(tmpdir(), "rondo-scope-twice-"));
+    const storePath = join(dir, "store.db");
+    const connection = new DatabaseSync(storePath);
+    const record = advisoryRecord(connection);
+    const store = iterationStore(connection, { maxOccupying: 4, maxLive: 6 });
+    const requestId = "request-scope-twice";
+    await record.recordThreadMessage({
+      messageId: requestId,
+      body: "Please fix it.",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: null,
+      atMs: 1_000,
+      bases: [],
+      asks: false,
+    });
+    const plan = await seedScopePlan(record, requestId);
+    const environment = { RONDO_APPROVER: "ada" };
+    // One form, drawn once: one minted scope id and one minted lap id, whatever
+    // number of times the body arrives.
+    const draft: ScopeFormDraft = {
+      scopeId: newScopeId(),
+      requestMessageId: requestId,
+      planDigest: plan.planDigest,
+      agentTypeDigest: plan.agentTypeDigest,
+      budgets: {
+        laps: 3,
+        review_rounds: 1,
+        cost_usd: 5,
+        cost_reserve_usd: 1,
+        expires_at_ms: 9_999_999_999,
+      },
+      severityThreshold: "major",
+      outwardActs: [],
+    };
+    const iterationId = "lap-scope-twice";
+
+    const first = await recordScopeFromPage(environment, store, storePath, "ada", draft);
+    const again = await recordScopeFromPage(environment, store, storePath, "ada", draft);
+    // One approval: the second press lands on the one the first made, and the
+    // store holds one scope row and one decision row for the two.
+    expect(first.ok).toBe(true);
+    expect(again.ok).toBe(true);
+    expect(again.scopeDecisionId).toBe(first.scopeDecisionId);
+    expect(rows(connection, "scope")).toBe(1);
+    expect(rows(connection, "scope_decision")).toBe(1);
+
+    const reserved = await store.reserve({
+      numbers: null,
+      id: iterationId,
+      request: "Please fix it.",
+      plan: planFor(iterationId),
+      spend: null,
+      scopeSpend: null,
+      claim: ownLane(iterationId),
+      nowMs: 1_000,
+      supersedesIterationId: null,
+      requestMessageId: requestId,
+      runId: `rondo-${iterationId}`,
+      topicBranch: `rondo/${iterationId}`,
+      workspace: `/srv/work/${iterationId}`,
+    });
+    expect(reserved.kind).toBe("reserved");
+    const asked = rows(connection, "conversation_message");
+
+    const start = {
+      iterationId,
+      requestMessageId: requestId,
+      scopeDecisionId: first.scopeDecisionId ?? "",
+      planDigest: plan.planDigest,
+    };
+    const started = await startScopedFromPage(environment, store, storePath, "ada", start);
+    const startedAgain = await startScopedFromPage(environment, store, storePath, "ada", start);
+    // One lap: the replay is the start it repeats, not a refusal to show and
+    // not a second admission against a budget the first one spent.
+    expect(started.ok).toBe(true);
+    expect(startedAgain.ok).toBe(true);
+    expect(rows(connection, "iteration")).toBe(1);
+    // And nothing was asked of the request by either (D-0066 rule 4.4): a
+    // second press is safe, which is what the screen's fold says it is.
+    expect(rows(connection, "conversation_message")).toBe(asked);
+  },
+  WINDOWS_HEAVY_TIMEOUT_MS,
+);
+
+test(
+  "the drafted scope's combined press sent twice approves the draft once, through the writes themselves",
+  async () => {
+    // The drafted path's own double press, through `recordDraftedScopeFromPage`
+    // rather than through a spy that refuses for it: the draft is approved once
+    // however many times the form's body arrives, and what makes that so is the
+    // store's own refusal of a second decision over one scope.
+    const dir = mkdtempSync(join(tmpdir(), "rondo-scope-draft-twice-"));
+    const storePath = join(dir, "store.db");
+    const connection = new DatabaseSync(storePath);
+    const record = advisoryRecord(connection);
+    const requestId = "request-draft-twice";
+    await record.recordThreadMessage({
+      messageId: requestId,
+      body: "Two things, please.",
+      authorKind: "operator",
+      authorId: "ada",
+      inReplyTo: null,
+      atMs: 1_000,
+      bases: [],
+      asks: false,
+    });
+    const plan = await seedScopePlan(record, requestId);
+    const budgets = {
+      laps: 2,
+      review_rounds: 1,
+      cost_usd: 4,
+      cost_reserve_usd: 1,
+      expires_at_ms: 9_999_999_999,
+    };
+    const payload = scopePayloadWithDefaults({
+      requests: [requestId],
+      workspaces: [{ repository: "/srv/repo", workspace_root: SCOPE_PLAN.workspaceRoot }],
+      agent_types: [plan.agentTypeDigest],
+      budgets,
+      severity_threshold: "major",
+      outward_acts: [],
+      irreversible_additions: [],
+    } as unknown as JsonRecord);
+    // **A drafter's scope lists only agent types rondo already holds** (D-0066
+    // rule 1.2.3), and nothing holds this one yet: a person's own unapproved
+    // scope over the pasted plan is what records it, as the page's own form
+    // would have.
+    const holding = await record.recordScope({
+      scopeId: "scope-holds-the-type",
+      payload,
+      supersedesScopeId: null,
+      authorKind: "operator",
+      authorId: "ada",
+      bases: [],
+      createdAtMs: 1_100,
+      agentTypeRecords: [
+        {
+          agentTypeDigest: plan.agentTypeDigest,
+          agentTypeInput: SCOPE_AGENT_TYPE_INPUT,
+          planDigest: plan.planDigest,
+        },
+      ],
+    });
+    expect(holding.kind, JSON.stringify(holding)).toBe("recorded");
+    const written = await record.recordScope({
+      scopeId: "scope-drafted-twice",
+      payload,
+      supersedesScopeId: null,
+      authorKind: "drafter",
+      authorId: `${MODEL_DRAFTER_PREFIX}1`,
+      // D-0066 rule 1.5: a drafter's scope names what it was drafted from.
+      bases: [{ form: "message", messageId: requestId }],
+      createdAtMs: 1_200,
+      // D-0071 section 6.2: a drafter's scope records no agent type of its own;
+      // it lists one the pasted plan above already holds.
+      agentTypeRecords: [],
+    });
+    expect(written.kind, JSON.stringify(written)).toBe("recorded");
+    const read = await record.readScope("scope-drafted-twice");
+    if (read.kind !== "read") {
+      throw new Error(`the drafted scope fixture did not read: ${JSON.stringify(read)}`);
+    }
+    // One form, drawn once: the draft by id and digest, and the minted scope id
+    // the person's own version would be recorded under.
+    const form = {
+      draftScopeId: read.scope.scopeId,
+      draftDigest: read.scope.scopeDigest,
+      scopeId: newScopeId(),
+      budgets,
+      severityThreshold: "major",
+      outwardActs: [] as const,
+    };
+    const environment = { RONDO_APPROVER: "ada" };
+    const first = await recordDraftedScopeFromPage(environment, storePath, "ada", form);
+    const again = await recordDraftedScopeFromPage(environment, storePath, "ada", form);
+    expect(first.ok).toBe(true);
+    expect(again.ok).toBe(true);
+    // One approval of one draft: the second press lands on the decision the
+    // first made, and nothing of the person's own was recorded beside it.
+    expect(again.scopeDecisionId).toBe(first.scopeDecisionId);
+    // Two scope rows, both the fixture's: the draft, and the unapproved one
+    // that holds the agent type. Nothing was recorded under the form's own
+    // minted id, so the second press wrote no version of the person's either.
+    expect(rows(connection, "scope")).toBe(2);
+    expect(await record.readScope(form.scopeId)).toEqual({ kind: "absent" });
+    expect(rows(connection, "scope_decision")).toBe(1);
   },
   WINDOWS_HEAVY_TIMEOUT_MS,
 );
@@ -1342,9 +1651,10 @@ test("with two plans held, the screen offers the choice, the first marked, and t
     () => "x",
     () => "y",
   );
-  // Bounded at the rounds, so what the recorded fold holds further down --
-  // where the paths are rondo's own record and stay paths -- is not read here.
-  const choice = drawn.slice(drawn.indexOf('id="plans"'), drawn.indexOf('id="rounds"'));
+  // Bounded at the plan card below it in the same fold, so what its recorded
+  // fold holds -- where the paths are rondo's own record and stay paths -- is
+  // not read here.
+  const choice = drawn.slice(drawn.indexOf('id="plans"'), drawn.indexOf('id="scope-plan-card"'));
   // **The two plans are in two repositories, so each line says which**
   // (rondo#305, D-0081 rule 4.2) -- and says it as the person names the place,
   // which is the last segment and not the path rondo holds it by.
@@ -1388,7 +1698,10 @@ for (const wording of [EN, chromeFor("ja")]) {
   /** The plans' section alone: below it the recorded fold holds rondo's own paths. */
   const plansPart = (drawn: string): string => {
     const from = drawn.indexOf('id="plans"');
-    const to = drawn.indexOf('id="rounds"');
+    // The choice is behind the plan fold now (the gate's reading of the five
+    // things this screen always shows), and the numbers' fold follows it.
+    expect(drawn.indexOf('id="scope-plan"')).toBeLessThan(from);
+    const to = drawn.indexOf('id="scope-plan-card"');
     expect(from).toBeGreaterThan(-1);
     expect(to).toBeGreaterThan(from);
     return drawn.slice(from, to);

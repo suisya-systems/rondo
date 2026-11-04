@@ -843,113 +843,11 @@ export type GoalPauseFromWeb = (input: GoalPauseInput) => Promise<ScopeRecorded>
 export type PlanStartFromWeb = (input: PlanStartInput) => Promise<Started>;
 
 /**
- * The third thing this surface may write (D-0059 section 5a, the two rondo#233
- * S3 rows): a scope with its approval, and a lap started under that approval.
- *
- * **Both checks are inside this capability**, as the press check is in
- * {@link AnswerPort} and the send check in {@link SayPort}: whoever holds this
- * object reaches neither implementation without a press {@link mintPress}
- * minted and nobody has spent. Two methods on one class rather than two classes
- * because they are one screen's two presses over one approval, and a caller
- * that could hold the start without the record could start a lap under a scope
- * this surface never showed anybody.
+ * **The scope port lives in `scope-port.ts`**, re-exported here so every caller
+ * that reached it through this module still does: this file is at its size cap,
+ * and a port whose press check is `spendPress` needs nothing else of it.
  */
-export class ScopePort {
-  readonly #record: RecordScopeFromWeb;
-  readonly #start: ScopedStartFromWeb;
-  readonly #recordDrafted: RecordDraftedScopeFromWeb | null;
-  readonly #startPlan: PlanStartFromWeb | null;
-  readonly #raise: RaiseFromWeb | null;
-  readonly #goal: { readonly record: GoalScopeFromWeb; readonly pause: GoalPauseFromWeb } | null;
-
-  constructor(
-    record: RecordScopeFromWeb,
-    start: ScopedStartFromWeb,
-    /** The drafted scope's two presses (rondo#238 C2b); null where the host offers none. */
-    recordDrafted: RecordDraftedScopeFromWeb | null = null,
-    startPlan: PlanStartFromWeb | null = null,
-    /** The raise press (D-0074 section 4); null where the host offers none. */
-    raise: RaiseFromWeb | null = null,
-    /** The goal scope's approve and pause presses (D-0128); null where the host offers none. */
-    goal: { readonly record: GoalScopeFromWeb; readonly pause: GoalPauseFromWeb } | null = null,
-  ) {
-    this.#record = record;
-    this.#start = start;
-    this.#recordDrafted = recordDrafted;
-    this.#startPlan = startPlan;
-    this.#raise = raise;
-    this.#goal = goal;
-  }
-
-  /** Record a goal scope and approve it, on one press (the person's P1, D-0128). */
-  async recordGoal(press: Press, input: GoalScopeInput): Promise<ScopeRecorded> {
-    if (!minted.has(press) || this.#goal === null) {
-      return { ok: false, note: "nothing was recorded: this was not a person's press" };
-    }
-    minted.delete(press);
-    return await this.#goal.record(input);
-  }
-
-  /** Pause a goal scope: its `laps: 0` successor, recorded and approved on one press. */
-  async pauseGoal(press: Press, input: GoalPauseInput): Promise<ScopeRecorded> {
-    if (!minted.has(press) || this.#goal === null) {
-      return { ok: false, note: "nothing was recorded: this was not a person's press" };
-    }
-    minted.delete(press);
-    return await this.#goal.pause(input);
-  }
-
-  /** Record a budgets-only successor of one approval and approve it, on one press. */
-  async raise(press: Press, input: RaiseInput): Promise<ScopeRecorded> {
-    if (!minted.has(press) || this.#raise === null) {
-      return { ok: false, note: "nothing was recorded: this was not a person's press" };
-    }
-    minted.delete(press);
-    return await this.#raise(input);
-  }
-
-  /** Approve one drafted scope, as drafted or as the person changed it, on one press. */
-  async recordDrafted(press: Press, form: DraftedScopeFormDraft): Promise<ScopeRecorded> {
-    if (!minted.has(press) || this.#recordDrafted === null) {
-      return { ok: false, note: "nothing was recorded: this was not a person's press" };
-    }
-    minted.delete(press);
-    return await this.#recordDrafted(form);
-  }
-
-  /** Start one drafted plan under one approved scope, on one press. */
-  async startPlan(press: Press, input: PlanStartInput): Promise<Started> {
-    if (!minted.has(press) || this.#startPlan === null) {
-      return { ok: false, note: "nothing was started: this was not a person's press" };
-    }
-    minted.delete(press);
-    return await this.#startPlan(input);
-  }
-
-  /** Record one drafted scope and approve it, on one press. */
-  async recordAndApprove(press: Press, draft: ScopeFormDraft): Promise<ScopeRecorded> {
-    if (!minted.has(press)) {
-      return {
-        ok: false,
-        note: "nothing was recorded: this was not a person's press",
-      };
-    }
-    minted.delete(press);
-    return await this.#record(draft);
-  }
-
-  /** Start one lap under one approved scope, on one press. */
-  async start(press: Press, input: ScopedStartInput): Promise<Started> {
-    if (!minted.has(press)) {
-      return {
-        ok: false,
-        note: "nothing was started: this was not a person's press",
-      };
-    }
-    minted.delete(press);
-    return await this.#start(input);
-  }
-}
+export { type Both, ScopePort } from "./scope-port.js";
 
 /** What one revise press names; the person typed none of the three ids. */
 export interface ReviseInput {
@@ -2172,6 +2070,60 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (draft === null) {
       return scopeRefused(c, 400, "scopeRefusedFields", request, rounds, drawnOver);
     }
+    // **Which of the screen's two presses this is**: the main button carries
+    // its own `start` field, and a browser posts the name and value of the
+    // button pressed and of no other. The field is what *widens* the act, so a
+    // body without it only approves -- the safe way round.
+    const alsoStarts = form["start"] === "1";
+    const iterationId = form["iteration"];
+    if (alsoStarts && (typeof iterationId !== "string" || !PAGE_ITERATION_ID.test(iterationId))) {
+      return scopeRefused(c, 400, "scopeRefusedForm", request, rounds, drawnOver);
+    }
+    if (alsoStarts && typeof iterationId === "string") {
+      // One press, two acts, inside the capability that holds both: the press
+      // is spent once there, and the start runs under the approval read back
+      // off the row (never a decision id the form carried).
+      const both = await scope.recordApproveAndStart(minting.press, draft, (scopeDecisionId) => ({
+        iterationId,
+        requestMessageId: request,
+        scopeDecisionId,
+        planDigest: draft.planDigest,
+        // rondo#462: the form's own field, empty for the host's default.
+        workerProvider: chosenWorker(form["worker_provider"]),
+        whenReady: false,
+      }));
+      if (!both.recorded.ok || both.started === null) {
+        return scopeRefused(
+          c,
+          409,
+          both.recorded.why ?? "scopeRefusedNotTaken",
+          request,
+          rounds,
+          drawnOver,
+        );
+      }
+      if (!both.started.ok) {
+        // **The approval stands and the start did not**, so the way back is the
+        // approved scope, where the start can be pressed again: the person
+        // approved, and a refusal that sent them to the draft would hide it.
+        return startRefused(
+          c,
+          heldStatus(both.started),
+          both.started.why ?? "startRefusedNotAdmitted",
+          request,
+          both.recorded.scopeDecisionId ?? null,
+          both.started.test ?? null,
+          draft.planDigest,
+          both.started.holders,
+          both.started.unusable ?? null,
+          { iteration: iterationId, worker: chosenWorker(form["worker_provider"]) },
+          both.started.note,
+        );
+      }
+      // Into the request's thread, where the lap just started draws its event
+      // lines (D-0083 rules 3, 7): no second screen to press start on.
+      return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
+    }
     const recorded = await scope.recordAndApprove(minting.press, draft);
     if (!recorded.ok || recorded.scopeDecisionId === undefined) {
       return scopeRefused(
@@ -2232,6 +2184,54 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     const values = scopeValuesOf(form);
     if (values === null) {
       return scopeRefused(c, 400, "scopeRefusedFields", request);
+    }
+    // The main press's own field, as `/scope`'s is, with the split's first part
+    // and the lap it runs as beside it.
+    const alsoStarts = form["start"] === "1";
+    const iterationId = form["iteration"];
+    const proposal = form["proposal"];
+    if (
+      alsoStarts &&
+      (typeof iterationId !== "string" ||
+        !PAGE_ITERATION_ID.test(iterationId) ||
+        typeof proposal !== "string" ||
+        proposal === "")
+    ) {
+      return scopeRefused(c, 400, "scopeRefusedForm", request);
+    }
+    if (alsoStarts && typeof iterationId === "string" && typeof proposal === "string") {
+      const both = await scope.recordDraftedAndStart(
+        minting.press,
+        { draftScopeId, draftDigest, scopeId, ...values },
+        (scopeDecisionId) => ({
+          iterationId,
+          requestMessageId: request,
+          scopeDecisionId,
+          proposalId: proposal,
+          // D-0098 rule 1: the first part, which the rest are ordered behind.
+          planIndex: 0,
+        }),
+      );
+      if (!both.recorded.ok || both.started === null) {
+        return scopeRefused(c, 409, both.recorded.why ?? "scopeRefusedNotTaken", request);
+      }
+      if (!both.started.ok) {
+        return startRefused(
+          c,
+          heldStatus(both.started),
+          both.started.why ?? "startRefusedNotAdmitted",
+          request,
+          both.recorded.scopeDecisionId ?? null,
+          both.started.test ?? null,
+          null,
+          both.started.holders,
+          // No press: a drafted split's start is not one the tick keeps.
+          both.started.unusable ?? null,
+          null,
+          both.started.note,
+        );
+      }
+      return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
     }
     const recorded = await scope.recordDrafted(minting.press, {
       draftScopeId,

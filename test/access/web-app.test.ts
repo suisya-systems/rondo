@@ -548,6 +548,207 @@ test("(scope) a person's native press records one scope and approves it, once", 
   expect(await closed).toBe(0);
 });
 
+test("(scope) the screen's main press approves and starts on one press; the other press only approves", async () => {
+  const scoped: Scoped = [];
+  const starts: Started = [];
+  const { base, stop, closed } = await served(createApp(spyPorts([], [], scoped, starts), TOKEN));
+
+  // **One click, two acts, one press.** An arrival mints one press and a port
+  // spends it, so the two acts run inside the capability that holds both --
+  // which is also why the start is attempted under the approval read back off
+  // the row, and never under a decision id the form carried.
+  const both = scopeForm({ start: "1", iteration: newIterationId(), worker_provider: "" });
+  const pressed = await send(base, "/scope", "POST", pressHeaders(base), both);
+  // Into the request's thread, where the lap just started draws its lines:
+  // there is no second screen left whose only job is to press *start*.
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
+  expect(scoped).toHaveLength(1);
+  expect(starts).toEqual([
+    {
+      iterationId: both["iteration"],
+      requestMessageId: "req-1",
+      scopeDecisionId: "decision-1",
+      planDigest: both["plan_digest"],
+      workerProvider: null,
+      whenReady: false,
+    },
+  ]);
+
+  // **The field is what widens the act**, so a body without it only approves:
+  // the secondary button carries no `start`, and a browser posts the name and
+  // value of the button that was pressed and of no other.
+  const only = scopeForm();
+  const approved = await send(base, "/scope", "POST", pressHeaders(base), only);
+  expect(approved.status).toBe(303);
+  expect(approved.location).toContain("scope=req-1&decision=decision-1");
+  expect(scoped).toHaveLength(2);
+  expect(starts).toHaveLength(1);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(scope) the combined press is still safe to decline: a refused approval starts nothing, and a start refused after one that was recorded leads to the approval", async () => {
+  // A port whose record refuses, as the store refuses a second press of one
+  // form's minted scope id -- which is what makes a double press one scope.
+  const starts: Started = [];
+  const refusing = {
+    ...spyPorts([]),
+    scope: new ScopePort(
+      async () => await Promise.resolve({ ok: false, note: "no", why: "scopeRefusedNotTaken" }),
+      async (input: ScopedStartInput) => {
+        starts.push(input);
+        return await Promise.resolve({ ok: true, note: "" });
+      },
+    ),
+  } as unknown as ServedPorts;
+  const refused = await served(createApp(refusing, TOKEN));
+  const press = scopeForm({ start: "1", iteration: newIterationId() });
+  const declined = await send(refused.base, "/scope", "POST", pressHeaders(refused.base), press);
+  expect(declined.status).toBe(409);
+  // Nothing started: the approval the start would be counted against was not
+  // recorded, so there is nothing to count it against.
+  expect(starts).toEqual([]);
+  refused.stop.abort();
+  expect(await refused.closed).toBe(0);
+
+  // The press with no lap id is not this page's form, and writes nothing.
+  const scoped: Scoped = [];
+  const held = await served(createApp(spyPorts([], [], scoped, []), TOKEN));
+  const noLap = await send(held.base, "/scope", "POST", pressHeaders(held.base), {
+    ...scopeForm(),
+    start: "1",
+  });
+  expect(noLap.status).toBe(400);
+  expect(scoped).toEqual([]);
+  held.stop.abort();
+  expect(await held.closed).toBe(0);
+
+  // **The approval stands when only the start was refused**, so the way back is
+  // the approved scope and not the draft: a refusal that sent the person back
+  // to the form would hide an approval they had given.
+  const unadmitted = {
+    ...spyPorts([]),
+    scope: new ScopePort(
+      async () => await Promise.resolve({ ok: true, note: "", scopeDecisionId: "decision-1" }),
+      async () =>
+        await Promise.resolve({ ok: false, note: "no room", why: "startRefusedNotAdmitted" }),
+    ),
+  } as unknown as ServedPorts;
+  const stuck = await served(createApp(unadmitted, TOKEN));
+  const half = await send(stuck.base, "/scope", "POST", pressHeaders(stuck.base), {
+    ...scopeForm(),
+    start: "1",
+    iteration: newIterationId(),
+  });
+  expect(half.status).toBe(409);
+  expect(half.body).toContain("/?scope=req-1&amp;decision=decision-1");
+  stuck.stop.abort();
+  expect(await stuck.closed).toBe(0);
+});
+
+test("(scope) the same form sent twice approves once and starts once", async () => {
+  // **A spy that keeps the two ids the form was drawn with**, because they are
+  // the whole of why a double press is safe: the store's partial unique index
+  // refuses a second scope of one minted scope id, and `startScopedFromPage`
+  // joins a second start of one minted lap id to the first. A spy that said
+  // *ok* to everything would prove the route sends two writes, not that one
+  // click became one approval and one lap.
+  const scoped: Scoped = [];
+  const starts: Started = [];
+  const twicePressed = {
+    ...spyPorts([]),
+    scope: new ScopePort(
+      async (draft) => {
+        if (scoped.some((one) => one.scopeId === draft.scopeId)) {
+          return await Promise.resolve({
+            ok: false,
+            note: "a scope with this id is already recorded",
+            why: "scopeRefusedNotTaken" as const,
+          });
+        }
+        scoped.push(draft);
+        return await Promise.resolve({ ok: true, note: "", scopeDecisionId: "decision-1" });
+      },
+      async (input) => {
+        // The join: a second start of one lap id is the first one, said again.
+        if (starts.some((one) => one.iterationId === input.iterationId)) {
+          return await Promise.resolve({ ok: true, note: "already under way" });
+        }
+        starts.push(input);
+        return await Promise.resolve({ ok: true, note: "" });
+      },
+    ),
+  } as unknown as ServedPorts;
+  const { base, stop, closed } = await served(createApp(twicePressed, TOKEN));
+
+  // One form, drawn once and sent twice -- a double click, or a resend after a
+  // slow write: both bodies carry the same minted scope id and lap id.
+  const press = scopeForm({ start: "1", iteration: newIterationId(), worker_provider: "" });
+  const first = await send(base, "/scope", "POST", pressHeaders(base), press);
+  const again = await send(base, "/scope", "POST", pressHeaders(base), press);
+  expect(first.status).toBe(303);
+  expect(first.location).toBe("/?thread=req-1&lang=en");
+  // The second is refused where the first was recorded, and refused *before*
+  // the start: one approval, one lap, and nothing started under a second one.
+  expect(again.status).toBe(409);
+  expect(scoped).toHaveLength(1);
+  expect(starts).toHaveLength(1);
+  expect(starts[0]?.iterationId).toBe(press["iteration"]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(scope-draft) the same form sent twice approves the draft once and starts its first part once", async () => {
+  // The drafted path's own double press, with the same two ids and the same
+  // two refusals: the draft is approved once, and the split's first part is
+  // started once (D-0098 rule 1), however many times the body arrives.
+  const approved: DraftedScopeFormDraft[] = [];
+  const planStarts: PlanStartInput[] = [];
+  const notThis = async () => await Promise.resolve({ ok: false, note: "not this route" });
+  const twicePressed = {
+    ...spyPorts([]),
+    scope: new ScopePort(
+      notThis,
+      notThis,
+      async (form) => {
+        if (approved.some((one) => one.scopeId === form.scopeId)) {
+          return await Promise.resolve({
+            ok: false,
+            note: "a scope with this id is already recorded",
+            why: "scopeRefusedNotTaken" as const,
+          });
+        }
+        approved.push(form);
+        return await Promise.resolve({ ok: true, note: "", scopeDecisionId: "decision-2" });
+      },
+      async (input) => {
+        if (planStarts.some((one) => one.iterationId === input.iterationId)) {
+          return await Promise.resolve({ ok: true, note: "already under way" });
+        }
+        planStarts.push(input);
+        return await Promise.resolve({ ok: true, note: "" });
+      },
+    ),
+  } as unknown as ServedPorts;
+  const { base, stop, closed } = await served(createApp(twicePressed, TOKEN));
+
+  const press = draftedScopeForm({ start: "1", proposal: "draft-3", iteration: newIterationId() });
+  const first = await send(base, "/scope-draft", "POST", pressHeaders(base), press);
+  const again = await send(base, "/scope-draft", "POST", pressHeaders(base), press);
+  expect(first.status).toBe(303);
+  expect(first.location).toBe("/?thread=req-1&lang=en");
+  expect(again.status).toBe(409);
+  expect(approved).toHaveLength(1);
+  expect(planStarts).toHaveLength(1);
+  expect(planStarts[0]?.planIndex).toBe(0);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
 test("(scope) every other shape of request to the record-scope route is refused and writes nothing", async () => {
   const scoped: Scoped = [];
   const { base, stop, closed } = await served(createApp(spyPorts([], [], scoped), TOKEN));
@@ -3570,6 +3771,76 @@ test("(scope-draft) a person's press approves the draft it was drawn over, with 
       outwardActs: [],
     },
   ]);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(scope-draft) the main press approves the draft and starts its first part on one press; the other press only approves", async () => {
+  const approved: DraftedScopeFormDraft[] = [];
+  const planStarts: PlanStartInput[] = [];
+  const { base, stop, closed } = await served(createApp(draftedPorts(approved, planStarts), TOKEN));
+
+  const form = draftedScopeForm({
+    start: "1",
+    proposal: "draft-3",
+    iteration: newIterationId(),
+  });
+  const pressed = await send(base, "/scope-draft", "POST", pressHeaders(base), form);
+  expect(pressed.status).toBe(303);
+  expect(pressed.location).toBe("/?thread=req-1&lang=en");
+  expect(approved).toHaveLength(1);
+  // **The first part and no other** (D-0098 rule 1): the parts after it are
+  // ordered behind it and start by themselves once it lands, so one press is
+  // the whole split under way.
+  expect(planStarts).toEqual([
+    {
+      iterationId: form["iteration"],
+      requestMessageId: "req-1",
+      scopeDecisionId: "decision-2",
+      proposalId: "draft-3",
+      planIndex: 0,
+    },
+  ]);
+
+  // Without the main button's own field it only approves, as before.
+  const only = await send(base, "/scope-draft", "POST", pressHeaders(base), draftedScopeForm());
+  expect(only.status).toBe(303);
+  expect(only.location).toBe("/?scope=req-1&decision=decision-2&lang=en#scope");
+  expect(approved).toHaveLength(2);
+  expect(planStarts).toHaveLength(1);
+
+  // A press with no proposal or no lap id is not this page's form: nothing is
+  // approved and nothing is started.
+  for (const missing of ["proposal", "iteration"]) {
+    const broken = draftedScopeForm({ start: "1", proposal: "draft-3", iteration: "i-x" });
+    delete broken[missing];
+    const bad = await send(base, "/scope-draft", "POST", pressHeaders(base), broken);
+    expect(bad.status, missing).toBe(400);
+  }
+  expect(approved).toHaveLength(2);
+  expect(planStarts).toHaveLength(1);
+
+  stop.abort();
+  expect(await closed).toBe(0);
+});
+
+test("(scope-draft) a draft the port refuses on the combined press starts nothing", async () => {
+  const approved: DraftedScopeFormDraft[] = [];
+  const planStarts: PlanStartInput[] = [];
+  const { base, stop, closed } = await served(
+    createApp(draftedPorts(approved, planStarts, { ok: false }), TOKEN),
+  );
+  const refused = await send(base, "/scope-draft", "POST", pressHeaders(base), {
+    ...draftedScopeForm(),
+    start: "1",
+    proposal: "draft-3",
+    iteration: newIterationId(),
+  });
+  expect(refused.status).toBe(409);
+  expect(refused.body).toContain("/?scope=req-1&amp;lang=en");
+  expect(approved).toHaveLength(1);
+  expect(planStarts).toEqual([]);
 
   stop.abort();
   expect(await closed).toBe(0);
