@@ -91,8 +91,10 @@ export interface Allowance {
  * Why the week's budget reading is on the screen at all (`D-0207` rule 1).
  *
  * - `holdingUp`: a budget is stopping work now -- a lap its spend cap stopped
- *   (`D-0121`), or an approval with no room left for another lap under a
- *   request still being worked on, which is the `cost` scope test's refusal.
+ *   (`D-0121`), or one the `cost` scope test refused to send, with nothing
+ *   running after it and its request neither taken in nor ended. An approval
+ *   whose room is merely spoken for by laps that are running is not this: the
+ *   caller tests for a stop that happened (`screens/week.ts`).
  * - `yours`: nothing is stopped, but a decision about a budget is the person's
  *   -- a raise (`D-0074` rule 4.2), or a scope of theirs to set or approve.
  *

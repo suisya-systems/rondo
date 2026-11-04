@@ -42,6 +42,30 @@ import {
 } from "../page-logic/week.js";
 import type { Chrome } from "../wording.js";
 
+/**
+ * **Whether the budget stopped this lap**, which is the one fact `D-0207`
+ * rule 1 draws the week's money as *holding work up* for.
+ *
+ * Two spellings of one event, because a budget stops a lap at two moments:
+ * mid-turn, when it spends the room its scope left it (`D-0121`, the row's own
+ * cost against its own cap), and at the start, when the `cost` scope test
+ * refuses to send it at all (`failureKind: "budget"`, `D-0121` rule 5). Both
+ * leave a person the same next move, which is a larger budget.
+ *
+ * **An approval with no room left is not here**, and that is the point: the
+ * room an approval has left is a sum over laps that may all be running
+ * perfectly well, and the reserve those laps hold is a guess made before they
+ * ran (`page-logic/governance.ts`'s {@link allowanceOf}). A reading drawn off
+ * that sum told a person their work was stopped while it was in fact going
+ * fine, and asked them to raise a budget nothing had refused.
+ */
+function budgetStopped(record: IterationRecord): boolean {
+  return (
+    reachedBudgetCap(record.lapCostUsd, record.lapBudgetCapUsd) ||
+    (record.status === "failed" && record.failureKind === "budget")
+  );
+}
+
 /** The week's face, read and composed. */
 export async function weekSide(
   ports: WebPorts,
@@ -74,63 +98,66 @@ export async function weekSide(
   const touched = [...allLapsByRequest.values()]
     .flat()
     .filter((lap) => Math.max(lap.record.createdAtMs, lap.record.updatedAtMs) >= weekFromMs);
-  /**
-   * **The requests still being worked on**: any lap under them that has not
-   * reached a terminal status, a gate included. A budget cannot be holding up a
-   * request whose every lap has ended -- there is no next lap for it to refuse
-   * (`page-logic/week.ts`'s {@link budgetBearing}).
-   */
-  const unfinished = new Set(
-    [...allLapsByRequest.entries()]
-      .filter(([, laps]) => laps.some((lap) => !isTerminal(lap.record.status)))
-      .map(([requestMessageId]) => requestMessageId),
-  );
-  /** Each touched lap's approval, read as one batch, as it was before. */
-  const touchedApprovals = await Promise.all(
-    touched.map(async (lap) => ({ lap, approval: await approvalOf(ports, lap.record) })),
-  );
-  /** Of the approvals in force, whether any has no room left for another lap. */
-  let noRoomLeft = false;
-  for (const { lap, approval } of touchedApprovals) {
-    if (approval === null) continue;
-    const allowance = allowanceOf(approval);
-    weekApprovals.set(approval.decisionId, allowance);
-    // The `cost` scope test's own arithmetic (`src/access/wording/en.ts`): what
-    // was read, plus what the laps whose cost is not read yet are held at,
-    // against what was approved.
-    if (
-      unfinished.has(lap.record.requestMessageId) &&
-      allowance.approvedUsd - allowance.spentUsd - allowance.heldUsd <= 0
-    ) {
-      noRoomLeft = true;
+  for (const approval of await Promise.all(touched.map((lap) => approvalOf(ports, lap.record)))) {
+    if (approval !== null) {
+      weekApprovals.set(approval.decisionId, allowanceOf(approval));
     }
   }
+  /**
+   * **The requests whose work has been taken somewhere**: every lap under them
+   * has ended, and one of them either closed or was settled by a person. A
+   * budget cannot be holding such a request up -- there is nothing left of it
+   * to stop, and the stop the person already answered is this week's history
+   * rather than this week's obstacle.
+   *
+   * **A request whose every lap ended `failed` is not one of them.** That is
+   * exactly the state a budget stop leaves behind: the lap is terminal, nothing
+   * replaced it, and raising the budget is what starts the next one. Reading
+   * *finished* off "every lap is terminal" alone would have withheld the
+   * reading in the one case `D-0207` rule 1 names first.
+   */
+  const settled = new Set(
+    [...allLapsByRequest.entries()]
+      .filter(
+        ([, laps]) =>
+          laps.every((lap) => isTerminal(lap.record.status)) &&
+          laps.some((lap) => lap.record.status === "closed" || lap.record.status === "abandoned"),
+      )
+      .map(([requestMessageId]) => requestMessageId),
+  );
   /*
    * **Why the week's budget is on this face, or that it is not** (`D-0207`
-   * rule 1). Two facts make it worth drawing: a budget that is stopping work
-   * now -- a lap its own spend cap stopped (`D-0121`), or an approval with no
-   * room left for another lap -- and a scope waiting for the person, which is
-   * where a budget is set or raised. With neither, the figures are withheld and
-   * nothing stands in their place (rule 4).
+   * rule 1). One fact makes it worth drawing as *holding work up*: a budget
+   * that stopped a lap and is still standing in the way of the request it
+   * stopped. Beside it is a scope waiting for the person, which is where a
+   * budget is set or raised. With neither, the figures are withheld and nothing
+   * stands in their place (rule 4).
    *
-   * **"Now" is read from the request and not from the lap alone.** A cap that
-   * stopped a lap is a fact that stays on its row for ever: a request raised
-   * after it and since finished would keep this face drawing the week's money
-   * for the rest of the window. So a capped lap counts only where its request
-   * is still unfinished and nothing is running under it -- stopped, and not yet
-   * taken anywhere -- which is `D-0207`'s own "holding work up" rather than
-   * "was held up at some point this week".
+   * **Every path to "holding work up" goes through the same three tests**, and
+   * that is this entry's own rule rather than a tidying: a budget is drawn only
+   * where it is in the way of work and the person has a move to make.
+   *
+   * 1. *The budget actually stopped something* ({@link budgetStopped}): a lap
+   *    its own spend cap stopped (`D-0121`), or one that ended on the budget's
+   *    refusal to send it. An approval with no room left under laps still
+   *    running is **not** one of these -- what has exhausted it is the reserve
+   *    held for work that is going fine, and a person asked to raise a budget
+   *    there would be answering a question nobody has been asked.
+   * 2. *Nothing is running under that request now*, so the stop is where the
+   *    work stands rather than something a later lap carried on from.
+   * 3. *The request has not been taken in or ended* ({@link settled}). A cap
+   *    that stopped a lap stays written on its row for ever, so a request
+   *    raised after it and since finished would otherwise keep this face
+   *    drawing the week's money for the rest of the window.
    */
   const workingNow = new Set(running.map((record) => record.requestMessageId));
   const bearing = budgetBearing({
-    holdingUp:
-      noRoomLeft ||
-      touched.some(
-        (lap) =>
-          reachedBudgetCap(lap.record.lapCostUsd, lap.record.lapBudgetCapUsd) &&
-          unfinished.has(lap.record.requestMessageId) &&
-          !workingNow.has(lap.record.requestMessageId),
-      ),
+    holdingUp: touched.some(
+      (lap) =>
+        budgetStopped(lap.record) &&
+        !workingNow.has(lap.record.requestMessageId) &&
+        !settled.has(lap.record.requestMessageId),
+    ),
     yours: scopeAwaits(waits),
   });
   const sideRunning: SideWork[] = await Promise.all(
