@@ -230,6 +230,31 @@ test("the last-looked line is drawn above the row it marks, the fold's rows incl
   expect(fold.indexOf(said)).toBeLessThan(fold.indexOf(">d4<"));
 });
 
+test("the line is drawn by the time order where a running row is older than the fold's", () => {
+  const done = (n: number, atMs: number) =>
+    row("finished", { messageId: `d${n}`, title: `d${n}`, atMs });
+  // Four done requests and one still running, older than all of them, so the
+  // fold's rows are drawn under it while being newer than it. The person last
+  // looked when the oldest done request had arrived and the running one had not.
+  const rows = [done(1, 5), done(2, 4), done(3, 3), done(4, 2), done(5, 1)];
+  const list = requestList(
+    [...rows, row("running", { messageId: "r", title: "r", atMs: 0 })],
+    1,
+    5,
+  );
+  const said = "you looked down to here";
+  const html = face(list, EN, null, said);
+  // One line, and it is inside the fold above the row the time order names --
+  // not above the running row, which is drawn before the fold and is older
+  // than both of the rows the fold took.
+  expect([...html.matchAll(/list-since/g)]).toHaveLength(1);
+  const fold = /<details class="list-fold" open="">([\s\S]*?)<\/details>/.exec(html)?.[1] ?? "";
+  expect(fold).toContain(said);
+  expect(fold.indexOf(said)).toBeLessThan(fold.indexOf(">d5<"));
+  expect(fold.indexOf(">d4<")).toBeLessThan(fold.indexOf(said));
+  expect(html.indexOf(">r<")).toBeLessThan(html.indexOf(said));
+});
+
 test("a row that is still running is never folded away, however old it is", () => {
   const list = requestList(
     [

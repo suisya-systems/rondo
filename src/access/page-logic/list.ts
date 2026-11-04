@@ -152,10 +152,12 @@ export interface RequestList {
    * there is no line to draw -- which is either that this actor has never
    * looked, or that they have seen everything.
    *
-   * It may be one of {@link moreDone}'s rows, because the line is a position
-   * in the whole time order and the fold hides part of that order (rondo#746).
-   * The face then draws the line inside the fold and opens it, as it opens it
-   * for the request the centre is showing.
+   * **The position is the time order's and not the drawn order's**
+   * (rondo#746): it is read off every request of the list sorted by when it
+   * last moved, so the fold -- which draws what it took at the foot, under
+   * requests older than they are -- moves no line. It may therefore name one
+   * of {@link moreDone}'s rows, and the face then draws the line inside the
+   * fold and opens it, as it opens it for the request the centre is showing.
    */
   readonly lastLookedAbove: string | null;
   /**
@@ -314,16 +316,21 @@ export function requestList(
   const moreDone = newest.slice(DONE_SHOWN);
   const shown = rest.filter((row) => rowWord(row) !== "done" || kept.has(row.messageId));
   const days = byDay(shown, (row) => row.atMs, nowMs);
-  // The first row, in drawing order, that had already been seen. What is
-  // lifted under *your turn* is left out: it is waiting on the person now,
-  // whenever it arrived, so a line above it would say something false about
-  // it. **The folded done requests are not left out** (rondo#746): the line is
-  // a position in the whole time order, and reading it off the shown rows
-  // alone loses it entirely where every request the person had already seen is
-  // one the fold took -- the list would then say nothing was ever looked at.
-  // So the order read here is the order drawn: the day groups, then the rows
-  // behind the press, which is where the line falls when it falls there.
-  const inOrder = [...days.flatMap((group) => group.rows), ...moreDone];
+  // **The line's position is a fact about the time order, read off every
+  // request in that order** (rule 7, rondo#746) -- the done ones the fold took
+  // included, and never off the order the list happens to draw. The fold draws
+  // the rows it took at the foot, under requests older than they are, so the
+  // drawn order is not the time order: reading the position off it would find
+  // the first *drawn* row already seen, which where a running request is older
+  // than a folded done one is the running row -- putting unread done requests
+  // below the line. Reading it off the shown rows alone loses the line
+  // entirely where every request already seen is one the fold took.
+  //
+  // What is lifted under *your turn* is left out, as rule 2's lift takes it out
+  // of the time order altogether: it waits on the person now, whenever it
+  // arrived, so a line above it would say something false about it -- and the
+  // face draws it where no line of the order belongs.
+  const inOrder = rest.toSorted((left, right) => right.atMs - left.atMs);
   const seen = sinceMs === null ? undefined : inOrder.find((row) => row.atMs <= sinceMs);
   return {
     yourTurn,

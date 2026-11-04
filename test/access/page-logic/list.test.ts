@@ -192,6 +192,33 @@ test("the line is read off the whole list, the done requests the fold took inclu
   expect(requestList(rows, at(2026, 9, 18, 18), NOW).lastLookedAbove).toBe("done-3");
 });
 
+test("the line's position is the time order's, not the order the fold draws in", () => {
+  // Five done requests and one still running that is older than every one of
+  // them, so the fold draws two done requests *under* the running row. The
+  // person last looked when the oldest done request had just arrived.
+  const rows = [
+    row({ messageId: "done-1", atMs: at(2026, 9, 20, 9) }),
+    row({ messageId: "done-2", atMs: at(2026, 9, 19) }),
+    row({ messageId: "done-3", atMs: at(2026, 9, 18) }),
+    row({ messageId: "done-4", atMs: at(2026, 9, 17) }),
+    row({ messageId: "done-5", atMs: at(2026, 9, 16) }),
+    row({ messageId: "running-oldest", atMs: at(2026, 9, 10), state: "running" }),
+  ];
+  const list = requestList(rows, at(2026, 9, 16, 18), NOW);
+  expect(list.moreDone.map((each) => each.messageId)).toEqual(["done-4", "done-5"]);
+  // In time order the oldest row already seen is `done-5`, and that is where
+  // the line goes. Walking the drawn rows instead -- the day groups, then the
+  // rows behind the press -- would reach `running-oldest` first and leave
+  // `done-4`, which the person has never seen, below the line.
+  expect(list.lastLookedAbove).toBe("done-5");
+  // And the running row is still where the line goes when the position is its
+  // own: the mix is read by time, not by which section a row is drawn in.
+  expect(requestList(rows, at(2026, 9, 10, 18), NOW).lastLookedAbove).toBe("running-oldest");
+  // A reading between the two folded rows puts the line on the newer of them,
+  // with the running row -- older than both -- still under it.
+  expect(requestList(rows, at(2026, 9, 17, 18), NOW).lastLookedAbove).toBe("done-4");
+});
+
 test("no line is drawn where it would divide nothing", () => {
   const rows = [
     row({ messageId: "a", atMs: at(2026, 9, 20, 9) }),
