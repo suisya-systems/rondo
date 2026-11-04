@@ -41,7 +41,6 @@ import {
   PRIMARY,
   TONE,
 } from "../page/vocabulary.js";
-import { placeSaid } from "../page-logic/list.js";
 import { isLive, type PageView, REVIEW_ROUND_CHOICES, viewHref } from "../page-logic/routes.js";
 import { firstLine, requestWords, type Threads, waitingAsk } from "../page-logic/threads.js";
 import { approvalTip, heldAgentTypeLines, scopeBudgetsFromStore, scopeCovers } from "../scope.js";
@@ -52,6 +51,8 @@ import {
   detailsFold,
   limitsBlock,
   numbersFold,
+  planChoice,
+  planLine,
   promptFold,
   whatBlock,
 } from "./scope-press.js";
@@ -659,86 +660,6 @@ export function recordedFold(wording: Chrome, lines: readonly string[]) {
         ))}
       </div>
     </details>
-  );
-}
-
-/**
- * One held plan as a person reads it: where it runs, with which agent type,
- * and where it came from.
- *
- * **`among` is the plans this one is offered beside** (`D-0081` rule 4.2,
- * rondo#305). The place is named only where two of the lines offered would
- * read the same without it -- so the key each plan is compared by is its own
- * line with the place left out, and a plan whose root, agent type or origin
- * already reads differently from every other says no place at all. Where two
- * lines would read the same, the repository is what is left to tell them
- * apart, and it is said in the person's own name for it.
- */
-function planLine(wording: Chrome, plan: HeldPlan, among: readonly HeldPlan[]): string {
-  const lineOf = (one: HeldPlan, place: string | null) =>
-    wording.scopePlanLine(
-      wording.scopeWorkspace(place, one.workspaceRoot),
-      one.agentTypeDigest.slice("sha256:".length, "sha256:".length + 12),
-      wording.scopePlanFrom(one.from.kind),
-    );
-  const said = placeSaid(
-    { otherwise: lineOf(plan, null), repository: plan.repository },
-    among.map((one) => lineOf(one, null)),
-  );
-  return lineOf(plan, said);
-}
-
-/**
- * The choice of plan, as links in the rounds' shape and for their reason (no
- * form to fight, and the address holds the state): one line per plan saying
- * where it runs and where it came from, the chosen one marked. Drawn only when
- * there is more than one to choose from.
- */
-function planChoice(
-  wording: Chrome,
-  view: Extract<PageView, { kind: "scope" }>,
-  plans: readonly HeldPlan[],
-  /** The chosen plan's digest, or null when nothing is chosen: every plan is then a link. */
-  chosen: string | null,
-) {
-  // One plan is no choice -- unless nothing is chosen, when it is the way on.
-  if (plans.length < 2 && chosen !== null) {
-    return null;
-  }
-  return (
-    <section id="plans" class="space-y-1">
-      <p class="text-body leading-6 font-medium">{wording.scopePlanAsk}</p>
-      <ul class="space-y-1">
-        {plans.map((plan) => {
-          // **Two choices that read alike say when rondo came to hold each**
-          // (D-0075 rule 2.3): a repaired setup and the stale plan it
-          // replaced differ in a path this line does not show, and the time
-          // is what a person can tell them apart by.
-          const line = planLine(wording, plan, plans);
-          const alike =
-            plans.filter((other) => planLine(wording, other, plans) === line).length > 1;
-          const said = alike
-            ? wording.scopePlanHeldAt(line, localTime(plan.heldAtMs).replace("T", " "))
-            : line;
-          return (
-            <li class="text-body leading-5 wrap-anywhere">
-              {plan.planDigest === chosen ? (
-                <span aria-current="true" class={`${PILL} font-sans ${TONE.ok}`}>
-                  {said}
-                </span>
-              ) : (
-                <a
-                  href={viewHref({ ...view, plan: plan.planDigest }, wording.lang)}
-                  class="rounded-md px-1.5 text-link underline-offset-2 hover:underline"
-                >
-                  {said}
-                </a>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
   );
 }
 
