@@ -11,6 +11,8 @@
  * calls are as cheap as five -- so the slowness was found by a person waiting
  * for a page rather than by a red check. This file is that missing check: a
  * store of the size the host's is, one page served over http, and a budget.
+ * **It adds a check and changes nothing the page draws**: no module under
+ * `src/access/page` or `src/access/web.tsx` is touched by the diff it came in.
  *
  * **What is judged, and how.** A duration is noisy -- a runner is shared, the
  * compiler and the garbage collector are not ours to schedule -- so a single
@@ -24,20 +26,28 @@
  * to the line says so.
  *
  * **The headroom, measured.** On this machine on 2026-11-05 the measured draws
- * are 63 to 177 ms, so the budget is some five times what a healthy page costs.
- * That is deliberate: this is a floor under runner variance, not a target to
- * grow into. The number to change when the page gets slower is the page.
+ * are 104 to 157 ms, so the budget is some four times what a healthy page
+ * costs. That is deliberate: this is a floor under runner variance, not a
+ * target to grow into. The number to change when the page gets slower is the
+ * page.
  *
- * **What the fixture is, and what it is not.** Its row counts are the counts of
- * the store at hand, read off `rondo-iterations.sqlite3` on 2026-11-05: 78
- * iterations, 448 thread messages, 288 proposals and 139 lap readings. Its
- * plans are padded to the average payload that store carries (8.4 KB), because
- * the ended ledger's cost is a function of plan bytes rather than of row count.
- * It is not a copy of that store: its readings, spends and scopes are the
- * fixtures' own, and a host's store will keep growing past these numbers. So
- * what a red run here means is "the page gets slower as the store grows", which
- * is the regression this file is for -- and what a green run does *not* promise
- * is a particular duration on a particular operator's machine.
+ * **What the fixture is.** Its row counts and its two heaviest columns are the
+ * store at hand's, read off `rondo-iterations.sqlite3` on 2026-11-05: 78
+ * iterations, 448 thread messages, 288 proposals, 139 lap readings, plans of
+ * 8.4 KB and a worker's command log of 174 KB a lap -- 12 MB of that store's 24
+ * MB, and the thing a draw decodes per lap it draws.
+ *
+ * **What it is not, measured on the same day.** It does not reproduce the 4 s
+ * draw `f9ff989` removed: with that fix reverted, a draw over this fixture
+ * takes 155 ms against 115 ms with it, not four seconds. The 4 s was 485 port
+ * calls rather than a large store, and how many calls a draw makes is a
+ * function of the *shape* of what is in the store -- how many requests carry
+ * scopes, splits and successors, which readers then answer once per request --
+ * where this fixture's requests carry none. The call count is
+ * `test/access/page-logic/read-once.test.ts`' claim and stays there; what this
+ * file holds is the duration, over a store of the right weight. So a red run
+ * here says the page is slower than half a second over a store the size of a
+ * host's, and a green one does not promise that no shape of store is slow.
  */
 import { expect, test } from "vitest";
 import type { ProposalDraft } from "../../src/store/records.js";
@@ -79,6 +89,16 @@ const AT_HAND = {
   readings: 139,
   /** Average `length(plan)` over that store's iteration rows. */
   planBytes: 8_387,
+  /**
+   * Average `length(lap_commands)` over the 69 rows that carry one, and the
+   * largest column in that store by two orders of magnitude: 12 MB of the 24 MB
+   * file is what the workers ran (`D-0104`), about 160 entries of some 2 KB a
+   * lap. The page decodes it per lap it draws, so a fixture without it is a
+   * fixture missing half the store's weight.
+   */
+  commandBytes: 174_363,
+  /** About 160 entries a lap, at about 2 KB each. */
+  commandsPerLap: 160,
 } as const;
 
 /**
@@ -97,6 +117,25 @@ function paddedPrompt(): string {
   const base = JSON.stringify(planFor("i-sizing")).length;
   const pad = Math.max(0, AT_HAND.planBytes + sentence.length - base);
   return PLAN.prompt + sentence.repeat(Math.ceil(pad / sentence.length)).slice(0, pad);
+}
+
+/**
+ * What a worker ran, in the shape the runner records it (`D-0104`): as many
+ * entries and as many bytes as a lap of the store at hand carries, so that a
+ * draw pays for decoding them the way a draw over that store does.
+ */
+function lapCommands(): string {
+  const output = "1\tthe file this command read, line by line, as the runner kept it\n";
+  const each = Math.floor(AT_HAND.commandBytes / AT_HAND.commandsPerLap);
+  return JSON.stringify(
+    Array.from({ length: AT_HAND.commandsPerLap }, (_unused, index) => ({
+      index,
+      command: `Read {"file_path":"/srv/work/i-0001/src/access/web.tsx"}`,
+      output: output.repeat(Math.ceil(each / output.length)).slice(0, each),
+      output_omitted_chars: 0,
+      is_error: false,
+    })),
+  );
 }
 
 /** One model reading, which is what a lap carries two of by the time it ends. */
@@ -145,6 +184,7 @@ const lapId = (index: number): string => `i-${String(index).padStart(4, "0")}`;
 async function storeTheSizeOfTheHosts(): Promise<ReturnType<typeof fresh>> {
   const made = fresh();
   const prompt = paddedPrompt();
+  const commands = lapCommands();
   // 61 laps carry two readings and 17 carry one, which is the 139 the store at
   // hand holds over its 78 laps.
   const twoReadings = AT_HAND.readings % AT_HAND.iterations;
@@ -168,6 +208,17 @@ async function storeTheSizeOfTheHosts(): Promise<ReturnType<typeof fresh>> {
     });
     expect(reserved.kind).toBe("reserved");
     await openGate(made, id);
+    // What the worker ran, carried by a transition of the state onto itself,
+    // which is how a reading arrives minutes after the walk that produced it
+    // (`gateWithChecks`' own spelling).
+    const ran = await made.store.transition(
+      id,
+      "awaiting_human",
+      "awaiting_human",
+      { lapCommands: commands },
+      2_400,
+    );
+    expect(ran.kind).toBe("transitioned");
     for (let taken = 0; taken < (index < twoReadings ? 2 : 1); taken += 1) {
       const appended = await made.store.appendReading(id, reading(taken), 2_500);
       expect(appended.kind).toBe("appended");
@@ -216,10 +267,13 @@ test(
       proposals: AT_HAND.proposals,
       readings: AT_HAND.readings,
     });
-    const plan = made.connection
-      .prepare("SELECT avg(length(plan)) AS bytes FROM iteration")
-      .get() as { bytes: number };
-    expect(Number(plan.bytes)).toBeGreaterThanOrEqual(AT_HAND.planBytes);
+    const written = made.connection
+      .prepare(
+        "SELECT avg(length(plan)) AS plan, avg(length(lap_commands)) AS commands FROM iteration",
+      )
+      .get() as { plan: number; commands: number };
+    expect(Number(written.plan)).toBeGreaterThanOrEqual(AT_HAND.planBytes);
+    expect(Number(written.commands)).toBeGreaterThanOrEqual(AT_HAND.commandBytes);
 
     const { base, stop, served } = await serving(portsOver(made, "ada", []));
     try {
