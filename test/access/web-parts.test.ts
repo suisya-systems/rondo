@@ -170,15 +170,28 @@ const page = async (world: Parameters<typeof portsOver>[0], wording = EN) =>
     mint,
   );
 
-/** The list row's sentence of state for the one request. */
+/** The list row's word of state for the one request (rondo#745). */
 function rowSaid(html: string): string {
   const row = /<a class="list-row[^"]*"[^>]*>([\s\S]*?)<\/a>/.exec(html)?.[1] ?? "";
   return (/<p>([\s\S]*?)<\/p>/.exec(row)?.[1] ?? "").replace(/<[^>]+>/g, "");
 }
 
-test("a request run as several lines is one row, and its sentence counts the parts (D-0098 rule 8.1)", async () => {
+/**
+ * The same row's hover, which is where the sentence counting the parts is
+ * since the row itself says one of three words (rondo#745): the last line of
+ * it, the name and the place being the lines before.
+ */
+function rowHover(html: string): string {
+  const tag = /<a class="list-row[^>]*>/.exec(html)?.[0] ?? "";
+  const title = / title="([\s\S]*?)"/.exec(tag)?.[1] ?? "";
+  return title.split("\n").at(-1) ?? "";
+}
+
+test("a request run as several lines is one row, and the sentence counting the parts is its hover (D-0098 rule 8.1)", async () => {
   const w = await split([undefined, undefined, 0]);
-  expect(rowSaid(await page(w.world))).toBe(
+  // The row says work is going on; how the parts stand is what it kept.
+  expect(rowSaid(await page(w.world))).toBe(EN.rowStateRunning);
+  expect(rowHover(await page(w.world))).toBe(
     "3 parts: 1 waiting for another part to be merged, 2 not started",
   );
 
@@ -186,18 +199,21 @@ test("a request run as several lines is one row, and its sentence counts the par
   await w.start(1, "lap-two");
   const html = await page(w.world);
   expect(html.match(/<a class="list-row/g)).toHaveLength(1);
-  expect(rowSaid(html)).toBe("2 of 3 parts running, 1 waiting for another part to be merged");
+  expect(rowSaid(html)).toBe(EN.rowStateRunning);
+  expect(rowHover(html)).toBe("2 of 3 parts running, 1 waiting for another part to be merged");
   // A wait rondo clears itself is not amber: only *your turn* is.
   expect(html).not.toContain("list-row-mine");
-  expect(rowSaid(await page(w.world, JA))).toBe(
+  expect(rowSaid(await page(w.world, JA))).toBe(JA.rowStateRunning);
+  expect(rowHover(await page(w.world, JA))).toBe(
     "作業 3 件のうち 2 件が進行中、1 件はほかの作業のマージ待ち",
   );
 });
 
-test("a request run as one line keeps its one sentence of state", async () => {
+test("a request run as one line keeps its one sentence of state on the hover", async () => {
   const w = await split([undefined]);
   await w.start(0, "lap-one");
-  expect(rowSaid(await page(w.world))).toBe(EN.rowRunning);
+  expect(rowSaid(await page(w.world))).toBe(EN.rowStateRunning);
+  expect(rowHover(await page(w.world))).toBe(EN.rowRunning);
 });
 
 /** The right face's steps, one per part, as text: name, then what it says. */
@@ -249,9 +265,10 @@ test("a part whose earlier part ended unmerged is the person's: amber, with the 
     "[yours] Part 2part 1 ended without being merged, so this one will not start by itself Answer the question",
   ]);
   expect(html).toContain(`href="#${askId}"`);
-  // The row is the person's turn, and says which part.
+  // The row is the person's turn, and which part is on its hover.
   expect(html).toContain("list-row-mine");
-  expect(rowSaid(html)).toBe("2 parts: 1 needs you, 1 stopped");
+  expect(rowSaid(html)).toBe(EN.rowStateYourTurn);
+  expect(rowHover(html)).toBe("2 parts: 1 needs you, 1 stopped");
 });
 
 test("a wait on another repository names it and its pull request", () => {
@@ -751,7 +768,10 @@ test("a part the person dropped by answering stop is stopped, not the person's t
   const html = await page(w.world);
   expect(partSteps(html)).toEqual(["Part 1stopped", "Part 2stopped"]);
   expect(html).not.toContain("list-row-mine");
-  expect(rowSaid(html)).toBe("2 parts: 2 stopped");
+  // Every part stopped, so the request is over: the row says so off its parts
+  // and not off the lap under its first message (rondo#745).
+  expect(rowSaid(html)).toBe(EN.rowStateDone);
+  expect(rowHover(html)).toBe("2 parts: 2 stopped");
 });
 
 test("a part closed without an approval, or whose pull request was closed unmerged, is stopped and not finished", async () => {

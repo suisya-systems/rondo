@@ -6,6 +6,7 @@
 import { APPROVED_OUTCOME, READING_COVERAGE } from "../../store/records.js";
 import type { GateAuto, GateAutoReason } from "../gate-auto.js";
 import { EXPLAIN_EN } from "../page/explain-words.js";
+import { LIST_EN } from "../page/list-words.js";
 import { REFUSAL_EN } from "../page/refusal-words.js";
 import { REPORT_EN } from "../page/report-words.js";
 import { SINCE_EN } from "../page/since-words.js";
@@ -156,6 +157,7 @@ export const EN: Chrome = Object.freeze({
   // that say it. Spread rather than re-declared, so `satisfies Chrome` below
   // still fails on a word this set is missing.
   ...PAGE_EN,
+  ...LIST_EN,
   ...EXPLAIN_EN,
   ...SINCE_EN,
   ...REFUSAL_EN,

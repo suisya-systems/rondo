@@ -93,17 +93,33 @@ export interface RequestRow {
 export type RowStanding = "yourTurn" | "running" | "done";
 
 /**
- * A row's standing, from the state the lap under it gives.
+ * A row's standing, from the state the lap under it gives and, where the
+ * request runs as several lines, from its parts.
  *
  * `notStarted` and `drafting` are *running*: the person has asked and rondo
  * has not finished with it, which is what the word says. `stopped` and
  * `question` are *done* for the same test read the other way -- nothing more
  * will happen under either unless the person asks again.
+ *
+ * **A request run as several lines stands where its parts do** (D-0098 rule
+ * 8.1): the lap under its first message says nothing about the others, and a
+ * row whose every part has stopped would read *in progress* off that lap
+ * alone. The counts are what the sentence used to say; the standing is what is
+ * left of that sentence once the row says one word.
  */
-export function standingOf(state: RowState): RowStanding {
-  switch (state) {
-    case "waitingOnYou":
-      return "yourTurn";
+export function standingOf(row: Pick<RequestRow, "state" | "parts">): RowStanding {
+  if (row.state === "waitingOnYou") {
+    return "yourTurn";
+  }
+  const parts = row.parts ?? null;
+  if (parts !== null) {
+    return parts.yours > 0
+      ? "yourTurn"
+      : parts.running + parts.waiting + parts.toStart > 0
+        ? "running"
+        : "done";
+  }
+  switch (row.state) {
     case "running":
     case "notStarted":
     case "drafting":
@@ -295,7 +311,7 @@ export function requestList(
   // of the day groups entirely rather than drawn there and hidden by a rule,
   // so the count on the press is the number a person cannot see.
   const finished = rest
-    .filter((row) => standingOf(row.state) === "done")
+    .filter((row) => standingOf(row) === "done")
     .toSorted((left, right) => right.atMs - left.atMs);
   const folded = finished.slice(DONE_IN_PLACE);
   const hidden = new Set(folded.map((row) => row.messageId));

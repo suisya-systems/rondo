@@ -6,6 +6,7 @@
 import { APPROVED_OUTCOME } from "../../store/records.js";
 import type { GateAuto, GateAutoReason } from "../gate-auto.js";
 import { EXPLAIN_JA } from "../page/explain-words.js";
+import { LIST_JA } from "../page/list-words.js";
 import { REFUSAL_JA } from "../page/refusal-words.js";
 import { REPORT_JA } from "../page/report-words.js";
 import { SINCE_JA } from "../page/since-words.js";
@@ -186,6 +187,7 @@ const JA_MEASURE: Record<string, string> = {
  */
 export const JA: Chrome = Object.freeze({
   ...PAGE_JA,
+  ...LIST_JA,
   ...EXPLAIN_JA,
   ...SINCE_JA,
   ...REFUSAL_JA,

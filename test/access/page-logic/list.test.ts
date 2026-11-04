@@ -7,7 +7,7 @@
  * thing that breaks the axis.
  */
 import { expect, test } from "vitest";
-import type { RequestRow, ThingDrawn } from "../../../src/access/page-logic/list.js";
+import type { RequestRow, RowState, ThingDrawn } from "../../../src/access/page-logic/list.js";
 import {
   DONE_IN_PLACE,
   placeSaid,
@@ -16,6 +16,7 @@ import {
   rowStateOf,
   standingOf,
 } from "../../../src/access/page-logic/list.js";
+import type { PartCounts } from "../../../src/access/page-logic/parts.js";
 import type { IterationRecord } from "../../../src/store/records.js";
 
 const at = (y: number, m: number, d: number, h = 12): number => new Date(y, m - 1, d, h).getTime();
@@ -68,18 +69,45 @@ test("what waits on the person is lifted out of the time order, oldest first", (
  */
 
 test("every state a lap can be in is the person's turn, work going on, or work over", () => {
-  expect(standingOf("waitingOnYou")).toBe("yourTurn");
+  const standing = (state: RowState) => standingOf({ state });
+  expect(standing("waitingOnYou")).toBe("yourTurn");
   // Asked and not finished with: rondo's turn, which the person reads as work
   // going on rather than as nothing happening.
-  expect(standingOf("running")).toBe("running");
-  expect(standingOf("notStarted")).toBe("running");
-  expect(standingOf("drafting")).toBe("running");
+  expect(standing("running")).toBe("running");
+  expect(standing("notStarted")).toBe("running");
+  expect(standing("drafting")).toBe("running");
   // Over, in the sense the word carries on a list: nothing more will happen
   // under it unless the person asks again.
-  expect(standingOf("finished")).toBe("done");
-  expect(standingOf("approved")).toBe("done");
-  expect(standingOf("stopped")).toBe("done");
-  expect(standingOf("question")).toBe("done");
+  expect(standing("finished")).toBe("done");
+  expect(standing("approved")).toBe("done");
+  expect(standing("stopped")).toBe("done");
+  expect(standing("question")).toBe("done");
+});
+
+test("a request run as several lines stands where its parts do, not where its first lap does", () => {
+  // The lap under the first message is not the request: a split whose parts
+  // have all stopped is over, however that one lap reads (D-0098 rule 8.1).
+  const counts = (over: Partial<PartCounts>): PartCounts => ({
+    total: 2,
+    running: 0,
+    yours: 0,
+    waiting: 0,
+    waitingOn: null,
+    toStart: 0,
+    finished: 0,
+    stopped: 0,
+    ...over,
+  });
+  const over = (parts: Partial<PartCounts>) =>
+    standingOf({ state: "notStarted", parts: counts(parts) });
+  expect(over({ stopped: 2 })).toBe("done");
+  expect(over({ finished: 1, stopped: 1 })).toBe("done");
+  // Anything still to happen is work going on, the waits rondo clears itself
+  // included; a part at its gate is the person's turn.
+  expect(over({ running: 1, stopped: 1 })).toBe("running");
+  expect(over({ waiting: 1, finished: 1 })).toBe("running");
+  expect(over({ toStart: 2 })).toBe("running");
+  expect(over({ yours: 1, running: 1 })).toBe("yourTurn");
 });
 
 test("only the newest three finished requests keep their place; the rest are counted on one press", () => {

@@ -216,7 +216,7 @@ function Row({
   readonly agoOf: (atMs: number) => string;
   readonly open: boolean;
 }) {
-  const standing = standingOf(row.state);
+  const standing = standingOf(row);
   const waiting = standing === "yourTurn";
   const mark = markOf(standing);
   // The three words the row draws, and the sentence it keeps for the hover.
@@ -405,8 +405,7 @@ export function RequestsFace({
   const paused = list.paused ?? [];
   const asking = list.asking ?? [];
   const unreadable = list.unreadable ?? [];
-  const empty =
-    list.yourTurn.length === 0 && list.days.length === 0 && list.folded.length === 0;
+  const empty = list.yourTurn.length === 0 && list.days.length === 0 && list.folded.length === 0;
   return (
     <div className="list">
       {newRequestHref === null ? null : (

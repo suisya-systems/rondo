@@ -1441,6 +1441,7 @@ const ROLES_BY_MODULE: Readonly<Record<string, readonly string[]>> = {
   "src/access/page/gate-shown.tsx": [HUMAN],
   "src/access/page/governance.tsx": [HUMAN],
   "src/access/page/list.tsx": [HUMAN],
+  "src/access/page/list-words.ts": [HUMAN],
   "src/access/page-logic/days.ts": [HUMAN],
   "src/access/page-logic/event-fold.ts": [HUMAN],
   "src/access/page-logic/governance.ts": [HUMAN],
