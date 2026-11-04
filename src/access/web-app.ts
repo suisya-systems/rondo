@@ -926,6 +926,69 @@ export class ScopePort {
     return await this.#startPlan(input);
   }
 
+  /**
+   * **Record one scope, approve it, and start the work -- on one press** (the
+   * scope screen's main press).
+   *
+   * An arrival mints one press and a port spends it ({@link spendArrival},
+   * {@link mintPress}), so a route cannot reach two of this capability's
+   * implementations from one person's click. That is what this method is for:
+   * the press is checked and spent **here, once**, and the two acts then run
+   * inside the capability that already holds both. The alternative -- minting a
+   * second press, or letting the route spend one twice -- would weaken the one
+   * rule that makes a write on this page a person's act.
+   *
+   * **The start is attempted only on an approval that was recorded**, and the
+   * approval it is attempted under is the one read back off the row, never a
+   * value the form carried: the caller composes the start from
+   * `recorded.scopeDecisionId`.
+   */
+  async recordApproveAndStart(
+    press: Press,
+    draft: ScopeFormDraft,
+    start: (scopeDecisionId: string) => ScopedStartInput,
+  ): Promise<{ readonly recorded: ScopeRecorded; readonly started: Started | null }> {
+    if (!minted.has(press)) {
+      return {
+        recorded: { ok: false, note: "nothing was recorded: this was not a person's press" },
+        started: null,
+      };
+    }
+    minted.delete(press);
+    const recorded = await this.#record(draft);
+    if (!recorded.ok || recorded.scopeDecisionId === undefined) {
+      return { recorded, started: null };
+    }
+    return { recorded, started: await this.#start(start(recorded.scopeDecisionId)) };
+  }
+
+  /**
+   * {@link recordApproveAndStart} for a drafted scope: the draft approved -- as
+   * drafted, or as the person changed it -- and its first part started.
+   *
+   * **The first part and no other** (D-0098 rule 1): the parts after it are
+   * ordered behind it and start by themselves once it lands, so one press is
+   * the whole split under way.
+   */
+  async recordDraftedAndStart(
+    press: Press,
+    form: DraftedScopeFormDraft,
+    start: (scopeDecisionId: string) => PlanStartInput,
+  ): Promise<{ readonly recorded: ScopeRecorded; readonly started: Started | null }> {
+    if (!minted.has(press) || this.#recordDrafted === null || this.#startPlan === null) {
+      return {
+        recorded: { ok: false, note: "nothing was recorded: this was not a person's press" },
+        started: null,
+      };
+    }
+    minted.delete(press);
+    const recorded = await this.#recordDrafted(form);
+    if (!recorded.ok || recorded.scopeDecisionId === undefined) {
+      return { recorded, started: null };
+    }
+    return { recorded, started: await this.#startPlan(start(recorded.scopeDecisionId)) };
+  }
+
   /** Record one drafted scope and approve it, on one press. */
   async recordAndApprove(press: Press, draft: ScopeFormDraft): Promise<ScopeRecorded> {
     if (!minted.has(press)) {
@@ -2172,6 +2235,62 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     if (draft === null) {
       return scopeRefused(c, 400, "scopeRefusedFields", request, rounds, drawnOver);
     }
+    // **Which of the screen's two presses this is** (the main one, or the one
+    // that only approves): the main button carries its own `start` field, and a
+    // browser posts the name and value of the button that was pressed and of no
+    // other. The field is what *widens* the act, so a body without it only
+    // approves -- which is the safe way round.
+    const alsoStarts = form["start"] === "1";
+    const iterationId = form["iteration"];
+    if (alsoStarts && (typeof iterationId !== "string" || !PAGE_ITERATION_ID.test(iterationId))) {
+      return scopeRefused(c, 400, "scopeRefusedForm", request, rounds, drawnOver);
+    }
+    if (alsoStarts && typeof iterationId === "string") {
+      // One press, two acts, inside the capability that holds both: the press
+      // is spent once there, and the start runs under the approval read back
+      // off the row (never a decision id the form carried).
+      const both = await scope.recordApproveAndStart(minting.press, draft, (scopeDecisionId) => ({
+        iterationId,
+        requestMessageId: request,
+        scopeDecisionId,
+        planDigest: draft.planDigest,
+        // rondo#462: the form's own field, empty for the host's default, and
+        // passed on rather than matched here.
+        workerProvider: chosenWorker(form["worker_provider"]),
+        whenReady: false,
+      }));
+      if (!both.recorded.ok || both.started === null) {
+        return scopeRefused(
+          c,
+          409,
+          both.recorded.why ?? "scopeRefusedNotTaken",
+          request,
+          rounds,
+          drawnOver,
+        );
+      }
+      if (!both.started.ok) {
+        // **The approval stands and the start did not**, so the way back is the
+        // approved scope, where the start can be pressed again: the person
+        // approved, and a refusal that sent them to the draft would hide it.
+        return startRefused(
+          c,
+          heldStatus(both.started),
+          both.started.why ?? "startRefusedNotAdmitted",
+          request,
+          both.recorded.scopeDecisionId ?? null,
+          both.started.test ?? null,
+          draft.planDigest,
+          both.started.holders,
+          both.started.unusable ?? null,
+          { iteration: iterationId, worker: chosenWorker(form["worker_provider"]) },
+          both.started.note,
+        );
+      }
+      // Into the request's thread, where the lap just started draws its event
+      // lines (D-0083 rules 3, 7): no second screen to press start on.
+      return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
+    }
     const recorded = await scope.recordAndApprove(minting.press, draft);
     if (!recorded.ok || recorded.scopeDecisionId === undefined) {
       return scopeRefused(
@@ -2232,6 +2351,54 @@ export function createApp(ports: ServedPorts, token: string): Hono<PageEnv> {
     const values = scopeValuesOf(form);
     if (values === null) {
       return scopeRefused(c, 400, "scopeRefusedFields", request);
+    }
+    // The main press's own field, as `/scope`'s is, with the split's first part
+    // and the lap it runs as beside it.
+    const alsoStarts = form["start"] === "1";
+    const iterationId = form["iteration"];
+    const proposal = form["proposal"];
+    if (
+      alsoStarts &&
+      (typeof iterationId !== "string" ||
+        !PAGE_ITERATION_ID.test(iterationId) ||
+        typeof proposal !== "string" ||
+        proposal === "")
+    ) {
+      return scopeRefused(c, 400, "scopeRefusedForm", request);
+    }
+    if (alsoStarts && typeof iterationId === "string" && typeof proposal === "string") {
+      const both = await scope.recordDraftedAndStart(
+        minting.press,
+        { draftScopeId, draftDigest, scopeId, ...values },
+        (scopeDecisionId) => ({
+          iterationId,
+          requestMessageId: request,
+          scopeDecisionId,
+          proposalId: proposal,
+          // D-0098 rule 1: the first part, which the rest are ordered behind.
+          planIndex: 0,
+        }),
+      );
+      if (!both.recorded.ok || both.started === null) {
+        return scopeRefused(c, 409, both.recorded.why ?? "scopeRefusedNotTaken", request);
+      }
+      if (!both.started.ok) {
+        return startRefused(
+          c,
+          heldStatus(both.started),
+          both.started.why ?? "startRefusedNotAdmitted",
+          request,
+          both.recorded.scopeDecisionId ?? null,
+          both.started.test ?? null,
+          null,
+          both.started.holders,
+          // No press: a drafted split's start is not one the tick keeps.
+          both.started.unusable ?? null,
+          null,
+          both.started.note,
+        );
+      }
+      return c.redirect(viewHref({ kind: "thread", messageId: request, to: null }, tagOf(c)), 303);
     }
     const recorded = await scope.recordDrafted(minting.press, {
       draftScopeId,
