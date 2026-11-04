@@ -34,26 +34,42 @@
 // page is showing now: a redraw that was asked for and then failed to fetch,
 // or was cut off mid-fetch, leaves `#ledger` on the older draw, and a
 // reconnect that claimed otherwise would be agreed with and the older draw
-// would stay on the screen. So a stream that errors is closed here and opened
-// again after the host's own backoff, on an address built from `#ledger` as it
-// stands at that moment.
+// would stay on the screen. So a stream that fails is closed here and opened
+// again after a wait of this script's own, on an address built from `#ledger`
+// as it stands at that moment.
 //
-// **And only a drop is reopened, never an answer that ended the asking.** A
-// host with no form to draw and nothing to watch answers `/events` with a
-// `204`, which is how it says there is nothing here to listen to; the browser
-// then puts the source in `CLOSED` and would never ask again. Reopening that
-// on a backoff of this script's own would be the very thing rondo#742
-// removed -- a page and a host doing work every five seconds while nothing
-// changes -- so the error that carries `CLOSED` is the end of listening, and
-// a drop, which leaves the source reconnecting, is what waits and opens
-// again.
+// **And one answer, and one only, ends the asking.** A host with no form to
+// draw and nothing to watch answers `/events` with a `204`, which is how it
+// says there is nothing here to listen to. Asking that again on a backoff
+// would be the very thing rondo#742 removed -- a page and a host doing work
+// every few seconds while nothing changes -- so a `204` is the end of
+// listening, and nothing else is.
+//
+// **Which the state of the source cannot say.** `EventSource` reports that a
+// stream failed and never reports why: a `204`, an HTTP `500` from a host
+// part-way through starting, and a host that is not listening at all each
+// arrive as one `error` with the source in `CLOSED`, because anything that is
+// not a `200` of the right type ends that source for good. Reading `CLOSED`
+// as "there is nothing here" gives up on a host that is about to come back
+// and leaves the page on an old screen for as long as it stays open. So the
+// ground for stopping is read off the answer itself: on a failure, and only
+// then, this asks the same address once with `fetch` and looks at the status.
+// `204` is the end; every other answer, and a request that could not be made
+// at all, is a host to ask again.
+//
+// **A growing wait, so that neither side works while nothing changes.** A
+// host that is down is asked again after a second, then two, then five, then
+// every thirty; a stream that opens resets that, so the next drop is answered
+// as quickly as the first. No wait is ever running while a stream is open,
+// and the page that comes back is redrawn by the host's own comparison
+// against the draw it is holding -- so what was written while it was down is
+// one redraw and a quiet host is still silence.
 //
 // **It decides nothing a press is checked on.** The press is still a person's
 // click on a form this origin drew, minted on the server (D-0059 section 5a);
 // this only keeps the token in that form the one the server now holds, which
 // is what reloading the page used to do.
 //
-// `retry` is the host's, so a host that is down is a reconnect that waits.
 // Inside a function for `page/changed.js`'s reason: classic scripts share one
 // top-level scope. Served under `script-src 'self'`, its digest in
 // `page.manifest.json`.
@@ -62,17 +78,23 @@
   if (typeof EventSource === "undefined") {
     return;
   }
-  // The host's own `retry`, which this script now spends instead of the
-  // browser: a dropped stream is reopened on this spacing, saying where the
-  // page is by then.
-  const AGAIN_MS = 5000;
-  // `EventSource.CLOSED`, by its value rather than off the constructor: a
-  // source in this state is one the browser will not reconnect, which is the
-  // difference between a host that said there is nothing to listen to and a
-  // stream that dropped.
-  const ENDED = 2;
+  // What this page waits before it opens a failed stream again, growing and
+  // then capped: a host that is down is asked less and less often, and a host
+  // that comes back is found within half a minute of coming back.
+  const AGAIN_MS = [1000, 2000, 5000, 30000];
+  // The one answer that means there is nothing here to listen to: no token to
+  // hand out and no bell to watch.
+  const NOTHING_TO_HEAR = 204;
   let source = null;
   let again = null;
+  // How many times in a row a stream has failed, which is the wait before the
+  // next attempt. A stream that opens puts it back to none.
+  let failures = 0;
+  // Which stream this page is on. An `error` from a stream this page has
+  // already replaced decides nothing, and the asking below is awaited, so the
+  // answer to it is only acted on while the stream that failed is still the
+  // one being listened for.
+  let era = 0;
   const changed = () => {
     document.body.dispatchEvent(new CustomEvent("rondo:change", { bubbles: false }));
   };
@@ -83,13 +105,47 @@
     const at = drawn ? `${search === "" ? "?" : "&"}at=${encodeURIComponent(drawn)}` : "";
     return `/events${search}${at}`;
   };
+  /**
+   * Whether the answer this address gives is the one that ends the asking.
+   *
+   * One request, made only after a failure, whose body is dropped as soon as
+   * the status has been read -- so a host that is up and would have held a
+   * stream open is not left holding a second one. A request that could not be
+   * made at all is a host to ask again, which is the same answer as any status
+   * that is not the `204`.
+   */
+  const ending = async () => {
+    if (typeof fetch === "undefined") {
+      return false;
+    }
+    const drop = new AbortController();
+    try {
+      const answer = await fetch(asking(), {
+        headers: { accept: "text/event-stream" },
+        cache: "no-store",
+        signal: drop.signal,
+      });
+      return answer.status === NOTHING_TO_HEAR;
+    } catch {
+      return false;
+    } finally {
+      drop.abort();
+    }
+  };
   const listen = () => {
     if (again !== null) {
       clearTimeout(again);
       again = null;
     }
     source?.close();
+    era += 1;
+    const mine = era;
     source = new EventSource(asking());
+    // A stream that opened is a host that is up: whatever this page waited to
+    // get here is spent, and the next failure waits the shortest spacing.
+    source.addEventListener("open", () => {
+      failures = 0;
+    });
     source.addEventListener("token", (event) => {
       for (const input of document.querySelectorAll('input[name="token"]')) {
         input.value = event.data;
@@ -101,19 +157,25 @@
     source.addEventListener("change", changed);
     // The browser would reconnect this itself, at the address it was given and
     // with the id it last received; closing it here is what keeps the next
-    // stream's `at` the draw this page is really showing. What it would *not*
-    // do is ask again after an answer that ended the asking, and neither does
-    // this: `CLOSED` on the source is the browser saying it has given up on
-    // this address -- a `204` from a host with no token and no bell -- and
-    // only a stream left reconnecting is one this page reopens.
+    // stream's `at` the draw this page is really showing. Whether there is a
+    // next stream at all is decided by what the address answers, and never by
+    // the state of the source: `CLOSED` is every failure there is, from the
+    // `204` that ends the asking to the `500` of a host that is starting up.
     source.addEventListener("error", () => {
-      const ended = source === null || source.readyState === ENDED;
-      source?.close();
-      source = null;
-      if (ended) {
+      if (mine !== era) {
         return;
       }
-      again ??= setTimeout(listen, AGAIN_MS);
+      source?.close();
+      source = null;
+      void (async () => {
+        const done = await ending();
+        if (mine !== era || done || again !== null) {
+          return;
+        }
+        const waits = AGAIN_MS[failures < AGAIN_MS.length ? failures : AGAIN_MS.length - 1];
+        failures += 1;
+        again = setTimeout(listen, waits);
+      })();
     });
   };
   listen();

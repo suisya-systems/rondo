@@ -489,6 +489,8 @@ async function liveReader(
   bell: ReturnType<typeof handBell>,
   /** The app's reading ports, where a test wants a write to land inside a draw. */
   ports: ServedPorts = portsOver(world, "ada", []),
+  /** This host's press token, which a restarted host mints anew (D-0041 rule 3b). */
+  token: string = TOKEN,
 ): Promise<{
   readonly page: () => Promise<string>;
   readonly open: (
@@ -506,7 +508,7 @@ async function liveReader(
     readonly drop: () => void;
   }>;
 }> {
-  const app = createApp({ ...ports, changes: bell }, TOKEN);
+  const app = createApp({ ...ports, changes: bell }, token);
   return {
     page: async () =>
       await (
@@ -661,6 +663,56 @@ test("a reader whose redraw never landed is told again on the stream it opens (r
   expect(await now.said()).toBe(`retry: 5000\nevent: token\ndata: ${TOKEN}\n\n`);
   expect(await now.said()).toBe(true);
   now.drop();
+});
+
+test("a page that outlived the host catches up on the stream the host comes back to (rondo#742)", async () => {
+  // **What a restart looks like from the page, and what the route owes it.**
+  // A host that is restarting answers nothing at all, and then answers badly
+  // while it is starting; `page/live.js` cannot tell either of those from the
+  // one answer that ends the asking, so it reads the status and keeps asking
+  // on a growing wait until a stream opens (owner, 2026-11-05). What it opens
+  // is this: a stream to a process that has minted a new token and has seen
+  // nothing written, carrying the draw the page is still showing. Both halves
+  // of that are owed an answer -- the forms on the screen are holding a token
+  // this process would refuse, and the write that landed while it was down is
+  // on a page nothing else will ever ring about.
+  const world = fresh();
+  await reserve(world, "i-0001", "do the thing");
+  const { page } = await liveReader(world, handBell("before"));
+
+  const drawn = await page();
+  const showing = /data-drawn-at="([^"]+)"/.exec(drawn)?.[1] ?? null;
+  expect(showing).toBe("before-0");
+  expect(drawn).not.toContain("and then the other thing");
+
+  // The write lands while the host is down, so no bell of anybody's rang for
+  // it: the process that saw it is gone.
+  await openRequest(world, "req-0002", "and then the other thing", 2_000);
+
+  // The host that comes back is a new process: a token of its own, and a bell
+  // whose count starts again -- which is why a mark is a process and a count
+  // and not a count alone. This page claims a draw this host never made.
+  const RESTARTED = "a-token-minted-after-the-restart";
+  const back = await liveReader(world, handBell("after"), portsOver(world, "ada", []), RESTARTED);
+  const caught = await back.open(showing);
+  // The new token first, which is what makes the person's next press answer
+  // instead of asking them to reload (rondo#674).
+  expect(await caught.said()).toBe(`retry: 5000\nevent: token\ndata: ${RESTARTED}\n\n`);
+  // Then one `change`: this page is holding a draw of a host that is gone, and
+  // the redraw it asks for says the thing that was written while it was down.
+  expect(await caught.said()).toBe(CHANGE_FRAME);
+  const redrawn = await back.page();
+  expect(redrawn).toContain("and then the other thing");
+  expect(await caught.said()).toBe(true);
+  caught.drop();
+
+  // **And then it is a reader like any other.** The draw this host stamped is
+  // the one the page now holds, so the stream it opens next is silence: a
+  // restart costs one redraw and nothing after it.
+  const settled = await back.open(/data-drawn-at="([^"]+)"/.exec(redrawn)?.[1] ?? null);
+  expect(await settled.said()).toBe(`retry: 5000\nevent: token\ndata: ${RESTARTED}\n\n`);
+  expect(await settled.said()).toBe(true);
+  settled.drop();
 });
 
 test("a write that lands inside the route's own open draw is one change (rondo#742)", async () => {

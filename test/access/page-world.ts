@@ -49,7 +49,17 @@ export const fresh = () => {
  * seen, as the real one does, so a page drawn before a ring is behind by the
  * one fact a host that restarted is also behind by.
  */
-export function handBell(): PageChanges & {
+export function handBell(
+  /**
+   * Which process this bell belongs to, as the real one's `born` is.
+   *
+   * The count starts at nothing in every process, so a mark says which host
+   * saw the writes it counts; a host that restarted therefore agrees with no
+   * page it did not draw, and a test of that case is a bell under another
+   * name.
+   */
+  born = "seen",
+): PageChanges & {
   readonly ring: () => void;
   readonly wrote: () => void;
   readonly holding: () => number;
@@ -63,7 +73,7 @@ export function handBell(): PageChanges & {
         listeners.delete(fn);
       };
     },
-    mark: () => `seen-${String(seen)}`,
+    mark: () => `${born}-${String(seen)}`,
     ring: () => {
       seen += 1;
       for (const listener of listeners) {

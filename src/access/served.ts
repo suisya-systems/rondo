@@ -205,11 +205,13 @@ const PASSES = 3;
  * leaving them as the version every later comparison is against.
  *
  * `retry` is still named, so a browser that reconnects a dropped stream of its
- * own accord waits rather than hammers; `page/live.js` reopens on the same
- * spacing, and says on the address which draw it is holding by then. With no
- * bell there is nothing to hold the stream open for: the token is sent and the
- * response ends, as it did before. A `204` -- no token and no bell -- tells the
- * browser to stop asking.
+ * own accord waits rather than hammers; `page/live.js` closes a failed stream
+ * and opens it again on a growing wait of its own, saying on the address which
+ * draw it is holding by then. With no bell there is nothing to hold the stream
+ * open for: the token is sent and the response ends, as it did before. A
+ * `204` -- no token and no bell -- is the one answer that ends the asking, and
+ * the page reads it off the status rather than off the state of a source that
+ * reports every failure the same way.
  */
 export function pageEvents({ token, changes, shown, held, signal }: PageEvents): Response {
   const headers = { "content-type": "text/event-stream", "cache-control": "no-store" };
