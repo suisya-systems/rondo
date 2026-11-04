@@ -33,6 +33,16 @@
  * is a fact about an allowance that is no longer the one in force, and the
  * screen that shows it is the scope screen's (`D-0074` section 4.2), not this
  * face's.
+ *
+ * **And the pair is only counted where the budget bears on what the person can
+ * do** (`D-0207` rule 1). The figures were drawn every time this face was,
+ * which made a reading nobody decides anything about the one thing always in
+ * front of a person -- the test `D-0082` rule 1 sets for lifting anything out
+ * is that a person alone can clear it, never that it is interesting. So
+ * {@link budgetBearing} is asked first, and with nothing holding work up and no
+ * budget decision of the person's, {@link WeekFigures.budget} is null and the
+ * face draws none of it. Nothing stands in its place (rule 4): no "the budget
+ * is fine", no empty cell, no zero.
  */
 import { approvedForPublication, type IterationRecord } from "../../store/records.js";
 import type { StepState } from "./governance.js";
@@ -77,6 +87,50 @@ export interface Allowance {
   readonly approvedUsd: number;
 }
 
+/**
+ * Why the week's budget reading is on the screen at all (`D-0207` rule 1).
+ *
+ * - `holdingUp`: a budget is stopping work now -- a lap its spend cap stopped
+ *   (`D-0121`), or one the `cost` scope test refused to send, with nothing
+ *   since having carried that stop on or taken its work anywhere. An approval
+ *   whose room is merely spoken for by laps that are running is not this: the
+ *   caller tests for a stop that happened, and asks of each stop whether
+ *   anything has answered it (`screens/week.ts`).
+ * - `yours`: nothing is stopped, but a decision about a budget is the person's
+ *   -- a raise (`D-0074` rule 4.2), or a scope of theirs to set or approve.
+ *
+ * Two members and not a boolean, because the words differ: one says what is
+ * stopped and the other says what is waiting to be decided, and a person acts
+ * on them differently (AGENTS.md section 1's rule for refusals, pointed at a
+ * screen's reason for drawing something).
+ */
+export type BudgetBearing = "holdingUp" | "yours";
+
+/**
+ * The facts a bearing is read from, each already narrowed by the caller: this
+ * module reads no rows (`D-0032` rule 3's habit).
+ */
+export interface BearingReads {
+  /** Whether a budget is stopping work now. */
+  readonly holdingUp: boolean;
+  /** Whether a decision about a budget is the person's to take. */
+  readonly yours: boolean;
+}
+
+/**
+ * Which of the two reasons puts the week's reading on the screen, or null for
+ * the ordinary case -- room left, and nothing for the person to do -- where it
+ * is not drawn.
+ *
+ * **Stopped comes before waiting to be decided** where both hold. `D-0207`
+ * does not order two reasons a screen could block for, and this orders only
+ * these two: a budget that is stopping work now is the reason the person came,
+ * and a decision they could take later does not describe it.
+ */
+export function budgetBearing(reads: BearingReads): BudgetBearing | null {
+  return reads.holdingUp ? "holdingUp" : reads.yours ? "yours" : null;
+}
+
 /** What the week is counted from: moments, one count, and the approvals. */
 export interface WeekReads {
   /** When each request was asked, over all of time; the window is applied here. */
@@ -100,16 +154,32 @@ export interface WeekReads {
    * by the caller, each with its own spend and its own ceiling.
    */
   readonly allowances: readonly Allowance[];
+  /**
+   * Why the budget is worth a person's attention, from
+   * {@link budgetBearing} -- or null, which withholds the whole reading
+   * (`D-0207` rule 1).
+   */
+  readonly bearing: BudgetBearing | null;
 }
 
-/** The six figures, ready to be said. */
+/**
+ * The week's money, where it is drawn at all: why it is here, and the pair
+ * `D-0083` rule 6 never separates.
+ */
+export interface WeekBudget {
+  readonly bearing: BudgetBearing;
+  /** Spent, approved and left -- or null where no approval reads, which hides all three. */
+  readonly allowance: (Allowance & { readonly leftUsd: number }) | null;
+}
+
+/** The figures, ready to be said. */
 export interface WeekFigures {
   readonly asked: number;
   readonly finished: number;
   readonly answered: number;
   readonly decidedWithoutAsking: number;
-  /** Spent, approved and left -- or null where no approval reads, which hides all three. */
-  readonly allowance: (Allowance & { readonly leftUsd: number }) | null;
+  /** The budget's reading, or null where it is not drawn (`D-0207` rule 1). */
+  readonly budget: WeekBudget | null;
 }
 
 export function weekFigures(reads: WeekReads, nowMs: number): WeekFigures {
@@ -125,19 +195,26 @@ export function weekFigures(reads: WeekReads, nowMs: number): WeekFigures {
     finished: reads.finishedAtMs.filter(inWeek).length,
     answered: reads.answeredAtMs.filter(inWeek).length,
     decidedWithoutAsking: reads.decidedWithoutAsking,
-    allowance:
-      reads.allowances.length === 0
+    budget:
+      reads.bearing === null
         ? null
-        : // Never below zero: a spend past its approval is the budget's own
-          // refusal to report, and *left* is what remains and not a debt.
-          // What is held is not left: the store's check counts it as spent.
-          {
-            spentUsd,
-            heldUsd,
-            heldTries,
-            heldInProgress,
-            approvedUsd,
-            leftUsd: Math.max(0, approvedUsd - spentUsd - heldUsd),
+        : {
+            bearing: reads.bearing,
+            allowance:
+              reads.allowances.length === 0
+                ? null
+                : // Never below zero: a spend past its approval is the budget's
+                  // own refusal to report, and *left* is what remains and not a
+                  // debt. What is held is not left: the store's check counts it
+                  // as spent.
+                  {
+                    spentUsd,
+                    heldUsd,
+                    heldTries,
+                    heldInProgress,
+                    approvedUsd,
+                    leftUsd: Math.max(0, approvedUsd - spentUsd - heldUsd),
+                  },
           },
   };
 }

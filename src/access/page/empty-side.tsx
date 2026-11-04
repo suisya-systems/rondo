@@ -8,6 +8,12 @@
  * allowance -- and each running request with its allowance and the five steps
  * to its end.
  *
+ * **The week's two money figures are now conditional** (`D-0207` rule 1): they
+ * are drawn where a budget is holding work up or a decision about one is the
+ * person's, and in the ordinary case the face is four figures shorter rather
+ * than carrying a reading that needs nobody. A running request's own allowance
+ * is not the week's and is unchanged (rule 2).
+ *
  * **No amber appears on it** (rule 4). Nothing on this face is waiting on the
  * person -- that is the whole claim of the state it belongs to -- so the one
  * colour that means *a person must act* (`D-0082` rule 2) would be a lie here.
@@ -80,25 +86,48 @@ export function EmptySide({ wording, figures, running, hrefOf }: EmptySideProps)
           <dd>{wording.weekThings(figures.decidedWithoutAsking)}</dd>
         </div>
         {/*
-         * **Both figures or neither** (rule 6). With no approval to read, one
-         * sentence stands for the pair rather than a spend nobody agreed to --
-         * which is what the left face's allowance does with the same words.
+         * **The budget only where it bears on what the person can do**
+         * (`D-0207` rule 1), and then with the reason it is here and the next
+         * thing to do beside it (rule 5). With room left and nothing for the
+         * person to decide, `figures.budget` is null and not one cell of this
+         * is drawn -- and nothing takes its place (rule 4): a sentence saying
+         * the budget is healthy is the standing reading in other words.
+         *
+         * **Both figures or neither where it is drawn** (rule 6, kept by
+         * `D-0207` rule 3). With no approval to read, one sentence stands for
+         * the pair rather than a spend nobody agreed to.
          */}
-        {figures.allowance === null ? (
-          <div className="side-week-wide">
-            <dt>{wording.weekAllowance}</dt>
-            <dd>{wording.weekNoAllowance}</dd>
-          </div>
-        ) : (
+        {figures.budget === null ? null : (
           <>
-            <div>
-              <dt>{wording.weekSpentFigure}</dt>
-              <dd>{spendSaid(wording, figures.allowance)}</dd>
+            <div className="side-week-wide">
+              <dt>
+                {figures.budget.bearing === "holdingUp"
+                  ? wording.weekBudgetHeldUp
+                  : wording.weekBudgetYours}
+              </dt>
+              <dd>
+                {figures.budget.bearing === "holdingUp"
+                  ? wording.weekBudgetHeldUpNext
+                  : wording.weekBudgetYoursNext}
+              </dd>
             </div>
-            <div>
-              <dt>{wording.weekLeft}</dt>
-              <dd>{dollars(figures.allowance.leftUsd)}</dd>
-            </div>
+            {figures.budget.allowance === null ? (
+              <div className="side-week-wide">
+                <dt>{wording.weekAllowance}</dt>
+                <dd>{wording.weekNoAllowance}</dd>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <dt>{wording.weekSpentFigure}</dt>
+                  <dd>{spendSaid(wording, figures.budget.allowance)}</dd>
+                </div>
+                <div>
+                  <dt>{wording.weekLeft}</dt>
+                  <dd>{dollars(figures.budget.allowance.leftUsd)}</dd>
+                </div>
+              </>
+            )}
           </>
         )}
       </dl>

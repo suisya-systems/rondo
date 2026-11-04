@@ -124,6 +124,23 @@ export function flowStopOnly(waits: readonly Wait[]): ReadonlySet<string> {
 /** The episode prefix of a request waiting on {@link scopesAwaitingYou}'s press. */
 export const PRESS = "press:";
 
+/** The episode prefix of a scope waiting to be set or approved. */
+const SCOPE = "scope:";
+
+/**
+ * **Whether a scope is waiting for the person at all** (`D-0207` rule 1's
+ * second case): a scope is where a budget is decided, so a scope of theirs to
+ * set or approve is a budget decision that is theirs.
+ *
+ * A predicate over the one derivation of *waiting* rather than a second scan,
+ * for this module's own reason: the week's face and the list cannot disagree
+ * about whether a scope is waiting, because there is one answer and they read
+ * it.
+ */
+export function scopeAwaits(waits: readonly Wait[]): boolean {
+  return waits.some((wait) => wait.episode.startsWith(SCOPE));
+}
+
 /**
  * **The requests whose only wait is a press before anything is drafted**
  * (rondo#643): a repository to add, or setup's plan to record. The row says
@@ -215,7 +232,7 @@ export async function scopesAwaitingYou(
           return isQuestion(message) ? [] : [{ root, episode: `${PRESS}${root}` }];
         }
         const draft = draftAwaiting(await draftedStanding(ports, root), lapped.has(root));
-        return draft === null ? [] : [{ root, episode: `scope:${draft.scope.scopeId}` }];
+        return draft === null ? [] : [{ root, episode: `${SCOPE}${draft.scope.scopeId}` }];
       }),
   );
   return waits.flat();

@@ -1619,7 +1619,6 @@ export async function operatorPage(
       },
       hrefOf: (messageId) => viewHref({ kind: "thread", messageId, to: null }, wording.lang),
       agoOf: (atMs) => wording.age(ago(atMs, nowMs)),
-      allowance: null,
       newRequestHref: forms ? viewHref({ kind: "requests" }, wording.lang) : null,
       lastLookedSaid:
         inbox?.sinceMs === null || inbox?.sinceMs === undefined

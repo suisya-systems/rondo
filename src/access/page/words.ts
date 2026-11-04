@@ -89,10 +89,8 @@ export interface PageWords extends DayWords {
   readonly lastLookedHere: (when: string) => string;
   /** The same line, where this actor has never looked before. */
   readonly lastLookedNever: string;
-  /** The week's allowance, under the list (rule 5, left face). */
+  /** The week's allowance, where the week's money is drawn at all (`D-0207` rule 1). */
   readonly weekAllowance: string;
-  /** Spent, approved and what is left, as one line. */
-  readonly weekSpent: (spent: string, approved: string, left: string) => string;
   /** Where no allowance has been approved, so no spend may be shown beside it (rule 6). */
   readonly weekNoAllowance: string;
   /** A request's state, in one sentence, on its row in the list (rule 5). */
@@ -456,6 +454,16 @@ export interface PageWords extends DayWords {
   readonly weekDecided: string;
   readonly weekSpentFigure: string;
   readonly weekLeft: string;
+  /**
+   * **Why the budget is on this face, and what to do about it** (`D-0207`
+   * rules 1 and 5): one short pair per reason the week's money is drawn at all
+   * -- the fact holding work up, or the decision that is the person's, and the
+   * next thing they do. How a budget is computed belongs to the scope screen.
+   */
+  readonly weekBudgetHeldUp: string;
+  readonly weekBudgetHeldUpNext: string;
+  readonly weekBudgetYours: string;
+  readonly weekBudgetYoursNext: string;
   readonly weekThings: (count: number) => string;
   readonly weekTimes: (count: number) => string;
   /** What is running, under the week (rule 4), and the sentence under it. */
@@ -696,7 +704,6 @@ export const PAGE_EN: PageWords = Object.freeze({
   lastLookedHere: (when) => `Below here is what you saw last time (${when})`,
   lastLookedNever: "Below here is everything so far",
   weekAllowance: "This week's allowance",
-  weekSpent: (spent, approved, left) => `${spent} of ${approved}, ${left} left`,
   weekNoAllowance: "No allowance approved yet",
   rowWaitingOnYou: "Waiting on your answer",
   rowFlowStopped: "rondo stopped working toward the goal and asks you here",
@@ -1104,6 +1111,10 @@ export const PAGE_EN: PageWords = Object.freeze({
   weekDecided: "rondo decided without asking",
   weekSpentFigure: "Spent",
   weekLeft: "Left of what was approved",
+  weekBudgetHeldUp: "A budget is holding work up",
+  weekBudgetHeldUpNext: "Open the request it stopped and raise the budget there",
+  weekBudgetYours: "A budget is yours to decide",
+  weekBudgetYoursNext: "Open the request waiting for you and set its budget there",
   weekThings: (count) => String(count),
   weekTimes: (count) => String(count),
   runningHeading: "Work under way",
@@ -1362,7 +1373,6 @@ export const PAGE_JA: PageWords = Object.freeze({
   lastLookedHere: (when) => `ここから下は前回（${when}）に見たもの`,
   lastLookedNever: "ここから下はこれまでのすべて",
   weekAllowance: "今週の予算",
-  weekSpent: (spent, approved, left) => `${spent} ／ ${approved}　残り ${left}`,
   weekNoAllowance: "予算はまだ承認されていません",
   rowWaitingOnYou: "あなたの返事を待っています",
   rowFlowStopped: "目標に向けた依頼を止めて、rondo がこのスレッドで聞いています",
@@ -1743,6 +1753,10 @@ export const PAGE_JA: PageWords = Object.freeze({
   weekDecided: "rondo が聞かずに決めた",
   weekSpentFigure: "使った費用",
   weekLeft: "承認した予算の残り",
+  weekBudgetHeldUp: "予算が足りず、作業が止まっています",
+  weekBudgetHeldUpNext: "止まった依頼を開いて、そこで予算を上げてください",
+  weekBudgetYours: "予算の判断はあなたの番です",
+  weekBudgetYoursNext: "待っている依頼を開いて、そこで予算を決めてください",
   weekThings: (count) => `${String(count)} 件`,
   weekTimes: (count) => `${String(count)} 回`,
   runningHeading: "進んでいる作業",
