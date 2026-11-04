@@ -239,6 +239,9 @@ C-NN`, so the spaces can never be read as one.
 | D-0203 | Where setup recorded no plan to build on, a plan rondo already holds is recorded as the setup plan it stands for on the person's press; setup that never ran stays installation, said on the page and commanded in the host's log | accepted |
 | D-0204 | A computer without the GitHub CLI gets a pinned one from rondo on the person's press on the sign-in screen, which then signs it in; the person's own `gh` on the host's `PATH` still comes first | accepted |
 | D-0205 | A start refused because the part that runs the work would not start says which kind of unusable it was, in the person's own words; the one kind that may pass by itself gets one press, which keeps the start for the host's tick | accepted, amended |
+| D-0206 | Approving a scope and starting the work are one press, and approving without starting stays as a second press beside it; the one press can be refused with the approval intact and starts at most one lap | accepted |
+| D-0207 | The week's budget is drawn on the page only where the budget is holding work up or a decision about it is the person's; a request's own allowance on its thread and its scope screen is not the week's and is unchanged | accepted |
+| D-0208 | The list that stands requests side by side draws the three newest finished requests and folds the rest into one line that says how many, opened by a press that works with script off | accepted |
 
 ---
 
@@ -32301,3 +32304,301 @@ At rondo `1cb5c00` on **2026-11-04**, by reading `src/`:
 > - Amends: D-0205 rule 2
 > - Amends: D-0205 "Four different states were one sentence"
 > - Amends: D-0205 "`notIdentified` holds two states"
+
+## D-0206 — Approving a scope and starting the work are one press, and approving without starting stays as a second press beside it; the one press can be refused with the approval intact and starts at most one lap
+
+**Status:** accepted (2026-11-04, the owner's request on this lap). Refs `D-0066`, `D-0074`,
+`D-0109`, `D-0158`, `D-0187`, `D-0191`, `D-0194`, `D-0201`, `D-0205`.
+
+### Context
+
+The screen a person reads a request's work and its ceilings on, and approves there, is the scope
+screen. Approving it and starting the work under it were two presses: the first recorded the
+approval, the screen came back with the approval on it, and a second press started one lap. A
+person who has just read the work and said yes to it has already decided the thing the second press
+asks about, so the second press asks a question that was answered on the way to it. That is the
+same reading `D-0187` took at the gate -- an approval carries the lap to its pull request without a
+second press -- and `D-0194`'s, where an approval starts work by itself. `D-0191` had already made
+the approval itself one press over a plan rondo assembled; this is the press after it.
+
+What the second press is *not* is useless. An approval recorded ahead of the moment the work should
+run is a real thing to want: a scope approved while another line holds the files (`D-0158`,
+`D-0201`), a raise recorded at a gate (`D-0074` rule 4.2), a ceiling settled now for work to be
+started later. So the question this entry answers is not "one press or two" but "which one is the
+main press".
+
+### What was measured, and how
+
+At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
+
+- **The scope view holds the approval it has recorded in its address** --
+  `page-logic/routes.ts`'s `scope` view carries `decisionId`, and its comment says the screen is
+  "the form rondo drafts from the plan and this store's laps, and -- once a press has recorded and
+  approved one -- that approval with the scoped start beside it". So the second press exists
+  because the screen comes back, not because anything had to be re-decided.
+- **The two presses' own words say they are two acts.** `scopeDraftedAction` is `Approve`, with
+  `scopeDraftedPressNote`: "One press approves. ... Approving spends nothing: every lap is tested
+  against it when it starts." `planStartAction` is `Start this plan`, with `planStartPlain`:
+  "Starts one lap on this plan, counted against the scope you approved".
+- **Every way the start can refuse is already enumerated and already said on this screen**:
+  `planOutside` for each scope test, `planBusy` and `planFull` for a host with no room, and
+  `startRefusedNoContinuo` with `D-0205`'s six kinds of unusable. `D-0158` adds the wait where
+  another line holds the files, for which "the page offers no second press".
+- **The start is already safe pressed twice.** `startScopedFromPage` holds a start in flight in a
+  per-process map keyed by the iteration id the form minted, so an overlapping second press joins
+  the first; `scopedStartPress` then joins a wait already kept for the same request, scope decision
+  and plan digest, so a second tab's own minted id does not become a second lap. `D-0109` settles
+  when the press is answered: once the lap's row is there.
+
+### Decision
+
+1. **One press approves and starts.** The scope screen's main press records the approval -- rondo's
+   draft, or the person's changed version of it, as it does today -- and then starts one lap under
+   it, on one submission. Its words say both acts and say that money will be spent, so
+   `scopeDraftedPressNote`'s "Approving spends nothing" is no longer said of this press; it is said
+   of the press in rule 2, which is what it is true of.
+2. **Approving without starting stays, as the secondary press beside it.** Same form, a second
+   submit of its own, with the behaviour the main press has today: it records the approval and
+   starts nothing. The start that may follow is the existing `planStartAction` on the screen the
+   approval comes back on, unchanged. A screen that offers no way to approve without starting is a
+   falsifier of this entry.
+3. **The one press can be refused safely, which means the approval stands and nothing is half
+   done.** The approval is recorded first and is what the person asked for; a start then refused
+   for any reason already enumerated -- a scope test, no room on the host, `D-0205`'s unusable
+   kinds, or `D-0158`'s files held by another line -- leaves that approval recorded, says the
+   refusal or the wait in the words it already has, and offers the press that belongs to it
+   (`D-0205` rule 2's one press, and no press where `D-0158` offers none). A start rondo could not
+   attempt is never reported as an approval withheld, and a refused start still admits, spends and
+   starts nothing.
+4. **It does not start twice.** The main press is the existing start path, so it inherits the
+   in-flight map keyed by the minted iteration id and the join of a kept wait: a double click, a
+   reload, a resubmission or a second tab keeps one row and starts one lap. The approval half is
+   not made idempotent by this entry and does not need to be: the recorded approval travels in the
+   address (`decisionId`), so the screen a person is returned to is the one showing what was
+   recorded rather than the draft offering to record it again.
+5. **Nothing about what is approved changes.** The record, its digest, its tests and when they are
+   spent are `D-0066`'s, and the budgets are `D-0074`'s. This entry moves a press; it widens no
+   scope and tests nothing differently.
+
+### Options considered
+
+| Option | Taken? | What it loses |
+|---|---|---|
+| A. Keep the two presses | No | A person who has read the work and approved it is asked again about the thing they just decided |
+| B. One press only, with no way to approve without starting | No | The approval recorded ahead of the work -- a held line, a raise at a gate -- becomes impossible, and a person has to sit at the screen until the files are free |
+| C. One press that approves and starts, with approve-only beside it | Yes | See below |
+| D. One press whose start is attempted after the answer, in the background | No | A refusal the person is not shown is a lap they cannot tell never began (`D-0109`) |
+| E. One press, with the start's refusals folded into one sentence | No | `D-0205` split those kinds on purpose; folding them back loses the next move |
+
+### What it costs
+
+- **The main press now has two outcomes to say**, and the screen it answers on draws an approval
+  with a start refused beside it -- which reads as a half-done press even though the half that
+  matters was recorded.
+- **A person who only wanted the record has to find the second press.** It is secondary, and reads
+  as secondary, which is the cost of making the common act the main one.
+- **A host with no room turns the main press into rule 2's press plus a sentence.** Nothing is
+  lost, but the press did not do what its words said it would.
+- **Two presses on one form means the form's two submits must stay told apart** where a browser
+  sends neither name; the screen's own test is what holds that, and this entry does not.
+
+### What would falsify it
+
+- **A main press that records no approval because the start was refused**, or one that starts a lap
+  under an approval it did not record.
+- **Two laps, or two approvals, from one person's double press, reload or second tab.**
+- **A scope screen with no way to approve without starting.**
+- **A main press whose words do not say that work begins and money is spent.**
+- **A refusal of the start that is drawn as a refusal of the approval**, or one of `D-0205`'s kinds
+  that loses its press on this path.
+
+## D-0207 — The week's budget is drawn on the page only where the budget is holding work up or a decision about it is the person's; a request's own allowance on its thread and its scope screen is not the week's and is unchanged
+
+**Status:** accepted (2026-11-04, the owner's request on this lap). Refs `D-0064`, `D-0066`,
+`D-0074`, `D-0082`, `D-0083`, `D-0121`.
+
+### Context
+
+The page tells a person where the week's money stands in two places that are always there: a line
+under the list, and a pair of figures on the right face when nothing is waiting. Neither is
+anything to do: a figure that is fine is a figure a person reads, decides nothing about, and reads
+again tomorrow. `D-0064` designs the page so that what is in front of a person is what needs them,
+and `D-0082` rule 1's test for lifting anything out is that a person alone can clear it -- never
+that it is interesting. A standing budget reading fails that test every time it is in the good
+case.
+
+It is not pointless in the bad case. A budget with no room left is the reason a lap will not start,
+and a raise is a decision only the person can take (`D-0074`). Those are the moments the figure is
+the answer to a question the person actually has.
+
+### What was measured, and how
+
+At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
+
+- **Three screens draw an allowance, and two of them are the week's.** `page/list.tsx` draws a
+  `list-allowance` line under the list -- *This week's allowance* -- and `page/empty-side.tsx`
+  draws *Spent* and *Left of what was approved* among the seven-day figures (`D-0083` rule 4).
+  `page/thread-side.tsx` draws the same pair for **one request's** approval, beside that request's
+  tries and its worker.
+- **rondo holds no weekly budget at all.** `page-logic/week.ts` says so in as many words: what a
+  person approves is one request's scope (`D-0066`), and "the week's allowance" is the approvals in
+  force this week, summed, read off the tip of each chain. No week figure is written anywhere, so
+  withholding the line removes no record.
+- **Both figures or neither, already.** `D-0083` rule 6 is enforced in all three places: with no
+  approval to read, one sentence (`weekNoAllowance`) stands for the pair rather than a spend nobody
+  agreed to.
+- **The blocking states exist and are named.** The scope test `budget_exhausted` says "the scope's
+  cost budget has no room left for another lap, counting what laps not yet read are held at";
+  `page-logic/governance.ts` carries `atBudgetCap` for `D-0121`'s lap that spent all the room the
+  budget left it; and `D-0074` rule 4.2 is the raise a person presses from the gate that refused
+  them.
+
+### Decision
+
+1. **The week's reading is drawn where the budget bears on what the person can do, and nowhere
+   else.** Those cases are: a budget that is holding work up now -- a start or a lap refused or
+   stopped for it (`budget_exhausted`, `D-0121`'s cap) -- and a decision about the budget that is
+   the person's, which is a raise (`D-0074` rule 4.2) and a scope being drafted or approved. With
+   neither true, the line under the list and the pair on the empty face are not drawn.
+2. **A request's own allowance is not the week's.** The pair on a request's thread and the figures
+   on its scope screen are that request's record -- what was approved, what each try cost, what is
+   held -- and they stay exactly as they are. This entry narrows the *week's* reading only: where
+   rule 1 draws that reading beside a decision being taken, it is drawn in addition to the
+   request's own figures and never in place of them.
+3. **Where it is drawn, it is drawn as it is now.** `D-0083` rule 6's pair holds, the figures are
+   the approvals in force summed as `page-logic/week.ts` reads them, and a spend is never shown
+   without the figure it was approved against.
+4. **Withheld is not reassuring, and not a gap to fill.** Nothing takes the line's place: no "the
+   budget is fine", no empty cell, no zero. A sentence saying the budget is healthy is a claim
+   about every approval in force, which is the standing reading this entry removes.
+5. **A budget that stops something says so where the thing stopped is.** The refusal, the gate and
+   the raise carry the figure; a person never has to go looking for the reason on another face.
+
+### Options considered
+
+| Option | Taken? | What it loses |
+|---|---|---|
+| A. Keep the standing week line | No | A figure that needs nobody, in front of everybody, every day |
+| B. Draw it only when it blocks or a decision is the person's | Yes | See below |
+| C. Draw it when what is left falls under a threshold | No | A threshold rondo would have to invent, over a week figure rondo does not hold (`page-logic/week.ts`) |
+| D. Remove the week's figures outright | No | The blocking case is exactly when the figure is the answer; removing it there sends a person to the store |
+| E. Keep it, in amber when it blocks | No | `D-0082` rule 2 spends amber on *a person must act*, and most of the time this needs nobody |
+
+### What it costs
+
+- **A person who wants to know where the week stands with nothing blocked has to open a request**
+  and read its own allowance. There is no page that answers "the week" on demand, and this entry
+  does not build one.
+- **The empty right face loses two of its seven-day figures in the ordinary case**, which is the
+  face `D-0083` rule 4 enumerates; the other figures stay, so the face is shorter rather than
+  gone.
+- **"Holding work up" is read from the states above and not from a measurement of time**, so a
+  budget that will block tomorrow says nothing today.
+- **A screen that blocks for two reasons at once** -- a budget with no room and files held by
+  another line -- says both, and this entry does not order them.
+
+### What would falsify it
+
+- **A week figure drawn where nothing is blocked and no decision about the budget is the
+  person's.**
+- **A budget that refused or stopped work with no figure on the screen that says so.**
+- **A request's own allowance removed from its thread or its scope screen by this rule.**
+- **A sentence, a blank cell or a zero standing where the withheld line was.**
+- **A spend drawn without what it was approved against**, anywhere this still draws.
+
+## D-0208 — The list that stands requests side by side draws the three newest finished requests and folds the rest into one line that says how many, opened by a press that works with script off
+
+**Status:** accepted (2026-11-04, the owner's request on this lap). Refs `D-0041`, `D-0056`,
+`D-0076`, `D-0082`, `D-0083`, `D-0175`, `D-0176`, `D-0183`, `D-0185`.
+
+### Context
+
+A finished request needs nobody. It is in the list so a person can see what became of what they
+asked for, and because the newest few are what a person checks after being away -- not so that
+every request ever finished is scrolled past on the way to what is waiting. In a list that stands
+requests side by side, the finished ones also take a column of their own, and a column that grows
+without bound is one that pushes everything else off the screen at the widths `D-0185` designs
+for.
+
+rondo already has the shape this calls for. `D-0175` keeps the rows that bind nothing as a count
+rather than as rows, `D-0176` leaves an approvable proposal out of the page's count while keeping
+its row readable, and `D-0183` cuts a row that waits on nobody down to one line. This entry is
+that habit applied to the finished column: a bound, a count, and a press.
+
+### What was measured, and how
+
+At rondo `d1e2f42` on **2026-11-04**, by reading `src/`:
+
+- **The list's unit is a request and its axis is time.** `page-logic/list.ts` builds `yourTurn`
+  plus `days`, every group cut by day and **every row of every group drawn** by `page/list.tsx`;
+  `finished` is one of the row states it names, and `D-0183` already cuts such a row to one line.
+  There is no bound on how many finished rows a view can hold.
+- **A request is one row however many laps it took.** `page-logic/week.ts`'s `finishedAt` is the
+  worked example: a request tried three times and taken in once finished once, and it counts as
+  finished only where nothing under it is still going.
+- **The row already carries the moment the order reads** -- `RequestRow.atMs`, "when the request
+  last moved", which is what the day cut uses -- so "the three newest" needs no new fact.
+- **A fold is the page's own device and it needs no script.** `D-0076` rule 4.2's maintainer fold
+  is drawn as a disclosure a person opens with a press, on a page whose presses are real form
+  submissions and whose script is an addition rather than a requirement (`D-0041`).
+- **View state lives in the address.** `page-logic/routes.ts` keeps each view's members in the URL
+  for `D-0056` rule 11's reason -- the language switch re-renders from the view it is on, so a
+  member kept anywhere else is lost by it -- and the list re-renders from that same address on the
+  poll.
+
+### Decision
+
+1. **Three finished requests, newest first.** The side-by-side list draws at most the three newest
+   finished requests. Newest is the moment the row already carries (`atMs`), so the order is the
+   one the rest of the list is in.
+2. **The rest are one line that says how many.** Below the three stands a single line whose words
+   are a count of the finished requests not drawn -- `D-0175`'s "the rest are a count", in the
+   list. The count is of requests, not of laps.
+3. **A press opens them.** The line is a disclosure: pressing it shows the remaining finished
+   requests, in the same order and in the same one-line shape `D-0183` gives them. It is drawn as
+   a fold and not as a link to another screen, and it works with no script.
+4. **An opened fold survives a re-render**, because its state travels in the address like every
+   other member of the view (`D-0056` rule 11): the poll and the language switch both re-render
+   from that address, and a fold that closed itself under a person every few seconds would be
+   worse than no fold.
+5. **Only finished requests are bounded by this.** A request under *your turn*, one still running,
+   one drafting and one stopped are not finished and are not counted, folded or cut by this entry.
+   The amber row `D-0083` rule 2 lifts out of the time order is untouched.
+6. **Nothing is removed.** Every finished request stays in the store and stays readable -- through
+   the fold, through its own thread, and on every other screen that counts it, including the
+   seven-day figures. This is a drawing rule, as `D-0175`'s is.
+
+### Options considered
+
+| Option | Taken? | What it loses |
+|---|---|---|
+| A. Draw every finished request | No | A column without a bound, pushing what needs a person off the screen at `D-0185`'s widths |
+| B. Three, with the rest in a counted fold | Yes | See below |
+| C. Three, with the rest reachable only on another screen | No | A press that leaves the list to see a row the list already holds |
+| D. A bound by time -- the last day, say -- rather than a count | No | A quiet week shows nothing and a busy day shows thirty; the column's height is what is being bounded |
+| E. Three, with the rest dropped from the page | No | A request a person asked for, with no way back to what became of it |
+
+### What it costs
+
+- **Three is a judgment about the column, not a measurement of how people read the list.** It was
+  chosen for the shape of the screen; what would change it is a column whose three rows do not fit
+  or which leaves obvious space, and that is a falsifier below rather than a number this entry can
+  defend from evidence.
+- **A person looking for the fourth-newest finished request presses once**, every time, on every
+  view.
+- **The count moves when nothing happened to it.** A fourth request finishing pushes the
+  third-newest into the fold, so a row a person saw yesterday is behind a press today.
+- **The fold's state in the address is another member the language switch and the poll both have to
+  carry**, which is a cost `D-0056` rule 11 already pays for every other member.
+
+### What would falsify it
+
+- **A fourth finished request drawn beside the three**, or fewer than three drawn where more
+  exist.
+- **A folded finished request that cannot be reached with script off.**
+- **A waiting, running, drafting or stopped request folded or counted by this rule.**
+- **A fold that closes itself on the poll or on the language switch.**
+- **A finished request missing from the count and from the fold**, or dropped from any other
+  screen that counts it.
+- **A column whose three rows do not fit the widths `D-0185` names**, or which leaves obvious empty
+  space where the fold's line is.
