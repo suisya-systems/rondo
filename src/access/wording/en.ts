@@ -309,9 +309,10 @@ explanation you pressed on and then answers the gate.`,
   answerReviseOptionsNote:
     "Each option, or answering in your own words, starts the next attempt right away, with " +
     "this answer.",
-  answerReviseDraftLead: "The next attempt is also given this change:",
+  answerReviseDraftLead: "Read the change the next attempt is also given",
   answerReviseCallsSend:
-    "Also send these judgment calls (where they differ from your answer, the answer wins):",
+    "Also send these judgment calls (where they differ from your answer, the answer wins)",
+  answerReviseCallsRead: "Read the judgment calls",
   answerRaiseLabel: "Budget from here on (USD)",
   answerRaiseRoundsLabel: "Review rounds for this line",
   answerRaiseLeft: (left, reserve, enough) =>

@@ -1,8 +1,9 @@
 /**
  * The notes a request's thread draws in place of a message's own words: the
  * forge's read of an issue, a drafter run that drafted nothing, a lap report
- * kept shut, a scope's stop and a flow's stop, and the predicates that pick
- * each one out (rondo#341 moved them out of `src/access/web.tsx`).
+ * kept shut, a worker's question, a scope's stop and a flow's stop, and the
+ * predicates that pick each one out (rondo#341 moved them out of
+ * `src/access/web.tsx`).
  */
 import {
   FLOW_AUTHOR,
@@ -17,6 +18,7 @@ import { isModelDrafterName, REDRAFT_AUTHOR } from "../model-draft/judgement.js"
 import type { PartView } from "../page-logic/parts.js";
 import { viewHref } from "../page-logic/routes.js";
 import type { Threads } from "../page-logic/threads.js";
+import { questionShown } from "../question.js";
 import {
   everyPartEnded,
   requestReportId,
@@ -235,6 +237,67 @@ export function heldMessage(message: ThreadMessageDraft): boolean {
     message.authorKind === "drafter" &&
     (message.authorId === WORKER_QUESTION_AUTHOR ||
       (message.authorId ?? "").startsWith(FLOW_AUTHOR_PREFIX))
+  );
+}
+
+/**
+ * Whether a message is a worker's question put at its lap's end (D-0098 rule
+ * 4.2, `relayQuestion`): the worker-question voice, `asks` set, and the
+ * options the block offered stored beside it -- which is what lets the screen
+ * draw the question without the list of options inside its body.
+ */
+export function workerQuestionAsked(message: ThreadMessageDraft): boolean {
+  return (
+    message.authorKind === "drafter" &&
+    message.authorId === WORKER_QUESTION_AUTHOR &&
+    message.asks === true &&
+    message.askOptions !== undefined
+  );
+}
+
+/**
+ * **A worker's question, as the one thing it asks** (rondo#704): the question
+ * in the worker's own words, and under it which part of the work waits on the
+ * answer.
+ *
+ * What is *not* here is the point. The options are each a press in the box
+ * below, with the reason it gives up beside it (D-0190 rule 5), so the list
+ * the body also carries would be the same choice twice -- and the commit the
+ * body ends with is an identifier of rondo's, which no screen says (D-0076);
+ * the lead above the box links to what changed instead. Neither is composed
+ * again, paraphrased or re-ordered: `questionShown` takes out the block rondo
+ * wrote and leaves the worker's bytes as they are.
+ *
+ * The words are the worker's English, so they carry the *read in my language*
+ * press every held message does (rondo#490).
+ */
+export function workerQuestionView(
+  wording: Chrome,
+  message: ThreadMessageDraft,
+  reads: HeldReads | null,
+) {
+  const shown = questionShown(message.body, message.askOptions ?? null);
+  const words = (text: string, className: string) =>
+    held(wording, reads, text, `body ${className}`, () => (
+      <p class={`body ${className}`} lang="en">
+        {text}
+      </p>
+    ));
+  return (
+    <div class="space-y-2" data-question="">
+      {words(shown.question, "text-body leading-6 wrap-anywhere whitespace-pre-wrap")}
+      {shown.waits === "" ? null : (
+        <div class="space-y-0.5">
+          <p class="text-meta leading-5 font-medium text-muted-foreground">
+            {wording.questionWaitsOn}
+          </p>
+          {words(
+            shown.waits,
+            "text-meta leading-5 wrap-anywhere whitespace-pre-wrap text-muted-foreground",
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -317,6 +317,35 @@ function stepRound(wording: Chrome, record: IterationRecord) {
   };
 }
 
+/**
+ * What was raised, one line each (D-0083 rule 9.4): the collision first and in
+ * the page's own language, then each finding in the reading's words.
+ */
+function standingList(collision: string | null, standing: readonly string[]) {
+  return (
+    <ul class="mt-1.5 space-y-1.5">
+      {collision === null ? null : (
+        <li class="flex gap-2 text-body leading-5">
+          <span aria-hidden="true" class="text-fail">
+            &#8226;
+          </span>
+          <span class="min-w-0 wrap-anywhere">{collision}</span>
+        </li>
+      )}
+      {standing.map((said) => (
+        <li class="flex gap-2 text-body leading-5">
+          <span aria-hidden="true" class="text-fail">
+            &#8226;
+          </span>
+          <span class="min-w-0 wrap-anywhere" lang="">
+            {said}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function approveView(
   wording: Chrome,
   record: IterationRecord,
@@ -379,32 +408,31 @@ export function approveView(
        */}
       {standing.length === 0 && collision === null ? null : (
         <section id="standing" class={CARD}>
-          <h3 class={CARD_HEADING}>{wording.standingHeading}</h3>
-          <ul class="mt-1.5 space-y-1.5">
-            {/*
-             * First, and in the set's own language rather than `lang=""`: the
-             * findings below are a reading's own words and this sentence is
-             * the page's.
-             */}
-            {collision === null ? null : (
-              <li class="flex gap-2 text-body leading-5">
-                <span aria-hidden="true" class="text-fail">
-                  &#8226;
-                </span>
-                <span class="min-w-0 wrap-anywhere">{collision}</span>
-              </li>
-            )}
-            {standing.map((said) => (
-              <li class="flex gap-2 text-body leading-5">
-                <span aria-hidden="true" class="text-fail">
-                  &#8226;
-                </span>
-                <span class="min-w-0 wrap-anywhere" lang="">
-                  {said}
-                </span>
-              </li>
-            ))}
-          </ul>
+          {/*
+           * **One press away where a worker is waiting on an answer**
+           * (rondo#704). Rule 9.4 draws the findings unfolded because the
+           * press they are answered over is *approve*, and nothing may stand
+           * between a person and what they are approving. A worker's question
+           * is a different press: what is being answered is the question, and
+           * a reviewer's findings written out in full above it is evidence
+           * stacked in front of a choice. So the heading becomes a fold the
+           * words are one press behind -- a `details`, so a browser with no
+           * script opens it too -- and the gate's own box keeps rule 9.4.
+           */}
+          {framing.workerQuestion === null ? (
+            <>
+              <h3 class={CARD_HEADING}>{wording.standingHeading}</h3>
+              {standingList(collision, standing)}
+            </>
+          ) : (
+            <details class="group">
+              <summary class="flex cursor-pointer list-none items-center gap-2 text-meta leading-5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+                {chevron()}
+                {wording.standingFold(standing.length + (collision === null ? 0 : 1))}
+              </summary>
+              {standingList(collision, standing)}
+            </details>
+          )}
         </section>
       )}
       {/*

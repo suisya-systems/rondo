@@ -247,6 +247,8 @@ export interface Chrome
    * (rondo#670); unticked, the answer goes without them.
    */
   readonly answerReviseCallsSend: string;
+  /** The fold over the drafted judgment calls themselves (rondo#704). */
+  readonly answerReviseCallsRead: string;
   /**
    * A budget stop's first answer (D-0140 rule 3): a budgets-only successor of
    * the lap's approval, then *carry on*, on one press. `answerRaiseLabel` is

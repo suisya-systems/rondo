@@ -212,6 +212,53 @@ export function questionBody(question: WorkerQuestion, tipCommit: string): strin
   ].join("\n");
 }
 
+/** The line {@link questionBody} writes where rondo could not read the commit. */
+const COMMIT_UNREAD = "(rondo could not read what this lap committed)";
+
+/**
+ * The question's body as the ask screen draws it (rondo#704): the question
+ * itself, and which part of the work waits on the answer -- **and neither the
+ * option list nor the commit**.
+ *
+ * The options are stored beside the body, so the screen draws each of them as
+ * a press with its own reason beside it (D-0190 rule 5); the list inside the
+ * body is the same options a second time, and the same choice offered in two
+ * places is a choice a person has to read twice to be sure it is one choice.
+ * The commit is an identifier of rondo's, which no screen says (D-0076); what
+ * the lap built is on the *what changed* card the lead links to.
+ *
+ * **Nothing is paraphrased and nothing is re-ordered**: the block this takes
+ * out is the one {@link optionLines} composed, found by its own bytes, so what
+ * is left is the worker's words exactly as the body carries them. Where the
+ * body is not one this composed -- an unreadable block's sentence, a row from
+ * before the options were stored -- it is drawn whole, which is what it was.
+ */
+export function questionShown(
+  body: string,
+  options: AskOptions | null,
+): { readonly question: string; readonly waits: string } {
+  if (options === null || options.recommendation === undefined) {
+    return { question: body, waits: "" };
+  }
+  const block = optionLines(options.options, options.recommended, options.recommendation).join(
+    "\n",
+  );
+  const at = body.indexOf(block);
+  if (at === -1) {
+    return { question: body, waits: "" };
+  }
+  const blocks = body
+    .slice(at + block.length)
+    .trim()
+    .split(/\n{2,}/);
+  const last = (blocks.at(-1) ?? "").trim();
+  const commit = /^[0-9a-f]{7,64}$/.test(last) || last === COMMIT_UNREAD;
+  return {
+    question: body.slice(0, at).trim(),
+    waits: (commit ? blocks.slice(0, -1) : blocks).join("\n\n").trim(),
+  };
+}
+
 /** What {@link relayQuestion} reads and writes. */
 export interface QuestionPorts {
   readonly record: Pick<AdvisoryRecord, "recordThreadMessage">;
@@ -269,10 +316,7 @@ export async function relayQuestion(
       `Lap '${iterationId}' ended with a question rondo could not read (${read.reason}). ` +
       "Its words are in the gate's rationale; answer at the gate.";
   } else {
-    body = questionBody(
-      read.question,
-      evidence?.tipCommit ?? "(rondo could not read what this lap committed)",
-    );
+    body = questionBody(read.question, evidence?.tipCommit ?? COMMIT_UNREAD);
   }
   const bases: JsonRecord[] = [
     { form: "iteration", iterationId },
