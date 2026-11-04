@@ -561,8 +561,8 @@ test("a page hears a change only where what the route draws changed (rondo#742)"
   // draw the host would make, so the comparison that settles it says nothing.
   expect(await said()).toBe(true);
 
-  // **Nothing changed, so nothing is said.** The bell rings -- something
-  // beside the store was written -- and this route draws this reader's own
+  // **Nothing changed, so nothing is said.** The bell rings -- the store was
+  // written -- and this route draws this reader's own
   // view again off the store and finds the same page, so the reader is told
   // nothing and makes no `GET`. That is the property `every 5s` could not
   // have had: a poll redraws whether anything changed or not.

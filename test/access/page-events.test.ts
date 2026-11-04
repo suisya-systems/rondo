@@ -3,12 +3,13 @@
  *
  * The page used to `GET` its own address every five seconds and morph the
  * answer in. What replaced it is one held-open `GET /events`: the host rings a
- * bell when something beside the store is written, draws the reader's own view
- * again, and says `change` only where the bytes differ from the ones that
- * reader is standing on. So the three claims worth a test are **that a quiet
- * host says nothing**, **that a change says exactly one word**, and **that a
- * write which does not reach this view is not a word to it** -- the last being
- * the property the poll could not have, since a poll redraws either way.
+ * bell when the store is written, draws the reader's own view again, and says
+ * `change` only where the bytes differ from the ones that reader is standing
+ * on. So the claims worth a test are **that a quiet host says nothing**, **that
+ * a change says exactly one word**, **that a write which does not reach this
+ * view is not a word to it** -- that one being the property the poll could not
+ * have, since a poll redraws either way -- and **which file a write has to be
+ * to, since the store shares a directory with files no page draws**.
  *
  * `pageEvents` is tested against a `shown` this file controls, because what is
  * under test is the comparison and not the renderer; `src/access/web-app.ts`
@@ -49,7 +50,7 @@ test("a quiet host says nothing, and one change says one word (rondo#742)", asyn
   expect(draws).toBe(1);
 
   // **A write that does not reach this view is not a word to it.** The bell
-  // rings -- something beside the store was written -- and this page shows the
+  // rings -- the store was written -- and this page shows the
   // same thing it showed, so the reader hears nothing and makes no `GET`.
   bell.ring();
   await Promise.resolve();
@@ -332,7 +333,36 @@ test("with no bell the stream is the press token alone, as it was (rondo#674)", 
   expect(neither.status).toBe(204);
 });
 
-test("the bell rings on a write beside the store, and stops when the host does (rondo#742)", async () => {
+/**
+ * Waiting for the bell: answers as soon as `rings` moves.
+ *
+ * **Watched, not polled** is what this asserts about the host, so nothing here
+ * waits on a clock of rondo's -- the write is what the operating system tells
+ * the process about, and a case that hangs here is a bell that never rang.
+ */
+async function rung(rings: () => number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const at = setInterval(() => {
+      if (rings() > 0) {
+        clearInterval(at);
+        resolve();
+      }
+    }, 10);
+  });
+}
+
+/**
+ * Long enough that a ring which was going to come has come.
+ *
+ * `SETTLE_MS` inside `page-changes.ts` is 50ms, and the quiet window the rest
+ * of these tests give a host is 250ms (`listening`); this is that window, so a
+ * silence asserted after it is five settles of silence and not a race.
+ */
+async function settled(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 250));
+}
+
+test("the bell rings on a write to the store, and stops when the host does (rondo#742)", async () => {
   const directory = mkdtempSync(join(tmpdir(), "rondo-changes-"));
   const bell = watchedChanges(join(directory, "rondo.db"), () => {});
   try {
@@ -340,25 +370,16 @@ test("the bell rings on a write beside the store, and stops when the host does (
     const stop = bell.listen(() => {
       rings += 1;
     });
-    // **Watched, not polled**: nothing here waits on a clock of rondo's. The
-    // write is what the operating system tells this process about, and the
-    // ring is coalesced, so a burst is one ring rather than one per file.
-    const rung = new Promise<void>((resolve) => {
-      const at = setInterval(() => {
-        if (rings > 0) {
-          clearInterval(at);
-          resolve();
-        }
-      }, 10);
-    });
     // **The mark holds still while the store does**, which is what makes two
     // equal marks a proof that a page is current.
     const quiet = bell.mark();
     expect(bell.mark()).toBe(quiet);
 
+    // The ring is coalesced, so a burst of writes to the store is one ring
+    // rather than one per write.
     writeFileSync(join(directory, "rondo.db"), "a row");
-    writeFileSync(join(directory, "rondo.db-journal"), "a commit");
-    await rung;
+    writeFileSync(join(directory, "rondo.db"), "a row, and another");
+    await rung(() => rings);
     expect(rings).toBe(1);
 
     // **And it moved with the write, not with the ring.** A page served during
@@ -370,6 +391,42 @@ test("the bell rings on a write beside the store, and stops when the host does (
     // holds none.
     stop();
     bell.stop();
+  } finally {
+    bell.stop();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the store's own file rings; the files beside it do not (rondo#742)", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "rondo-changes-"));
+  const bell = watchedChanges(join(directory, "rondo.db"), () => {});
+  try {
+    let rings = 0;
+    bell.listen(() => {
+      rings += 1;
+    });
+    const quiet = bell.mark();
+
+    // **What shares the directory and is not the store.** continuo keeps its
+    // own control plane there, which a lap writes to while it runs and which no
+    // page draws a byte of; SQLite moves the store's journal twice around every
+    // commit, for the same one write to the database it sits beside. A bell for
+    // either redraws a view that cannot have changed.
+    writeFileSync(join(directory, "control-plane.sqlite3"), "a lap step");
+    writeFileSync(join(directory, "rondo.db-journal"), "a commit in flight");
+    rmSync(join(directory, "rondo.db-journal"));
+    await settled();
+    expect(rings).toBe(0);
+    // **And no write was counted**, so a page served now is told it is current
+    // rather than being handed a mark the host has already moved past.
+    expect(bell.mark()).toBe(quiet);
+
+    // **The store itself still rings**, which is what makes the silence above a
+    // name the bell reads and not a watch that broke.
+    writeFileSync(join(directory, "rondo.db"), "a row");
+    await rung(() => rings);
+    expect(rings).toBe(1);
+    expect(bell.mark()).not.toBe(quiet);
   } finally {
     bell.stop();
     rmSync(directory, { recursive: true, force: true });

@@ -151,7 +151,7 @@ export async function serveWeb(
   const approver = environment[APPROVER_ENV];
   const record = openAdvisoryRecord(storePath);
   // **What tells an open page that something changed** (rondo#742): one watch
-  // of the files beside the store, for the life of this host. Opened here and
+  // of the store, for the life of this host. Opened here and
   // not in `pagePorts`, because naming the approver rebuilds those and a watch
   // is not a port of one approver's.
   const changes = watchedChanges(storePath, say);

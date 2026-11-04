@@ -568,7 +568,11 @@ const ALLOWED_EXTERNALS_BY_MODULE: Readonly<
   // what changed is `served.ts`'s, off a page it draws through the renderer.
   "src/access/page-changes.ts": {
     "node:fs": ["watch"],
-    "node:path": ["dirname"],
+    // `basename` beside `dirname` because the watch is of a directory and the
+    // bell is for one file in it: the store's own name is what tells a write to
+    // the database apart from a write to continuo's control plane or to a
+    // journal, neither of which a page draws (rondo#742).
+    "node:path": ["basename", "dirname"],
   },
 };
 
